@@ -1,0 +1,7 @@
+.venv/
+results/
+__pycache__/
+*.egg-info/
+node_modules/
+src/mysb/review_dist/
+/tasks/

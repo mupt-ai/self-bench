@@ -1,0 +1,23 @@
+{
+  "name": "make-your-swebench-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:review": "vite --config review/vite.config.ts",
+    "build:review": "vite build --config review/vite.config.ts",
+    "typecheck:review": "tsc --noEmit -p review/tsconfig.json"
+  },
+  "dependencies": {
+    "@pierre/diffs": "1.2.12",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.13",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
+  }
+}
