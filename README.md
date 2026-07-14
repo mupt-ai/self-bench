@@ -61,6 +61,29 @@ Codex extraction uses user-message events and ignores injected environment or in
 
 For a task without an exported session, omit `prompt_source` and add a `prompt.md` file instead. A task must provide exactly one prompt source.
 
+When a prompt must be reconstructed for standalone use but the original coding session is available, keep `prompt.md` and add a separate `trace_source` to `task.json`:
+
+```json
+{
+  "trace_source": {
+    "path": "inputs/session.jsonl",
+    "format": "pi"
+  }
+}
+```
+
+`trace_source` is private generation provenance. It is not included in the eval prompt or uploaded with a rollout. The review console shows the original human turns by default and can reveal assistant context when needed. Injected instruction records and tool results are omitted, and common API-key patterns are redacted from the rendered trace.
+
+Generate a standalone prompt from that conversation with:
+
+```bash
+uv run mysb generate-prompt tasks/example-fix \
+  --provider openai --model gpt-5.5 --thinking medium \
+  --confirm-source-upload --write --force
+```
+
+The generator receives the redacted source conversation and basic repository context, but not the current prompt, gold patch, test patch, or held-out test names. Pi runs with tools, extensions, skills, project context files, and prompt templates disabled, so the generator cannot inspect the task directory or working tree. It preserves the human requester's framing and corrections while removing conversational logistics and implementation details. `--confirm-source-upload` is required because generation sends the private conversation to the configured model provider. Written prompts record their generator and content fingerprints in `task.json`.
+
 The repository ignores `tasks/` by default so source patches and transcripts are not accidentally committed here. This is not a promise that evaluation data stays on one machine: the repository snapshot and prompt are uploaded to Modal, and relevant prompt or source content may be sent to the configured model provider. Apply your organization's data-handling rules before running proprietary tasks.
 
 Task construction is currently manual: you choose the base and completed commits, classify test versus implementation files, export the source session, and create `task.json`. The bundled skill gives the end-to-end checklist.
@@ -80,11 +103,11 @@ uv run mysb run tasks/example-fix --repo ~/code/example-project \
   --provider openai --model gpt-5.5
 ```
 
-Results are written below `results/<task-id>/`. Each model gets its own subdirectory containing `result.json` and, when present, `agent.patch`. The generated agent patch excludes complete files under the held-out test paths before grading.
+Results are written below `results/<task-id>/`. Each model gets its own subdirectory containing `result.json` and, when present, `agent.patch`. The generated agent patch excludes complete files under the held-out test paths before grading. Rollouts record the eval prompt fingerprint; if a generated prompt changes, the audit and review console mark older runs as stale until they are rerun.
 
 ## Audit a benchmark
 
-Validation proves that a task executes. The audit command checks whether it is also useful benchmark signal: the prompt must be sufficiently specified without leaking held-out tests or solution identifiers, the test and implementation patches must be separated, regression coverage must exist, and configured model outcomes must be present. By default the audit expects result directories named `openai__gpt-5.5` and `fireworks__glm-5p2`; override them with `--models`.
+Validation proves that a task executes. The audit command checks whether it is also useful benchmark signal: the prompt must have authentic pre-implementation request provenance and be sufficiently specified without leaking held-out tests or solution identifiers, the test and implementation patches must be separated, held-out tests must not depend on exact identifiers introduced only by the gold patch, regression coverage must exist, and configured model outcomes must be present. By default the audit expects result directories named `openai__gpt-5.5` and `fireworks__glm-5p2`; override them with `--models`.
 
 ```bash
 uv run mysb audit tasks --results results
@@ -102,7 +125,7 @@ uv run mysb review --host 0.0.0.0 --port 8765 \
   --tasks tasks --results results
 ```
 
-The command builds the Vite frontend when its sources change, then serves the React app and Python API together. The console shows the resolved engineer prompt and its source, task metadata, validation output, model outcomes, review notes, and interactive patch views. Saving review notes updates the task's local `task.json` under its `quality` field.
+The command builds the Vite frontend when its sources change, then serves the React app and Python API together. The console shows the resolved eval prompt, the original source-session conversation when attached, task metadata, validation output, model outcomes, review notes, and interactive patch views. Use **Original Session** to compare a reconstructed prompt with what the engineer actually asked. Saving review notes updates the task's local `task.json` under its `quality` field.
 
 For frontend development, run the API and Vite separately:
 

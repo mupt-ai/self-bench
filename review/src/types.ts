@@ -1,4 +1,4 @@
-export type ModelResult = 'pass' | 'fail' | 'missing' | 'unreadable';
+export type ModelResult = 'pass' | 'fail' | 'missing' | 'unreadable' | 'stale';
 export type Verdict = 'accepted' | 'needs_review' | 'rejected';
 
 export interface Quality {
@@ -36,8 +36,23 @@ export interface PromptOrigin {
   message_index?: number;
 }
 
+export interface SourceTraceMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  user_message_index?: number;
+}
+
+export interface SourceTrace {
+  origin: {
+    path: string;
+    format: string;
+  };
+  messages: SourceTraceMessage[];
+}
+
 export interface RunDetail {
   exists: boolean;
+  prompt_status: 'current' | 'stale' | 'untracked';
   result: Record<string, unknown> | null;
   result_text: string;
   agent_patch: string;
@@ -49,6 +64,7 @@ export interface TaskDetail {
   task_json_text: string;
   prompt: string;
   prompt_origin: PromptOrigin;
+  source_trace: SourceTrace | null;
   validation_result: Record<string, unknown> | null;
   validation_text: string;
   runs: Record<string, RunDetail>;

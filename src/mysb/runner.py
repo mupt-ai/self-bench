@@ -142,6 +142,7 @@ def run_task(
         "task_id": task.task_id,
         "provider": provider,
         "model": model,
+        "prompt_sha256": task.prompt_sha256,
         "resolved": resolved,
         "failure_reasons": failure_reasons,
         "fail_to_pass_passed": f2p.passed,

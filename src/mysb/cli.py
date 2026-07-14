@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import DEFAULT_SIGNAL_MODELS, audit_task, format_audit_markdown
 from .review import cmd_review
 from .runner import run_task, save_result, validate_task
@@ -15,6 +16,41 @@ from .task import load_task
 
 def _model_slug(provider: str, model: str) -> str:
     return f"{provider}__{model.split('/')[-1]}"
+
+
+def cmd_generate_prompt(args: argparse.Namespace) -> int:
+    task = load_task(args.task_dir)
+    if task.source_trace is None:
+        print(f"task {task.task_id} has no source coding session", file=sys.stderr)
+        return 1
+    if not args.confirm_source_upload:
+        print(
+            "refusing to send the private source conversation to a model provider without "
+            "--confirm-source-upload",
+            file=sys.stderr,
+        )
+        return 1
+    if args.write and (task.dir / "prompt.md").is_file() and not args.force:
+        print("prompt.md already exists; pass --force to replace it", file=sys.stderr)
+        return 1
+    prompt, request_sha256 = generate_prompt(
+        task,
+        provider=args.provider,
+        model=args.model,
+        thinking=args.thinking,
+    )
+    if not args.write:
+        print(prompt)
+        return 0
+    path = save_generated_prompt(
+        task,
+        prompt,
+        provider=args.provider,
+        model=args.model,
+        request_sha256=request_sha256,
+    )
+    print(f"generated prompt: {path}")
+    return 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -125,6 +161,23 @@ def main() -> None:
     common.add_argument("--repo", required=True, help="path to a local clone containing base_commit")
     common.add_argument("--results", default="results", help="results root dir (default: results)")
     common.add_argument("--quiet", action="store_true", help="don't stream sandbox output")
+
+    p_prompt = sub.add_parser(
+        "generate-prompt",
+        help="generate a standalone user-voice prompt from a private source coding session",
+    )
+    p_prompt.add_argument("task_dir", help="task directory containing task.json and trace_source")
+    p_prompt.add_argument("--provider", required=True, help="pi provider used for prompt generation")
+    p_prompt.add_argument("--model", required=True, help="pi model used for prompt generation")
+    p_prompt.add_argument("--thinking", default=None, help="pi thinking level")
+    p_prompt.add_argument("--write", action="store_true", help="save the generated prompt to prompt.md")
+    p_prompt.add_argument("--force", action="store_true", help="replace an existing prompt.md")
+    p_prompt.add_argument(
+        "--confirm-source-upload",
+        action="store_true",
+        help="confirm the private source conversation may be sent to the configured provider",
+    )
+    p_prompt.set_defaults(fn=cmd_generate_prompt)
 
     p_val = sub.add_parser("validate", parents=[common], help="gold-validate a task (must pass before the task counts)")
     p_val.set_defaults(fn=cmd_validate)

@@ -64,9 +64,18 @@ class ReviewStore:
             "task_json_text": json.dumps(task_json, indent=2),
             "prompt": task.prompt,
             "prompt_origin": task.prompt_origin,
+            "source_trace": task.source_trace,
             "validation_result": validation,
             "validation_text": json.dumps(validation, indent=2) if validation is not None else "",
-            "runs": {slug: self._run_detail(task.task_id, slug) for slug in self.model_slugs},
+            "runs": {
+                slug: self._run_detail(
+                    task.task_id,
+                    slug,
+                    current_prompt_sha256=task.prompt_sha256,
+                    enforce_prompt_fingerprint=task.prompt_generation is not None,
+                )
+                for slug in self.model_slugs
+            },
         }
 
     def _summary(self, task: Task, audit: AuditResult) -> dict[str, object]:
@@ -87,15 +96,29 @@ class ReviewStore:
             "pass_to_pass_count": len(task.pass_to_pass),
         }
 
-    def _run_detail(self, task_id: str, slug: str) -> dict[str, object]:
+    def _run_detail(
+        self,
+        task_id: str,
+        slug: str,
+        *,
+        current_prompt_sha256: str | None = None,
+        enforce_prompt_fingerprint: bool = False,
+    ) -> dict[str, object]:
         run_dir = self.results_root / task_id / slug
         result = _read_json(run_dir / "result.json")
         agent_patch = _read_text(run_dir / "agent.patch")
         if agent_patch is None and isinstance(result, dict):
             value = result.get("agent_patch")
             agent_patch = value if isinstance(value, str) else ""
+        prompt_status = "untracked"
+        if isinstance(result, dict) and current_prompt_sha256 is not None:
+            if result.get("prompt_sha256") == current_prompt_sha256:
+                prompt_status = "current"
+            elif enforce_prompt_fingerprint:
+                prompt_status = "stale"
         return {
             "exists": result is not None,
+            "prompt_status": prompt_status,
             "result": result,
             "result_text": json.dumps(result, indent=2) if result is not None else "",
             "agent_patch": agent_patch or "",

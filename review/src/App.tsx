@@ -1,9 +1,10 @@
-import { PatchDiff } from '@pierre/diffs/react';
+import { parsePatchFiles } from '@pierre/diffs';
+import { FileDiff } from '@pierre/diffs/react';
 import React from 'react';
 
-import type { PromptOrigin, RunDetail, Summaries, TaskDetail, TaskSummary, Verdict } from './types';
+import type { PromptOrigin, RunDetail, SourceTrace, Summaries, TaskDetail, TaskSummary, Verdict } from './types';
 
-type Tab = 'prompt' | 'task' | 'test' | 'gold' | 'validation' | 'runs';
+type Tab = 'prompt' | 'source' | 'task' | 'test' | 'gold' | 'validation' | 'runs';
 type Filter = 'all' | Verdict;
 
 const verdictOrder: Record<Verdict, number> = { accepted: 0, needs_review: 1, rejected: 2 };
@@ -147,13 +148,23 @@ function Detail({ detail, tab, onTab, onSaved }: { detail: TaskDetail | null; ta
       <div className="detail">
         <Summary summary={detail.summary} />
         <ReviewPanel key={detail.summary.task_id} detail={detail} onSaved={onSaved} />
-        <section className="panel">
-          <div className="tabs">
-            {(['prompt', 'task', 'test', 'gold', 'validation', 'runs'] as Tab[]).map((value) => (
-              <button key={value} className="tab" data-active={tab === value} type="button" onClick={() => onTab(value)}>{tabLabel(value)}</button>
+        <section className="panel tab-panel">
+          <div className="tabs" role="tablist" aria-label="Task detail">
+            {(['prompt', 'source', 'task', 'test', 'gold', 'validation', 'runs'] as Tab[]).map((value) => (
+              <button
+                key={value}
+                className="tab"
+                data-active={tab === value}
+                type="button"
+                role="tab"
+                aria-selected={tab === value}
+                onClick={() => onTab(value)}
+              >
+                {tabLabel(value)}
+              </button>
             ))}
           </div>
-          <div className="panel-body"><TabContent tab={tab} detail={detail} /></div>
+          <div className="panel-body tab-content"><TabContent tab={tab} detail={detail} /></div>
         </section>
       </div>
     </section>
@@ -228,7 +239,8 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
 }
 
 function TabContent({ tab, detail }: { tab: Tab; detail: TaskDetail }) {
-  if (tab === 'prompt') return <PromptView prompt={detail.prompt} origin={detail.prompt_origin} />;
+  if (tab === 'prompt') return <PromptView prompt={detail.prompt} origin={detail.prompt_origin} hasSourceTrace={detail.source_trace !== null} />;
+  if (tab === 'source') return <SourceSession key={detail.summary.task_id} trace={detail.source_trace} promptOrigin={detail.prompt_origin} />;
   if (tab === 'task') return <Code>{detail.task_json_text}</Code>;
   if (tab === 'test') return <DiffViewer taskId={detail.summary.task_id} kind="test" label="Test Patch" />;
   if (tab === 'gold') return <DiffViewer taskId={detail.summary.task_id} kind="gold" label="Gold Patch" />;
@@ -236,9 +248,48 @@ function TabContent({ tab, detail }: { tab: Tab; detail: TaskDetail }) {
   return <Runs detail={detail} />;
 }
 
-function PromptView({ prompt, origin }: { prompt: string; origin: PromptOrigin }) {
-  const source = origin.kind === 'agent_json' ? `${origin.format} · ${origin.path} · message ${origin.message_index}` : origin.path;
-  return <div><div className="source-line"><span className="label">Prompt Source</span><span className="subtle">{source}</span></div><Code>{prompt}</Code></div>;
+function PromptView({ prompt, origin, hasSourceTrace }: { prompt: string; origin: PromptOrigin; hasSourceTrace: boolean }) {
+  const source = origin.kind === 'agent_json' ? `${origin.format} · ${origin.path} · message ${origin.message_index}` : 'manually reconstructed · prompt.md';
+  return <div>
+    <div className="source-line"><span className="label">Eval Prompt Source</span><span className="subtle">{source}</span></div>
+    {origin.kind === 'prompt.md' && hasSourceTrace && <div className="warning prompt-provenance">Compare this reconstructed prompt with the human requests in Original Session.</div>}
+    <Code>{prompt}</Code>
+  </div>;
+}
+
+function SourceSession({ trace, promptOrigin }: { trace: SourceTrace | null; promptOrigin: PromptOrigin }) {
+  const [showAssistant, setShowAssistant] = React.useState(false);
+  if (!trace) return <Empty>No original coding session is attached to this eval.</Empty>;
+
+  const selectedIndex = promptOrigin.kind === 'agent_json' && promptOrigin.path === trace.origin.path
+    ? promptOrigin.message_index
+    : null;
+  const visibleMessages = showAssistant ? trace.messages : trace.messages.filter((message) => message.role === 'user');
+  const userCount = trace.messages.filter((message) => message.role === 'user').length;
+
+  return <div className="source-session">
+    <div className="source-session-header">
+      <div>
+        <div className="label">Original Coding Session</div>
+        <div className="subtle">{trace.origin.format} · {trace.origin.path} · {userCount} human turn{userCount === 1 ? '' : 's'}</div>
+      </div>
+      <button type="button" onClick={() => setShowAssistant((current) => !current)}>
+        {showAssistant ? 'Human turns only' : 'Show assistant context'}
+      </button>
+    </div>
+    <div className="source-messages">
+      {visibleMessages.map((message, index) => {
+        const selected = message.role === 'user' && message.user_message_index === selectedIndex;
+        return <section className="source-message" data-role={message.role} data-selected={selected} key={`${message.role}:${message.user_message_index ?? index}:${index}`}>
+          <div className="source-message-header">
+            <span>{message.role === 'user' ? `Human request ${(message.user_message_index ?? index) + 1}` : 'Assistant context'}</span>
+            {selected && <Badge value="eval prompt" kind="pass" />}
+          </div>
+          <pre className="source-message-content">{message.content}</pre>
+        </section>;
+      })}
+    </div>
+  </div>;
 }
 
 function DiffViewer({ taskId, kind, label, modelSlug, compact = false }: { taskId: string; kind: 'test' | 'gold' | 'agent'; label: string; modelSlug?: string; compact?: boolean }) {
@@ -261,9 +312,52 @@ function DiffViewer({ taskId, kind, label, modelSlug, compact = false }: { taskI
   return <div className={`diff-shell${expanded ? ' expanded' : ''}${compact ? ' compact' : ''}`}>
     <div className="diff-toolbar"><span className="label">{label}</span><div className="meta"><button className="link-button" type="button" onClick={() => setExpanded(!expanded)}>{expanded ? 'Close full screen' : 'Open full screen'}</button><a href={path} target="_blank" rel="noreferrer">Raw patch</a></div></div>
     <div className="diff-body">
-      {error ? <div className="warning blocker">{error}</div> : patch ? <PatchDiff patch={patch} disableWorkerPool options={{ themeType: 'dark', diffStyle: window.matchMedia('(max-width: 900px)').matches ? 'unified' : 'split', diffIndicators: 'bars', overflow: 'scroll', disableBackground: false, disableLineNumbers: false, stickyHeader: true, lineHoverHighlight: 'number' }} /> : <Empty>Loading patch…</Empty>}
+      {error ? <div className="warning blocker">{error}</div> : patch ? (
+        <DiffErrorBoundary key={path}>
+          <PatchFiles patch={patch} />
+        </DiffErrorBoundary>
+      ) : <Empty>Loading patch…</Empty>}
     </div>
   </div>;
+}
+
+function PatchFiles({ patch }: { patch: string }) {
+  const files = React.useMemo(() => parsePatchFiles(patch).flatMap((parsed) => parsed.files), [patch]);
+  if (!files.length) return <Code>{patch}</Code>;
+
+  const options = {
+    themeType: 'dark' as const,
+    diffStyle: window.matchMedia('(max-width: 900px)').matches ? 'unified' as const : 'split' as const,
+    diffIndicators: 'bars' as const,
+    overflow: 'scroll' as const,
+    disableBackground: false,
+    disableLineNumbers: false,
+    stickyHeader: true,
+    lineHoverHighlight: 'number' as const,
+  };
+
+  return <div className="patch-files">
+    {files.map((file, index) => (
+      <FileDiff key={`${file.prevName ?? ''}:${file.name}:${index}`} fileDiff={file} disableWorkerPool options={options} />
+    ))}
+  </div>;
+}
+
+class DiffErrorBoundary extends React.Component<React.PropsWithChildren, { error: string | null }> {
+  state = { error: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error: String(error) };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('Diff renderer failed', error);
+  }
+
+  render() {
+    if (this.state.error) return <div className="warning blocker">Diff renderer failed. Open the raw patch instead.</div>;
+    return this.props.children;
+  }
 }
 
 function Validation({ detail }: { detail: TaskDetail }) {
@@ -282,9 +376,11 @@ function Run({ taskId, slug, run }: { taskId: string; slug: string; run: RunDeta
   if (!run.exists) return <div className="run-card"><div className="run-head"><span>{slug}</span><Badge value="missing" /></div></div>;
   const result = run.result ?? {};
   const resolved = result.resolved === true;
+  const stale = run.prompt_status === 'stale';
   const reasons = Array.isArray(result.failure_reasons) ? result.failure_reasons.join('\n') : '';
   return <div className="run-card">
-    <div className="run-head"><span>{slug}</span><Badge value={resolved ? 'resolved' : 'failed'} kind={resolved ? 'pass' : 'fail'} /></div>
+    <div className="run-head"><span>{slug}</span><Badge value={stale ? 'stale prompt' : resolved ? 'resolved' : 'failed'} kind={stale ? 'stale' : resolved ? 'pass' : 'fail'} /></div>
+    {stale && <div className="warning stale-run">This rollout used an older prompt. Rerun it before interpreting the result.</div>}
     <div className="run-body"><div className="warning-list"><Tail title="Failure Reasons" value={reasons} /><Tail title="F2P Tail" value={result.f2p_tail} /><Tail title="P2P Tail" value={result.p2p_tail} /><Tail title="Agent Log Tail" value={result.agent_log_tail} /></div><div>{run.agent_patch ? <DiffViewer taskId={taskId} kind="agent" label="Agent Patch" modelSlug={slug} compact /> : <Code>{run.result_text}</Code>}</div></div>
   </div>;
 }
@@ -300,5 +396,5 @@ function Stat({ label, children }: React.PropsWithChildren<{ label: string }>) {
 function Code({ children }: { children: string }) { return <pre className="code">{children}</pre>; }
 function Empty({ children }: React.PropsWithChildren) { return <div className="empty">{children}</div>; }
 function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) { return <div className="page-state"><div className="warning blocker">{error}</div><button type="button" onClick={onRetry}>Retry</button></div>; }
-function tabLabel(tab: Tab) { return ({ prompt: 'Prompt', task: 'Task JSON', test: 'Test Patch', gold: 'Gold Patch', validation: 'Validation', runs: 'Runs' })[tab]; }
+function tabLabel(tab: Tab) { return ({ prompt: 'Prompt', source: 'Original Session', task: 'Task JSON', test: 'Test Patch', gold: 'Gold Patch', validation: 'Validation', runs: 'Runs' })[tab]; }
 function shortModel(slug: string) { return slug.replace('openai__', 'openai ').replace('fireworks__', 'fw '); }
