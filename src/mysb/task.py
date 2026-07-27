@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -43,6 +44,34 @@ class Task:
     @property
     def prompt_sha256(self) -> str:
         return hashlib.sha256(self.prompt.encode()).hexdigest()
+
+    @property
+    def evaluation_fingerprints(self) -> dict[str, str]:
+        definition = {
+            "task_id": self.task_id,
+            "repo": self.repo,
+            "base_commit": self.base_commit,
+            "workdir": self.workdir,
+            "setup_cmd": self.setup_cmd,
+            "test_cmd": self.test_cmd,
+            "fail_to_pass": self.fail_to_pass,
+            "pass_to_pass": self.pass_to_pass,
+            "test_paths": self.test_paths,
+            "timeout_setup": self.timeout_setup,
+            "timeout_agent": self.timeout_agent,
+            "timeout_tests": self.timeout_tests,
+        }
+        encoded_definition = json.dumps(
+            definition,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return {
+            "definition_sha256": hashlib.sha256(encoded_definition).hexdigest(),
+            "prompt_sha256": self.prompt_sha256,
+            "test_patch_sha256": hashlib.sha256(self.test_patch.encode()).hexdigest(),
+            "gold_patch_sha256": hashlib.sha256(self.gold_patch.encode()).hexdigest(),
+        }
 
     @property
     def prompt_origin(self) -> dict[str, object]:
@@ -109,7 +138,10 @@ class Task:
         if not isinstance(source_format, str) or source_format not in SUPPORTED_FORMATS:
             supported = ", ".join(sorted(SUPPORTED_FORMATS))
             raise ValueError(f"{field_name}.format must be one of {supported}")
-        return self.dir / relative_path, source_format
+        source_path = (self.dir / relative_path).resolve()
+        if not source_path.is_relative_to(self.dir):
+            raise ValueError(f"{field_name}.path must stay inside the task directory")
+        return source_path, source_format
 
 
 def load_task(task_dir: str | Path) -> Task:
@@ -118,6 +150,17 @@ def load_task(task_dir: str | Path) -> Task:
     task = Task(dir=task_dir, **cfg)
 
     problems = []
+    if not isinstance(task.task_id, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]*",
+        task.task_id,
+    ):
+        problems.append("task_id must be a path-safe identifier")
+    if not isinstance(task.workdir, str) or not task.workdir:
+        problems.append("workdir must be a non-empty relative path")
+    else:
+        workdir = Path(task.workdir)
+        if workdir.is_absolute() or ".." in workdir.parts:
+            problems.append("workdir must stay inside the repository")
     if "{tests}" not in task.test_cmd:
         problems.append('test_cmd must contain the "{tests}" placeholder')
     if not task.fail_to_pass:
@@ -151,6 +194,19 @@ def load_task(task_dir: str | Path) -> Task:
             problems.append(f"missing {name}")
     if not task.test_paths:
         problems.append("test_paths must list the files/dirs the test patch touches")
+    else:
+        for test_path in task.test_paths:
+            if not isinstance(test_path, str) or not test_path:
+                problems.append("test_paths entries must be non-empty relative paths")
+                break
+            path = Path(test_path)
+            if path == Path(".") or path.is_absolute() or ".." in path.parts:
+                problems.append("test_paths entries must stay inside the repository")
+                break
+    for timeout_name in ("timeout_setup", "timeout_agent", "timeout_tests"):
+        timeout = getattr(task, timeout_name)
+        if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+            problems.append(f"{timeout_name} must be a positive integer")
     if problems:
         raise ValueError(f"invalid task {task_dir}: " + "; ".join(problems))
     return task

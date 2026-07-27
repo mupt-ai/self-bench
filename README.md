@@ -2,7 +2,7 @@
 
 Turn merged pull requests from a local Git clone into executable SWE-bench-style tasks. Each task gives a coding agent a clean repository snapshot and an engineer-authored work request, then grades the resulting patch with tests derived from the original change.
 
-The toolkit validates task determinism, runs agent rollouts in isolated sandboxes, audits benchmark quality, produces result tables, and includes a React review console for inspecting prompts, patches, test output, and model traces.
+The toolkit validates task determinism, runs agent rollouts in isolated Modal sandboxes, audits benchmark quality, produces result tables, and includes a React review console for inspecting prompts, patches, and test output. Agent execution and grading use separate fresh sandboxes so the agent cannot inspect held-out patches or persist ignored dependency state into grading.
 
 ## Install
 
@@ -90,20 +90,22 @@ Task construction is currently manual: you choose the base and completed commits
 
 ## Validate and run
 
-First prove that the selected tests fail at the base commit and pass with the gold implementation:
+First prove that the selected tests fail at the base commit and pass with the gold implementation. Base and gold checks run in separate fresh sandboxes:
 
 ```bash
 uv run mysb validate tasks/example-fix --repo ~/code/example-project
 ```
 
-Then run a model through Pi inside a Modal sandbox:
+Then run a model through Pi inside a Modal sandbox. The agent sandbox receives only the base snapshot and prompt. Its captured patch is graded in a second fresh sandbox that receives the held-out tests; `gold.patch` is never uploaded to either rollout sandbox:
 
 ```bash
 uv run mysb run tasks/example-fix --repo ~/code/example-project \
   --provider openai --model gpt-5.5
 ```
 
-Results are written below `results/<task-id>/`. Each model gets its own subdirectory containing `result.json` and, when present, `agent.patch`. The generated agent patch excludes complete files under the held-out test paths before grading. Rollouts record the eval prompt fingerprint; if a generated prompt changes, the audit and review console mark older runs as stale until they are rerun.
+Results are written below `results/<task-id>/`. Each model gets a backward-compatible latest `result.json` and `agent.patch`, plus immutable history under `runs/<run-id>/`. Results record thinking effort, timestamps, harness/runtime versions, and fingerprints for the task definition, prompt, test patch, and gold patch. The generated agent patch excludes complete files under the held-out test paths before grading. If benchmark inputs or the result schema change, the audit and review console mark older validations and runs as stale until they are rerun.
+
+Provider credentials are scoped to the Pi command rather than the whole sandbox. Pi and tool subprocesses it launches may still inherit those credentials, so use narrowly scoped evaluation keys. Setup and grading commands do not receive provider secrets.
 
 ## Audit a benchmark
 
@@ -114,7 +116,7 @@ uv run mysb audit tasks --results results
 uv run mysb report results --tasks tasks
 ```
 
-Audit verdicts are computed automatically. `accepted` means the validation and quality gates pass with mixed model outcomes. `needs_review` means the task executes but has a warning or inconclusive model signal. `rejected` means a blocking requirement fails. Without `--strict`, warnings and review-needed verdicts are reported without failing the command. Use `--strict` in automation when every task must be accepted.
+Audit verdicts are computed automatically. `accepted` means the current validation and quality gates pass with mixed model outcomes. `needs_review` means the task executes but has a warning or inconclusive model signal. `rejected` means a blocking requirement fails, including a stale validation result. Without `--strict`, warnings and review-needed verdicts are reported without failing the command. Use `--strict` in automation when every task must be accepted.
 
 ## Review tasks in the browser
 

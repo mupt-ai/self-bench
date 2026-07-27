@@ -140,6 +140,8 @@ Acceptance requires all of the following:
 - Fail-to-pass tests pass with the gold patch twice in succession. This catches obvious flakes but does not prove full determinism.
 - Pass-to-pass tests still pass with the gold patch.
 
+The validator uses separate fresh sandboxes for the base and gold checks. A rollout uses another two-sandbox boundary: the agent receives only the base snapshot and prompt, then its captured patch is graded in a fresh sandbox with the held-out tests. Never place `gold.patch` or `test.patch` in the agent sandbox, and never grade in a sandbox that executed the agent.
+
 If validation fails, correct the base commit, patch split, setup command, or test IDs. Do not weaken a legitimate test merely to make the task pass.
 
 Run the quality audit once before spending model calls:
@@ -159,6 +161,8 @@ uv run mysb run tasks/<task> --repo <local-repo> --provider <provider> --model <
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
+
+Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores.
 
 ## Step 7: audit and review
 

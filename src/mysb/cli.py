@@ -4,18 +4,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import DEFAULT_SIGNAL_MODELS, audit_task, format_audit_markdown
+from .result_schema import RESULT_SCHEMA_VERSION
 from .review import cmd_review
 from .runner import run_task, save_result, validate_task
 from .task import load_task
 
 
 def _model_slug(provider: str, model: str) -> str:
-    return f"{provider}__{model.split('/')[-1]}"
+    model_name = model.rsplit("/", 1)[-1]
+    for label, value in (("provider", provider), ("model", model_name)):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
+            raise ValueError(f"{label} must end in a path-safe identifier")
+    return f"{provider}__{model_name}"
 
 
 def cmd_generate_prompt(args: argparse.Namespace) -> int:
@@ -75,7 +81,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     path = save_result(result, Path(args.results), _model_slug(args.provider, args.model))
     summary = {
         k: result[k]
-        for k in ("task_id", "provider", "model", "resolved", "failure_reasons",
+        for k in ("run_id", "task_id", "provider", "model", "thinking", "resolved", "failure_reasons",
                   "fail_to_pass_passed", "pass_to_pass_passed", "agent_exit_ok",
                   "agent_patch_applied", "duration_s")
     }
@@ -86,12 +92,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_report(args: argparse.Namespace) -> int:
     root = Path(args.results)
+    tasks_by_id = {
+        task.task_id: task
+        for task in (load_task(task_dir) for task_dir in _iter_task_dirs(args.tasks))
+    }
     allowed_task_ids: set[str] | None = None
     if args.verdict:
         audit_models = args.models or list(DEFAULT_SIGNAL_MODELS)
         audits = [
-            audit_task(load_task(task_dir), root, audit_models)
-            for task_dir in _iter_task_dirs(args.tasks)
+            audit_task(task, root, audit_models)
+            for task in tasks_by_id.values()
         ]
         allowed_task_ids = {r.task_id for r in audits if r.verdict in args.verdict}
 
@@ -108,18 +118,32 @@ def cmd_report(args: argparse.Namespace) -> int:
         if allowed_task_ids is not None and task_id not in allowed_task_ids:
             continue
         models.add(run_name)
-        rows.setdefault(task_id, {})[run_name] = "✅" if r["resolved"] else "❌"
+        task = tasks_by_id.get(task_id)
+        if task is not None and (
+            r.get("result_schema_version") != RESULT_SCHEMA_VERSION
+            or r.get("task_fingerprints") != task.evaluation_fingerprints
+        ):
+            status = "stale"
+        else:
+            status = "pass" if r["resolved"] else "fail"
+        rows.setdefault(task_id, {})[run_name] = status
     if not rows:
         print(f"no run results under {root}")
         return 1
     cols = sorted(models)
+    icons = {"pass": "✅", "fail": "❌", "stale": "⏳"}
     print("| task | " + " | ".join(cols) + " |")
     print("|---" * (len(cols) + 1) + "|")
     for task_id, per_model in sorted(rows.items()):
-        print(f"| {task_id} | " + " | ".join(per_model.get(m, "—") for m in cols) + " |")
+        print(
+            f"| {task_id} | "
+            + " | ".join(icons.get(per_model.get(model, ""), "—") for model in cols)
+            + " |"
+        )
     totals = [
-        f"{sum(1 for r in rows.values() if r.get(m) == '✅')}/{sum(1 for r in rows.values() if m in r)}"
-        for m in cols
+        f"{sum(1 for row in rows.values() if row.get(model) == 'pass')}/"
+        f"{sum(1 for row in rows.values() if row.get(model) in {'pass', 'fail'})}"
+        for model in cols
     ]
     print("| **resolved** | " + " | ".join(totals) + " |")
     return 0
@@ -131,6 +155,8 @@ def _iter_task_dirs(paths: list[str]) -> list[Path]:
         path = Path(raw)
         if (path / "task.json").is_file():
             task_dirs.append(path)
+            continue
+        if not path.is_dir():
             continue
         task_dirs.extend(sorted(p for p in path.iterdir() if (p / "task.json").is_file()))
     return task_dirs

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task
 
 DEFAULT_SIGNAL_MODELS = ("openai__gpt-5.5", "fireworks__glm-5p2")
@@ -50,7 +51,10 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     blockers: list[str] = []
     warnings: list[str] = []
 
-    validation = _validation_status(results_root / task.task_id / "validation" / "result.json")
+    validation = _validation_status(
+        results_root / task.task_id / "validation" / "result.json",
+        required_task_fingerprints=task.evaluation_fingerprints,
+    )
     if validation != "valid":
         blockers.append(f"validation result is {validation}")
 
@@ -134,10 +138,13 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         task.task_id,
         model_slugs,
         required_prompt_sha256=required_prompt_sha256,
+        required_task_fingerprints=task.evaluation_fingerprints,
     )
     solver_signal = _solver_signal(model_results)
     if any(result == "stale" for result in model_results.values()):
-        warnings.append("one or more standard model runs used an older prompt and must be rerun")
+        warnings.append(
+            "one or more standard model runs use stale benchmark inputs or result schema and must be rerun"
+        )
     elif solver_signal == "missing":
         warnings.append("missing one or more standard model runs")
     elif solver_signal == "single_model":
@@ -167,13 +174,22 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     )
 
 
-def _validation_status(path: Path) -> str:
+def _validation_status(
+    path: Path,
+    *,
+    required_task_fingerprints: dict[str, str] | None = None,
+) -> str:
     if not path.is_file():
         return "missing"
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError:
         return "unreadable"
+    if required_task_fingerprints is not None and (
+        data.get("result_schema_version") != RESULT_SCHEMA_VERSION
+        or data.get("task_fingerprints") != required_task_fingerprints
+    ):
+        return "stale"
     return "valid" if data.get("valid") is True else "invalid"
 
 
@@ -183,6 +199,7 @@ def _model_results(
     model_slugs: list[str],
     *,
     required_prompt_sha256: str | None = None,
+    required_task_fingerprints: dict[str, str] | None = None,
 ) -> dict[str, str]:
     out: dict[str, str] = {}
     for slug in model_slugs:
@@ -194,6 +211,12 @@ def _model_results(
             data = json.loads(path.read_text())
         except json.JSONDecodeError:
             out[slug] = "unreadable"
+            continue
+        if required_task_fingerprints is not None and (
+            data.get("result_schema_version") != RESULT_SCHEMA_VERSION
+            or data.get("task_fingerprints") != required_task_fingerprints
+        ):
+            out[slug] = "stale"
             continue
         if required_prompt_sha256 is not None and data.get("prompt_sha256") != required_prompt_sha256:
             out[slug] = "stale"
@@ -434,7 +457,7 @@ def format_audit_markdown(results: list[AuditResult], model_slugs: list[str]) ->
         + " | notes |",
         "|---" * (5 + len(model_slugs)) + "|",
     ]
-    icon = {"pass": "✅", "fail": "❌", "missing": "—", "unreadable": "?"}
+    icon = {"pass": "✅", "fail": "❌", "missing": "—", "stale": "⏳", "unreadable": "?"}
     for result in sorted(results, key=lambda r: r.task_id):
         notes = result.blockers or result.warnings
         note_text = "; ".join(notes[:3])

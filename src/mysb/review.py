@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .quality import AuditResult, audit_task
+from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task, load_task
 
 
@@ -73,6 +74,7 @@ class ReviewStore:
                     slug,
                     current_prompt_sha256=task.prompt_sha256,
                     enforce_prompt_fingerprint=task.prompt_generation is not None,
+                    current_task_fingerprints=task.evaluation_fingerprints,
                 )
                 for slug in self.model_slugs
             },
@@ -103,6 +105,7 @@ class ReviewStore:
         *,
         current_prompt_sha256: str | None = None,
         enforce_prompt_fingerprint: bool = False,
+        current_task_fingerprints: dict[str, str] | None = None,
     ) -> dict[str, object]:
         run_dir = self.results_root / task_id / slug
         result = _read_json(run_dir / "result.json")
@@ -111,14 +114,26 @@ class ReviewStore:
             value = result.get("agent_patch")
             agent_patch = value if isinstance(value, str) else ""
         prompt_status = "untracked"
+        stale_reason = None
         if isinstance(result, dict) and current_prompt_sha256 is not None:
-            if result.get("prompt_sha256") == current_prompt_sha256:
+            if (
+                current_task_fingerprints is not None
+                and (
+                    result.get("result_schema_version") != RESULT_SCHEMA_VERSION
+                    or result.get("task_fingerprints") != current_task_fingerprints
+                )
+            ):
+                prompt_status = "stale"
+                stale_reason = "Benchmark inputs or result schema changed. Rerun before interpreting this result."
+            elif result.get("prompt_sha256") == current_prompt_sha256:
                 prompt_status = "current"
             elif enforce_prompt_fingerprint:
                 prompt_status = "stale"
+                stale_reason = "The eval prompt changed. Rerun before interpreting this result."
         return {
             "exists": result is not None,
             "prompt_status": prompt_status,
+            "stale_reason": stale_reason,
             "result": result,
             "result_text": json.dumps(result, indent=2) if result is not None else "",
             "agent_patch": agent_patch or "",

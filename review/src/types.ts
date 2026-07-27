@@ -53,6 +53,7 @@ export interface SourceTrace {
 export interface RunDetail {
   exists: boolean;
   prompt_status: 'current' | 'stale' | 'untracked';
+  stale_reason: string | null;
   result: Record<string, unknown> | null;
   result_text: string;
   agent_patch: string;

@@ -9,8 +9,10 @@ from mysb.quality import (
     _brittle_test_signals,
     _gold_coupled_test_identifiers,
     _model_results,
+    _validation_status,
     audit_task,
 )
+from mysb.result_schema import RESULT_SCHEMA_VERSION
 from mysb.task import Task
 
 
@@ -131,6 +133,48 @@ class ModelResultFreshnessTest(unittest.TestCase):
         results = _model_results(self.results, "task", ["model"])
 
         self.assertEqual(results, {"model": "pass"})
+
+    def test_marks_legacy_result_stale_when_current_fingerprints_are_required(self) -> None:
+        self.write_result("model", resolved=True)
+
+        results = _model_results(
+            self.results,
+            "task",
+            ["model"],
+            required_task_fingerprints={"definition_sha256": "current"},
+        )
+
+        self.assertEqual(results, {"model": "stale"})
+
+    def test_accepts_current_result_schema_and_fingerprints(self) -> None:
+        fingerprints = {"definition_sha256": "current"}
+        self.write_result(
+            "model",
+            resolved=True,
+            result_schema_version=RESULT_SCHEMA_VERSION,
+            task_fingerprints=fingerprints,
+        )
+
+        results = _model_results(
+            self.results,
+            "task",
+            ["model"],
+            required_task_fingerprints=fingerprints,
+        )
+
+        self.assertEqual(results, {"model": "pass"})
+
+    def test_marks_old_validation_schema_stale(self) -> None:
+        path = self.results / "validation.json"
+        path.write_text(json.dumps({"valid": True}))
+
+        self.assertEqual(
+            _validation_status(
+                path,
+                required_task_fingerprints={"definition_sha256": "current"},
+            ),
+            "stale",
+        )
 
 
 if __name__ == "__main__":

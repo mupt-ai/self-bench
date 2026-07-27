@@ -95,6 +95,25 @@ class TaskPromptSourceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "trace_source.path must stay"):
             load_task(self.task_dir)
 
+    def test_rejects_unsafe_task_and_repository_paths(self) -> None:
+        (self.task_dir / "prompt.md").write_text("Standalone eval prompt")
+
+        self.write_task(prompt_source=None, task_id="../escape")
+        with self.assertRaisesRegex(ValueError, "task_id must be a path-safe"):
+            load_task(self.task_dir)
+
+        self.write_task(prompt_source=None, workdir="../../tmp")
+        with self.assertRaisesRegex(ValueError, "workdir must stay"):
+            load_task(self.task_dir)
+
+        self.write_task(prompt_source=None, test_paths=["../tests"])
+        with self.assertRaisesRegex(ValueError, "test_paths entries must stay"):
+            load_task(self.task_dir)
+
+        self.write_task(prompt_source=None, test_paths=["."])
+        with self.assertRaisesRegex(ValueError, "test_paths entries must stay"):
+            load_task(self.task_dir)
+
     def test_rejects_generated_prompt_when_fingerprint_changed(self) -> None:
         (self.task_dir / "prompt.md").write_text("Edited generated prompt")
         self.write_task(

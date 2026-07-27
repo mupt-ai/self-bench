@@ -380,7 +380,7 @@ function Run({ taskId, slug, run }: { taskId: string; slug: string; run: RunDeta
   const reasons = Array.isArray(result.failure_reasons) ? result.failure_reasons.join('\n') : '';
   return <div className="run-card">
     <div className="run-head"><span>{slug}</span><Badge value={stale ? 'stale prompt' : resolved ? 'resolved' : 'failed'} kind={stale ? 'stale' : resolved ? 'pass' : 'fail'} /></div>
-    {stale && <div className="warning stale-run">This rollout used an older prompt. Rerun it before interpreting the result.</div>}
+    {stale && <div className="warning stale-run">{run.stale_reason ?? 'This rollout is stale. Rerun it before interpreting the result.'}</div>}
     <div className="run-body"><div className="warning-list"><Tail title="Failure Reasons" value={reasons} /><Tail title="F2P Tail" value={result.f2p_tail} /><Tail title="P2P Tail" value={result.p2p_tail} /><Tail title="Agent Log Tail" value={result.agent_log_tail} /></div><div>{run.agent_patch ? <DiffViewer taskId={taskId} kind="agent" label="Agent Patch" modelSlug={slug} compact /> : <Code>{run.result_text}</Code>}</div></div>
   </div>;
 }
