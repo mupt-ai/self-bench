@@ -1,5 +1,5 @@
 {
-  "name": "make-your-swebench-review",
+  "name": "selfbench-review",
   "private": true,
   "type": "module",
   "scripts": {

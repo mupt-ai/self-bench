@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mysb.agent_input import extract_prompt
+from selfbench.agent_input import extract_prompt, extract_trace
 
 
 class AgentInputTest(unittest.TestCase):
@@ -58,6 +58,28 @@ class AgentInputTest(unittest.TestCase):
         )
 
         self.assertEqual(extract_prompt(path, source_format="auto"), "Make builds deterministic.")
+
+    def test_extracts_review_trace_without_injected_messages_or_secrets(self) -> None:
+        path = self.write_jsonl(
+            "pi.jsonl",
+            [
+                {"type": "session", "id": "s1"},
+                {"type": "message", "parentId": None, "message": {"role": "user", "content": "Investigate this with dari_abcdefghijklmnopqrstuvwxyz1234"}},
+                {"type": "message", "parentId": None, "message": {"role": "assistant", "content": [{"type": "text", "text": "I found the timeout."}]}},
+                {"type": "message", "parentId": None, "message": {"role": "user", "content": "<skill name=\"loop-on-ci\">injected</skill>"}},
+                {"type": "message", "parentId": None, "message": {"role": "user", "content": "Make the timeout ten minutes."}},
+            ],
+        )
+
+        trace = extract_trace(path, source_format="auto")
+
+        self.assertEqual(trace["format"], "pi")
+        self.assertEqual(trace["messages"], [
+            {"role": "user", "content": "Investigate this with dari_[REDACTED]", "user_message_index": 0},
+            {"role": "assistant", "content": "I found the timeout."},
+            {"role": "user", "content": "Make the timeout ten minutes.", "user_message_index": 1},
+        ])
+        self.assertEqual(extract_prompt(path, message_index=-1), "Make the timeout ten minutes.")
 
     def test_extracts_generic_messages_json(self) -> None:
         path = self.root / "generic.json"

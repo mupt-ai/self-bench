@@ -1,9 +1,9 @@
 ---
-name: make-your-swebench
+name: selfbench
 description: Convert merged pull requests into private, executable SWE-bench-style tasks, validate them, run agent rollouts, and audit benchmark quality.
 ---
 
-# Make Your SWE-bench
+# selfbench
 
 Use this skill when creating or reviewing benchmark tasks from real software changes.
 
@@ -24,7 +24,7 @@ test.patch             # held-out tests
 gold.patch             # expected non-test implementation
 ```
 
-If no source session is available, use `prompt.md` instead of `inputs/session.jsonl`. Never provide both `prompt.md` and `prompt_source`.
+Use exactly one eval prompt source: either `prompt.md` or `prompt_source`. When the original session is available but its request needs a standalone reconstruction, keep the eval text in `prompt.md` and attach the session separately with `trace_source` for provenance review.
 
 A minimal `task.json` looks like this:
 
@@ -71,7 +71,28 @@ Supported formats are:
 
 Use `message_index` to select the engineer turn that defined the work. It is zero-based; negative values count from the end. Inspect the resolved prompt in the review console before accepting the task.
 
-Only write `prompt.md` when no authentic session input exists. In that fallback, describe the observed behavior, expected behavior, constraints, and success criteria without revealing the implementation.
+Prefer generating one standalone user-voice prompt from the full original conversation over using a raw turn verbatim. Keep the eval text in `prompt.md` and preserve the coding session as private generation provenance:
+
+```json
+{
+  "trace_source": {
+    "path": "inputs/session.jsonl",
+    "format": "auto"
+  }
+}
+```
+
+Generate the prompt with:
+
+```bash
+uv run selfbench generate-prompt tasks/<task> \
+  --provider <provider> --model <model> \
+  --confirm-source-upload --write --force
+```
+
+The generated request should sound like one coherent message from the original human: preserve their framing, terminology, directness, and material corrections; resolve conversational references; remove PR/commit/CI logistics and secrets; and do not import solution details that only appeared in assistant messages. Run the generator without tools, extensions, skills, project context files, or prompt templates. It must not receive or be able to inspect the gold patch, test patch, held-out test names, previous synthetic prompt, or working tree. Review the result against Original Session before accepting it.
+
+If no coding session exists, require another authentic pre-implementation request such as the original issue, ticket, bug report, or user message, and attach it as provenance. A PR title/body written after implementation is not enough: it can encode the chosen solution and exact names. If no authentic request can establish what was actually asked, reject the candidate rather than reconstructing a prompt from the PR, gold patch, or tests.
 
 ## Step 3: split the change
 
@@ -90,6 +111,8 @@ List every file or directory owned by `test.patch` in `test_paths`. Agent edits 
 
 `fail_to_pass` contains focused tests that fail on the base commit with only `test.patch` applied, then pass after `gold.patch` is applied. `pass_to_pass` contains existing regression tests that already pass at the base and must continue to pass.
 
+A test from the source change is not automatically a valid held-out test. Before selecting it, perform an equivalent-design check: imagine an implementation that satisfies the human request with different private names, data flow, or helper boundaries. If that implementation would fail the test, exclude the test. In particular, reject tests that construct, read, import, or monkeypatch a field, helper, constant, intermediate payload, sidecar filename, archive layout, or fixed byte offset introduced only by the gold patch unless the authentic human request explicitly named that public contract. Describing a concept in prose (for example, “return the auth subject” or “accept a version identifier”) does not specify a JSON key such as `auth_subject` or `version_id`; held-out tests must not require that exact spelling unless the source request did. Do not test “deterministic output” by asserting the gold implementation's gzip header value; generate the same logical input under different clock values and compare the complete outputs. Assert end-to-end observable state, output, persistence, or API behavior instead. If no focused behavioral tests remain, reject the candidate rather than grading agents on whether they reproduced the gold implementation.
+
 Use at least three meaningful pass-to-pass entries when possible. Avoid broad suites that make every rollout slow when focused package or test-file targets exist.
 
 Common command templates include:
@@ -106,7 +129,7 @@ Common command templates include:
 Run the gold validator before any model rollouts:
 
 ```bash
-uv run mysb validate tasks/<task> --repo <local-repo>
+uv run selfbench validate tasks/<task> --repo <local-repo>
 ```
 
 Acceptance requires all of the following:
@@ -117,33 +140,45 @@ Acceptance requires all of the following:
 - Fail-to-pass tests pass with the gold patch twice in succession. This catches obvious flakes but does not prove full determinism.
 - Pass-to-pass tests still pass with the gold patch.
 
+The validator uses separate fresh sandboxes for the base and gold checks. A rollout uses another two-sandbox boundary: the agent receives only the base snapshot and prompt, then its captured patch is graded in a fresh sandbox with the held-out tests. Never place `gold.patch` or `test.patch` in the agent sandbox, and never grade in a sandbox that executed the agent.
+
 If validation fails, correct the base commit, patch split, setup command, or test IDs. Do not weaken a legitimate test merely to make the task pass.
+
+Run the quality audit once before spending model calls:
+
+```bash
+uv run selfbench audit tasks/<task> --results results
+```
+
+Missing rollout signal is expected at this stage, but any blocker about gold-coupled private identifiers must be fixed by replacing the test or rejecting the candidate.
 
 ## Step 6: run models
 
 Run at least two representative models so the task has measurable solver signal:
 
 ```bash
-uv run mysb run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
+uv run selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
+
+Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores.
 
 ## Step 7: audit and review
 
 Run the quality audit:
 
 ```bash
-uv run mysb audit tasks/<task> --results results
+uv run selfbench audit tasks/<task> --results results
 ```
 
 Then open the review console:
 
 ```bash
-uv run mysb review --host 0.0.0.0 --port 8765 --tasks tasks --results results
+uv run selfbench review --host 0.0.0.0 --port 8765 --tasks tasks --results results
 ```
 
-Check the resolved prompt and source metadata, patch split, validation tails, agent traces, and model patches. Record any reviewed warnings and rationale in the review panel.
+Check the generated prompt against the human turns in Original Session when a source trace is attached. Then review the patch split, validation tails, rollout output, and model patches. Generated-prompt rollouts must show a current prompt fingerprint; stale results do not count as solver signal. Record any reviewed warnings and rationale in the review panel.
 
 The final verdicts are:
 
@@ -158,6 +193,8 @@ Reject or repair tasks with any of these defects:
 - The prompt names held-out tests, new solution identifiers, patch files, or implementation steps.
 - The test patch and gold patch overlap.
 - Tests assert irrelevant internal structure rather than externally meaningful behavior.
+- A test requires private names, fields, helpers, constants, intermediate payloads, sidecar filenames, archive layout, fixed byte offsets, or control flow introduced only by the gold patch. Equivalent implementations must be able to pass.
+- The task has no authentic pre-implementation request provenance and was reconstructed from a PR description, implementation, or tests.
 - The task omits essential context that an engineer had when receiving the request.
 - The base already passes fail-to-pass tests.
 - The gold implementation does not pass the selected tests deterministically.

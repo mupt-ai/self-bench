@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task
 
 DEFAULT_SIGNAL_MODELS = ("openai__gpt-5.5", "fireworks__glm-5p2")
@@ -50,7 +51,10 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     blockers: list[str] = []
     warnings: list[str] = []
 
-    validation = _validation_status(results_root / task.task_id / "validation" / "result.json")
+    validation = _validation_status(
+        results_root / task.task_id / "validation" / "result.json",
+        required_task_fingerprints=task.evaluation_fingerprints,
+    )
     if validation != "valid":
         blockers.append(f"validation result is {validation}")
 
@@ -58,6 +62,12 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         blockers.append("pass_to_pass is empty; accepted tasks need regression coverage")
     elif len(task.pass_to_pass) < 3:
         warnings.append("pass_to_pass has fewer than 3 entries")
+
+    if task.prompt_source is None and task.trace_source is None:
+        blockers.append(
+            "task lacks authentic request provenance; do not reconstruct requirements from the PR, "
+            "gold patch, or tests"
+        )
 
     prompt_words = len(re.findall(r"\w+", task.prompt))
     if prompt_words < 80:
@@ -99,15 +109,43 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     if brittle:
         warnings.extend(brittle[:5])
 
+    private_coupling, field_coupling = _gold_coupled_test_identifiers(
+        task.test_patch,
+        task.gold_patch,
+        task.prompt,
+    )
+    if private_coupling:
+        blockers.append(
+            "test patch depends on private identifier(s) introduced by gold.patch: "
+            + ", ".join(private_coupling[:5])
+        )
+    if field_coupling:
+        warnings.append(
+            "test patch requires field(s) introduced by gold.patch but absent from the prompt; "
+            "verify equivalent designs can pass: "
+            + ", ".join(field_coupling[:5])
+        )
+
     if gold_stats.added_lines >= 200 and len(task.fail_to_pass) <= 1:
         warnings.append(
             f"large gold patch ({gold_stats.added_lines} added lines) with only "
             f"{len(task.fail_to_pass)} fail_to_pass entry"
         )
 
-    model_results = _model_results(results_root, task.task_id, model_slugs)
+    required_prompt_sha256 = task.prompt_sha256 if task.prompt_generation is not None else None
+    model_results = _model_results(
+        results_root,
+        task.task_id,
+        model_slugs,
+        required_prompt_sha256=required_prompt_sha256,
+        required_task_fingerprints=task.evaluation_fingerprints,
+    )
     solver_signal = _solver_signal(model_results)
-    if solver_signal == "missing":
+    if any(result == "stale" for result in model_results.values()):
+        warnings.append(
+            "one or more standard model runs use stale benchmark inputs or result schema and must be rerun"
+        )
+    elif solver_signal == "missing":
         warnings.append("missing one or more standard model runs")
     elif solver_signal == "single_model":
         warnings.append("need at least two model runs to measure task signal")
@@ -136,17 +174,33 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     )
 
 
-def _validation_status(path: Path) -> str:
+def _validation_status(
+    path: Path,
+    *,
+    required_task_fingerprints: dict[str, str] | None = None,
+) -> str:
     if not path.is_file():
         return "missing"
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError:
         return "unreadable"
+    if required_task_fingerprints is not None and (
+        data.get("result_schema_version") != RESULT_SCHEMA_VERSION
+        or data.get("task_fingerprints") != required_task_fingerprints
+    ):
+        return "stale"
     return "valid" if data.get("valid") is True else "invalid"
 
 
-def _model_results(results_root: Path, task_id: str, model_slugs: list[str]) -> dict[str, str]:
+def _model_results(
+    results_root: Path,
+    task_id: str,
+    model_slugs: list[str],
+    *,
+    required_prompt_sha256: str | None = None,
+    required_task_fingerprints: dict[str, str] | None = None,
+) -> dict[str, str]:
     out: dict[str, str] = {}
     for slug in model_slugs:
         path = results_root / task_id / slug / "result.json"
@@ -158,13 +212,22 @@ def _model_results(results_root: Path, task_id: str, model_slugs: list[str]) -> 
         except json.JSONDecodeError:
             out[slug] = "unreadable"
             continue
+        if required_task_fingerprints is not None and (
+            data.get("result_schema_version") != RESULT_SCHEMA_VERSION
+            or data.get("task_fingerprints") != required_task_fingerprints
+        ):
+            out[slug] = "stale"
+            continue
+        if required_prompt_sha256 is not None and data.get("prompt_sha256") != required_prompt_sha256:
+            out[slug] = "stale"
+            continue
         out[slug] = "pass" if data.get("resolved") is True else "fail"
     return out
 
 
 def _solver_signal(model_results: dict[str, str]) -> str:
     outcomes = list(model_results.values())
-    if any(v in {"missing", "unreadable"} for v in outcomes):
+    if any(v in {"missing", "unreadable", "stale"} for v in outcomes):
         return "missing"
     solved = sum(v == "pass" for v in outcomes)
     total = len(outcomes)
@@ -280,19 +343,90 @@ def _forbidden_prompt_terms(prompt: str) -> list[str]:
     return terms
 
 
+def _gold_coupled_test_identifiers(
+    test_patch: str,
+    gold_patch: str,
+    prompt: str,
+) -> tuple[list[str], list[str]]:
+    added_gold = _added_patch_text(gold_patch)
+    added_tests = _added_patch_text(test_patch)
+    prompt_identifiers = _prompt_words(prompt)
+
+    private_identifiers = set(
+        re.findall(
+            r"\b(?:async\s+def|def|class)\s+(_[A-Za-z_][A-Za-z0-9_]*)",
+            added_gold,
+        )
+    )
+    private_identifiers.update(
+        re.findall(
+            r"(?m)^(_[A-Z][A-Z0-9_]*)\s*(?::[^=\n]+)?=",
+            added_gold,
+        )
+    )
+    introduced_fields = set(
+        re.findall(
+            r"(?m)^    ([a-z][A-Za-z0-9_]*)\s*:\s*[^=\n]+(?:=\s*[^\n]+)?$",
+            added_gold,
+        )
+    )
+
+    private_coupling = sorted(
+        identifier
+        for identifier in private_identifiers
+        if identifier not in prompt_identifiers
+        and re.search(rf"\b{re.escape(identifier)}\b", added_tests)
+    )
+    field_coupling = sorted(
+        identifier
+        for identifier in introduced_fields
+        if identifier not in _COUPLING_FIELD_STOPWORDS
+        and identifier not in prompt_identifiers
+        and (
+            re.search(rf"\b{re.escape(identifier)}\s*=", added_tests)
+            or re.search(rf"\.{re.escape(identifier)}\b", added_tests)
+            or re.search(rf"[\"']{re.escape(identifier)}[\"']\s*[:\]]", added_tests)
+        )
+    )
+    return private_coupling, field_coupling
+
+
+_COUPLING_FIELD_STOPWORDS = _IDENTIFIER_STOPWORDS | {
+    "details",
+    "process",
+    "session",
+}
+
+
+def _added_patch_text(patch: str) -> str:
+    return "\n".join(
+        line[1:]
+        for line in patch.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
 def _brittle_test_signals(test_patch: str) -> list[str]:
     warnings: list[str] = []
     added = [line[1:].strip() for line in test_patch.splitlines() if line.startswith("+") and not line.startswith("+++")] 
     exact_string_count = 0
     exact_structure_count = 0
+    magic_byte_assertion = False
     for line in added:
         if re.search(r"\bassert\b.+==\s*[\"'][^\"']{40,}[\"']", line):
             exact_string_count += 1
         if re.search(r"\bassert\b.+==\s*[{[]\s*$", line):
             exact_structure_count += 1
+        if re.search(r"\bassert\b.+\[\d+:\d+\].*==", line):
+            magic_byte_assertion = True
         if re.search(r"\b(toMatchSnapshot|assert_snapshot|golden output)\b", line, flags=re.IGNORECASE):
             warnings.append("test patch uses snapshot/golden-output assertions; review for over-constraint")
             break
+    if magic_byte_assertion:
+        warnings.append(
+            "test patch asserts a fixed byte offset; verify it tests an explicit format contract "
+            "rather than the gold implementation"
+        )
     if exact_string_count:
         warnings.append(f"test patch has {exact_string_count} long exact-string assertion(s)")
     if exact_structure_count:
@@ -323,7 +457,7 @@ def format_audit_markdown(results: list[AuditResult], model_slugs: list[str]) ->
         + " | notes |",
         "|---" * (5 + len(model_slugs)) + "|",
     ]
-    icon = {"pass": "✅", "fail": "❌", "missing": "—", "unreadable": "?"}
+    icon = {"pass": "✅", "fail": "❌", "missing": "—", "stale": "⏳", "unreadable": "?"}
     for result in sorted(results, key=lambda r: r.task_id):
         notes = result.blockers or result.warnings
         note_text = "; ".join(notes[:3])

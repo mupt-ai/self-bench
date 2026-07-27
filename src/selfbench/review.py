@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .quality import AuditResult, audit_task
+from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task, load_task
 
 
@@ -64,9 +65,19 @@ class ReviewStore:
             "task_json_text": json.dumps(task_json, indent=2),
             "prompt": task.prompt,
             "prompt_origin": task.prompt_origin,
+            "source_trace": task.source_trace,
             "validation_result": validation,
             "validation_text": json.dumps(validation, indent=2) if validation is not None else "",
-            "runs": {slug: self._run_detail(task.task_id, slug) for slug in self.model_slugs},
+            "runs": {
+                slug: self._run_detail(
+                    task.task_id,
+                    slug,
+                    current_prompt_sha256=task.prompt_sha256,
+                    enforce_prompt_fingerprint=task.prompt_generation is not None,
+                    current_task_fingerprints=task.evaluation_fingerprints,
+                )
+                for slug in self.model_slugs
+            },
         }
 
     def _summary(self, task: Task, audit: AuditResult) -> dict[str, object]:
@@ -87,15 +98,42 @@ class ReviewStore:
             "pass_to_pass_count": len(task.pass_to_pass),
         }
 
-    def _run_detail(self, task_id: str, slug: str) -> dict[str, object]:
+    def _run_detail(
+        self,
+        task_id: str,
+        slug: str,
+        *,
+        current_prompt_sha256: str | None = None,
+        enforce_prompt_fingerprint: bool = False,
+        current_task_fingerprints: dict[str, str] | None = None,
+    ) -> dict[str, object]:
         run_dir = self.results_root / task_id / slug
         result = _read_json(run_dir / "result.json")
         agent_patch = _read_text(run_dir / "agent.patch")
         if agent_patch is None and isinstance(result, dict):
             value = result.get("agent_patch")
             agent_patch = value if isinstance(value, str) else ""
+        prompt_status = "untracked"
+        stale_reason = None
+        if isinstance(result, dict) and current_prompt_sha256 is not None:
+            if (
+                current_task_fingerprints is not None
+                and (
+                    result.get("result_schema_version") != RESULT_SCHEMA_VERSION
+                    or result.get("task_fingerprints") != current_task_fingerprints
+                )
+            ):
+                prompt_status = "stale"
+                stale_reason = "Benchmark inputs or result schema changed. Rerun before interpreting this result."
+            elif result.get("prompt_sha256") == current_prompt_sha256:
+                prompt_status = "current"
+            elif enforce_prompt_fingerprint:
+                prompt_status = "stale"
+                stale_reason = "The eval prompt changed. Rerun before interpreting this result."
         return {
             "exists": result is not None,
+            "prompt_status": prompt_status,
+            "stale_reason": stale_reason,
             "result": result,
             "result_text": json.dumps(result, indent=2) if result is not None else "",
             "agent_patch": agent_patch or "",
@@ -292,7 +330,7 @@ def _match_patch_path(path: str) -> tuple[str, str, str | None] | None:
 def _ensure_review_build() -> Path:
     repo_root = Path(__file__).resolve().parents[2]
     source_root = repo_root / "review"
-    dist_root = repo_root / "src" / "mysb" / "review_dist"
+    dist_root = repo_root / "src" / "selfbench" / "review_dist"
     index = dist_root / "index.html"
     sources = [repo_root / "package.json", repo_root / "bun.lock", *source_root.rglob("*")]
     latest_source = max(path.stat().st_mtime for path in sources if path.is_file())
@@ -309,7 +347,7 @@ def _ensure_review_build() -> Path:
             _run_bun([bun, "install", "--frozen-lockfile"], repo_root)
         _run_bun([bun, "run", "build:review"], repo_root)
         if not index.is_file():
-            raise RuntimeError("frontend build did not produce src/mysb/review_dist/index.html")
+            raise RuntimeError("frontend build did not produce src/selfbench/review_dist/index.html")
         return dist_root
 
 
