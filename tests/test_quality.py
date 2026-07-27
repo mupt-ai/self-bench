@@ -5,15 +5,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mysb.quality import (
+from selfbench.quality import (
     _brittle_test_signals,
     _gold_coupled_test_identifiers,
     _model_results,
     _validation_status,
     audit_task,
 )
-from mysb.result_schema import RESULT_SCHEMA_VERSION
-from mysb.task import Task
+from selfbench.result_schema import RESULT_SCHEMA_VERSION
+from selfbench.task import Task
 
 
 class GoldCouplingTest(unittest.TestCase):

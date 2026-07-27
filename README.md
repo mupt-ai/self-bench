@@ -1,4 +1,4 @@
-# make-your-swebench
+# selfbench
 
 Turn merged pull requests from a local Git clone into executable SWE-bench-style tasks. Each task gives a coding agent a clean repository snapshot and an engineer-authored work request, then grades the resulting patch with tests derived from the original change.
 
@@ -77,7 +77,7 @@ When a prompt must be reconstructed for standalone use but the original coding s
 Generate a standalone prompt from that conversation with:
 
 ```bash
-uv run mysb generate-prompt tasks/example-fix \
+uv run selfbench generate-prompt tasks/example-fix \
   --provider openai --model gpt-5.5 --thinking medium \
   --confirm-source-upload --write --force
 ```
@@ -93,13 +93,13 @@ Task construction is currently manual: you choose the base and completed commits
 First prove that the selected tests fail at the base commit and pass with the gold implementation. Base and gold checks run in separate fresh sandboxes:
 
 ```bash
-uv run mysb validate tasks/example-fix --repo ~/code/example-project
+uv run selfbench validate tasks/example-fix --repo ~/code/example-project
 ```
 
 Then run a model through Pi inside a Modal sandbox. The agent sandbox receives only the base snapshot and prompt. Its captured patch is graded in a second fresh sandbox that receives the held-out tests; `gold.patch` is never uploaded to either rollout sandbox:
 
 ```bash
-uv run mysb run tasks/example-fix --repo ~/code/example-project \
+uv run selfbench run tasks/example-fix --repo ~/code/example-project \
   --provider openai --model gpt-5.5
 ```
 
@@ -112,8 +112,8 @@ Provider credentials are scoped to the Pi command rather than the whole sandbox.
 Validation proves that a task executes. The audit command checks whether it is also useful benchmark signal: the prompt must have authentic pre-implementation request provenance and be sufficiently specified without leaking held-out tests or solution identifiers, the test and implementation patches must be separated, held-out tests must not depend on exact identifiers introduced only by the gold patch, regression coverage must exist, and configured model outcomes must be present. By default the audit expects result directories named `openai__gpt-5.5` and `fireworks__glm-5p2`; override them with `--models`.
 
 ```bash
-uv run mysb audit tasks --results results
-uv run mysb report results --tasks tasks
+uv run selfbench audit tasks --results results
+uv run selfbench report results --tasks tasks
 ```
 
 Audit verdicts are computed automatically. `accepted` means the current validation and quality gates pass with mixed model outcomes. `needs_review` means the task executes but has a warning or inconclusive model signal. `rejected` means a blocking requirement fails, including a stale validation result. Without `--strict`, warnings and review-needed verdicts are reported without failing the command. Use `--strict` in automation when every task must be accepted.
@@ -123,7 +123,7 @@ Audit verdicts are computed automatically. `accepted` means the current validati
 Start the local review server:
 
 ```bash
-uv run mysb review --host 0.0.0.0 --port 8765 \
+uv run selfbench review --host 0.0.0.0 --port 8765 \
   --tasks tasks --results results
 ```
 
@@ -132,7 +132,7 @@ The command builds the Vite frontend when its sources change, then serves the Re
 For frontend development, run the API and Vite separately:
 
 ```bash
-uv run mysb review --port 8765 --tasks tasks --results results
+uv run selfbench review --port 8765 --tasks tasks --results results
 bun run dev:review
 ```
 

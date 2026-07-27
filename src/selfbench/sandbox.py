@@ -10,7 +10,7 @@ from pathlib import Path
 
 import modal
 
-APP_NAME = "make-your-swebench"
+APP_NAME = "selfbench"
 PI_VERSION = "0.75.0"
 PYTHON_VERSION = "3.12"
 NODE_MAJOR_VERSION = "22"
@@ -172,7 +172,7 @@ class TaskSandbox:
             timeout=300,
         )
         self.exec_checked(
-            "git init -q && git config user.email mysb@local && git config user.name mysb "
+            "git init -q && git config user.email selfbench@local && git config user.name selfbench "
             "&& git add -A && git commit -qm base",
             action="repository snapshot initialization",
             timeout=300,

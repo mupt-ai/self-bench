@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mysb.task import load_task
+from selfbench.task import load_task
 
 
 class TaskPromptSourceTest(unittest.TestCase):

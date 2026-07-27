@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from mysb.prompt_generation import build_generation_request, generate_prompt, save_generated_prompt
-from mysb.task import load_task
+from selfbench.prompt_generation import build_generation_request, generate_prompt, save_generated_prompt
+from selfbench.task import load_task
 
 
 class PromptGenerationTest(unittest.TestCase):
@@ -50,7 +50,7 @@ class PromptGenerationTest(unittest.TestCase):
         self.assertNotIn("Old synthetic prompt", request)
         self.assertNotIn("secret_solution.py", request)
 
-    @patch("mysb.prompt_generation.subprocess.run")
+    @patch("selfbench.prompt_generation.subprocess.run")
     def test_generator_process_cannot_access_repo_tools(self, run_mock) -> None:
         prompt = " ".join(["Please investigate and fix the reported behavior without changing unrelated paths."] * 7)
         run_mock.return_value.returncode = 0

@@ -69,7 +69,7 @@ export function App() {
     <div className="shell">
       <header className="topbar">
         <div>
-          <div className="eyebrow">make-your-swebench</div>
+          <div className="eyebrow">selfbench</div>
           <h1>Task Review Console</h1>
         </div>
         <div className="meta topbar-actions">

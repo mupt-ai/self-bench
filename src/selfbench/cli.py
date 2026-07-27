@@ -1,4 +1,4 @@
-"""mysb CLI: validate tasks, run rollouts, aggregate reports."""
+"""selfbench CLI: validate tasks, run rollouts, aggregate reports."""
 
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="mysb", description="make your own swe-bench")
+    parser = argparse.ArgumentParser(prog="selfbench", description="benchmark coding agents on your own merged PRs")
     sub = parser.add_subparsers(dest="command", required=True)
 
     common = argparse.ArgumentParser(add_help=False)

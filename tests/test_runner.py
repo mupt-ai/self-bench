@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from mysb.cli import _model_slug
-from mysb.runner import (
+from selfbench.cli import _model_slug
+from selfbench.runner import (
     AGENT_PATCH_PATH,
     CAPTURED_AGENT_PATCH_PATH,
     GOLD_PATCH_PATH,
@@ -17,8 +17,8 @@ from mysb.runner import (
     save_result,
     validate_task,
 )
-from mysb.sandbox import ExecResult
-from mysb.task import Task
+from selfbench.sandbox import ExecResult
+from selfbench.task import Task
 
 
 AGENT_PATCH = """\
@@ -135,8 +135,8 @@ class RunnerIsolationTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    @patch("mysb.runner._harness_revision", return_value="test-revision")
-    @patch("mysb.runner.TaskSandbox", FakeSandbox)
+    @patch("selfbench.runner._harness_revision", return_value="test-revision")
+    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
     def test_rollout_keeps_hidden_patches_out_of_agent_sandbox(self, _revision: object) -> None:
         result = run_task(
             self.task,
@@ -167,8 +167,8 @@ class RunnerIsolationTest(unittest.TestCase):
         self.assertEqual(result["harness_revision"], "test-revision")
         self.assertEqual(result["task_fingerprints"], self.task.evaluation_fingerprints)
 
-    @patch("mysb.runner._harness_revision", return_value="test-revision")
-    @patch("mysb.runner.TaskSandbox", FakeSandbox)
+    @patch("selfbench.runner._harness_revision", return_value="test-revision")
+    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
     def test_validation_uses_fresh_base_and_gold_sandboxes(self, _revision: object) -> None:
         result = validate_task(self.task, self.root, verbose=False)
 
@@ -181,14 +181,14 @@ class RunnerIsolationTest(unittest.TestCase):
         self.assertTrue(result["valid"])
         self.assertTrue(result["checks"]["gold_f2p_deterministic"])
 
-    @patch("mysb.runner.TaskSandbox", FakeSandbox)
+    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
     def test_validation_fails_closed_when_test_patch_does_not_apply(self) -> None:
         FakeSandbox.fail_test_patch = True
 
         with self.assertRaisesRegex(RuntimeError, "test.patch does not apply"):
             validate_task(self.task, self.root, verbose=False)
 
-    @patch("mysb.runner.TaskSandbox", FakeSandbox)
+    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
     def test_validation_fails_closed_when_setup_fails(self) -> None:
         FakeSandbox.fail_setup = True
 

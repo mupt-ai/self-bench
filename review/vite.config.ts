@@ -6,7 +6,7 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react()],
   build: {
-    outDir: fileURLToPath(new URL('../src/mysb/review_dist', import.meta.url)),
+    outDir: fileURLToPath(new URL('../src/selfbench/review_dist', import.meta.url)),
     emptyOutDir: true,
   },
   server: {

@@ -1,9 +1,9 @@
 ---
-name: make-your-swebench
+name: selfbench
 description: Convert merged pull requests into private, executable SWE-bench-style tasks, validate them, run agent rollouts, and audit benchmark quality.
 ---
 
-# Make Your SWE-bench
+# selfbench
 
 Use this skill when creating or reviewing benchmark tasks from real software changes.
 
@@ -85,7 +85,7 @@ Prefer generating one standalone user-voice prompt from the full original conver
 Generate the prompt with:
 
 ```bash
-uv run mysb generate-prompt tasks/<task> \
+uv run selfbench generate-prompt tasks/<task> \
   --provider <provider> --model <model> \
   --confirm-source-upload --write --force
 ```
@@ -129,7 +129,7 @@ Common command templates include:
 Run the gold validator before any model rollouts:
 
 ```bash
-uv run mysb validate tasks/<task> --repo <local-repo>
+uv run selfbench validate tasks/<task> --repo <local-repo>
 ```
 
 Acceptance requires all of the following:
@@ -147,7 +147,7 @@ If validation fails, correct the base commit, patch split, setup command, or tes
 Run the quality audit once before spending model calls:
 
 ```bash
-uv run mysb audit tasks/<task> --results results
+uv run selfbench audit tasks/<task> --results results
 ```
 
 Missing rollout signal is expected at this stage, but any blocker about gold-coupled private identifiers must be fixed by replacing the test or rejecting the candidate.
@@ -157,7 +157,7 @@ Missing rollout signal is expected at this stage, but any blocker about gold-cou
 Run at least two representative models so the task has measurable solver signal:
 
 ```bash
-uv run mysb run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
+uv run selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
@@ -169,13 +169,13 @@ Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model d
 Run the quality audit:
 
 ```bash
-uv run mysb audit tasks/<task> --results results
+uv run selfbench audit tasks/<task> --results results
 ```
 
 Then open the review console:
 
 ```bash
-uv run mysb review --host 0.0.0.0 --port 8765 --tasks tasks --results results
+uv run selfbench review --host 0.0.0.0 --port 8765 --tasks tasks --results results
 ```
 
 Check the generated prompt against the human turns in Original Session when a source trace is attached. Then review the patch split, validation tails, rollout output, and model patches. Generated-prompt rollouts must show a current prompt fingerprint; stale results do not count as solver signal. Record any reviewed warnings and rationale in the review panel.

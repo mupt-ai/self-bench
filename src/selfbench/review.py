@@ -330,7 +330,7 @@ def _match_patch_path(path: str) -> tuple[str, str, str | None] | None:
 def _ensure_review_build() -> Path:
     repo_root = Path(__file__).resolve().parents[2]
     source_root = repo_root / "review"
-    dist_root = repo_root / "src" / "mysb" / "review_dist"
+    dist_root = repo_root / "src" / "selfbench" / "review_dist"
     index = dist_root / "index.html"
     sources = [repo_root / "package.json", repo_root / "bun.lock", *source_root.rglob("*")]
     latest_source = max(path.stat().st_mtime for path in sources if path.is_file())
@@ -347,7 +347,7 @@ def _ensure_review_build() -> Path:
             _run_bun([bun, "install", "--frozen-lockfile"], repo_root)
         _run_bun([bun, "run", "build:review"], repo_root)
         if not index.is_file():
-            raise RuntimeError("frontend build did not produce src/mysb/review_dist/index.html")
+            raise RuntimeError("frontend build did not produce src/selfbench/review_dist/index.html")
         return dist_root
 
 

@@ -3,5 +3,5 @@ results/
 __pycache__/
 *.egg-info/
 node_modules/
-src/mysb/review_dist/
+src/selfbench/review_dist/
 /tasks/

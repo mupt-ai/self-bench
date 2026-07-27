@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mysb.agent_input import extract_prompt, extract_trace
+from selfbench.agent_input import extract_prompt, extract_trace
 
 
 class AgentInputTest(unittest.TestCase):
