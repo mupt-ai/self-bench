@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 
+from .create import launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import DEFAULT_SIGNAL_MODELS, audit_task, format_audit_markdown
@@ -190,6 +191,20 @@ def _iter_task_dirs(paths: list[str]) -> list[Path]:
     return task_dirs
 
 
+def cmd_create(args: argparse.Namespace) -> int:
+    """Launch Pi with the selfbench skill to author a task interactively."""
+    return launch_create_agent(
+        args.request,
+        repo=Path(args.repo) if args.repo else Path.cwd(),
+        tasks_root=Path(args.tasks_root),
+        provider=args.provider,
+        model=args.model,
+        thinking=args.thinking,
+        print_mode=args.print_mode,
+        pi_executable=args.pi_executable,
+    )
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     task_dirs = _iter_task_dirs(args.task_dirs)
     if not task_dirs:
@@ -292,6 +307,39 @@ def main() -> None:
     p_review.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_review.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
     p_review.set_defaults(fn=cmd_review)
+
+    p_create = sub.add_parser(
+        "create",
+        help="create a task interactively using the selfbench skill (launches Pi)",
+        description=(
+            "Launch Pi with the bundled selfbench task-building skill. "
+            "Positional arguments are joined as the initial prompt. "
+            "Runs interactively by default; pass --print for one-shot output."
+        ),
+    )
+    p_create.add_argument(
+        "request",
+        nargs="*",
+        metavar="MESSAGE",
+        help="initial prompt to Pi (joined with spaces); omit to enter interactive mode",
+    )
+    p_create.add_argument("--repo", help="source repository path (defaults to cwd)")
+    p_create.add_argument("--tasks-root", default="tasks", help="authoring task root (default: tasks)")
+    p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")
+    p_create.add_argument("--model", help="Pi model ID")
+    p_create.add_argument("--thinking", help="Pi thinking level (off, minimal, low, medium, high, xhigh, max)")
+    p_create.add_argument(
+        "--print",
+        dest="print_mode",
+        action="store_true",
+        help="non-interactive mode: process the prompt and exit",
+    )
+    p_create.add_argument(
+        "--pi-executable",
+        default="pi",
+        help="path to the Pi executable (default: pi)",
+    )
+    p_create.set_defaults(fn=cmd_create)
 
     args = parser.parse_args()
     sys.exit(args.fn(args))
