@@ -2,7 +2,7 @@
 
 Build private SWE-bench-style evaluations from real changes in repositories you can clone, then validate them, run coding-agent rollouts in isolated [Harbor](https://harborframework.com) Docker containers, and inspect the results in a browser.
 
-Task construction is currently manual. selfbench does not import a pull request or infer the benchmark for you: you choose the base and completed commits, preserve the original engineering request, split tests from implementation, and define the test selectors. The toolkit makes that task executable and checks whether it is fair, reproducible, and useful.
+Task construction remains a judgment-heavy workflow rather than deterministic PR import. `selfbench create` launches a [Pi](https://github.com/earendil-works/pi) session with the bundled task-building skill to scan merged pull requests, exclude previously attempted candidates, and choose viable changes itself. It then preserves the original engineering request, splits tests from implementation, and defines the test selectors. The toolkit makes the resulting task executable and checks whether it is fair, reproducible, and useful. You can also nominate a particular change or author a task by hand.
 
 Harbor owns the execution runtime. selfbench owns task construction, private-provenance audit, and the review queue.
 
@@ -36,6 +36,34 @@ bun install --frozen-lockfile
 ```
 
 `uv sync` installs Harbor (the execution runtime) as a Python dependency. Set the API key for the provider used by a rollout, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`. The CLI compiles a history-free archive of the selected base commit into a Harbor task directory, then Harbor runs the agent inside a Docker container. [Pi](https://github.com/earendil-works/pi) (a coding-agent CLI) is installed inside that container and invokes the selected model provider.
+
+`selfbench create` also needs Pi installed on the host machine (the session that authors the task runs outside Docker).
+
+## Create a task with the bundled skill
+
+`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. It follows the full construction checklist: candidate discovery, prompt provenance, patch split, test selection, validation, and audit. By default it opens an interactive Pi session; pass `--print` for one-shot execution.
+
+```bash
+# Let Pi discover and choose merged PRs itself.
+uv run selfbench create \
+  --repo ~/code/example-project \
+  --provider openai --model gpt-5.5 --thinking high
+
+# Or nominate/scope candidates explicitly.
+uv run selfbench create \
+  --repo ~/code/example-project \
+  "Build a task from PR 123."
+```
+
+Flags:
+
+- `--repo <path>`: local clone of the repository being benchmarked (defaults to the current working directory).
+- `--tasks-root <dir>`: authoring task root (default `tasks`).
+- `--provider`, `--model`, `--thinking`: Pi session options for the authoring agent.
+- `--print`: non-interactive mode; process the prompt and exit.
+- `--pi-executable <path>`: override the Pi executable (default `pi`).
+
+Positional arguments are joined into the initial prompt. Omit them to run autonomous PR discovery; the interactive session remains open so you can steer it if needed. The agent should only ask for candidate selection when repository access, authentic request provenance, or another hard blocker prevents a safe choice. The skill instructs it to validate and audit completed tasks before spending rollout calls.
 
 ## Build a task manually
 
