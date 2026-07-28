@@ -1,9 +1,11 @@
 export type ModelResult = 'pass' | 'fail' | 'missing' | 'unreadable' | 'stale';
 export type Verdict = 'accepted' | 'needs_review' | 'rejected';
+export type ReviewStatus = 'unreviewed' | 'in_review' | 'approved' | 'changes_requested' | 'rejected';
 
 export interface Quality {
   review_notes?: string;
   reviewed_warnings?: string[];
+  review_status?: ReviewStatus;
 }
 
 export interface TaskSummary {
@@ -19,6 +21,7 @@ export interface TaskSummary {
   blockers: string[];
   warnings: string[];
   quality: Quality;
+  review_status: ReviewStatus;
   fail_to_pass_count: number;
   pass_to_pass_count: number;
 }
@@ -26,6 +29,7 @@ export interface TaskSummary {
 export interface Summaries {
   models: string[];
   counts: Partial<Record<Verdict, number>>;
+  review_counts: Partial<Record<ReviewStatus, number>>;
   tasks: TaskSummary[];
 }
 
@@ -61,7 +65,6 @@ export interface RunDetail {
 
 export interface TaskDetail {
   summary: TaskSummary;
-  task_json: Record<string, unknown>;
   task_json_text: string;
   prompt: string;
   prompt_origin: PromptOrigin;

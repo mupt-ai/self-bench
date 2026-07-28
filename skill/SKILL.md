@@ -9,7 +9,7 @@ Use this skill when creating or reviewing benchmark tasks from real software cha
 
 ## Goal
 
-A task is a sealed evaluation built from one completed change. The coding agent receives only a clean checkout at the base commit and the engineer's original work request. Held-out tests determine whether the agent reproduced the intended behavior. Rollouts execute in Modal and send model requests to the configured provider, so confirm that the source and prompt are permitted to leave the local machine.
+A task is a sealed evaluation built from one completed change. The coding agent receives only a clean checkout at the base commit and the engineer's original work request. Held-out tests determine whether the agent reproduced the intended behavior. Rollouts execute in Harbor Docker containers and send model requests to the configured provider, so confirm that the source and prompt are permitted to leave the local machine.
 
 Do not give the agent the source pull request, later commits, gold patch, test patch, or test names.
 
@@ -140,7 +140,7 @@ Acceptance requires all of the following:
 - Fail-to-pass tests pass with the gold patch twice in succession. This catches obvious flakes but does not prove full determinism.
 - Pass-to-pass tests still pass with the gold patch.
 
-The validator uses separate fresh sandboxes for the base and gold checks. A rollout uses another two-sandbox boundary: the agent receives only the base snapshot and prompt, then its captured patch is graded in a fresh sandbox with the held-out tests. Never place `gold.patch` or `test.patch` in the agent sandbox, and never grade in a sandbox that executed the agent.
+The validator uses separate Docker containers for the base and gold checks. A rollout uses the same two-container boundary: the agent container receives only the base snapshot and prompt, then its captured patch is graded in a separate verifier container with the held-out tests. Never place `gold.patch` or `test.patch` in the agent container, and never grade in a container that executed the agent.
 
 If validation fails, correct the base commit, patch split, setup command, or test IDs. Do not weaken a legitimate test merely to make the task pass.
 

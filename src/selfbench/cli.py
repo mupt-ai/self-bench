@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 
+from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import DEFAULT_SIGNAL_MODELS, audit_task, format_audit_markdown
 from .result_schema import RESULT_SCHEMA_VERSION
@@ -59,9 +60,31 @@ def cmd_generate_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_build(args: argparse.Namespace) -> int:
+    task = load_task(args.task_dir)
+    path = build_harbor_task(
+        task,
+        Path(args.repo),
+        Path(args.harbor_tasks),
+        org=args.org,
+        overwrite=args.force,
+    )
+    print(f"Harbor task: {path}")
+    print(f"Run it directly: uv run harbor run -p {path} -a <agent> -m <provider/model>")
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     task = load_task(args.task_dir)
-    result = validate_task(task, Path(args.repo).resolve(), verbose=not args.quiet)
+    result = validate_task(
+        task,
+        Path(args.repo).resolve(),
+        harbor_root=Path(args.harbor_tasks),
+        jobs_root=Path(args.jobs),
+        environment=args.env,
+        rebuild=args.rebuild,
+        verbose=not args.quiet,
+    )
     path = save_result(result, Path(args.results), "validation")
     print(json.dumps({k: result[k] for k in ("task_id", "valid", "checks", "duration_s")}, indent=2))
     print(f"full result: {path}")
@@ -76,6 +99,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         provider=args.provider,
         model=args.model,
         thinking=args.thinking,
+        agent=args.agent,
+        harbor_root=Path(args.harbor_tasks),
+        jobs_root=Path(args.jobs),
+        environment=args.env,
+        rebuild=args.rebuild,
         verbose=not args.quiet,
     )
     path = save_result(result, Path(args.results), _model_slug(args.provider, args.model))
@@ -185,8 +213,12 @@ def main() -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("task_dir", help="task directory containing task.json")
     common.add_argument("--repo", required=True, help="path to a local clone containing base_commit")
-    common.add_argument("--results", default="results", help="results root dir (default: results)")
-    common.add_argument("--quiet", action="store_true", help="don't stream sandbox output")
+    common.add_argument("--results", default="results", help="lightweight result index (default: results)")
+    common.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
+    common.add_argument("--jobs", default="harbor-jobs", help="canonical Harbor jobs root")
+    common.add_argument("--env", default="docker", help="Harbor environment provider (default: docker)")
+    common.add_argument("--rebuild", action="store_true", help="rebuild the compiled Harbor task")
+    common.add_argument("--quiet", action="store_true", help="suppress per-trial Harbor progress")
 
     p_prompt = sub.add_parser(
         "generate-prompt",
@@ -205,13 +237,22 @@ def main() -> None:
     )
     p_prompt.set_defaults(fn=cmd_generate_prompt)
 
-    p_val = sub.add_parser("validate", parents=[common], help="gold-validate a task (must pass before the task counts)")
+    p_build = sub.add_parser("build", help="compile an authoring task into a native Harbor task")
+    p_build.add_argument("task_dir", help="task directory containing task.json")
+    p_build.add_argument("--repo", required=True, help="local Git clone containing base_commit")
+    p_build.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
+    p_build.add_argument("--org", default="selfbench", help="Harbor task package organization")
+    p_build.add_argument("--force", action="store_true", help="replace an existing compiled task")
+    p_build.set_defaults(fn=cmd_build)
+
+    p_val = sub.add_parser("validate", parents=[common], help="validate with Harbor nop and oracle trials")
     p_val.set_defaults(fn=cmd_validate)
 
-    p_run = sub.add_parser("run", parents=[common], help="run one agent rollout against a task")
+    p_run = sub.add_parser("run", parents=[common], help="run one native Harbor agent trial")
     p_run.add_argument("--provider", required=True, help="pi provider, e.g. openai|fireworks")
     p_run.add_argument("--model", required=True, help="pi model id, e.g. gpt-5.5")
-    p_run.add_argument("--thinking", default=None, help="pi thinking level: off|minimal|low|medium|high")
+    p_run.add_argument("--agent", default="pi", help="Harbor agent (default: pi)")
+    p_run.add_argument("--thinking", default=None, help="agent thinking level when supported")
     p_run.set_defaults(fn=cmd_run)
 
     p_rep = sub.add_parser("report", help="print a markdown resolved-rate table from results")

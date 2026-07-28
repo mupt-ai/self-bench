@@ -1,11 +1,11 @@
 [project]
 name = "selfbench"
-version = "0.1.0"
-description = "selfbench: evaluate coding agents against benchmarks built from your own merged PRs"
+version = "0.2.0"
+description = "Build, curate, and run private software-engineering evaluations with Harbor"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "modal>=1.5.1",
+    "harbor>=0.20,<0.21",
 ]
 
 [project.scripts]

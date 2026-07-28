@@ -19,6 +19,7 @@ from .task import Task, load_task
 
 
 _REVIEW_BUILD_LOCK = threading.Lock()
+_REVIEW_STATUSES = {"unreviewed", "in_review", "approved", "changes_requested", "rejected"}
 
 
 class ReviewStore:
@@ -48,11 +49,19 @@ class ReviewStore:
         tasks = self.load_tasks()
         audits = [audit_task(task, self.results_root, self.model_slugs) for task in tasks]
         counts: dict[str, int] = {}
+        review_counts: dict[str, int] = {}
         summaries = []
         for task, audit in zip(tasks, audits, strict=True):
             counts[audit.verdict] = counts.get(audit.verdict, 0) + 1
+            review_status = _review_status(task)
+            review_counts[review_status] = review_counts.get(review_status, 0) + 1
             summaries.append(self._summary(task, audit))
-        return {"models": self.model_slugs, "counts": counts, "tasks": summaries}
+        return {
+            "models": self.model_slugs,
+            "counts": counts,
+            "review_counts": review_counts,
+            "tasks": summaries,
+        }
 
     def detail(self, task_id: str) -> dict[str, object]:
         task = self.get_task(task_id)
@@ -61,7 +70,6 @@ class ReviewStore:
         task_json = _read_json(task.dir / "task.json") or {}
         return {
             "summary": self._summary(task, audit),
-            "task_json": task_json,
             "task_json_text": json.dumps(task_json, indent=2),
             "prompt": task.prompt,
             "prompt_origin": task.prompt_origin,
@@ -94,6 +102,7 @@ class ReviewStore:
             "blockers": audit.blockers,
             "warnings": audit.warnings,
             "quality": task.quality,
+            "review_status": _review_status(task),
             "fail_to_pass_count": len(task.fail_to_pass),
             "pass_to_pass_count": len(task.pass_to_pass),
         }
@@ -169,11 +178,15 @@ class ReviewStore:
                 raise ValueError("reviewed_warnings must be a list")
             quality["reviewed_warnings"] = [str(item) for item in reviewed if str(item)]
         if "review_status" in payload:
-            status = payload["review_status"]
-            quality["review_status"] = str(status) if status is not None else ""
+            status = str(payload["review_status"] or "unreviewed")
+            if status not in _REVIEW_STATUSES:
+                raise ValueError(f"review_status must be one of {', '.join(sorted(_REVIEW_STATUSES))}")
+            quality["review_status"] = status
 
         cfg["quality"] = quality
-        path.write_text(json.dumps(cfg, indent=2) + "\n")
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(cfg, indent=2) + "\n")
+        temporary.replace(path)
         return self.detail(task_id)
 
 
@@ -207,7 +220,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
     review_store: ReviewStore
     static_root: Path
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         if path == "/api/tasks":
@@ -233,7 +246,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
             return
         self._send_static(path)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         if path.startswith("/api/tasks/") and path.endswith("/quality"):
@@ -356,6 +369,11 @@ def _run_bun(command: list[str], cwd: Path) -> None:
     if result.returncode != 0:
         output = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(f"{' '.join(command)} failed: {output[-3000:]}")
+
+
+def _review_status(task: Task) -> str:
+    status = task.quality.get("review_status")
+    return str(status) if status in _REVIEW_STATUSES else "unreviewed"
 
 
 def _read_json(path: Path) -> object | None:

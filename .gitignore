@@ -2,6 +2,9 @@
 results/
 __pycache__/
 *.egg-info/
+node_modules
 node_modules/
 src/selfbench/review_dist/
 /tasks/
+/harbor-tasks/
+/harbor-jobs/
