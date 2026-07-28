@@ -100,12 +100,12 @@ export function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <div>
-          <div className="eyebrow">selfbench</div>
-          <h1>Task Review Console</h1>
+        <div className="topbar-title">
+          <span className="eyebrow">selfbench</span>
+          <h1>Task Review</h1>
         </div>
         <div className="meta topbar-actions">
-          <span>Models: {summaries.models.join(' · ')}</span>
+          <span className="topbar-models">{summaries.models.join(' · ')}</span>
           <button className="brand-button" type="button" onClick={() => void refresh()}>Refresh</button>
         </div>
       </header>
@@ -170,10 +170,10 @@ function Sidebar({ summaries, tasks, selected, filter, search, onFilter, onSearc
           <button key={task.task_id} className="task-row" data-active={task.task_id === selected} type="button" onClick={() => onSelect(task.task_id)}>
             <div className="task-title">
               <span className="task-id">{task.task_id}</span>
-              <span className="meta"><Badge value={task.review_status} /><Badge value={task.verdict} /></span>
+              <span className="meta task-statuses"><Badge value={`H: ${humanize(task.review_status)}`} kind={task.review_status} /><Badge value={`A: ${humanize(task.verdict)}`} kind={task.verdict} /></span>
             </div>
-            <div className="meta"><span>{task.workdir}</span><span>F2P {task.fail_to_pass_count}</span><span>P2P {task.pass_to_pass_count}</span></div>
-            <div className="meta">{Object.entries(task.model_results).map(([model, result]) => <Badge key={model} value={`${shortModel(model)}: ${result}`} kind={result} />)}</div>
+            <div className="meta task-meta"><span>{task.workdir}</span><span>F2P {task.fail_to_pass_count}</span><span>P2P {task.pass_to_pass_count}</span></div>
+            <div className="meta task-models">{Object.entries(task.model_results).map(([model, result]) => <span key={model} className={`model-pill ${result}`}>{shortModel(model)}: {result}</span>)}</div>
           </button>
         )) : <Empty>No tasks match this filter.</Empty>}
       </div>
@@ -195,7 +195,7 @@ function Detail({ detail, tab, previousTask, nextTask, onNavigate, onTab, onSave
     <section className="content">
       <div className="detail">
         <div className="queue-nav">
-          <span className="subtle">Use J / K to move through the queue.</span>
+          <span className="subtle">J / K moves through the queue</span>
           <div className="meta">
             <button type="button" disabled={!previousTask} onClick={() => previousTask && onNavigate(previousTask)}>← Previous</button>
             <button type="button" disabled={!nextTask} onClick={() => nextTask && onNavigate(nextTask)}>Next →</button>
@@ -231,15 +231,15 @@ function Summary({ summary }: { summary: TaskSummary }) {
     <section className="panel">
       <div className="panel-header">
         <div><div className="eyebrow">{summary.repo}</div><div className="panel-title">{summary.task_id}</div></div>
-        <div className="meta"><Badge value={summary.review_status} /><Badge value={summary.verdict} /><Badge value={summary.validation} /></div>
+        <div className="meta"><Badge value={`Human: ${humanize(summary.review_status)}`} kind={summary.review_status} /><Badge value={`Audit: ${humanize(summary.verdict)}`} kind={summary.verdict} /><Badge value={summary.validation} /></div>
       </div>
       <div className="panel-body">
-        <div className="summary-grid">
+        <dl className="summary-grid">
           <Stat label="Workdir">{summary.workdir}</Stat>
           <Stat label="Source">{summary.source_url ? <a href={summary.source_url} target="_blank" rel="noreferrer">PR {summary.source_pr}</a> : (summary.source_pr ?? '—')}</Stat>
           <Stat label="Signal">{summary.solver_signal}</Stat>
           <Stat label="Tests">F2P {summary.fail_to_pass_count} / P2P {summary.pass_to_pass_count}</Stat>
-        </div>
+        </dl>
         {(summary.blockers.length > 0 || summary.warnings.length > 0) && <div className="warning-list issues">
           {summary.blockers.map((item) => <div key={item} className="warning blocker">{item}</div>)}
           {summary.warnings.map((item) => <div key={item} className="warning">{item}</div>)}
@@ -276,14 +276,13 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
         <button className="primary-button" type="button" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save Review'}</button>
       </div>
       <div className="panel-body review-grid">
-        <div>
+        <div className="review-field">
           <label className="label" htmlFor="review-status">Review Status</label>
           <select id="review-status" className="field-body" value={status} onChange={(event) => setStatus(event.target.value as ReviewStatus)}>
             {reviewStatuses.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
           </select>
-          <div className="panel-hint">Audit verdicts are automatic. This is the human curation decision.</div>
         </div>
-        <div><div className="label">Reviewed Warnings</div><div className="field-body">
+        <div className="review-field"><div className="label">Reviewed Warnings</div><div className="field-body">
           {detail.summary.warnings.length ? detail.summary.warnings.map((warning) => (
             <label className="check-row" key={warning}>
               <input type="checkbox" checked={[...reviewed].some((token) => warning.includes(token))} onChange={(event) => setReviewed((current) => {
@@ -295,7 +294,7 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
             </label>
           )) : <Empty>No active warnings.</Empty>}
         </div></div>
-        <div><div className="label">Notes</div><textarea className="field-body" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Why this task is fair, what was manually checked, or why it should stay candidate-only." /></div>
+        <div className="review-field"><div className="label">Notes</div><textarea className="field-body" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Why this task is fair, what was manually checked, or why it should stay candidate-only." /></div>
       </div>
     </section>
   );
@@ -373,7 +372,19 @@ function DiffViewer({ taskId, kind, label, modelSlug, compact = false }: { taskI
   }, [path]);
 
   return <div className={`diff-shell${expanded ? ' expanded' : ''}${compact ? ' compact' : ''}`}>
-    <div className="diff-toolbar"><span className="label">{label}</span><div className="meta"><button className="link-button" type="button" onClick={() => setExpanded(!expanded)}>{expanded ? 'Close full screen' : 'Open full screen'}</button><a href={path} target="_blank" rel="noreferrer">Raw patch</a></div></div>
+    <div className="diff-toolbar">
+      <span className="label">{label}</span>
+      <div className="diff-actions">
+        <button className="utility-button" type="button" onClick={() => setExpanded(!expanded)}>
+          <ExpandIcon />
+          <span>{expanded ? 'Close' : 'Full screen'}</span>
+        </button>
+        <a className="utility-button" href={path} target="_blank" rel="noreferrer">
+          <CodeFileIcon />
+          <span>Raw patch</span>
+        </a>
+      </div>
+    </div>
     <div className="diff-body">
       {error ? <div className="warning blocker">{error}</div> : patch ? (
         <DiffErrorBoundary key={path}>
@@ -450,9 +461,15 @@ function Tail({ title, value }: { title: string; value: unknown }) {
   return <div><div className="label tail-title">{title}</div><Code>{value}</Code></div>;
 }
 
+function ExpandIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" /></svg>;
+}
+function CodeFileIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4M7 8 5 10l2 2M9 8l2 2-2 2" /></svg>;
+}
 function Count({ label, value }: { label: string; value: number }) { return <div className="count"><div className="label">{label}</div><div className="value">{value}</div></div>; }
 function Badge({ value, kind }: { value: string; kind?: string }) { return <span className={`badge ${kind ?? value}`}>{value}</span>; }
-function Stat({ label, children }: React.PropsWithChildren<{ label: string }>) { return <div className="stat"><div className="label">{label}</div><div className="stat-value">{children}</div></div>; }
+function Stat({ label, children }: React.PropsWithChildren<{ label: string }>) { return <div className="stat"><dt className="label">{label}</dt><dd className="stat-value">{children}</dd></div>; }
 function Code({ children }: { children: string }) { return <pre className="code">{children}</pre>; }
 function Empty({ children }: React.PropsWithChildren) { return <div className="empty">{children}</div>; }
 function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) { return <div className="page-state"><div className="warning blocker">{error}</div><button type="button" onClick={onRetry}>Retry</button></div>; }
