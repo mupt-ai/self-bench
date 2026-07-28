@@ -31,6 +31,10 @@ class Task:
     timeout_setup: int = 900
     timeout_agent: int = 2400
     timeout_tests: int = 900
+    network_mode: str = "public"
+    cpus: int = 4
+    memory_mb: int = 8192
+    storage_mb: int = 20480
 
     dir: Path = field(default=None, repr=False)  # type: ignore[assignment]
 
@@ -60,6 +64,10 @@ class Task:
             "timeout_setup": self.timeout_setup,
             "timeout_agent": self.timeout_agent,
             "timeout_tests": self.timeout_tests,
+            "network_mode": self.network_mode,
+            "cpus": self.cpus,
+            "memory_mb": self.memory_mb,
+            "storage_mb": self.storage_mb,
         }
         encoded_definition = json.dumps(
             definition,
@@ -207,6 +215,12 @@ def load_task(task_dir: str | Path) -> Task:
         timeout = getattr(task, timeout_name)
         if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
             problems.append(f"{timeout_name} must be a positive integer")
+    if task.network_mode not in {"public", "no-network", "allowlist"}:
+        problems.append("network_mode must be public, no-network, or allowlist")
+    for resource_name in ("cpus", "memory_mb", "storage_mb"):
+        value = getattr(task, resource_name)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            problems.append(f"{resource_name} must be a positive integer")
     if problems:
         raise ValueError(f"invalid task {task_dir}: " + "; ".join(problems))
     return task

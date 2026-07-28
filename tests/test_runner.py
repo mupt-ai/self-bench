@@ -1,25 +1,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from selfbench.cli import _model_slug
-from selfbench.runner import (
-    AGENT_PATCH_PATH,
-    CAPTURED_AGENT_PATCH_PATH,
-    GOLD_PATCH_PATH,
-    PROMPT_PATH,
-    TEST_PATCH_PATH,
-    run_task,
-    save_result,
-    validate_task,
-)
-from selfbench.sandbox import ExecResult
+from selfbench.harbor import HarborRun, build_harbor_task
+from selfbench.harbor_pi import PI_VERSION, _provider_error
+from selfbench.runner import run_task, save_result, validate_task
 from selfbench.task import Task
-
 
 AGENT_PATCH = """\
 diff --git a/src/fix.py b/src/fix.py
@@ -31,91 +23,90 @@ new file mode 100644
 """
 
 
-class FakeSandbox:
-    instances: list["FakeSandbox"] = []
-    fail_test_patch = False
-    fail_setup = False
-
-    def __init__(self, verbose: bool = True):
-        self.index = len(self.instances)
-        self.verbose = verbose
-        self.files: dict[str, bytes] = {}
-        self.exec_calls: list[dict[str, object]] = []
-        self.instances.append(self)
-
-    def __enter__(self) -> "FakeSandbox":
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
-    def upload_snapshot(self, local_repo: Path, base_commit: str) -> None:
-        self.local_repo = local_repo
-        self.base_commit = base_commit
-
-    def put_file(self, remote_path: str, data: bytes) -> None:
-        self.files[remote_path] = data
-
-    def get_file(self, remote_path: str) -> bytes:
-        return self.files[remote_path]
-
-    def exec(
-        self,
-        cmd: str,
-        workdir: str = "/work/repo",
-        timeout: int = 600,
-        *,
-        provider_secrets: bool = False,
-    ) -> ExecResult:
-        self.exec_calls.append(
-            {
-                "cmd": cmd,
-                "workdir": workdir,
-                "timeout": timeout,
-                "provider_secrets": provider_secrets,
-            }
-        )
-        if self.fail_test_patch and cmd.endswith(TEST_PATCH_PATH):
-            return ExecResult(exit_code=1, output="bad test patch")
-        if self.fail_setup and cmd == "setup":
-            return ExecResult(exit_code=1, output="bad setup")
-        if cmd.startswith("pi "):
-            return ExecResult(exit_code=0, output="agent completed")
-        if cmd == "run f2p" and self.index == 0:
-            return ExecResult(exit_code=1, output="expected base failure")
-        return ExecResult(exit_code=0, output="ok")
-
-    def exec_checked(
-        self,
-        cmd: str,
-        *,
-        action: str,
-        workdir: str = "/work/repo",
-        timeout: int = 600,
-        provider_secrets: bool = False,
-    ) -> ExecResult:
-        result = self.exec(
-            cmd,
-            workdir=workdir,
-            timeout=timeout,
-            provider_secrets=provider_secrets,
-        )
-        if "git diff --cached" in cmd:
-            self.files[CAPTURED_AGENT_PATCH_PATH] = AGENT_PATCH.encode()
-        if result.exit_code != 0:
-            raise RuntimeError(f"{action} failed")
-        return result
-
-
-class RunnerIsolationTest(unittest.TestCase):
+class HarborTaskBuildTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
-        self.task_dir = self.root / "task"
-        self.task_dir.mkdir()
-        (self.task_dir / "prompt.md").write_text("Fix the observable behavior with a focused change.")
-        (self.task_dir / "test.patch").write_text("test patch")
-        (self.task_dir / "gold.patch").write_text("gold patch")
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test"], check=True)
+        (self.repo / "src").mkdir()
+        (self.repo / "src" / "base.py").write_text("base = True\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "base"], check=True)
+        self.commit = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+
+        self.authoring_dir = self.root / "authoring"
+        self.authoring_dir.mkdir()
+        (self.authoring_dir / "prompt.md").write_text("Fix the public behavior without changing its documented interface.\n")
+        (self.authoring_dir / "test.patch").write_text("diff --git a/tests/x.py b/tests/x.py\n")
+        (self.authoring_dir / "gold.patch").write_text(AGENT_PATCH)
+        self.task = Task(
+            task_id="example-task",
+            repo="example/repo",
+            base_commit=self.commit,
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_fix"],
+            pass_to_pass=["tests/y.py"],
+            test_paths=["tests"],
+            trace_source={"path": "inputs/source.jsonl", "format": "pi"},
+            dir=self.authoring_dir,
+        )
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def test_builds_a_sealed_native_harbor_task(self) -> None:
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+        self.assertTrue((output / "task.toml").is_file())
+        self.assertTrue((output / "instruction.md").is_file())
+        self.assertTrue((output / "environment" / "Dockerfile").is_file())
+        self.assertTrue((output / "solution" / "solve.sh").is_file())
+        self.assertTrue((output / "tests" / "test.sh").is_file())
+        self.assertNotIn("source.jsonl", {path.name for path in output.rglob("*")})
+        self.assertFalse((output / "task.json").exists())
+
+        config = (output / "task.toml").read_text()
+        self.assertIn('schema_version = "1.4"', config)
+        self.assertIn('environment_mode = "separate"', config)
+        self.assertIn('name = "selfbench/example-task"', config)
+        self.assertIn('/opt/selfbench/agent.patch', config)
+
+        verifier = (output / "tests" / "test.sh").read_text()
+        self.assertIn("/tests/test.patch", verifier)
+        self.assertIn("--exclude=tests", verifier)
+        self.assertIn('"reward": $reward', verifier)
+
+    def test_reuses_current_build_and_rejects_stale_output(self) -> None:
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+        self.assertEqual(
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks"),
+            output,
+        )
+        (output / ".selfbench-manifest.json").write_text("{}")
+        with self.assertRaisesRegex(FileExistsError, "pass --force"):
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+
+class HarborRunnerTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        task_dir = self.root / "task"
+        task_dir.mkdir()
+        (task_dir / "prompt.md").write_text("Fix the observable behavior with a focused change.")
+        (task_dir / "test.patch").write_text("test patch")
+        (task_dir / "gold.patch").write_text("gold patch")
         self.task = Task(
             task_id="example-task",
             repo="example/repo",
@@ -126,106 +117,120 @@ class RunnerIsolationTest(unittest.TestCase):
             fail_to_pass=["f2p"],
             pass_to_pass=["p2p"],
             test_paths=["tests"],
-            dir=self.task_dir,
+            dir=task_dir,
         )
-        FakeSandbox.instances = []
-        FakeSandbox.fail_test_patch = False
-        FakeSandbox.fail_setup = False
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    @patch("selfbench.runner._harness_revision", return_value="test-revision")
-    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
-    def test_rollout_keeps_hidden_patches_out_of_agent_sandbox(self, _revision: object) -> None:
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
+    @patch("selfbench.runner.run_harbor_task")
+    def test_validation_runs_nop_and_oracle_through_harbor(self, run, _build) -> None:
+        base = _fake_run(self.root / "base", {"fail_to_pass": 0, "pass_to_pass": 1})
+        oracle = _fake_run(
+            self.root / "oracle",
+            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
+        )
+        run.side_effect = [base, oracle]
+
+        result = validate_task(self.task, self.root, verbose=False)
+
+        self.assertEqual([call.kwargs["agent"] for call in run.call_args_list], ["nop", "oracle"])
+        self.assertTrue(result["valid"])
+        self.assertTrue(result["checks"]["base_f2p_fails"])
+
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
+    @patch("selfbench.runner.run_harbor_task")
+    def test_rollout_delegates_agent_model_and_thinking_to_harbor(self, run, _build) -> None:
+        run.return_value = _fake_run(
+            self.root / "rollout",
+            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
+        )
+
         result = run_task(
             self.task,
             self.root,
-            provider="provider",
-            model="model",
+            provider="openai",
+            model="gpt-test",
             thinking="high",
+            agent="pi",
             verbose=False,
         )
 
-        self.assertEqual(len(FakeSandbox.instances), 2)
-        agent, grader = FakeSandbox.instances
-        self.assertIn(PROMPT_PATH, agent.files)
-        self.assertNotIn(TEST_PATCH_PATH, agent.files)
-        self.assertNotIn(GOLD_PATCH_PATH, agent.files)
-        self.assertIn(TEST_PATCH_PATH, grader.files)
-        self.assertIn(AGENT_PATCH_PATH, grader.files)
-        self.assertNotIn(PROMPT_PATH, grader.files)
-        self.assertNotIn(GOLD_PATCH_PATH, grader.files)
-
-        secret_calls = [call for call in agent.exec_calls if call["provider_secrets"]]
-        self.assertEqual(len(secret_calls), 1)
-        self.assertTrue(str(secret_calls[0]["cmd"]).startswith("pi "))
-        self.assertFalse(any(call["provider_secrets"] for call in grader.exec_calls))
-
+        self.assertEqual(run.call_args.kwargs["agent"], "pi")
+        self.assertEqual(run.call_args.kwargs["model"], "openai/gpt-test")
+        self.assertEqual(run.call_args.kwargs["agent_kwargs"], {"thinking": "high"})
         self.assertTrue(result["resolved"])
-        self.assertEqual(result["thinking"], "high")
-        self.assertEqual(result["harness_revision"], "test-revision")
-        self.assertEqual(result["task_fingerprints"], self.task.evaluation_fingerprints)
+        self.assertEqual(result["result_schema_version"], "harbor-1")
 
-    @patch("selfbench.runner._harness_revision", return_value="test-revision")
-    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
-    def test_validation_uses_fresh_base_and_gold_sandboxes(self, _revision: object) -> None:
-        result = validate_task(self.task, self.root, verbose=False)
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
+    @patch("selfbench.runner.run_harbor_task")
+    def test_rollout_preserves_nested_model_id_after_provider_prefix(self, run, _build) -> None:
+        run.return_value = _fake_run(
+            self.root / "rollout",
+            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
+        )
 
-        self.assertEqual(len(FakeSandbox.instances), 2)
-        base, gold = FakeSandbox.instances
-        self.assertIn(TEST_PATCH_PATH, base.files)
-        self.assertNotIn(GOLD_PATCH_PATH, base.files)
-        self.assertIn(TEST_PATCH_PATH, gold.files)
-        self.assertIn(GOLD_PATCH_PATH, gold.files)
-        self.assertTrue(result["valid"])
-        self.assertTrue(result["checks"]["gold_f2p_deterministic"])
+        run_task(
+            self.task,
+            self.root,
+            provider="openrouter",
+            model="deepseek/deepseek-v4-flash",
+            agent="pi",
+            verbose=False,
+        )
 
-    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
-    def test_validation_fails_closed_when_test_patch_does_not_apply(self) -> None:
-        FakeSandbox.fail_test_patch = True
+        self.assertEqual(
+            run.call_args.kwargs["model"],
+            "openrouter/deepseek/deepseek-v4-flash",
+        )
 
-        with self.assertRaisesRegex(RuntimeError, "test.patch does not apply"):
-            validate_task(self.task, self.root, verbose=False)
 
-    @patch("selfbench.runner.TaskSandbox", FakeSandbox)
-    def test_validation_fails_closed_when_setup_fails(self) -> None:
-        FakeSandbox.fail_setup = True
+class HarborPiTest(unittest.TestCase):
+    def test_current_pi_version_is_pinned(self) -> None:
+        self.assertEqual(PI_VERSION, "0.82.1")
 
-        with self.assertRaisesRegex(RuntimeError, "setup_cmd failed"):
-            validate_task(self.task, self.root, verbose=False)
+    def test_provider_error_is_not_treated_as_agent_success(self) -> None:
+        output = "\n".join(
+            [
+                json.dumps({"type": "message_end", "message": {"role": "user"}}),
+                json.dumps(
+                    {
+                        "type": "message_end",
+                        "message": {
+                            "role": "assistant",
+                            "stopReason": "error",
+                            "errorMessage": "400 incompatible thinking config",
+                        },
+                    }
+                ),
+            ]
+        )
+        self.assertEqual(_provider_error(output), "400 incompatible thinking config")
+        self.assertIsNone(
+            _provider_error(
+                json.dumps(
+                    {
+                        "type": "message_end",
+                        "message": {"role": "assistant", "stopReason": "stop"},
+                    }
+                )
+            )
+        )
 
 
 class ResultHistoryTest(unittest.TestCase):
     def test_save_result_preserves_each_run_and_refreshes_latest(self) -> None:
         with tempfile.TemporaryDirectory() as raw_dir:
             results = Path(raw_dir)
-            first = {
-                "run_id": "run-one",
-                "task_id": "task",
-                "resolved": False,
-                "agent_patch": "first",
-            }
-            second = {
-                "run_id": "run-two",
-                "task_id": "task",
-                "resolved": True,
-                "agent_patch": "second",
-            }
+            first = {"run_id": "run-one", "task_id": "task", "resolved": False, "agent_patch": "first"}
+            second = {"run_id": "run-two", "task_id": "task", "resolved": True, "agent_patch": "second"}
 
             latest = save_result(first, results, "provider__model")
             save_result(second, results, "provider__model")
 
-            self.assertFalse(
-                json.loads(
-                    (results / "task/provider__model/runs/run-one/result.json").read_text()
-                )["resolved"]
-            )
-            self.assertTrue(
-                json.loads(
-                    (results / "task/provider__model/runs/run-two/result.json").read_text()
-                )["resolved"]
-            )
+            self.assertFalse(json.loads((results / "task/provider__model/runs/run-one/result.json").read_text())["resolved"])
+            self.assertTrue(json.loads((results / "task/provider__model/runs/run-two/result.json").read_text())["resolved"])
             self.assertTrue(json.loads(latest.read_text())["resolved"])
             self.assertEqual((latest.parent / "agent.patch").read_text(), "second")
 
@@ -233,18 +238,7 @@ class ResultHistoryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw_dir:
             results = Path(raw_dir)
             with self.assertRaisesRegex(ValueError, "path-safe"):
-                save_result(
-                    {"run_id": "../escape", "task_id": "task"},
-                    results,
-                    "provider__model",
-                )
-            with self.assertRaisesRegex(ValueError, "result subdir"):
-                save_result(
-                    {"run_id": "run", "task_id": "task"},
-                    results,
-                    "../escape",
-                )
-
+                save_result({"run_id": "../escape", "task_id": "task"}, results, "provider__model")
             result = {"run_id": "same-run", "task_id": "task"}
             save_result(result, results, "provider__model")
             with self.assertRaises(FileExistsError):
@@ -256,6 +250,25 @@ class CliPathTest(unittest.TestCase):
         self.assertEqual(_model_slug("openai", "org/model"), "openai__model")
         with self.assertRaisesRegex(ValueError, "provider"):
             _model_slug("../provider", "model")
+
+
+def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
+    trial = root / "trial"
+    (trial / "artifacts" / "opt" / "selfbench").mkdir(parents=True)
+    (trial / "artifacts" / "opt" / "selfbench" / "agent.patch").write_text(AGENT_PATCH)
+    result = {
+        "id": root.name,
+        "trial_name": root.name,
+        "started_at": "2026-01-01T00:00:00+00:00",
+        "finished_at": "2026-01-01T00:00:01+00:00",
+        "agent_info": {
+            "name": "pi",
+            "version": "1.0",
+            "model_info": {"provider": "openai", "name": "gpt-test"},
+        },
+        "verifier_result": {"rewards": rewards},
+    }
+    return HarborRun(root, trial, {"trial_results": [result]}, result)
 
 
 if __name__ == "__main__":

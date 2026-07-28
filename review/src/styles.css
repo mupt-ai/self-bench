@@ -40,13 +40,14 @@ h1 { margin: 0.15rem 0 0; font-size: 13px; font-weight: 500; }
 .task-list { overflow: auto; min-height: 0; }
 .task-row { width: 100%; text-align: left; border-width: 0 0 1px; padding: 0.65rem 0.75rem; display: grid; gap: 0.4rem; font-size: 13px; }
 .task-row[data-active="true"] { background: hsl(var(--brand) / 0.08); border-left: 2px solid hsl(var(--brand)); padding-left: calc(0.75rem - 2px); }
-.task-title, .panel-header, .run-head, .diff-toolbar, .source-line { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.task-title, .panel-header, .run-head, .diff-toolbar, .source-line, .queue-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.queue-nav { min-height: 2rem; }
 .task-id { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta { color: hsl(var(--muted-foreground)); display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; font-size: 11px; }
 .badge { border: 1px solid hsl(var(--border)); padding: 0.1rem 0.3rem; color: hsl(var(--muted-foreground)); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; }
-.badge.accepted, .badge.pass, .badge.resolved { border-color: hsl(var(--ok) / 0.5); color: hsl(var(--ok)); background: hsl(var(--ok) / 0.08); }
-.badge.needs_review, .badge.missing, .badge.stale { border-color: hsl(var(--brand) / 0.45); color: hsl(var(--brand)); background: hsl(var(--brand) / 0.08); }
-.badge.rejected, .badge.fail, .badge.failed, .badge.invalid { border-color: hsl(var(--destructive) / 0.55); color: hsl(var(--destructive)); background: hsl(var(--destructive) / 0.1); }
+.badge.accepted, .badge.approved, .badge.pass, .badge.resolved { border-color: hsl(var(--ok) / 0.5); color: hsl(var(--ok)); background: hsl(var(--ok) / 0.08); }
+.badge.needs_review, .badge.in_review, .badge.missing, .badge.stale { border-color: hsl(var(--brand) / 0.45); color: hsl(var(--brand)); background: hsl(var(--brand) / 0.08); }
+.badge.rejected, .badge.changes_requested, .badge.fail, .badge.failed, .badge.invalid { border-color: hsl(var(--destructive) / 0.55); color: hsl(var(--destructive)); background: hsl(var(--destructive) / 0.1); }
 .content { min-width: 0; overflow: auto; }
 .detail { padding: 0.75rem; display: grid; gap: 0.75rem; }
 .panel { border: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
@@ -67,7 +68,8 @@ h1 { margin: 0.15rem 0 0; font-size: 13px; font-weight: 500; }
 .warning { border: 1px solid hsl(var(--brand) / 0.35); background: hsl(var(--brand) / 0.07); padding: 0.5rem 0.6rem; font-size: 12px; }
 .blocker { border-color: hsl(var(--destructive) / 0.5); background: hsl(var(--destructive) / 0.08); }
 .issues { margin-top: 0.75rem; }
-.split, .run-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.run-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.review-grid { display: grid; grid-template-columns: minmax(170px, 0.45fr) 1fr 1fr; gap: 0.75rem; align-items: start; }
 .field-body { margin-top: 0.5rem; }
 .check-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .check-row input { width: auto; margin-top: 0.15rem; accent-color: hsl(var(--brand)); }
@@ -104,7 +106,7 @@ diffs-container { display: block; font-family: "JetBrains Mono", ui-monospace, S
 @media (max-width: 980px) {
   .main { grid-template-columns: 1fr; }
   .sidebar { border-right: 0; border-bottom: 1px solid hsl(var(--border)); max-height: 55vh; }
-  .summary-grid, .split, .run-body { grid-template-columns: 1fr; }
+  .summary-grid, .run-body, .review-grid { grid-template-columns: 1fr; }
   .tab-panel { grid-template-columns: minmax(0, 1fr); }
   .tabs { flex-direction: row; border-right: 0; border-bottom: 1px solid hsl(var(--border)); overflow-x: auto; }
   .tab { width: auto; border-bottom: 2px solid transparent; border-left: 0; padding: 0.6rem 0.75rem; }
