@@ -17,7 +17,7 @@ def build_create_request(
     """Build the initial instruction passed to the task-building agent."""
     tasks_root = tasks_root.expanduser().resolve()
     lines = [
-        "Use the loaded selfbench skill to create a benchmark task.",
+        "Use the loaded selfbench skill to discover and create benchmark tasks.",
         f"Write authoring artifacts under: {tasks_root}",
     ]
     if repo is not None:
@@ -29,7 +29,16 @@ def build_create_request(
     if user_request:
         lines.extend(("", user_request))
     else:
-        lines.extend(("", "Ask me for any missing candidate, provenance, or rollout details before proceeding."))
+        lines.extend(
+            (
+                "",
+                "No pull request is preselected. Inspect the repository's merged pull requests, compare them "
+                "against existing tasks and rejected candidates under the task root, rank unseen candidates "
+                "using the skill's acceptance criteria, and build the strongest viable task or tasks. Do not "
+                "ask me to nominate PR numbers; only ask if access, provenance, or another hard blocker prevents "
+                "you from choosing safely.",
+            )
+        )
     return "\n".join(lines)
 
 

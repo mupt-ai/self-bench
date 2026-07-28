@@ -310,18 +310,18 @@ def main() -> None:
 
     p_create = sub.add_parser(
         "create",
-        help="create a task interactively using the selfbench skill (launches Pi)",
+        help="discover PR candidates and create tasks using the selfbench skill (launches Pi)",
         description=(
-            "Launch Pi with the bundled selfbench task-building skill. "
-            "Positional arguments are joined as the initial prompt. "
-            "Runs interactively by default; pass --print for one-shot output."
+            "Launch Pi with the bundled selfbench task-building skill. Without a request, Pi discovers and "
+            "ranks unseen merged pull requests itself. Positional arguments scope or replace that default "
+            "request. Runs interactively by default; pass --print for one-shot output."
         ),
     )
     p_create.add_argument(
         "request",
         nargs="*",
         metavar="MESSAGE",
-        help="initial prompt to Pi (joined with spaces); omit to enter interactive mode",
+        help="optional prompt to Pi (joined with spaces); omit to discover merged PR candidates automatically",
     )
     p_create.add_argument("--repo", help="source repository path (defaults to cwd)")
     p_create.add_argument("--tasks-root", default="tasks", help="authoring task root (default: tasks)")

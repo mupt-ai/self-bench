@@ -51,11 +51,25 @@ A minimal `task.json` looks like this:
 
 The test command must contain `{tests}`. Test IDs are substituted with shell quoting at runtime.
 
-## Step 1: choose a candidate
+## Step 1: discover and choose candidates
 
-Prefer a recent, merged, human-reviewed change with a reproducible bug or missing behavior. Reject changes that require unavailable production services, secrets, nondeterministic external state, or manual-only verification.
+When the user supplies a pull request or commit, evaluate that candidate directly. When no candidate is supplied, choose candidates autonomously instead of asking the user for PR numbers:
 
-Before building the task, identify the base commit that the change was made against. For a merge commit, this is normally its first parent. Confirm that the repository can be checked out at that commit and set up without relying on later files.
+1. Resolve the repository slug from its `origin` remote and list merged pull requests with `gh`. Start with recent changes and expand the search window if the first batch yields no strong candidates.
+2. Read every `task.json` below the requested task root, including rejected-task directories. Exclude pull requests already represented by `source_pr` or `source_url`; do not retry a known rejection under a new task name unless the user explicitly asks.
+3. Triage unseen pull requests from metadata and changed paths. Prioritize changes that modify separable implementation and test files, have a focused behavioral requirement, are small enough to understand, and are likely reproducible in a clean checkout. Metadata filtering is only a shortlist: inspect the actual diff, test design, and provenance before accepting a candidate.
+4. Rank the shortlist and work through the strongest candidates. Reject weak candidates quickly and continue to the next one. Do not ask the user to nominate a PR unless repository access or another hard blocker prevents autonomous selection.
+
+For a GitHub repository, a useful initial query is:
+
+```bash
+gh pr list -R <owner/repo> --state merged --limit 100 \
+  --json number,title,body,additions,deletions,files,mergedAt,author
+```
+
+Prefer a recent, merged, human-reviewed change with a reproducible bug or missing behavior. Reject changes that require unavailable production services, secrets, nondeterministic external state, manual-only verification, or unavailable authentic request provenance.
+
+Before building a task, identify the base commit that the change was made against. For a merge commit, this is normally its first parent. Confirm that the repository can be checked out at that commit and set up without relying on later files.
 
 ## Step 2: preserve the engineer's request
 

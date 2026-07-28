@@ -17,13 +17,17 @@ class BuildCreateRequestTest(unittest.TestCase):
         self.assertIn("Use the loaded selfbench skill", lines[0])
         self.assertIn("Write authoring artifacts under:", lines[1])
 
-    def test_prompt_forms_fallback(self) -> None:
+    def test_no_request_triggers_autonomous_pr_discovery(self) -> None:
         result = build_create_request([])
-        self.assertIn("Ask me for any missing candidate", result)
+        self.assertIn("No pull request is preselected", result)
+        self.assertIn("merged pull requests", result)
+        self.assertIn("existing tasks and rejected candidates", result)
+        self.assertIn("Do not ask me to nominate PR numbers", result)
 
     def test_joins_request_segments(self) -> None:
         result = build_create_request(["Create", "a task", "from PR 42"])
         self.assertIn("Create a task from PR 42", result)
+        self.assertNotIn("No pull request is preselected", result)
 
     def test_repo_path_appears_in_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as d:
