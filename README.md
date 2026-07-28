@@ -1,41 +1,69 @@
 # selfbench
 
-Turn changes from merged pull requests into executable SWE-bench-style coding-agent benchmarks. Each benchmark task is constructed manually from one completed change, then validated and run through selfbench's CLI. Each task gives a coding agent a clean repository snapshot and an engineer-authored work request, then grades the resulting patch with tests derived from the original change.
+Build private SWE-bench-style evaluations from real changes in repositories you can clone, then validate them, run coding-agent rollouts in isolated [Harbor](https://harborframework.com) Docker containers, and inspect the results in a browser.
 
-The toolkit validates task determinism, runs agent rollouts in isolated [Harbor](https://harborframework.com) Docker containers, audits benchmark quality, produces result tables, and includes a React review console for inspecting prompts, patches, and test output. Agent execution and grading use separate fresh containers so the agent cannot inspect held-out patches or persist ignored dependency state into grading.
+Task construction is currently manual. selfbench does not import a pull request or infer the benchmark for you: you choose the base and completed commits, preserve the original engineering request, split tests from implementation, and define the test selectors. The toolkit makes that task executable and checks whether it is fair, reproducible, and useful.
 
-Harbor owns the execution runtime. selfbench owns task construction, private-provenance audit, and the review queue. The compiled task format is a native Harbor task directory — sealed, self-contained, and runnable with `harbor run` directly.
+Harbor owns the execution runtime. selfbench owns task construction, private-provenance audit, and the review queue.
+
+## What a task measures
+
+A selfbench task contains two states of one completed change:
+
+- The **base commit** is the repository before the implementation.
+- The **gold patch** is the known-good implementation.
+- The **test patch** contains held-out behavioral tests.
+- **Fail-to-pass** selectors fail at the base and pass with the gold patch.
+- **Pass-to-pass** selectors pass at the base and guard against regressions.
+- The **prompt** preserves the engineer's original pre-implementation request.
+
+During a rollout, the coding agent receives only a history-free archive of the base commit and the prompt. selfbench captures the agent's patch, starts a separate fresh grading container, applies the held-out tests there, removes agent edits to protected test paths, and runs the selected tests. Neither `gold.patch` nor `test.patch` is placed in the agent container.
 
 ## Install
 
-Clone the repository and install dependencies. The CLI requires Python 3.12 or newer, [uv](https://docs.astral.sh/uv/), [Docker](https://www.docker.com/), and a local clone of the repository being benchmarked. The review console additionally requires [Bun](https://bun.sh/).
+You need Python 3.12+, [uv](https://docs.astral.sh/uv/), [Docker](https://www.docker.com/), a local clone of the repository being benchmarked, and an API key for the model provider used by a rollout. [Bun](https://bun.sh/) is required only for the review console.
 
 ```bash
 git clone https://github.com/mupt-ai/selfbench.git
 cd selfbench
 uv sync
+```
+
+For the browser review console:
+
+```bash
 bun install --frozen-lockfile
 ```
 
-`uv sync` installs [Harbor](https://harborframework.com) (the execution runtime) as a Python dependency. Set the API key for the provider used by a rollout, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. The CLI compiles a history-free archive of the selected base commit into a Harbor task directory, then Harbor runs the agent inside a Docker container. [Pi](https://github.com/earendil-works/pi) (a coding-agent CLI) is installed inside that container and invokes the selected model provider.
+`uv sync` installs Harbor (the execution runtime) as a Python dependency. Set the API key for the provider used by a rollout, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`. The CLI compiles a history-free archive of the selected base commit into a Harbor task directory, then Harbor runs the agent inside a Docker container. [Pi](https://github.com/earendil-works/pi) (a coding-agent CLI) is installed inside that container and invokes the selected model provider.
 
-## Core concepts
+## Build a task manually
 
-A task compares two states of one change. The **base commit** is the repository state before the implementation. The **gold patch** is the completed implementation. The **test patch** supplies held-out tests that the coding agent cannot edit. **Fail-to-pass** selectors fail at the base and pass with the gold patch; **pass-to-pass** selectors already pass at the base and guard against regressions. A **rollout** is one model's attempt to solve the task from the engineer prompt.
+Choose a completed change with a reproducible behavioral requirement. Reject changes that require unavailable production services, secrets, nondeterministic external state, or tests that only accept the original implementation's private names and structure.
 
-## Create a task
-
-Create a directory under `tasks/` with this shape:
+Create this directory shape under the ignored `tasks/` directory:
 
 ```text
 tasks/example-fix/
-  task.json
-  inputs/session.jsonl
-  test.patch
-  gold.patch
+├── task.json
+├── inputs/session.jsonl  # preferred: the original coding session
+├── test.patch            # held-out tests
+└── gold.patch            # known-good implementation
 ```
 
-`test.patch` contains the tests that distinguish the broken base commit from the completed change. `gold.patch` contains the expected non-test implementation. `task.json` identifies the base commit, commands, and test cases:
+If the completed change has cleanly separated test and implementation files, generate the two patches from the same commit range:
+
+```bash
+git -C ~/code/example-project diff --binary <base> <completed> \
+  -- tests/regression.test.ts > tasks/example-fix/test.patch
+
+git -C ~/code/example-project diff --binary <base> <completed> \
+  -- src/feature.ts > tasks/example-fix/gold.patch
+```
+
+The patches must not touch the same file. `test_paths` must cover every path owned by `test.patch` so agent changes to those paths can be excluded before grading.
+
+A minimal definition looks like this:
 
 ```json
 {
@@ -46,7 +74,7 @@ tasks/example-fix/
   "setup_cmd": "npm ci",
   "test_cmd": "npm test -- {tests}",
   "fail_to_pass": ["tests/regression.test.ts"],
-  "pass_to_pass": ["tests/unit.test.ts", "tests/api.test.ts", "tests/cli.test.ts"],
+  "pass_to_pass": ["tests/unit.test.ts", "tests/api.test.ts"],
   "test_paths": ["tests"],
   "prompt_source": {
     "path": "inputs/session.jsonl",
@@ -56,28 +84,38 @@ tasks/example-fix/
 }
 ```
 
-`repo` is informational; `--repo` supplies the actual local clone at runtime. `workdir` is relative to that clone's root and is where setup and test commands run. `setup_cmd` is executed as a shell command. Each fail-to-pass or pass-to-pass entry is a framework-specific test selector passed as one shell-quoted argument at `{tests}`; it may be a file path, test name, or other selector accepted by the configured test command. `test_paths` contains repository-relative files or directories owned by the held-out test patch. Agent changes to those complete paths are excluded before grading.
+#### task.json field reference
 
-`prompt_source` preserves the work request exactly as the engineer typed it. The path must stay inside the task directory. Supported formats are `codex`, `claude-code`, `pi`, and `generic`; use `auto` to detect the format. `message_index` is zero-based and may be negative, so `-1` selects the last engineer message in a session.
+| Field | Required | Type | Description |
+| --- | --- | --- | --- |
+| `task_id` | yes | string | Path-safe identifier (`[A-Za-z0-9._-]+`), used as the results directory name |
+| `repo` | yes | string | Informational project slug (e.g. `"example/project"`); the actual clone is supplied by `--repo` at runtime |
+| `base_commit` | yes | string | Full SHA of the commit the change was made against (first parent of the merge commit) |
+| `workdir` | yes | string | Repo-relative working directory where commands run; `"."` for root |
+| `setup_cmd` | yes | string | Shell command run before tests in each container |
+| `test_cmd` | yes | string | Shell command containing `{tests}`; the placeholder is replaced with shell-quoted, framework-specific selectors |
+| `fail_to_pass` | yes | string array | Test selectors that fail at the base with `test.patch` applied and pass with `gold.patch` applied |
+| `pass_to_pass` | yes | string array | Test selectors that already pass at the base and must continue to pass |
+| `test_paths` | yes | string array | Repo-relative files or directories owned by `test.patch`; agent edits below these paths are stripped before grading |
+| `prompt_source` | no* | object | References the original coding session (`path`, `format`, `message_index`). Exactly one of `prompt_source` or `prompt.md` must exist |
+| `trace_source` | no | object | Private generation provenance session (same shape as `prompt_source`); not used as the eval prompt |
+| `source_pr` | no | integer | Original PR number for provenance tracking |
+| `source_url` | no | string | URL to the original change for provenance tracking |
+| `timeout_setup` | no | integer | Seconds to wait for `setup_cmd` (default 900) |
+| `timeout_agent` | no | integer | Seconds to wait for the coding agent (default 2400) |
+| `timeout_tests` | no | integer | Seconds to wait for `test_cmd` (default 900) |
+| `network_mode` | no | string | Docker network mode: `public`, `no-network`, or `allowlist` (default `public`) |
+| `cpus` | no | integer | CPU count for the agent container (default 4) |
+| `memory_mb` | no | integer | Memory limit in MB for the agent container (default 8192) |
+| `storage_mb` | no | integer | Storage limit in MB for the agent container (default 20480) |
 
-Codex extraction uses user-message events and ignores injected environment or instruction records. Claude Code extraction ignores tool-result user records. Pi extraction reads user message text blocks. The generic adapter accepts JSON or JSONL messages with `role: "user"` and string or text-block content.
+`test_paths` entries are repo-root-relative directory prefixes; `"tests"` protects `tests/` and everything under it. Test selectors in `fail_to_pass` and `pass_to_pass` are passed to `test_cmd` as one shell-quoted argument each; how they map to specific tests depends on your test framework. The patches must not touch the same file. If the completed change modifies both implementation and test files in a single file (inline tests, Python docstring tests), the change is not suitable for a task under this toolkit.
 
-For a task without an exported session, omit `prompt_source` and add a `prompt.md` file instead. A task must provide exactly one prompt source.
+`prompt_source` can extract user turns from Codex, Claude Code, Pi, or generic JSON/JSONL sessions. Without an exported session, omit `prompt_source` and write `prompt.md` instead. The task must use exactly one eval prompt source.
 
-When a prompt must be reconstructed for standalone use but the original coding session is available, keep `prompt.md` and add a separate `trace_source` to `task.json`:
+The bundled [task-building skill](skill/SKILL.md) is the end-to-end construction checklist, including candidate rejection criteria and prompt-provenance rules.
 
-```json
-{
-  "trace_source": {
-    "path": "inputs/session.jsonl",
-    "format": "pi"
-  }
-}
-```
-
-`trace_source` is private generation provenance. It is not included in the eval prompt or uploaded with a rollout. The review console shows the original human turns by default and can reveal assistant context when needed. Injected instruction records and tool results are omitted, and common API-key patterns are redacted from the rendered trace.
-
-Generate a standalone prompt from that conversation with:
+For a task whose prompt has been reconstructed from the original coding session, the `trace_source` field preserves the private source conversation while the standalone `prompt.md` contains the eval prompt. Generate the standalone prompt with:
 
 ```bash
 uv run selfbench generate-prompt tasks/example-fix \
@@ -85,30 +123,17 @@ uv run selfbench generate-prompt tasks/example-fix \
   --confirm-source-upload --write --force
 ```
 
-The generator receives the redacted source conversation and basic repository context, but not the current prompt, gold patch, test patch, or held-out test names. Pi runs with tools, extensions, skills, project context files, and prompt templates disabled, so the generator cannot inspect the task directory or working tree. It preserves the human requester's framing and corrections while removing conversational logistics and implementation details. `--confirm-source-upload` is required because generation sends the private conversation to the configured model provider. Written prompts record their generator and content fingerprints in `task.json`.
+The generator receives the redacted source conversation and basic repository context, but not the current prompt, gold patch, test patch, or held-out test names. `--confirm-source-upload` is required because generation sends the private conversation to the configured model provider.
 
-The repository ignores `tasks/` by default so source patches and transcripts are not accidentally committed here. This is not a promise that evaluation data stays on one machine: the repository snapshot and prompt are bundled into the Harbor task directory, and relevant prompt or source content may be sent to the configured model provider. Apply your organization's data-handling rules before running proprietary tasks.
+## Validate before running a model
 
-Task construction is a manual process: choose the base and completed commits, classify test versus implementation files, export the source coding-agent session, generate `test.patch` and `gold.patch`, and create `task.json`. The repository's [`skill/SKILL.md`](skill/SKILL.md) contains the complete authoring and review checklist.
-
-Create each patch as a binary-safe Git diff from the base commit to the completed change. The two file lists must not overlap; if test and implementation changes cannot be separated by file, choose another task.
-
-```bash
-git -C ~/code/example-project diff --binary <base> <completed> -- <test-files...> \
-  > tasks/example-fix/test.patch
-git -C ~/code/example-project diff --binary <base> <completed> -- <implementation-files...> \
-  > tasks/example-fix/gold.patch
-```
-
-## Validate and run
-
-First prove that the selected tests fail at the base commit and pass with the gold implementation. Validation compiles the authoring task into a native Harbor task directory (under `harbor-tasks/`), then runs a **nop** (no-op agent) and an **oracle** (gold patch applied) trial in separate Docker containers:
+Validation compiles the authoring task into a native Harbor task directory (under `harbor-tasks/`), then runs a **nop** (no-op agent) and an **oracle** (gold patch applied) trial in separate Docker containers:
 
 ```bash
 uv run selfbench validate tasks/example-fix --repo ~/code/example-project
 ```
 
-All six checks must pass:
+Six checks must all pass:
 
 - Base fails fail-to-pass tests
 - Base passes pass-to-pass tests
@@ -117,53 +142,65 @@ All six checks must pass:
 - Gold patch fix is deterministic (passes twice in a row)
 - Gold patch does not break pass-to-pass tests
 
-Then run a real model. Pi is the default agent and supports providers such as `openai`, `anthropic`, `fireworks`, `google`, and `openrouter`. The agent container receives only the base snapshot and prompt. Its captured patch is collected by Harbor before the container shuts down, then graded in a separate verifier container that holds the test patch and runs the held-out tests; `gold.patch` is never placed in either rollout container:
+Run the quality audit before spending model calls:
+
+```bash
+uv run selfbench audit tasks/example-fix --results results
+```
+
+The audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, gold-coupled private identifiers, regression coverage, validation freshness, and model outcome signal. A pre-rollout audit can legitimately report missing model signal; fix blockers before continuing.
+
+The audit also surfaces fairness concerns that validation alone cannot catch. A task may execute deterministically and still be unsuitable for scoring if its held-out tests require exact private identifiers that only the gold patch introduces, assert on incidental implementation shape rather than observable behavior, or omit the main feature from the graded test selectors.
+
+## Run and grade a coding agent
+
+Pi is the default agent and supports providers such as `openai`, `anthropic`, `fireworks`, `google`, and `openrouter`. The agent container receives only the base snapshot and prompt. Its captured patch is collected by Harbor before the container shuts down, then graded in a separate verifier container that holds the test patch and runs the held-out tests; `gold.patch` is never placed in either rollout container:
 
 ```bash
 uv run selfbench run tasks/example-fix --repo ~/code/example-project \
   --provider openai --model gpt-4.1 --thinking high
 ```
 
-Results are written below `results/<task-id>/`. Each model gets a backward-compatible latest `result.json` and `agent.patch`, plus immutable history under `runs/<run-id>/`. Results record thinking effort, timestamps, harness/runtime versions, and fingerprints for the task definition, prompt, test patch, and gold patch. The generated agent patch excludes complete files under the held-out test paths before grading. If benchmark inputs or the result schema change, the audit and review console mark older validations and runs as stale until they are rerun.
+Results are written below `results/<task-id>/<provider>__<model>/`. The `result.json` and `agent.patch` at the top of that directory are the latest result; immutable run artifacts, including prior attempts, live under `runs/<run-id>/`. Results record thinking effort, timestamps, harness/runtime versions, and fingerprints for the task definition, prompt, test patch, and gold patch. If benchmark inputs or the result schema change, the audit and review console mark older validations and runs as stale until they are rerun.
 
 Provider credentials are passed only to the Pi agent process inside the container. Pi and tool subprocesses it launches may still inherit those credentials, so use narrowly scoped evaluation keys. Setup and grading containers do not receive provider secrets.
 
 ## Build a Harbor task directly
 
-The `build` subcommand compiles an authoring task into a native Harbor task directory without running a trial. Run validation separately before treating the task as usable benchmark signal. The output is a self-contained Harbor task runnable with any Harbor agent:
+The `build` subcommand compiles an authoring task into a native Harbor task directory without running a trial. Run validation separately before treating the task as usable benchmark signal:
 
 ```bash
 uv run selfbench build tasks/example-fix --repo ~/code/example-project
 uv run harbor run -p harbor-tasks/example-fix -a pi -m openai/gpt-4.1
 ```
 
-Generated task directories omit private provenance such as `task.json` and source-session transcripts. They contain the standard Harbor instruction, environment, oracle solution, and verifier layout. During a normal model rollout, Harbor exposes only the instruction and base repository environment to the agent; the oracle solution and held-out tests remain outside the agent container.
+Generated task directories omit private provenance such as `task.json` and source-session transcripts. They contain the standard Harbor instruction, environment, oracle solution, and verifier layout.
 
-## Audit a benchmark
-
-Validation proves that a task executes. The audit command checks whether it is also useful benchmark signal: the prompt must have authentic pre-implementation request provenance and be sufficiently specified without leaking held-out tests or solution identifiers, the test and implementation patches must be separated, held-out tests must not depend on exact identifiers introduced only by the gold patch, regression coverage must exist, and configured model outcomes must be present. By default the audit expects result directories named `openai__gpt-5.5` and `fireworks__glm-5p2`; override them with `--models`.
+## Audit a benchmark suite
 
 ```bash
 uv run selfbench audit tasks --results results
 uv run selfbench report results --tasks tasks
 ```
 
-Audit verdicts are computed automatically. `accepted` means the current validation and quality gates pass with mixed model outcomes. `needs_review` means the task executes but has a warning or inconclusive model signal. `rejected` means a blocking requirement fails, including a stale validation result. Without `--strict`, warnings and review-needed verdicts are reported without failing the command. Use `--strict` in automation when every task must be accepted.
+Audit verdicts are:
 
-The audit also surfaces fairness concerns that validation alone cannot catch. A task may execute deterministically and still be unsuitable for scoring if its held-out tests require exact private identifiers that only the gold patch introduces, assert on incidental implementation shape rather than observable behavior, or omit the main feature from the graded test selectors. When the audit or manual review finds such a problem, mark the task `changes_requested` in the review console and omit it from aggregate benchmark scores until it is repaired, revalidated, and rerun. The review status records that curation decision; it does not delete or rewrite existing results.
+- `accepted`: validation and quality gates pass, with mixed outcomes across the expected model ladder;
+- `needs_review`: the task executes but has a warning or inconclusive solver signal;
+- `rejected`: a blocking quality requirement or current validation fails.
 
-## Review tasks in the browser
+Use `--strict` when automation should fail unless every task is accepted. The default audit expects at least two model runs (`openai__gpt-5.5` and `fireworks__glm-5p2`) for solver-signal analysis. Override this list with `--models`.
 
-Start the local review server:
+## Review tasks in a browser
 
 ```bash
 uv run selfbench review --host 0.0.0.0 --port 8765 \
   --tasks tasks --results results
 ```
 
-The command builds the Vite frontend when its sources change, then serves the React app and Python API together. The console shows the resolved eval prompt, the original source-session conversation when attached, task metadata, validation output, model outcomes, review notes, and interactive patch views. Use **Original Session** to compare a reconstructed prompt with what the engineer actually asked. Saving review notes updates the task's local `task.json` under its `quality` field.
+The review console shows the resolved eval prompt, the original source-session conversation when attached, task metadata, validation output, model outcomes, review notes, and interactive patch views. Use **Original Session** to compare a reconstructed prompt with what the engineer actually asked. Saving review notes updates the task's local `task.json` under its `quality` field.
 
-The task list shows review status badges alongside audit verdicts. Use the status filter dropdown to group tasks by review status (`unreviewed`, `in_review`, `approved`, `changes_requested`, `rejected`) or by audit verdict. Keyboard shortcuts (`J` / `K`) and previous / next buttons navigate the queue. The current task and tab are persisted in the URL for deep linking.
+The task list shows review status badges alongside audit verdicts. Use the status filter dropdown to group tasks by review status (`unreviewed`, `in_review`, `approved`, `changes_requested`, `rejected`) or by audit verdict. Keyboard shortcuts (`J` / `K`) and previous / next buttons navigate the queue. The current task and tab are persisted in the URL for deep linking. When the audit or manual review finds a fairness concern, mark the task `changes_requested` to omit it from aggregate benchmark scores until it is repaired, revalidated, and rerun. The review status records that curation decision; it does not delete or rewrite existing results.
 
 For frontend development, run the API and Vite separately:
 
@@ -173,12 +210,26 @@ bun run dev:review
 ```
 
 Vite proxies `/api` requests to the Python server on port 8765.
-Open the Vite URL printed by `bun run dev:review`; the Python server on port 8765 continues to provide the API.
 
-## Checks
+## Data handling
+
+`tasks/` and `results/` are gitignored by default to reduce accidental commits, but they do not remain exclusively on your machine during normal use:
+
+- validation and rollout compile a history-free archive of `base_commit` into a Harbor task directory that includes the repository snapshot;
+- an agent rollout sends the prompt and relevant repository context to the configured model provider through Pi;
+- `generate-prompt` sends a redacted source conversation to the selected provider only after `--confirm-source-upload`;
+- the gold and test patches are kept out of the agent container, but validation and grading containers receive the patches required for their phase.
+
+Apply your organization's source-code, transcript, and provider-key policies before benchmarking proprietary repositories. Withholding the gold patch prevents direct solution leakage from the harness; it does not prove that a public change was absent from a model's training data.
+
+## Development
 
 ```bash
 uv run python -m unittest discover -s tests -v
 bun run typecheck:review
 bun run build:review
 ```
+
+## Licensing
+
+This repository does not currently include a repository-wide license. Public visibility alone does not grant permission to copy, modify, or redistribute the code; add an explicit license before presenting selfbench as open-source software.
