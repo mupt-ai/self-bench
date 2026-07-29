@@ -11,7 +11,7 @@ from pathlib import Path
 from .create import launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
-from .quality import DEFAULT_SIGNAL_MODELS, audit_task, format_audit_markdown
+from .quality import audit_task, format_audit_markdown
 from .result_schema import RESULT_SCHEMA_VERSION
 from .review import cmd_review
 from .runner import run_task, save_result, validate_task
@@ -24,6 +24,13 @@ def _model_slug(provider: str, model: str) -> str:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
             raise ValueError(f"{label} must end in a path-safe identifier")
     return f"{provider}__{model_name}"
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
 
 
 def cmd_generate_prompt(args: argparse.Namespace) -> int:
@@ -127,7 +134,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     }
     allowed_task_ids: set[str] | None = None
     if args.verdict:
-        audit_models = args.models or list(DEFAULT_SIGNAL_MODELS)
+        audit_models = args.models or []
         audits = [
             audit_task(task, root, audit_models)
             for task in tasks_by_id.values()
@@ -197,6 +204,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         args.request,
         repo=Path(args.repo) if args.repo else Path.cwd(),
         tasks_root=Path(args.tasks_root),
+        count=args.count,
         provider=args.provider,
         model=args.model,
         thinking=args.thinking,
@@ -210,14 +218,15 @@ def cmd_audit(args: argparse.Namespace) -> int:
     if not task_dirs:
         print("no task dirs found", file=sys.stderr)
         return 1
+    models = args.models or []
     results = [
-        audit_task(load_task(task_dir), Path(args.results), args.models)
+        audit_task(load_task(task_dir), Path(args.results), models)
         for task_dir in task_dirs
     ]
     if args.json:
         print(json.dumps([r.as_dict() for r in results], indent=2))
     else:
-        print(format_audit_markdown(results, args.models))
+        print(format_audit_markdown(results, models))
     return 1 if args.strict and any(r.verdict != "accepted" for r in results) else 0
 
 
@@ -288,8 +297,7 @@ def main() -> None:
     p_audit.add_argument(
         "--models",
         nargs="+",
-        default=list(DEFAULT_SIGNAL_MODELS),
-        help="result subdirs used as the solver-signal ladder",
+        help="optional result subdirs to display as informational solver signal",
     )
     p_audit.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     p_audit.add_argument("--strict", action="store_true", help="exit nonzero unless every task is accepted")
@@ -301,8 +309,7 @@ def main() -> None:
     p_review.add_argument(
         "--models",
         nargs="+",
-        default=list(DEFAULT_SIGNAL_MODELS),
-        help="result subdirs used as the solver-signal ladder",
+        help="optional result subdirs to display as informational solver signal",
     )
     p_review.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_review.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
@@ -325,6 +332,12 @@ def main() -> None:
     )
     p_create.add_argument("--repo", help="source repository path (defaults to cwd)")
     p_create.add_argument("--tasks-root", default="tasks", help="authoring task root (default: tasks)")
+    p_create.add_argument(
+        "-n",
+        "--count",
+        type=_positive_int,
+        help="target number of complete benchmark tasks to create",
+    )
     p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")
     p_create.add_argument("--model", help="Pi model ID")
     p_create.add_argument("--thinking", help="Pi thinking level (off, minimal, low, medium, high, xhigh, max)")

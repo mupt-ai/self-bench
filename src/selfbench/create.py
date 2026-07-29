@@ -13,13 +13,26 @@ def build_create_request(
     *,
     repo: Path | None = None,
     tasks_root: Path = Path("tasks"),
+    count: int | None = None,
 ) -> str:
     """Build the initial instruction passed to the task-building agent."""
     tasks_root = tasks_root.expanduser().resolve()
     lines = [
         "Use the loaded selfbench skill to discover and create benchmark tasks.",
         f"Write authoring artifacts under: {tasks_root}",
+        (
+            "After authoring the full batch, deterministic nop/oracle validation and static audit are allowed. "
+            "Do not run benchmark solver trials: never invoke selfbench run or start Harbor with a coding "
+            "agent/model unless the user explicitly asks."
+        ),
     ]
+    if count is not None:
+        if count < 1:
+            raise ValueError("task count must be a positive integer")
+        lines.append(
+            f"Target batch size: {count}. Create exactly {count} complete benchmark "
+            "task directories unless a genuine hard blocker exhausts the viable candidates."
+        )
     if repo is not None:
         repo = repo.expanduser().resolve()
         if not repo.is_dir():
@@ -47,6 +60,7 @@ def launch_create_agent(
     *,
     repo: Path | None = None,
     tasks_root: Path = Path("tasks"),
+    count: int | None = None,
     provider: str | None = None,
     model: str | None = None,
     thinking: str | None = None,
@@ -55,7 +69,7 @@ def launch_create_agent(
     skill_path: Path | None = None,
 ) -> int:
     """Run Pi with the bundled skill and return its exit code."""
-    prompt = build_create_request(request, repo=repo, tasks_root=tasks_root)
+    prompt = build_create_request(request, repo=repo, tasks_root=tasks_root, count=count)
 
     def run(resolved_skill: Path) -> int:
         command = [pi_executable, "--skill", str(resolved_skill)]

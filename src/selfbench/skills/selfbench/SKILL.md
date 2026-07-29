@@ -57,8 +57,9 @@ When the user supplies a pull request or commit, evaluate that candidate directl
 
 1. Resolve the repository slug from its `origin` remote and list merged pull requests with `gh`. Start with recent changes and expand the search window if the first batch yields no strong candidates.
 2. Read every `task.json` below the requested task root, including rejected-task directories. Exclude pull requests already represented by `source_pr` or `source_url`; do not retry a known rejection under a new task name unless the user explicitly asks.
-3. Triage unseen pull requests from metadata and changed paths. Prioritize changes that modify separable implementation and test files, have a focused behavioral requirement, are small enough to understand, and are likely reproducible in a clean checkout. Metadata filtering is only a shortlist: inspect the actual diff, test design, and provenance before accepting a candidate.
-4. Rank the shortlist and work through the strongest candidates. Reject weak candidates quickly and continue to the next one. Do not ask the user to nominate a PR unless repository access or another hard blocker prevents autonomous selection.
+3. Triage unseen pull requests from metadata and changed paths. Prioritize changes that modify separable implementation and test files, have a focused behavioral requirement, are small enough to understand, and are likely reproducible in a clean checkout. Metadata filtering is only a shortlist: inspect the actual diff and test design before accepting a candidate.
+4. Search thoroughly for authentic pre-implementation provenance for the whole shortlist before authoring tasks. Check local Pi, Claude Code, Codex, and relaymux sessions, worktree names, implementation journals, linked issues, and other original request artifacts. Read the human turns, not just filenames or keyword hits. Reject candidates whose request cannot be recovered without reconstructing it from the PR, implementation, or tests.
+5. Rank the provenance-backed shortlist and set a batch target `N` before creating anything. Use the user's requested count when supplied; otherwise choose and record a reasonable target from the strong candidates available. Reject weak candidates quickly and continue down the ranking. Do not ask the user to nominate PRs unless repository access or another hard blocker prevents autonomous selection.
 
 For a GitHub repository, a useful initial query is:
 
@@ -129,6 +130,18 @@ A test from the source change is not automatically a valid held-out test. Before
 
 Use at least three meaningful pass-to-pass entries when possible. Avoid broad suites that make every rollout slow when focused package or test-file targets exist.
 
+## Required batch-first ordering
+
+`selfbench create` may author, deterministically validate, and statically audit tasks. It must never run coding-agent/model solver trials unless the user explicitly asks. During creation:
+
+1. For each ranked candidate, complete Steps 2–4 and write the full authoring directory: provenance input, exactly one eval prompt source, `task.json`, `test.patch`, and `gold.patch`.
+2. If a candidate fails provenance, separability, equivalent-design, or reproducibility review while being authored, record the rejection and replace it with the next ranked candidate. Keep going until `N` complete task directories exist or a genuine hard blocker exhausts the viable shortlist.
+3. Do not validate or audit any task until the full target batch has been authored. In particular, do not let an early task's result change which later candidates get created.
+4. Once all `N` task directories exist, validate every task with the deterministic nop/oracle validator, then run the static quality audit. Stop after reporting those results.
+5. Do not invoke `selfbench run` or start Harbor with a coding agent/model. Solver trials are a separate operation that requires an explicit user request.
+
+Static authoring checks such as confirming commits exist, inspecting diffs, checking patch separation, and reviewing test equivalence are part of creation. Deterministic validation may execute task setup and tests only after the batch is fully authored; it does not authorize coding-model evaluation.
+
 Common command templates include:
 
 | Project | Setup | Test command |
@@ -138,9 +151,9 @@ Common command templates include:
 | Bun | `bun install --frozen-lockfile` | `bun test {tests}` |
 | npm | `npm ci` | `npm test -- {tests}` |
 
-## Step 5: validate
+## Step 5: validate and statically audit
 
-Run the gold validator before any model rollouts:
+Run the gold validator after the full batch is authored and before any separately requested model rollouts:
 
 ```bash
 selfbench validate tasks/<task> --repo <local-repo>
@@ -158,17 +171,17 @@ The validator uses separate Docker containers for the base and gold checks. A ro
 
 If validation fails, correct the base commit, patch split, setup command, or test IDs. Do not weaken a legitimate test merely to make the task pass.
 
-Run the quality audit once before spending model calls:
+Run the static quality audit:
 
 ```bash
 selfbench audit tasks/<task> --results results
 ```
 
-Missing rollout signal is expected at this stage, but any blocker about gold-coupled private identifiers must be fixed by replacing the test or rejecting the candidate.
+Audit is independent of coding-model selection. Fix any blocker about gold-coupled private identifiers by replacing the test or rejecting the candidate.
 
-## Step 6: run models
+## Separate operation: optionally run Harbor/model trials
 
-Run at least two representative models so the task has measurable solver signal:
+Do not run coding models as part of task creation unless the user explicitly requests them. When solver signal is wanted, choose the provider/model set for that evaluation and run it separately:
 
 ```bash
 selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
@@ -176,29 +189,31 @@ selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <mo
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
 
-Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores.
+Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores. Pass explicit result-directory slugs to `selfbench audit --models ...` only when informational solver signal should be displayed; model outcomes do not determine the static audit verdict.
 
-## Step 7: audit and review
+## Separate operation: review
 
-Run the quality audit:
+The static audit may be rerun at any time:
 
 ```bash
 selfbench audit tasks/<task> --results results
 ```
 
-Then open the review console:
+Do not open the review console automatically during `selfbench create`. When review is separately requested:
 
 ```bash
 selfbench review --host 0.0.0.0 --port 8765 --tasks tasks --results results
 ```
 
-Check the generated prompt against the human turns in Original Session when a source trace is attached. Then review the patch split, validation tails, rollout output, and model patches. Generated-prompt rollouts must show a current prompt fingerprint; stale results do not count as solver signal. Record any reviewed warnings and rationale in the review panel.
+Check the generated prompt against the human turns in Original Session when a source trace is attached. Then review the patch split and validation tails. If separate Harbor/model trials were run, also review their output and patches; generated-prompt rollouts must show a current prompt fingerprint before their solver signal is interpreted. Record any reviewed warnings and rationale in the review panel.
 
 The final verdicts are:
 
-- `accepted`: validation passes, quality gates pass, and the standard model outcomes are mixed.
-- `needs_review`: the task executes but lacks clean solver signal or has a warning requiring judgment.
+- `accepted`: validation and static quality gates pass without unresolved warnings.
+- `needs_review`: the task executes but has a static warning requiring judgment.
 - `rejected`: validation or a blocking quality requirement fails.
+
+Solver outcomes are reported separately and do not determine these quality verdicts.
 
 ## Quality rules
 

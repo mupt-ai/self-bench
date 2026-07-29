@@ -102,6 +102,58 @@ class RequestProvenanceTest(unittest.TestCase):
         )
 
 
+class AuditModelIndependenceTest(unittest.TestCase):
+    def test_clean_audit_does_not_require_or_depend_on_model_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text(" ".join(["requirement"] * 100))
+            (task_dir / "test.patch").write_text(
+                "diff --git a/tests/x.py b/tests/x.py\n+def test_expected(): pass\n"
+            )
+            (task_dir / "gold.patch").write_text(
+                "diff --git a/src/x.py b/src/x.py\n+implemented = True\n"
+            )
+            task = Task(
+                task_id="task",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="true",
+                test_cmd="pytest {tests}",
+                fail_to_pass=["tests/x.py::test_expected"],
+                pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+                test_paths=["tests/x.py"],
+                trace_source={"path": "inputs/session.jsonl", "format": "generic"},
+                dir=task_dir,
+            )
+            validation = root / "results" / "task" / "validation" / "result.json"
+            validation.parent.mkdir(parents=True)
+            validation.write_text(json.dumps({
+                "valid": True,
+                "result_schema_version": RESULT_SCHEMA_VERSION,
+                "task_fingerprints": task.evaluation_fingerprints,
+            }))
+
+            without_models = audit_task(task, root / "results", [])
+            self.assertEqual(without_models.verdict, "accepted")
+            self.assertEqual(without_models.solver_signal, "not_requested")
+            self.assertEqual(without_models.model_results, {})
+
+            for slug in ("model-a", "model-b"):
+                result = root / "results" / "task" / slug / "result.json"
+                result.parent.mkdir(parents=True)
+                result.write_text(json.dumps({
+                    "resolved": True,
+                    "result_schema_version": RESULT_SCHEMA_VERSION,
+                    "task_fingerprints": task.evaluation_fingerprints,
+                }))
+            with_models = audit_task(task, root / "results", ["model-a", "model-b"])
+            self.assertEqual(with_models.verdict, "accepted")
+            self.assertEqual(with_models.solver_signal, "all_solved")
+
+
 class ModelResultFreshnessTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
