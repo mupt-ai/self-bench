@@ -16,9 +16,6 @@ from typing import Any
 from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task
 
-DEFAULT_SIGNAL_MODELS = ("openai__gpt-5.5", "fireworks__glm-5p2")
-
-
 @dataclass
 class AuditResult:
     task_id: str
@@ -141,27 +138,15 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         required_task_fingerprints=task.evaluation_fingerprints,
     )
     solver_signal = _solver_signal(model_results)
-    if any(result == "stale" for result in model_results.values()):
-        warnings.append(
-            "one or more standard model runs use stale benchmark inputs or result schema and must be rerun"
-        )
-    elif solver_signal == "missing":
-        warnings.append("missing one or more standard model runs")
-    elif solver_signal == "single_model":
-        warnings.append("need at least two model runs to measure task signal")
-    elif solver_signal == "all_solved":
-        warnings.append("all standard models solved this task; do not count it in headline signal")
-    elif solver_signal == "none_solved":
-        warnings.append("no standard model solved this task; inspect traces for brittleness or missing context")
 
     warnings = _suppress_reviewed_warnings(warnings, task.quality)
 
     if blockers:
         verdict = "rejected"
-    elif solver_signal == "mixed":
-        verdict = "accepted"
-    else:
+    elif warnings:
         verdict = "needs_review"
+    else:
+        verdict = "accepted"
 
     return AuditResult(
         task_id=task.task_id,
@@ -227,6 +212,8 @@ def _model_results(
 
 def _solver_signal(model_results: dict[str, str]) -> str:
     outcomes = list(model_results.values())
+    if not outcomes:
+        return "not_requested"
     if any(v in {"missing", "unreadable", "stale"} for v in outcomes):
         return "missing"
     solved = sum(v == "pass" for v in outcomes)
@@ -451,11 +438,10 @@ def _suppress_reviewed_warnings(warnings: list[str], quality: dict[str, object])
 
 
 def format_audit_markdown(results: list[AuditResult], model_slugs: list[str]) -> str:
+    headings = ["task", "verdict", "validation", "solver signal", *model_slugs, "notes"]
     lines = [
-        "| task | verdict | validation | solver signal | "
-        + " | ".join(model_slugs)
-        + " | notes |",
-        "|---" * (5 + len(model_slugs)) + "|",
+        "| " + " | ".join(headings) + " |",
+        "|" + "---|" * len(headings),
     ]
     icon = {"pass": "✅", "fail": "❌", "missing": "—", "stale": "⏳", "unreadable": "?"}
     for result in sorted(results, key=lambda r: r.task_id):

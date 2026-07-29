@@ -320,7 +320,7 @@ def cmd_review(args: argparse.Namespace) -> int:
     serve_review_site(
         tasks_root=Path(args.tasks).resolve(),
         results_root=Path(args.results).resolve(),
-        model_slugs=args.models,
+        model_slugs=args.models or [],
         host=args.host,
         port=args.port,
     )

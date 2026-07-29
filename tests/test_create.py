@@ -24,6 +24,13 @@ class BuildCreateRequestTest(unittest.TestCase):
         self.assertIn("existing tasks and rejected candidates", result)
         self.assertIn("Do not ask me to nominate PR numbers", result)
 
+    def test_creation_allows_validation_but_stops_before_solver_trials(self) -> None:
+        result = build_create_request([])
+        self.assertIn("deterministic nop/oracle validation and static audit are allowed", result)
+        self.assertIn("Do not run benchmark solver trials", result)
+        self.assertIn("never invoke selfbench run", result)
+        self.assertIn("coding agent/model unless the user explicitly asks", result)
+
     def test_joins_request_segments(self) -> None:
         result = build_create_request(["Create", "a task", "from PR 42"])
         self.assertIn("Create a task from PR 42", result)
@@ -41,6 +48,15 @@ class BuildCreateRequestTest(unittest.TestCase):
     def test_tasks_root_customization(self) -> None:
         result = build_create_request([], tasks_root=Path("my-tasks"))
         self.assertIn("my-tasks", result)
+
+    def test_count_sets_explicit_batch_target(self) -> None:
+        result = build_create_request([], count=4)
+        self.assertIn("Target batch size: 4", result)
+        self.assertIn("exactly 4 complete benchmark task directories", result)
+
+    def test_count_must_be_positive(self) -> None:
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            build_create_request([], count=0)
 
 
 class LaunchCreateAgentTest(unittest.TestCase):
@@ -75,6 +91,15 @@ class LaunchCreateAgentTest(unittest.TestCase):
         self.assertIn("--thinking", command)
         self.assertIn("--print", command)
         self.assertIn(self.root.name, " ".join(command))
+
+    @patch("selfbench.create.subprocess.run")
+    def test_count_is_forwarded_in_prompt(self, run_mock) -> None:
+        run_mock.return_value.returncode = 0
+
+        launch_create_agent([], count=3, print_mode=True)
+
+        prompt = run_mock.call_args.args[0][-1]
+        self.assertIn("Target batch size: 3", prompt)
 
     @patch("selfbench.create.subprocess.run")
     def test_respects_custom_pi_executable(self, run_mock) -> None:

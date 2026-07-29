@@ -41,12 +41,13 @@ bun install --frozen-lockfile
 
 ## Create a task with the bundled skill
 
-`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. It follows the full construction checklist: candidate discovery, prompt provenance, patch split, test selection, validation, and audit. By default it opens an interactive Pi session; pass `--print` for one-shot execution.
+`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. It authors the full batch first, then may run deterministic nop/oracle validation and static quality audit. It never runs coding-agent/model solver trials unless explicitly requested; `selfbench run` and coding-model Harbor trials are separate operations. By default it opens an interactive Pi session; pass `--print` for one-shot creation.
 
 ```bash
-# Let Pi discover and choose merged PRs itself.
+# Let Pi discover and choose three merged PRs itself.
 uv run selfbench create \
   --repo ~/code/example-project \
+  --count 3 \
   --provider openai --model gpt-5.5 --thinking high
 
 # Or nominate/scope candidates explicitly.
@@ -58,6 +59,7 @@ uv run selfbench create \
 Flags:
 
 - `--repo <path>`: local clone of the repository being benchmarked (defaults to the current working directory).
+- `-n, --count <number>`: target number of complete benchmark tasks to create; omitted means the agent chooses a reasonable batch size.
 - `--tasks-root <dir>`: authoring task root (default `tasks`).
 - `--provider`, `--model`, `--thinking`: Pi session options for the authoring agent.
 - `--print`: non-interactive mode; process the prompt and exit.
@@ -213,11 +215,11 @@ uv run selfbench report results --tasks tasks
 
 Audit verdicts are:
 
-- `accepted`: validation and quality gates pass, with mixed outcomes across the expected model ladder;
-- `needs_review`: the task executes but has a warning or inconclusive solver signal;
+- `accepted`: validation and static quality gates pass without unresolved warnings;
+- `needs_review`: the task executes but has a static warning requiring judgment;
 - `rejected`: a blocking quality requirement or current validation fails.
 
-Use `--strict` when automation should fail unless every task is accepted. The default audit expects at least two model runs (`openai__gpt-5.5` and `fireworks__glm-5p2`) for solver-signal analysis. Override this list with `--models`.
+Use `--strict` when automation should fail unless every task is accepted. Audit does not require or select coding models. Run Harbor/model trials separately when you want solver signal. To display already-indexed model results as informational signal, pass their result-directory slugs explicitly with `--models`; those outcomes do not change the quality verdict.
 
 ## Review tasks in a browser
 
