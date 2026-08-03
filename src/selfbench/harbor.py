@@ -103,6 +103,7 @@ def run_harbor_task(
     agent_kwargs: dict[str, str] | None = None,
     agent_env: dict[str, str] | None = None,
     quiet: bool = False,
+    log_path: Path | None = None,
 ) -> HarborRun:
     """Run one native Harbor trial and return its canonical result artifacts."""
     harbor = _require_harbor()
@@ -136,11 +137,24 @@ def run_harbor_task(
     if quiet:
         command.append("--quiet")
 
-    result = subprocess.run(command, text=True, check=False)
+    if log_path is None:
+        result = subprocess.run(command, text=True, check=False)
+    else:
+        log_path = log_path.resolve()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a") as log:
+            result = subprocess.run(
+                command,
+                text=True,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
     job_dir = jobs_root / job_name
     if result.returncode != 0:
+        log_hint = f" Full log: {log_path}." if log_path is not None else ""
         raise RuntimeError(
-            f"Harbor exited {result.returncode}. Partial artifacts, if any: {job_dir}"
+            f"Harbor exited {result.returncode}. Partial artifacts, if any: {job_dir}.{log_hint}"
         )
     return load_harbor_run(job_dir)
 
