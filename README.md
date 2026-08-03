@@ -31,6 +31,32 @@ bun install --frozen-lockfile   # only for the browser review console
 
 Not published to PyPI; run everything with `uv run` from the checkout.
 
+## Quickstart
+
+One task, end to end. You need a local clone of a GitHub repository with merged PRs (yours, or any you can clone), `gh` authenticated to see it, Docker running, and one provider key exported (`OPENAI_API_KEY` here).
+
+```bash
+# 1. Author one task. The Pi session picks a suitable merged PR itself,
+#    prints its reasoning, and writes the task directory it authored,
+#    e.g. tasks/your-project-pr-123 — substitute that path below.
+uv run selfbench create --repo ~/code/your-project -n 1 \
+  --provider openai --model gpt-5.6-sol --thinking high
+
+# 2. Gate it: deterministic validation, static audit, coupling review.
+uv run selfbench validate tasks/your-project-pr-123 \
+  --repo ~/code/your-project --env docker
+uv run selfbench audit tasks --results results
+uv run selfbench review-coupling tasks/your-project-pr-123 \
+  --provider openai --model gpt-5.6-sol
+
+# 3. Benchmark an agent on it and read the score.
+uv run selfbench run tasks/your-project-pr-123 \
+  --repo ~/code/your-project --provider openai --model gpt-5.6-sol
+uv run selfbench report results --tasks tasks
+```
+
+Step 1 is the judgment-heavy part — the session may reject several PRs before finding one with authentic provenance and separable tests; that selectivity is the point. If it reports no viable candidate, nominate a PR you know had a linked issue: append `"Build a task from PR 123."` to the create command. The sections below explain each stage.
+
 ## Create tasks
 
 ```bash
