@@ -276,7 +276,10 @@ def _validation_status(
         or data.get("task_fingerprints") != required_task_fingerprints
     ):
         return "stale"
-    return "valid" if data.get("valid") is True else "invalid"
+    if data.get("valid") is True:
+        return "valid"
+    # An image-build or harness crash is not evidence the task itself is broken.
+    return "infra_error" if data.get("infrastructure_errors") else "invalid"
 
 
 def _model_results(

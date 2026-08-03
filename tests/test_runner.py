@@ -626,6 +626,76 @@ class CliPathTest(unittest.TestCase):
             _model_slug("../provider", "model")
 
 
+class InfrastructureErrorSurfacingTest(unittest.TestCase):
+    def test_validation_result_records_trial_exceptions(self) -> None:
+        from selfbench.harbor import validation_result
+
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text("Fix the behavior.")
+            (task_dir / "test.patch").write_text("test patch")
+            (task_dir / "gold.patch").write_text("gold patch")
+            task = Task(
+                task_id="infra-task",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="setup",
+                test_cmd="run {tests}",
+                fail_to_pass=["f2p"],
+                pass_to_pass=["p2p"],
+                test_paths=["tests"],
+                dir=task_dir,
+            )
+            base = _fake_run(root / "base", {"fail_to_pass": 0, "pass_to_pass": 1})
+            oracle = _fake_run(root / "oracle", {})
+            oracle.trial_result["exception_info"] = {
+                "exception_type": "RemoteError",
+                "exception_message": "Image build failed",
+            }
+
+            result = validation_result(task, base, oracle)
+
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            result["infrastructure_errors"], {"oracle": "RemoteError: Image build failed"}
+        )
+
+    def test_validation_result_omits_key_without_exceptions(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text("Fix the behavior.")
+            (task_dir / "test.patch").write_text("test patch")
+            (task_dir / "gold.patch").write_text("gold patch")
+            task = Task(
+                task_id="ok-task",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="setup",
+                test_cmd="run {tests}",
+                fail_to_pass=["f2p"],
+                pass_to_pass=["p2p"],
+                test_paths=["tests"],
+                dir=task_dir,
+            )
+            from selfbench.harbor import validation_result
+
+            base = _fake_run(root / "base", {"fail_to_pass": 0, "pass_to_pass": 1})
+            oracle = _fake_run(
+                root / "oracle",
+                {"fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1, "patch_applied": 1},
+            )
+            result = validation_result(task, base, oracle)
+
+        self.assertTrue(result["valid"])
+        self.assertNotIn("infrastructure_errors", result)
+
+
 def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
     trial = root / "trial"
     (trial / "artifacts" / "opt" / "selfbench").mkdir(parents=True)

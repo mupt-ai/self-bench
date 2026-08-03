@@ -254,6 +254,14 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "gold_p2p_passes": float(gold_rewards.get("pass_to_pass", 0)) >= 1,
         "gold_patch_applies": float(gold_rewards.get("patch_applied", 0)) >= 1,
     }
+    infrastructure_errors = {}
+    for name, run in (("base", base), ("oracle", oracle)):
+        exc = run.exception
+        if exc is not None:
+            infrastructure_errors[name] = (
+                f"{exc.get('exception_type', 'Harbor error')}: "
+                f"{exc.get('exception_message', '')}".rstrip()
+            )
     return {
         "result_schema_version": "harbor-1",
         "run_id": f"{base.trial_result.get('id')}+{oracle.trial_result.get('id')}",
@@ -261,6 +269,7 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "task_id": task.task_id,
         "valid": all(checks.values()),
         "checks": checks,
+        **({"infrastructure_errors": infrastructure_errors} if infrastructure_errors else {}),
         "task_fingerprints": task.evaluation_fingerprints,
         "harbor": {
             "version_range": HARBOR_VERSION_RANGE,

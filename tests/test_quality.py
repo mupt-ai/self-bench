@@ -459,6 +459,19 @@ class ModelResultFreshnessTest(unittest.TestCase):
             "stale",
         )
 
+    def test_infrastructure_failure_is_not_reported_as_invalid(self) -> None:
+        path = self.results / "validation.json"
+        path.write_text(json.dumps({
+            "valid": False,
+            "infrastructure_errors": {"oracle": "RemoteError: Image build failed"},
+        }))
+        self.assertEqual(_validation_status(path), "infra_error")
+
+    def test_genuine_failure_still_reports_invalid(self) -> None:
+        path = self.results / "validation.json"
+        path.write_text(json.dumps({"valid": False}))
+        self.assertEqual(_validation_status(path), "invalid")
+
 
 if __name__ == "__main__":
     unittest.main()
