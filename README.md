@@ -21,7 +21,7 @@ During a rollout, the coding agent receives only a history-free archive of the b
 
 ## Install
 
-You need Python 3.12+, [uv](https://docs.astral.sh/uv/), [Docker](https://www.docker.com/), a local clone of the repository being benchmarked, and an API key for the model provider used by a rollout. [Bun](https://bun.sh/) is required only for the review console.
+You need Python 3.12+, [uv](https://docs.astral.sh/uv/), [Docker](https://www.docker.com/) (for local debugging), a local clone of the repository being benchmarked, and an API key for the model provider used by a rollout. Public validation on the default Modal environment also needs the `modal` extra (`uv sync --extra modal`) and Modal credentials ([Bun](https://bun.sh/) is required only for the review console).
 
 ```bash
 git clone https://github.com/mupt-ai/selfbench.git
@@ -157,10 +157,42 @@ The generator receives the redacted source conversation and basic repository con
 
 ## Validate before running a model
 
-Validation compiles the authoring task into a native Harbor task directory (under `harbor-tasks/`), then runs a **nop** (no-op agent) and an **oracle** (gold patch applied) trial in separate Docker containers:
+Validation compiles the authoring task into a native Harbor task directory (under `harbor-tasks/`), then runs a **nop** (no-op agent) and an **oracle** (gold patch applied) trial as a pair of Harbor trials. It runs on the [Modal](https://modal.com) environment by default so a whole public task set can fan out without contending for a single local Docker daemon; pass `--env docker` (or any other Harbor environment) to debug offline/local. Modal authentication and per-task errors are always surfaced, never hidden:
 
 ```bash
+# Modal is the default environment.
 uv run selfbench validate tasks/example-fix --repo ~/code/example-project
+
+# Local/offline debugging on a single Docker daemon.
+uv run selfbench validate tasks/example-fix --repo ~/code/example-project --env docker
+```
+
+> Modal is an opt-in dependency. Install it with `uv sync --extra modal` and
+> authenticate with `modal token set` (Harbor also accepts `MODAL_TOKEN_ID` and
+> `MODAL_TOKEN_SECRET`). Without the extra, `--env modal` fails immediately
+> with a clear missing-SDK error rather than silently falling back to Docker.
+
+### Validate many tasks at once
+
+`selfbench validate-batch` validates every task under one or more task dirs
+concurrently, skipping tasks that already have a current, valid result. It
+also defaults to Modal, and by default it runs **all** tasks concurrently
+(concurrency = task count); throttle with `--concurrency <n>` or the
+`SELFBENCH_VALIDATION_CONCURRENCY` environment variable. Each task keeps its
+own result and its own log under `--logs` so failures stay attributable:
+
+```bash
+# Run every task in tasks/ at once on Modal. Repos resolve as <repos-root>/<repo name>.
+uv run selfbench validate-batch tasks \
+  --repos-root ~/code --results results
+
+# Throttled local validation with an explicit Docker override.
+SELFBENCH_VALIDATION_CONCURRENCY=4 \
+  uv run selfbench validate-batch tasks \
+  --repos-root ~/code --env docker --results results
+
+# A shell pass-through wrapper with the same defaults and env overrides.
+scripts/validate-batch.sh tasks --repos-root ~/code
 ```
 
 Six checks must all pass:

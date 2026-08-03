@@ -8,6 +8,16 @@ dependencies = [
     "harbor>=0.20,<0.21",
 ]
 
+[project.optional-dependencies]
+# Modal execution environment for public validation that fans out without a
+# local Docker daemon. Harbor lazily imports the Modal SDK only when
+# `--env modal` is requested, so this extra is opt-in. Install with
+# `uv sync --extra modal`.
+modal = [
+    "modal>=1.5.1",
+    "dockerfile-parse>=2.0.1",
+]
+
 [tool.uv-build]
 package-data = { "selfbench" = ["skills/selfbench/SKILL.md", "review_dist/**/*"] }
 

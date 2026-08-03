@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -14,8 +15,15 @@ from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
 from .result_schema import RESULT_SCHEMA_VERSION
 from .review import cmd_review
-from .runner import run_task, save_result, validate_task
-from .task import load_task
+from .runner import (
+    DEFAULT_ROLLOUT_ENVIRONMENT,
+    DEFAULT_VALIDATION_ENVIRONMENT,
+    run_task,
+    save_result,
+    validate_batch,
+    validate_task,
+)
+from .task import Task, load_task
 
 
 def _model_slug(provider: str, model: str) -> str:
@@ -89,7 +97,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         Path(args.repo).resolve(),
         harbor_root=Path(args.harbor_tasks),
         jobs_root=Path(args.jobs),
-        environment=args.env,
+        environment=args.env or DEFAULT_VALIDATION_ENVIRONMENT,
         rebuild=args.rebuild,
         verbose=not args.quiet,
     )
@@ -97,6 +105,68 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(json.dumps({k: result[k] for k in ("task_id", "valid", "checks", "duration_s")}, indent=2))
     print(f"full result: {path}")
     return 0 if result["valid"] else 1
+
+
+def _repo_map(values: list[str]) -> dict[str, Path]:
+    mapping: dict[str, Path] = {}
+    for value in values:
+        key, separator, raw_path = value.partition("=")
+        if not separator or not key or not raw_path:
+            raise ValueError(f"repo mapping must be REPO=PATH, got {value!r}")
+        mapping[key] = Path(raw_path).expanduser().resolve()
+    return mapping
+
+
+def cmd_validate_batch(args: argparse.Namespace) -> int:
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+
+    tasks = [load_task(task_dir) for task_dir in task_dirs]
+    task_ids = [task.task_id for task in tasks]
+    if len(task_ids) != len(set(task_ids)):
+        print("duplicate task_id in batch", file=sys.stderr)
+        return 1
+
+    try:
+        overrides = _repo_map(args.repo_map or [])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    repos_root = Path(args.repos_root).expanduser().resolve() if args.repos_root else None
+
+    def repo_for(task: Task) -> Path:
+        if task.repo in overrides:
+            return overrides[task.repo]
+        if repos_root is None:
+            raise ValueError(
+                f"no local repository for {task.repo}; pass --repo-map {task.repo}=PATH "
+                "or --repos-root"
+            )
+        return repos_root / task.repo.rsplit("/", 1)[-1]
+
+    environment = args.env or DEFAULT_VALIDATION_ENVIRONMENT
+    concurrency = args.concurrency or len(tasks)
+    outcomes = validate_batch(
+        tasks,
+        repo_for,
+        results_root=Path(args.results),
+        harbor_root=Path(args.harbor_tasks),
+        jobs_root=Path(args.jobs),
+        environment=environment,
+        concurrency=concurrency,
+        rebuild=True,
+        log_dir=Path(args.logs),
+    )
+    summary = {
+        "environment": environment,
+        "concurrency": concurrency,
+        "tasks": len(tasks),
+        "outcomes": [outcome.as_dict() for outcome in outcomes],
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if all(outcome.status in {"valid", "skipped"} for outcome in outcomes) else 1
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -110,7 +180,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         agent=args.agent,
         harbor_root=Path(args.harbor_tasks),
         jobs_root=Path(args.jobs),
-        environment=args.env,
+        environment=args.env or DEFAULT_ROLLOUT_ENVIRONMENT,
         rebuild=args.rebuild,
         verbose=not args.quiet,
     )
@@ -230,7 +300,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 1 if args.strict and any(r.verdict != "accepted" for r in results) else 0
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Construct the selfbench CLI argument parser."""
     parser = argparse.ArgumentParser(prog="selfbench", description="benchmark coding agents on your own merged PRs")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -240,7 +311,14 @@ def main() -> None:
     common.add_argument("--results", default="results", help="lightweight result index (default: results)")
     common.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
     common.add_argument("--jobs", default="harbor-jobs", help="canonical Harbor jobs root")
-    common.add_argument("--env", default="docker", help="Harbor environment provider (default: docker)")
+    common.add_argument(
+        "--env",
+        default=None,
+        help=(
+            "Harbor environment provider; per-command default is modal for validate "
+            "and docker for run. Pass docker for local/offline validation."
+        ),
+    )
     common.add_argument("--rebuild", action="store_true", help="rebuild the compiled Harbor task")
     common.add_argument("--quiet", action="store_true", help="suppress per-trial Harbor progress")
 
@@ -271,6 +349,57 @@ def main() -> None:
 
     p_val = sub.add_parser("validate", parents=[common], help="validate with Harbor nop and oracle trials")
     p_val.set_defaults(fn=cmd_validate)
+
+    p_batch = sub.add_parser(
+        "validate-batch",
+        help="validate many tasks concurrently (default environment: Modal)",
+        description=(
+            "Validate every task under the given task dirs concurrently on Harbor. "
+            "Defaults to the Modal environment so the whole public set can fan out "
+            "without a local Docker daemon; pass --env docker to debug offline. "
+            "Tasks that already have a current, valid result are skipped (idempotent). "
+            "Per-task results and logs are preserved."
+        ),
+    )
+    p_batch.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
+    p_batch.add_argument("--results", default="results", help="results root (default: results)")
+    p_batch.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
+    p_batch.add_argument("--jobs", default="harbor-jobs", help="canonical Harbor jobs root")
+    p_batch.add_argument("--logs", default="logs/validate", help="per-task log directory")
+    p_batch.add_argument(
+        "--env",
+        default=os.getenv("SELFBENCH_VALIDATION_ENV", DEFAULT_VALIDATION_ENVIRONMENT),
+        help=(
+            f"Harbor environment provider (default: {DEFAULT_VALIDATION_ENVIRONMENT}; "
+            "use docker for local/offline validation). Also honors SELFBENCH_VALIDATION_ENV."
+        ),
+    )
+    p_batch.add_argument(
+        "--concurrency",
+        type=_positive_int,
+        default=os.getenv("SELFBENCH_VALIDATION_CONCURRENCY"),
+        help=(
+            "how many tasks to validate at once; defaults to the task count (run all "
+            "concurrently). Also honors SELFBENCH_VALIDATION_CONCURRENCY to throttle."
+        ),
+    )
+    p_batch.add_argument(
+        "--repo-map",
+        action="append",
+        metavar="REPO=PATH",
+        help=(
+            "map a task.json repo (e.g. fastapi/fastapi) to a local clone path; "
+            "repeatable. Falls back to --repos-root/<repo name> otherwise."
+        ),
+    )
+    p_batch.add_argument(
+        "--repos-root",
+        help=(
+            "directory of local repo clones, one per task.json repo name "
+            "(e.g. --repos-root ~/code/repos resolves fastapi/fastapi to that dir/fastapi)"
+        ),
+    )
+    p_batch.set_defaults(fn=cmd_validate_batch)
 
     p_run = sub.add_parser("run", parents=[common], help="run one native Harbor agent trial")
     p_run.add_argument("--provider", required=True, help="pi provider, e.g. openai|fireworks")
@@ -354,5 +483,10 @@ def main() -> None:
     )
     p_create.set_defaults(fn=cmd_create)
 
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
     sys.exit(args.fn(args))
