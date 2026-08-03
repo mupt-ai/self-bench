@@ -717,3 +717,25 @@ def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelfbenchPiAgentConfigTest(unittest.TestCase):
+    def test_thinking_enum_matches_pinned_pi_package(self) -> None:
+        from selfbench.harbor_pi import SelfbenchPi
+
+        flags = {flag.kwarg: flag.choices for flag in SelfbenchPi.CLI_FLAGS}
+        self.assertIn("max", flags["thinking"])
+        self.assertIn("xhigh", flags["thinking"])
+
+    def test_models_json_payload_is_validated(self) -> None:
+        import asyncio
+
+        from selfbench.harbor_pi import MODELS_JSON_FILE_ENV, SelfbenchPi
+
+        with tempfile.TemporaryDirectory() as raw_dir:
+            bad = Path(raw_dir) / "models.json"
+            bad.write_text("{not json")
+            with patch.dict("os.environ", {MODELS_JSON_FILE_ENV: str(bad)}):
+                agent = SelfbenchPi.__new__(SelfbenchPi)
+                with self.assertRaises(json.JSONDecodeError):
+                    asyncio.run(agent._install_models_json(object()))
