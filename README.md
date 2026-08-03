@@ -41,7 +41,7 @@ bun install --frozen-lockfile
 
 ## Create a task with the bundled skill
 
-`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. It authors the full batch first, then may run deterministic nop/oracle validation and static quality audit. It never runs coding-agent/model solver trials unless explicitly requested; `selfbench run` and coding-model Harbor trials are separate operations. By default it opens an interactive Pi session; pass `--print` for one-shot creation.
+`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. The skill runs a staged pipeline: author the full batch, deterministically validate it, run the static audit, run an independent `selfbench review-coupling` model pass over each task, then resolve findings (repair or replace tasks, revalidating anything changed) before reporting the finished task folder. It never runs coding-agent/model solver trials unless explicitly requested; `selfbench run` and coding-model Harbor trials are separate operations. By default it opens an interactive Pi session; pass `--print` for one-shot creation.
 
 ```bash
 # Let Pi discover and choose three merged PRs itself.
@@ -221,6 +221,17 @@ uv run selfbench audit tasks/example-fix --results results
 The audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, gold-coupled private identifiers, regression coverage, validation freshness, and model outcome signal. A pre-rollout audit can legitimately report missing model signal; fix blockers before continuing.
 
 The audit also surfaces fairness concerns that validation alone cannot catch. A task may execute deterministically and still be unsuitable for scoring if its held-out tests require exact private identifiers that only the gold patch introduces, assert on incidental implementation shape rather than observable behavior, or omit the main feature from the graded test selectors.
+
+## Independent coupling review
+
+Validation proves the gold patch passes; it cannot prove that a *different but equally correct* implementation would. The coupling review sends only the eval prompt plus the two held-out patches to a fresh model pass (no authoring context, no repository access) that classifies every identifier, signature, and output shape the tests rely on as prompt-derivable, guessable, or gold-coupled:
+
+```bash
+uv run selfbench review-coupling tasks/example-fix \
+  --provider openai --model gpt-5.6-sol --thinking high
+```
+
+The verdict (`clean` / `minor` / `coupled`) and findings are written to `coupling_review.json` inside each task directory, fingerprinted against the prompt and patches so later edits mark the review stale. The static audit consumes it: a `coupled` verdict is a blocker, `minor` and stale reviews are warnings. The command exits nonzero when any task is `coupled`.
 
 ## Run and grade a coding agent
 

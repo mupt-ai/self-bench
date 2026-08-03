@@ -9,6 +9,7 @@ import re
 import sys
 from pathlib import Path
 
+from .coupling import review_coupling, save_coupling_review
 from .create import PROFILES, launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
@@ -284,6 +285,48 @@ def cmd_create(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_review_coupling(args: argparse.Namespace) -> int:
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+    rows: list[dict[str, object]] = []
+    worst_coupled = False
+    for task_dir in task_dirs:
+        task = load_task(task_dir)
+        review = review_coupling(
+            task,
+            provider=args.provider,
+            model=args.model,
+            thinking=args.thinking,
+            pi_executable=args.pi_executable,
+        )
+        path = save_coupling_review(task, review, provider=args.provider, model=args.model)
+        verdict = review["verdict"]
+        worst_coupled = worst_coupled or verdict == "coupled"
+        rows.append({
+            "task_id": task.task_id,
+            "verdict": verdict,
+            "findings": review.get("findings", []),
+            "summary": review.get("summary", ""),
+            "review_path": str(path),
+        })
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print("| task | verdict | findings | summary |")
+        print("|---|---|---|---|")
+        for row in rows:
+            findings = row["findings"]
+            assert isinstance(findings, list)
+            names = ", ".join(
+                str(f.get("identifier", "?")) for f in findings if isinstance(f, dict)
+            )
+            summary = str(row["summary"]).replace("|", "\\|")
+            print(f"| {row['task_id']} | {row['verdict']} | {names} | {summary} |")
+    return 1 if worst_coupled else 0
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     task_dirs = _iter_task_dirs(args.task_dirs)
     if not task_dirs:
@@ -420,6 +463,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="only include tasks whose audit verdict matches",
     )
     p_rep.set_defaults(fn=cmd_report)
+
+    p_couple = sub.add_parser(
+        "review-coupling",
+        help="independent LLM pass judging whether equivalent implementations can pass the held-out tests",
+    )
+    p_couple.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
+    p_couple.add_argument("--provider", required=True, help="pi provider for the reviewer model")
+    p_couple.add_argument("--model", required=True, help="pi model for the reviewer")
+    p_couple.add_argument("--thinking", default=None, help="pi thinking level")
+    p_couple.add_argument("--pi-executable", default=None, help="path to the Pi executable")
+    p_couple.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    p_couple.set_defaults(fn=cmd_review_coupling)
 
     p_audit = sub.add_parser("audit", help="audit task quality and solver signal")
     p_audit.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
