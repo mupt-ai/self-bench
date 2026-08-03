@@ -61,10 +61,18 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         warnings.append("pass_to_pass has fewer than 3 entries")
 
     if task.prompt_source is None and task.trace_source is None:
-        blockers.append(
-            "task lacks authentic request provenance; do not reconstruct requirements from the PR, "
-            "gold patch, or tests"
-        )
+        external_provenance = _external_provenance_refs(task.quality)
+        if external_provenance:
+            warnings.append(
+                "provenance is an external reference ("
+                + ", ".join(external_provenance[:3])
+                + "); verify the linked request predates the implementation"
+            )
+        else:
+            blockers.append(
+                "task lacks authentic request provenance; do not reconstruct requirements from the PR, "
+                "gold patch, or tests"
+            )
 
     prompt_words = len(re.findall(r"\w+", task.prompt))
     if prompt_words < 80:
@@ -123,6 +131,17 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
             + ", ".join(field_coupling[:5])
         )
 
+    manifest_files = sorted(
+        path for path in gold_stats.files if _is_dependency_manifest(path)
+    )
+    if manifest_files:
+        warnings.append(
+            "gold patch changes dependency manifest(s) ("
+            + ", ".join(manifest_files[:3])
+            + "); verify the prompt conveys the required dependency change, since a solver "
+            "cannot otherwise know to upgrade"
+        )
+
     if gold_stats.added_lines >= 200 and len(task.fail_to_pass) <= 1:
         warnings.append(
             f"large gold patch ({gold_stats.added_lines} added lines) with only "
@@ -156,6 +175,59 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         model_results=model_results,
         blockers=blockers,
         warnings=warnings,
+    )
+
+
+def _external_provenance_refs(quality: dict[str, object]) -> list[str]:
+    """Structured pre-implementation provenance references recorded under quality.provenance.
+
+    Accepts a single entry or a list of entries; each needs a non-empty ``kind``
+    and ``url``. These reference an original issue/ticket/request rather than an
+    attached session, so they clear the provenance blocker but still warrant review.
+    """
+    raw = quality.get("provenance")
+    entries = raw if isinstance(raw, list) else [raw]
+    refs: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("kind")
+        url = entry.get("url")
+        if isinstance(kind, str) and kind and isinstance(url, str) and url:
+            refs.append(f"{kind}: {url}")
+    return refs
+
+
+_DEPENDENCY_MANIFESTS = {
+    "package.json",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lock",
+    "bun.lockb",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "Pipfile",
+    "Pipfile.lock",
+    "poetry.lock",
+    "uv.lock",
+    "go.mod",
+    "go.sum",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Gemfile",
+    "Gemfile.lock",
+    "composer.json",
+    "composer.lock",
+}
+
+
+def _is_dependency_manifest(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    return name in _DEPENDENCY_MANIFESTS or (
+        name.startswith("requirements") and name.endswith(".txt")
     )
 
 

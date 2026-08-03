@@ -101,6 +101,118 @@ class RequestProvenanceTest(unittest.TestCase):
             any("authentic request provenance" in blocker for blocker in audit.blockers)
         )
 
+    def _task_without_sources(self, task_dir: Path, quality: dict) -> Task:
+        (task_dir / "prompt.md").write_text(" ".join(["behavior"] * 100))
+        (task_dir / "test.patch").write_text(
+            "diff --git a/tests/x.py b/tests/x.py\n+def test_behavior(): pass\n"
+        )
+        (task_dir / "gold.patch").write_text(
+            "diff --git a/src/x.py b/src/x.py\n+def behavior(): pass\n"
+        )
+        return Task(
+            task_id="external-prov",
+            repo="example/repo",
+            base_commit="abc123",
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_behavior"],
+            pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+            test_paths=["tests"],
+            dir=task_dir,
+            quality=quality,
+        )
+
+    def test_external_issue_provenance_clears_blocker_but_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {"provenance": {"kind": "github_issue", "url": "https://github.com/x/y/issues/1"}},
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertFalse(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+        self.assertTrue(
+            any("external reference" in warning for warning in audit.warnings)
+        )
+
+    def test_external_provenance_accepts_list_of_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {
+                    "provenance": [
+                        {"kind": "github_issue", "url": "https://github.com/x/y/issues/1"},
+                        {"kind": "github_issue", "url": "https://github.com/x/y/issues/2"},
+                    ]
+                },
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertFalse(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+
+    def test_malformed_external_provenance_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {"provenance": {"kind": "github_issue"}},
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertTrue(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+
+
+class DependencyManifestCouplingTest(unittest.TestCase):
+    def _audit_with_gold(self, task_dir: Path, gold_patch: str):
+        (task_dir / "prompt.md").write_text(" ".join(["behavior"] * 100))
+        (task_dir / "test.patch").write_text(
+            "diff --git a/tests/x.py b/tests/x.py\n+def test_behavior(): pass\n"
+        )
+        (task_dir / "gold.patch").write_text(gold_patch)
+        task = Task(
+            task_id="dep-manifest",
+            repo="example/repo",
+            base_commit="abc123",
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_behavior"],
+            pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+            test_paths=["tests"],
+            trace_source={"path": "inputs/session.jsonl", "format": "generic"},
+            dir=task_dir,
+        )
+        return audit_task(task, task_dir / "results", [])
+
+    def test_warns_when_gold_patch_touches_dependency_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audit_with_gold(
+                Path(raw_dir),
+                "diff --git a/package.json b/package.json\n+  \"dep\": \"^2.0.0\"\n"
+                "diff --git a/lib/x.js b/lib/x.js\n+module.exports = 1\n",
+            )
+
+        self.assertTrue(
+            any("dependency manifest" in warning for warning in audit.warnings)
+        )
+
+    def test_no_manifest_warning_for_code_only_gold_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audit_with_gold(
+                Path(raw_dir),
+                "diff --git a/lib/x.js b/lib/x.js\n+module.exports = 1\n",
+            )
+
+        self.assertFalse(
+            any("dependency manifest" in warning for warning in audit.warnings)
+        )
+
 
 class AuditModelIndependenceTest(unittest.TestCase):
     def test_clean_audit_does_not_require_or_depend_on_model_runs(self) -> None:

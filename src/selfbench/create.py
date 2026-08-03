@@ -46,9 +46,10 @@ def build_create_request(
         lines.append(
             "Difficulty profile: hard. Apply the skill's hard difficulty profile during candidate discovery: "
             "use changed-file and changed-line metadata only to shortlist larger merged pull requests, then "
-            "read the actual diffs and rank candidates by behavioral scope and implementation complexity, "
-            "keeping every provenance, patch-separability, equivalent-design, and deterministic-validation "
-            "gate unchanged."
+            "read the actual diffs and rank candidates by behavioral scope and implementation complexity. "
+            "Judge difficulty on the separable implementation core that would become gold.patch, not the "
+            "PR envelope, and keep every provenance, patch-separability, equivalent-design, and "
+            "deterministic-validation gate unchanged."
         )
         lines.append(
             f"Hard-profile goal: {validated_target} tasks from this repository that pass deterministic "
