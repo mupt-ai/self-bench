@@ -8,3 +8,4 @@ src/selfbench/review_dist/
 /tasks/
 /harbor-tasks/
 /harbor-jobs/
+logs/

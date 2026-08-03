@@ -24,6 +24,9 @@ from .task import Task
 # that list, so selfbench forwards it explicitly via --agent-env.
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "fireworks": "FIREWORKS_API_KEY",
+    # Dari routing endpoint; provider is defined via SELFBENCH_PI_MODELS_JSON_FILE
+    # (see harbor_pi.py) and its models.json references this key with !printenv.
+    "dari-prod": "DARI_ROUTER_KEY",
 }
 
 # Default Harbor execution environments. Public selfbench validation runs on

@@ -72,6 +72,25 @@ Prefer a recent, merged, human-reviewed change with a reproducible bug or missin
 
 Before building a task, identify the base commit that the change was made against. For a merge commit, this is normally its first parent. Confirm that the repository can be checked out at that commit and set up without relying on later files.
 
+## Difficulty profiles
+
+The launch prompt may name a difficulty profile. When none is named, use `default`. Profiles change only how Step 1 shortlists and ranks candidates; every other step, gate, and rejection rule in this skill applies unchanged to both profiles.
+
+### default
+
+The Step 1 guidance as written: prefer focused merged changes that are small enough to understand quickly.
+
+### hard
+
+Target larger, more complex merged PRs. Size metadata is a shortlist signal, never an acceptance criterion; a big diff that fails a quality gate is rejected, not weakened.
+
+1. Shortlist from PR metadata (`additions`, `deletions`, `files`): prefer merged PRs with at least 5 changed files and at least 150 changed lines (additions plus deletions, tests included). Rank the roughly 150–1500 changed-line band highest. This metadata pass is only a cheap first filter: PR-envelope size includes changelogs, version bumps, and bundled noise, so acceptance is always judged on the separable implementation core defined in rule 4.
+2. Exclude from the shortlist regardless of size: docs-only, formatting/style-only, dependency or lockfile bumps, generated or vendored code, release/changelog chores, and broad mechanical refactors (mass renames, file moves, API churn without behavior change). A behavioral change extracted from such a PR (for example a feature buried inside a release bundle) counts as hard only when its separable implementation core itself meets the bar in rule 4.
+3. Rank the shortlist by reading the actual diffs, not by line count. Prefer candidates with one coherent behavioral requirement that spans multiple modules or layers, meaningful implementation changes plus meaningful separable test changes, and nontrivial control-flow or data-model work over repetitive single-pattern edits. A 300-line change with real cross-module logic outranks a 900-line change of copy-paste edits.
+4. Judge difficulty on the separable implementation core — the files that would form `gold.patch` — not the PR envelope. A hard task needs roughly 100+ changed implementation lines across 3+ implementation files after the test/implementation split. A PR whose envelope is large but whose extracted core falls below this bar is not a hard candidate; treat it as default-profile material. Keep a smaller core on the hard shortlist only for an unusually intricate behavioral requirement, and record that justification with the task.
+5. Apply every existing gate unchanged: authentic pre-implementation provenance, file-separable test and implementation patches, the equivalent-design test check (including dependency coupling), and deterministic nop/oracle validation.
+6. The hard profile's standing goal is 15 validated tasks per repository; a user-supplied batch count overrides that number. The target counts tasks that pass deterministic nop/oracle validation, not shortlisted PRs or authored directories. Batch-first ordering still applies: rank the provenance-backed shortlist, author the full target batch, then validate and audit it. After that pass, replace tasks that were rejected or failed validation with the next ranked provenance-backed candidates, author and validate the replacements as their own follow-up batch, and repeat until the target number of tasks passes validation. Stop short only when the viable provenance-backed pool is exhausted, and then report the exact blocker and the shortfall rather than weakening a gate. Do not ask the user to nominate PRs.
+
 ## Step 2: preserve the engineer's request
 
 Use the original coding-agent session whenever one exists. Copy the JSON or JSONL export into `inputs/` inside the task directory, then reference it with `prompt_source`.
@@ -126,21 +145,26 @@ List every file or directory owned by `test.patch` in `test_paths`. Agent edits 
 
 `fail_to_pass` contains focused tests that fail on the base commit with only `test.patch` applied, then pass after `gold.patch` is applied. `pass_to_pass` contains existing regression tests that already pass at the base and must continue to pass.
 
-A test from the source change is not automatically a valid held-out test. Before selecting it, perform an equivalent-design check: imagine an implementation that satisfies the human request with different private names, data flow, or helper boundaries. If that implementation would fail the test, exclude the test. In particular, reject tests that construct, read, import, or monkeypatch a field, helper, constant, intermediate payload, sidecar filename, archive layout, or fixed byte offset introduced only by the gold patch unless the authentic human request explicitly named that public contract. Describing a concept in prose (for example, “return the auth subject” or “accept a version identifier”) does not specify a JSON key such as `auth_subject` or `version_id`; held-out tests must not require that exact spelling unless the source request did. Do not test “deterministic output” by asserting the gold implementation's gzip header value; generate the same logical input under different clock values and compare the complete outputs. Assert end-to-end observable state, output, persistence, or API behavior instead. If no focused behavioral tests remain, reject the candidate rather than grading agents on whether they reproduced the gold implementation.
+A test from the source change is not automatically a valid held-out test. Before selecting tests, run this mechanical checklist: list every function, method, class, signature, option name, dictionary key, header value, and error string the candidate held-out tests reference, and verify each one either (a) exists at the base commit, (b) is named in the authentic request or eval prompt, or (c) is dictated by a public spec the prompt invokes. Anything that fails all three is gold-coupled: exclude the test, rewrite it against observable behavior, or reject the candidate. Also verify the tests do not depend on helpers, fixtures, or imports that the source change added outside the files carried by `test.patch`.
+
+Beyond the checklist, perform an equivalent-design check: imagine an implementation that satisfies the human request with different private names, data flow, or helper boundaries. If that implementation would fail the test, exclude the test. In particular, reject tests that construct, read, import, or monkeypatch a field, helper, constant, intermediate payload, sidecar filename, archive layout, or fixed byte offset introduced only by the gold patch unless the authentic human request explicitly named that public contract. Describing a concept in prose (for example, “return the auth subject” or “accept a version identifier”) does not specify a JSON key such as `auth_subject` or `version_id`; held-out tests must not require that exact spelling unless the source request did. Do not test “deterministic output” by asserting the gold implementation's gzip header value; generate the same logical input under different clock values and compare the complete outputs. Assert end-to-end observable state, output, persistence, or API behavior instead. If no focused behavioral tests remain, reject the candidate rather than grading agents on whether they reproduced the gold implementation.
+
+Also check dependency coupling: if the gold implementation's behavior depends on adding or upgrading a dependency (a load-bearing manifest or lockfile change, not an incidental one), the authentic request — and therefore the eval prompt derived from it — must convey that the dependency change is needed. If it does not, reject the candidate: a solver working from the prompt and a clean checkout cannot know to change dependency versions, and no equivalent code-only implementation can pass.
 
 Use at least three meaningful pass-to-pass entries when possible. Avoid broad suites that make every rollout slow when focused package or test-file targets exist.
 
-## Required batch-first ordering
+## Required creation pipeline
 
-`selfbench create` may author, deterministically validate, and statically audit tasks. It must never run coding-agent/model solver trials unless the user explicitly asks. During creation:
+`selfbench create` may author, deterministically validate, statically audit, and coupling-review tasks. It must never run coding-agent/model solver trials unless the user explicitly asks. During creation, run these stages in order:
 
-1. For each ranked candidate, complete Steps 2–4 and write the full authoring directory: provenance input, exactly one eval prompt source, `task.json`, `test.patch`, and `gold.patch`.
-2. If a candidate fails provenance, separability, equivalent-design, or reproducibility review while being authored, record the rejection and replace it with the next ranked candidate. Keep going until `N` complete task directories exist or a genuine hard blocker exhausts the viable shortlist.
-3. Do not validate or audit any task until the full target batch has been authored. In particular, do not let an early task's result change which later candidates get created.
-4. Once all `N` task directories exist, validate every task with the deterministic nop/oracle validator, then run the static quality audit. Stop after reporting those results.
-5. Do not invoke `selfbench run` or start Harbor with a coding agent/model. Solver trials are a separate operation that requires an explicit user request.
+1. **Author the full batch.** For each ranked candidate, complete Steps 2–4 and write the full authoring directory: provenance input, exactly one eval prompt source, `task.json`, `test.patch`, and `gold.patch`. If a candidate fails provenance, separability, equivalent-design, or reproducibility review while being authored, record the rejection and replace it with the next ranked candidate. Do not validate or audit any task until the full target batch has been authored; do not let an early task's result change which later candidates get created.
+2. **Deterministic validation.** Once all `N` task directories exist, validate every task with the nop/oracle validator.
+3. **Static audit.** Run `selfbench audit` over the batch.
+4. **Independent coupling review.** Run `selfbench review-coupling <task-dirs> --provider <provider> --model <model>` over the batch. This sends only the eval prompt and the two held-out patches to a fresh model pass with no authoring context, and writes `coupling_review.json` into each task directory. Do not substitute your own judgment for this pass: you authored the tasks and cannot independently review them.
+5. **Resolution pass.** Using the validation, audit, and coupling findings together: repair tasks where a finding is fixable (relax an over-tight assertion, extend `test.patch` with a helper the tests need, restore prompt wording that provenance supports), and replace tasks that cannot be repaired with the next ranked candidate. Any task whose prompt or patches changed must be revalidated and coupling-reviewed again. Repeat until every task in the batch is validated with a `clean` (or reviewed-and-justified `minor`) coupling verdict, or the viable pool is exhausted.
+6. **Report the folder.** Finish with a summary listing every task directory, its validation result, audit verdict, and coupling verdict, plus rejected candidates and the reason for each.
 
-Static authoring checks such as confirming commits exist, inspecting diffs, checking patch separation, and reviewing test equivalence are part of creation. Deterministic validation may execute task setup and tests only after the batch is fully authored; it does not authorize coding-model evaluation.
+Whenever a task is rejected or removed at any stage, move its directory into `tasks/rejected/` (keeping `task.json` with its `source_pr`) instead of deleting it, so later sessions do not retry the candidate. Do not invoke `selfbench run` or start Harbor with a coding agent/model; solver trials are a separate operation that requires an explicit user request.
 
 Common command templates include:
 
@@ -223,6 +247,7 @@ Reject or repair tasks with any of these defects:
 - The test patch and gold patch overlap.
 - Tests assert irrelevant internal structure rather than externally meaningful behavior.
 - A test requires private names, fields, helpers, constants, intermediate payloads, sidecar filenames, archive layout, fixed byte offsets, or control flow introduced only by the gold patch. Equivalent implementations must be able to pass.
+- The gold patch depends on a load-bearing dependency addition or upgrade that the prompt does not convey.
 - The task has no authentic pre-implementation request provenance and was reconstructed from a PR description, implementation, or tests.
 - The task omits essential context that an engineer had when receiving the request.
 - The base already passes fail-to-pass tests.

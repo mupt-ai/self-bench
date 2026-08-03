@@ -626,6 +626,76 @@ class CliPathTest(unittest.TestCase):
             _model_slug("../provider", "model")
 
 
+class InfrastructureErrorSurfacingTest(unittest.TestCase):
+    def test_validation_result_records_trial_exceptions(self) -> None:
+        from selfbench.harbor import validation_result
+
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text("Fix the behavior.")
+            (task_dir / "test.patch").write_text("test patch")
+            (task_dir / "gold.patch").write_text("gold patch")
+            task = Task(
+                task_id="infra-task",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="setup",
+                test_cmd="run {tests}",
+                fail_to_pass=["f2p"],
+                pass_to_pass=["p2p"],
+                test_paths=["tests"],
+                dir=task_dir,
+            )
+            base = _fake_run(root / "base", {"fail_to_pass": 0, "pass_to_pass": 1})
+            oracle = _fake_run(root / "oracle", {})
+            oracle.trial_result["exception_info"] = {
+                "exception_type": "RemoteError",
+                "exception_message": "Image build failed",
+            }
+
+            result = validation_result(task, base, oracle)
+
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            result["infrastructure_errors"], {"oracle": "RemoteError: Image build failed"}
+        )
+
+    def test_validation_result_omits_key_without_exceptions(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text("Fix the behavior.")
+            (task_dir / "test.patch").write_text("test patch")
+            (task_dir / "gold.patch").write_text("gold patch")
+            task = Task(
+                task_id="ok-task",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="setup",
+                test_cmd="run {tests}",
+                fail_to_pass=["f2p"],
+                pass_to_pass=["p2p"],
+                test_paths=["tests"],
+                dir=task_dir,
+            )
+            from selfbench.harbor import validation_result
+
+            base = _fake_run(root / "base", {"fail_to_pass": 0, "pass_to_pass": 1})
+            oracle = _fake_run(
+                root / "oracle",
+                {"fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1, "patch_applied": 1},
+            )
+            result = validation_result(task, base, oracle)
+
+        self.assertTrue(result["valid"])
+        self.assertNotIn("infrastructure_errors", result)
+
+
 def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
     trial = root / "trial"
     (trial / "artifacts" / "opt" / "selfbench").mkdir(parents=True)
@@ -647,3 +717,25 @@ def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelfbenchPiAgentConfigTest(unittest.TestCase):
+    def test_thinking_enum_matches_pinned_pi_package(self) -> None:
+        from selfbench.harbor_pi import SelfbenchPi
+
+        flags = {flag.kwarg: flag.choices for flag in SelfbenchPi.CLI_FLAGS}
+        self.assertIn("max", flags["thinking"])
+        self.assertIn("xhigh", flags["thinking"])
+
+    def test_models_json_payload_is_validated(self) -> None:
+        import asyncio
+
+        from selfbench.harbor_pi import MODELS_JSON_FILE_ENV, SelfbenchPi
+
+        with tempfile.TemporaryDirectory() as raw_dir:
+            bad = Path(raw_dir) / "models.json"
+            bad.write_text("{not json")
+            with patch.dict("os.environ", {MODELS_JSON_FILE_ENV: str(bad)}):
+                agent = SelfbenchPi.__new__(SelfbenchPi)
+                with self.assertRaises(json.JSONDecodeError):
+                    asyncio.run(agent._install_models_json(object()))

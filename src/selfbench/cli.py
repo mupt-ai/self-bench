@@ -9,7 +9,8 @@ import re
 import sys
 from pathlib import Path
 
-from .create import launch_create_agent
+from .coupling import review_coupling, save_coupling_review
+from .create import PROFILES, launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
@@ -275,12 +276,55 @@ def cmd_create(args: argparse.Namespace) -> int:
         repo=Path(args.repo) if args.repo else Path.cwd(),
         tasks_root=Path(args.tasks_root),
         count=args.count,
+        profile=args.profile,
         provider=args.provider,
         model=args.model,
         thinking=args.thinking,
         print_mode=args.print_mode,
         pi_executable=args.pi_executable,
     )
+
+
+def cmd_review_coupling(args: argparse.Namespace) -> int:
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+    rows: list[dict[str, object]] = []
+    worst_coupled = False
+    for task_dir in task_dirs:
+        task = load_task(task_dir)
+        review = review_coupling(
+            task,
+            provider=args.provider,
+            model=args.model,
+            thinking=args.thinking,
+            pi_executable=args.pi_executable,
+        )
+        path = save_coupling_review(task, review, provider=args.provider, model=args.model)
+        verdict = review["verdict"]
+        worst_coupled = worst_coupled or verdict == "coupled"
+        rows.append({
+            "task_id": task.task_id,
+            "verdict": verdict,
+            "findings": review.get("findings", []),
+            "summary": review.get("summary", ""),
+            "review_path": str(path),
+        })
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print("| task | verdict | findings | summary |")
+        print("|---|---|---|---|")
+        for row in rows:
+            findings = row["findings"]
+            assert isinstance(findings, list)
+            names = ", ".join(
+                str(f.get("identifier", "?")) for f in findings if isinstance(f, dict)
+            )
+            summary = str(row["summary"]).replace("|", "\\|")
+            print(f"| {row['task_id']} | {row['verdict']} | {names} | {summary} |")
+    return 1 if worst_coupled else 0
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -420,6 +464,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_rep.set_defaults(fn=cmd_report)
 
+    p_couple = sub.add_parser(
+        "review-coupling",
+        help="independent LLM pass judging whether equivalent implementations can pass the held-out tests",
+    )
+    p_couple.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
+    p_couple.add_argument("--provider", required=True, help="pi provider for the reviewer model")
+    p_couple.add_argument("--model", required=True, help="pi model for the reviewer")
+    p_couple.add_argument("--thinking", default=None, help="pi thinking level")
+    p_couple.add_argument("--pi-executable", default=None, help="path to the Pi executable")
+    p_couple.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    p_couple.set_defaults(fn=cmd_review_coupling)
+
     p_audit = sub.add_parser("audit", help="audit task quality and solver signal")
     p_audit.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
     p_audit.add_argument("--results", default="results", help="results root dir (default: results)")
@@ -466,6 +522,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--count",
         type=_positive_int,
         help="target number of complete benchmark tasks to create",
+    )
+    p_create.add_argument(
+        "--profile",
+        choices=PROFILES,
+        default="default",
+        help=(
+            "candidate difficulty profile: 'hard' shortlists larger merged PRs by changed files/lines, "
+            "ranks them by diff complexity while keeping all quality gates, and targets 15 validated "
+            "tasks per repo unless --count is given (default: default)"
+        ),
     )
     p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")
     p_create.add_argument("--model", help="Pi model ID")

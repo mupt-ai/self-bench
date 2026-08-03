@@ -41,7 +41,7 @@ bun install --frozen-lockfile
 
 ## Create a task with the bundled skill
 
-`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. It authors the full batch first, then may run deterministic nop/oracle validation and static quality audit. It never runs coding-agent/model solver trials unless explicitly requested; `selfbench run` and coding-model Harbor trials are separate operations. By default it opens an interactive Pi session; pass `--print` for one-shot creation.
+`selfbench create` launches a host Pi session with the bundled task-building skill. With no positional request, the agent inspects merged pull requests, excludes PRs already represented anywhere under the task root (including rejected candidates), ranks unseen changes, and builds the strongest viable task or tasks. The skill runs a staged pipeline: author the full batch, deterministically validate it, run the static audit, run an independent `selfbench review-coupling` model pass over each task, then resolve findings (repair or replace tasks, revalidating anything changed) before reporting the finished task folder. It never runs coding-agent/model solver trials unless explicitly requested; `selfbench run` and coding-model Harbor trials are separate operations. By default it opens an interactive Pi session; pass `--print` for one-shot creation.
 
 ```bash
 # Let Pi discover and choose three merged PRs itself.
@@ -54,12 +54,20 @@ uv run selfbench create \
 uv run selfbench create \
   --repo ~/code/example-project \
   "Build a task from PR 123."
+
+# Opt in to harder candidates; the hard profile targets 15 validated
+# tasks per repository by default (override with -n/--count).
+uv run selfbench create \
+  --repo ~/code/example-project \
+  --profile hard \
+  --provider openai --model gpt-5.5 --thinking high
 ```
 
 Flags:
 
 - `--repo <path>`: local clone of the repository being benchmarked (defaults to the current working directory).
 - `-n, --count <number>`: target number of complete benchmark tasks to create; omitted means the agent chooses a reasonable batch size.
+- `--profile <default|hard>`: candidate difficulty profile (default `default`, the existing behavior). `hard` shortlists larger merged PRs by changed-file and changed-line metadata (roughly 5+ files and 150+ changed lines), then ranks them by actual diff complexity and behavioral scope rather than size alone, skipping docs-only, formatting, dependency, generated-code, release, and broad-refactor changes. Difficulty is judged on the separable implementation core that becomes `gold.patch` (roughly 100+ lines across 3+ implementation files), not the PR envelope, so release-style bundles cannot masquerade as hard tasks. Its goal is a batch of tasks that pass deterministic validation — 15 per repository by default, or the `--count` value when supplied — so the agent replaces rejected or validation-failing candidates from the ranked list until the target validates or the viable pool is exhausted. All provenance, patch-separation, equivalent-design, and validation gates still apply; see the [task-building skill](skill/SKILL.md) for the full profile definition.
 - `--tasks-root <dir>`: authoring task root (default `tasks`).
 - `--provider`, `--model`, `--thinking`: Pi session options for the authoring agent.
 - `--print`: non-interactive mode; process the prompt and exit.
@@ -213,6 +221,17 @@ uv run selfbench audit tasks/example-fix --results results
 The audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, gold-coupled private identifiers, regression coverage, validation freshness, and model outcome signal. A pre-rollout audit can legitimately report missing model signal; fix blockers before continuing.
 
 The audit also surfaces fairness concerns that validation alone cannot catch. A task may execute deterministically and still be unsuitable for scoring if its held-out tests require exact private identifiers that only the gold patch introduces, assert on incidental implementation shape rather than observable behavior, or omit the main feature from the graded test selectors.
+
+## Independent coupling review
+
+Validation proves the gold patch passes; it cannot prove that a *different but equally correct* implementation would. The coupling review sends only the eval prompt plus the two held-out patches to a fresh model pass (no authoring context, no repository access) that classifies every identifier, signature, and output shape the tests rely on as prompt-derivable, guessable, or gold-coupled:
+
+```bash
+uv run selfbench review-coupling tasks/example-fix \
+  --provider openai --model gpt-5.6-sol --thinking high
+```
+
+The verdict (`clean` / `minor` / `coupled`) and findings are written to `coupling_review.json` inside each task directory, fingerprinted against the prompt and patches so later edits mark the review stale. The static audit consumes it: a `coupled` verdict is a blocker, `minor` and stale reviews are warnings. The command exits nonzero when any task is `coupled`.
 
 ## Run and grade a coding agent
 
