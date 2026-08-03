@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from selfbench.cli import main
 from selfbench.create import build_create_request, launch_create_agent
 
 
@@ -58,6 +61,32 @@ class BuildCreateRequestTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive integer"):
             build_create_request([], count=0)
 
+    def test_default_profile_adds_no_profile_directive(self) -> None:
+        self.assertNotIn("Difficulty profile", build_create_request([]))
+        self.assertNotIn("Difficulty profile", build_create_request([], profile="default"))
+
+    def test_omitting_profile_matches_explicit_default(self) -> None:
+        self.assertEqual(build_create_request([]), build_create_request([], profile="default"))
+
+    def test_hard_profile_adds_directive(self) -> None:
+        result = build_create_request([], profile="hard")
+        self.assertIn("Difficulty profile: hard", result)
+
+    def test_hard_profile_preserves_default_instructions(self) -> None:
+        result = build_create_request([], profile="hard")
+        self.assertIn("No pull request is preselected", result)
+        self.assertIn("Do not run benchmark solver trials", result)
+
+    def test_hard_profile_composes_with_count_and_request(self) -> None:
+        result = build_create_request(["focus on the parser"], profile="hard", count=20)
+        self.assertIn("Difficulty profile: hard", result)
+        self.assertIn("Target batch size: 20", result)
+        self.assertIn("focus on the parser", result)
+
+    def test_unknown_profile_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown difficulty profile"):
+            build_create_request([], profile="extreme")
+
 
 class LaunchCreateAgentTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -100,6 +129,24 @@ class LaunchCreateAgentTest(unittest.TestCase):
 
         prompt = run_mock.call_args.args[0][-1]
         self.assertIn("Target batch size: 3", prompt)
+
+    @patch("selfbench.create.subprocess.run")
+    def test_hard_profile_is_forwarded_in_prompt(self, run_mock) -> None:
+        run_mock.return_value.returncode = 0
+
+        launch_create_agent([], profile="hard", print_mode=True)
+
+        prompt = run_mock.call_args.args[0][-1]
+        self.assertIn("Difficulty profile: hard", prompt)
+
+    @patch("selfbench.create.subprocess.run")
+    def test_profile_defaults_to_no_directive(self, run_mock) -> None:
+        run_mock.return_value.returncode = 0
+
+        launch_create_agent([], print_mode=True)
+
+        prompt = run_mock.call_args.args[0][-1]
+        self.assertNotIn("Difficulty profile", prompt)
 
     @patch("selfbench.create.subprocess.run")
     def test_respects_custom_pi_executable(self, run_mock) -> None:
@@ -160,6 +207,32 @@ class LaunchCreateAgentTest(unittest.TestCase):
         # The prompt is the last positional argument (after all flags and their values)
         prompt = cmd[-1]
         self.assertIn(repo.name, prompt)
+
+
+class CliCreateProfileTest(unittest.TestCase):
+    def _run_cli(self, argv: list[str]):
+        with patch("selfbench.cli.launch_create_agent", return_value=0) as launch_mock:
+            with patch("sys.argv", ["selfbench", *argv]):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+        return launch_mock, ctx.exception.code
+
+    def test_cli_forwards_profile(self) -> None:
+        launch_mock, code = self._run_cli(["create", "--profile", "hard"])
+        self.assertEqual(code, 0)
+        self.assertEqual(launch_mock.call_args.kwargs["profile"], "hard")
+
+    def test_cli_defaults_profile(self) -> None:
+        launch_mock, code = self._run_cli(["create"])
+        self.assertEqual(code, 0)
+        self.assertEqual(launch_mock.call_args.kwargs["profile"], "default")
+
+    def test_cli_rejects_unknown_profile(self) -> None:
+        with patch("sys.argv", ["selfbench", "create", "--profile", "extreme"]):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    main()
+        self.assertEqual(ctx.exception.code, 2)
 
 
 if __name__ == "__main__":

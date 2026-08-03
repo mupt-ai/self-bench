@@ -7,6 +7,8 @@ from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Iterable
 
+PROFILES = ("default", "hard")
+
 
 def build_create_request(
     request: Iterable[str],
@@ -14,8 +16,11 @@ def build_create_request(
     repo: Path | None = None,
     tasks_root: Path = Path("tasks"),
     count: int | None = None,
+    profile: str = "default",
 ) -> str:
     """Build the initial instruction passed to the task-building agent."""
+    if profile not in PROFILES:
+        raise ValueError(f"unknown difficulty profile: {profile!r} (choose from {', '.join(PROFILES)})")
     tasks_root = tasks_root.expanduser().resolve()
     lines = [
         "Use the loaded selfbench skill to discover and create benchmark tasks.",
@@ -32,6 +37,14 @@ def build_create_request(
         lines.append(
             f"Target batch size: {count}. Create exactly {count} complete benchmark "
             "task directories unless a genuine hard blocker exhausts the viable candidates."
+        )
+    if profile == "hard":
+        lines.append(
+            "Difficulty profile: hard. Apply the skill's hard difficulty profile during candidate discovery: "
+            "use changed-file and changed-line metadata only to shortlist larger merged pull requests, then "
+            "read the actual diffs and rank candidates by behavioral scope and implementation complexity, "
+            "keeping every provenance, patch-separability, equivalent-design, and deterministic-validation "
+            "gate unchanged."
         )
     if repo is not None:
         repo = repo.expanduser().resolve()
@@ -61,6 +74,7 @@ def launch_create_agent(
     repo: Path | None = None,
     tasks_root: Path = Path("tasks"),
     count: int | None = None,
+    profile: str = "default",
     provider: str | None = None,
     model: str | None = None,
     thinking: str | None = None,
@@ -69,7 +83,7 @@ def launch_create_agent(
     skill_path: Path | None = None,
 ) -> int:
     """Run Pi with the bundled skill and return its exit code."""
-    prompt = build_create_request(request, repo=repo, tasks_root=tasks_root, count=count)
+    prompt = build_create_request(request, repo=repo, tasks_root=tasks_root, count=count, profile=profile)
 
     def run(resolved_skill: Path) -> int:
         command = [pi_executable, "--skill", str(resolved_skill)]

@@ -72,6 +72,24 @@ Prefer a recent, merged, human-reviewed change with a reproducible bug or missin
 
 Before building a task, identify the base commit that the change was made against. For a merge commit, this is normally its first parent. Confirm that the repository can be checked out at that commit and set up without relying on later files.
 
+## Difficulty profiles
+
+The launch prompt may name a difficulty profile. When none is named, use `default`. Profiles change only how Step 1 shortlists and ranks candidates; every other step, gate, and rejection rule in this skill applies unchanged to both profiles.
+
+### default
+
+The Step 1 guidance as written: prefer focused merged changes that are small enough to understand quickly.
+
+### hard
+
+Target larger, more complex merged PRs. Size metadata is a shortlist signal, never an acceptance criterion; a big diff that fails a quality gate is rejected, not weakened.
+
+1. Shortlist from PR metadata (`additions`, `deletions`, `files`): prefer merged PRs with at least 5 changed files and at least 150 changed lines (additions plus deletions, tests included). Rank the roughly 150–1500 changed-line band highest. Below that band a candidate stays on the hard shortlist only with an unusually intricate behavioral requirement; above it a change is usually too broad to separate cleanly and validate, so keep it only after confirming a focused core.
+2. Exclude from the shortlist regardless of size: docs-only, formatting/style-only, dependency or lockfile bumps, generated or vendored code, release/changelog chores, and broad mechanical refactors (mass renames, file moves, API churn without behavior change). Reconsider such a PR only when reading its diff reveals a genuinely focused behavioral change that stands on its own.
+3. Rank the shortlist by reading the actual diffs, not by line count. Prefer candidates with one coherent behavioral requirement that spans multiple modules or layers, meaningful implementation changes plus meaningful separable test changes, and nontrivial control-flow or data-model work over repetitive single-pattern edits. A 300-line change with real cross-module logic outranks a 900-line change of copy-paste edits.
+4. Apply every existing gate unchanged: authentic pre-implementation provenance, file-separable test and implementation patches, the equivalent-design test check, and deterministic nop/oracle validation.
+5. Batches work exactly as in the default profile, including pilot batches of around 20 tasks: rank the provenance-backed shortlist, author the full batch first, then validate and audit. Do not ask the user to nominate PRs.
+
 ## Step 2: preserve the engineer's request
 
 Use the original coding-agent session whenever one exists. Copy the JSON or JSONL export into `inputs/` inside the task directory, then reference it with `prompt_source`.

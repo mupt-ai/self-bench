@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-from .create import launch_create_agent
+from .create import PROFILES, launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
@@ -275,6 +275,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         repo=Path(args.repo) if args.repo else Path.cwd(),
         tasks_root=Path(args.tasks_root),
         count=args.count,
+        profile=args.profile,
         provider=args.provider,
         model=args.model,
         thinking=args.thinking,
@@ -466,6 +467,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--count",
         type=_positive_int,
         help="target number of complete benchmark tasks to create",
+    )
+    p_create.add_argument(
+        "--profile",
+        choices=PROFILES,
+        default="default",
+        help=(
+            "candidate difficulty profile: 'hard' shortlists larger merged PRs by changed files/lines and "
+            "ranks them by diff complexity while keeping all quality gates (default: default)"
+        ),
     )
     p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")
     p_create.add_argument("--model", help="Pi model ID")

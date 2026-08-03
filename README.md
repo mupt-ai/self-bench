@@ -54,12 +54,19 @@ uv run selfbench create \
 uv run selfbench create \
   --repo ~/code/example-project \
   "Build a task from PR 123."
+
+# Opt in to harder candidates, e.g. a 20-task pilot of larger merged PRs.
+uv run selfbench create \
+  --repo ~/code/example-project \
+  --profile hard --count 20 \
+  --provider openai --model gpt-5.5 --thinking high
 ```
 
 Flags:
 
 - `--repo <path>`: local clone of the repository being benchmarked (defaults to the current working directory).
 - `-n, --count <number>`: target number of complete benchmark tasks to create; omitted means the agent chooses a reasonable batch size.
+- `--profile <default|hard>`: candidate difficulty profile (default `default`, the existing behavior). `hard` shortlists larger merged PRs by changed-file and changed-line metadata (roughly 5+ files and 150+ changed lines), then ranks them by actual diff complexity and behavioral scope rather than size alone, skipping docs-only, formatting, dependency, generated-code, release, and broad-refactor changes. All provenance, patch-separation, equivalent-design, and validation gates still apply; see the [task-building skill](skill/SKILL.md) for the full profile definition.
 - `--tasks-root <dir>`: authoring task root (default `tasks`).
 - `--provider`, `--model`, `--thinking`: Pi session options for the authoring agent.
 - `--print`: non-interactive mode; process the prompt and exit.
