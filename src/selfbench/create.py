@@ -9,6 +9,9 @@ from typing import Iterable
 
 PROFILES = ("default", "hard")
 
+# Standing per-repository goal for the hard profile when the user does not pass --count.
+HARD_PROFILE_DEFAULT_COUNT = 15
+
 
 def build_create_request(
     request: Iterable[str],
@@ -39,12 +42,22 @@ def build_create_request(
             "task directories unless a genuine hard blocker exhausts the viable candidates."
         )
     if profile == "hard":
+        validated_target = count if count is not None else HARD_PROFILE_DEFAULT_COUNT
         lines.append(
             "Difficulty profile: hard. Apply the skill's hard difficulty profile during candidate discovery: "
             "use changed-file and changed-line metadata only to shortlist larger merged pull requests, then "
             "read the actual diffs and rank candidates by behavioral scope and implementation complexity, "
             "keeping every provenance, patch-separability, equivalent-design, and deterministic-validation "
             "gate unchanged."
+        )
+        lines.append(
+            f"Hard-profile goal: {validated_target} tasks from this repository that pass deterministic "
+            "nop/oracle validation, counted as validated tasks rather than shortlisted PRs or authored "
+            "directories. After the batch-first authoring and validation pass, replace rejected or "
+            "validation-failing tasks with the next ranked provenance-backed candidates, author and "
+            f"revalidate the replacements, and continue until {validated_target} tasks pass validation. "
+            "Stop short only when the viable provenance-backed pool is exhausted, and then report the "
+            "exact blocker and the shortfall."
         )
     if repo is not None:
         repo = repo.expanduser().resolve()

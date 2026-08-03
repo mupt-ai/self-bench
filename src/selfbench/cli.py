@@ -473,8 +473,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=PROFILES,
         default="default",
         help=(
-            "candidate difficulty profile: 'hard' shortlists larger merged PRs by changed files/lines and "
-            "ranks them by diff complexity while keeping all quality gates (default: default)"
+            "candidate difficulty profile: 'hard' shortlists larger merged PRs by changed files/lines, "
+            "ranks them by diff complexity while keeping all quality gates, and targets 15 validated "
+            "tasks per repo unless --count is given (default: default)"
         ),
     )
     p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")

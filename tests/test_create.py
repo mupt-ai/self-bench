@@ -72,6 +72,27 @@ class BuildCreateRequestTest(unittest.TestCase):
         result = build_create_request([], profile="hard")
         self.assertIn("Difficulty profile: hard", result)
 
+    def test_hard_profile_defaults_to_15_validated_tasks(self) -> None:
+        result = build_create_request([], profile="hard")
+        self.assertIn("Hard-profile goal: 15 tasks", result)
+        # 15 is the standing validated-task goal, not an authored-batch target.
+        self.assertNotIn("Target batch size", result)
+
+    def test_hard_profile_count_overrides_validated_target(self) -> None:
+        result = build_create_request([], profile="hard", count=8)
+        self.assertIn("Hard-profile goal: 8 tasks", result)
+        self.assertIn("Target batch size: 8", result)
+        self.assertNotIn("Hard-profile goal: 15", result)
+
+    def test_hard_profile_goal_counts_validated_tasks(self) -> None:
+        result = build_create_request([], profile="hard")
+        self.assertIn("pass deterministic nop/oracle validation", result)
+        self.assertIn("exhausted", result)
+
+    def test_default_profile_has_no_validated_goal(self) -> None:
+        self.assertNotIn("Hard-profile goal", build_create_request([]))
+        self.assertNotIn("Hard-profile goal", build_create_request([], count=15))
+
     def test_hard_profile_preserves_default_instructions(self) -> None:
         result = build_create_request([], profile="hard")
         self.assertIn("No pull request is preselected", result)
