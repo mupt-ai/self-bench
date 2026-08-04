@@ -67,13 +67,14 @@ Harbor—not selfbench—owns coding-agent execution and result artifacts:
 export OPENAI_API_KEY=...
 uv run harbor run \
   --path harbor-tasks/TASK_ID \
-  --agent selfbench.harbor_pi:SelfbenchPi \
-  --model openai/gpt-4.1 \
+  --agent pi \
+  --model openai/gpt-5.6-sol \
+  --agent-kwarg thinking=xhigh \
   --jobs-dir harbor-jobs \
   --allow-agent-host api.openai.com
 ```
 
-For another provider, set its API key, change `provider/model`, and allow its API host. You can replace `SelfbenchPi` with another agent supported by Harbor.
+For another provider, set its API key, change `provider/model`, and allow its API host. You can replace `pi` with any other agent supported by Harbor.
 
 ## What an eval contains
 
