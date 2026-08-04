@@ -102,6 +102,7 @@ def run_harbor_task(
     environment: str = "docker",
     agent_kwargs: dict[str, str] | None = None,
     agent_env: dict[str, str] | None = None,
+    allow_agent_hosts: list[str] | None = None,
     quiet: bool = False,
     log_path: Path | None = None,
 ) -> HarborRun:
@@ -134,6 +135,8 @@ def run_harbor_task(
         command.extend(["--agent-kwarg", f"{key}={value}"])
     for key, value in sorted((agent_env or {}).items()):
         command.extend(["--agent-env", f"{key}={value}"])
+    for host in dict.fromkeys(allow_agent_hosts or []):
+        command.extend(["--allow-agent-host", host])
     if quiet:
         command.append("--quiet")
 
@@ -351,14 +354,26 @@ def _task_toml(task: Task, task_name: str) -> str:
         "[metadata]",
         *[f"{key} = {_toml_value(value)}" for key, value in metadata.items()],
         "",
+        # Phase-scoped network policy: the environment baseline below stays
+        # reachable so Harbor can install the coding agent, but the agent's
+        # working phase only reaches its model provider and the verifier reaches
+        # nothing. Without this an agent clones the upstream repository or
+        # downloads the source PR diff instead of implementing the change.
         "[agent]",
         f"timeout_sec = {float(task.timeout_agent)}",
         'user = "agent"',
+        f"network_mode = {_toml_string(task.agent_network_mode)}",
+        *(
+            [f"allowed_hosts = {json.dumps(task.agent_allowed_hosts)}"]
+            if task.agent_network_mode == "allowlist"
+            else []
+        ),
         "",
         "[verifier]",
         f"timeout_sec = {float(task.timeout_tests + task.timeout_setup)}",
         'user = "root"',
         'environment_mode = "separate"',
+        f"network_mode = {_toml_string(task.verifier_network_mode)}",
         "",
         "[[verifier.collect]]",
         'service = "main"',

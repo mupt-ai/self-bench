@@ -31,7 +31,22 @@ class Task:
     timeout_setup: int = 900
     timeout_agent: int = 2400
     timeout_tests: int = 900
+    # Environment baseline. The agent container needs egress while Harbor
+    # installs the coding agent (node, npm, apt), so this stays public; the
+    # agent's own run phase and the verifier are sealed separately below.
     network_mode: str = "public"
+    # Network policy while the coding agent actually works the task. Sealed by
+    # default: agents otherwise clone the upstream repository or fetch the
+    # source PR diff and copy the reference implementation. Provider API hosts
+    # are added per rollout by the runner, so the agent can reach its model and
+    # nothing else.
+    agent_network_mode: str = "allowlist"
+    agent_allowed_hosts: list[str] = field(default_factory=list)
+    # The verifier re-runs setup_cmd before the held-out tests, so it needs the
+    # package registries its ecosystem installs from. It never receives the
+    # agent's session and cannot leak the reference implementation to a solver,
+    # so it stays on the environment baseline rather than being sealed.
+    verifier_network_mode: str = "public"
     cpus: int = 4
     memory_mb: int = 8192
     storage_mb: int = 20480
@@ -65,6 +80,9 @@ class Task:
             "timeout_agent": self.timeout_agent,
             "timeout_tests": self.timeout_tests,
             "network_mode": self.network_mode,
+            "agent_network_mode": self.agent_network_mode,
+            "agent_allowed_hosts": self.agent_allowed_hosts,
+            "verifier_network_mode": self.verifier_network_mode,
             "cpus": self.cpus,
             "memory_mb": self.memory_mb,
             "storage_mb": self.storage_mb,
@@ -215,8 +233,13 @@ def load_task(task_dir: str | Path) -> Task:
         timeout = getattr(task, timeout_name)
         if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
             problems.append(f"{timeout_name} must be a positive integer")
-    if task.network_mode not in {"public", "no-network", "allowlist"}:
-        problems.append("network_mode must be public, no-network, or allowlist")
+    for mode_name in ("network_mode", "agent_network_mode", "verifier_network_mode"):
+        if getattr(task, mode_name) not in {"public", "no-network", "allowlist"}:
+            problems.append(f"{mode_name} must be public, no-network, or allowlist")
+    if task.agent_allowed_hosts and task.agent_network_mode != "allowlist":
+        problems.append("agent_allowed_hosts requires agent_network_mode=allowlist")
+    if any(not isinstance(h, str) or not h for h in task.agent_allowed_hosts):
+        problems.append("agent_allowed_hosts entries must be non-empty hostnames")
     for resource_name in ("cpus", "memory_mb", "storage_mb"):
         value = getattr(task, resource_name)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
