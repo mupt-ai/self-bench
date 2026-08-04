@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "uv run python -m unittest discover -s tests -v",
+    "validate": "bun run test && bun run typecheck:review && bun run build:review",
     "dev:review": "vite --config review/vite.config.ts",
     "build:review": "vite build --config review/vite.config.ts",
     "typecheck:review": "tsc --noEmit -p review/tsconfig.json"

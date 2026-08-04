@@ -158,35 +158,39 @@ The validator uses separate Docker containers for the base and gold checks. A ro
 
 If validation fails, correct the base commit, patch split, setup command, or test IDs. Do not weaken a legitimate test merely to make the task pass.
 
-Run the quality audit once before spending model calls:
+Run the static quality audit:
 
 ```bash
 selfbench audit tasks/<task> --results results
 ```
 
-Missing rollout signal is expected at this stage, but any blocker about gold-coupled private identifiers must be fixed by replacing the test or rejecting the candidate.
+Audit is independent of coding-model selection. Fix any blocker about gold-coupled private identifiers by replacing the test or rejecting the candidate.
 
-## Step 6: run models
+## Separate operation: optionally run Harbor/model trials
 
-Run at least two representative models so the task has measurable solver signal:
+Do not run coding models as part of task creation unless the user explicitly requests them. When solver signal is wanted, choose the provider/model set for that evaluation and run it separately:
 
 ```bash
-selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
+uv run harbor run \
+  --path harbor-tasks/TASK_ID \
+  --agent selfbench.harbor_pi:SelfbenchPi \
+  --model PROVIDER/MODEL \
+  --jobs-dir harbor-jobs
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
 
-Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores.
+Harbor owns the job configuration, execution, and result artifacts under `harbor-jobs/`. Changing task inputs makes the compiled Harbor task stale, so rerun `selfbench validate` before interpreting new scores.
 
-## Step 7: audit and review
+## Separate operation: review
 
-Run the quality audit:
+The static audit may be rerun at any time:
 
 ```bash
 selfbench audit tasks/<task> --results results
 ```
 
-Then open the review console:
+When review is separately requested, open the review console:
 
 ```bash
 selfbench review --host 0.0.0.0 --port 8765 --tasks tasks --results results
@@ -196,9 +200,11 @@ Check the generated prompt against the human turns in Original Session when a so
 
 The final verdicts are:
 
-- `accepted`: validation passes, quality gates pass, and the standard model outcomes are mixed.
-- `needs_review`: the task executes but lacks clean solver signal or has a warning requiring judgment.
+- `accepted`: validation and static quality gates pass without unresolved warnings.
+- `needs_review`: the task executes but has a static warning requiring judgment.
 - `rejected`: validation or a blocking quality requirement fails.
+
+Solver outcomes are reported separately and do not determine these quality verdicts.
 
 ## Quality rules
 

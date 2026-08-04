@@ -1,7 +1,7 @@
 [project]
 name = "selfbench"
 version = "0.2.0"
-description = "Build, curate, and run private software-engineering evaluations with Harbor"
+description = "Create, validate, and curate private software-engineering evaluations for Harbor"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

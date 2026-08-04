@@ -1,26 +1,17 @@
-"""Harbor-backed task validation and rollout helpers."""
+"""Harbor-backed task validation helpers."""
 
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from pathlib import Path
 
 from .harbor import (
     build_harbor_task,
-    compatibility_result,
     run_harbor_task,
     validation_result,
 )
 from .task import Task
-
-# Harbor's built-in Pi agent forwards credentials for openai, anthropic,
-# openrouter, google, and several others automatically. Fireworks is not in
-# that list, so selfbench forwards it explicitly via --agent-env.
-_PROVIDER_ENV_KEYS: dict[str, str] = {
-    "fireworks": "FIREWORKS_API_KEY",
-}
 
 
 def validate_task(
@@ -54,48 +45,8 @@ def validate_task(
         environment=environment,
         quiet=not verbose,
     )
-    return validation_result(task, base, oracle)
-
-
-def run_task(
-    task: Task,
-    local_repo: Path,
-    provider: str,
-    model: str,
-    thinking: str | None = None,
-    *,
-    agent: str = "pi",
-    harbor_root: Path = Path("harbor-tasks"),
-    jobs_root: Path = Path("harbor-jobs"),
-    environment: str = "docker",
-    rebuild: bool = False,
-    verbose: bool = True,
-) -> dict:
-    """Run an agent with Harbor and create a lightweight local result index."""
-    harbor_task = build_harbor_task(
-        task,
-        local_repo,
-        harbor_root,
-        overwrite=rebuild,
-    )
-    model_name = f"{provider}/{model}"
-    kwargs = {"thinking": thinking} if thinking else None
-    agent_env: dict[str, str] = {}
-    env_key = _PROVIDER_ENV_KEYS.get(provider)
-    if env_key and os.environ.get(env_key):
-        agent_env[env_key] = os.environ[env_key]
-    run = run_harbor_task(
-        harbor_task,
-        jobs_root,
-        agent=agent,
-        model=model_name,
-        environment=environment,
-        agent_kwargs=kwargs,
-        agent_env=agent_env or None,
-        quiet=not verbose,
-    )
-    result = compatibility_result(task, run, run_kind="rollout")
-    result.update({"provider": provider, "model": model, "thinking": thinking})
+    result = validation_result(task, base, oracle)
+    result["harbor"]["task_dir"] = str(harbor_task.resolve())
     return result
 
 

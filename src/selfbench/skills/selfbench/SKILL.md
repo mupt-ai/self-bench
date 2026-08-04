@@ -138,7 +138,7 @@ Use at least three meaningful pass-to-pass entries when possible. Avoid broad su
 2. If a candidate fails provenance, separability, equivalent-design, or reproducibility review while being authored, record the rejection and replace it with the next ranked candidate. Keep going until `N` complete task directories exist or a genuine hard blocker exhausts the viable shortlist.
 3. Do not validate or audit any task until the full target batch has been authored. In particular, do not let an early task's result change which later candidates get created.
 4. Once all `N` task directories exist, validate every task with the deterministic nop/oracle validator, then run the static quality audit. Stop after reporting those results.
-5. Do not invoke `selfbench run` or start Harbor with a coding agent/model. Solver trials are a separate operation that requires an explicit user request.
+5. Do not start Harbor with a coding agent/model. Solver trials are a separate operation that requires an explicit user request.
 
 Static authoring checks such as confirming commits exist, inspecting diffs, checking patch separation, and reviewing test equivalence are part of creation. Deterministic validation may execute task setup and tests only after the batch is fully authored; it does not authorize coding-model evaluation.
 
@@ -184,12 +184,16 @@ Audit is independent of coding-model selection. Fix any blocker about gold-coupl
 Do not run coding models as part of task creation unless the user explicitly requests them. When solver signal is wanted, choose the provider/model set for that evaluation and run it separately:
 
 ```bash
-selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
+uv run harbor run \
+  --path harbor-tasks/TASK_ID \
+  --agent selfbench.harbor_pi:SelfbenchPi \
+  --model PROVIDER/MODEL \
+  --jobs-dir harbor-jobs
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
 
-Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores. Pass explicit result-directory slugs to `selfbench audit --models ...` only when informational solver signal should be displayed; model outcomes do not determine the static audit verdict.
+Harbor owns the job configuration, execution, and result artifacts under `harbor-jobs/`. Changing task inputs makes the compiled Harbor task stale, so rerun `selfbench validate` before interpreting new scores.
 
 ## Separate operation: review
 
