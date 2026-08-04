@@ -565,12 +565,13 @@ class HarborCommandTest(unittest.TestCase):
         self.assertNotIn("run", commands)
         self.assertNotIn("report", commands)
 
-    def test_uses_harbor_directly_with_the_current_pi_adapter(self) -> None:
+    def test_uses_harbor_pi_with_sol_and_xhigh(self) -> None:
         command = _harbor_run_command(Path("harbor-tasks/example task"))
 
         self.assertIn("harbor run", command)
-        self.assertIn("selfbench.harbor_pi:SelfbenchPi", command)
-        self.assertIn("openai/gpt-4.1", command)
+        self.assertIn("--agent pi", command)
+        self.assertIn("openai/gpt-5.6-sol", command)
+        self.assertIn("thinking=xhigh", command)
         self.assertIn("api.openai.com", command)
         self.assertIn("'harbor-tasks/example task'", command)
         self.assertNotIn("selfbench run", command)

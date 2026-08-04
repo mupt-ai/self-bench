@@ -214,10 +214,11 @@ Do not run coding models as part of task creation unless the user explicitly req
 ```bash
 uv run harbor run \
   --path harbor-tasks/TASK_ID \
-  --agent selfbench.harbor_pi:SelfbenchPi \
-  --model PROVIDER/MODEL \
+  --agent pi \
+  --model openai/gpt-5.6-sol \
+  --agent-kwarg thinking=xhigh \
   --jobs-dir harbor-jobs \
-  --allow-agent-host PROVIDER_API_HOST
+  --allow-agent-host api.openai.com
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
