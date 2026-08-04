@@ -21,7 +21,14 @@ PI_VERSION = "0.82.1"
 # and forward X via agent env rather than embedding key material in the file.
 MODELS_JSON_FILE_ENV = "SELFBENCH_PI_MODELS_JSON_FILE"
 
+# Path to a Pi auth.json for providers that authenticate with a stored token
+# rather than an API key env var (for example `openai-codex`). Installed into
+# the sandbox before Pi runs. The file holds live credentials, so it is written
+# with owner-only permissions and never echoed into logs.
+AUTH_JSON_FILE_ENV = "SELFBENCH_PI_AUTH_JSON_FILE"
+
 _MODELS_JSON_HEREDOC = "SELFBENCH_MODELS_JSON_EOF"
+_AUTH_JSON_HEREDOC = "SELFBENCH_AUTH_JSON_EOF"
 
 
 class SelfbenchPi(Pi):
@@ -73,6 +80,24 @@ class SelfbenchPi(Pi):
             ),
         )
 
+    async def _install_auth_json(self, environment: BaseEnvironment) -> None:
+        auth_file = os.environ.get(AUTH_JSON_FILE_ENV)
+        if not auth_file:
+            return
+        payload = Path(auth_file).read_text()
+        json.loads(payload)
+        if _AUTH_JSON_HEREDOC in payload:
+            raise ValueError(f"auth.json payload must not contain {_AUTH_JSON_HEREDOC}")
+        await self.exec_as_agent(
+            environment,
+            command=(
+                'mkdir -p "$HOME/.pi/agent" && '
+                f"cat > \"$HOME/.pi/agent/auth.json\" <<'{_AUTH_JSON_HEREDOC}'\n"
+                f"{payload}\n{_AUTH_JSON_HEREDOC}\n"
+                'chmod 600 "$HOME/.pi/agent/auth.json"'
+            ),
+        )
+
     @override
     async def run(
         self,
@@ -81,6 +106,7 @@ class SelfbenchPi(Pi):
         context: AgentContext,
     ) -> None:
         await self._install_models_json(environment)
+        await self._install_auth_json(environment)
         await super().run(instruction, environment, context)
         output_file = self.logs_dir / self._OUTPUT_FILENAME
         if not output_file.is_file():

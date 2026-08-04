@@ -28,6 +28,9 @@ from .task import Task
 # SELFBENCH_EXTRA_AGENT_HOSTS (comma-separated) for self-hosted endpoints.
 _PROVIDER_API_HOSTS: dict[str, tuple[str, ...]] = {
     "openai": ("api.openai.com",),
+    # Subscription-authenticated Codex backend; Pi reads its token from the
+    # auth.json installed by SELFBENCH_PI_AUTH_JSON_FILE rather than an env key.
+    "openai-codex": ("chatgpt.com", "api.openai.com"),
     "anthropic": ("api.anthropic.com",),
     "fireworks": ("api.fireworks.ai",),
     "openrouter": ("openrouter.ai",),
