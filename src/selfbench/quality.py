@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .coupling import load_coupling_review
 from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task
 
@@ -61,10 +62,18 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         warnings.append("pass_to_pass has fewer than 3 entries")
 
     if task.prompt_source is None and task.trace_source is None:
-        blockers.append(
-            "task lacks authentic request provenance; do not reconstruct requirements from the PR, "
-            "gold patch, or tests"
-        )
+        external_provenance = _external_provenance_refs(task.quality)
+        if external_provenance:
+            warnings.append(
+                "provenance is an external reference ("
+                + ", ".join(external_provenance[:3])
+                + "); verify the linked request predates the implementation"
+            )
+        else:
+            blockers.append(
+                "task lacks authentic request provenance; do not reconstruct requirements from the PR, "
+                "gold patch, or tests"
+            )
 
     prompt_words = len(re.findall(r"\w+", task.prompt))
     if prompt_words < 80:
@@ -111,6 +120,17 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
         task.gold_patch,
         task.prompt,
     )
+    public_coupling = _gold_public_api_test_identifiers(
+        task.test_patch,
+        task.gold_patch,
+        task.prompt,
+    )
+    if public_coupling:
+        warnings.append(
+            "test patch references public identifier(s) introduced by gold.patch but absent from "
+            "the prompt; verify equivalent designs can pass: "
+            + ", ".join(public_coupling[:5])
+        )
     if private_coupling:
         blockers.append(
             "test patch depends on private identifier(s) introduced by gold.patch: "
@@ -121,6 +141,34 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
             "test patch requires field(s) introduced by gold.patch but absent from the prompt; "
             "verify equivalent designs can pass: "
             + ", ".join(field_coupling[:5])
+        )
+
+    coupling_review = load_coupling_review(task)
+    if coupling_review is not None:
+        review_verdict = coupling_review.get("verdict")
+        if coupling_review.get("stale"):
+            warnings.append("coupling review is stale; rerun selfbench review-coupling")
+        elif review_verdict == "coupled":
+            blockers.append(
+                "independent coupling review verdict is coupled; repair the held-out tests or "
+                "reject the candidate"
+            )
+        elif review_verdict == "minor":
+            warnings.append(
+                "independent coupling review found guessable-only coupling; review the findings"
+            )
+        elif review_verdict != "clean":
+            warnings.append("coupling review is unreadable; rerun selfbench review-coupling")
+
+    manifest_files = sorted(
+        path for path in gold_stats.files if _is_dependency_manifest(path)
+    )
+    if manifest_files:
+        warnings.append(
+            "gold patch changes dependency manifest(s) ("
+            + ", ".join(manifest_files[:3])
+            + "); verify the prompt conveys the required dependency change, since a solver "
+            "cannot otherwise know to upgrade"
         )
 
     if gold_stats.added_lines >= 200 and len(task.fail_to_pass) <= 1:
@@ -159,6 +207,59 @@ def audit_task(task: Task, results_root: Path, model_slugs: list[str]) -> AuditR
     )
 
 
+def _external_provenance_refs(quality: dict[str, object]) -> list[str]:
+    """Structured pre-implementation provenance references recorded under quality.provenance.
+
+    Accepts a single entry or a list of entries; each needs a non-empty ``kind``
+    and ``url``. These reference an original issue/ticket/request rather than an
+    attached session, so they clear the provenance blocker but still warrant review.
+    """
+    raw = quality.get("provenance")
+    entries = raw if isinstance(raw, list) else [raw]
+    refs: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("kind")
+        url = entry.get("url")
+        if isinstance(kind, str) and kind and isinstance(url, str) and url:
+            refs.append(f"{kind}: {url}")
+    return refs
+
+
+_DEPENDENCY_MANIFESTS = {
+    "package.json",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lock",
+    "bun.lockb",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "Pipfile",
+    "Pipfile.lock",
+    "poetry.lock",
+    "uv.lock",
+    "go.mod",
+    "go.sum",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Gemfile",
+    "Gemfile.lock",
+    "composer.json",
+    "composer.lock",
+}
+
+
+def _is_dependency_manifest(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    return name in _DEPENDENCY_MANIFESTS or (
+        name.startswith("requirements") and name.endswith(".txt")
+    )
+
+
 def _validation_status(
     path: Path,
     *,
@@ -175,7 +276,10 @@ def _validation_status(
         or data.get("task_fingerprints") != required_task_fingerprints
     ):
         return "stale"
-    return "valid" if data.get("valid") is True else "invalid"
+    if data.get("valid") is True:
+        return "valid"
+    # An image-build or harness crash is not evidence the task itself is broken.
+    return "infra_error" if data.get("infrastructure_errors") else "invalid"
 
 
 def _model_results(
@@ -383,6 +487,49 @@ _COUPLING_FIELD_STOPWORDS = _IDENTIFIER_STOPWORDS | {
     "process",
     "session",
 }
+
+
+def _gold_public_api_test_identifiers(
+    test_patch: str,
+    gold_patch: str,
+    prompt: str,
+) -> list[str]:
+    """Public function/method names defined only in gold-patch added lines that the
+    held-out tests call but the prompt never mentions. These are the coupling class
+    the private-identifier check misses: gold-only API shapes with public-looking
+    names (e.g. ``Route.prototype.dispatch``)."""
+    added_gold = _added_patch_text(gold_patch)
+    removed_gold = _removed_patch_text(gold_patch)
+    added_tests = _added_patch_text(test_patch)
+    prompt_identifiers = _prompt_words(prompt)
+
+    patterns = (
+        r"\b(?:async\s+def|def)\s+([a-z][A-Za-z0-9_]{3,})\s*\(",
+        r"\b(?:[A-Za-z_][A-Za-z0-9_]*)\.prototype\.([a-z][A-Za-z0-9_]{3,})\s*=",
+        r"\bexports\.([a-z][A-Za-z0-9_]{3,})\s*=",
+        r"\bfunction\s+([a-z][A-Za-z0-9_]{3,})\s*\(",
+    )
+    introduced: set[str] = set()
+    for pattern in patterns:
+        introduced.update(re.findall(pattern, added_gold))
+        # A name both removed and re-added is a rework of an existing API, not new.
+        introduced.difference_update(re.findall(pattern, removed_gold))
+
+    return sorted(
+        name
+        for name in introduced
+        if name not in _IDENTIFIER_STOPWORDS
+        and name not in prompt_identifiers
+        and re.search(rf"\.{re.escape(name)}\s*\(", added_tests)
+    )
+
+
+def _removed_patch_text(patch: str) -> str:
+    return "\n".join(
+        line[1:]
+        for line in patch.splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    )
 
 
 def _added_patch_text(patch: str) -> str:

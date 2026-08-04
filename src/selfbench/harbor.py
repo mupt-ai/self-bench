@@ -48,6 +48,12 @@ class HarborRun:
         rewards = verifier.get("rewards")
         return rewards if isinstance(rewards, dict) else {}
 
+    @property
+    def exception(self) -> dict[str, Any] | None:
+        value = self.trial_result.get("exception_info")
+        return value if isinstance(value, dict) else None
+
+
 def build_harbor_task(
     task: Task,
     local_repo: Path,
@@ -96,7 +102,9 @@ def run_harbor_task(
     environment: str = "docker",
     agent_kwargs: dict[str, str] | None = None,
     agent_env: dict[str, str] | None = None,
+    allow_agent_hosts: list[str] | None = None,
     quiet: bool = False,
+    log_path: Path | None = None,
 ) -> HarborRun:
     """Run one native Harbor trial and return its canonical result artifacts."""
     harbor = _require_harbor()
@@ -127,14 +135,29 @@ def run_harbor_task(
         command.extend(["--agent-kwarg", f"{key}={value}"])
     for key, value in sorted((agent_env or {}).items()):
         command.extend(["--agent-env", f"{key}={value}"])
+    for host in dict.fromkeys(allow_agent_hosts or []):
+        command.extend(["--allow-agent-host", host])
     if quiet:
         command.append("--quiet")
 
-    result = subprocess.run(command, text=True, check=False)
+    if log_path is None:
+        result = subprocess.run(command, text=True, check=False)
+    else:
+        log_path = log_path.resolve()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a") as log:
+            result = subprocess.run(
+                command,
+                text=True,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
     job_dir = jobs_root / job_name
     if result.returncode != 0:
+        log_hint = f" Full log: {log_path}." if log_path is not None else ""
         raise RuntimeError(
-            f"Harbor exited {result.returncode}. Partial artifacts, if any: {job_dir}"
+            f"Harbor exited {result.returncode}. Partial artifacts, if any: {job_dir}.{log_hint}"
         )
     return load_harbor_run(job_dir)
 
@@ -185,6 +208,14 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "gold_p2p_passes": float(gold_rewards.get("pass_to_pass", 0)) >= 1,
         "gold_patch_applies": float(gold_rewards.get("patch_applied", 0)) >= 1,
     }
+    infrastructure_errors = {}
+    for name, run in (("base", base), ("oracle", oracle)):
+        exc = run.exception
+        if exc is not None:
+            infrastructure_errors[name] = (
+                f"{exc.get('exception_type', 'Harbor error')}: "
+                f"{exc.get('exception_message', '')}".rstrip()
+            )
     return {
         "result_schema_version": "harbor-1",
         "run_id": f"{base.trial_result.get('id')}+{oracle.trial_result.get('id')}",
@@ -192,6 +223,7 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "task_id": task.task_id,
         "valid": all(checks.values()),
         "checks": checks,
+        **({"infrastructure_errors": infrastructure_errors} if infrastructure_errors else {}),
         "task_fingerprints": task.evaluation_fingerprints,
         "harbor": {
             "version_range": HARBOR_VERSION_RANGE,
@@ -273,14 +305,26 @@ def _task_toml(task: Task, task_name: str) -> str:
         "[metadata]",
         *[f"{key} = {_toml_value(value)}" for key, value in metadata.items()],
         "",
+        # Phase-scoped network policy: the environment baseline below stays
+        # reachable so Harbor can install the coding agent, but the agent's
+        # working phase only reaches its model provider and the verifier reaches
+        # nothing. Without this an agent clones the upstream repository or
+        # downloads the source PR diff instead of implementing the change.
         "[agent]",
         f"timeout_sec = {float(task.timeout_agent)}",
         'user = "agent"',
+        f"network_mode = {_toml_string(task.agent_network_mode)}",
+        *(
+            [f"allowed_hosts = {json.dumps(task.agent_allowed_hosts)}"]
+            if task.agent_network_mode == "allowlist"
+            else []
+        ),
         "",
         "[verifier]",
         f"timeout_sec = {float(task.timeout_tests + task.timeout_setup)}",
         'user = "root"',
         'environment_mode = "separate"',
+        f"network_mode = {_toml_string(task.verifier_network_mode)}",
         "",
         "[[verifier.collect]]",
         'service = "main"',

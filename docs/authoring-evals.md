@@ -72,6 +72,9 @@ If a source session needs to be reconstructed into a standalone prompt, keep the
 | `timeout_agent` | no | Agent timeout in seconds; default `2400`. |
 | `timeout_tests` | no | Test timeout in seconds; default `900`. |
 | `network_mode` | no | `public`, `no-network`, or `allowlist`; default `public`. |
+| `agent_network_mode` | no | Network policy while the coding agent works; default `allowlist`. |
+| `agent_allowed_hosts` | no | Extra hosts available during the coding-agent phase. |
+| `verifier_network_mode` | no | Network policy for held-out grading; default `public`. |
 | `cpus` | no | Container CPU count; default `4`. |
 | `memory_mb` | no | Container memory in MB; default `8192`. |
 | `storage_mb` | no | Container storage in MB; default `20480`. |
@@ -117,10 +120,10 @@ This sends the redacted source conversation to the selected model provider. It d
 ## Validate and audit
 
 ```bash
-uv run selfbench validate tasks/example-fix --repo ~/code/my-project
+uv run selfbench validate tasks/example-fix --repo ~/code/my-project --env docker
 uv run selfbench audit tasks/example-fix --results results --strict
 ```
 
-Validation generates `harbor-tasks/example-fix/` and runs Harbor's `nop` and `oracle` agents in separate Docker environments. The static audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, validation freshness, and test coupling.
+Validation generates `harbor-tasks/example-fix/` and runs Harbor's `nop` and `oracle` agents in separate environments. The command above runs locally with Docker; omit `--env docker` after installing and authenticating Modal. The static audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, validation freshness, and test coupling.
 
 Once both pass, use the `harbor run` command printed by validation. Harbor—not selfbench—owns coding-agent execution and result artifacts.

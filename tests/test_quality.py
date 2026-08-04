@@ -8,10 +8,12 @@ from pathlib import Path
 from selfbench.quality import (
     _brittle_test_signals,
     _gold_coupled_test_identifiers,
+    _gold_public_api_test_identifiers,
     _model_results,
     _validation_status,
     audit_task,
 )
+from selfbench.coupling import save_coupling_review
 from selfbench.result_schema import RESULT_SCHEMA_VERSION
 from selfbench.task import Task
 
@@ -71,6 +73,123 @@ class GoldCouplingTest(unittest.TestCase):
         self.assertEqual(field_names, [])
 
 
+class GoldPublicApiCouplingTest(unittest.TestCase):
+    def test_flags_js_prototype_method_only_in_gold(self) -> None:
+        flagged = _gold_public_api_test_identifiers(
+            "+    route.dispatch(req, res, done)\n",
+            "+Route.prototype.dispatch = function dispatch(req, res, done) {\n",
+            "Refactor middleware processing so routes run in order.",
+        )
+        self.assertEqual(flagged, ["dispatch"])
+
+    def test_allows_method_named_in_prompt(self) -> None:
+        flagged = _gold_public_api_test_identifiers(
+            "+    route.dispatch(req, res, done)\n",
+            "+Route.prototype.dispatch = function dispatch(req, res, done) {\n",
+            "Expose a dispatch entry point on each route.",
+        )
+        self.assertEqual(flagged, [])
+
+    def test_allows_reworked_existing_api(self) -> None:
+        flagged = _gold_public_api_test_identifiers(
+            "+    router.route('/foo')\n",
+            "-Router.prototype.route = function(method, path, callbacks) {\n"
+            "+Router.prototype.route = function(path) {\n",
+            "Refactor the router.",
+        )
+        self.assertEqual(flagged, [])
+
+    def test_flags_python_public_function_only_in_gold(self) -> None:
+        flagged = _gold_public_api_test_identifiers(
+            "+    result = client.batch_verify(items)\n",
+            "+def batch_verify(items):\n",
+            "Verify submitted items efficiently.",
+        )
+        self.assertEqual(flagged, ["batch_verify"])
+
+
+class CouplingReviewAuditTest(unittest.TestCase):
+    def _audited_task(self, task_dir: Path, review: dict | None):
+        (task_dir / "prompt.md").write_text(" ".join(["behavior"] * 100))
+        (task_dir / "test.patch").write_text(
+            "diff --git a/tests/x.py b/tests/x.py\n+def test_behavior(): pass\n"
+        )
+        (task_dir / "gold.patch").write_text(
+            "diff --git a/src/x.py b/src/x.py\n+def behavior(): pass\n"
+        )
+        task = Task(
+            task_id="review-audit",
+            repo="example/repo",
+            base_commit="abc123",
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_behavior"],
+            pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+            test_paths=["tests"],
+            trace_source={"path": "inputs/session.jsonl", "format": "generic"},
+            dir=task_dir,
+        )
+        if review is not None:
+            save_coupling_review(task, review, provider="p", model="m")
+        return audit_task(task, task_dir / "results", [])
+
+    def test_coupled_review_verdict_is_a_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audited_task(
+                Path(raw_dir), {"verdict": "coupled", "findings": [], "summary": ""}
+            )
+        self.assertTrue(any("coupling review" in b for b in audit.blockers))
+
+    def test_minor_review_verdict_is_a_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audited_task(
+                Path(raw_dir), {"verdict": "minor", "findings": [], "summary": ""}
+            )
+        self.assertFalse(any("coupling review" in b for b in audit.blockers))
+        self.assertTrue(any("coupling review" in w for w in audit.warnings))
+
+    def test_clean_review_verdict_adds_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audited_task(
+                Path(raw_dir), {"verdict": "clean", "findings": [], "summary": ""}
+            )
+        self.assertFalse(any("coupling review" in b for b in audit.blockers))
+        self.assertFalse(any("coupling review" in w for w in audit.warnings))
+
+    def test_absent_review_adds_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audited_task(Path(raw_dir), None)
+        self.assertFalse(any("coupling review" in b for b in audit.blockers))
+        self.assertFalse(any("coupling review" in w for w in audit.warnings))
+
+    def test_stale_review_is_a_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task_dir = Path(raw_dir)
+            audit = self._audited_task(
+                task_dir, {"verdict": "clean", "findings": [], "summary": ""}
+            )
+            self.assertFalse(any("stale" in w for w in audit.warnings))
+            data = json.loads((task_dir / "coupling_review.json").read_text())
+            data["task_fingerprints"]["gold_patch"] = "different"
+            (task_dir / "coupling_review.json").write_text(json.dumps(data))
+            task = Task(
+                task_id="review-audit",
+                repo="example/repo",
+                base_commit="abc123",
+                workdir=".",
+                setup_cmd="true",
+                test_cmd="pytest {tests}",
+                fail_to_pass=["tests/x.py::test_behavior"],
+                pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+                test_paths=["tests"],
+                trace_source={"path": "inputs/session.jsonl", "format": "generic"},
+                dir=task_dir,
+            )
+            audit = audit_task(task, task_dir / "results", [])
+        self.assertTrue(any("coupling review is stale" in w for w in audit.warnings))
+
+
 class RequestProvenanceTest(unittest.TestCase):
     def test_rejects_task_reconstructed_without_authentic_request_source(self) -> None:
         with tempfile.TemporaryDirectory() as raw_dir:
@@ -99,6 +218,118 @@ class RequestProvenanceTest(unittest.TestCase):
 
         self.assertTrue(
             any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+
+    def _task_without_sources(self, task_dir: Path, quality: dict) -> Task:
+        (task_dir / "prompt.md").write_text(" ".join(["behavior"] * 100))
+        (task_dir / "test.patch").write_text(
+            "diff --git a/tests/x.py b/tests/x.py\n+def test_behavior(): pass\n"
+        )
+        (task_dir / "gold.patch").write_text(
+            "diff --git a/src/x.py b/src/x.py\n+def behavior(): pass\n"
+        )
+        return Task(
+            task_id="external-prov",
+            repo="example/repo",
+            base_commit="abc123",
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_behavior"],
+            pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+            test_paths=["tests"],
+            dir=task_dir,
+            quality=quality,
+        )
+
+    def test_external_issue_provenance_clears_blocker_but_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {"provenance": {"kind": "github_issue", "url": "https://github.com/x/y/issues/1"}},
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertFalse(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+        self.assertTrue(
+            any("external reference" in warning for warning in audit.warnings)
+        )
+
+    def test_external_provenance_accepts_list_of_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {
+                    "provenance": [
+                        {"kind": "github_issue", "url": "https://github.com/x/y/issues/1"},
+                        {"kind": "github_issue", "url": "https://github.com/x/y/issues/2"},
+                    ]
+                },
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertFalse(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+
+    def test_malformed_external_provenance_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            task = self._task_without_sources(
+                Path(raw_dir),
+                {"provenance": {"kind": "github_issue"}},
+            )
+            audit = audit_task(task, Path(raw_dir) / "results", [])
+
+        self.assertTrue(
+            any("authentic request provenance" in blocker for blocker in audit.blockers)
+        )
+
+
+class DependencyManifestCouplingTest(unittest.TestCase):
+    def _audit_with_gold(self, task_dir: Path, gold_patch: str):
+        (task_dir / "prompt.md").write_text(" ".join(["behavior"] * 100))
+        (task_dir / "test.patch").write_text(
+            "diff --git a/tests/x.py b/tests/x.py\n+def test_behavior(): pass\n"
+        )
+        (task_dir / "gold.patch").write_text(gold_patch)
+        task = Task(
+            task_id="dep-manifest",
+            repo="example/repo",
+            base_commit="abc123",
+            workdir=".",
+            setup_cmd="true",
+            test_cmd="pytest {tests}",
+            fail_to_pass=["tests/x.py::test_behavior"],
+            pass_to_pass=["tests/a.py", "tests/b.py", "tests/c.py"],
+            test_paths=["tests"],
+            trace_source={"path": "inputs/session.jsonl", "format": "generic"},
+            dir=task_dir,
+        )
+        return audit_task(task, task_dir / "results", [])
+
+    def test_warns_when_gold_patch_touches_dependency_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audit_with_gold(
+                Path(raw_dir),
+                "diff --git a/package.json b/package.json\n+  \"dep\": \"^2.0.0\"\n"
+                "diff --git a/lib/x.js b/lib/x.js\n+module.exports = 1\n",
+            )
+
+        self.assertTrue(
+            any("dependency manifest" in warning for warning in audit.warnings)
+        )
+
+    def test_no_manifest_warning_for_code_only_gold_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            audit = self._audit_with_gold(
+                Path(raw_dir),
+                "diff --git a/lib/x.js b/lib/x.js\n+module.exports = 1\n",
+            )
+
+        self.assertFalse(
+            any("dependency manifest" in warning for warning in audit.warnings)
         )
 
 
@@ -227,6 +458,19 @@ class ModelResultFreshnessTest(unittest.TestCase):
             ),
             "stale",
         )
+
+    def test_infrastructure_failure_is_not_reported_as_invalid(self) -> None:
+        path = self.results / "validation.json"
+        path.write_text(json.dumps({
+            "valid": False,
+            "infrastructure_errors": {"oracle": "RemoteError: Image build failed"},
+        }))
+        self.assertEqual(_validation_status(path), "infra_error")
+
+    def test_genuine_failure_still_reports_invalid(self) -> None:
+        path = self.results / "validation.json"
+        path.write_text(json.dumps({"valid": False}))
+        self.assertEqual(_validation_status(path), "invalid")
 
 
 if __name__ == "__main__":

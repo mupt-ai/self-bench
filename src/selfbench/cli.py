@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import sys
 from pathlib import Path
 
-from .create import launch_create_agent
+from .coupling import review_coupling, save_coupling_review
+from .create import PROFILES, launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
 from .review import cmd_review
-from .runner import save_result, validate_task
-from .task import load_task
+from .runner import (
+    DEFAULT_VALIDATION_ENVIRONMENT,
+    save_result,
+    validate_batch,
+    validate_task,
+)
+from .task import Task, load_task
 
 
 def _positive_int(value: str) -> int:
@@ -39,6 +46,8 @@ def _harbor_run_command(task_dir: Path) -> str:
             "openai/gpt-4.1",
             "--jobs-dir",
             "harbor-jobs",
+            "--allow-agent-host",
+            "api.openai.com",
         ]
     )
 
@@ -106,7 +115,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             Path(args.repo).resolve(),
             harbor_root=Path(args.harbor_tasks),
             jobs_root=Path(args.jobs),
-            environment=args.env,
+            environment=args.env or DEFAULT_VALIDATION_ENVIRONMENT,
             rebuild=args.rebuild,
             verbose=not args.quiet and not args.json,
         )
@@ -137,6 +146,68 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if all(summary["valid"] for summary in summaries) else 1
 
 
+def _repo_map(values: list[str]) -> dict[str, Path]:
+    mapping: dict[str, Path] = {}
+    for value in values:
+        key, separator, raw_path = value.partition("=")
+        if not separator or not key or not raw_path:
+            raise ValueError(f"repo mapping must be REPO=PATH, got {value!r}")
+        mapping[key] = Path(raw_path).expanduser().resolve()
+    return mapping
+
+
+def cmd_validate_batch(args: argparse.Namespace) -> int:
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+
+    tasks = [load_task(task_dir) for task_dir in task_dirs]
+    task_ids = [task.task_id for task in tasks]
+    if len(task_ids) != len(set(task_ids)):
+        print("duplicate task_id in batch", file=sys.stderr)
+        return 1
+
+    try:
+        overrides = _repo_map(args.repo_map or [])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    repos_root = Path(args.repos_root).expanduser().resolve() if args.repos_root else None
+
+    def repo_for(task: Task) -> Path:
+        if task.repo in overrides:
+            return overrides[task.repo]
+        if repos_root is None:
+            raise ValueError(
+                f"no local repository for {task.repo}; pass --repo-map {task.repo}=PATH "
+                "or --repos-root"
+            )
+        return repos_root / task.repo.rsplit("/", 1)[-1]
+
+    environment = args.env or DEFAULT_VALIDATION_ENVIRONMENT
+    concurrency = args.concurrency or len(tasks)
+    outcomes = validate_batch(
+        tasks,
+        repo_for,
+        results_root=Path(args.results),
+        harbor_root=Path(args.harbor_tasks),
+        jobs_root=Path(args.jobs),
+        environment=environment,
+        concurrency=concurrency,
+        rebuild=True,
+        log_dir=Path(args.logs),
+    )
+    summary = {
+        "environment": environment,
+        "concurrency": concurrency,
+        "tasks": len(tasks),
+        "outcomes": [outcome.as_dict() for outcome in outcomes],
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if all(outcome.status in {"valid", "skipped"} for outcome in outcomes) else 1
+
+
 def _iter_task_dirs(paths: list[str]) -> list[Path]:
     task_dirs: list[Path] = []
     for raw in paths:
@@ -157,12 +228,55 @@ def cmd_create(args: argparse.Namespace) -> int:
         repo=Path(args.repo) if args.repo else Path.cwd(),
         tasks_root=Path(args.tasks_root),
         count=args.count,
+        profile=args.profile,
         provider=args.provider,
         model=args.model,
         thinking=args.thinking,
         print_mode=args.print_mode,
         pi_executable=args.pi_executable,
     )
+
+
+def cmd_review_coupling(args: argparse.Namespace) -> int:
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+    rows: list[dict[str, object]] = []
+    worst_coupled = False
+    for task_dir in task_dirs:
+        task = load_task(task_dir)
+        review = review_coupling(
+            task,
+            provider=args.provider,
+            model=args.model,
+            thinking=args.thinking,
+            pi_executable=args.pi_executable,
+        )
+        path = save_coupling_review(task, review, provider=args.provider, model=args.model)
+        verdict = review["verdict"]
+        worst_coupled = worst_coupled or verdict == "coupled"
+        rows.append({
+            "task_id": task.task_id,
+            "verdict": verdict,
+            "findings": review.get("findings", []),
+            "summary": review.get("summary", ""),
+            "review_path": str(path),
+        })
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print("| task | verdict | findings | summary |")
+        print("|---|---|---|---|")
+        for row in rows:
+            findings = row["findings"]
+            assert isinstance(findings, list)
+            names = ", ".join(
+                str(f.get("identifier", "?")) for f in findings if isinstance(f, dict)
+            )
+            summary = str(row["summary"]).replace("|", "\\|")
+            print(f"| {row['task_id']} | {row['verdict']} | {names} | {summary} |")
+    return 1 if worst_coupled else 0
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -182,7 +296,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 1 if args.strict and any(r.verdict != "accepted" for r in results) else 0
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Construct the selfbench CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="selfbench",
         description="create private software-engineering evals for Harbor",
@@ -199,7 +314,14 @@ def main() -> None:
     common.add_argument("--results", default="results", help="lightweight result index (default: results)")
     common.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
     common.add_argument("--jobs", default="harbor-jobs", help="canonical Harbor jobs root")
-    common.add_argument("--env", default="docker", help="Harbor environment provider (default: docker)")
+    common.add_argument(
+        "--env",
+        default=None,
+        help=(
+            "Harbor environment provider (default: modal); pass docker for "
+            "local/offline validation"
+        ),
+    )
     common.add_argument("--rebuild", action="store_true", help="rebuild the compiled Harbor task")
     common.add_argument("--quiet", action="store_true", help="suppress per-trial Harbor progress")
     common.add_argument("--json", action="store_true", help="emit machine-readable JSON")
@@ -232,7 +354,70 @@ def main() -> None:
     p_val = sub.add_parser("validate", parents=[common], help="validate with Harbor nop and oracle trials")
     p_val.set_defaults(fn=cmd_validate)
 
-    p_audit = sub.add_parser("audit", help="audit task quality")
+    p_batch = sub.add_parser(
+        "validate-batch",
+        help="validate many tasks concurrently (default environment: Modal)",
+        description=(
+            "Validate every task under the given task dirs concurrently on Harbor. "
+            "Defaults to the Modal environment so the whole public set can fan out "
+            "without a local Docker daemon; pass --env docker to debug offline. "
+            "Tasks that already have a current, valid result are skipped (idempotent). "
+            "Per-task results and logs are preserved."
+        ),
+    )
+    p_batch.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
+    p_batch.add_argument("--results", default="results", help="results root (default: results)")
+    p_batch.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
+    p_batch.add_argument("--jobs", default="harbor-jobs", help="canonical Harbor jobs root")
+    p_batch.add_argument("--logs", default="logs/validate", help="per-task log directory")
+    p_batch.add_argument(
+        "--env",
+        default=os.getenv("SELFBENCH_VALIDATION_ENV", DEFAULT_VALIDATION_ENVIRONMENT),
+        help=(
+            f"Harbor environment provider (default: {DEFAULT_VALIDATION_ENVIRONMENT}; "
+            "use docker for local/offline validation). Also honors SELFBENCH_VALIDATION_ENV."
+        ),
+    )
+    p_batch.add_argument(
+        "--concurrency",
+        type=_positive_int,
+        default=os.getenv("SELFBENCH_VALIDATION_CONCURRENCY"),
+        help=(
+            "how many tasks to validate at once; defaults to the task count (run all "
+            "concurrently). Also honors SELFBENCH_VALIDATION_CONCURRENCY to throttle."
+        ),
+    )
+    p_batch.add_argument(
+        "--repo-map",
+        action="append",
+        metavar="REPO=PATH",
+        help=(
+            "map a task.json repo (e.g. fastapi/fastapi) to a local clone path; "
+            "repeatable. Falls back to --repos-root/<repo name> otherwise."
+        ),
+    )
+    p_batch.add_argument(
+        "--repos-root",
+        help=(
+            "directory of local repo clones, one per task.json repo name "
+            "(e.g. --repos-root ~/code/repos resolves fastapi/fastapi to that dir/fastapi)"
+        ),
+    )
+    p_batch.set_defaults(fn=cmd_validate_batch)
+
+    p_couple = sub.add_parser(
+        "review-coupling",
+        help="independent LLM pass judging whether equivalent implementations can pass the held-out tests",
+    )
+    p_couple.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
+    p_couple.add_argument("--provider", required=True, help="pi provider for the reviewer model")
+    p_couple.add_argument("--model", required=True, help="pi model for the reviewer")
+    p_couple.add_argument("--thinking", default=None, help="pi thinking level")
+    p_couple.add_argument("--pi-executable", default=None, help="path to the Pi executable")
+    p_couple.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    p_couple.set_defaults(fn=cmd_review_coupling)
+
+    p_audit = sub.add_parser("audit", help="audit task quality and solver signal")
     p_audit.add_argument("task_dirs", nargs="+", help="task dir(s), or parent dirs containing task dirs")
     p_audit.add_argument("--results", default="results", help="results root dir (default: results)")
     p_audit.add_argument(
@@ -279,6 +464,16 @@ def main() -> None:
         type=_positive_int,
         help="target number of complete benchmark tasks to create",
     )
+    p_create.add_argument(
+        "--profile",
+        choices=PROFILES,
+        default="default",
+        help=(
+            "candidate difficulty profile: 'hard' shortlists larger merged PRs by changed files/lines, "
+            "ranks them by diff complexity while keeping all quality gates, and targets 15 validated "
+            "tasks per repo unless --count is given (default: default)"
+        ),
+    )
     p_create.add_argument("--provider", help="Pi provider (e.g. openai, anthropic)")
     p_create.add_argument("--model", help="Pi model ID")
     p_create.add_argument("--thinking", help="Pi thinking level (off, minimal, low, medium, high, xhigh, max)")
@@ -295,5 +490,10 @@ def main() -> None:
     )
     p_create.set_defaults(fn=cmd_create)
 
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
     sys.exit(args.fn(args))
