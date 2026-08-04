@@ -1,7 +1,7 @@
 # selfbench
 
 [![CI](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mupt-ai/selfbench/blob/main/LICENSE)
 
 Selfbench turns completed repository changes—usually merged pull requests—into reproducible software-engineering evals for [Harbor](https://harborframework.com).
 
@@ -9,35 +9,33 @@ It recovers the original engineering request, separates the implementation from 
 
 ## Quick start
 
-You need Python 3.12+, [uv](https://docs.astral.sh/uv/), an authenticated [GitHub CLI](https://cli.github.com/), and an installed [Pi](https://github.com/earendil-works/pi) CLI. Use Docker for local validation or Modal for remote validation.
+You need Python 3.12+, an authenticated [GitHub CLI](https://cli.github.com/), and an installed [Pi](https://github.com/earendil-works/pi) CLI. Use Docker for local validation or Modal for remote validation.
 
 ```bash
-git clone https://github.com/mupt-ai/selfbench.git
-cd selfbench
-uv sync --locked
+pip install selfbench
 ```
 
-Create one eval from a repository you can clone:
+Create one eval from a local clone whose GitHub remote you can access:
 
 ```bash
-uv run selfbench create --repo ~/code/my-project --count 1 --print
+selfbench create --repo ~/code/my-project --count 1 --print
 ```
 
 Pi inspects merged pull requests, selects a viable change, writes the eval, validates it, and audits its provenance and test design. To target a specific change:
 
 ```bash
-uv run selfbench create --repo ~/code/my-project \
+selfbench create --repo ~/code/my-project \
   "Create an eval from PR 123."
 ```
 
-Creation writes the authoring files to `tasks/TASK_ID`. Validation generates a native Harbor task at `harbor-tasks/TASK_ID`.
+Creation writes authoring files to `tasks/TASK_ID` under your current directory. Validation generates the runnable Harbor task at `harbor-tasks/TASK_ID`.
 
 ## Validate
 
-Validation defaults to Modal. Install its dependencies with `uv sync --locked --extra modal`, or pass `--env docker` to run locally:
+Validation defaults to Modal. Install its dependencies with `pip install "selfbench[modal]"`, or pass `--env docker` to run locally:
 
 ```bash
-uv run selfbench validate tasks/TASK_ID \
+selfbench validate tasks/TASK_ID \
   --repo ~/code/my-project \
   --env docker
 ```
@@ -45,7 +43,7 @@ uv run selfbench validate tasks/TASK_ID \
 You can validate every eval directly below a task root with the same command:
 
 ```bash
-uv run selfbench validate tasks --repo ~/code/my-project --env docker
+selfbench validate tasks --repo ~/code/my-project --env docker
 ```
 
 An eval is valid only when all six checks pass:
@@ -65,7 +63,7 @@ Harbor—not selfbench—owns coding-agent execution and result artifacts:
 
 ```bash
 export OPENAI_API_KEY=...
-uv run harbor run \
+harbor run \
   --path harbor-tasks/TASK_ID \
   --agent pi \
   --model openai/gpt-5.6-sol \
@@ -88,13 +86,13 @@ tasks/<task-id>/
 
 The coding agent receives a history-free snapshot of the base commit and the engineering request. Harbor grades its patch separately with the held-out tests. The agent never receives `gold.patch` or `test.patch`.
 
-See [Authoring evals](docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The bundled [selfbench skill](skill/SKILL.md) contains the complete construction checklist.
+See [Authoring evals](https://github.com/mupt-ai/selfbench/blob/main/docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The bundled [selfbench skill](https://github.com/mupt-ai/selfbench/blob/main/skill/SKILL.md) contains the complete construction checklist.
 
 ## Audit and review
 
 ```bash
-uv run selfbench audit tasks --results results --strict
-uv run selfbench review-coupling tasks/TASK_ID \
+selfbench audit tasks --results results --strict
+selfbench review-coupling tasks/TASK_ID \
   --provider openai --model gpt-5.6-sol
 ```
 
@@ -103,7 +101,7 @@ For provenance and patch review, open the local review console:
 ```bash
 bun install --frozen-lockfile
 bun run build:review
-uv run selfbench review --tasks tasks --results results
+selfbench review --tasks tasks --results results
 ```
 
 ## Data handling
@@ -122,4 +120,4 @@ bun run validate
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/mupt-ai/selfbench/blob/main/LICENSE).

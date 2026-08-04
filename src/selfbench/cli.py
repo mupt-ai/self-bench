@@ -34,8 +34,6 @@ def _positive_int(value: str) -> int:
 def _harbor_run_command(task_dir: Path) -> str:
     return shlex.join(
         [
-            "uv",
-            "run",
             "harbor",
             "run",
             "--path",
