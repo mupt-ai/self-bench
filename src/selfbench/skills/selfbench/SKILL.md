@@ -70,6 +70,8 @@ gh pr list -R <owner/repo> --state merged --limit 100 \
 
 Prefer a recent, merged, human-reviewed change with a reproducible bug or missing behavior. Reject changes that require unavailable production services, secrets, nondeterministic external state, manual-only verification, or unavailable authentic request provenance.
 
+Passing validation once does not make a task reproducible. `setup_cmd` resolves dependencies fresh on every rebuild, so upstream releases silently break tasks that validated months — or hours — earlier. Pin build-time tooling whenever the source repository's packaging predates current standards: pass build constraints to the installer (for example `uv pip install --build-constraints`, which pins the backend used in uv's *isolated* build environment; installing the backend into the project venv does not affect it) and pin any version-deriving plugin the build needs. Treat an old validation result as unproven and revalidate before trusting it.
+
 Before building a task, identify the base commit that the change was made against. For a merge commit, this is normally its first parent. Confirm that the repository can be checked out at that commit and set up without relying on later files.
 
 ## Difficulty profiles
@@ -190,6 +192,8 @@ Acceptance requires all of the following:
 - The gold patch applies cleanly.
 - Fail-to-pass tests pass with the gold patch twice in succession. This catches obvious flakes but does not prove full determinism.
 - Pass-to-pass tests still pass with the gold patch.
+
+Rollouts seal the agent's network: while the coding agent works, only its model provider's API host is reachable. Without that seal agents clone the upstream repository or download the source pull request diff and copy the reference implementation instead of writing one, which silently invalidates every score. The verifier keeps normal egress because it reinstalls dependencies before running the held-out tests.
 
 The validator uses separate Docker containers for the base and gold checks. A rollout uses the same two-container boundary: the agent container receives only the base snapshot and prompt, then its captured patch is graded in a separate verifier container with the held-out tests. Never place `gold.patch` or `test.patch` in the agent container, and never grade in a container that executed the agent.
 

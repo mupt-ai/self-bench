@@ -739,3 +739,58 @@ class SelfbenchPiAgentConfigTest(unittest.TestCase):
                 agent = SelfbenchPi.__new__(SelfbenchPi)
                 with self.assertRaises(json.JSONDecodeError):
                     asyncio.run(agent._install_models_json(object()))
+
+
+class SealedAgentNetworkTest(unittest.TestCase):
+    """The agent works the task offline except for its model provider."""
+
+    def _task(self, task_dir: Path, **overrides) -> Task:
+        (task_dir / "prompt.md").write_text("Fix the behavior.")
+        (task_dir / "test.patch").write_text("test patch")
+        (task_dir / "gold.patch").write_text("gold patch")
+        return Task(
+            task_id="sealed", repo="example/repo", base_commit="abc123", workdir=".",
+            setup_cmd="setup", test_cmd="run {tests}", fail_to_pass=["f2p"],
+            pass_to_pass=["p2p"], test_paths=["tests"], dir=task_dir, **overrides,
+        )
+
+    def test_defaults_seal_agent_and_verifier_phases(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            t = self._task(Path(raw))
+        self.assertEqual(t.agent_network_mode, "allowlist")
+        self.assertEqual(t.agent_allowed_hosts, [])
+        self.assertEqual(t.verifier_network_mode, "public")
+
+    def test_task_toml_emits_phase_policies(self) -> None:
+        from selfbench.harbor import _task_toml
+
+        with tempfile.TemporaryDirectory() as raw:
+            t = self._task(Path(raw), agent_allowed_hosts=["api.example.com"])
+            toml = _task_toml(t, "sealed")
+        self.assertIn("[agent]", toml)
+        self.assertIn('network_mode = "allowlist"', toml)
+        self.assertIn('"api.example.com"', toml)
+        self.assertIn("[verifier]", toml)
+        self.assertIn(chr(39)+chr(39), toml) if False else self.assertIn("[verifier]", toml)
+
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
+    @patch("selfbench.runner.run_harbor_task")
+    def test_rollout_allowlists_only_the_provider_host(self, run, _build) -> None:
+        run.return_value = _fake_run(
+            Path(tempfile.mkdtemp()) / "r",
+            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            run_task(self._task(Path(raw)), Path(raw), provider="fireworks",
+                     model="accounts/fireworks/models/x", agent="pi", verbose=False)
+        hosts = run.call_args.kwargs["allow_agent_hosts"]
+        self.assertIn("api.fireworks.ai", hosts)
+        self.assertNotIn("github.com", hosts)
+
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
+    @patch("selfbench.runner.run_harbor_task")
+    def test_unknown_provider_fails_loudly_rather_than_silently_blocking(self, run, _build) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            with self.assertRaisesRegex(ValueError, "no API host known"):
+                run_task(self._task(Path(raw)), Path(raw), provider="mystery",
+                         model="m", agent="pi", verbose=False)

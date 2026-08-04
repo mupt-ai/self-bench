@@ -22,6 +22,19 @@ from .task import Task
 # Harbor's built-in Pi agent forwards credentials for openai, anthropic,
 # openrouter, google, and several others automatically. Fireworks is not in
 # that list, so selfbench forwards it explicitly via --agent-env.
+# Model API hosts reachable from the sealed agent phase. Everything else --
+# github.com, package registries, the open internet -- stays blocked so a
+# rollout cannot fetch the upstream fix instead of implementing it. Extend via
+# SELFBENCH_EXTRA_AGENT_HOSTS (comma-separated) for self-hosted endpoints.
+_PROVIDER_API_HOSTS: dict[str, tuple[str, ...]] = {
+    "openai": ("api.openai.com",),
+    "anthropic": ("api.anthropic.com",),
+    "fireworks": ("api.fireworks.ai",),
+    "openrouter": ("openrouter.ai",),
+    "google": ("generativelanguage.googleapis.com",),
+    "dari-prod": ("routing.dari.dev",),
+}
+
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "fireworks": "FIREWORKS_API_KEY",
     # Dari routing endpoint; provider is defined via SELFBENCH_PI_MODELS_JSON_FILE
@@ -236,6 +249,17 @@ def run_task(
     env_key = _PROVIDER_ENV_KEYS.get(provider)
     if env_key and os.environ.get(env_key):
         agent_env[env_key] = os.environ[env_key]
+    extra_hosts = list(_PROVIDER_API_HOSTS.get(provider, ()))
+    extra_hosts.extend(
+        h.strip()
+        for h in os.environ.get("SELFBENCH_EXTRA_AGENT_HOSTS", "").split(",")
+        if h.strip()
+    )
+    if task.agent_network_mode == "allowlist" and not extra_hosts:
+        raise ValueError(
+            f"no API host known for provider {provider!r}; the sealed agent phase would block "
+            "its model. Set SELFBENCH_EXTRA_AGENT_HOSTS to the provider endpoint host."
+        )
     run = run_harbor_task(
         harbor_task,
         jobs_root,
@@ -244,6 +268,7 @@ def run_task(
         environment=environment,
         agent_kwargs=kwargs,
         agent_env=agent_env or None,
+        allow_agent_hosts=extra_hosts,
         quiet=not verbose,
     )
     result = compatibility_result(task, run, run_kind="rollout")
