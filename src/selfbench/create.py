@@ -30,8 +30,8 @@ def build_create_request(
         f"Write authoring artifacts under: {tasks_root}",
         (
             "After authoring the full batch, deterministic nop/oracle validation and static audit are allowed. "
-            "Do not run benchmark solver trials: never invoke selfbench run or start Harbor with a coding "
-            "agent/model unless the user explicitly asks."
+            "Do not run benchmark solver trials or start Harbor with a coding agent/model unless the user "
+            "explicitly asks."
         ),
     ]
     if count is not None:

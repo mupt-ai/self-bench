@@ -1,11 +1,11 @@
-"""selfbench CLI: validate tasks, run rollouts, aggregate reports."""
+"""selfbench CLI: create, validate, audit, and review Harbor evals."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -14,12 +14,9 @@ from .create import PROFILES, launch_create_agent
 from .harbor import build_harbor_task
 from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
-from .result_schema import RESULT_SCHEMA_VERSION
 from .review import cmd_review
 from .runner import (
-    DEFAULT_ROLLOUT_ENVIRONMENT,
     DEFAULT_VALIDATION_ENVIRONMENT,
-    run_task,
     save_result,
     validate_batch,
     validate_task,
@@ -27,19 +24,32 @@ from .runner import (
 from .task import Task, load_task
 
 
-def _model_slug(provider: str, model: str) -> str:
-    model_name = model.rsplit("/", 1)[-1]
-    for label, value in (("provider", provider), ("model", model_name)):
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
-            raise ValueError(f"{label} must end in a path-safe identifier")
-    return f"{provider}__{model_name}"
-
-
 def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
+
+
+def _harbor_run_command(task_dir: Path) -> str:
+    return shlex.join(
+        [
+            "uv",
+            "run",
+            "harbor",
+            "run",
+            "--path",
+            str(task_dir),
+            "--agent",
+            "selfbench.harbor_pi:SelfbenchPi",
+            "--model",
+            "openai/gpt-4.1",
+            "--jobs-dir",
+            "harbor-jobs",
+            "--allow-agent-host",
+            "api.openai.com",
+        ]
+    )
 
 
 def cmd_generate_prompt(args: argparse.Namespace) -> int:
@@ -87,25 +97,53 @@ def cmd_build(args: argparse.Namespace) -> int:
         overwrite=args.force,
     )
     print(f"Harbor task: {path}")
-    print(f"Run it directly: uv run harbor run -p {path} -a <agent> -m <provider/model>")
+    print(f"Run with Harbor: {_harbor_run_command(path)}")
     return 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    task = load_task(args.task_dir)
-    result = validate_task(
-        task,
-        Path(args.repo).resolve(),
-        harbor_root=Path(args.harbor_tasks),
-        jobs_root=Path(args.jobs),
-        environment=args.env or DEFAULT_VALIDATION_ENVIRONMENT,
-        rebuild=args.rebuild,
-        verbose=not args.quiet,
-    )
-    path = save_result(result, Path(args.results), "validation")
-    print(json.dumps({k: result[k] for k in ("task_id", "valid", "checks", "duration_s")}, indent=2))
-    print(f"full result: {path}")
-    return 0 if result["valid"] else 1
+    task_dirs = _iter_task_dirs(args.task_dirs)
+    if not task_dirs:
+        print("no task dirs found", file=sys.stderr)
+        return 1
+
+    summaries: list[dict[str, object]] = []
+    for task_dir in task_dirs:
+        task = load_task(task_dir)
+        result = validate_task(
+            task,
+            Path(args.repo).resolve(),
+            harbor_root=Path(args.harbor_tasks),
+            jobs_root=Path(args.jobs),
+            environment=args.env or DEFAULT_VALIDATION_ENVIRONMENT,
+            rebuild=args.rebuild,
+            verbose=not args.quiet and not args.json,
+        )
+        result_path = save_result(result, Path(args.results), "validation")
+        summaries.append(
+            {
+                "task_id": result["task_id"],
+                "valid": result["valid"],
+                "checks": result["checks"],
+                "duration_s": result["duration_s"],
+                "harbor_task": result["harbor"]["task_dir"],
+                "result": str(result_path),
+            }
+        )
+
+    if args.json:
+        print(json.dumps(summaries, indent=2))
+    else:
+        for summary in summaries:
+            status = "PASS" if summary["valid"] else "FAIL"
+            print(f"{status} {summary['task_id']} ({summary['duration_s']}s)")
+            print(f"  Harbor task: {summary['harbor_task']}")
+            print(f"  Result: {summary['result']}")
+            if summary["valid"]:
+                print(f"  Run: {_harbor_run_command(Path(str(summary['harbor_task'])))}")
+        valid_count = sum(1 for summary in summaries if summary["valid"])
+        print(f"{valid_count}/{len(summaries)} evals valid")
+    return 0 if all(summary["valid"] for summary in summaries) else 1
 
 
 def _repo_map(values: list[str]) -> dict[str, Path]:
@@ -168,92 +206,6 @@ def cmd_validate_batch(args: argparse.Namespace) -> int:
     }
     print(json.dumps(summary, indent=2))
     return 0 if all(outcome.status in {"valid", "skipped"} for outcome in outcomes) else 1
-
-
-def cmd_run(args: argparse.Namespace) -> int:
-    task = load_task(args.task_dir)
-    result = run_task(
-        task,
-        Path(args.repo).resolve(),
-        provider=args.provider,
-        model=args.model,
-        thinking=args.thinking,
-        agent=args.agent,
-        harbor_root=Path(args.harbor_tasks),
-        jobs_root=Path(args.jobs),
-        environment=args.env or DEFAULT_ROLLOUT_ENVIRONMENT,
-        rebuild=args.rebuild,
-        verbose=not args.quiet,
-    )
-    path = save_result(result, Path(args.results), _model_slug(args.provider, args.model))
-    summary = {
-        k: result[k]
-        for k in ("run_id", "task_id", "provider", "model", "thinking", "resolved", "failure_reasons",
-                  "fail_to_pass_passed", "pass_to_pass_passed", "agent_exit_ok",
-                  "agent_patch_applied", "duration_s")
-    }
-    print(json.dumps(summary, indent=2))
-    print(f"full result: {path}")
-    return 0 if result["resolved"] else 1
-
-
-def cmd_report(args: argparse.Namespace) -> int:
-    root = Path(args.results)
-    tasks_by_id = {
-        task.task_id: task
-        for task in (load_task(task_dir) for task_dir in _iter_task_dirs(args.tasks))
-    }
-    allowed_task_ids: set[str] | None = None
-    if args.verdict:
-        audit_models = args.models or []
-        audits = [
-            audit_task(task, root, audit_models)
-            for task in tasks_by_id.values()
-        ]
-        allowed_task_ids = {r.task_id for r in audits if r.verdict in args.verdict}
-
-    rows: dict[str, dict[str, str]] = {}
-    models: set[str] = set(args.models or [])
-    for rj in sorted(root.glob("*/*/result.json")):
-        r = json.loads(rj.read_text())
-        run_name = rj.parent.name
-        if run_name == "validation":
-            continue
-        if args.models and run_name not in args.models:
-            continue
-        task_id = r["task_id"]
-        if allowed_task_ids is not None and task_id not in allowed_task_ids:
-            continue
-        models.add(run_name)
-        task = tasks_by_id.get(task_id)
-        if task is not None and (
-            r.get("result_schema_version") != RESULT_SCHEMA_VERSION
-            or r.get("task_fingerprints") != task.evaluation_fingerprints
-        ):
-            status = "stale"
-        else:
-            status = "pass" if r["resolved"] else "fail"
-        rows.setdefault(task_id, {})[run_name] = status
-    if not rows:
-        print(f"no run results under {root}")
-        return 1
-    cols = sorted(models)
-    icons = {"pass": "✅", "fail": "❌", "stale": "⏳"}
-    print("| task | " + " | ".join(cols) + " |")
-    print("|---" * (len(cols) + 1) + "|")
-    for task_id, per_model in sorted(rows.items()):
-        print(
-            f"| {task_id} | "
-            + " | ".join(icons.get(per_model.get(model, ""), "—") for model in cols)
-            + " |"
-        )
-    totals = [
-        f"{sum(1 for row in rows.values() if row.get(model) == 'pass')}/"
-        f"{sum(1 for row in rows.values() if row.get(model) in {'pass', 'fail'})}"
-        for model in cols
-    ]
-    print("| **resolved** | " + " | ".join(totals) + " |")
-    return 0
 
 
 def _iter_task_dirs(paths: list[str]) -> list[Path]:
@@ -346,11 +298,18 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the selfbench CLI argument parser."""
-    parser = argparse.ArgumentParser(prog="selfbench", description="benchmark coding agents on your own merged PRs")
+    parser = argparse.ArgumentParser(
+        prog="selfbench",
+        description="create private software-engineering evals for Harbor",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("task_dir", help="task directory containing task.json")
+    common.add_argument(
+        "task_dirs",
+        nargs="+",
+        help="task dir(s), or parent dirs containing task dirs",
+    )
     common.add_argument("--repo", required=True, help="path to a local clone containing base_commit")
     common.add_argument("--results", default="results", help="lightweight result index (default: results)")
     common.add_argument("--harbor-tasks", default="harbor-tasks", help="compiled Harbor task root")
@@ -359,12 +318,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--env",
         default=None,
         help=(
-            "Harbor environment provider; per-command default is modal for validate "
-            "and docker for run. Pass docker for local/offline validation."
+            "Harbor environment provider (default: modal); pass docker for "
+            "local/offline validation"
         ),
     )
     common.add_argument("--rebuild", action="store_true", help="rebuild the compiled Harbor task")
     common.add_argument("--quiet", action="store_true", help="suppress per-trial Harbor progress")
+    common.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
     p_prompt = sub.add_parser(
         "generate-prompt",
@@ -444,25 +404,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_batch.set_defaults(fn=cmd_validate_batch)
-
-    p_run = sub.add_parser("run", parents=[common], help="run one native Harbor agent trial")
-    p_run.add_argument("--provider", required=True, help="pi provider, e.g. openai|fireworks")
-    p_run.add_argument("--model", required=True, help="pi model id, e.g. gpt-5.5")
-    p_run.add_argument("--agent", default="pi", help="Harbor agent (default: pi)")
-    p_run.add_argument("--thinking", default=None, help="agent thinking level when supported")
-    p_run.set_defaults(fn=cmd_run)
-
-    p_rep = sub.add_parser("report", help="print a markdown resolved-rate table from results")
-    p_rep.add_argument("results", nargs="?", default="results")
-    p_rep.add_argument("--models", nargs="+", help="optional result subdirs to include")
-    p_rep.add_argument("--tasks", nargs="+", default=["tasks"], help="task dirs used for verdict filtering")
-    p_rep.add_argument(
-        "--verdict",
-        nargs="+",
-        choices=("accepted", "needs_review", "rejected"),
-        help="only include tasks whose audit verdict matches",
-    )
-    p_rep.set_defaults(fn=cmd_report)
 
     p_couple = sub.add_parser(
         "review-coupling",

@@ -166,7 +166,7 @@ Use at least three meaningful pass-to-pass entries when possible. Avoid broad su
 5. **Resolution pass.** Using the validation, audit, and coupling findings together: repair tasks where a finding is fixable (relax an over-tight assertion, extend `test.patch` with a helper the tests need, restore prompt wording that provenance supports), and replace tasks that cannot be repaired with the next ranked candidate. Any task whose prompt or patches changed must be revalidated and coupling-reviewed again. Repeat until every task in the batch is validated with a `clean` (or reviewed-and-justified `minor`) coupling verdict, or the viable pool is exhausted.
 6. **Report the folder.** Finish with a summary listing every task directory, its validation result, audit verdict, and coupling verdict, plus rejected candidates and the reason for each.
 
-Whenever a task is rejected or removed at any stage, move its directory into `tasks/rejected/` (keeping `task.json` with its `source_pr`) instead of deleting it, so later sessions do not retry the candidate. Do not invoke `selfbench run` or start Harbor with a coding agent/model; solver trials are a separate operation that requires an explicit user request.
+Whenever a task is rejected or removed at any stage, move its directory into `tasks/rejected/` (keeping `task.json` with its `source_pr`) instead of deleting it, so later sessions do not retry the candidate. Do not start Harbor with a coding agent/model; solver trials are a separate operation that requires an explicit user request.
 
 Common command templates include:
 
@@ -182,7 +182,7 @@ Common command templates include:
 Run the gold validator after the full batch is authored and before any separately requested model rollouts:
 
 ```bash
-selfbench validate tasks/<task> --repo <local-repo>
+selfbench validate tasks/<task> --repo <local-repo> --env docker
 ```
 
 Acceptance requires all of the following:
@@ -212,12 +212,17 @@ Audit is independent of coding-model selection. Fix any blocker about gold-coupl
 Do not run coding models as part of task creation unless the user explicitly requests them. When solver signal is wanted, choose the provider/model set for that evaluation and run it separately:
 
 ```bash
-selfbench run tasks/<task> --repo <local-repo> --provider <provider> --model <model>
+uv run harbor run \
+  --path harbor-tasks/TASK_ID \
+  --agent selfbench.harbor_pi:SelfbenchPi \
+  --model PROVIDER/MODEL \
+  --jobs-dir harbor-jobs \
+  --allow-agent-host PROVIDER_API_HOST
 ```
 
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
 
-Each run is preserved under `results/<task>/<model>/runs/<run-id>/`; the model directory's top-level `result.json` is only the latest-result compatibility view. Changing task inputs or the result schema makes prior validation and rollout artifacts stale, so rerun validation before interpreting new scores. Pass explicit result-directory slugs to `selfbench audit --models ...` only when informational solver signal should be displayed; model outcomes do not determine the static audit verdict.
+Harbor owns the job configuration, execution, and result artifacts under `harbor-jobs/`. Changing task inputs makes the compiled Harbor task stale, so rerun `selfbench validate` before interpreting new scores.
 
 ## Separate operation: review
 

@@ -1,98 +1,124 @@
 # selfbench
 
-Build private, SWE-bench-style evaluations from merged PRs in repositories you can clone. A task pairs the engineer's original request with the held-out tests from their change; the agent gets a history-free checkout and the request, nothing else. [Harbor](https://harborframework.com) runs the containers; selfbench builds the tasks and gates their quality.
+[![CI](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Install
+Selfbench turns completed repository changes—usually merged pull requests—into reproducible software-engineering evals for [Harbor](https://harborframework.com).
 
-Needs Python 3.12+, [uv](https://docs.astral.sh/uv/), [Pi](https://github.com/earendil-works/pi), Docker (or [Modal](https://modal.com) credentials), [`gh`](https://cli.github.com) for PR discovery, and a provider API key.
+It recovers the original engineering request, separates the implementation from held-out tests, and checks that doing nothing fails while the known-good solution passes. Selfbench creates and validates evals; Harbor runs coding agents against them.
 
-```bash
-git clone https://github.com/mupt-ai/selfbench.git && cd selfbench
-uv sync                          # --extra modal to run on Modal
-bun install --frozen-lockfile    # only for the review console
-```
+## Quick start
 
-Not on PyPI — run everything with `uv run` from the checkout.
-
-## Quickstart
-
-One task, end to end, against any GitHub repo you have cloned. Check prerequisites with `pi --version && gh auth status && docker info`; `pi --list-models` lists usable provider/model pairs.
+You need Python 3.12+, [uv](https://docs.astral.sh/uv/), an authenticated [GitHub CLI](https://cli.github.com/), and an installed [Pi](https://github.com/earendil-works/pi) CLI. Use Docker for local validation or Modal for remote validation.
 
 ```bash
-# 1. Author. The Pi session picks a merged PR and names the directory
-#    it created in its summary — substitute that path below.
-uv run selfbench create --repo ~/code/your-project -n 1 \
-  --provider openai --model gpt-5.6-sol --thinking high
-
-# 2. Gate.
-uv run selfbench validate tasks/your-project-pr-123 --repo ~/code/your-project --env docker
-uv run selfbench audit tasks --results results
-uv run selfbench review-coupling tasks/your-project-pr-123 --provider openai --model gpt-5.6-sol
-
-# 3. Benchmark an agent and read the score.
-uv run selfbench run tasks/your-project-pr-123 --repo ~/code/your-project \
-  --provider openai --model gpt-5.6-sol
-uv run selfbench report results --tasks tasks
+git clone https://github.com/mupt-ai/selfbench.git
+cd selfbench
+uv sync --locked
 ```
 
-Step 1 is judgment-heavy: the session rejects PRs that lack authentic pre-implementation provenance or separable tests, which is the point. If it finds no candidate, nominate one — append `"Build a task from PR 123."` to the create command.
+Create one eval from a repository you can clone:
 
-## What a task is
+```bash
+uv run selfbench create --repo ~/code/my-project --count 1 --print
+```
+
+Pi inspects merged pull requests, selects a viable change, writes the eval, validates it, and audits its provenance and test design. To target a specific change:
+
+```bash
+uv run selfbench create --repo ~/code/my-project \
+  "Create an eval from PR 123."
+```
+
+Creation writes the authoring files to `tasks/TASK_ID`. Validation generates a native Harbor task at `harbor-tasks/TASK_ID`.
+
+## Validate
+
+Validation defaults to Modal. Install its dependencies with `uv sync --locked --extra modal`, or pass `--env docker` to run locally:
+
+```bash
+uv run selfbench validate tasks/TASK_ID \
+  --repo ~/code/my-project \
+  --env docker
+```
+
+You can validate every eval directly below a task root with the same command:
+
+```bash
+uv run selfbench validate tasks --repo ~/code/my-project --env docker
+```
+
+An eval is valid only when all six checks pass:
+
+- the base fails the fail-to-pass tests;
+- the base passes the regression tests;
+- the gold patch applies cleanly;
+- the gold patch fixes the fail-to-pass tests;
+- the fix passes twice to catch obvious flakes;
+- the gold patch preserves the regression tests.
+
+Successful validation prints the generated Harbor path and exact command to use next.
+
+## Run with Harbor
+
+Harbor—not selfbench—owns coding-agent execution and result artifacts:
+
+```bash
+export OPENAI_API_KEY=...
+uv run harbor run \
+  --path harbor-tasks/TASK_ID \
+  --agent selfbench.harbor_pi:SelfbenchPi \
+  --model openai/gpt-4.1 \
+  --jobs-dir harbor-jobs \
+  --allow-agent-host api.openai.com
+```
+
+For another provider, set its API key, change `provider/model`, and allow its API host. You can replace `SelfbenchPi` with another agent supported by Harbor.
+
+## What an eval contains
 
 ```text
-tasks/your-project-pr-123/
-├── task.json     # test selectors, metadata, provenance refs
-├── prompt.md     # the request as the engineer originally posed it
-├── test.patch    # held-out tests
-└── gold.patch    # reference implementation
+tasks/<task-id>/
+├── task.json
+├── inputs/session.jsonl  # preferred source request
+├── test.patch            # held-out behavioral tests
+└── gold.patch            # known-good implementation
 ```
 
-Authored by a Pi session running the bundled [task-building skill](skill/SKILL.md), which owns the rules: provenance must predate the implementation, tests and implementation must split cleanly by file, and held-out tests must be passable by an equivalent-but-different implementation. `--profile hard` targets larger changes, judging difficulty on the extracted `gold.patch` core (~100+ lines across 3+ files) rather than raw PR size.
+The coding agent receives a history-free snapshot of the base commit and the engineering request. Harbor grades its patch separately with the held-out tests. The agent never receives `gold.patch` or `test.patch`.
 
-During a rollout the agent's network is sealed to its model provider's API host — otherwise agents clone the upstream repo or fetch the PR diff and copy the answer instead of writing one.
+See [Authoring evals](docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The bundled [selfbench skill](skill/SKILL.md) contains the complete construction checklist.
 
-## The three gates
-
-- **validate** — a *nop* trial (unchanged base) and an *oracle* trial (gold patch applied) in separate containers. Base must fail the fail-to-pass tests, gold must fix them twice running, and the pass-to-pass regression tests must stay green. Defaults to Modal; `--env docker` for local. `validate-batch` runs many concurrently.
-- **audit** — static checks: patch separation, protected test paths, prompt leakage, gold-coupled identifiers, dependency coupling, provenance. Verdicts `accepted` / `needs_review` / `rejected`, with `--strict` for CI.
-- **review-coupling** — a fresh model pass seeing only the prompt, both patches, and the graded selectors, which classifies everything the tests rely on as prompt-derivable, guessable, or coupled. A `coupled` verdict blocks the task. Use a different model than the one that authored it.
-
-Clearing all three means: the reference implementation passes reproducibly, and an independent reviewer found nothing an equivalent implementation couldn't satisfy. That is "no known coupling after adversarial review," not a proof. Results are fingerprinted, so edits mark them stale — re-run the gates.
-
-**Cost:** `create`, `review-coupling`, `generate-prompt`, and `run` make model calls. `validate` runs containers but no model calls. `audit`, `report`, and `review` are free and local.
-
-## Running many tasks
-
-Results land in `results/<task>/<provider>__<model>/`, and `report` prints a per-task, per-model resolved table marking stale rows. For a large one-shot batch, compile tasks into a dataset and let Harbor fan out instead:
+## Audit and review
 
 ```bash
-uv run selfbench build tasks/your-project-pr-123 --repo ~/code/your-project \
-  --harbor-tasks harbor-dataset
-uv run harbor run -p harbor-dataset -a selfbench.harbor_pi:SelfbenchPi \
-  -m openai/gpt-5.6-sol --env modal -n 20 --allow-agent-host api.openai.com
+uv run selfbench audit tasks --results results --strict
+uv run selfbench review-coupling tasks/TASK_ID \
+  --provider openai --model gpt-5.6-sol
 ```
 
-`-p` accepts a directory of many compiled tasks; Harbor handles concurrency and retries. Use the import-path agent rather than stock `-a pi`, which installs an outdated Pi. Direct Harbor runs bypass the fingerprinted results index, so `report` and the audit won't see them.
-
-## Review console
+For provenance and patch review, open the local review console:
 
 ```bash
+bun install --frozen-lockfile
+bun run build:review
 uv run selfbench review --tasks tasks --results results
 ```
 
-Local web UI for the resolved prompt, provenance, patch views, validation output, and model outcomes, with a review queue (`J`/`K`, status filters). Decisions save into `task.json`.
-
 ## Data handling
 
-`tasks/` and `results/` are gitignored, but nothing here is airtight: validation and rollouts upload the base-commit snapshot to your execution environment, agents send the prompt and repository context to the model provider, and `generate-prompt` uploads a redacted source conversation only after `--confirm-source-upload`. Gold and test patches never enter the agent container — but exported Harbor task directories contain them, so treat exports as the answer key. Withholding the gold patch prevents harness leakage; it cannot prove a public change was absent from a model's training data.
+`tasks/`, `results/`, `harbor-tasks/`, and `harbor-jobs/` are gitignored. They may contain proprietary code, source conversations, patches, and model outputs. Apply your organization's source-code, transcript, and provider-key policies before using private repositories.
 
 ## Development
 
 ```bash
-uv run python -m unittest discover -s tests
-bun run typecheck:review && bun run build:review
+uv sync --locked
+bun install --frozen-lockfile
+bun run validate
 ```
+
+`bun run validate` runs the Python tests, review-console typecheck, and production build—the same checks used by CI.
 
 ## License
 
-No license file yet. Public visibility alone does not grant permission to copy, modify, or redistribute.
+MIT. See [LICENSE](LICENSE).

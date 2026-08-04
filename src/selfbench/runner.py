@@ -1,9 +1,8 @@
-"""Harbor-backed task validation and rollout helpers."""
+"""Harbor-backed task validation helpers."""
 
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -12,48 +11,15 @@ from typing import Any
 
 from .harbor import (
     build_harbor_task,
-    compatibility_result,
     run_harbor_task,
     validation_result,
 )
 from .result_schema import RESULT_SCHEMA_VERSION
 from .task import Task
 
-# Harbor's built-in Pi agent forwards credentials for openai, anthropic,
-# openrouter, google, and several others automatically. Fireworks is not in
-# that list, so selfbench forwards it explicitly via --agent-env.
-# Model API hosts reachable from the sealed agent phase. Everything else --
-# github.com, package registries, the open internet -- stays blocked so a
-# rollout cannot fetch the upstream fix instead of implementing it. Extend via
-# SELFBENCH_EXTRA_AGENT_HOSTS (comma-separated) for self-hosted endpoints.
-_PROVIDER_API_HOSTS: dict[str, tuple[str, ...]] = {
-    "openai": ("api.openai.com",),
-    # Subscription-authenticated Codex backend; Pi reads its token from the
-    # auth.json installed by SELFBENCH_PI_AUTH_JSON_FILE rather than an env key.
-    "openai-codex": ("chatgpt.com", "api.openai.com"),
-    "anthropic": ("api.anthropic.com",),
-    "fireworks": ("api.fireworks.ai",),
-    "openrouter": ("openrouter.ai",),
-    "google": ("generativelanguage.googleapis.com",),
-    "dari-prod": ("routing.dari.dev",),
-}
-
-_PROVIDER_ENV_KEYS: dict[str, str] = {
-    "fireworks": "FIREWORKS_API_KEY",
-    # Dari routing endpoint; provider is defined via SELFBENCH_PI_MODELS_JSON_FILE
-    # (see harbor_pi.py) and its models.json references this key with !printenv.
-    "dari-prod": "DARI_ROUTER_KEY",
-}
-
-# Default Harbor execution environments. Public selfbench validation runs on
-# Modal so a large public task set can fan out without contending for a single
-# Docker daemon; ``docker`` (and ``local`` where Harbor supports it) remain
-# available as explicit overrides for offline/local debugging. Agent rollouts
-# still default to Docker, unchanged, because they are run deliberately and
-# in smaller batches.
+# Public validation defaults to Modal so larger task sets can fan out. Docker
+# remains available as an explicit local/offline override.
 DEFAULT_VALIDATION_ENVIRONMENT = "modal"
-DEFAULT_ROLLOUT_ENVIRONMENT = "docker"
-
 
 def validate_task(
     task: Task,
@@ -89,7 +55,9 @@ def validate_task(
         quiet=not verbose,
         log_path=log_path,
     )
-    return validation_result(task, base, oracle)
+    result = validation_result(task, base, oracle)
+    result["harbor"]["task_dir"] = str(harbor_task.resolve())
+    return result
 
 
 def is_currently_valid(task: Task, results_root: Path) -> bool:
@@ -223,60 +191,6 @@ def validate_batch(
 
     outcomes.sort(key=lambda o: o.task_id)
     return outcomes
-
-
-def run_task(
-    task: Task,
-    local_repo: Path,
-    provider: str,
-    model: str,
-    thinking: str | None = None,
-    *,
-    agent: str = "pi",
-    harbor_root: Path = Path("harbor-tasks"),
-    jobs_root: Path = Path("harbor-jobs"),
-    environment: str = DEFAULT_ROLLOUT_ENVIRONMENT,
-    rebuild: bool = False,
-    verbose: bool = True,
-) -> dict:
-    """Run an agent with Harbor and create a lightweight local result index."""
-    harbor_task = build_harbor_task(
-        task,
-        local_repo,
-        harbor_root,
-        overwrite=rebuild,
-    )
-    model_name = f"{provider}/{model}"
-    kwargs = {"thinking": thinking} if thinking else None
-    agent_env: dict[str, str] = {}
-    env_key = _PROVIDER_ENV_KEYS.get(provider)
-    if env_key and os.environ.get(env_key):
-        agent_env[env_key] = os.environ[env_key]
-    extra_hosts = list(_PROVIDER_API_HOSTS.get(provider, ()))
-    extra_hosts.extend(
-        h.strip()
-        for h in os.environ.get("SELFBENCH_EXTRA_AGENT_HOSTS", "").split(",")
-        if h.strip()
-    )
-    if task.agent_network_mode == "allowlist" and not extra_hosts:
-        raise ValueError(
-            f"no API host known for provider {provider!r}; the sealed agent phase would block "
-            "its model. Set SELFBENCH_EXTRA_AGENT_HOSTS to the provider endpoint host."
-        )
-    run = run_harbor_task(
-        harbor_task,
-        jobs_root,
-        agent=agent,
-        model=model_name,
-        environment=environment,
-        agent_kwargs=kwargs,
-        agent_env=agent_env or None,
-        allow_agent_hosts=extra_hosts,
-        quiet=not verbose,
-    )
-    result = compatibility_result(task, run, run_kind="rollout")
-    result.update({"provider": provider, "model": model, "thinking": thinking})
-    return result
 
 
 def save_result(result: dict, results_root: Path, subdir: str) -> Path:

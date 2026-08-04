@@ -38,8 +38,8 @@ class Task:
     # Network policy while the coding agent actually works the task. Sealed by
     # default: agents otherwise clone the upstream repository or fetch the
     # source PR diff and copy the reference implementation. Provider API hosts
-    # are added per rollout by the runner, so the agent can reach its model and
-    # nothing else.
+    # are supplied to Harbor when the eval is run, so the agent can reach its
+    # model and nothing else.
     agent_network_mode: str = "allowlist"
     agent_allowed_hosts: list[str] = field(default_factory=list)
     # The verifier re-runs setup_cmd before the held-out tests, so it needs the

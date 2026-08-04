@@ -197,55 +197,6 @@ def load_harbor_run(job_dir: Path) -> HarborRun:
     return HarborRun(job_dir, trial_dir, job_result, trial_result)
 
 
-def compatibility_result(task: Task, run: HarborRun, *, run_kind: str) -> dict[str, Any]:
-    """Create a small review/audit index that points to canonical Harbor artifacts."""
-    rewards = run.rewards
-    exception = run.exception
-    agent_info = run.trial_result.get("agent_info")
-    if not isinstance(agent_info, dict):
-        agent_info = {}
-    model_info = agent_info.get("model_info")
-    if not isinstance(model_info, dict):
-        model_info = {}
-    reward = float(rewards.get("reward", 0))
-    agent_patch_path = run.trial_dir / "artifacts" / "opt" / "selfbench" / "agent.patch"
-    agent_patch = agent_patch_path.read_text(errors="replace") if agent_patch_path.is_file() else ""
-    return {
-        "result_schema_version": "harbor-1",
-        "run_id": str(run.trial_result.get("id") or run.trial_result.get("trial_name")),
-        "run_kind": run_kind,
-        "task_id": task.task_id,
-        "provider": model_info.get("provider"),
-        "model": model_info.get("name"),
-        "agent": agent_info.get("name"),
-        "agent_version": agent_info.get("version"),
-        "prompt_sha256": task.prompt_sha256,
-        "resolved": reward >= 1,
-        "reward": reward,
-        "rewards": rewards,
-        "failure_reasons": _failure_reasons(rewards, exception),
-        "fail_to_pass_passed": float(rewards.get("fail_to_pass", 0)) >= 1,
-        "pass_to_pass_passed": float(rewards.get("pass_to_pass", 0)) >= 1,
-        "agent_exit_ok": exception is None,
-        "agent_patch_applied": float(rewards.get("patch_applied", 0)) >= 1,
-        "agent_patch": agent_patch,
-        "duration_s": _duration_seconds(
-            run.trial_result.get("started_at"), run.trial_result.get("finished_at")
-        ),
-        "started_at": run.trial_result.get("started_at"),
-        "finished_at": run.trial_result.get("finished_at"),
-        "task_fingerprints": task.evaluation_fingerprints,
-        "harbor": {
-            "version_range": HARBOR_VERSION_RANGE,
-            "job_dir": str(run.job_dir),
-            "trial_dir": str(run.trial_dir),
-            "job_result": str(run.job_dir / "result.json"),
-            "trial_result": str(run.trial_dir / "result.json"),
-            "trajectory": str(run.trial_dir / "agent" / "trajectory.json"),
-        },
-    }
-
-
 def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[str, Any]:
     base_rewards = base.rewards
     gold_rewards = oracle.rewards
@@ -589,27 +540,6 @@ def _require_harbor() -> Path:
     if (major, minor) != (0, 20):
         raise RuntimeError(f"Harbor {HARBOR_VERSION_RANGE} is required, found {version}")
     return harbor
-
-
-def _failure_reasons(
-    rewards: dict[str, float | int], exception: dict[str, Any] | None
-) -> list[str]:
-    reasons: list[str] = []
-    if exception is not None:
-        reasons.append(
-            f"{exception.get('exception_type', 'Harbor error')}: "
-            f"{exception.get('exception_message', '')}".rstrip()
-        )
-    labels = {
-        "patch_applied": "agent patch did not apply",
-        "fail_to_pass": "fail-to-pass tests failed",
-        "pass_to_pass": "pass-to-pass tests failed",
-        "deterministic": "fail-to-pass tests were not repeatable",
-    }
-    for key, label in labels.items():
-        if float(rewards.get(key, 0)) < 1:
-            reasons.append(label)
-    return reasons
 
 
 def _duration_seconds(started_at: object, finished_at: object) -> float | None:

@@ -7,15 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from selfbench.cli import _model_slug
+from selfbench.cli import _harbor_run_command, _iter_task_dirs, build_parser
 from selfbench.harbor import HarborRun, build_harbor_task
 from selfbench.harbor_pi import PI_VERSION, _provider_error
 from selfbench.runner import (
-    DEFAULT_ROLLOUT_ENVIRONMENT,
     DEFAULT_VALIDATION_ENVIRONMENT,
     BatchValidationOutcome,
     is_currently_valid,
-    run_task,
     save_result,
     validate_batch,
     validate_task,
@@ -147,56 +145,11 @@ class HarborRunnerTest(unittest.TestCase):
         self.assertEqual([call.kwargs["agent"] for call in run.call_args_list], ["nop", "oracle"])
         self.assertTrue(result["valid"])
         self.assertTrue(result["checks"]["base_f2p_fails"])
-
-    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
-    @patch("selfbench.runner.run_harbor_task")
-    def test_rollout_delegates_agent_model_and_thinking_to_harbor(self, run, _build) -> None:
-        run.return_value = _fake_run(
-            self.root / "rollout",
-            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
-        )
-
-        result = run_task(
-            self.task,
-            self.root,
-            provider="openai",
-            model="gpt-test",
-            thinking="high",
-            agent="pi",
-            verbose=False,
-        )
-
-        self.assertEqual(run.call_args.kwargs["agent"], "pi")
-        self.assertEqual(run.call_args.kwargs["model"], "openai/gpt-test")
-        self.assertEqual(run.call_args.kwargs["agent_kwargs"], {"thinking": "high"})
-        self.assertTrue(result["resolved"])
-        self.assertEqual(result["result_schema_version"], "harbor-1")
-
-    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
-    @patch("selfbench.runner.run_harbor_task")
-    def test_rollout_preserves_nested_model_id_after_provider_prefix(self, run, _build) -> None:
-        run.return_value = _fake_run(
-            self.root / "rollout",
-            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
-        )
-
-        run_task(
-            self.task,
-            self.root,
-            provider="openrouter",
-            model="deepseek/deepseek-v4-flash",
-            agent="pi",
-            verbose=False,
-        )
-
-        self.assertEqual(
-            run.call_args.kwargs["model"],
-            "openrouter/deepseek/deepseek-v4-flash",
-        )
+        self.assertEqual(result["harbor"]["task_dir"], str(Path("/tmp/task").resolve()))
 
 
 class EnvironmentDefaultTest(unittest.TestCase):
-    """Validation defaults to Modal; rollouts keep the Docker default."""
+    """Validation defaults to Modal and accepts a Docker override."""
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -259,20 +212,6 @@ class EnvironmentDefaultTest(unittest.TestCase):
             [call.kwargs["environment"] for call in run.call_args_list],
             ["docker", "docker"],
         )
-
-    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
-    @patch("selfbench.runner.run_harbor_task")
-    def test_rollout_keeps_docker_default(self, run, _build) -> None:
-        run.return_value = _fake_run(
-            self.root / "rollout",
-            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
-        )
-
-        run_task(self.task, self.root, provider="openai", model="gpt-test", agent="pi", verbose=False)
-
-        self.assertEqual(DEFAULT_ROLLOUT_ENVIRONMENT, "docker")
-        self.assertEqual(run.call_args.kwargs["environment"], "docker")
-
 
 class ValidationSkipTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -496,7 +435,7 @@ class BatchValidationTest(unittest.TestCase):
             self.assertTrue((log_dir / f"{task.task_id}.log").is_file())
 
 
-class HarborCommandTest(unittest.TestCase):
+class HarborNativeCommandTest(unittest.TestCase):
     """The modal default must reach the harbor CLI as `--env modal`."""
 
     @patch("selfbench.harbor.load_harbor_run")
@@ -619,11 +558,36 @@ class ResultHistoryTest(unittest.TestCase):
                 save_result(result, results, "provider__model")
 
 
-class CliPathTest(unittest.TestCase):
-    def test_model_slug_keeps_model_tail_and_rejects_path_unsafe_provider(self) -> None:
-        self.assertEqual(_model_slug("openai", "org/model"), "openai__model")
-        with self.assertRaisesRegex(ValueError, "provider"):
-            _model_slug("../provider", "model")
+class HarborCommandTest(unittest.TestCase):
+    def test_cli_does_not_expose_run_or_report_commands(self) -> None:
+        commands = build_parser()._subparsers._group_actions[0].choices
+
+        self.assertNotIn("run", commands)
+        self.assertNotIn("report", commands)
+
+    def test_uses_harbor_directly_with_the_current_pi_adapter(self) -> None:
+        command = _harbor_run_command(Path("harbor-tasks/example task"))
+
+        self.assertIn("harbor run", command)
+        self.assertIn("selfbench.harbor_pi:SelfbenchPi", command)
+        self.assertIn("openai/gpt-4.1", command)
+        self.assertIn("api.openai.com", command)
+        self.assertIn("'harbor-tasks/example task'", command)
+        self.assertNotIn("selfbench run", command)
+
+    def test_discovers_one_task_or_every_direct_child(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            first = root / "first"
+            second = root / "second"
+            ignored = root / "notes"
+            for path in (first, second, ignored):
+                path.mkdir()
+            (first / "task.json").write_text("{}")
+            (second / "task.json").write_text("{}")
+
+            self.assertEqual(_iter_task_dirs([str(first)]), [first])
+            self.assertEqual(_iter_task_dirs([str(root)]), [first, second])
 
 
 class InfrastructureErrorSurfacingTest(unittest.TestCase):
@@ -772,25 +736,3 @@ class SealedAgentNetworkTest(unittest.TestCase):
         self.assertIn('"api.example.com"', toml)
         self.assertIn("[verifier]", toml)
         self.assertIn(chr(39)+chr(39), toml) if False else self.assertIn("[verifier]", toml)
-
-    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
-    @patch("selfbench.runner.run_harbor_task")
-    def test_rollout_allowlists_only_the_provider_host(self, run, _build) -> None:
-        run.return_value = _fake_run(
-            Path(tempfile.mkdtemp()) / "r",
-            {"reward": 1, "patch_applied": 1, "fail_to_pass": 1, "pass_to_pass": 1, "deterministic": 1},
-        )
-        with tempfile.TemporaryDirectory() as raw:
-            run_task(self._task(Path(raw)), Path(raw), provider="fireworks",
-                     model="accounts/fireworks/models/x", agent="pi", verbose=False)
-        hosts = run.call_args.kwargs["allow_agent_hosts"]
-        self.assertIn("api.fireworks.ai", hosts)
-        self.assertNotIn("github.com", hosts)
-
-    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/task"))
-    @patch("selfbench.runner.run_harbor_task")
-    def test_unknown_provider_fails_loudly_rather_than_silently_blocking(self, run, _build) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            with self.assertRaisesRegex(ValueError, "no API host known"):
-                run_task(self._task(Path(raw)), Path(raw), provider="mystery",
-                         model="m", agent="pi", verbose=False)

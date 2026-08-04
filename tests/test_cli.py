@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from selfbench.cli import _positive_int, build_parser, cmd_run, cmd_validate, cmd_validate_batch
+from selfbench.cli import _positive_int, build_parser, cmd_validate, cmd_validate_batch
 
 
 def _valid_result(task_id: str, run_id: str, *, valid: bool = True) -> dict:
@@ -30,6 +30,7 @@ def _valid_result(task_id: str, run_id: str, *, valid: bool = True) -> dict:
         "agent_patch_applied": valid,
         "agent_patch": "",
         "task_fingerprints": {},
+        "harbor": {"task_dir": f"/tmp/harbor-tasks/{task_id}"},
     }
 
 
@@ -65,7 +66,7 @@ class CliEnvironmentDefaultTest(unittest.TestCase):
 
     def _validate_args(self, env: str | None) -> SimpleNamespace:
         return SimpleNamespace(
-            task_dir=str(self.task_dir),
+            task_dirs=[str(self.task_dir)],
             repo=str(self.repo),
             results=str(self.root / "results"),
             harbor_tasks=str(self.root / "harbor-tasks"),
@@ -73,6 +74,7 @@ class CliEnvironmentDefaultTest(unittest.TestCase):
             env=env,
             rebuild=False,
             quiet=True,
+            json=False,
         )
 
     @patch("selfbench.cli.validate_task")
@@ -92,31 +94,6 @@ class CliEnvironmentDefaultTest(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(validate.call_args.kwargs["environment"], "docker")
-
-    @patch("selfbench.cli.run_task")
-    def test_run_without_env_keeps_docker_default(self, run) -> None:
-        result = _valid_result("example-task", "run-2")
-        result.update({"thinking": None, "provider": "openai", "model": "gpt-test"})
-        run.return_value = result
-
-        args = SimpleNamespace(
-            task_dir=str(self.task_dir),
-            repo=str(self.repo),
-            results=str(self.root / "results"),
-            harbor_tasks=str(self.root / "harbor-tasks"),
-            jobs=str(self.root / "harbor-jobs"),
-            env=None,
-            rebuild=False,
-            quiet=True,
-            provider="openai",
-            model="gpt-test",
-            thinking=None,
-            agent="pi",
-        )
-        rc = cmd_run(args)
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(run.call_args.kwargs["environment"], "docker")
 
     def test_parser_validate_env_flag_accepts_docker(self) -> None:
         parser = build_parser()

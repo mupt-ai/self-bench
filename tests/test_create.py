@@ -31,7 +31,7 @@ class BuildCreateRequestTest(unittest.TestCase):
         result = build_create_request([])
         self.assertIn("deterministic nop/oracle validation and static audit are allowed", result)
         self.assertIn("Do not run benchmark solver trials", result)
-        self.assertIn("never invoke selfbench run", result)
+        self.assertIn("start Harbor with a coding agent/model", result)
         self.assertIn("coding agent/model unless the user explicitly asks", result)
 
     def test_joins_request_segments(self) -> None:
