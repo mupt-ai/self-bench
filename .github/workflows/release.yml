@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  pypi:
+    if: github.repository == 'mupt-ai/selfbench'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/selfbench
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Verify release version
+        run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
+      - run: uv build
+      - run: uv publish --trusted-publishing always

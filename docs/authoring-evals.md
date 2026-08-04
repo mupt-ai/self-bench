@@ -108,7 +108,7 @@ Avoid tests coupled to helpers, fields, constants, archive bytes, payload keys, 
 When `trace_source` points to an original coding session, selfbench can generate a redacted user-voice request:
 
 ```bash
-uv run selfbench generate-prompt tasks/example-fix \
+selfbench generate-prompt tasks/example-fix \
   --provider openai \
   --model YOUR_MODEL \
   --confirm-source-upload \
@@ -120,8 +120,8 @@ This sends the redacted source conversation to the selected model provider. It d
 ## Validate and audit
 
 ```bash
-uv run selfbench validate tasks/example-fix --repo ~/code/my-project --env docker
-uv run selfbench audit tasks/example-fix --results results --strict
+selfbench validate tasks/example-fix --repo ~/code/my-project --env docker
+selfbench audit tasks/example-fix --results results --strict
 ```
 
 Validation generates `harbor-tasks/example-fix/` and runs Harbor's `nop` and `oracle` agents in separate environments. The command above runs locally with Docker; omit `--env docker` after installing and authenticating Modal. The static audit checks prompt provenance, patch separation, protected test paths, likely solution leakage, validation freshness, and test coupling.

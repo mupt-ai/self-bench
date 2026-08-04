@@ -212,7 +212,7 @@ Audit is independent of coding-model selection. Fix any blocker about gold-coupl
 Do not run coding models as part of task creation unless the user explicitly requests them. When solver signal is wanted, choose the provider/model set for that evaluation and run it separately:
 
 ```bash
-uv run harbor run \
+harbor run \
   --path harbor-tasks/TASK_ID \
   --agent pi \
   --model openai/gpt-5.6-sol \

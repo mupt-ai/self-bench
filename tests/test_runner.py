@@ -574,6 +574,8 @@ class HarborCommandTest(unittest.TestCase):
         self.assertIn("thinking=xhigh", command)
         self.assertIn("api.openai.com", command)
         self.assertIn("'harbor-tasks/example task'", command)
+        self.assertTrue(command.startswith("harbor run "))
+        self.assertNotIn("uv run harbor", command)
         self.assertNotIn("selfbench run", command)
 
     def test_discovers_one_task_or_every_direct_child(self) -> None:
