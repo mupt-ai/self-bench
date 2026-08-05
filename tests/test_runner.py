@@ -103,6 +103,25 @@ class HarborTaskBuildTest(unittest.TestCase):
         with self.assertRaisesRegex(FileExistsError, "pass --force"):
             build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
 
+    def test_pins_the_snapshot_corepack_package_manager(self) -> None:
+        (self.repo / "package.json").write_text('{"packageManager":"pnpm@9.6.0"}\n')
+        subprocess.run(["git", "-C", str(self.repo), "add", "package.json"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "pin pnpm"], check=True)
+        self.task.base_commit = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+        dockerfile = (output / "environment" / "Dockerfile").read_text()
+        manifest = json.loads((output / ".selfbench-manifest.json").read_text())
+        self.assertIn("COREPACK_HOME=/usr/local/share/corepack", dockerfile)
+        self.assertIn("corepack prepare pnpm@9.6.0 --activate", dockerfile)
+        self.assertEqual(manifest["package_manager"], "pnpm@9.6.0")
+
 
 class HarborRunnerTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -406,6 +425,65 @@ class BatchValidationTest(unittest.TestCase):
         self.assertTrue((self.root / "results" / self.tasks[1].task_id / "validation" / "result.json").is_file())
 
     @patch("selfbench.runner.validate_task")
+    def test_repeated_setup_failures_block_remaining_repo_tasks(self, validate) -> None:
+        for task in self.tasks:
+            task.repo = "example/shared"
+
+        def setup_failure(task, local_repo, **kwargs):  # noqa: ARG001 - mock forwards all kwargs
+            return {
+                "result_schema_version": "harbor-1",
+                "run_id": f"run-{task.task_id}",
+                "run_kind": "validation",
+                "task_id": task.task_id,
+                "valid": False,
+                "checks": {},
+                "setup_failures": {"oracle": "ERR_PNPM_LOCKFILE_CONFIG_MISMATCH"},
+                "task_fingerprints": task.evaluation_fingerprints,
+                "duration_s": 1.0,
+            }
+
+        validate.side_effect = setup_failure
+        outcomes = validate_batch(
+            self.tasks,
+            lambda task: self.root / "repo",
+            results_root=self.root / "results",
+            environment="modal",
+            concurrency=1,
+        )
+
+        self.assertEqual(validate.call_count, 2)
+        self.assertEqual([outcome.status for outcome in outcomes].count("blocked"), 1)
+        blocked = next(outcome for outcome in outcomes if outcome.status == "blocked")
+        self.assertEqual(blocked.setup_failure_signature, "ERR_PNPM_LOCKFILE_CONFIG_MISMATCH")
+
+    @patch("selfbench.runner.preflight_harbor_task")
+    @patch("selfbench.runner.build_harbor_task", return_value=Path("/tmp/harbor-task"))
+    @patch("selfbench.runner.validate_task")
+    def test_preflight_builds_images_before_remote_validation(self, validate, build, preflight) -> None:
+        validate.return_value = {
+            "result_schema_version": "harbor-1",
+            "run_id": "run",
+            "run_kind": "validation",
+            "task_id": self.tasks[0].task_id,
+            "valid": True,
+            "checks": {},
+            "task_fingerprints": self.tasks[0].evaluation_fingerprints,
+            "duration_s": 1.0,
+        }
+
+        validate_batch(
+            self.tasks[:1],
+            lambda task: self.repos[task.repo],
+            results_root=self.root / "results",
+            environment="modal",
+            preflight=True,
+        )
+
+        build.assert_called_once()
+        preflight.assert_called_once_with(Path("/tmp/harbor-task"), log_path=None)
+        self.assertFalse(validate.call_args.kwargs["rebuild"])
+
+    @patch("selfbench.runner.validate_task")
     def test_batch_writes_per_task_logs(self, validate) -> None:
         validate.side_effect = [
             {
@@ -643,6 +721,38 @@ class InfrastructureErrorSurfacingTest(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertEqual(
             result["infrastructure_errors"], {"oracle": "RemoteError: Image build failed"}
+        )
+
+    def test_validation_result_records_setup_failure_signature(self) -> None:
+        from selfbench.harbor import validation_result
+
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            task_dir = root / "task"
+            task_dir.mkdir()
+            (task_dir / "prompt.md").write_text("Fix the behavior.")
+            (task_dir / "test.patch").write_text("test patch")
+            (task_dir / "gold.patch").write_text("gold patch")
+            task = Task(
+                task_id="setup-task", repo="example/repo", base_commit="abc123", workdir=".",
+                setup_cmd="setup", test_cmd="run {tests}", fail_to_pass=["f2p"],
+                pass_to_pass=["p2p"], test_paths=["tests"], dir=task_dir,
+            )
+            base = _fake_run(root / "base", {"patch_applied": 1, "setup_completed": 0})
+            oracle = _fake_run(root / "oracle", {"patch_applied": 1, "setup_completed": 0})
+            for run in (base, oracle):
+                verifier = run.trial_dir / "verifier"
+                verifier.mkdir()
+                (verifier / "test-stdout.txt").write_text("ERR_PNPM_LOCKFILE_CONFIG_MISMATCH\n")
+
+            result = validation_result(task, base, oracle)
+
+        self.assertEqual(
+            result["setup_failures"],
+            {
+                "base": "ERR_PNPM_LOCKFILE_CONFIG_MISMATCH",
+                "oracle": "ERR_PNPM_LOCKFILE_CONFIG_MISMATCH",
+            },
         )
 
     def test_validation_result_omits_key_without_exceptions(self) -> None:
