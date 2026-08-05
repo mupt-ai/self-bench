@@ -124,6 +124,20 @@ class TaskPromptSourceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "does not match prompt_generation"):
             load_task(self.task_dir)
 
+    def test_rejects_invalid_toolchain_configuration(self) -> None:
+        (self.task_dir / "prompt.md").write_text("Standalone eval prompt")
+        invalid = (
+            ("uv", "non-empty list"),
+            ([], "non-empty list"),
+            (["uv", "uv"], "must not contain duplicates"),
+            (["cobol"], "unknown toolchain"),
+        )
+        for toolchains, message in invalid:
+            with self.subTest(toolchains=toolchains):
+                self.write_task(prompt_source=None, toolchains=toolchains)
+                with self.assertRaisesRegex(ValueError, message):
+                    load_task(self.task_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

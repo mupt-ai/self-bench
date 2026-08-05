@@ -168,6 +168,8 @@ Use at least three meaningful pass-to-pass entries when possible. Avoid broad su
 
 Whenever a task is rejected or removed at any stage, move its directory into `tasks/rejected/` (keeping `task.json` with its `source_pr`) instead of deleting it, so later sessions do not retry the candidate. Do not start Harbor with a coding agent/model; solver trials are a separate operation that requires an explicit user request.
 
+Task images include `uv`, `bun`, `go`, and `node` by default. Set `toolchains` in `task.json` to select from those tools plus `python` and `rust`, for example `"toolchains": ["python"]`. Selfbench includes toolchain dependencies automatically. Selecting only what the eval needs reduces image build time. Increase `timeout_setup` when a cold compiled build needs more than 900 seconds.
+
 Common command templates include:
 
 | Project | Setup | Test command |
