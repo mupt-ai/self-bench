@@ -28,6 +28,9 @@ selfbench create --repo ~/code/my-project \
   "Create an eval from PR 123."
 ```
 
+For a larger batch, a local discovery parent can rank provenance-backed candidates and fan each
+assigned pull request out to a fresh Modal Sandbox. See [Modal generation](docs/modal-generation.md).
+
 Creation writes authoring files to `tasks/TASK_ID` under your current directory. Validation generates the runnable Harbor task at `harbor-tasks/TASK_ID`.
 
 ## Validate
