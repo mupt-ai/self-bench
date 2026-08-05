@@ -170,14 +170,24 @@ Whenever a task is rejected or removed at any stage, move its directory into `ta
 
 Task images include `uv`, `bun`, `go`, and `node` by default. Set `toolchains` in `task.json` to select from those tools plus `python` and `rust`, for example `"toolchains": ["python"]`. Selfbench includes toolchain dependencies automatically. Selecting only what the eval needs reduces image build time. Increase `timeout_setup` when a cold compiled build needs more than 900 seconds.
 
-Common command templates include:
+### Native JavaScript setup contract
 
-| Project | Setup | Test command |
-|---|---|---|
-| Python with uv | `uv sync --group dev --frozen` | `uv run pytest -q {tests}` |
-| Go | `go build ./...` | `go test {tests}` |
-| Bun | `bun install --frozen-lockfile` | `bun test {tests}` |
-| npm | `npm ci` | `npm test -- {tests}` |
+For a JS task, inspect the **exact base snapshot at `workdir`** before authoring `task.json`. Select the matching toolchain (`node` for npm/pnpm/Yarn; `bun` for Bun), require `package.json#packageManager` to name one exact manager/runtime version, and keep exactly one matching native lockfile. Selfbench records that snapshot profile (including the manifest and lockfile hashes) in the generated task and provisions that manager version in both images. It does not infer a manager from an ambiguous checkout.
+
+Use the repository's native manager and an immutable install in `setup_cmd`; keep any required build, code-generation, or other setup steps after it. Canonical commands are:
+
+| Project | Required metadata | Immutable setup | Test command |
+|---|---|---|---|
+| npm | `"packageManager": "npm@x.y.z"` + `package-lock.json` or `npm-shrinkwrap.json` | `npm ci` | `npm test -- {tests}` |
+| pnpm | `"packageManager": "pnpm@x.y.z"` + `pnpm-lock.yaml` | `pnpm install --frozen-lockfile` | `pnpm test -- {tests}` |
+| Yarn | `"packageManager": "yarn@x.y.z"` + `yarn.lock` | `yarn install --immutable` | `yarn test -- {tests}` |
+| Bun | `"packageManager": "bun@x.y.z"` + `bun.lock` or `bun.lockb` | `bun install --frozen-lockfile` | `bun test {tests}` |
+| Python with uv | n/a | `uv sync --group dev --frozen` | `uv run pytest -q {tests}` |
+| Go | n/a | `go build ./...` | `go test {tests}` |
+
+Do not use bare mutable installs (`npm install`, `pnpm install` without `--frozen-lockfile`, `yarn install` without `--immutable`, or `bun install` without `--frozen-lockfile`). Pin declared runtime and manager versions; do not use `latest`, tags, or ranges. Corepack is only for pnpm/Yarn, never npm or Bun.
+
+If a checkout has neither a package-manager declaration nor a recognized lockfile, it stays legacy-compatible and setup remains explicit/task-specific. If it has partial or contradictory metadata (missing declaration, declaration/lockfile mismatch, multiple lockfiles, missing required toolchain, or `setup_cmd` plainly invoking another manager), reject or repair the task before compilation. Always locally preflight the generated Docker images before spending Modal validation jobs; `validate-batch` does this for per-repository canaries unless explicitly run with `--no-preflight`.
 
 ## Step 5: validate and statically audit
 

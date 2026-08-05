@@ -81,6 +81,8 @@ class HarborTaskBuildTest(unittest.TestCase):
         self.assertTrue((output / "tests" / "test.sh").is_file())
         self.assertNotIn("source.jsonl", {path.name for path in output.rglob("*")})
         self.assertFalse((output / "task.json").exists())
+        manifest = json.loads((output / ".selfbench-manifest.json").read_text())
+        self.assertIsNone(manifest["package_manager_profile"])
 
         config = (output / "task.toml").read_text()
         self.assertIn('schema_version = "1.4"', config)
@@ -103,24 +105,210 @@ class HarborTaskBuildTest(unittest.TestCase):
         with self.assertRaisesRegex(FileExistsError, "pass --force"):
             build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
 
-    def test_pins_the_snapshot_corepack_package_manager(self) -> None:
-        (self.repo / "package.json").write_text('{"packageManager":"pnpm@9.6.0"}\n')
-        subprocess.run(["git", "-C", str(self.repo), "add", "package.json"], check=True)
-        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "pin pnpm"], check=True)
+    def _commit_js_snapshot(
+        self,
+        *,
+        package_manager: str | None,
+        lockfiles: dict[str, str],
+        setup_cmd: str,
+        toolchains: list[str] | None,
+        workdir: str = ".",
+    ) -> None:
+        snapshot_dir = self.repo / workdir
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        if package_manager is not None:
+            (snapshot_dir / "package.json").write_text(
+                json.dumps({"packageManager": package_manager}) + "\n"
+            )
+        for name, content in lockfiles.items():
+            (snapshot_dir / name).write_text(content)
+        subprocess.run(["git", "-C", str(self.repo), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "JS snapshot"], check=True)
         self.task.base_commit = subprocess.run(
             ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
             text=True,
             capture_output=True,
             check=True,
         ).stdout.strip()
+        self.task.workdir = workdir
+        self.task.setup_cmd = setup_cmd
+        self.task.toolchains = toolchains
+
+    def _reset_snapshot(self) -> None:
+        subprocess.run(["git", "-C", str(self.repo), "reset", "--hard", self.commit], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "clean", "-fdx"], check=True)
+
+    def test_compiles_each_native_package_manager_profile(self) -> None:
+        cases = (
+            ("npm", "npm@11.1.0", "package-lock.json", "npm ci", ["node"], "npm install --global"),
+            ("pnpm", "pnpm@9.6.0", "pnpm-lock.yaml", "pnpm install --frozen-lockfile", ["node"], "corepack install --global pnpm@9.6.0"),
+            ("yarn", "yarn@4.5.0", "yarn.lock", "yarn install --immutable", ["node"], "corepack install --global yarn@4.5.0"),
+            ("bun", "bun@1.1.42", "bun.lock", "bun install --frozen-lockfile", ["bun"], "bun-v1.1.42"),
+        )
+        for manager, specifier, lockfile, setup, toolchains, marker in cases:
+            with self.subTest(manager=manager):
+                self._reset_snapshot()
+                self._commit_js_snapshot(
+                    package_manager=specifier,
+                    lockfiles={lockfile: "lockfile\n"},
+                    setup_cmd=setup,
+                    toolchains=toolchains,
+                )
+                output = build_harbor_task(
+                    self.task,
+                    self.repo,
+                    self.root / f"harbor-tasks-{manager}",
+                )
+
+                dockerfile = (output / "environment" / "Dockerfile").read_text()
+                manifest = json.loads((output / ".selfbench-manifest.json").read_text())
+                profile = manifest["package_manager_profile"]
+                self.assertEqual(manifest["package_manager"], specifier)
+                self.assertEqual(profile["manager"], manager)
+                self.assertEqual(profile["version"], specifier.partition("@")[2])
+                self.assertEqual(profile["lockfiles"][0]["path"], lockfile)
+                self.assertIn(marker, dockerfile)
+                if manager in {"pnpm", "yarn"}:
+                    self.assertIn("COREPACK_HOME=/usr/local/share/corepack", dockerfile)
+                if manager == "bun":
+                    self.assertIn("SHASUMS256.txt", dockerfile)
+
+    def test_compiles_supported_alternative_native_lockfiles(self) -> None:
+        cases = (
+            ("npm@11.1.0", "npm-shrinkwrap.json", "npm ci", ["node"]),
+            ("bun@1.1.42", "bun.lockb", "bun install --frozen-lockfile", ["bun"]),
+        )
+        for specifier, lockfile, setup, toolchains in cases:
+            with self.subTest(lockfile=lockfile):
+                self._reset_snapshot()
+                self._commit_js_snapshot(
+                    package_manager=specifier,
+                    lockfiles={lockfile: "lockfile\n"},
+                    setup_cmd=setup,
+                    toolchains=toolchains,
+                )
+                output = build_harbor_task(
+                    self.task,
+                    self.repo,
+                    self.root / f"harbor-tasks-{lockfile}",
+                )
+                manifest = json.loads((output / ".selfbench-manifest.json").read_text())
+                self.assertEqual(
+                    manifest["package_manager_profile"]["lockfiles"][0]["path"],
+                    lockfile,
+                )
+
+    def test_package_json_without_native_metadata_keeps_legacy_behavior(self) -> None:
+        (self.repo / "package.json").write_text('{"name":"legacy-project"}\n')
+        subprocess.run(["git", "-C", str(self.repo), "add", "package.json"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "legacy package metadata"], check=True)
+        self.task.base_commit = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+        self.task.setup_cmd = "true"
+        self.task.toolchains = ["node"]
 
         output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
-
-        dockerfile = (output / "environment" / "Dockerfile").read_text()
         manifest = json.loads((output / ".selfbench-manifest.json").read_text())
-        self.assertIn("COREPACK_HOME=/usr/local/share/corepack", dockerfile)
-        self.assertIn("corepack prepare pnpm@9.6.0 --activate", dockerfile)
-        self.assertEqual(manifest["package_manager"], "pnpm@9.6.0")
+
+        self.assertIsNone(manifest["package_manager_profile"])
+        self.assertIsNone(manifest["package_manager"])
+
+    def test_profiles_are_read_from_the_snapshot_workdir_and_invalidate_reuse(self) -> None:
+        self._commit_js_snapshot(
+            package_manager="pnpm@9.6.0",
+            lockfiles={"pnpm-lock.yaml": "lockfile\n"},
+            setup_cmd="pnpm install --frozen-lockfile && pnpm run build",
+            toolchains=["node"],
+            workdir="packages/client",
+        )
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+        manifest_path = output / ".selfbench-manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        self.assertEqual(
+            manifest["package_manager_profile"]["lockfiles"][0]["path"],
+            "packages/client/pnpm-lock.yaml",
+        )
+        manifest["package_manager_profile"]["lockfiles"][0]["sha256"] = "stale"
+        manifest_path.write_text(json.dumps(manifest))
+
+        with self.assertRaisesRegex(FileExistsError, "not current"):
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+    def test_rejects_ambiguous_or_incomplete_js_metadata(self) -> None:
+        cases = (
+            ("pnpm@9.6.0", {"package-lock.json": "{}"}, "pnpm install --frozen-lockfile", ["node"], "conflicts"),
+            ("npm@11.1.0", {"package-lock.json": "{}", "yarn.lock": "lock"}, "npm ci", ["node"], "conflicting"),
+            (None, {"pnpm-lock.yaml": "lock"}, "pnpm install --frozen-lockfile", ["node"], "without package.json"),
+            ("npm@11.1.0", {}, "npm ci", ["node"], "no npm lockfile"),
+            ("npm@latest", {"package-lock.json": "{}"}, "npm ci", ["node"], "exact x.y.z version"),
+            ("npm@11.1.0+sha256.test", {"package-lock.json": "{}"}, "npm ci", ["node"], "exact x.y.z version"),
+            ("bun@1.1.42+sha256.test", {"bun.lock": "lock"}, "bun install --frozen-lockfile", ["bun"], "exact x.y.z version"),
+        )
+        for package_manager, lockfiles, setup, toolchains, error in cases:
+            with self.subTest(package_manager=package_manager, lockfiles=lockfiles):
+                self._reset_snapshot()
+                self._commit_js_snapshot(
+                    package_manager=package_manager,
+                    lockfiles=lockfiles,
+                    setup_cmd=setup,
+                    toolchains=toolchains,
+                )
+                with self.assertRaisesRegex(ValueError, error):
+                    build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+    def test_rejects_toolchain_and_setup_manager_conflicts(self) -> None:
+        self._commit_js_snapshot(
+            package_manager="pnpm@9.6.0",
+            lockfiles={"pnpm-lock.yaml": "lock"},
+            setup_cmd="pnpm install --frozen-lockfile",
+            toolchains=["bun"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires the 'node' toolchain"):
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+
+        self._reset_snapshot()
+        self._commit_js_snapshot(
+            package_manager="bun@1.1.42",
+            lockfiles={"bun.lock": "lock"},
+            setup_cmd="bun install --frozen-lockfile",
+            toolchains=["node"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires the 'bun' toolchain"):
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks-bun")
+
+        self._reset_snapshot()
+        self._commit_js_snapshot(
+            package_manager="pnpm@9.6.0",
+            lockfiles={"pnpm-lock.yaml": "lock"},
+            setup_cmd="npm ci",
+            toolchains=["node"],
+        )
+        with self.assertRaisesRegex(ValueError, "setup_cmd invokes npm"):
+            build_harbor_task(self.task, self.repo, self.root / "harbor-tasks-other-manager")
+
+    def test_rejects_mutable_native_install_commands(self) -> None:
+        cases = (
+            ("npm@11.1.0", "package-lock.json", "npm install", "mutable npm install"),
+            ("pnpm@9.6.0", "pnpm-lock.yaml", "pnpm install", "mutable pnpm install"),
+            ("yarn@4.5.0", "yarn.lock", "yarn install", "mutable yarn install"),
+            ("bun@1.1.42", "bun.lock", "bun install", "mutable bun install"),
+        )
+        for specifier, lockfile, setup, error in cases:
+            with self.subTest(specifier=specifier):
+                self._reset_snapshot()
+                manager = specifier.partition("@")[0]
+                self._commit_js_snapshot(
+                    package_manager=specifier,
+                    lockfiles={lockfile: "lock"},
+                    setup_cmd=setup,
+                    toolchains=["bun"] if manager == "bun" else ["node"],
+                )
+                with self.assertRaisesRegex(ValueError, error):
+                    build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
 
 
 class HarborRunnerTest(unittest.TestCase):
@@ -855,7 +1043,7 @@ class ConfigurableToolchainTest(unittest.TestCase):
 
         d = _toolchain_layers(None)
         self.assertEqual(DEFAULT_TOOLCHAINS, ("uv", "bun", "go", "node"))
-        for marker in ("astral.sh/uv", "bun.sh/install", "go.dev/dl", "nodejs.org"):
+        for marker in ("astral.sh/uv", "bun-v1.1.42", "SHASUMS256.txt", "go.dev/dl", "nodejs.org"):
             self.assertIn(marker, d)
         self.assertNotIn("rustup.rs", d)
 

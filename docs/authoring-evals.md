@@ -90,6 +90,14 @@ If a source session needs to be reconstructed into a standalone prompt, keep the
 
 Set `toolchains` when the default image does not fit the project, for example `"toolchains": ["python"]`. Selfbench includes dependencies such as `uv` automatically. Selecting only what the eval needs reduces image build time.
 
+### Native JavaScript setup
+
+At compilation Selfbench inspects the exact base snapshot at `workdir`. A JS project with package metadata must have exactly one native lockfile plus an exact `package.json#packageManager` pin. Supported profiles are npm (`package-lock.json` or `npm-shrinkwrap.json`), pnpm (`pnpm-lock.yaml`), Yarn (`yarn.lock`), and Bun (`bun.lock` or `bun.lockb`). The generated manifest records the resolved manager, version, and package/lockfile hashes; changing that profile makes an existing generated task stale.
+
+Choose the matching toolchain: `node` for npm, pnpm, and Yarn; `bun` for Bun. Use immutable setup commands: `npm ci`, `pnpm install --frozen-lockfile`, `yarn install --immutable`, or `bun install --frozen-lockfile`, followed by any repository-specific build or generation commands. Exact pnpm/Yarn versions use Corepack; exact npm versions are independently installed under a SelfBench prefix; exact Bun releases are checksum-verified official release assets. Corepack is not used to manage npm or Bun.
+
+Selfbench rejects conflicting/multiple lockfiles, absent or non-exact declarations, declaration/lockfile mismatch, incompatible selected toolchains, a plainly different manager in `setup_cmd`, and obvious mutable install forms. A checkout with no manager declaration and no recognized lockfile remains compatible with legacy explicit setup. Preflight the generated Docker images before remote Modal validation; `validate-batch` does this for its local canaries by default.
+
 ## Split the change
 
 Generate both patches from the same base and completed commit. The patches must not touch the same files.

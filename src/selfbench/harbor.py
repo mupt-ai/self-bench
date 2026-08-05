@@ -9,6 +9,7 @@ transcripts, task.json, and the gold patch never reach the agent.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -27,13 +28,26 @@ from .task import Task, resolve_toolchains
 
 HARBOR_SCHEMA_VERSION = "1.4"
 HARBOR_VERSION_RANGE = ">=0.20.1.dev202607200228,<0.21"
-ENVIRONMENT_COMPILER_REVISION = 4
+ENVIRONMENT_COMPILER_REVISION = 5
 _BASE_IMAGE = "ubuntu:24.04"
 _GO_VERSION = "1.25.0"
 _RUST_VERSION = "1.90.0"
 _PYTHON_VERSIONS = "3.12 3.11 3.13"
 _NODE_VERSION = "22.14.0"
+_NODE_NPM_VERSION = "10.9.2"
+_BUN_VERSION = "1.1.42"
 GENERATED_MANIFEST = ".selfbench-manifest.json"
+
+_JS_LOCKFILES = {
+    "npm": ("npm-shrinkwrap.json", "package-lock.json"),
+    "pnpm": ("pnpm-lock.yaml",),
+    "yarn": ("yarn.lock",),
+    "bun": ("bun.lock", "bun.lockb"),
+}
+_SUPPORTED_JS_MANAGERS = frozenset(_JS_LOCKFILES)
+_EXACT_PACKAGE_MANAGER_VERSION = re.compile(
+    r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +71,29 @@ class HarborRun:
         return value if isinstance(value, dict) else None
 
 
+@dataclass(frozen=True)
+class PackageManagerProfile:
+    """Resolved native JavaScript package-manager inputs from one snapshot."""
+
+    manager: str
+    version: str
+    specifier: str
+    package_json_sha256: str
+    lockfiles: tuple[tuple[str, str], ...]
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "manager": self.manager,
+            "version": self.version,
+            "specifier": self.specifier,
+            "package_json_sha256": self.package_json_sha256,
+            "lockfiles": [
+                {"path": path, "sha256": checksum}
+                for path, checksum in self.lockfiles
+            ],
+        }
+
+
 def build_harbor_task(
     task: Task,
     local_repo: Path,
@@ -70,7 +107,7 @@ def build_harbor_task(
     output_root = output_root.resolve()
     _check_commit(local_repo, task.base_commit)
     task_name = f"{_harbor_name(org)}/{_harbor_name(task.task_id)}"
-    package_manager = _package_manager_spec(local_repo, task.base_commit)
+    package_profile = _package_manager_profile(local_repo, task)
     destination = output_root / task.task_id
     if destination.exists() and not overwrite:
         manifest = _read_json(destination / GENERATED_MANIFEST)
@@ -78,6 +115,7 @@ def build_harbor_task(
             isinstance(manifest, dict)
             and manifest.get("environment_compiler_revision") == ENVIRONMENT_COMPILER_REVISION
             and manifest.get("task_fingerprints") == task.evaluation_fingerprints
+            and manifest.get("package_manager_profile") == _profile_manifest_value(package_profile)
         ):
             return destination
         raise FileExistsError(
@@ -87,7 +125,7 @@ def build_harbor_task(
     output_root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{task.task_id}-", dir=output_root))
     try:
-        _write_harbor_task(staging, task, local_repo, task_name, package_manager)
+        _write_harbor_task(staging, task, local_repo, task_name, package_profile)
         if destination.exists():
             shutil.rmtree(destination)
         staging.replace(destination)
@@ -257,7 +295,7 @@ def _write_harbor_task(
     task: Task,
     local_repo: Path,
     task_name: str,
-    package_manager: str | None,
+    package_profile: PackageManagerProfile | None,
 ) -> None:
     environment = root / "environment"
     solution = root / "solution"
@@ -274,8 +312,8 @@ def _write_harbor_task(
     (root / "instruction.md").write_text(task.prompt.rstrip() + "\n")
     (solution / "solve.sh").write_text(_solution_script(task))
     (tests / "test.sh").write_text(_test_script(task))
-    (environment / "Dockerfile").write_text(_environment_dockerfile(task, package_manager))
-    (tests / "Dockerfile").write_text(_verifier_dockerfile(task, package_manager))
+    (environment / "Dockerfile").write_text(_environment_dockerfile(task, package_profile))
+    (tests / "Dockerfile").write_text(_verifier_dockerfile(task, package_profile))
     os.chmod(solution / "solve.sh", 0o755)
     os.chmod(tests / "test.sh", 0o755)
     (root / "task.toml").write_text(_task_toml(task, task_name))
@@ -287,7 +325,8 @@ def _write_harbor_task(
                 "harbor_version_range": HARBOR_VERSION_RANGE,
                 "environment_compiler_revision": ENVIRONMENT_COMPILER_REVISION,
                 "task_id": task.task_id,
-                "package_manager": package_manager,
+                "package_manager": package_profile.specifier if package_profile else None,
+                "package_manager_profile": _profile_manifest_value(package_profile),
                 "task_fingerprints": task.evaluation_fingerprints,
                 "generated_at": datetime.now(UTC).isoformat(),
             },
@@ -372,7 +411,6 @@ _TOOLCHAIN_LAYERS = {
         "RUN curl -LsSf https://astral.sh/uv/install.sh \\\n"
         "    | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh"
     ),
-    "bun": "RUN curl -fsSL https://bun.sh/install | env BUN_INSTALL=/usr/local bash",
     "go": (
         'RUN arch="$(dpkg --print-architecture)" \\\n'
         f'    && curl -fsSL "https://go.dev/dl/go{_GO_VERSION}.linux-${{arch}}.tar.gz" \\\n'
@@ -403,14 +441,42 @@ _TOOLCHAIN_LAYERS = {
 }
 
 
-def _toolchain_layers(names: list[str] | None = None) -> str:
-    """Install the deterministic toolchain shared by the agent and the verifier.
+def _bun_layer(version: str) -> str:
+    """Install one exact Bun release from its checksum-published release assets."""
+    return f'''RUN arch="$(dpkg --print-architecture)" \\
+    && case "$arch" in \\
+        arm64) bun_arch=aarch64 ;; \\
+        amd64) bun_arch=x64 ;; \\
+        *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \\
+    esac \\
+    && bun_asset="bun-linux-${{bun_arch}}.zip" \\
+    && bun_url="https://github.com/oven-sh/bun/releases/download/bun-v{version}" \\
+    && curl -fsSL "$bun_url/SHASUMS256.txt" -o /tmp/bun-shasums.txt \\
+    && expected="$(awk -v asset="$bun_asset" '$2 == asset {{print $1}}' /tmp/bun-shasums.txt)" \\
+    && test -n "$expected" \\
+    && curl -fsSL "$bun_url/$bun_asset" -o /tmp/bun.zip \\
+    && printf '%s  %s\\n' "$expected" /tmp/bun.zip | sha256sum -c - \\
+    && unzip -q /tmp/bun.zip -d /tmp/bun \\
+    && install -m 0755 "/tmp/bun/bun-linux-${{bun_arch}}/bun" /usr/local/bin/bun \\
+    && rm -rf /tmp/bun /tmp/bun.zip /tmp/bun-shasums.txt \\
+    && test "$(bun --version)" = {shlex.quote(version)}'''
+
+
+def _toolchain_layers(
+    names: list[str] | None = None,
+    package_profile: PackageManagerProfile | None = None,
+) -> str:
+    """Install deterministic toolchains and the snapshot's native JS manager.
 
     ``PATH`` extends the image default instead of replacing it, so system
     binaries such as ``useradd`` in ``/usr/sbin`` stay reachable. Toolchains go
     to ``/usr/local`` so the unprivileged agent user can run them too.
     """
-    layers = "\n".join(_TOOLCHAIN_LAYERS[name] for name in resolve_toolchains(names))
+    resolved = resolve_toolchains(names)
+    layers = "\n".join(
+        _package_manager_toolchain_layer(name, package_profile)
+        for name in resolved
+    )
     return f"""FROM {_BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \\
@@ -427,25 +493,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
 """
 
 
-def _corepack_layer(package_manager: str | None) -> str:
-    """Persist the package manager the base snapshot declares via Corepack.
+def _package_manager_toolchain_layer(
+    name: str,
+    package_profile: PackageManagerProfile | None,
+) -> str:
+    """Return a selected toolchain, substituting a snapshot-pinned JS manager."""
+    if name == "bun":
+        return _bun_layer(
+            package_profile.version
+            if package_profile is not None and package_profile.manager == "bun"
+            else _BUN_VERSION
+        )
+    if name == "node" and package_profile is not None:
+        if package_profile.manager == "npm":
+            return _TOOLCHAIN_LAYERS[name] + "\n" + _npm_layer(package_profile.version)
+        if package_profile.manager in {"pnpm", "yarn"}:
+            return _TOOLCHAIN_LAYERS[name] + "\n" + _corepack_layer(package_profile)
+    return _TOOLCHAIN_LAYERS[name]
 
-    Corepack normally downloads a project's manager into ``/root/.cache`` on
-    first use. The setup layer is cache-mounted there, which lets distinct
-    images accidentally reuse that mutable state. Keeping the resolved binary
-    under ``/usr/local/share/corepack`` makes each generated image self-
-    contained and ensures that frozen installs use the lockfile's own manager.
-    """
-    if package_manager is None:
-        return ""
-    name, _, _ = package_manager.partition("@")
+
+def _corepack_layer(profile: PackageManagerProfile) -> str:
+    """Persist an exact pnpm or Yarn release using Corepack's supported path."""
     return f"""ENV COREPACK_HOME=/usr/local/share/corepack \\
     COREPACK_DEFAULT_TO_LATEST=0
-RUN mkdir -p "$COREPACK_HOME" \\
-    && corepack enable \\
-    && corepack prepare {shlex.quote(package_manager)} --activate \\
-    && corepack {shlex.quote(name)} --version \\
+RUN mkdir -p "$COREPACK_HOME" /usr/local/share/corepack/bin \\
+    && corepack enable --install-directory /usr/local/share/corepack/bin \\
+    && corepack install --global {shlex.quote(profile.specifier)} \\
+    && /usr/local/share/corepack/bin/{shlex.quote(profile.manager)} --version \\
+    && test "$(/usr/local/share/corepack/bin/{shlex.quote(profile.manager)} --version)" = {shlex.quote(profile.version)} \\
     && chmod -R a+rX "$COREPACK_HOME"
+ENV PATH=/usr/local/share/corepack/bin:$PATH
+"""
+
+
+def _npm_layer(version: str) -> str:
+    """Install an exact npm release without pretending Corepack manages it."""
+    if version == _NODE_NPM_VERSION:
+        return f"""RUN test "$(npm --version)" = {shlex.quote(version)}
+"""
+    return f"""RUN mkdir -p /usr/local/share/selfbench-npm \\
+    && npm install --global --prefix /usr/local/share/selfbench-npm {shlex.quote(f'npm@{version}')} \\
+    && /usr/local/share/selfbench-npm/bin/npm --version \\
+    && test "$(/usr/local/share/selfbench-npm/bin/npm --version)" = {shlex.quote(version)}
+ENV PATH=/usr/local/share/selfbench-npm/bin:$PATH
 """
 
 
@@ -462,15 +552,18 @@ RUN mkdir -p /app && tar -xzf /tmp/repo.tar.gz -C /app && rm /tmp/repo.tar.gz \\
 """
 
 
-def _environment_dockerfile(task: Task, package_manager: str | None = None) -> str:
+def _environment_dockerfile(
+    task: Task,
+    package_profile: PackageManagerProfile | None = None,
+) -> str:
     """Agent-facing image: no gold patch, no held-out tests, no provenance.
 
     ``/opt/selfbench/base.git`` is a root-only copy of the pristine base repo.
     The collect hook diffs against it, so an agent that rewrites ``/app/.git``
     cannot disguise what it actually changed.
     """
-    return f"""{_toolchain_layers(task.toolchains)}
-{_corepack_layer(package_manager)}RUN useradd --create-home --shell /bin/bash agent
+    return f"""{_toolchain_layers(task.toolchains, package_profile)}
+RUN useradd --create-home --shell /bin/bash agent
 {_repo_layers(task)}
 RUN git -C /app reset --hard -q HEAD \\
     && git -C /app clean -fdq \\
@@ -484,10 +577,13 @@ WORKDIR /app
 """
 
 
-def _verifier_dockerfile(task: Task, package_manager: str | None = None) -> str:
+def _verifier_dockerfile(
+    task: Task,
+    package_profile: PackageManagerProfile | None = None,
+) -> str:
     """Verifier image: holds the held-out tests the agent never sees."""
-    return f"""{_toolchain_layers(task.toolchains)}
-{_corepack_layer(package_manager)}{_repo_layers(task)}
+    return f"""{_toolchain_layers(task.toolchains, package_profile)}
+{_repo_layers(task)}
 RUN mkdir -p /opt/selfbench && chmod 700 /opt/selfbench
 COPY . /tests/
 RUN chmod +x /tests/test.sh
@@ -579,28 +675,220 @@ def _setup_failure_signature(run: HarborRun) -> str:
     return "setup command failed"
 
 
-def _package_manager_spec(local_repo: Path, commit: str) -> str | None:
-    """Read a Corepack-compatible manager pin from the exact task snapshot."""
+def _package_manager_profile(local_repo: Path, task: Task) -> PackageManagerProfile | None:
+    """Resolve one native JS package manager from the exact task snapshot.
+
+    A profile is intentionally stricter than package-manager discovery. A
+    package manifest, a lockfile, and the explicit manager pin have to agree;
+    otherwise the generated image would be making an unreviewable choice about
+    how to install a repository. Repositories without any of that JS metadata
+    retain the historical task behavior.
+    """
+    workdir = _snapshot_workdir(task.workdir)
+    package_json_path = _snapshot_join(workdir, "package.json")
+    package_json = _snapshot_file(local_repo, task.base_commit, package_json_path)
+    lockfiles = {
+        manager: tuple(
+            (path, content)
+            for filename in filenames
+            if (content := _snapshot_file(
+                local_repo,
+                task.base_commit,
+                path := _snapshot_join(workdir, filename),
+            )) is not None
+        )
+        for manager, filenames in _JS_LOCKFILES.items()
+    }
+    managers_with_locks = {manager for manager, files in lockfiles.items() if files}
+
+    if package_json is None and not managers_with_locks:
+        return None
+    display_workdir = task.workdir
+    if package_json is None:
+        found = ", ".join(sorted(_lockfile_paths(lockfiles)))
+        raise ValueError(
+            f"JS lockfile(s) found at {display_workdir} without package.json: {found}"
+        )
+    try:
+        manifest = json.loads(package_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid package.json at {display_workdir}: {exc.msg}") from exc
+    if not isinstance(manifest, dict):
+        raise ValueError(f"package.json at {display_workdir} must contain an object")
+
+    raw_specifier = manifest.get("packageManager")
+    if raw_specifier is None and not managers_with_locks:
+        # A generic package.json without native-manager metadata is an old task,
+        # not a reason to infer one. Keep its historical image behavior.
+        return None
+    if not isinstance(raw_specifier, str) or not raw_specifier:
+        raise ValueError(
+            f"package.json at {display_workdir} requires an exact packageManager pin "
+            "when JS metadata is present"
+        )
+    manager, separator, declared_version = raw_specifier.partition("@")
+    version = declared_version.partition("+")[0]
+    if (
+        manager not in _SUPPORTED_JS_MANAGERS
+        or not separator
+        or not _EXACT_PACKAGE_MANAGER_VERSION.fullmatch(declared_version)
+        or (manager in {"npm", "bun"} and "+" in declared_version)
+    ):
+        supported = ", ".join(sorted(_SUPPORTED_JS_MANAGERS))
+        raise ValueError(
+            f"package.json at {display_workdir} has unsupported packageManager "
+            f"{raw_specifier!r}; require one of {supported} with an exact x.y.z version"
+        )
+    if not managers_with_locks:
+        raise ValueError(
+            f"package.json at {display_workdir} declares {raw_specifier} but has no "
+            f"{manager} lockfile"
+        )
+    found_lockfiles = sorted(_lockfile_paths(lockfiles))
+    if len(found_lockfiles) > 1:
+        raise ValueError(
+            f"conflicting JS lockfiles at {display_workdir}: {', '.join(found_lockfiles)}"
+        )
+    if managers_with_locks != {manager}:
+        raise ValueError(
+            f"package manager {manager} from package.json at {display_workdir} conflicts "
+            f"with lockfile(s): {', '.join(found_lockfiles)}"
+        )
+
+    profile = PackageManagerProfile(
+        manager=manager,
+        version=version,
+        specifier=raw_specifier,
+        package_json_sha256=_sha256(package_json),
+        lockfiles=tuple(
+            (path, _sha256(content))
+            for path, content in lockfiles[manager]
+        ),
+    )
+    _validate_profile_toolchains(task, profile)
+    _validate_profile_setup_command(task, profile)
+    return profile
+
+
+def _snapshot_workdir(workdir: str) -> str:
+    path = Path(workdir)
+    if not workdir or path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"workdir must stay inside the repository: {workdir!r}")
+    return "" if path == Path(".") else path.as_posix().strip("/")
+
+
+def _snapshot_join(workdir: str, filename: str) -> str:
+    return f"{workdir}/{filename}" if workdir else filename
+
+
+def _snapshot_file(local_repo: Path, commit: str, path: str) -> bytes | None:
     result = subprocess.run(
-        ["git", "-C", str(local_repo), "show", f"{commit}:package.json"],
+        ["git", "-C", str(local_repo), "show", f"{commit}:{path}"],
         capture_output=True,
         check=False,
     )
-    if result.returncode != 0:
-        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _lockfile_paths(lockfiles: dict[str, tuple[tuple[str, bytes], ...]]) -> list[str]:
+    return [path for files in lockfiles.values() for path, _ in files]
+
+
+def _sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def _profile_manifest_value(profile: PackageManagerProfile | None) -> dict[str, object] | None:
+    return profile.as_dict() if profile is not None else None
+
+
+def _validate_profile_toolchains(task: Task, profile: PackageManagerProfile) -> None:
+    selected = set(resolve_toolchains(task.toolchains))
+    required = "bun" if profile.manager == "bun" else "node"
+    if required not in selected:
+        raise ValueError(
+            f"{profile.specifier} at {task.workdir} requires the {required!r} toolchain; "
+            "select it in task.json"
+        )
+
+
+def _validate_profile_setup_command(task: Task, profile: PackageManagerProfile) -> None:
+    """Reject only unambiguous manager conflicts and mutable native installs."""
+    for manager, arguments in _setup_manager_invocations(task.setup_cmd):
+        if manager != profile.manager:
+            raise ValueError(
+                f"setup_cmd invokes {manager}, but package.json at {task.workdir} declares "
+                f"{profile.specifier}"
+            )
+        _validate_immutable_install(manager, arguments)
+
+
+def _setup_manager_invocations(command: str) -> list[tuple[str, str]]:
+    """Find direct manager commands at shell command boundaries.
+
+    This deliberately avoids trying to interpret arbitrary shell programs. It
+    catches commands that plainly choose a manager while preserving complex,
+    task-specific setup steps for preflight to execute.
+    """
+    pattern = re.compile(
+        r"(?:^|&&|\|\||;|\n)\s*"
+        r"(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;&|]+\s+)*"
+        r"(?P<command>npm|npx|pnpm|pnpx|yarn|yarnpkg|bun|bunx)\b"
+        r"(?P<arguments>[^\n;&|]*)"
+    )
+    aliases = {
+        "npm": "npm",
+        "npx": "npm",
+        "pnpm": "pnpm",
+        "pnpx": "pnpm",
+        "yarn": "yarn",
+        "yarnpkg": "yarn",
+        "bun": "bun",
+        "bunx": "bun",
+    }
+    return [
+        (aliases[match.group("command")], match.group("arguments").strip())
+        for match in pattern.finditer(command)
+    ]
+
+
+def _validate_immutable_install(manager: str, arguments: str) -> None:
+    """Reject clear mutable dependency installs, not unrelated manager commands."""
     try:
-        package_json = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-    value = package_json.get("packageManager") if isinstance(package_json, dict) else None
-    if not isinstance(value, str):
-        return None
-    name, separator, version = value.partition("@")
-    if name not in {"pnpm", "yarn"} or not separator or not version or any(
-        char.isspace() for char in value
-    ):
-        return None
-    return value
+        words = shlex.split(arguments)
+    except ValueError:
+        # Shell syntax itself is left to the actual task setup command.
+        return
+    if not words:
+        return
+    subcommand = words[0]
+    flags = set(words[1:])
+    if manager == "npm":
+        global_install = {"-g", "--global", "--location=global"}.intersection(flags)
+        if "--location" in flags:
+            location = words.index("--location") + 1
+            if location < len(words) and words[location] == "global":
+                global_install = {"--location global"}
+        if subcommand == "install" and not global_install:
+            raise ValueError("setup_cmd uses mutable npm install; use npm ci with package-lock.json")
+        return
+    if manager == "pnpm" and subcommand in {"install", "i"}:
+        if not any(flag in {"--frozen-lockfile", "--frozen-lockfile=true"} for flag in flags):
+            raise ValueError(
+                "setup_cmd uses mutable pnpm install; add --frozen-lockfile"
+            )
+        return
+    if manager == "yarn" and subcommand == "install":
+        if not {"--immutable", "--frozen-lockfile"}.intersection(flags):
+            raise ValueError(
+                "setup_cmd uses mutable yarn install; add --immutable"
+            )
+        return
+    if manager == "bun" and subcommand == "install":
+        if not any(flag in {"--frozen-lockfile", "--frozen-lockfile=true"} for flag in flags):
+            raise ValueError(
+                "setup_cmd uses mutable bun install; add --frozen-lockfile"
+            )
 
 
 def _git_archive(local_repo: Path, commit: str) -> bytes:
