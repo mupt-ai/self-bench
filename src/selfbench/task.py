@@ -10,6 +10,33 @@ from pathlib import Path
 
 from .agent_input import SUPPORTED_FORMATS, extract_prompt, extract_trace
 
+SUPPORTED_TOOLCHAINS = ("uv", "bun", "go", "node", "python", "rust")
+DEFAULT_TOOLCHAINS = ("uv", "bun", "go", "node")
+_TOOLCHAIN_DEPENDENCIES = {"python": ("uv",)}
+
+
+def resolve_toolchains(toolchains: list[str] | None) -> tuple[str, ...]:
+    if toolchains is None:
+        return DEFAULT_TOOLCHAINS
+    if not isinstance(toolchains, list) or not toolchains or any(
+        not isinstance(name, str) or not name for name in toolchains
+    ):
+        raise ValueError("toolchains must be a non-empty list of toolchain names")
+
+    unknown = sorted(set(toolchains) - set(SUPPORTED_TOOLCHAINS))
+    if unknown:
+        raise ValueError(
+            f"unknown toolchain(s): {', '.join(unknown)}; "
+            f"available: {', '.join(SUPPORTED_TOOLCHAINS)}"
+        )
+    if len(toolchains) != len(set(toolchains)):
+        raise ValueError("toolchains must not contain duplicates")
+
+    selected = set(toolchains)
+    for name in toolchains:
+        selected.update(_TOOLCHAIN_DEPENDENCIES.get(name, ()))
+    return tuple(name for name in SUPPORTED_TOOLCHAINS if name in selected)
+
 
 @dataclass
 class Task:
@@ -34,6 +61,8 @@ class Task:
     # Environment baseline. The agent container needs egress while Harbor
     # installs the coding agent (node, npm, apt), so this stays public; the
     # agent's own run phase and the verifier are sealed separately below.
+    # None preserves the historical default toolchain for existing tasks.
+    toolchains: list[str] | None = None
     network_mode: str = "public"
     # Network policy while the coding agent actually works the task. Sealed by
     # default: agents otherwise clone the upstream repository or fetch the
@@ -79,6 +108,11 @@ class Task:
             "timeout_setup": self.timeout_setup,
             "timeout_agent": self.timeout_agent,
             "timeout_tests": self.timeout_tests,
+            **(
+                {"toolchains": list(resolve_toolchains(self.toolchains))}
+                if self.toolchains is not None
+                else {}
+            ),
             "network_mode": self.network_mode,
             "agent_network_mode": self.agent_network_mode,
             "agent_allowed_hosts": self.agent_allowed_hosts,
@@ -233,6 +267,10 @@ def load_task(task_dir: str | Path) -> Task:
         timeout = getattr(task, timeout_name)
         if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
             problems.append(f"{timeout_name} must be a positive integer")
+    try:
+        resolve_toolchains(task.toolchains)
+    except ValueError as exc:
+        problems.append(str(exc))
     for mode_name in ("network_mode", "agent_network_mode", "verifier_network_mode"):
         if getattr(task, mode_name) not in {"public", "no-network", "allowlist"}:
             problems.append(f"{mode_name} must be public, no-network, or allowlist")

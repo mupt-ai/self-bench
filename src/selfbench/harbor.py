@@ -23,13 +23,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .task import Task
+from .task import Task, resolve_toolchains
 
 HARBOR_SCHEMA_VERSION = "1.4"
 HARBOR_VERSION_RANGE = ">=0.20,<0.21"
 ENVIRONMENT_COMPILER_REVISION = 4
 _BASE_IMAGE = "ubuntu:24.04"
 _GO_VERSION = "1.25.0"
+_RUST_VERSION = "1.90.0"
+_PYTHON_VERSIONS = "3.12 3.11 3.13"
 _NODE_VERSION = "22.14.0"
 GENERATED_MANIFEST = ".selfbench-manifest.json"
 
@@ -366,34 +368,63 @@ def _task_toml(task: Task, task_name: str) -> str:
     return "\n".join(lines)
 
 
-def _toolchain_layers() -> str:
-    """Install one deterministic toolchain shared by the agent and the verifier.
+_TOOLCHAIN_LAYERS = {
+    "uv": (
+        "RUN curl -LsSf https://astral.sh/uv/install.sh \\\n"
+        "    | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh"
+    ),
+    "bun": "RUN curl -fsSL https://bun.sh/install | env BUN_INSTALL=/usr/local bash",
+    "go": (
+        'RUN arch="$(dpkg --print-architecture)" \\\n'
+        f'    && curl -fsSL "https://go.dev/dl/go{_GO_VERSION}.linux-${{arch}}.tar.gz" \\\n'
+        "    | tar -C /usr/local -xz"
+    ),
+    "node": (
+        'RUN arch="$(dpkg --print-architecture)" \\\n'
+        "    && case \"$arch\" in \\\n"
+        "        arm64) node_arch=arm64 ;; \\\n"
+        "        amd64) node_arch=x64 ;; \\\n"
+        '        *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \\\n'
+        "    esac \\\n"
+        f'    && curl -fsSL "https://nodejs.org/dist/v{_NODE_VERSION}/node-v{_NODE_VERSION}-linux-${{node_arch}}.tar.xz" \\\n'
+        "    | tar -C /usr/local --strip-components=1 -xJ"
+    ),
+    "python": (
+        f"RUN uv python install {_PYTHON_VERSIONS} \\\n"
+        "    && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3 \\\n"
+        "    && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python \\\n"
+        "    && chmod -R a+rX /usr/local/share/uv/python"
+    ),
+    "rust": (
+        "RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \\\n"
+        f"    | env RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo sh -s -- \\\n"
+        f"        -y --no-modify-path --profile minimal --default-toolchain {_RUST_VERSION} \\\n"
+        "    && chmod -R a+w /usr/local/cargo"
+    ),
+}
+
+
+def _toolchain_layers(names: list[str] | None = None) -> str:
+    """Install the deterministic toolchain shared by the agent and the verifier.
 
     ``PATH`` extends the image default instead of replacing it, so system
-    binaries such as ``useradd`` in ``/usr/sbin`` stay reachable. uv and bun go
-    to ``/usr/local/bin`` so the unprivileged agent user can run them too.
+    binaries such as ``useradd`` in ``/usr/sbin`` stay reachable. Toolchains go
+    to ``/usr/local`` so the unprivileged agent user can run them too.
     """
+    layers = "\n".join(_TOOLCHAIN_LAYERS[name] for name in resolve_toolchains(names))
     return f"""FROM {_BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \\
     UV_LINK_MODE=copy \\
-    PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+    UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \\
+    UV_PYTHON_BIN_DIR=/usr/local/bin \\
+    RUSTUP_HOME=/usr/local/rustup \\
+    CARGO_HOME=/usr/local/cargo \\
+    PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    bash build-essential ca-certificates curl git jq passwd unzip xz-utils \\
+    bash build-essential ca-certificates curl git jq passwd pkg-config unzip xz-utils \\
     && rm -rf /var/lib/apt/lists/*
-RUN curl -LsSf https://astral.sh/uv/install.sh \\
-    | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
-RUN curl -fsSL https://bun.sh/install | env BUN_INSTALL=/usr/local bash
-RUN arch="$(dpkg --print-architecture)" \\
-    && curl -fsSL "https://go.dev/dl/go{_GO_VERSION}.linux-${{arch}}.tar.gz" \\
-    | tar -C /usr/local -xz \\
-    && case "$arch" in \\
-        arm64) node_arch=arm64 ;; \\
-        amd64) node_arch=x64 ;; \\
-        *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \\
-    esac \\
-    && curl -fsSL "https://nodejs.org/dist/v{_NODE_VERSION}/node-v{_NODE_VERSION}-linux-${{node_arch}}.tar.xz" \\
-    | tar -C /usr/local --strip-components=1 -xJ
+{layers}
 """
 
 
@@ -439,7 +470,7 @@ def _environment_dockerfile(task: Task, package_manager: str | None = None) -> s
     The collect hook diffs against it, so an agent that rewrites ``/app/.git``
     cannot disguise what it actually changed.
     """
-    return f"""{_toolchain_layers()}
+    return f"""{_toolchain_layers(task.toolchains)}
 {_corepack_layer(package_manager)}RUN useradd --create-home --shell /bin/bash agent
 {_repo_layers(task)}
 RUN git -C /app reset --hard -q HEAD \\
@@ -456,7 +487,7 @@ WORKDIR /app
 
 def _verifier_dockerfile(task: Task, package_manager: str | None = None) -> str:
     """Verifier image: holds the held-out tests the agent never sees."""
-    return f"""{_toolchain_layers()}
+    return f"""{_toolchain_layers(task.toolchains)}
 {_corepack_layer(package_manager)}{_repo_layers(task)}
 RUN mkdir -p /opt/selfbench && chmod 700 /opt/selfbench
 COPY . /tests/
