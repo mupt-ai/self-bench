@@ -26,7 +26,7 @@ modal = [
 ]
 
 [tool.uv-build]
-package-data = { "selfbench" = ["skills/selfbench/SKILL.md", "review_dist/**/*"] }
+package-data = { "selfbench" = ["extensions/*.ts", "skills/selfbench/SKILL.md", "review_dist/**/*"] }
 
 [project.scripts]
 selfbench = "selfbench.cli:main"
