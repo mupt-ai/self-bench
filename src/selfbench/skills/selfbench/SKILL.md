@@ -93,9 +93,9 @@ Target larger, more complex merged PRs. Size metadata is a shortlist signal, nev
 5. Apply every existing gate unchanged: authentic pre-implementation provenance, file-separable test and implementation patches, the equivalent-design test check (including dependency coupling), and deterministic nop/oracle validation.
 6. The hard profile's standing goal is 15 validated tasks per repository; a user-supplied batch count overrides that number. The target counts tasks that pass deterministic nop/oracle validation, not shortlisted PRs or authored directories. Batch-first ordering still applies: rank the provenance-backed shortlist, author the full target batch, then validate and audit it. After that pass, replace tasks that were rejected or failed validation with the next ranked provenance-backed candidates, author and validate the replacements as their own follow-up batch, and repeat until the target number of tasks passes validation. Stop short only when the viable provenance-backed pool is exhausted, and then report the exact blocker and the shortfall rather than weakening a gate. Do not ask the user to nominate PRs.
 
-## Step 2: preserve the engineer's request
+## Step 2: update the initial prompt from the transcript
 
-Use the original coding-agent session whenever one exists. Copy the JSON or JSONL export into `inputs/` inside the task directory, then reference it with `prompt_source`.
+Use the original coding-agent session whenever one exists. Copy its JSON or JSONL export into `inputs/` inside the task directory as private provenance. Use the transcript to update the initial solver prompt into one standalone work request; do not forward a raw transcript turn to the solver.
 
 Supported formats are:
 
@@ -105,9 +105,7 @@ Supported formats are:
 - `generic`: JSON or JSONL records with `role: "user"` and textual content.
 - `auto`: detect one of the formats above.
 
-Use `message_index` to select the engineer turn that defined the work. It is zero-based; negative values count from the end. Inspect the resolved prompt in the review console before accepting the task.
-
-Prefer generating one standalone user-voice prompt from the full original conversation over using a raw turn verbatim. Keep the eval text in `prompt.md` and preserve the coding session as private generation provenance:
+Use `message_index` only to locate the engineer turn that defined the work while reviewing a session. It is zero-based; negative values count from the end. The usual task format is `prompt.md` plus `trace_source`: keep the revised initial prompt in `prompt.md` and preserve the transcript as private generation provenance:
 
 ```json
 {
@@ -126,7 +124,7 @@ selfbench generate-prompt tasks/<task> \
   --confirm-source-upload --write --force
 ```
 
-The generated request should sound like one coherent message from the original human: preserve their framing, terminology, directness, and material corrections; resolve conversational references; remove PR/commit/CI logistics and secrets; and do not import solution details that only appeared in assistant messages. Run the generator without tools, extensions, skills, project context files, or prompt templates. It must not receive or be able to inspect the gold patch, test patch, held-out test names, previous synthetic prompt, or working tree. Review the result against Original Session before accepting it.
+Update the initial prompt from the full transcript, not by copying a selected turn. The revised request should sound like one coherent message from the original human: preserve their framing, terminology, directness, and material corrections; resolve conversational references; state the requested behavior and explicit user-facing constraints; and remove PR/commit/CI logistics, secrets, and implementation details that would narrow the solver to the original approach. The transcript remains provenance and is never given to the solver. Run the generator without tools, extensions, skills, project context files, or prompt templates. It must not receive or be able to inspect the gold patch, test patch, held-out test names, previous synthetic prompt, or working tree. Review the revised prompt against Original Session before accepting it.
 
 If no coding session exists, require another authentic pre-implementation request such as the original issue, ticket, bug report, or user message, and attach it as provenance. A PR title/body written after implementation is not enough: it can encode the chosen solution and exact names. If no authentic request can establish what was actually asked, reject the candidate rather than reconstructing a prompt from the PR, gold patch, or tests.
 
