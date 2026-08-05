@@ -86,7 +86,7 @@ tasks/<task-id>/
 
 The coding agent receives a history-free snapshot of the base commit and the engineering request. Harbor grades its patch separately with the held-out tests. The agent never receives `gold.patch` or `test.patch`.
 
-See [Authoring evals](https://github.com/mupt-ai/selfbench/blob/main/docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The bundled [selfbench skill](https://github.com/mupt-ai/selfbench/blob/main/skill/SKILL.md) contains the complete construction checklist.
+See [Authoring evals](https://github.com/mupt-ai/selfbench/blob/main/docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The [bundled selfbench skill](https://github.com/mupt-ai/selfbench/blob/main/src/selfbench/skills/selfbench/SKILL.md) contains the complete construction checklist.
 
 ## Audit and review
 

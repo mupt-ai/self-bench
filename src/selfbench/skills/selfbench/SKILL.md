@@ -93,9 +93,9 @@ Target larger, more complex merged PRs. Size metadata is a shortlist signal, nev
 5. Apply every existing gate unchanged: authentic pre-implementation provenance, file-separable test and implementation patches, the equivalent-design test check (including dependency coupling), and deterministic nop/oracle validation.
 6. The hard profile's standing goal is 15 validated tasks per repository; a user-supplied batch count overrides that number. The target counts tasks that pass deterministic nop/oracle validation, not shortlisted PRs or authored directories. Batch-first ordering still applies: rank the provenance-backed shortlist, author the full target batch, then validate and audit it. After that pass, replace tasks that were rejected or failed validation with the next ranked provenance-backed candidates, author and validate the replacements as their own follow-up batch, and repeat until the target number of tasks passes validation. Stop short only when the viable provenance-backed pool is exhausted, and then report the exact blocker and the shortfall rather than weakening a gate. Do not ask the user to nominate PRs.
 
-## Step 2: preserve the engineer's request
+## Step 2: update the initial prompt from the transcript
 
-Use the original coding-agent session whenever one exists. Copy the JSON or JSONL export into `inputs/` inside the task directory, then reference it with `prompt_source`.
+Use the original coding-agent session whenever one exists. Copy its JSON or JSONL export into `inputs/` inside the task directory as private provenance. Use the transcript to update the initial solver prompt into one standalone work request; do not forward a raw transcript turn to the solver.
 
 Supported formats are:
 
@@ -105,9 +105,7 @@ Supported formats are:
 - `generic`: JSON or JSONL records with `role: "user"` and textual content.
 - `auto`: detect one of the formats above.
 
-Use `message_index` to select the engineer turn that defined the work. It is zero-based; negative values count from the end. Inspect the resolved prompt in the review console before accepting the task.
-
-Prefer generating one standalone user-voice prompt from the full original conversation over using a raw turn verbatim. Keep the eval text in `prompt.md` and preserve the coding session as private generation provenance:
+Use `message_index` only to locate the engineer turn that defined the work while reviewing a session. It is zero-based; negative values count from the end. The usual task format is `prompt.md` plus `trace_source`: keep the revised initial prompt in `prompt.md` and preserve the transcript as private generation provenance:
 
 ```json
 {
@@ -126,7 +124,7 @@ selfbench generate-prompt tasks/<task> \
   --confirm-source-upload --write --force
 ```
 
-The generated request should sound like one coherent message from the original human: preserve their framing, terminology, directness, and material corrections; resolve conversational references; remove PR/commit/CI logistics and secrets; and do not import solution details that only appeared in assistant messages. Run the generator without tools, extensions, skills, project context files, or prompt templates. It must not receive or be able to inspect the gold patch, test patch, held-out test names, previous synthetic prompt, or working tree. Review the result against Original Session before accepting it.
+Update the initial prompt from the full transcript, not by copying a selected turn. The revised request should sound like one coherent message from the original human: preserve their framing, terminology, directness, and material corrections; resolve conversational references; state the requested behavior and explicit user-facing constraints; and remove PR/commit/CI logistics, secrets, and implementation details that would narrow the solver to the original approach. The transcript remains provenance and is never given to the solver. Run the generator without tools, extensions, skills, project context files, or prompt templates. It must not receive or be able to inspect the gold patch, test patch, held-out test names, previous synthetic prompt, or working tree. Review the revised prompt against Original Session before accepting it.
 
 If no coding session exists, require another authentic pre-implementation request such as the original issue, ticket, bug report, or user message, and attach it as provenance. A PR title/body written after implementation is not enough: it can encode the chosen solution and exact names. If no authentic request can establish what was actually asked, reject the candidate rather than reconstructing a prompt from the PR, gold patch, or tests.
 
@@ -170,14 +168,24 @@ Whenever a task is rejected or removed at any stage, move its directory into `ta
 
 Task images include `uv`, `bun`, `go`, and `node` by default. Set `toolchains` in `task.json` to select from those tools plus `python` and `rust`, for example `"toolchains": ["python"]`. Selfbench includes toolchain dependencies automatically. Selecting only what the eval needs reduces image build time. Increase `timeout_setup` when a cold compiled build needs more than 900 seconds.
 
-Common command templates include:
+### Native JavaScript setup contract
 
-| Project | Setup | Test command |
-|---|---|---|
-| Python with uv | `uv sync --group dev --frozen` | `uv run pytest -q {tests}` |
-| Go | `go build ./...` | `go test {tests}` |
-| Bun | `bun install --frozen-lockfile` | `bun test {tests}` |
-| npm | `npm ci` | `npm test -- {tests}` |
+For a JS task, inspect the **exact base snapshot at `workdir`** before authoring `task.json`. Select the matching toolchain (`node` for npm/pnpm/Yarn; `bun` for Bun), require `package.json#packageManager` to name one exact manager/runtime version, and keep exactly one matching native lockfile. Selfbench records that snapshot profile (including the manifest and lockfile hashes) in the generated task and provisions that manager version in both images. It does not infer a manager from an ambiguous checkout.
+
+Use the repository's native manager and an immutable install in `setup_cmd`; keep any required build, code-generation, or other setup steps after it. Canonical commands are:
+
+| Project | Required metadata | Immutable setup | Test command |
+|---|---|---|---|
+| npm | `"packageManager": "npm@x.y.z"` + `package-lock.json` or `npm-shrinkwrap.json` | `npm ci` | `npm test -- {tests}` |
+| pnpm | `"packageManager": "pnpm@x.y.z"` + `pnpm-lock.yaml` | `pnpm install --frozen-lockfile` | `pnpm test -- {tests}` |
+| Yarn | `"packageManager": "yarn@x.y.z"` + `yarn.lock` | `yarn install --immutable` | `yarn test -- {tests}` |
+| Bun | `"packageManager": "bun@x.y.z"` + `bun.lock` or `bun.lockb` | `bun install --frozen-lockfile` | `bun test {tests}` |
+| Python with uv | n/a | `uv sync --group dev --frozen` | `uv run pytest -q {tests}` |
+| Go | n/a | `go build ./...` | `go test {tests}` |
+
+Do not use bare mutable installs (`npm install`, `pnpm install` without `--frozen-lockfile`, `yarn install` without `--immutable`, or `bun install` without `--frozen-lockfile`). Pin declared runtime and manager versions; do not use `latest`, tags, or ranges. Corepack is only for pnpm/Yarn, never npm or Bun.
+
+If a checkout has neither a package-manager declaration nor a recognized lockfile, it stays legacy-compatible and setup remains explicit/task-specific. If it has partial or contradictory metadata (missing declaration, declaration/lockfile mismatch, multiple lockfiles, missing required toolchain, or `setup_cmd` plainly invoking another manager), reject or repair the task before compilation. Always locally preflight the generated Docker images before spending Modal validation jobs; `validate-batch` does this for per-repository canaries unless explicitly run with `--no-preflight`.
 
 ## Step 5: validate and statically audit
 
