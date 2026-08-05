@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -94,6 +95,101 @@ class HarborTaskBuildTest(unittest.TestCase):
         self.assertIn("/tests/test.patch", verifier)
         self.assertIn("--exclude=tests", verifier)
         self.assertIn('"reward": $reward', verifier)
+        self.assertLess(verifier.index("runuser -u verifier -- bash -lc true"), verifier.index("git -C /app apply --binary --whitespace=nowarn /tests/test.patch"))
+        self.assertIn("chmod 700 /tests", (output / "tests" / "Dockerfile").read_text())
+        self.assertLess(verifier.index("git -C /app apply --binary --whitespace=nowarn /tests/test.patch"), verifier.index("rm -f /tests/test.patch"))
+
+    def test_generated_verifier_kills_setup_process_before_exposing_tests(self) -> None:
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
+        sandbox = self.root / "script-sandbox"
+        app = sandbox / "app"
+        tests = sandbox / "tests"
+        opt = sandbox / "opt" / "selfbench"
+        logs = sandbox / "logs"
+        bin_dir = sandbox / "bin"
+        for directory in (app, tests, opt, logs, bin_dir):
+            directory.mkdir(parents=True, exist_ok=True)
+        (opt / "agent.patch").write_text("")
+        (tests / "test.patch").write_text("held out")
+        (app / "tests").mkdir()
+
+        runuser = bin_dir / "runuser"
+        runuser.write_text(f'''#!/bin/bash
+count=$(cat {sandbox / "run-count"} 2>/dev/null || echo 0)
+count=$((count + 1))
+echo "$count" > {sandbox / "run-count"}
+if [ "$count" -eq 1 ]; then
+  sleep 60 & echo $! > {sandbox / "watcher.pid"}
+elif [ "$count" -eq 2 ]; then
+  sleep 60 & echo $! > {sandbox / "watcher.pid"}
+elif [ "$count" -eq 3 ]; then
+  if kill -0 "$(cat {sandbox / "watcher.pid"})" 2>/dev/null; then exit 92; fi
+  touch {sandbox / "second-run-clean"}
+fi
+exit 0
+''')
+        pkill = bin_dir / "pkill"
+        pkill.write_text(f'''#!/bin/bash
+if [ -f {sandbox / "watcher.pid"} ]; then
+  kill -KILL "$(cat {sandbox / "watcher.pid"})" 2>/dev/null || true
+fi
+touch {sandbox / "killed"}
+''')
+        git = bin_dir / "git"
+        git.write_text(f'''#!/bin/bash
+if [[ "$*" == *"{tests / "test.patch"}"* ]]; then
+  test -f {sandbox / "killed"} || exit 91
+  touch {sandbox / "held-out-applied"}
+fi
+exit 0
+''')
+        (bin_dir / "id").write_text("#!/bin/bash\necho 4242\n")
+        for name in ("chown", "chmod"):
+            (bin_dir / name).write_text("#!/bin/bash\nexit 0\n")
+        for executable in bin_dir.iterdir():
+            executable.chmod(0o755)
+
+        script = (output / "tests" / "test.sh").read_text()
+        for source, target in (
+            ("/opt/selfbench", str(opt)), ("/app", str(app)),
+            ("/tests", str(tests)), ("/logs", str(logs)),
+        ):
+            script = script.replace(source, target)
+        script_path = sandbox / "test.sh"
+        script_path.write_text(script)
+        script_path.chmod(0o755)
+        subprocess.run(
+            [str(script_path)],
+            check=True,
+            env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+        self.assertTrue((sandbox / "held-out-applied").is_file())
+        self.assertTrue((sandbox / "second-run-clean").is_file())
+
+    def test_file_valued_test_path_locks_its_parent_against_replacement(self) -> None:
+        self.task.test_paths = ["tests/test_hidden.py"]
+        output = build_harbor_task(self.task, self.repo, self.root / "harbor-file-task")
+        script = (output / "tests" / "test.sh").read_text()
+
+        self.assertIn('for protected_path in /app/tests/test_hidden.py; do', script)
+        self.assertIn('protect_held_out_path "$protected_path"', script)
+        self.assertIn('parent="$(dirname "$path")"', script)
+        self.assertIn('chmod a-w,go+rX -- "$parent"', script)
+        self.assertIn('[ "$parent" = /app ] && break', script)
+        self.assertNotIn("chmod -R a-w,go+rX -- /app", script)
+
+        with tempfile.TemporaryDirectory() as raw_permission_dir:
+            permission_root = Path(raw_permission_dir)
+            parent = permission_root / "tests"
+            parent.mkdir()
+            hidden = parent / "test_hidden.py"
+            hidden.write_text("held out\n")
+            parent.chmod(0o555)
+            try:
+                with self.assertRaises(PermissionError):
+                    hidden.unlink()
+            finally:
+                parent.chmod(0o755)
 
     def test_reuses_current_build_and_rejects_stale_output(self) -> None:
         output = build_harbor_task(self.task, self.repo, self.root / "harbor-tasks")
@@ -1013,7 +1109,7 @@ class SealedAgentNetworkTest(unittest.TestCase):
             t = self._task(Path(raw))
         self.assertEqual(t.agent_network_mode, "allowlist")
         self.assertEqual(t.agent_allowed_hosts, [])
-        self.assertEqual(t.verifier_network_mode, "public")
+        self.assertEqual(t.verifier_network_mode, "no-network")
 
     def test_task_toml_emits_phase_policies(self) -> None:
         from selfbench.harbor import _task_toml

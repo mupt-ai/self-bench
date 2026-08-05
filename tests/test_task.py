@@ -30,7 +30,7 @@ class TaskPromptSourceTest(unittest.TestCase):
             "fail_to_pass": ["tests/x"],
             "pass_to_pass": ["tests/y"],
             "test_paths": ["tests"],
-            "prompt_source": {"path": "inputs/session.json", "format": "generic", "message_index": -1},
+            "prompt_source": {"path": "inputs/session.json", "format": "generic", "message_index": 1},
         }
         config.update(overrides)
         (self.task_dir / "task.json").write_text(json.dumps(config))
@@ -49,7 +49,7 @@ class TaskPromptSourceTest(unittest.TestCase):
             "kind": "agent_json",
             "path": "inputs/session.json",
             "format": "generic",
-            "message_index": -1,
+            "message_index": 1,
         })
 
     def test_loads_trace_source_with_manual_prompt(self) -> None:
@@ -81,6 +81,31 @@ class TaskPromptSourceTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "exactly one"):
             load_task(self.task_dir)
+
+    def test_rejects_negative_prompt_message_index(self) -> None:
+        self.write_task(prompt_source={"path": "inputs/session.json", "message_index": -1})
+
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            load_task(self.task_dir)
+
+    def test_rejects_malformed_public_schema_fields(self) -> None:
+        (self.task_dir / "prompt.md").write_text("Standalone eval prompt")
+        cases = (
+            ({"repo": 3}, "repo must be a non-empty string"),
+            ({"setup_cmd": None}, "setup_cmd must be a non-empty string"),
+            ({"fail_to_pass": "tests/x"}, "fail_to_pass must be a list"),
+            ({"pass_to_pass": ["ok", 3]}, "pass_to_pass entries"),
+            ({"test_paths": "tests"}, "test_paths must be a list"),
+            ({"agent_allowed_hosts": "api.example.com"}, "agent_allowed_hosts must be a list"),
+            ({"quality": []}, "quality must be an object"),
+            ({"quality": None}, "quality must be an object"),
+            ({"source_pr": True}, "source_pr must be a positive integer"),
+        )
+        for overrides, message in cases:
+            with self.subTest(overrides=overrides):
+                self.write_task(prompt_source=None, **overrides)
+                with self.assertRaisesRegex(ValueError, message):
+                    load_task(self.task_dir)
 
     def test_rejects_prompt_source_outside_task_directory(self) -> None:
         self.write_task(prompt_source={"path": "../session.json"})

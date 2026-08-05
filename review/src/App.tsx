@@ -2,6 +2,7 @@ import { parsePatchFiles } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import React from 'react';
 
+import { loadGuardedTaskDetail } from './detail-loader';
 import type { PromptOrigin, ReviewStatus, RunDetail, SourceTrace, Summaries, TaskDetail, TaskSummary, Verdict } from './types';
 
 type Tab = 'prompt' | 'source' | 'task' | 'test' | 'gold' | 'validation' | 'runs';
@@ -32,6 +33,11 @@ export function App() {
     return value && tabs.includes(value) ? value : 'prompt';
   });
   const [error, setError] = React.useState<string | null>(null);
+  const selectedRef = React.useRef(selected);
+  selectedRef.current = selected;
+
+  const fetchDetail = React.useCallback((taskId: string, signal: AbortSignal) =>
+    getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(taskId)}`, { signal }), []);
 
   const refreshSummaries = React.useCallback(async () => {
     const next = await getJson<Summaries>('/api/tasks');
@@ -51,10 +57,19 @@ export function App() {
       setDetail(null);
       return;
     }
-    getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(selected)}`)
-      .then(setDetail)
-      .catch((nextError: unknown) => setError(String(nextError)));
-  }, [selected]);
+    const controller = new AbortController();
+    setDetail(null);
+    loadGuardedTaskDetail(
+      selected,
+      controller.signal,
+      (taskId) => selectedRef.current === taskId,
+      fetchDetail,
+      setDetail,
+    ).catch((nextError: unknown) => {
+      if (!controller.signal.aborted) setError(String(nextError));
+    });
+    return () => controller.abort();
+  }, [fetchDetail, selected]);
 
   React.useEffect(() => {
     const url = new URL(window.location.href);
@@ -86,9 +101,23 @@ export function App() {
 
   const refresh = React.useCallback(async () => {
     setError(null);
-    await refreshSummaries();
-    if (selected) setDetail(await getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(selected)}`));
-  }, [refreshSummaries, selected]);
+    const controller = new AbortController();
+    const taskId = selectedRef.current;
+    try {
+      await refreshSummaries();
+      if (taskId && selectedRef.current === taskId) {
+        await loadGuardedTaskDetail(
+          taskId,
+          controller.signal,
+          (candidate) => selectedRef.current === candidate,
+          fetchDetail,
+          setDetail,
+        );
+      }
+    } finally {
+      controller.abort();
+    }
+  }, [fetchDetail, refreshSummaries]);
 
   if (error) return <ErrorState error={error} onRetry={() => void refresh()} />;
   if (!summaries) return <div className="page-state">Loading tasks…</div>;
@@ -127,7 +156,12 @@ export function App() {
           nextTask={nextTask}
           onNavigate={setSelected}
           onTab={setTab}
-          onSaved={(nextDetail) => { setDetail(nextDetail); void refreshSummaries(); }}
+          onSaved={(nextDetail) => {
+            // A completed save may outlive its panel after navigation. Replace
+            // detail only when it still represents the same selected task.
+            setDetail((current) => current?.summary.task_id === nextDetail.summary.task_id ? nextDetail : current);
+            void refreshSummaries();
+          }}
         />
       </main>
     </div>
@@ -152,8 +186,8 @@ function Sidebar({ summaries, tasks, selected, filter, search, onFilter, onSearc
           <Count label="In Review" value={summaries.review_counts.in_review ?? 0} />
           <Count label="Approved" value={summaries.review_counts.approved ?? 0} />
         </div>
-        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search task, workdir, PR" />
-        <select value={filter} onChange={(event) => onFilter(event.target.value as Filter)}>
+        <input aria-label="Search tasks" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search task, workdir, PR" />
+        <select aria-label="Filter tasks" value={filter} onChange={(event) => onFilter(event.target.value as Filter)}>
           <option value="all">All Tasks</option>
           <optgroup label="Review Status">
             {reviewStatuses.map((status) => <option key={status} value={`review:${status}`}>{humanize(status)} ({summaries.review_counts[status] ?? 0})</option>)}
@@ -205,21 +239,36 @@ function Detail({ detail, tab, previousTask, nextTask, onNavigate, onTab, onSave
         <ReviewPanel key={detail.summary.task_id} detail={detail} onSaved={onSaved} />
         <section className="panel tab-panel">
           <div className="tabs" role="tablist" aria-label="Task detail">
-            {tabs.map((value) => (
+            {tabs.map((value, index) => (
               <button
                 key={value}
+                id={`task-tab-${value}`}
                 className="tab"
                 data-active={tab === value}
                 type="button"
                 role="tab"
                 aria-selected={tab === value}
+                aria-controls="task-tabpanel"
+                tabIndex={tab === value ? 0 : -1}
                 onClick={() => onTab(value)}
+                onKeyDown={(event) => {
+                  let nextIndex: number | null = null;
+                  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+                  if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+                  if (event.key === 'Home') nextIndex = 0;
+                  if (event.key === 'End') nextIndex = tabs.length - 1;
+                  if (nextIndex === null) return;
+                  event.preventDefault();
+                  const next = tabs[nextIndex];
+                  onTab(next);
+                  document.getElementById(`task-tab-${next}`)?.focus();
+                }}
               >
                 {tabLabel(value)}
               </button>
             ))}
           </div>
-          <div className="panel-body tab-content"><TabContent tab={tab} detail={detail} /></div>
+          <div id="task-tabpanel" className="panel-body tab-content" role="tabpanel" aria-labelledby={`task-tab-${tab}`}><TabContent tab={tab} detail={detail} /></div>
         </section>
       </div>
     </section>
@@ -254,9 +303,11 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
   const [reviewed, setReviewed] = React.useState(() => new Set(detail.summary.quality.reviewed_warnings ?? []));
   const [status, setStatus] = React.useState<ReviewStatus>(detail.summary.review_status);
   const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   async function save() {
     setSaving(true);
+    setSaveError(null);
     try {
       const next = await getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(detail.summary.task_id)}/quality`, {
         method: 'POST',
@@ -264,6 +315,8 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
         body: JSON.stringify({ review_notes: notes, reviewed_warnings: [...reviewed], review_status: status }),
       });
       onSaved(next);
+    } catch (nextError: unknown) {
+      setSaveError(String(nextError));
     } finally {
       setSaving(false);
     }
@@ -275,6 +328,7 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
         <div><div className="panel-title">Review Notes</div><div className="panel-hint">Writes to task.json quality metadata.</div></div>
         <button className="primary-button" type="button" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save Review'}</button>
       </div>
+      {saveError && <div className="warning blocker" role="alert">Review was not saved: {saveError}</div>}
       <div className="panel-body review-grid">
         <div className="review-field">
           <label className="label" htmlFor="review-status">Review Status</label>
@@ -287,7 +341,9 @@ function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail
             <label className="check-row" key={warning}>
               <input type="checkbox" checked={[...reviewed].some((token) => warning.includes(token))} onChange={(event) => setReviewed((current) => {
                 const next = new Set(current);
-                if (event.target.checked) next.add(warning); else next.delete(warning);
+                if (event.target.checked) next.add(warning); else {
+                  for (const token of next) if (warning.includes(token)) next.delete(token);
+                }
                 return next;
               })} />
               <span>{warning}</span>

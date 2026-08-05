@@ -28,7 +28,7 @@ from .task import Task, resolve_toolchains
 
 HARBOR_SCHEMA_VERSION = "1.4"
 HARBOR_VERSION_RANGE = ">=0.20.1.dev202607200228,<0.21"
-ENVIRONMENT_COMPILER_REVISION = 5
+ENVIRONMENT_COMPILER_REVISION = 6
 _BASE_IMAGE = "ubuntu:24.04"
 _GO_VERSION = "1.25.0"
 _RUST_VERSION = "1.90.0"
@@ -487,7 +487,7 @@ ENV DEBIAN_FRONTEND=noninteractive \\
     CARGO_HOME=/usr/local/cargo \\
     PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    bash build-essential ca-certificates curl git jq passwd pkg-config unzip xz-utils \\
+    bash build-essential ca-certificates curl git jq passwd pkg-config procps unzip xz-utils \\
     && rm -rf /var/lib/apt/lists/*
 {layers}
 """
@@ -584,9 +584,12 @@ def _verifier_dockerfile(
     """Verifier image: holds the held-out tests the agent never sees."""
     return f"""{_toolchain_layers(task.toolchains, package_profile)}
 {_repo_layers(task)}
-RUN mkdir -p /opt/selfbench && chmod 700 /opt/selfbench
+RUN useradd --create-home --shell /bin/bash verifier \
+    && chown -R verifier:verifier /app \
+    && mkdir -p /opt/selfbench \
+    && chmod 700 /opt/selfbench
 COPY . /tests/
-RUN chmod +x /tests/test.sh
+RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh
 WORKDIR /app
 """
 
@@ -604,6 +607,7 @@ def _test_script(task: Task) -> str:
         for path in task.test_paths
     )
     protected = " ".join(shlex.quote(path) for path in task.test_paths)
+    protected_absolute = " ".join(shlex.quote(f"/app/{path}") for path in task.test_paths)
     workdir = shlex.quote(f"/app/{task.workdir}")
     f2p = _test_command(task, task.fail_to_pass)
     p2p = _test_command(task, task.pass_to_pass) if task.pass_to_pass else "true"
@@ -617,6 +621,33 @@ pass_to_pass=0
 deterministic=0
 setup_completed=0
 
+kill_verifier_processes() {{
+  pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true
+}}
+
+run_verifier_command() {{
+  runuser -u verifier -- bash -lc "$1"
+  local status=$?
+  kill_verifier_processes
+  return "$status"
+}}
+
+protect_held_out_path() {{
+  local path="$1"
+  chown -R root:root -- "$path"
+  chmod -R a-w,go+rX -- "$path"
+  if [ -f "$path" ]; then
+    local parent
+    parent="$(dirname "$path")"
+    while :; do
+      chown root:root -- "$parent"
+      chmod a-w,go+rX -- "$parent"
+      [ "$parent" = /app ] && break
+      parent="$(dirname "$parent")"
+    done
+  fi
+}}
+
 if [ ! -f /opt/selfbench/agent.patch ]; then
   echo "Harbor did not transfer the captured agent patch" >&2
   patch_applied=0
@@ -624,22 +655,34 @@ elif [ -s /opt/selfbench/agent.patch ]; then
   git -C /app apply --binary --whitespace=nowarn {exclusions} /opt/selfbench/agent.patch || patch_applied=0
 fi
 
+# Solver-controlled lifecycle/build hooks run before held-out material is exposed.
 if [ "$patch_applied" -eq 1 ]; then
+  cd {workdir}
+  if runuser -u verifier -- bash -lc {shlex.quote(setup)}; then setup_completed=1; fi
+fi
+
+# Setup is solver-controlled. Kill every remaining process for its UID before
+# held-out material appears; code under test still shares the later test process.
+if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
+  kill_verifier_processes
   git -C /app restore --source=HEAD --staged --worktree -- {protected} 2>/dev/null || true
   git -C /app clean -fd -- {protected} >/dev/null 2>&1 || true
   git -C /app apply --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
+  if [ "$patch_applied" -eq 1 ]; then
+    for protected_path in {protected_absolute}; do
+      protect_held_out_path "$protected_path"
+    done
+  fi
+  rm -f /tests/test.patch
 fi
 
-if [ "$patch_applied" -eq 1 ]; then
+if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   cd {workdir}
-  if bash -lc {shlex.quote(setup)}; then
-    setup_completed=1
-    if bash -lc {shlex.quote(f2p)}; then
-      fail_to_pass=1
-      if bash -lc {shlex.quote(f2p)}; then deterministic=1; fi
-    fi
-    if bash -lc {shlex.quote(p2p)}; then pass_to_pass=1; fi
+  if run_verifier_command {shlex.quote(f2p)}; then
+    fail_to_pass=1
+    if run_verifier_command {shlex.quote(f2p)}; then deterministic=1; fi
   fi
+  if run_verifier_command {shlex.quote(p2p)}; then pass_to_pass=1; fi
 fi
 
 reward=0

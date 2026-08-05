@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import os
@@ -13,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 import modal
 
+from selfbench.agent_input import build_provenance_staging
 from selfbench.modal_generation import (
     GenerationManifest,
     ManifestError,
@@ -180,7 +180,7 @@ def _stage_manifest(manifest: GenerationManifest, repo: Path | None) -> Generati
     staged = manifest.as_dict()
     raw_workers = staged["workers"]
     assert isinstance(raw_workers, list)
-    uploads: list[tuple[Path, str]] = []
+    uploads: list[tuple[io.BytesIO, str]] = []
     for raw_worker in raw_workers:
         assert isinstance(raw_worker, dict)
         provenance = raw_worker.get("provenance")
@@ -200,14 +200,24 @@ def _stage_manifest(manifest: GenerationManifest, repo: Path | None) -> Generati
             raise ManifestError(
                 f"provenance file exceeds {MAX_PROVENANCE_BYTES} bytes: {source}"
             )
-        checksum = _sha256_file(source)
-        worker_id = str(raw_worker["worker_id"])
-        suffix = source.suffix if len(source.suffix) <= 12 else ""
-        remote_path = f"runs/{manifest.run_id}/inputs/{worker_id}/{checksum}{suffix}"
-        provenance["path"] = f"{ARTIFACT_MOUNT}/{remote_path}"
-        provenance["sha256"] = checksum
+        source_format = str(provenance.get("format", "auto"))
+        message_index = int(provenance.get("message_index", 0))
+        try:
+            sanitized, remote_path, rewritten = build_provenance_staging(
+                source,
+                run_id=manifest.run_id,
+                worker_id=str(raw_worker["worker_id"]),
+                artifact_mount=ARTIFACT_MOUNT,
+                source_format=source_format,
+                message_index=message_index,
+            )
+        except (OSError, ValueError) as exc:
+            raise ManifestError(f"cannot sanitize provenance {source}: {exc}") from exc
+        # The staged artifact is one generic user message containing only the
+        # selected, redacted prompt. No other source-session records upload.
+        provenance.update(rewritten)
         if _read_remote(remote_path) is None:
-            uploads.append((source, remote_path))
+            uploads.append((io.BytesIO(sanitized), remote_path))
 
     remote_manifest = GenerationManifest.from_dict(staged)
     manifest_path = f"runs/{manifest.run_id}/manifest.json"
@@ -219,19 +229,11 @@ def _stage_manifest(manifest: GenerationManifest, repo: Path | None) -> Generati
         )
     if uploads or existing_manifest is None:
         with artifact_volume.batch_upload() as batch:
-            for source, remote_path in uploads:
-                batch.put_file(source, remote_path)
+            for sanitized, remote_path in uploads:
+                batch.put_file(sanitized, remote_path)
             if existing_manifest is None:
                 batch.put_file(io.BytesIO(expected_manifest), manifest_path)
     return remote_manifest
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _sandbox_name(manifest: GenerationManifest, worker: WorkerSpec) -> str:

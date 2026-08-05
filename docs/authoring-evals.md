@@ -81,7 +81,7 @@ If a source session needs to be reconstructed into a standalone prompt, keep the
 | `network_mode` | no | `public`, `no-network`, or `allowlist`; default `public`. |
 | `agent_network_mode` | no | Network policy while the coding agent works; default `allowlist`. |
 | `agent_allowed_hosts` | no | Extra hosts available during the coding-agent phase. |
-| `verifier_network_mode` | no | Network policy for held-out grading; default `public`. |
+| `verifier_network_mode` | no | Network policy for held-out grading; default `no-network`. |
 | `cpus` | no | Container CPU count; default `4`. |
 | `memory_mb` | no | Container memory in MB; default `8192`. |
 | `storage_mb` | no | Container storage in MB; default `20480`. |
@@ -112,7 +112,7 @@ git -C ~/code/my-project diff --binary "$BASE_SHA" "$COMPLETED_SHA" \
   -- src/feature.ts > tasks/example-fix/gold.patch
 ```
 
-Every file owned by `test.patch` must fall below a `test_paths` entry. Before grading, the verifier removes agent edits to those paths and applies the held-out test patch.
+Every file owned by `test.patch` must fall below a `test_paths` entry. Before grading, the verifier terminates processes left by solver-controlled setup, removes agent edits to those paths, applies the held-out test patch, and makes those paths root-owned and non-writable. Tests still execute code under test in the same process/filesystem, so this prevents background persistence and default egress rather than claiming impossible runtime secrecy.
 
 ## Select tests
 

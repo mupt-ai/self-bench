@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
+from email.message import Message
 from pathlib import Path
 
-from selfbench.review import ReviewStore, _review_status
+from selfbench.review import ReviewHandler, ReviewStore, _match_patch_path, _review_status
 from selfbench.task import Task
 
 
@@ -51,6 +53,27 @@ class ReviewStatusTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    def test_rejects_unsafe_configured_model_slugs(self) -> None:
+        for slug in ("..", "nested/model", "nested\\model", "."):
+            with self.subTest(slug=slug), self.assertRaisesRegex(ValueError, "path-safe component"):
+                ReviewStore(self.root / "tasks", self.results, [slug])
+
+    def test_agent_patch_requires_a_configured_model_slug(self) -> None:
+        with self.assertRaises(KeyError):
+            self.store.patch_text("test-task", "agent", "unconfigured")
+
+    def test_encoded_patch_components_are_decoded_for_confinement(self) -> None:
+        for path, expected in (
+            ("/api/tasks/test-task/patch/agent/%2E%2E", ".."),
+            ("/api/tasks/test-task/patch/agent/nested%2Fmodel", "nested/model"),
+        ):
+            with self.subTest(path=path):
+                match = _match_patch_path(path)
+                self.assertIsNotNone(match)
+                assert match is not None
+                with self.assertRaises((KeyError, ValueError)):
+                    self.store.patch_text(*match)
 
     def test_default_review_status_is_unreviewed(self) -> None:
         summaries = self.store.summaries()
@@ -100,6 +123,31 @@ class ReviewStatusTest(unittest.TestCase):
         summaries = self.store.summaries()
         self.assertEqual(summaries["review_counts"], {"unreviewed": 1})
         self.assertEqual(summaries["tasks"][0]["review_status"], "unreviewed")
+
+
+class ReviewRequestBodyTest(unittest.TestCase):
+    def _handler(self, body: bytes, content_type: str = "application/json") -> ReviewHandler:
+        handler = object.__new__(ReviewHandler)
+        headers = Message()
+        headers["content-type"] = content_type
+        headers["content-length"] = str(len(body))
+        handler.headers = headers
+        handler.rfile = io.BytesIO(body)
+        return handler
+
+    def test_requires_application_json(self) -> None:
+        with self.assertRaisesRegex(ValueError, "content-type"):
+            self._handler(b"{}", "text/plain")._read_json_body()
+
+    def test_rejects_oversized_json_without_reading_it(self) -> None:
+        handler = self._handler(b"")
+        handler.headers.replace_header("content-length", str(1024 * 1024 + 1))
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
+            handler._read_json_body()
+
+    def test_rejects_invalid_utf8_as_invalid_json(self) -> None:
+        with self.assertRaisesRegex(ValueError, "request body must be JSON"):
+            self._handler(b'\xff{"review_status":"approved"}')._read_json_body()
 
 
 class ReviewStatusHelperTest(unittest.TestCase):

@@ -62,6 +62,43 @@ const parameters = Type.Object(
 	{ additionalProperties: false },
 );
 
+// TypeBox is supplied by the host extension runtime rather than this package's
+// local dependencies, so Static<typeof parameters> cannot be imported reliably
+// during extension loading. Keep this narrow runtime-facing type in sync with
+// the schema above until the host exposes a supported Static type export.
+type GenerationPlan = {
+	target_count: number;
+	workers: Array<{
+		worker_id: string;
+		target_count: number;
+		candidates: string[];
+		base_commit: string;
+		completed_commit: string;
+	}>;
+};
+
+function validatePlan(plan: GenerationPlan): void {
+	const workerIds = new Set<string>();
+	const candidates = new Set<string>();
+	let capacity = 0;
+	for (const worker of plan.workers) {
+		if (workerIds.has(worker.worker_id)) throw new Error(`duplicate worker_id: ${worker.worker_id}`);
+		workerIds.add(worker.worker_id);
+		if (worker.base_commit.toLowerCase() === worker.completed_commit.toLowerCase()) {
+			throw new Error(`worker ${worker.worker_id} has identical base and completed commits`);
+		}
+		for (const candidate of worker.candidates) {
+			const normalized = candidate.replace(/\/+$/, "");
+			if (candidates.has(normalized)) throw new Error(`duplicate candidate: ${candidate}`);
+			candidates.add(normalized);
+		}
+		capacity += worker.target_count;
+	}
+	if (capacity < plan.target_count) {
+		throw new Error(`worker capacity ${capacity} is below target_count ${plan.target_count}`);
+	}
+}
+
 const submitGenerationPlan = defineTool({
 	name: "submit_generation_plan",
 	label: "Submit generation plan",
@@ -75,6 +112,7 @@ const submitGenerationPlan = defineTool({
 	],
 	parameters,
 	async execute(_toolCallId, plan) {
+		validatePlan(plan);
 		const outputPath = process.env.SELFBENCH_PLAN_OUTPUT;
 		if (!outputPath) {
 			throw new Error("SELFBENCH_PLAN_OUTPUT is required");

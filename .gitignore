@@ -9,3 +9,4 @@ src/selfbench/review_dist/
 /harbor-tasks/
 /harbor-jobs/
 logs/
+.pi-subagents/

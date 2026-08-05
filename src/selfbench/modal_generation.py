@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from .agent_input import SUPPORTED_FORMATS
+from .task import load_task
 
 SCHEMA_VERSION = 1
 _SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -489,7 +490,11 @@ def _inspect_tasks(
             raise ManifestError(f"invalid task.json in {task_dir}: {exc}") from exc
         if not isinstance(task_data, dict):
             raise ManifestError(f"task.json in {task_dir} must be an object")
-        task_id = _require_safe_id(task_data.get("task_id"), f"{task_dir.name}.task_id")
+        try:
+            authored_task = load_task(task_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            raise ManifestError(f"invalid authored task in {task_dir}: {exc}") from exc
+        task_id = _require_safe_id(authored_task.task_id, f"{task_dir.name}.task_id")
         if task_id != task_dir.name:
             raise ManifestError(f"task_id {task_id!r} does not match directory {task_dir.name!r}")
         source_key = _task_source_key(task_data, repo_url)

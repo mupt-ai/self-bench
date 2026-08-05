@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -26,11 +27,63 @@ def extract_prompt(path: Path, *, source_format: str = "auto", message_index: in
         ) from exc
 
 
+def extract_provenance_artifact(
+    path: Path,
+    *,
+    source_format: str = "auto",
+    message_index: int = 0,
+) -> dict[str, object]:
+    """Return a generic one-message trace containing only the selected prompt."""
+    prompt = extract_prompt(path, source_format=source_format, message_index=message_index)
+    return {"messages": [{"role": "user", "content": prompt}]}
+
+
+def build_provenance_payload(
+    path: Path,
+    *,
+    source_format: str = "auto",
+    message_index: int = 0,
+) -> bytes:
+    """Build the exact deterministic JSON bytes safe to stage for a worker."""
+    artifact = extract_provenance_artifact(
+        path,
+        source_format=source_format,
+        message_index=message_index,
+    )
+    return json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode()
+
+
+def build_provenance_staging(
+    path: Path,
+    *,
+    run_id: str,
+    worker_id: str,
+    artifact_mount: str,
+    source_format: str = "auto",
+    message_index: int = 0,
+) -> tuple[bytes, str, dict[str, object]]:
+    """Return exact upload bytes, volume path, and rewritten descriptor fields."""
+    payload = build_provenance_payload(
+        path,
+        source_format=source_format,
+        message_index=message_index,
+    )
+    checksum = hashlib.sha256(payload).hexdigest()
+    remote_path = f"runs/{run_id}/inputs/{worker_id}/{checksum}.json"
+    return payload, remote_path, {
+        "path": f"{artifact_mount}/{remote_path}",
+        "format": "generic",
+        "message_index": 0,
+        "sha256": checksum,
+    }
+
+
 def extract_trace(path: Path, *, source_format: str = "auto") -> dict[str, object]:
     """Return human and assistant text from a source coding session.
 
     Tool results, injected instructions, and non-text blocks are intentionally omitted.
-    The trace is for prompt provenance review and is never sent to an eval agent.
+    The trace is for local provenance review only and is never included in a compiled
+    solver environment.
     """
     resolved_format, messages = _extract_messages(path, source_format)
     trace_messages: list[dict[str, object]] = []
@@ -236,10 +289,19 @@ def _looks_injected(prompt: str) -> bool:
 
 def _redact_secrets(value: str) -> str:
     patterns = (
+        (r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----", "[REDACTED PRIVATE KEY]"),
+        (r"(?i)\bAuthorization\s*:\s*Bearer\s+[^\s,;]+", "Authorization: Bearer [REDACTED]"),
+        (r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", "AWS_ACCESS_KEY_ID=[REDACTED]"),
+        (r"(?i)\bAWS_SECRET_ACCESS_KEY\s*[:=]\s*[^\s,;]+", "AWS_SECRET_ACCESS_KEY=[REDACTED]"),
+        (r"\bnpm_[A-Za-z0-9]{16,}\b", "npm_[REDACTED]"),
+        (r"\bglpat-[A-Za-z0-9_-]{16,}\b", "glpat-[REDACTED]"),
+        (r"(?i)\b(?:password|passwd|pwd)\s*[:=]\s*[^\s,;]+", "password=[REDACTED]"),
+        (r"(?i)\b(?:database_url|db_url)\s*[:=]\s*[^\s]+", "DATABASE_URL=[REDACTED]"),
+        (r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis)://[^\s]+", "[REDACTED DATABASE URL]"),
         (r"\bdari_[A-Za-z0-9_-]{16,}", "dari_[REDACTED]"),
         (r"\bsk-[A-Za-z0-9_-]{16,}", "sk-[REDACTED]"),
         (r"\b(?:ghp|github_pat)_[A-Za-z0-9_-]{16,}", "github_[REDACTED]"),
     )
     for pattern, replacement in patterns:
-        value = re.sub(pattern, replacement, value)
+        value = re.sub(pattern, replacement, value, flags=re.DOTALL if "PRIVATE KEY" in pattern else 0)
     return value
