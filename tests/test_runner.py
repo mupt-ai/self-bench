@@ -18,7 +18,7 @@ from selfbench.runner import (
     validate_batch,
     validate_task,
 )
-from selfbench.task import Task
+from selfbench.task import DEFAULT_TOOLCHAINS, Task
 
 AGENT_PATCH = """\
 diff --git a/src/fix.py b/src/fix.py
@@ -682,10 +682,6 @@ def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
     return HarborRun(root, trial, {"trial_results": [result]}, result)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SelfbenchPiAgentConfigTest(unittest.TestCase):
     def test_thinking_enum_matches_pinned_pi_package(self) -> None:
         from selfbench.harbor_pi import SelfbenchPi
@@ -738,4 +734,90 @@ class SealedAgentNetworkTest(unittest.TestCase):
         self.assertIn('network_mode = "allowlist"', toml)
         self.assertIn('"api.example.com"', toml)
         self.assertIn("[verifier]", toml)
-        self.assertIn(chr(39)+chr(39), toml) if False else self.assertIn("[verifier]", toml)
+
+
+class ConfigurableToolchainTest(unittest.TestCase):
+    def _task(self, task_dir: Path, **kw) -> Task:
+        (task_dir / "prompt.md").write_text("Fix it.")
+        (task_dir / "test.patch").write_text("t")
+        (task_dir / "gold.patch").write_text("g")
+        return Task(
+            task_id="tc", repo="e/r", base_commit="abc", workdir=".", setup_cmd="s",
+            test_cmd="r {tests}", fail_to_pass=["a"], pass_to_pass=["b"],
+            test_paths=["tests"], dir=task_dir, **kw,
+        )
+
+    def test_default_installs_historical_set(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        d = _toolchain_layers(None)
+        self.assertEqual(DEFAULT_TOOLCHAINS, ("uv", "bun", "go", "node"))
+        for marker in ("astral.sh/uv", "bun.sh/install", "go.dev/dl", "nodejs.org"):
+            self.assertIn(marker, d)
+        self.assertNotIn("rustup.rs", d)
+
+    def test_subset_omits_unused_toolchains(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        d = _toolchain_layers(["uv", "rust"])
+        self.assertIn("rustup.rs", d)
+        self.assertNotIn("go.dev/dl", d)
+        self.assertNotIn("nodejs.org", d)
+
+    def test_unknown_toolchain_rejected(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        with self.assertRaisesRegex(ValueError, "unknown toolchain"):
+            _toolchain_layers(["cobol"])
+
+    def test_default_task_keeps_its_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            plain = self._task(Path(raw))
+            explicit = self._task(Path(raw), toolchains=["uv", "rust"])
+            self.assertNotIn("toolchains", json.dumps(plain.evaluation_fingerprints))
+            self.assertNotEqual(
+                plain.evaluation_fingerprints["definition_sha256"],
+                explicit.evaluation_fingerprints["definition_sha256"],
+            )
+
+    def test_toolchain_order_does_not_change_the_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            first = self._task(Path(raw), toolchains=["python"])
+            second = self._task(Path(raw), toolchains=["uv", "python"])
+            self.assertEqual(first.evaluation_fingerprints, second.evaluation_fingerprints)
+
+    def test_dockerfiles_use_the_task_selection(self) -> None:
+        from selfbench.harbor import _environment_dockerfile, _verifier_dockerfile
+
+        with tempfile.TemporaryDirectory() as raw:
+            t = self._task(Path(raw), toolchains=["uv", "rust"])
+            for df in (_environment_dockerfile(t), _verifier_dockerfile(t)):
+                self.assertIn("rustup.rs", df)
+                self.assertNotIn("go.dev/dl", df)
+
+
+class PythonToolchainTest(unittest.TestCase):
+    def test_python_toolchain_installs_interpreters(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        d = _toolchain_layers(["uv", "python"])
+        self.assertIn("uv python install", d)
+        self.assertIn("UV_PYTHON_INSTALL_DIR", d)
+        self.assertIn("/usr/local/bin/python3.12 /usr/local/bin/python", d)
+
+    def test_python_includes_uv(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        dockerfile = _toolchain_layers(["python"])
+        self.assertIn("astral.sh/uv/install.sh", dockerfile)
+        self.assertIn("uv python install", dockerfile)
+
+    def test_uv_is_installed_before_python_regardless_of_order(self) -> None:
+        from selfbench.harbor import _toolchain_layers
+
+        d = _toolchain_layers(["python", "uv"])
+        self.assertLess(d.index("astral.sh/uv/install.sh"), d.index("uv python install"))
+
+
+if __name__ == "__main__":
+    unittest.main()

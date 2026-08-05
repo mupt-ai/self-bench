@@ -2,6 +2,12 @@
 
 Selfbench evals reproduce one completed software change from the repository state before the implementation. Prefer `selfbench create`; author a task manually only when you already know the change, tests, and authentic source request.
 
+```bash
+selfbench create --repo ~/code/my-project --count 1 --print
+```
+
+`--count 1` requests one complete eval. `--print` runs the authoring agent non-interactively; it still writes the task under `tasks/` and may stay quiet until the agent finishes.
+
 ## Choose a suitable change
 
 A good eval has:
@@ -71,6 +77,7 @@ If a source session needs to be reconstructed into a standalone prompt, keep the
 | `timeout_setup` | no | Setup timeout in seconds; default `900`. |
 | `timeout_agent` | no | Agent timeout in seconds; default `2400`. |
 | `timeout_tests` | no | Test timeout in seconds; default `900`. |
+| `toolchains` | no | Image tools selected from `uv`, `bun`, `go`, `node`, `python`, and `rust`; defaults to `uv`, `bun`, `go`, and `node`. |
 | `network_mode` | no | `public`, `no-network`, or `allowlist`; default `public`. |
 | `agent_network_mode` | no | Network policy while the coding agent works; default `allowlist`. |
 | `agent_allowed_hosts` | no | Extra hosts available during the coding-agent phase. |
@@ -80,6 +87,8 @@ If a source session needs to be reconstructed into a standalone prompt, keep the
 | `storage_mb` | no | Container storage in MB; default `20480`. |
 
 `prompt_source` is required unless `prompt.md` exists. Exactly one of them must define the eval prompt.
+
+Set `toolchains` when the default image does not fit the project, for example `"toolchains": ["python"]`. Selfbench includes dependencies such as `uv` automatically. Selecting only what the eval needs reduces image build time.
 
 ## Split the change
 
