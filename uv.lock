@@ -677,7 +677,7 @@ wheels = [
 
 [[package]]
 name = "harbor"
-version = "0.20.0"
+version = "0.20.1.dev202608040148"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dirhash" },
@@ -702,9 +702,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/da/5a26998c6e7d9455321ab39bc8e9122993892ece13c3ad4f2b0de986aaf6/harbor-0.20.0.tar.gz", hash = "sha256:e2e5e88f772690fd121553ca34fd5d6dd6b4aaa51c8fae635abc84b112303112", size = 1590870, upload-time = "2026-07-18T21:25:22.578Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/3c/1ced75cfff8c6b505308ffb43d81ea8561fc1e66178a35b220fdf406d4e5/harbor-0.20.1.dev202608040148.tar.gz", hash = "sha256:704417a1a680f0a49b96bf578f4cd7584d2db468caf35bc9dceccbe78f8f289d", size = 1678870, upload-time = "2026-08-04T08:49:01.609Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/03/b6617f32385295729f3af0ae0d512cf87ba4793b9ce462ea020d776a9025/harbor-0.20.0-py3-none-any.whl", hash = "sha256:4b7e48223aea2384cdb8c9eff35eaebd482fc9b1ec09f8193a121c47356ff19a", size = 1792416, upload-time = "2026-07-18T21:25:19.206Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/2c/64936892fb1915549e1a3c8a2f66bf4e44d5ae27d3693ba7a281e9abe7c1/harbor-0.20.1.dev202608040148-py3-none-any.whl", hash = "sha256:609c72d067144efca8b1a71a938a0e898adcc310c199e038e0632aaa5cee086d", size = 1881880, upload-time = "2026-08-04T08:48:59.452Z" },
 ]
 
 [[package]]
@@ -1782,7 +1782,7 @@ modal = [
 [package.metadata]
 requires-dist = [
     { name = "dockerfile-parse", marker = "extra == 'modal'", specifier = ">=2.0.1" },
-    { name = "harbor", specifier = ">=0.20,<0.21" },
+    { name = "harbor", specifier = ">=0.20.1.dev202607200228,<0.21" },
     { name = "modal", marker = "extra == 'modal'", specifier = ">=1.5.1" },
 ]
 provides-extras = ["modal"]

@@ -223,6 +223,8 @@ harbor run \
   --allow-agent-host api.openai.com
 ```
 
+This uses Harbor's stock `pi` agent. For an OpenAI-compatible endpoint, export `OPENAI_BASE_URL` alongside `OPENAI_API_KEY`; Harbor forwards both to Pi. Selfbench does not copy local Pi `models.json` or `auth.json` files into rollout sandboxes, so use a stock Pi provider or its supported environment variables.
+
 Each rollout receives the resolved engineer prompt, edits a clean snapshot, and produces an agent patch. The grader removes held-out test edits, applies `test.patch`, and runs fail-to-pass plus pass-to-pass tests.
 
 Harbor owns the job configuration, execution, and result artifacts under `harbor-jobs/`. Changing task inputs makes the compiled Harbor task stale, so rerun `selfbench validate` before interpreting new scores.
