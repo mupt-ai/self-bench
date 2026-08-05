@@ -72,7 +72,7 @@ harbor run \
   --allow-agent-host api.openai.com
 ```
 
-For another provider, set its API key, change `provider/model`, and allow its API host. You can replace `pi` with any other agent supported by Harbor.
+This uses Harbor's stock Pi agent. For an OpenAI-compatible endpoint, also export `OPENAI_BASE_URL`; Harbor forwards it with `OPENAI_API_KEY`. Harbor does not copy local Pi `models.json` or `auth.json` files into rollout sandboxes, so use a stock Pi provider or configure a supported provider through its environment variables. You can replace `pi` with any other agent supported by Harbor.
 
 ## What an eval contains
 

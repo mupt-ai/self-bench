@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from selfbench.cli import _harbor_run_command, _iter_task_dirs, build_parser
 from selfbench.harbor import HarborRun, build_harbor_task
-from selfbench.harbor_pi import PI_VERSION, _provider_error
 from selfbench.runner import (
     DEFAULT_VALIDATION_ENVIRONMENT,
     BatchValidationOutcome,
@@ -438,6 +437,15 @@ class BatchValidationTest(unittest.TestCase):
 class HarborNativeCommandTest(unittest.TestCase):
     """The modal default must reach the harbor CLI as `--env modal`."""
 
+    def test_pi_resolves_to_harbors_registered_agent(self) -> None:
+        from harbor.agents.factory import AgentFactory
+        from harbor.models.agent.name import AgentName
+
+        agent_class = AgentFactory.get_agent_class(AgentName.PI)
+
+        self.assertEqual(agent_class.__module__, "harbor.agents.installed.pi")
+        self.assertEqual(agent_class.__name__, "Pi")
+
     @patch("selfbench.harbor.load_harbor_run")
     @patch("selfbench.harbor.subprocess.run")
     @patch("selfbench.harbor._require_harbor")
@@ -482,6 +490,46 @@ class HarborNativeCommandTest(unittest.TestCase):
     @patch("selfbench.harbor.load_harbor_run")
     @patch("selfbench.harbor.subprocess.run")
     @patch("selfbench.harbor._require_harbor")
+    def test_run_harbor_task_uses_stock_pi_agent(self, _load, run, require) -> None:
+        from pathlib import Path as P
+
+        require.return_value = P("/usr/local/bin/harbor")
+        run.return_value.returncode = 0
+
+        from selfbench.harbor import run_harbor_task
+
+        with tempfile.TemporaryDirectory() as raw:
+            task_dir = Path(raw) / "harbor-tasks" / "task"
+            task_dir.mkdir(parents=True)
+            run_harbor_task(task_dir, Path(raw) / "jobs", agent="pi", quiet=True)
+
+        argv = run.call_args.args[0]
+        harbor_agent = argv[argv.index("--agent") + 1]
+        self.assertEqual(harbor_agent, "pi")
+        self.assertNotIn(":", harbor_agent)
+
+    @patch("selfbench.harbor.load_harbor_run")
+    @patch("selfbench.harbor.subprocess.run")
+    @patch("selfbench.harbor._require_harbor")
+    def test_run_harbor_task_preserves_non_pi_agent(self, _load, run, require) -> None:
+        from pathlib import Path as P
+
+        require.return_value = P("/usr/local/bin/harbor")
+        run.return_value.returncode = 0
+
+        from selfbench.harbor import run_harbor_task
+
+        with tempfile.TemporaryDirectory() as raw:
+            task_dir = Path(raw) / "harbor-tasks" / "task"
+            task_dir.mkdir(parents=True)
+            run_harbor_task(task_dir, Path(raw) / "jobs", agent="oracle", quiet=True)
+
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[argv.index("--agent") + 1], "oracle")
+
+    @patch("selfbench.harbor.load_harbor_run")
+    @patch("selfbench.harbor.subprocess.run")
+    @patch("selfbench.harbor._require_harbor")
     def test_run_harbor_task_writes_log_when_requested(self, _load, run, require) -> None:
         from pathlib import Path as P
 
@@ -497,39 +545,6 @@ class HarborNativeCommandTest(unittest.TestCase):
             log_path = root / "logs" / "task.log"
             run_harbor_task(task_dir, root / "jobs", agent="nop", environment="modal", quiet=True, log_path=log_path)
             self.assertTrue(log_path.is_file())
-
-
-class HarborPiTest(unittest.TestCase):
-    def test_current_pi_version_is_pinned(self) -> None:
-        self.assertEqual(PI_VERSION, "0.82.1")
-
-    def test_provider_error_is_not_treated_as_agent_success(self) -> None:
-        output = "\n".join(
-            [
-                json.dumps({"type": "message_end", "message": {"role": "user"}}),
-                json.dumps(
-                    {
-                        "type": "message_end",
-                        "message": {
-                            "role": "assistant",
-                            "stopReason": "error",
-                            "errorMessage": "400 incompatible thinking config",
-                        },
-                    }
-                ),
-            ]
-        )
-        self.assertEqual(_provider_error(output), "400 incompatible thinking config")
-        self.assertIsNone(
-            _provider_error(
-                json.dumps(
-                    {
-                        "type": "message_end",
-                        "message": {"role": "assistant", "stopReason": "stop"},
-                    }
-                )
-            )
-        )
 
 
 class ResultHistoryTest(unittest.TestCase):
@@ -565,7 +580,7 @@ class HarborCommandTest(unittest.TestCase):
         self.assertNotIn("run", commands)
         self.assertNotIn("report", commands)
 
-    def test_uses_harbor_pi_with_sol_and_xhigh(self) -> None:
+    def test_uses_stock_pi_with_sol_and_xhigh(self) -> None:
         command = _harbor_run_command(Path("harbor-tasks/example task"))
 
         self.assertIn("harbor run", command)
@@ -680,28 +695,6 @@ def _fake_run(root: Path, rewards: dict[str, float | int]) -> HarborRun:
         "verifier_result": {"rewards": rewards},
     }
     return HarborRun(root, trial, {"trial_results": [result]}, result)
-
-
-class SelfbenchPiAgentConfigTest(unittest.TestCase):
-    def test_thinking_enum_matches_pinned_pi_package(self) -> None:
-        from selfbench.harbor_pi import SelfbenchPi
-
-        flags = {flag.kwarg: flag.choices for flag in SelfbenchPi.CLI_FLAGS}
-        self.assertIn("max", flags["thinking"])
-        self.assertIn("xhigh", flags["thinking"])
-
-    def test_models_json_payload_is_validated(self) -> None:
-        import asyncio
-
-        from selfbench.harbor_pi import MODELS_JSON_FILE_ENV, SelfbenchPi
-
-        with tempfile.TemporaryDirectory() as raw_dir:
-            bad = Path(raw_dir) / "models.json"
-            bad.write_text("{not json")
-            with patch.dict("os.environ", {MODELS_JSON_FILE_ENV: str(bad)}):
-                agent = SelfbenchPi.__new__(SelfbenchPi)
-                with self.assertRaises(json.JSONDecodeError):
-                    asyncio.run(agent._install_models_json(object()))
 
 
 class SealedAgentNetworkTest(unittest.TestCase):

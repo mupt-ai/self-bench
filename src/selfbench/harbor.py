@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -25,7 +26,7 @@ from typing import Any
 from .task import Task, resolve_toolchains
 
 HARBOR_SCHEMA_VERSION = "1.4"
-HARBOR_VERSION_RANGE = ">=0.20,<0.21"
+HARBOR_VERSION_RANGE = ">=0.20.1.dev202607200228,<0.21"
 ENVIRONMENT_COMPILER_REVISION = 4
 _BASE_IMAGE = "ubuntu:24.04"
 _GO_VERSION = "1.25.0"
@@ -115,14 +116,13 @@ def run_harbor_task(
     jobs_root.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     job_name = f"{harbor_task_dir.name}-{agent}-{timestamp}-{uuid.uuid4().hex[:8]}"
-    harbor_agent = "selfbench.harbor_pi:SelfbenchPi" if agent == "pi" else agent
     command = [
         str(harbor),
         "run",
         "--path",
         str(harbor_task_dir),
         "--agent",
-        harbor_agent,
+        agent,
         "--env",
         environment,
         "--job-name",
@@ -564,11 +564,14 @@ def _require_harbor() -> Path:
     result = subprocess.run([str(harbor), "--version"], text=True, capture_output=True, check=False)
     version = result.stdout.strip() or result.stderr.strip()
     match = version.rsplit(" ", 1)[-1]
-    try:
-        major, minor, *_ = (int(part) for part in match.split("."))
-    except ValueError as exc:
-        raise RuntimeError(f"could not determine Harbor version from: {version}") from exc
-    if (major, minor) != (0, 20):
+    version_match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:\.dev(\d+))?$", match)
+    if version_match is None:
+        raise RuntimeError(f"could not determine Harbor version from: {version}")
+    major, minor, patch, dev = version_match.groups()
+    installed_version = (int(major), int(minor), int(patch))
+    if not (installed_version[:2] == (0, 20) and installed_version >= (0, 20, 1)):
+        raise RuntimeError(f"Harbor {HARBOR_VERSION_RANGE} is required, found {version}")
+    if dev is not None and int(dev) < 202607200228:
         raise RuntimeError(f"Harbor {HARBOR_VERSION_RANGE} is required, found {version}")
     return harbor
 
