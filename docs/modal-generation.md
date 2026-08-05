@@ -13,9 +13,14 @@ review pass.
 
 1. A read-only local Pi parent ranks `count + reserve_count` merged pull requests. It verifies an
    authentic pre-implementation provenance source and emits a schema-validated plan.
-2. The coordinator uploads only the selected provenance files to a private Modal Volume. Paths are
-   restricted to the source repository and known Pi, Claude, Codex, relaymux, and handoff roots.
-   Credential-like files and provenance files larger than 50 MiB are rejected.
+2. The coordinator locally extracts the selected engineer prompt, redacts recognized credential
+   forms (including common bearer, AWS, npm/GitLab, database/password, and private-key forms), and
+   uploads it as a one-message generic JSON artifact to a private Modal Volume. Raw session exports,
+   tool results, assistant responses, and other human turns are never uploaded. This is
+   defense-in-depth pattern filtering, not a guarantee that arbitrary prose contains no sensitive
+   data. Source paths are restricted to the source repository and known Pi, Claude, Codex, relaymux,
+   and handoff roots; credential-like source files and provenance files larger than 50 MiB are
+   rejected.
 3. The coordinator starts one candidate per Modal Sandbox, up to the configured concurrency. Each
    Sandbox has an isolated repository clone, Pi session, and output path.
 4. A child either publishes one task or records a structured rejection. Rejections consume the next

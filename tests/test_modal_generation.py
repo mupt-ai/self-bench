@@ -61,10 +61,19 @@ def write_task(tasks_root: Path, task_id: str, pull_number: int) -> Path:
             {
                 "task_id": task_id,
                 "repo": "example/project",
+                "base_commit": "b" * 40,
+                "workdir": ".",
+                "setup_cmd": "true",
+                "test_cmd": "pytest {tests}",
+                "fail_to_pass": ["tests/test_fix.py::test_fix"],
+                "pass_to_pass": ["tests/test_existing.py::test_existing"],
+                "test_paths": ["tests"],
                 "source_pr": pull_number,
             }
         )
     )
+    (task_dir / "prompt.md").write_text("Fix the assigned regression without changing public behavior.\n")
+    (task_dir / "test.patch").write_text("diff --git a/tests/test_fix.py b/tests/test_fix.py\n")
     (task_dir / "gold.patch").write_text(f"gold for {task_id}\n")
     return task_dir
 
@@ -227,6 +236,29 @@ class ArtifactTest(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertTrue((output / "task-101" / "task.json").is_file())
         self.assertTrue((output / ".selfbench-generation.json").is_file())
+
+    def test_hash_consistent_but_invalid_task_is_rejected(self) -> None:
+        manifest = GenerationManifest.from_dict(manifest_data())
+        run_root = self.root / "downloaded-run"
+        worker_root = complete_worker(
+            run_root,
+            manifest,
+            0,
+            task_id="task-101",
+            pull_number=101,
+        )
+        task_dir = worker_root / "tasks" / "task-101"
+        task_data = json.loads((task_dir / "task.json").read_text())
+        task_data.pop("setup_cmd")
+        (task_dir / "task.json").write_text(json.dumps(task_data))
+        with self.assertRaisesRegex(ManifestError, "invalid authored task"):
+            write_worker_artifact_manifest(
+                worker_root,
+                worker_root / "tasks",
+                manifest,
+                manifest.workers[0],
+                build_commit="b" * 40,
+            )
 
     def test_tampered_task_file_is_rejected(self) -> None:
         manifest = GenerationManifest.from_dict(manifest_data())

@@ -27,3 +27,6 @@ jobs:
       - run: bun run validate
         env:
           UV_PYTHON: "3.12"
+      - run: uv build
+      - name: Verify packaged review console
+        run: uv run python scripts/verify-wheel-review-assets.py dist/*.whl

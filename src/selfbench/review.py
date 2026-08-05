@@ -20,13 +20,22 @@ from .task import Task, load_task
 
 _REVIEW_BUILD_LOCK = threading.Lock()
 _REVIEW_STATUSES = {"unreviewed", "in_review", "approved", "changes_requested", "rejected"}
+_MAX_JSON_BODY_BYTES = 1024 * 1024
+
+
+def _path_component(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value or value in {".", ".."} or Path(value).name != value or "/" in value or "\\" in value:
+        raise ValueError(f"{field} must be a path-safe component")
+    return value
 
 
 class ReviewStore:
     def __init__(self, tasks_root: Path, results_root: Path, model_slugs: list[str]):
         self.tasks_root = tasks_root.resolve()
         self.results_root = results_root.resolve()
-        self.model_slugs = model_slugs
+        self.model_slugs = [_path_component(slug, "model slug") for slug in model_slugs]
+        if len(self.model_slugs) != len(set(self.model_slugs)):
+            raise ValueError("model slugs must not contain duplicates")
 
     def task_dirs(self) -> list[Path]:
         if (self.tasks_root / "task.json").is_file():
@@ -155,6 +164,9 @@ class ReviewStore:
         if patch_kind == "gold":
             return task.gold_patch
         if patch_kind == "agent" and model_slug:
+            model_slug = _path_component(model_slug, "model slug")
+            if model_slug not in self.model_slugs:
+                raise KeyError(f"unknown model slug {model_slug}")
             patch = self._run_detail(task_id, model_slug).get("agent_patch")
             return patch if isinstance(patch, str) else ""
         raise KeyError(f"unknown patch {patch_kind}")
@@ -234,7 +246,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
                     self.review_store.patch_text(task_id, patch_kind, model_slug),
                     "text/plain; charset=utf-8",
                 )
-            except KeyError:
+            except (KeyError, ValueError):
                 self._send_error_json(HTTPStatus.NOT_FOUND, "unknown patch")
             return
         if path.startswith("/api/tasks/"):
@@ -266,11 +278,19 @@ class ReviewHandler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
     def _read_json_body(self) -> dict[str, object]:
-        length = int(self.headers.get("content-length", "0"))
-        raw = self.rfile.read(length).decode("utf-8")
+        content_type = self.headers.get_content_type()
+        if content_type != "application/json":
+            raise ValueError("content-type must be application/json")
         try:
+            length = int(self.headers.get("content-length", "0"))
+        except ValueError as exc:
+            raise ValueError("content-length must be an integer") from exc
+        if length < 0 or length > _MAX_JSON_BODY_BYTES:
+            raise ValueError(f"request body must not exceed {_MAX_JSON_BODY_BYTES} bytes")
+        try:
+            raw = self.rfile.read(length).decode("utf-8")
             payload = json.loads(raw or "{}")
-        except json.JSONDecodeError as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("request body must be JSON") from exc
         if not isinstance(payload, dict):
             raise ValueError("request body must be a JSON object")
@@ -341,10 +361,17 @@ def _match_patch_path(path: str) -> tuple[str, str, str | None] | None:
 
 
 def _ensure_review_build() -> Path:
-    repo_root = Path(__file__).resolve().parents[2]
-    source_root = repo_root / "review"
-    dist_root = repo_root / "src" / "selfbench" / "review_dist"
+    package_root = Path(__file__).resolve().parent
+    dist_root = package_root / "review_dist"
     index = dist_root / "index.html"
+    repo_root = package_root.parents[1]
+    source_root = repo_root / "review"
+    source_markers = [repo_root / "package.json", repo_root / "bun.lock", source_root / "src"]
+    if not all(path.exists() for path in source_markers):
+        if index.is_file():
+            return dist_root
+        raise RuntimeError("installed selfbench package does not contain the review frontend")
+
     sources = [repo_root / "package.json", repo_root / "bun.lock", *source_root.rglob("*")]
     latest_source = max(path.stat().st_mtime for path in sources if path.is_file())
     if index.is_file() and index.stat().st_mtime >= latest_source:

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from selfbench.agent_input import extract_prompt, extract_trace
+from selfbench.agent_input import build_provenance_payload, build_provenance_staging, extract_prompt, extract_provenance_artifact, extract_trace
 
 
 class AgentInputTest(unittest.TestCase):
@@ -80,6 +80,78 @@ class AgentInputTest(unittest.TestCase):
             {"role": "user", "content": "Make the timeout ten minutes.", "user_message_index": 1},
         ])
         self.assertEqual(extract_prompt(path, message_index=-1), "Make the timeout ten minutes.")
+
+    def test_provenance_artifact_contains_only_selected_redacted_prompt(self) -> None:
+        path = self.write_jsonl(
+            "pi.jsonl",
+            [
+                {"type": "message", "parentId": None, "message": {"role": "user", "content": "Unrelated earlier request"}},
+                {"type": "message", "parentId": None, "message": {"role": "assistant", "content": "Unrelated assistant response"}},
+                {"type": "message", "parentId": None, "message": {"role": "toolResult", "content": "UNRELATED_RAW_SECRET"}},
+                {"type": "message", "parentId": None, "message": {"role": "user", "content": "Fix it with sk-abcdefghijklmnopqrstuvwxyz1234"}},
+            ],
+        )
+
+        artifact = extract_provenance_artifact(path, source_format="pi", message_index=1)
+        encoded = json.dumps(artifact)
+
+        self.assertEqual(artifact, {"messages": [{"role": "user", "content": "Fix it with sk-[REDACTED]"}]})
+        self.assertNotIn("UNRELATED_RAW_SECRET", encoded)
+        self.assertNotIn("Unrelated", encoded)
+        self.assertNotIn("abcdefghijklmnopqrstuvwxyz1234", encoded)
+
+    def test_provenance_payload_is_deterministic_generic_json(self) -> None:
+        path = self.root / "prompt.json"
+        path.write_text(json.dumps({"messages": [{"role": "user", "content": "Ship it"}]}))
+        payload = build_provenance_payload(path)
+        self.assertEqual(payload, b'{"messages":[{"content":"Ship it","role":"user"}]}')
+
+    def test_provenance_staging_contract_rewrites_exact_bytes_hash_and_path(self) -> None:
+        path = self.root / "prompt.json"
+        path.write_text(json.dumps({"messages": [
+            {"role": "user", "content": "Earlier request"},
+            {"role": "user", "content": "Ship it"},
+        ]}))
+        payload, remote_path, rewritten = build_provenance_staging(
+            path,
+            run_id="run-1",
+            worker_id="worker-1",
+            artifact_mount="/artifacts",
+            message_index=1,
+        )
+        checksum = "d124f9b7b0b452864d91f7197653a72c009bccb92b7f310acb118c95290f9068"
+        self.assertEqual(payload, b'{"messages":[{"content":"Ship it","role":"user"}]}')
+        self.assertEqual(remote_path, f"runs/run-1/inputs/worker-1/{checksum}.json")
+        self.assertEqual(rewritten, {
+            "path": f"/artifacts/{remote_path}",
+            "format": "generic",
+            "message_index": 0,
+            "sha256": checksum,
+        })
+
+    def test_redacts_common_credential_families_from_selected_prompt(self) -> None:
+        credentials = "\n".join([
+            "Authorization: Bearer bearer-token-abcdefghijklmnopqrstuvwxyz",
+            "AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKLMNOP",
+            "AWS_SECRET_ACCESS_KEY=abcdefghijklmnopqrstuvwxyz/1234567890+ABCD",
+            "npm_abcdefghijklmnopqrstuvwxyz123456",
+            "glpat-abcdefghijklmnopqrstuvwxyz123456",
+            "PASSWORD=hunter2-secret",
+            "DATABASE_URL=postgresql://user:secret@db.example/app",
+            "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----",
+        ])
+        path = self.root / "credentials.json"
+        path.write_text(json.dumps({"messages": [{"role": "user", "content": credentials}]}))
+
+        prompt = extract_prompt(path)
+
+        for secret in (
+            "bearer-token", "AKIAABCDEFGHIJKLMNOP", "abcdefghijklmnopqrstuvwxyz/1234567890+ABCD",
+            "npm_abcdefghijklmnopqrstuvwxyz", "glpat-abcdefghijklmnopqrstuvwxyz", "hunter2-secret",
+            "user:secret", "private-material",
+        ):
+            self.assertNotIn(secret, prompt)
+        self.assertIn("[REDACTED PRIVATE KEY]", prompt)
 
     def test_extracts_generic_messages_json(self) -> None:
         path = self.root / "generic.json"
