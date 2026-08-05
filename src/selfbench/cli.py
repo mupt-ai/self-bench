@@ -16,6 +16,7 @@ from .prompt_generation import generate_prompt, save_generated_prompt
 from .quality import audit_task, format_audit_markdown
 from .review import cmd_review
 from .runner import (
+    DEFAULT_SETUP_FAILURE_THRESHOLD,
     DEFAULT_VALIDATION_ENVIRONMENT,
     save_result,
     validate_batch,
@@ -187,6 +188,12 @@ def cmd_validate_batch(args: argparse.Namespace) -> int:
 
     environment = args.env or DEFAULT_VALIDATION_ENVIRONMENT
     concurrency = args.concurrency or len(tasks)
+    preflight = getattr(args, "preflight", True) and environment == "modal"
+    setup_failure_threshold = getattr(
+        args,
+        "setup_failure_threshold",
+        DEFAULT_SETUP_FAILURE_THRESHOLD,
+    )
     outcomes = validate_batch(
         tasks,
         repo_for,
@@ -197,10 +204,14 @@ def cmd_validate_batch(args: argparse.Namespace) -> int:
         concurrency=concurrency,
         rebuild=True,
         log_dir=Path(args.logs),
+        preflight=preflight,
+        setup_failure_threshold=setup_failure_threshold,
     )
     summary = {
         "environment": environment,
         "concurrency": concurrency,
+        "preflight": preflight,
+        "setup_failure_threshold": setup_failure_threshold,
         "tasks": len(tasks),
         "outcomes": [outcome.as_dict() for outcome in outcomes],
     }
@@ -403,7 +414,25 @@ def build_parser() -> argparse.ArgumentParser:
             "(e.g. --repos-root ~/code/repos resolves fastapi/fastapi to that dir/fastapi)"
         ),
     )
-    p_batch.set_defaults(fn=cmd_validate_batch)
+    p_batch.add_argument(
+        "--no-preflight",
+        dest="preflight",
+        action="store_false",
+        help=(
+            "skip the local Docker image-build preflight for Modal batches (not "
+            "recommended; it avoids spending Modal jobs on broken task setup)"
+        ),
+    )
+    p_batch.add_argument(
+        "--setup-failure-threshold",
+        type=_positive_int,
+        default=DEFAULT_SETUP_FAILURE_THRESHOLD,
+        help=(
+            "block the remaining tasks for a repository after this many canaries have "
+            "the same setup failure (default: %(default)s)"
+        ),
+    )
+    p_batch.set_defaults(fn=cmd_validate_batch, preflight=True)
 
     p_couple = sub.add_parser(
         "review-coupling",

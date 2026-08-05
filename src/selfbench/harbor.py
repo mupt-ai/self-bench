@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -26,7 +27,7 @@ from .task import Task
 
 HARBOR_SCHEMA_VERSION = "1.4"
 HARBOR_VERSION_RANGE = ">=0.20,<0.21"
-ENVIRONMENT_COMPILER_REVISION = 3
+ENVIRONMENT_COMPILER_REVISION = 4
 _BASE_IMAGE = "ubuntu:24.04"
 _GO_VERSION = "1.25.0"
 _NODE_VERSION = "22.14.0"
@@ -67,6 +68,7 @@ def build_harbor_task(
     output_root = output_root.resolve()
     _check_commit(local_repo, task.base_commit)
     task_name = f"{_harbor_name(org)}/{_harbor_name(task.task_id)}"
+    package_manager = _package_manager_spec(local_repo, task.base_commit)
     destination = output_root / task.task_id
     if destination.exists() and not overwrite:
         manifest = _read_json(destination / GENERATED_MANIFEST)
@@ -83,7 +85,7 @@ def build_harbor_task(
     output_root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{task.task_id}-", dir=output_root))
     try:
-        _write_harbor_task(staging, task, local_repo, task_name)
+        _write_harbor_task(staging, task, local_repo, task_name, package_manager)
         if destination.exists():
             shutil.rmtree(destination)
         staging.replace(destination)
@@ -209,6 +211,7 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "gold_patch_applies": float(gold_rewards.get("patch_applied", 0)) >= 1,
     }
     infrastructure_errors = {}
+    setup_failures = {}
     for name, run in (("base", base), ("oracle", oracle)):
         exc = run.exception
         if exc is not None:
@@ -216,6 +219,11 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
                 f"{exc.get('exception_type', 'Harbor error')}: "
                 f"{exc.get('exception_message', '')}".rstrip()
             )
+        if (
+            float(run.rewards.get("patch_applied", 1)) >= 1
+            and float(run.rewards.get("setup_completed", 1)) == 0
+        ):
+            setup_failures[name] = _setup_failure_signature(run)
     return {
         "result_schema_version": "harbor-1",
         "run_id": f"{base.trial_result.get('id')}+{oracle.trial_result.get('id')}",
@@ -224,6 +232,7 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
         "valid": all(checks.values()),
         "checks": checks,
         **({"infrastructure_errors": infrastructure_errors} if infrastructure_errors else {}),
+        **({"setup_failures": setup_failures} if setup_failures else {}),
         "task_fingerprints": task.evaluation_fingerprints,
         "harbor": {
             "version_range": HARBOR_VERSION_RANGE,
@@ -242,7 +251,13 @@ def validation_result(task: Task, base: HarborRun, oracle: HarborRun) -> dict[st
     }
 
 
-def _write_harbor_task(root: Path, task: Task, local_repo: Path, task_name: str) -> None:
+def _write_harbor_task(
+    root: Path,
+    task: Task,
+    local_repo: Path,
+    task_name: str,
+    package_manager: str | None,
+) -> None:
     environment = root / "environment"
     solution = root / "solution"
     tests = root / "tests"
@@ -258,8 +273,8 @@ def _write_harbor_task(root: Path, task: Task, local_repo: Path, task_name: str)
     (root / "instruction.md").write_text(task.prompt.rstrip() + "\n")
     (solution / "solve.sh").write_text(_solution_script(task))
     (tests / "test.sh").write_text(_test_script(task))
-    (environment / "Dockerfile").write_text(_environment_dockerfile(task))
-    (tests / "Dockerfile").write_text(_verifier_dockerfile(task))
+    (environment / "Dockerfile").write_text(_environment_dockerfile(task, package_manager))
+    (tests / "Dockerfile").write_text(_verifier_dockerfile(task, package_manager))
     os.chmod(solution / "solve.sh", 0o755)
     os.chmod(tests / "test.sh", 0o755)
     (root / "task.toml").write_text(_task_toml(task, task_name))
@@ -271,6 +286,7 @@ def _write_harbor_task(root: Path, task: Task, local_repo: Path, task_name: str)
                 "harbor_version_range": HARBOR_VERSION_RANGE,
                 "environment_compiler_revision": ENVIRONMENT_COMPILER_REVISION,
                 "task_id": task.task_id,
+                "package_manager": package_manager,
                 "task_fingerprints": task.evaluation_fingerprints,
                 "generated_at": datetime.now(UTC).isoformat(),
             },
@@ -381,6 +397,28 @@ RUN arch="$(dpkg --print-architecture)" \\
 """
 
 
+def _corepack_layer(package_manager: str | None) -> str:
+    """Persist the package manager the base snapshot declares via Corepack.
+
+    Corepack normally downloads a project's manager into ``/root/.cache`` on
+    first use. The setup layer is cache-mounted there, which lets distinct
+    images accidentally reuse that mutable state. Keeping the resolved binary
+    under ``/usr/local/share/corepack`` makes each generated image self-
+    contained and ensures that frozen installs use the lockfile's own manager.
+    """
+    if package_manager is None:
+        return ""
+    name, _, _ = package_manager.partition("@")
+    return f"""ENV COREPACK_HOME=/usr/local/share/corepack \\
+    COREPACK_DEFAULT_TO_LATEST=0
+RUN mkdir -p "$COREPACK_HOME" \\
+    && corepack enable \\
+    && corepack prepare {shlex.quote(package_manager)} --activate \\
+    && corepack {shlex.quote(name)} --version \\
+    && chmod -R a+rX "$COREPACK_HOME"
+"""
+
+
 def _repo_layers(task: Task) -> str:
     """Unpack the history-free snapshot and run the task's own setup command."""
     return f"""COPY repo.tar.gz /tmp/repo.tar.gz
@@ -394,7 +432,7 @@ RUN mkdir -p /app && tar -xzf /tmp/repo.tar.gz -C /app && rm /tmp/repo.tar.gz \\
 """
 
 
-def _environment_dockerfile(task: Task) -> str:
+def _environment_dockerfile(task: Task, package_manager: str | None = None) -> str:
     """Agent-facing image: no gold patch, no held-out tests, no provenance.
 
     ``/opt/selfbench/base.git`` is a root-only copy of the pristine base repo.
@@ -402,7 +440,7 @@ def _environment_dockerfile(task: Task) -> str:
     cannot disguise what it actually changed.
     """
     return f"""{_toolchain_layers()}
-RUN useradd --create-home --shell /bin/bash agent
+{_corepack_layer(package_manager)}RUN useradd --create-home --shell /bin/bash agent
 {_repo_layers(task)}
 RUN git -C /app reset --hard -q HEAD \\
     && git -C /app clean -fdq \\
@@ -416,10 +454,10 @@ WORKDIR /app
 """
 
 
-def _verifier_dockerfile(task: Task) -> str:
+def _verifier_dockerfile(task: Task, package_manager: str | None = None) -> str:
     """Verifier image: holds the held-out tests the agent never sees."""
     return f"""{_toolchain_layers()}
-{_repo_layers(task)}
+{_corepack_layer(package_manager)}{_repo_layers(task)}
 RUN mkdir -p /opt/selfbench && chmod 700 /opt/selfbench
 COPY . /tests/
 RUN chmod +x /tests/test.sh
@@ -451,6 +489,7 @@ patch_applied=1
 fail_to_pass=0
 pass_to_pass=0
 deterministic=0
+setup_completed=0
 
 if [ ! -f /opt/selfbench/agent.patch ]; then
   echo "Harbor did not transfer the captured agent patch" >&2
@@ -468,6 +507,7 @@ fi
 if [ "$patch_applied" -eq 1 ]; then
   cd {workdir}
   if bash -lc {shlex.quote(setup)}; then
+    setup_completed=1
     if bash -lc {shlex.quote(f2p)}; then
       fail_to_pass=1
       if bash -lc {shlex.quote(f2p)}; then deterministic=1; fi
@@ -481,7 +521,7 @@ if [ "$patch_applied" -eq 1 ] && [ "$fail_to_pass" -eq 1 ] && [ "$pass_to_pass" 
   reward=1
 fi
 cat > /logs/verifier/reward.json <<EOF
-{{"reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic}}
+{{"reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic, "setup_completed": $setup_completed}}
 EOF
 exit 0
 """
@@ -497,6 +537,40 @@ def _docker_run(command: str, workdir: str) -> str:
         "RUN --mount=type=cache,target=/root/.cache "
         f"cd {shlex.quote(workdir)} && bash -lc {shlex.quote(command)}"
     )
+
+
+def _setup_failure_signature(run: HarborRun) -> str:
+    """Return a stable, short signature for a verifier setup failure."""
+    output = run.trial_dir / "verifier" / "test-stdout.txt"
+    if output.is_file():
+        text = output.read_text(errors="replace")
+        if match := re.search(r"\bERR_[A-Z0-9_]+\b", text):
+            return match.group(0)
+    return "setup command failed"
+
+
+def _package_manager_spec(local_repo: Path, commit: str) -> str | None:
+    """Read a Corepack-compatible manager pin from the exact task snapshot."""
+    result = subprocess.run(
+        ["git", "-C", str(local_repo), "show", f"{commit}:package.json"],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        package_json = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    value = package_json.get("packageManager") if isinstance(package_json, dict) else None
+    if not isinstance(value, str):
+        return None
+    name, separator, version = value.partition("@")
+    if name not in {"pnpm", "yarn"} or not separator or not version or any(
+        char.isspace() for char in value
+    ):
+        return None
+    return value
 
 
 def _git_archive(local_repo: Path, commit: str) -> bytes:

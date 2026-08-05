@@ -112,6 +112,11 @@ class CliBatchEnvironmentTest(unittest.TestCase):
         ns = parser.parse_args(["validate-batch", "tasks", "--env", "docker"])
         self.assertEqual(ns.env, "docker")
 
+    def test_validate_batch_preflight_defaults_on_and_can_be_disabled(self) -> None:
+        parser = build_parser()
+        self.assertTrue(parser.parse_args(["validate-batch", "tasks"]).preflight)
+        self.assertFalse(parser.parse_args(["validate-batch", "tasks", "--no-preflight"]).preflight)
+
     def test_validate_batch_env_var_default(self) -> None:
         with patch.dict(os.environ, {"SELFBENCH_VALIDATION_ENV": "docker"}):
             parser = build_parser()
