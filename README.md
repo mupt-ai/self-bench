@@ -1,126 +1,191 @@
-# selfbench
+# SelfBench
 
 [![CI](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mupt-ai/selfbench/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Selfbench turns completed repository changes—usually merged pull requests—into reproducible software-engineering evals for [Harbor](https://harborframework.com).
+SelfBench turns completed GitHub pull requests into private, hard software-engineering evaluations that coding agents can run with [Harbor](https://harborframework.com), the task format and runner that executes an agent and grades its result.
 
-It recovers the original engineering request, separates the implementation from held-out tests, and checks that doing nothing fails while the known-good solution passes. Selfbench creates and validates evals; Harbor runs coding agents against them.
+It recovers the human-written request, separates the known-good implementation from tests hidden from evaluated agents, proves the task fails without a solution and passes with the reference solution, and rejects tests that depend on private details of that saved implementation. SelfBench supports hard mode only: every task must clear the size, file-spread, and test requirements below.
 
-## Quick start
+## How it works
 
-You need Python 3.12+, an authenticated [GitHub CLI](https://cli.github.com/), and an installed [Pi](https://github.com/earendil-works/pi) CLI. Use Docker for local validation or Modal for remote validation.
+[Temporal](https://temporal.io/) durably coordinates every run and carries each task through eight steps:
 
-```bash
-pip install selfbench
-```
+1. **Discover** merged pull requests with a human-authored request.
+2. **Author** a standalone instruction and split implementation from tests.
+3. **Audit** hard-mode size, patch separation, and task structure.
+4. **Validate without a solution (`nop`)** to prove new tests fail while regressions pass.
+5. **Validate with the reference solution (`oracle`)** to prove the known-good change passes everything.
+6. **Review** for instructions that reveal the solution and tests that depend on its private structure.
+7. **Repair held-out tests once** when that dependency is fixable, then repeat audit, validation, and review.
+8. **Export** accepted tasks as a sensitive, unencrypted Harbor bundle.
 
-Create one eval from a local clone whose GitHub remote you can access:
+Requests come from local Pi, Claude Code, or Codex sessions when available. For other repositories, SelfBench can use a merged, non-bot GitHub pull request's exact title and body. GitHub provenance is labeled separately and bound to that exact repository and PR number.
 
-```bash
-selfbench create --repo ~/code/my-project --count 1 --print
-```
+Every exported task has at least 100 changed implementation lines across at least three implementation files, one test that fails before the change and passes afterward, and two existing regression tests that pass both before and afterward. “Hard” is an eligibility profile, not a claim that every model will fail the task.
 
-Pi inspects merged pull requests, selects a viable change, writes the eval, validates it, and audits its provenance and test design. To target a specific change:
+## Run it locally
 
-```bash
-selfbench create --repo ~/code/my-project \
-  "Create an eval from PR 123."
-```
+### Requirements
 
-For a larger batch, a local discovery parent can rank provenance-backed candidates and fan each
-assigned pull request out to a fresh Modal Sandbox. See [Modal generation](docs/modal-generation.md).
+- Docker Engine with Compose v2, at least 8 GB RAM, and 20 GB free disk;
+- Node.js 22+, Bun 1.3.14+, Git, `curl`, and OpenSSL;
+- [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`;
+- [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) 0.84.0; start its interactive UI, run `/login`, and select OpenAI Codex;
+- Codex CLI logged into a ChatGPT subscription with `codex login`.
 
-Creation writes authoring files to `tasks/TASK_ID` under your current directory. Validation generates the runnable Harbor task at `harbor-tasks/TASK_ID`.
+Pi authentication powers discovery, authoring, and review; Codex CLI authentication powers the optional test-repair step. SelfBench verifies that both are subscription-backed and does not silently fall back to `OPENAI_API_KEY`.
 
-## Validate
-
-Validation defaults to Modal. Install its dependencies with `pip install "selfbench[modal]"`, or pass `--env docker` to run locally:
-
-```bash
-selfbench validate tasks/TASK_ID \
-  --repo ~/code/my-project \
-  --env docker
-```
-
-You can validate every eval directly below a task root with the same command:
+### Start SelfBench
 
 ```bash
-selfbench validate tasks --repo ~/code/my-project --env docker
+git clone https://github.com/mupt-ai/selfbench.git
+cd selfbench
+
+npm install -g @earendil-works/pi-coding-agent@0.84.0
+bun install --frozen-lockfile
+bun run build
+docker build -f Dockerfile.sandbox -t selfbench-sandbox:local .
+
+export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
+export GH_TOKEN="$(gh auth token)"
+docker compose up -d --build
+
+until curl --fail http://127.0.0.1:8080/healthz; do sleep 2; done
 ```
 
-An eval is valid only when all six checks pass:
+The stack is Postgres, Temporal, an ordinary HTTP API, and a long-running worker. The worker launches disposable Docker sandboxes; there is no MinIO service or separate computer runner.
 
-- the base fails the fail-to-pass tests;
-- the base passes the regression tests;
-- the gold patch applies cleanly;
-- the gold patch fixes the fail-to-pass tests;
-- the fix passes twice to catch obvious flakes;
-- the gold patch preserves the regression tests.
+### Generate tasks
 
-Successful validation prints the generated Harbor path and exact command to use next.
-
-## Run with Harbor
-
-Harbor—not selfbench—owns coding-agent execution and result artifacts:
+Run this from the same shell so the CLI uses the API token exported above:
 
 ```bash
-export OPENAI_API_KEY=...
-harbor run \
-  --path harbor-tasks/TASK_ID \
-  --agent pi \
-  --model openai/gpt-5.6-sol \
-  --agent-kwarg thinking=xhigh \
-  --jobs-dir harbor-jobs \
-  --allow-agent-host api.openai.com
+export SELFBENCH_API_URL=http://127.0.0.1:8080
+
+node dist/cli.js run \
+  --repo /absolute/path/to/your/repository \
+  --count 10 \
+  --reserve-count 10 \
+  --output ./selfbench-tasks.tar.gz
 ```
 
-This uses Harbor's stock Pi agent. For an OpenAI-compatible endpoint, also export `OPENAI_BASE_URL`; Harbor forwards it with `OPENAI_API_KEY`. Harbor does not copy local Pi `models.json` or `auth.json` files into rollout sandboxes, so use a stock Pi provider or configure a supported provider through its environment variables. You can replace `pi` with any other agent supported by Harbor.
+`--output` waits for the Temporal workflow, downloads the completed export, and verifies its SHA-256. Without `--output` or `--wait`, submission is asynchronous.
 
-## What an eval contains
+`--count` is the number of accepted tasks. `--reserve-count` gives discovery extra candidates to consume when authoring or validation rejects an initial candidate.
+
+Useful follow-up commands:
+
+```bash
+node dist/cli.js status RUN_ID
+node dist/cli.js list
+node dist/cli.js cancel RUN_ID
+node dist/cli.js download RUN_ID ./selfbench-RUN_ID.tar.gz
+```
+
+Generation defaults to Pi with `gpt-5.6-sol` at high reasoning. Multi-task runs can take hours and consume substantial model subscription and sandbox capacity.
+
+## Use Modal for parallel sandboxes
+
+[Modal](https://modal.com/) is an optional hosted sandbox provider that replaces host Docker execution; it requires a separate Modal account and may incur usage charges. Temporal still owns the workflow.
+
+```bash
+modal token new
+
+SELFBENCH_EXECUTION_BACKEND=modal \
+SELFBENCH_HARBOR_ENVIRONMENT=modal \
+SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml" \
+docker compose up -d --build
+```
+
+Discovery partitions requests across eight independently retryable workers. Modal defaults to 20 concurrent activities and starts another candidate whenever one is rejected. Model processes stream progress; discovery and authoring stop after eight minutes without output, while review stops after five.
+
+See [operations and deployment](docs/operations.md) for auth-file overrides, persistence, the HTTP API, GCS, and the Cloud Run topology.
+
+## Run agents with Harbor
+
+Extract one task from the export, then run it with Harbor. The `solution/` directory is mounted only for explicit oracle validation, never for coding-agent trials.
+
+```bash
+mkdir -p ./export ./selected-task
+tar -xzf ./selfbench-tasks.tar.gz -C ./export
+
+TASK_ID="$(jq -r '.tasks[0].taskId' ./export/manifest.json)"
+tar -xzf "./export/tasks/$TASK_ID.tar.gz" -C ./selected-task
+
+uv tool install --python 3.12 'harbor[modal]==0.20.1.dev202608040148'
+
+export CODEX_FORCE_AUTH_JSON=1
+export CODEX_AUTH_JSON_PATH="$HOME/.codex/auth.json"
+env -u OPENAI_API_KEY harbor run \
+  --path ./selected-task/harbor-task \
+  --agent codex \
+  --model gpt-5.6-sol \
+  --ak version=0.146.1 \
+  --ak reasoning_effort=high \
+  --env modal \
+  --jobs-dir ./harbor-jobs \
+  --yes
+```
+
+For a 10-task export, `dist/eval-main.js` runs every task through `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna` at high reasoning and reuses completed Harbor jobs after restart:
+
+```bash
+env -u OPENAI_API_KEY node dist/eval-main.js \
+  --export ./selfbench-tasks.tar.gz \
+  --jobs ./matrix-jobs \
+  --harbor harbor \
+  --environment modal \
+  --concurrency 20 \
+  --auth "$HOME/.codex/auth.json"
+```
+
+The harness rejects non-ChatGPT Codex auth and does not forward `OPENAI_API_KEY`.
+
+## What an export contains
 
 ```text
-tasks/<task-id>/
-├── task.json
-├── inputs/session.jsonl  # preferred source request
-├── test.patch            # held-out behavioral tests
-└── gold.patch            # known-good implementation
+manifest.json
+tasks/
+└── TASK_ID.tar.gz
+    └── harbor-task/
+        ├── task.toml
+        ├── instruction.md
+        ├── environment/
+        ├── tests/
+        └── solution/
 ```
 
-The coding agent receives a history-free snapshot of the base commit and the engineering request. Harbor grades its patch separately with the held-out tests. The agent never receives `gold.patch` or `test.patch`.
+Exports include base repository snapshots, held-out tests, and reference solutions. They intentionally exclude Git history, source sessions, and model transcripts. Treat every export as sensitive, unencrypted benchmark material.
 
-See [Authoring evals](https://github.com/mupt-ai/selfbench/blob/main/docs/authoring-evals.md) for the task schema, manual authoring, provenance rules, and rejection criteria. The [bundled selfbench skill](https://github.com/mupt-ai/selfbench/blob/main/src/selfbench/skills/selfbench/SKILL.md) contains the complete construction checklist.
+Read [task construction and validation](docs/task-construction.md) for the hard-mode contract, anti-coupling rules, repair boundary, and archive semantics.
 
-## Audit and review
+## Architecture
 
-```bash
-selfbench audit tasks --results results --strict
-selfbench review-coupling tasks/TASK_ID \
-  --provider openai --model gpt-5.6-sol
+```mermaid
+flowchart LR
+    CLI -->|HTTP| API
+    API --> Temporal
+    Temporal --> Worker
+    Worker -->|8 discovery shards| Sandboxes[Docker or Modal sandboxes]
+    Worker --> Harbor
+    API --> Store[Local volume or GCS]
+    Worker --> Store
 ```
 
-For provenance and patch review, open the local review console:
-
-```bash
-bun install --frozen-lockfile
-bun run build:review
-selfbench review --tasks tasks --results results
-```
-
-## Data handling
-
-`tasks/`, `results/`, `harbor-tasks/`, and `harbor-jobs/` are gitignored. They may contain proprietary code, source conversations, patches, and model outputs. Apply your organization's source-code, transcript, and provider-key policies before using private repositories.
+The API only starts and queries workflows. The worker owns GitHub access, model sessions, Harbor, and sandbox execution. Cloud Run can host the API because it only handles HTTP requests; the worker must run continuously on a long-lived container platform.
 
 ## Development
 
+SelfBench is TypeScript. Harbor remains an external executable.
+
 ```bash
-uv sync --locked
 bun install --frozen-lockfile
 bun run validate
 ```
 
-`bun run validate` runs the Python tests, review-console typecheck, and production build—the same checks used by CI.
+`bun run validate` runs Biome, strict TypeScript checks, tests, and production builds. The complete task-authoring rubric lives in [`src/skills/selfbench/SKILL.md`](src/skills/selfbench/SKILL.md).
 
 ## License
 
-MIT. See [LICENSE](https://github.com/mupt-ai/selfbench/blob/main/LICENSE).
+[MIT](LICENSE) © 2026 Mupt AI.

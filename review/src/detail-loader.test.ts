@@ -1,25 +1,20 @@
-import { expect, test } from 'bun:test';
+import { expect, test } from "bun:test";
+import { loadGuardedTaskDetail } from "./detail-loader";
+import type { TaskDetail } from "./types";
 
-import { loadGuardedTaskDetail } from './detail-loader';
-import type { TaskDetail } from './types';
-
-test('a refresh detail response cannot overwrite a task selected while it was pending', async () => {
-  let selected = 'old-task';
-  let resolveDetail!: (detail: TaskDetail) => void;
-  const pending = new Promise<TaskDetail>((resolve) => { resolveDetail = resolve; });
-  const committed: TaskDetail[] = [];
+test("a late detail response cannot overwrite a newly selected task", async () => {
   const controller = new AbortController();
-
-  const loading = loadGuardedTaskDetail(
-    'old-task',
+  const detail = { summary: { task_id: "task-a" } } as TaskDetail;
+  let selected = "task-a";
+  const committed: TaskDetail[] = [];
+  const pending = loadGuardedTaskDetail(
+    "task-a",
     controller.signal,
-    (taskId) => selected === taskId,
-    () => pending,
-    (detail) => committed.push(detail),
+    (taskId) => taskId === selected,
+    async () => detail,
+    (value) => committed.push(value),
   );
-  selected = 'new-task';
-  resolveDetail({ summary: { task_id: 'old-task' } } as TaskDetail);
-  await loading;
-
+  selected = "task-b";
+  await pending;
   expect(committed).toEqual([]);
 });
