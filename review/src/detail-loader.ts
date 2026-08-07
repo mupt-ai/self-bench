@@ -1,4 +1,4 @@
-import type { TaskDetail } from './types';
+import type { TaskDetail } from "./types";
 
 export async function loadGuardedTaskDetail(
   taskId: string,
@@ -8,5 +8,7 @@ export async function loadGuardedTaskDetail(
   commit: (detail: TaskDetail) => void,
 ): Promise<void> {
   const detail = await load(taskId, signal);
-  if (!signal.aborted && isSelected(taskId)) commit(detail);
+  if (!signal.aborted && isSelected(taskId)) {
+    commit(detail);
+  }
 }

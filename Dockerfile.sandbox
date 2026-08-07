@@ -1,0 +1,24 @@
+FROM node:22-bookworm
+
+ARG PI_VERSION=0.84.0
+ARG CODEX_VERSION=0.146.1
+ARG GH_VERSION=2.89.0
+ARG TARGETARCH
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git jq ripgrep unzip xz-utils \
+  && rm -rf /var/lib/apt/lists/*
+RUN case "${TARGETARCH}" in \
+    amd64) GH_SHA256=d0422caade520530e76c1c558da47daebaa8e1203d6b7ff10ad7d6faba3490d8 ;; \
+    arm64) GH_SHA256=9e64a623dfc242990aa5d9b3f507111149c4282f66b68eaad1dc79eeb13b9ce5 ;; \
+    *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac \
+  && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" -o /tmp/gh.tar.gz \
+  && echo "${GH_SHA256}  /tmp/gh.tar.gz" | sha256sum -c - \
+  && tar -xzf /tmp/gh.tar.gz -C /tmp \
+  && mv "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
+  && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH}"
+RUN npm install --global --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
+RUN npm install --global "@openai/codex@${CODEX_VERSION}"
+
+WORKDIR /work

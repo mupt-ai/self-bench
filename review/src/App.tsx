@@ -1,17 +1,43 @@
-import { parsePatchFiles } from '@pierre/diffs';
-import { FileDiff } from '@pierre/diffs/react';
-import React from 'react';
+import { parsePatchFiles } from "@pierre/diffs";
+import { FileDiff } from "@pierre/diffs/react";
+import React from "react";
+import { loadGuardedTaskDetail } from "./detail-loader";
+import type {
+  ModelResult,
+  PromptOrigin,
+  ReviewStatus,
+  RunDetail,
+  SourceTrace,
+  Summaries,
+  TaskDetail,
+  TaskSummary,
+} from "./types";
 
-import { loadGuardedTaskDetail } from './detail-loader';
-import type { PromptOrigin, ReviewStatus, RunDetail, SourceTrace, Summaries, TaskDetail, TaskSummary, Verdict } from './types';
+type Section = "brief" | "tests" | "gold" | "validation" | "runs" | "task";
+type QueueFilter = "all" | "attention" | "approved";
+type PatchKind = "test" | "gold" | "agent";
+type Theme = "light" | "dark";
 
-type Tab = 'prompt' | 'source' | 'task' | 'test' | 'gold' | 'validation' | 'runs';
-type Filter = 'all' | `verdict:${Verdict}` | `review:${ReviewStatus}`;
+const ThemeContext = React.createContext<Theme>("light");
 
-const reviewStatuses: ReviewStatus[] = ['unreviewed', 'in_review', 'approved', 'changes_requested', 'rejected'];
-const tabs: Tab[] = ['prompt', 'source', 'task', 'test', 'gold', 'validation', 'runs'];
+const sections: ReadonlyArray<{ id: Section; label: string }> = [
+  { id: "brief", label: "Brief" },
+  { id: "tests", label: "Tests" },
+  { id: "gold", label: "Reference" },
+  { id: "validation", label: "Validation" },
+  { id: "runs", label: "Model runs" },
+  { id: "task", label: "Task config" },
+];
 
-const verdictOrder: Record<Verdict, number> = { accepted: 0, needs_review: 1, rejected: 2 };
+const reviewStatuses: ReviewStatus[] = [
+  "unreviewed",
+  "in_review",
+  "approved",
+  "changes_requested",
+  "rejected",
+];
+
+const diffSkeletonWidths = [48, 65, 82, 55, 72, 89, 62, 79, 52, 69, 86, 59];
 
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -23,34 +49,48 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function App() {
+  const params = React.useMemo(() => new URLSearchParams(window.location.search), []);
   const [summaries, setSummaries] = React.useState<Summaries | null>(null);
-  const [selected, setSelected] = React.useState<string | null>(() => new URLSearchParams(window.location.search).get('task'));
+  const [selected, setSelected] = React.useState<string | null>(() => params.get("task"));
   const [detail, setDetail] = React.useState<TaskDetail | null>(null);
-  const [filter, setFilter] = React.useState<Filter>('all');
-  const [search, setSearch] = React.useState('');
-  const [tab, setTab] = React.useState<Tab>(() => {
-    const value = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    return value && tabs.includes(value) ? value : 'prompt';
-  });
+  const [section, setSection] = React.useState<Section>(() => sectionFrom(params.get("tab")));
+  const [filter, setFilter] = React.useState<QueueFilter>("all");
+  const [search, setSearch] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [theme, setTheme] = React.useState<Theme>(initialTheme);
   const selectedRef = React.useRef(selected);
   selectedRef.current = selected;
 
-  const fetchDetail = React.useCallback((taskId: string, signal: AbortSignal) =>
-    getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(taskId)}`, { signal }), []);
+  const fetchDetail = React.useCallback(
+    (taskId: string, signal: AbortSignal) =>
+      getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(taskId)}`, { signal }),
+    [],
+  );
 
   const refreshSummaries = React.useCallback(async () => {
-    const next = await getJson<Summaries>('/api/tasks');
+    const next = await getJson<Summaries>("/api/tasks");
     setSummaries(next);
     setSelected((current) => {
-      if (current && next.tasks.some((task) => task.task_id === current)) return current;
-      return (next.tasks.find((task) => task.verdict === 'accepted') ?? next.tasks[0])?.task_id ?? null;
+      if (current && next.tasks.some((task) => task.task_id === current)) {
+        return current;
+      }
+      return next.tasks[0]?.task_id ?? null;
     });
   }, []);
 
   React.useEffect(() => {
     refreshSummaries().catch((nextError: unknown) => setError(String(nextError)));
   }, [refreshSummaries]);
+
+  React.useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("selfbench-theme", theme);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", theme === "dark" ? "#0d1016" : "#f4f5f7");
+  }, [theme]);
 
   React.useEffect(() => {
     if (!selected) {
@@ -73,36 +113,51 @@ export function App() {
 
   React.useEffect(() => {
     const url = new URL(window.location.href);
-    if (selected) url.searchParams.set('task', selected); else url.searchParams.delete('task');
-    url.searchParams.set('tab', tab);
-    window.history.replaceState(null, '', url);
-  }, [selected, tab]);
+    if (selected) url.searchParams.set("task", selected);
+    else url.searchParams.delete("task");
+    url.searchParams.set("tab", section);
+    window.history.replaceState(null, "", url);
+  }, [section, selected]);
 
-  const query = search.trim().toLowerCase();
-  const visibleTasks = React.useMemo(() => [...(summaries?.tasks ?? [])]
-    .sort((a, b) => verdictOrder[a.verdict] - verdictOrder[b.verdict] || a.task_id.localeCompare(b.task_id))
-    .filter((task) => filter === 'all'
-      || (filter.startsWith('verdict:') && task.verdict === filter.slice('verdict:'.length))
-      || (filter.startsWith('review:') && task.review_status === filter.slice('review:'.length)))
-    .filter((task) => !query || `${task.task_id} ${task.workdir} ${task.source_pr ?? ''}`.toLowerCase().includes(query)), [filter, query, summaries]);
+  const visibleTasks = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (summaries?.tasks ?? [])
+      .filter((task) => {
+        if (filter === "approved") return task.review_status === "approved";
+        if (filter === "attention") {
+          return (
+            task.review_status !== "approved" || Object.values(task.model_results).includes("fail")
+          );
+        }
+        return true;
+      })
+      .filter((task) =>
+        query
+          ? `${task.task_id} ${task.repo} ${task.source_pr ?? ""}`.toLowerCase().includes(query)
+          : true,
+      );
+  }, [filter, search, summaries]);
 
   React.useEffect(() => {
-    function navigate(event: KeyboardEvent) {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
-      if (event.key !== 'j' && event.key !== 'k') return;
-      const current = visibleTasks.findIndex((task) => task.task_id === selected);
-      const delta = event.key === 'j' ? 1 : -1;
-      const next = visibleTasks[Math.min(Math.max(current + delta, 0), visibleTasks.length - 1)];
+    const navigate = (event: KeyboardEvent) => {
+      if (isEditing(event.target) || (event.key !== "j" && event.key !== "k")) return;
+      const index = visibleTasks.findIndex((task) => task.task_id === selected);
+      const nextIndex = Math.min(
+        Math.max(index + (event.key === "j" ? 1 : -1), 0),
+        visibleTasks.length - 1,
+      );
+      const next = visibleTasks[nextIndex];
       if (next) setSelected(next.task_id);
-    }
-    window.addEventListener('keydown', navigate);
-    return () => window.removeEventListener('keydown', navigate);
+    };
+    window.addEventListener("keydown", navigate);
+    return () => window.removeEventListener("keydown", navigate);
   }, [selected, visibleTasks]);
 
   const refresh = React.useCallback(async () => {
+    setRefreshing(true);
     setError(null);
-    const controller = new AbortController();
     const taskId = selectedRef.current;
+    const controller = new AbortController();
     try {
       await refreshSummaries();
       if (taskId && selectedRef.current === taskId) {
@@ -114,304 +169,720 @@ export function App() {
           setDetail,
         );
       }
+    } catch (nextError) {
+      setError(String(nextError));
     } finally {
       controller.abort();
+      setRefreshing(false);
     }
   }, [fetchDetail, refreshSummaries]);
 
-  if (error) return <ErrorState error={error} onRetry={() => void refresh()} />;
-  if (!summaries) return <div className="page-state">Loading tasks…</div>;
+  if (error) {
+    return (
+      <ThemeContext.Provider value={theme}>
+        <ErrorState error={error} onRetry={() => void refresh()} />
+      </ThemeContext.Provider>
+    );
+  }
+  if (!summaries) {
+    return (
+      <ThemeContext.Provider value={theme}>
+        <LoadingState />
+      </ThemeContext.Provider>
+    );
+  }
 
   const selectedIndex = visibleTasks.findIndex((task) => task.task_id === selected);
-  const previousTask = selectedIndex > 0 ? visibleTasks[selectedIndex - 1].task_id : null;
-  const nextTask = selectedIndex >= 0 && selectedIndex < visibleTasks.length - 1 ? visibleTasks[selectedIndex + 1].task_id : null;
+  const previousTask = selectedIndex > 0 ? visibleTasks[selectedIndex - 1]?.task_id : null;
+  const nextTask = selectedIndex >= 0 ? visibleTasks[selectedIndex + 1]?.task_id : null;
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="topbar-title">
-          <span className="eyebrow">selfbench</span>
-          <h1>Task Review</h1>
-        </div>
-        <div className="meta topbar-actions">
-          <span className="topbar-models">{summaries.models.join(' · ')}</span>
-          <button className="brand-button" type="button" onClick={() => void refresh()}>Refresh</button>
-        </div>
-      </header>
-      <main className="main">
-        <Sidebar
+    <ThemeContext.Provider value={theme}>
+      <div className="app-shell">
+        <Header
           summaries={summaries}
-          tasks={visibleTasks}
-          selected={selected}
-          filter={filter}
-          search={search}
-          onFilter={setFilter}
-          onSearch={setSearch}
-          onSelect={(taskId) => { setSelected(taskId); setTab('prompt'); }}
+          refreshing={refreshing}
+          theme={theme}
+          onRefresh={() => void refresh()}
+          onTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
         />
-        <Detail
-          detail={detail}
-          tab={tab}
-          previousTask={previousTask}
-          nextTask={nextTask}
-          onNavigate={setSelected}
-          onTab={setTab}
-          onSaved={(nextDetail) => {
-            // A completed save may outlive its panel after navigation. Replace
-            // detail only when it still represents the same selected task.
-            setDetail((current) => current?.summary.task_id === nextDetail.summary.task_id ? nextDetail : current);
-            void refreshSummaries();
-          }}
-        />
-      </main>
-    </div>
+        <div className="app-grid">
+          <TaskQueue
+            filter={filter}
+            models={summaries.models}
+            onFilter={setFilter}
+            onSearch={setSearch}
+            onSelect={(taskId) => {
+              setSelected(taskId);
+              setSection("brief");
+            }}
+            search={search}
+            selected={selected}
+            tasks={visibleTasks}
+            total={summaries.tasks.length}
+          />
+          <main className="workspace">
+            {detail ? (
+              <TaskWorkspace
+                detail={detail}
+                models={summaries.models}
+                nextTask={nextTask ?? null}
+                onNavigate={setSelected}
+                onSaved={(nextDetail) => {
+                  setDetail((current) =>
+                    current?.summary.task_id === nextDetail.summary.task_id ? nextDetail : current,
+                  );
+                  void refreshSummaries();
+                }}
+                onSection={setSection}
+                previousTask={previousTask ?? null}
+                section={section}
+              />
+            ) : (
+              <WorkspaceSkeleton />
+            )}
+          </main>
+        </div>
+      </div>
+    </ThemeContext.Provider>
   );
 }
 
-function Sidebar({ summaries, tasks, selected, filter, search, onFilter, onSearch, onSelect }: {
+function Header({
+  summaries,
+  refreshing,
+  theme,
+  onRefresh,
+  onTheme,
+}: {
   summaries: Summaries;
+  refreshing: boolean;
+  theme: Theme;
+  onRefresh: () => void;
+  onTheme: () => void;
+}) {
+  const complete = summaries.tasks.flatMap((task) => Object.values(task.model_results));
+  const pending = complete.filter((result) => result === "missing").length;
+  return (
+    <header className="site-header">
+      <div className="brand-lockup">
+        <div className="brand-mark" aria-hidden="true">
+          S
+        </div>
+        <div>
+          <div className="brand-name">SelfBench</div>
+          <div className="brand-context">Evaluation review</div>
+        </div>
+      </div>
+      <div className="header-status">
+        <span className="live-dot" data-active={pending > 0} />
+        <span>{pending > 0 ? `${pending} runs in progress` : "All results synchronized"}</span>
+      </div>
+      <div className="header-actions">
+        <div className="keyboard-hint" title="Keyboard shortcut">
+          <kbd>J</kbd>
+          <kbd>K</kbd>
+          <span>navigate</span>
+        </div>
+        <button
+          className="button secondary theme-toggle"
+          type="button"
+          aria-label={`Use ${theme === "dark" ? "light" : "dark"} mode`}
+          title={`Use ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={onTheme}
+        >
+          <ThemeIcon theme={theme} />
+        </button>
+        <button
+          className="button secondary"
+          type="button"
+          disabled={refreshing}
+          onClick={onRefresh}
+        >
+          <RefreshIcon spinning={refreshing} />
+          {refreshing ? "Refreshing" : "Refresh"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function TaskQueue({
+  tasks,
+  total,
+  selected,
+  models,
+  search,
+  filter,
+  onSearch,
+  onFilter,
+  onSelect,
+}: {
   tasks: TaskSummary[];
+  total: number;
   selected: string | null;
-  filter: Filter;
+  models: string[];
   search: string;
-  onFilter: (value: Filter) => void;
+  filter: QueueFilter;
   onSearch: (value: string) => void;
+  onFilter: (value: QueueFilter) => void;
   onSelect: (taskId: string) => void;
 }) {
   return (
-    <aside className="sidebar">
-      <div className="filters">
-        <div className="counts">
-          <Count label="Unreviewed" value={summaries.review_counts.unreviewed ?? 0} />
-          <Count label="In Review" value={summaries.review_counts.in_review ?? 0} />
-          <Count label="Approved" value={summaries.review_counts.approved ?? 0} />
+    <aside className="queue">
+      <div className="queue-head">
+        <div className="queue-title-row">
+          <div>
+            <div className="eyebrow">Review queue</div>
+            <h1>{total} tasks</h1>
+          </div>
+          <div className="model-legend">
+            {models.map((model) => (
+              <span key={model}>{modelInitial(model)}</span>
+            ))}
+          </div>
         </div>
-        <input aria-label="Search tasks" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search task, workdir, PR" />
-        <select aria-label="Filter tasks" value={filter} onChange={(event) => onFilter(event.target.value as Filter)}>
-          <option value="all">All Tasks</option>
-          <optgroup label="Review Status">
-            {reviewStatuses.map((status) => <option key={status} value={`review:${status}`}>{humanize(status)} ({summaries.review_counts[status] ?? 0})</option>)}
-          </optgroup>
-          <optgroup label="Audit Verdict">
-            <option value="verdict:accepted">Accepted ({summaries.counts.accepted ?? 0})</option>
-            <option value="verdict:needs_review">Needs Review ({summaries.counts.needs_review ?? 0})</option>
-            <option value="verdict:rejected">Rejected ({summaries.counts.rejected ?? 0})</option>
-          </optgroup>
-        </select>
+        <label className="search-field">
+          <SearchIcon />
+          <input
+            aria-label="Search tasks"
+            placeholder="Search tasks or PRs"
+            type="search"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+          />
+        </label>
+        <nav className="filter-tabs" aria-label="Queue filter">
+          {(["all", "attention", "approved"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              data-active={filter === value}
+              onClick={() => onFilter(value)}
+            >
+              {humanize(value)}
+            </button>
+          ))}
+        </nav>
       </div>
       <div className="task-list">
-        {tasks.length ? tasks.map((task) => (
-          <button key={task.task_id} className="task-row" data-active={task.task_id === selected} type="button" onClick={() => onSelect(task.task_id)}>
-            <div className="task-title">
-              <span className="task-id">{task.task_id}</span>
-              <span className="meta task-statuses"><Badge value={`H: ${humanize(task.review_status)}`} kind={task.review_status} /><Badge value={`A: ${humanize(task.verdict)}`} kind={task.verdict} /></span>
-            </div>
-            <div className="meta task-meta"><span>{task.workdir}</span><span>F2P {task.fail_to_pass_count}</span><span>P2P {task.pass_to_pass_count}</span></div>
-            <div className="meta task-models">{Object.entries(task.model_results).map(([model, result]) => <span key={model} className={`model-pill ${result}`}>{shortModel(model)}: {result}</span>)}</div>
-          </button>
-        )) : <Empty>No tasks match this filter.</Empty>}
+        {tasks.length ? (
+          tasks.map((task) => (
+            <TaskRow
+              key={task.task_id}
+              active={task.task_id === selected}
+              models={models}
+              onSelect={() => onSelect(task.task_id)}
+              task={task}
+            />
+          ))
+        ) : (
+          <EmptyState
+            title="No matching tasks"
+            body="Try a broader search or a different filter."
+          />
+        )}
       </div>
     </aside>
   );
 }
 
-function Detail({ detail, tab, previousTask, nextTask, onNavigate, onTab, onSaved }: {
-  detail: TaskDetail | null;
-  tab: Tab;
+function TaskRow({
+  task,
+  models,
+  active,
+  onSelect,
+}: {
+  task: TaskSummary;
+  models: string[];
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const passCount = Object.values(task.model_results).filter((result) => result === "pass").length;
+  const completeCount = Object.values(task.model_results).filter((result) =>
+    ["pass", "fail", "unreadable"].includes(result),
+  ).length;
+  return (
+    <button className="task-row" type="button" data-active={active} onClick={onSelect}>
+      <div className="task-row-top">
+        <span className="task-name">{taskLabel(task.task_id)}</span>
+        <span className="task-score">
+          {passCount}/{completeCount || models.length}
+        </span>
+      </div>
+      <div className="task-id">{task.task_id}</div>
+      <div className="task-row-bottom">
+        <span>PR {task.source_pr ?? "—"}</span>
+        <div className="result-dots">
+          {models.map((model) => (
+            <ResultDot key={model} label={modelInitial(model)} result={task.model_results[model]} />
+          ))}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function TaskWorkspace({
+  detail,
+  models,
+  section,
+  previousTask,
+  nextTask,
+  onNavigate,
+  onSection,
+  onSaved,
+}: {
+  detail: TaskDetail;
+  models: string[];
+  section: Section;
   previousTask: string | null;
   nextTask: string | null;
   onNavigate: (taskId: string) => void;
-  onTab: (tab: Tab) => void;
+  onSection: (section: Section) => void;
   onSaved: (detail: TaskDetail) => void;
 }) {
-  if (!detail) return <section className="content"><div className="detail"><Empty>Select a task.</Empty></div></section>;
   return (
-    <section className="content">
-      <div className="detail">
-        <div className="queue-nav">
-          <span className="subtle">J / K moves through the queue</span>
-          <div className="meta">
-            <button type="button" disabled={!previousTask} onClick={() => previousTask && onNavigate(previousTask)}>← Previous</button>
-            <button type="button" disabled={!nextTask} onClick={() => nextTask && onNavigate(nextTask)}>Next →</button>
+    <>
+      <section className="task-hero">
+        <div className="hero-topline">
+          <div className="breadcrumbs">
+            <span>{detail.summary.repo}</span>
+            <ChevronIcon />
+            <span>PR {detail.summary.source_pr ?? "—"}</span>
+          </div>
+          <div className="queue-navigation">
+            <button
+              type="button"
+              aria-label="Previous task"
+              disabled={!previousTask}
+              onClick={() => previousTask && onNavigate(previousTask)}
+            >
+              <ArrowIcon direction="left" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next task"
+              disabled={!nextTask}
+              onClick={() => nextTask && onNavigate(nextTask)}
+            >
+              <ArrowIcon direction="right" />
+            </button>
           </div>
         </div>
-        <Summary summary={detail.summary} />
-        <ReviewPanel key={detail.summary.task_id} detail={detail} onSaved={onSaved} />
-        <section className="panel tab-panel">
-          <div className="tabs" role="tablist" aria-label="Task detail">
-            {tabs.map((value, index) => (
-              <button
-                key={value}
-                id={`task-tab-${value}`}
-                className="tab"
-                data-active={tab === value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                aria-controls="task-tabpanel"
-                tabIndex={tab === value ? 0 : -1}
-                onClick={() => onTab(value)}
-                onKeyDown={(event) => {
-                  let nextIndex: number | null = null;
-                  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
-                  if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
-                  if (event.key === 'Home') nextIndex = 0;
-                  if (event.key === 'End') nextIndex = tabs.length - 1;
-                  if (nextIndex === null) return;
-                  event.preventDefault();
-                  const next = tabs[nextIndex];
-                  onTab(next);
-                  document.getElementById(`task-tab-${next}`)?.focus();
-                }}
-              >
-                {tabLabel(value)}
-              </button>
-            ))}
+        <div className="hero-title-row">
+          <div>
+            <h2>{taskLabel(detail.summary.task_id)}</h2>
+            <div className="hero-id">{detail.summary.task_id}</div>
           </div>
-          <div id="task-tabpanel" className="panel-body tab-content" role="tabpanel" aria-labelledby={`task-tab-${tab}`}><TabContent tab={tab} detail={detail} /></div>
-        </section>
-      </div>
-    </section>
+          <StatusPill result={detail.summary.verdict === "accepted" ? "pass" : "fail"}>
+            {detail.summary.validation}
+          </StatusPill>
+        </div>
+        <div className="outcome-strip">
+          {models.map((model) => (
+            <ModelOutcome
+              key={model}
+              model={model}
+              result={detail.summary.model_results[model] ?? "missing"}
+            />
+          ))}
+          <div className="test-counts">
+            <span>
+              <strong>{detail.summary.fail_to_pass_count}</strong> fail-to-pass
+            </span>
+            <span>
+              <strong>{detail.summary.pass_to_pass_count}</strong> regressions
+            </span>
+          </div>
+        </div>
+      </section>
+      <nav className="section-tabs" aria-label="Task detail">
+        {sections.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            data-active={section === item.id}
+            onClick={() => onSection(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <section className="section-content">
+        <SectionContent detail={detail} models={models} section={section} onSaved={onSaved} />
+      </section>
+    </>
   );
 }
 
-function Summary({ summary }: { summary: TaskSummary }) {
+function SectionContent({
+  detail,
+  models,
+  section,
+  onSaved,
+}: {
+  detail: TaskDetail;
+  models: string[];
+  section: Section;
+  onSaved: (detail: TaskDetail) => void;
+}) {
+  if (section === "tests") {
+    return <DiffViewer taskId={detail.summary.task_id} kind="test" label="Held-out test patch" />;
+  }
+  if (section === "gold") {
+    return <DiffViewer taskId={detail.summary.task_id} kind="gold" label="Reference patch" />;
+  }
+  if (section === "validation") return <ValidationView detail={detail} />;
+  if (section === "runs") return <RunsView detail={detail} models={models} />;
+  if (section === "task") return <CodeBlock value={detail.task_json_text} />;
+  return <BriefView detail={detail} onSaved={onSaved} />;
+}
+
+function BriefView({
+  detail,
+  onSaved,
+}: {
+  detail: TaskDetail;
+  onSaved: (detail: TaskDetail) => void;
+}) {
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div><div className="eyebrow">{summary.repo}</div><div className="panel-title">{summary.task_id}</div></div>
-        <div className="meta"><Badge value={`Human: ${humanize(summary.review_status)}`} kind={summary.review_status} /><Badge value={`Audit: ${humanize(summary.verdict)}`} kind={summary.verdict} /><Badge value={summary.validation} /></div>
+    <div className="brief-grid">
+      <article className="surface prompt-surface">
+        <SurfaceHeader eyebrow="Evaluation brief" title="What the agent receives">
+          <span className="source-chip">{promptSource(detail.prompt_origin)}</span>
+        </SurfaceHeader>
+        <div className="prompt-copy">{detail.prompt}</div>
+      </article>
+      <div className="brief-side">
+        <ReviewPanel detail={detail} onSaved={onSaved} />
+        <EvidenceCard summary={detail.summary} />
       </div>
-      <div className="panel-body">
-        <dl className="summary-grid">
-          <Stat label="Workdir">{summary.workdir}</Stat>
-          <Stat label="Source">{summary.source_url ? <a href={summary.source_url} target="_blank" rel="noreferrer">PR {summary.source_pr}</a> : (summary.source_pr ?? '—')}</Stat>
-          <Stat label="Signal">{summary.solver_signal}</Stat>
-          <Stat label="Tests">F2P {summary.fail_to_pass_count} / P2P {summary.pass_to_pass_count}</Stat>
-        </dl>
-        {(summary.blockers.length > 0 || summary.warnings.length > 0) && <div className="warning-list issues">
-          {summary.blockers.map((item) => <div key={item} className="warning blocker">{item}</div>)}
-          {summary.warnings.map((item) => <div key={item} className="warning">{item}</div>)}
-        </div>}
-      </div>
-    </section>
+      {detail.source_trace ? (
+        <article className="surface source-surface">
+          <SurfaceHeader eyebrow="Provenance" title="Original request history" />
+          <SourceSession trace={detail.source_trace} promptOrigin={detail.prompt_origin} />
+        </article>
+      ) : null}
+    </div>
   );
 }
 
-function ReviewPanel({ detail, onSaved }: { detail: TaskDetail; onSaved: (detail: TaskDetail) => void }) {
-  const [notes, setNotes] = React.useState(detail.summary.quality.review_notes ?? '');
-  const [reviewed, setReviewed] = React.useState(() => new Set(detail.summary.quality.reviewed_warnings ?? []));
+function EvidenceCard({ summary }: { summary: TaskSummary }) {
+  return (
+    <article className="surface evidence-card">
+      <SurfaceHeader eyebrow="Evidence" title="Task facts" />
+      <dl className="fact-list">
+        <Fact label="Repository" value={summary.repo} />
+        <Fact label="Workdir" value={summary.workdir} mono />
+        <Fact
+          label="Source"
+          value={
+            summary.source_url ? (
+              <a href={summary.source_url} target="_blank" rel="noreferrer">
+                Pull request {summary.source_pr} <ExternalIcon />
+              </a>
+            ) : (
+              `PR ${summary.source_pr ?? "—"}`
+            )
+          }
+        />
+        <Fact label="Solver signal" value={summary.solver_signal} />
+      </dl>
+      {summary.blockers.length || summary.warnings.length ? (
+        <div className="issue-stack">
+          {summary.blockers.map((blocker) => (
+            <Notice key={blocker} tone="danger">
+              {blocker}
+            </Notice>
+          ))}
+          {summary.warnings.map((warning) => (
+            <Notice key={warning} tone="warning">
+              {warning}
+            </Notice>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ReviewPanel({
+  detail,
+  onSaved,
+}: {
+  detail: TaskDetail;
+  onSaved: (detail: TaskDetail) => void;
+}) {
+  const [notes, setNotes] = React.useState(detail.summary.quality.review_notes ?? "");
   const [status, setStatus] = React.useState<ReviewStatus>(detail.summary.review_status);
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
-  async function save() {
+  const save = async () => {
     setSaving(true);
     setSaveError(null);
     try {
-      const next = await getJson<TaskDetail>(`/api/tasks/${encodeURIComponent(detail.summary.task_id)}/quality`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ review_notes: notes, reviewed_warnings: [...reviewed], review_status: status }),
-      });
+      const next = await getJson<TaskDetail>(
+        `/api/tasks/${encodeURIComponent(detail.summary.task_id)}/quality`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            review_notes: notes,
+            reviewed_warnings: detail.summary.quality.reviewed_warnings ?? [],
+            review_status: status,
+          }),
+        },
+      );
       onSaved(next);
-    } catch (nextError: unknown) {
+    } catch (nextError) {
       setSaveError(String(nextError));
     } finally {
       setSaving(false);
     }
-  }
+  };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div><div className="panel-title">Review Notes</div><div className="panel-hint">Writes to task.json quality metadata.</div></div>
-        <button className="primary-button" type="button" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save Review'}</button>
-      </div>
-      {saveError && <div className="warning blocker" role="alert">Review was not saved: {saveError}</div>}
-      <div className="panel-body review-grid">
-        <div className="review-field">
-          <label className="label" htmlFor="review-status">Review Status</label>
-          <select id="review-status" className="field-body" value={status} onChange={(event) => setStatus(event.target.value as ReviewStatus)}>
-            {reviewStatuses.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
-          </select>
-        </div>
-        <div className="review-field"><div className="label">Reviewed Warnings</div><div className="field-body">
-          {detail.summary.warnings.length ? detail.summary.warnings.map((warning) => (
-            <label className="check-row" key={warning}>
-              <input type="checkbox" checked={[...reviewed].some((token) => warning.includes(token))} onChange={(event) => setReviewed((current) => {
-                const next = new Set(current);
-                if (event.target.checked) next.add(warning); else {
-                  for (const token of next) if (warning.includes(token)) next.delete(token);
-                }
-                return next;
-              })} />
-              <span>{warning}</span>
-            </label>
-          )) : <Empty>No active warnings.</Empty>}
-        </div></div>
-        <div className="review-field"><div className="label">Notes</div><textarea className="field-body" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Why this task is fair, what was manually checked, or why it should stay candidate-only." /></div>
-      </div>
-    </section>
+    <article className="surface review-card">
+      <SurfaceHeader eyebrow="Human review" title="Decision">
+        <StatusPill result={reviewStatusResult(status)}>{humanize(status)}</StatusPill>
+      </SurfaceHeader>
+      <label className="field-label" htmlFor="review-status">
+        Status
+      </label>
+      <select
+        id="review-status"
+        className="input-control"
+        value={status}
+        onChange={(event) => setStatus(event.target.value as ReviewStatus)}
+      >
+        {reviewStatuses.map((value) => (
+          <option key={value} value={value}>
+            {humanize(value)}
+          </option>
+        ))}
+      </select>
+      <label className="field-label" htmlFor="review-notes">
+        Notes
+      </label>
+      <textarea
+        id="review-notes"
+        className="input-control notes-field"
+        placeholder="Record why this task is fair or what needs to change."
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+      />
+      {saveError ? <Notice tone="danger">Review was not saved: {saveError}</Notice> : null}
+      <button
+        className="button primary full"
+        type="button"
+        disabled={saving}
+        onClick={() => void save()}
+      >
+        {saving ? "Saving…" : "Save review"}
+      </button>
+    </article>
   );
 }
 
-function TabContent({ tab, detail }: { tab: Tab; detail: TaskDetail }) {
-  if (tab === 'prompt') return <PromptView prompt={detail.prompt} origin={detail.prompt_origin} hasSourceTrace={detail.source_trace !== null} />;
-  if (tab === 'source') return <SourceSession key={detail.summary.task_id} trace={detail.source_trace} promptOrigin={detail.prompt_origin} />;
-  if (tab === 'task') return <Code>{detail.task_json_text}</Code>;
-  if (tab === 'test') return <DiffViewer taskId={detail.summary.task_id} kind="test" label="Test Patch" />;
-  if (tab === 'gold') return <DiffViewer taskId={detail.summary.task_id} kind="gold" label="Gold Patch" />;
-  if (tab === 'validation') return <Validation detail={detail} />;
-  return <Runs detail={detail} />;
-}
-
-function PromptView({ prompt, origin, hasSourceTrace }: { prompt: string; origin: PromptOrigin; hasSourceTrace: boolean }) {
-  const source = origin.kind === 'agent_json' ? `${origin.format} · ${origin.path} · message ${origin.message_index}` : 'manually reconstructed · prompt.md';
-  return <div>
-    <div className="source-line"><span className="label">Eval Prompt Source</span><span className="subtle">{source}</span></div>
-    {origin.kind === 'prompt.md' && hasSourceTrace && <div className="warning prompt-provenance">Compare this reconstructed prompt with the human requests in Original Session.</div>}
-    <Code>{prompt}</Code>
-  </div>;
-}
-
-function SourceSession({ trace, promptOrigin }: { trace: SourceTrace | null; promptOrigin: PromptOrigin }) {
+function SourceSession({
+  trace,
+  promptOrigin,
+}: {
+  trace: SourceTrace;
+  promptOrigin: PromptOrigin;
+}) {
   const [showAssistant, setShowAssistant] = React.useState(false);
-  if (!trace) return <Empty>No original coding session is attached to this eval.</Empty>;
-
-  const selectedIndex = promptOrigin.kind === 'agent_json' && promptOrigin.path === trace.origin.path
-    ? promptOrigin.message_index
-    : null;
-  const visibleMessages = showAssistant ? trace.messages : trace.messages.filter((message) => message.role === 'user');
-  const userCount = trace.messages.filter((message) => message.role === 'user').length;
-
-  return <div className="source-session">
-    <div className="source-session-header">
-      <div>
-        <div className="label">Original Coding Session</div>
-        <div className="subtle">{trace.origin.format} · {trace.origin.path} · {userCount} human turn{userCount === 1 ? '' : 's'}</div>
+  const selectedIndex =
+    promptOrigin.kind === "agent_json" && promptOrigin.path === trace.origin.path
+      ? promptOrigin.message_index
+      : null;
+  const visibleMessages = showAssistant
+    ? trace.messages
+    : trace.messages.filter((message) => message.role === "user");
+  return (
+    <div className="source-session">
+      <div className="source-controls">
+        <span>
+          {trace.origin.format} · {trace.origin.path}
+        </span>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => setShowAssistant(!showAssistant)}
+        >
+          {showAssistant ? "Human turns only" : "Include assistant context"}
+        </button>
       </div>
-      <button type="button" onClick={() => setShowAssistant((current) => !current)}>
-        {showAssistant ? 'Human turns only' : 'Show assistant context'}
-      </button>
-    </div>
-    <div className="source-messages">
-      {visibleMessages.map((message, index) => {
-        const selected = message.role === 'user' && message.user_message_index === selectedIndex;
-        return <section className="source-message" data-role={message.role} data-selected={selected} key={`${message.role}:${message.user_message_index ?? index}:${index}`}>
-          <div className="source-message-header">
-            <span>{message.role === 'user' ? `Human request ${(message.user_message_index ?? index) + 1}` : 'Assistant context'}</span>
-            {selected && <Badge value="eval prompt" kind="pass" />}
+      {visibleMessages.map((message) => {
+        const selected = message.role === "user" && message.user_message_index === selectedIndex;
+        return (
+          <div
+            className="source-message"
+            data-role={message.role}
+            data-selected={selected}
+            key={`${message.role}:${message.user_message_index ?? "context"}:${message.content}`}
+          >
+            <div className="source-message-label">
+              {message.role === "user" ? "Human" : "Assistant"}
+              {selected ? <span>Prompt source</span> : null}
+            </div>
+            <pre>{message.content}</pre>
           </div>
-          <pre className="source-message-content">{message.content}</pre>
-        </section>;
+        );
       })}
     </div>
-  </div>;
+  );
 }
 
-function DiffViewer({ taskId, kind, label, modelSlug, compact = false }: { taskId: string; kind: 'test' | 'gold' | 'agent'; label: string; modelSlug?: string; compact?: boolean }) {
-  const [patch, setPatch] = React.useState('');
+function ValidationView({ detail }: { detail: TaskDetail }) {
+  if (!detail.validation_result) {
+    return (
+      <EmptyState
+        title="No validation artifact"
+        body="This task has no attached validation result."
+      />
+    );
+  }
+  const validation = detail.validation_result;
+  const coupling = isRecord(validation.coupling) ? validation.coupling : null;
+  return (
+    <div className="validation-grid">
+      <article className="surface validation-summary">
+        <SurfaceHeader eyebrow="Qualification" title="Validation gates" />
+        <div className="gate-list">
+          <Gate label="No-op exposes the bug" status={String(validation.nop ?? "recorded")} />
+          <Gate
+            label="Reference solves the task"
+            status={String(validation.oracle ?? "recorded")}
+          />
+          <Gate
+            label="Independent coupling review"
+            status={String(coupling?.verdict ?? "recorded")}
+          />
+        </div>
+        {typeof coupling?.reason === "string" ? (
+          <div className="review-rationale">
+            <div className="eyebrow">Reviewer rationale</div>
+            <p>{coupling.reason}</p>
+          </div>
+        ) : null}
+      </article>
+      <article className="surface raw-validation">
+        <SurfaceHeader eyebrow="Artifact" title="Raw validation result" />
+        <CodeBlock value={detail.validation_text} />
+      </article>
+    </div>
+  );
+}
+
+function RunsView({ detail, models }: { detail: TaskDetail; models: string[] }) {
+  const initial =
+    models.find((model) => detail.summary.model_results[model] === "fail") ?? models[0] ?? "";
+  const [selectedModel, setSelectedModel] = React.useState(initial);
+  React.useEffect(() => setSelectedModel(initial), [initial]);
+  const run = detail.runs[selectedModel];
+  const result = detail.summary.model_results[selectedModel] ?? "missing";
+  return (
+    <div className="runs-layout">
+      <div className="run-selector">
+        {models.map((model) => (
+          <button
+            key={model}
+            type="button"
+            data-active={selectedModel === model}
+            onClick={() => setSelectedModel(model)}
+          >
+            <div>
+              <span className="model-name">{shortModel(model)}</span>
+              <span className="model-full">{model}</span>
+            </div>
+            <StatusPill result={detail.summary.model_results[model] ?? "missing"}>
+              {humanize(detail.summary.model_results[model] ?? "missing")}
+            </StatusPill>
+          </button>
+        ))}
+      </div>
+      {run ? (
+        <RunInspector
+          key={`${detail.summary.task_id}:${selectedModel}`}
+          model={selectedModel}
+          result={result}
+          run={run}
+          taskId={detail.summary.task_id}
+        />
+      ) : (
+        <EmptyState title="No run selected" body="Select a model to inspect its result." />
+      )}
+    </div>
+  );
+}
+
+function RunInspector({
+  taskId,
+  model,
+  result,
+  run,
+}: {
+  taskId: string;
+  model: string;
+  result: ModelResult;
+  run: RunDetail;
+}) {
+  const [showRaw, setShowRaw] = React.useState(false);
+  const facts = runFacts(run);
+  return (
+    <article className="surface run-inspector">
+      <SurfaceHeader eyebrow="Selected run" title={model}>
+        <StatusPill result={result}>{humanize(result)}</StatusPill>
+      </SurfaceHeader>
+      {run.stale_reason ? <Notice tone="warning">{run.stale_reason}</Notice> : null}
+      <div className="run-facts">
+        {facts.map((fact) => (
+          <div key={fact.label}>
+            <span>{fact.label}</span>
+            <strong>{fact.value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="inspector-toolbar">
+        <div>
+          <h3>Agent patch</h3>
+          <p>The code produced during this one-shot trial.</p>
+        </div>
+        <button className="button ghost" type="button" onClick={() => setShowRaw(!showRaw)}>
+          <CodeIcon />
+          {showRaw ? "Hide result JSON" : "View result JSON"}
+        </button>
+      </div>
+      {showRaw ? <CodeBlock value={run.result_text || "No result artifact."} /> : null}
+      {run.agent_patch ? (
+        <DiffViewer
+          taskId={taskId}
+          kind="agent"
+          label={`${shortModel(model)} patch`}
+          modelSlug={model}
+        />
+      ) : (
+        <EmptyState title="No patch captured" body="This run did not produce an agent patch." />
+      )}
+    </article>
+  );
+}
+
+function DiffViewer({
+  taskId,
+  kind,
+  label,
+  modelSlug,
+}: {
+  taskId: string;
+  kind: PatchKind;
+  label: string;
+  modelSlug?: string;
+}) {
+  const [patch, setPatch] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState(false);
   const path = modelSlug
@@ -420,57 +891,83 @@ function DiffViewer({ taskId, kind, label, modelSlug, compact = false }: { taskI
 
   React.useEffect(() => {
     const controller = new AbortController();
-    fetch(path, { signal: controller.signal, cache: 'no-store' })
-      .then((response) => { if (!response.ok) throw new Error(`Patch fetch failed: ${response.status}`); return response.text(); })
+    setPatch("");
+    setError(null);
+    fetch(path, { signal: controller.signal, cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Patch fetch failed: ${response.status}`);
+        return response.text();
+      })
       .then(setPatch)
-      .catch((nextError: unknown) => { if (!controller.signal.aborted) setError(String(nextError)); });
+      .catch((nextError: unknown) => {
+        if (!controller.signal.aborted) setError(String(nextError));
+      });
     return () => controller.abort();
   }, [path]);
 
-  return <div className={`diff-shell${expanded ? ' expanded' : ''}${compact ? ' compact' : ''}`}>
-    <div className="diff-toolbar">
-      <span className="label">{label}</span>
-      <div className="diff-actions">
-        <button className="utility-button" type="button" onClick={() => setExpanded(!expanded)}>
-          <ExpandIcon />
-          <span>{expanded ? 'Close' : 'Full screen'}</span>
-        </button>
-        <a className="utility-button" href={path} target="_blank" rel="noreferrer">
-          <CodeFileIcon />
-          <span>Raw patch</span>
-        </a>
+  return (
+    <div className="diff-surface" data-expanded={expanded}>
+      <div className="diff-toolbar">
+        <div>
+          <div className="eyebrow">Code review</div>
+          <h3>{label}</h3>
+        </div>
+        <div className="diff-actions">
+          <button className="button ghost" type="button" onClick={() => setExpanded(!expanded)}>
+            <ExpandIcon />
+            {expanded ? "Exit full screen" : "Full screen"}
+          </button>
+          <a className="button ghost" href={path} target="_blank" rel="noreferrer">
+            <ExternalIcon />
+            Raw patch
+          </a>
+        </div>
+      </div>
+      <div className="diff-body">
+        {error ? (
+          <Notice tone="danger">{error}</Notice>
+        ) : patch ? (
+          <DiffErrorBoundary key={path}>
+            <PatchFiles patch={patch} />
+          </DiffErrorBoundary>
+        ) : (
+          <DiffSkeleton />
+        )}
       </div>
     </div>
-    <div className="diff-body">
-      {error ? <div className="warning blocker">{error}</div> : patch ? (
-        <DiffErrorBoundary key={path}>
-          <PatchFiles patch={patch} />
-        </DiffErrorBoundary>
-      ) : <Empty>Loading patch…</Empty>}
-    </div>
-  </div>;
+  );
 }
 
 function PatchFiles({ patch }: { patch: string }) {
-  const files = React.useMemo(() => parsePatchFiles(patch).flatMap((parsed) => parsed.files), [patch]);
-  if (!files.length) return <Code>{patch}</Code>;
-
+  const theme = React.useContext(ThemeContext);
+  const files = React.useMemo(
+    () => parsePatchFiles(patch).flatMap((parsed) => parsed.files),
+    [patch],
+  );
+  if (!files.length) return <CodeBlock value={patch} />;
+  const narrow = window.matchMedia("(max-width: 900px)").matches;
   const options = {
-    themeType: 'dark' as const,
-    diffStyle: window.matchMedia('(max-width: 900px)').matches ? 'unified' as const : 'split' as const,
-    diffIndicators: 'bars' as const,
-    overflow: 'scroll' as const,
+    themeType: theme,
+    diffStyle: narrow ? ("unified" as const) : ("split" as const),
+    diffIndicators: "bars" as const,
+    overflow: "scroll" as const,
     disableBackground: false,
     disableLineNumbers: false,
     stickyHeader: true,
-    lineHoverHighlight: 'number' as const,
+    lineHoverHighlight: "number" as const,
   };
-
-  return <div className="patch-files">
-    {files.map((file, index) => (
-      <FileDiff key={`${file.prevName ?? ''}:${file.name}:${index}`} fileDiff={file} disableWorkerPool options={options} />
-    ))}
-  </div>;
+  return (
+    <div className="patch-files">
+      {files.map((file) => (
+        <FileDiff
+          key={`${file.prevName ?? ""}:${file.name}`}
+          fileDiff={file}
+          disableWorkerPool
+          options={options}
+        />
+      ))}
+    </div>
+  );
 }
 
 class DiffErrorBoundary extends React.Component<React.PropsWithChildren, { error: string | null }> {
@@ -481,54 +978,357 @@ class DiffErrorBoundary extends React.Component<React.PropsWithChildren, { error
   }
 
   componentDidCatch(error: unknown) {
-    console.error('Diff renderer failed', error);
+    console.error("Pierre diff renderer failed", error);
   }
 
   render() {
-    if (this.state.error) return <div className="warning blocker">Diff renderer failed. Open the raw patch instead.</div>;
+    if (this.state.error) {
+      return <Notice tone="danger">The diff could not render. Open the raw patch instead.</Notice>;
+    }
     return this.props.children;
   }
 }
 
-function Validation({ detail }: { detail: TaskDetail }) {
-  if (!detail.validation_result) return <Empty>No validation artifact found.</Empty>;
-  return <Code>{detail.validation_text}</Code>;
+function SurfaceHeader({
+  eyebrow,
+  title,
+  children,
+}: React.PropsWithChildren<{ eyebrow: string; title: string }>) {
+  return (
+    <div className="surface-header">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h3>{title}</h3>
+      </div>
+      {children ? <div className="surface-action">{children}</div> : null}
+    </div>
+  );
 }
 
-function Runs({ detail }: { detail: TaskDetail }) {
-  return <>{Object.entries(detail.runs).map(([slug, run]) => <Run key={slug} taskId={detail.summary.task_id} slug={slug} run={run} />)}</>;
+function Fact({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd data-mono={mono}>{value}</dd>
+    </div>
+  );
 }
 
-function Run({ taskId, slug, run }: { taskId: string; slug: string; run: RunDetail }) {
-  if (!run.exists) return <div className="run-card"><div className="run-head"><span>{slug}</span><Badge value="missing" /></div></div>;
-  const result = run.result ?? {};
-  const resolved = result.resolved === true;
-  const stale = run.prompt_status === 'stale';
-  const reasons = Array.isArray(result.failure_reasons) ? result.failure_reasons.join('\n') : '';
-  return <div className="run-card">
-    <div className="run-head"><span>{slug}</span><Badge value={stale ? 'stale prompt' : resolved ? 'resolved' : 'failed'} kind={stale ? 'stale' : resolved ? 'pass' : 'fail'} /></div>
-    {stale && <div className="warning stale-run">{run.stale_reason ?? 'This rollout is stale. Rerun it before interpreting the result.'}</div>}
-    <div className="run-body"><Tail title="Failure Reasons" value={reasons} /><div>{run.agent_patch ? <DiffViewer taskId={taskId} kind="agent" label="Agent Patch" modelSlug={slug} compact /> : <Code>{run.result_text}</Code>}</div></div>
-  </div>;
+function Gate({ label, status }: { label: string; status: string }) {
+  const passes = ["passed", "clean", "accepted", "recorded"].includes(status.toLowerCase());
+  return (
+    <div className="gate-row">
+      <span className="gate-check" data-pass={passes}>
+        {passes ? <CheckIcon /> : <MinusIcon />}
+      </span>
+      <span>{label}</span>
+      <strong>{humanize(status)}</strong>
+    </div>
+  );
 }
 
-function Tail({ title, value }: { title: string; value: unknown }) {
-  if (typeof value !== 'string' || !value) return null;
-  return <div><div className="label tail-title">{title}</div><Code>{value}</Code></div>;
+function ModelOutcome({ model, result }: { model: string; result: ModelResult }) {
+  return (
+    <div className="model-outcome">
+      <ResultDot label={modelInitial(model)} result={result} />
+      <div>
+        <strong>{shortModel(model)}</strong>
+        <span>{humanize(result)}</span>
+      </div>
+    </div>
+  );
+}
+
+function ResultDot({ label, result = "missing" }: { label: string; result?: ModelResult }) {
+  return (
+    <span
+      className="result-dot"
+      data-result={result}
+      role="img"
+      aria-label={`${label}: ${humanize(result)}`}
+      title={`${label}: ${humanize(result)}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function StatusPill({
+  result,
+  children,
+}: React.PropsWithChildren<{ result: ModelResult | "pass" | "fail" }>) {
+  return (
+    <span className="status-pill" data-result={result}>
+      <span />
+      {children}
+    </span>
+  );
+}
+
+function Notice({ tone, children }: React.PropsWithChildren<{ tone: "warning" | "danger" }>) {
+  return (
+    <div className="notice" data-tone={tone}>
+      <AlertIcon />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function CodeBlock({ value }: { value: string }) {
+  return <pre className="code-block">{value}</pre>;
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-icon">
+        <SearchIcon />
+      </div>
+      <strong>{title}</strong>
+      <p>{body}</p>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="loading-screen">
+      <div className="brand-mark">S</div>
+      <div>
+        <strong>Opening review workspace</strong>
+        <span>Loading tasks and model results…</span>
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="error-screen">
+      <AlertIcon />
+      <h1>Could not open the review workspace</h1>
+      <p>{error}</p>
+      <button className="button primary" type="button" onClick={onRetry}>
+        Try again
+      </button>
+    </div>
+  );
+}
+
+function WorkspaceSkeleton() {
+  return (
+    <div className="workspace-skeleton" role="status" aria-label="Loading task">
+      <div />
+      <div />
+      <div />
+    </div>
+  );
+}
+
+function DiffSkeleton() {
+  return (
+    <div className="diff-skeleton" role="status" aria-label="Loading patch">
+      {diffSkeletonWidths.map((width) => (
+        <span key={width} style={{ width: `${width}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function runFacts(run: RunDetail): Array<{ label: string; value: string }> {
+  const result = run.result;
+  if (!result) return [{ label: "Status", value: "No result" }];
+  const trial = isRecord(result.trial) ? result.trial : result;
+  const verifier = isRecord(trial.verifier_result) ? trial.verifier_result : null;
+  const rewards = verifier && isRecord(verifier.rewards) ? verifier.rewards : null;
+  const exception = isRecord(trial.exception_info) ? trial.exception_info : null;
+  const status =
+    typeof result.live_status === "string"
+      ? result.live_status
+      : run.exists
+        ? "completed"
+        : "missing";
+  const facts = [{ label: "Status", value: humanize(status) }];
+  if (rewards) {
+    facts.push({ label: "Patch applied", value: scoreLabel(rewards.patch_applied) });
+    facts.push({ label: "Fail-to-pass", value: scoreLabel(rewards.fail_to_pass) });
+    facts.push({ label: "Regressions", value: scoreLabel(rewards.pass_to_pass) });
+  }
+  if (typeof exception?.exception_type === "string") {
+    facts.push({ label: "Exception", value: exception.exception_type });
+  }
+  return facts;
+}
+
+function scoreLabel(value: unknown): string {
+  return value === 1 ? "Passed" : value === 0 ? "Failed" : "—";
+}
+
+function sectionFrom(value: string | null): Section {
+  if (value === "prompt" || value === "source") return "brief";
+  if (value === "test") return "tests";
+  if (value && sections.some((section) => section.id === value)) return value as Section;
+  return "brief";
+}
+
+function promptSource(origin: PromptOrigin): string {
+  return origin.kind === "agent_json"
+    ? `${origin.format ?? "session"} · message ${origin.message_index ?? "—"}`
+    : origin.path;
+}
+
+function modelInitial(model: string): string {
+  if (model.includes("sol")) return "S";
+  if (model.includes("terra")) return "T";
+  if (model.includes("luna")) return "L";
+  return model.at(0)?.toUpperCase() ?? "?";
+}
+
+function shortModel(model: string): string {
+  return model.replace(/^gpt-5\.6-/, "").replace(/^openai__/, "");
+}
+
+function taskLabel(taskId: string): string {
+  return taskId
+    .replace(/^agent-host-/, "")
+    .split("-")
+    .map((word) => (word.length <= 3 && /^\d+$/.test(word) ? word : capitalize(word)))
+    .join(" ");
+}
+
+function capitalize(value: string): string {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function humanize(value: string): string {
+  return value.split("_").map(capitalize).join(" ");
+}
+
+function reviewStatusResult(status: ReviewStatus): ModelResult {
+  if (status === "approved") return "pass";
+  if (status === "rejected" || status === "changes_requested") return "fail";
+  return "missing";
+}
+
+function isEditing(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function initialTheme(): Theme {
+  const stored = window.localStorage.getItem("selfbench-theme");
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <circle cx="8.5" cy="8.5" r="5.5" />
+      <path d="m13 13 4 4" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg aria-hidden="true" data-spinning={spinning} viewBox="0 0 20 20">
+      <path d="M16 7a6.5 6.5 0 1 0 .2 5.5" />
+      <path d="M16 3v4h-4" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: Theme }) {
+  return theme === "dark" ? (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="3.2" />
+      <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M15.7 4.3l-1.4 1.4M5.7 14.3l-1.4 1.4" />
+    </svg>
+  ) : (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <path d="M16.5 12.6A6.8 6.8 0 0 1 7.4 3.5 6.8 6.8 0 1 0 16.5 12.6Z" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
+function ArrowIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg aria-hidden="true" data-direction={direction} viewBox="0 0 20 20">
+      <path d="m12.5 4-6 6 6 6" />
+    </svg>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18">
+      <path d="M10 3h5v5M15 3l-7 7" />
+      <path d="M14 10v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+    </svg>
+  );
 }
 
 function ExpandIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" /></svg>;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18">
+      <path d="M7 3H3v4M11 3h4v4M7 15H3v-4M11 15h4v-4" />
+    </svg>
+  );
 }
-function CodeFileIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4M7 8 5 10l2 2M9 8l2 2-2 2" /></svg>;
+
+function CodeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18">
+      <path d="m6 5-4 4 4 4M12 5l4 4-4 4M10.5 3 7.5 15" />
+    </svg>
+  );
 }
-function Count({ label, value }: { label: string; value: number }) { return <div className="count"><div className="label">{label}</div><div className="value">{value}</div></div>; }
-function Badge({ value, kind }: { value: string; kind?: string }) { return <span className={`badge ${kind ?? value}`}>{value}</span>; }
-function Stat({ label, children }: React.PropsWithChildren<{ label: string }>) { return <div className="stat"><dt className="label">{label}</dt><dd className="stat-value">{children}</dd></div>; }
-function Code({ children }: { children: string }) { return <pre className="code">{children}</pre>; }
-function Empty({ children }: React.PropsWithChildren) { return <div className="empty">{children}</div>; }
-function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) { return <div className="page-state"><div className="warning blocker">{error}</div><button type="button" onClick={onRetry}>Retry</button></div>; }
-function tabLabel(tab: Tab) { return ({ prompt: 'Prompt', source: 'Original Session', task: 'Task JSON', test: 'Test Patch', gold: 'Gold Patch', validation: 'Validation', runs: 'Runs' })[tab]; }
-function humanize(value: string) { return value.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' '); }
-function shortModel(slug: string) { return slug.replace('openai__', 'openai ').replace('fireworks__', 'fw '); }
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="m3 8 3 3 7-7" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="M3 8h10" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18">
+      <path d="M9 2 1.8 15h14.4L9 2Z" />
+      <path d="M9 6v4M9 13h.01" />
+    </svg>
+  );
+}

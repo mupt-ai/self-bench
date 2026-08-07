@@ -1,25 +1,67 @@
 {
-  "name": "selfbench-review",
-  "private": true,
+  "name": "selfbench",
+  "version": "0.3.0",
+  "description": "Turn completed repository changes into durable, private Harbor evaluations",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mupt-ai/selfbench.git"
+  },
   "type": "module",
+  "bin": {
+    "selfbench": "dist/cli.js",
+    "selfbench-agent-smoke": "dist/agent-smoke-main.js",
+    "selfbench-eval": "dist/eval-main.js",
+    "selfbench-reaudit": "dist/reaudit-main.js",
+    "selfbench-repair": "dist/repair-main.js",
+    "selfbench-validate": "dist/validate-main.js"
+  },
+  "files": [
+    "dist",
+    "src/extensions",
+    "src/skills"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "uv run python -m unittest discover -s tests -v",
-    "test:review": "bun test review/src/detail-loader.test.ts",
-    "validate": "bun run test && bun run test:review && bun run typecheck:review && bun run build:review",
-    "dev:review": "vite --config review/vite.config.ts",
+    "build": "bun run build:server && bun run build:review",
     "build:review": "vite build --config review/vite.config.ts",
-    "typecheck:review": "tsc --noEmit -p review/tsconfig.json"
+    "build:server": "tsc -p tsconfig.build.json && bun build src/sandbox-author.ts --target=node --outfile=dist/sandbox-author.bundle.js && bun build src/sandbox-review.ts --target=node --outfile=dist/sandbox-review.bundle.js && bun build src/sandbox-repair.ts --target=node --outfile=dist/sandbox-repair.bundle.js",
+    "check": "biome check . && tsc --noEmit -p tsconfig.json && bun run typecheck:review",
+    "dev:api": "tsx src/api-main.ts",
+    "dev:review": "vite --config review/vite.config.ts",
+    "dev:worker": "tsx src/worker-main.ts",
+    "format": "biome format --write .",
+    "start:api": "node dist/api-main.js",
+    "start:worker": "node dist/worker-main.js",
+    "test": "bun test tests review/src",
+    "typecheck:review": "tsc --noEmit -p review/tsconfig.json",
+    "validate": "bun run check && bun run test && bun run build"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.0",
     "@pierre/diffs": "1.2.12",
+    "@temporalio/activity": "^1.13.2",
+    "@temporalio/client": "^1.13.2",
+    "@temporalio/common": "^1.13.2",
+    "@temporalio/worker": "^1.13.2",
+    "@temporalio/workflow": "^1.13.2",
+    "modal": "^0.9.0",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.2.6",
+    "@earendil-works/pi-coding-agent": "0.84.0",
+    "@sinclair/typebox": "0.34.41",
+    "@types/bun": "^1.3.14",
     "@types/node": "24.10.13",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
+    "tsx": "^4.20.6",
     "typescript": "5.9.3",
     "vite": "7.3.1"
   }
