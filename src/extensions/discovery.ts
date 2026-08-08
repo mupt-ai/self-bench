@@ -6,13 +6,18 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "submit_discovery",
     label: "Submit SelfBench discovery",
-    description: "Submit the final ranked hard-mode candidate list exactly once.",
+    description: "Submit the final ranked tiered candidate list exactly once.",
     parameters: Type.Object(
       {
         candidates: Type.Array(
           Type.Object(
             {
               candidateId: Type.String({ minLength: 1 }),
+              difficulty: Type.Union([
+                Type.Literal("easy"),
+                Type.Literal("medium"),
+                Type.Literal("hard"),
+              ]),
               sourcePr: Type.Integer({ minimum: 1 }),
               sourceUrl: Type.String({ minLength: 1 }),
               baseCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),

@@ -32,7 +32,7 @@ describe("Harbor task compiler", () => {
       join(authored, "definition.json"),
       JSON.stringify({
         schemaVersion: 1,
-        difficulty: "hard",
+        difficulty: "medium",
         taskId: "example",
         repo: "example/repo",
         baseCommit: commit,
@@ -65,7 +65,8 @@ describe("Harbor task compiler", () => {
       "Implement the requested behavior.\n",
     );
     const taskToml = await readFile(join(output, "task.toml"), "utf8");
-    expect(taskToml).toContain('difficulty = "hard"');
+    expect(taskToml).toContain('difficulty = "medium"');
+    expect(taskToml).toContain('"medium"');
     expect(taskToml).toContain(
       'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     );

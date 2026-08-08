@@ -70,20 +70,21 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 The CLI collects two types of provenance:
 
 1. sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees;
-2. exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse hard-mode size thresholds.
+2. exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds.
 
 GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
 
 ```bash
 node dist/cli.js run \
   --repo /absolute/path/to/repository \
-  --count 10 \
-  --reserve-count 10 \
+  --easy-count 5 \
+  --medium-count 10 \
+  --hard-count 5 \
   --model gpt-5.6-sol \
   --output ./selfbench-tasks.tar.gz
 ```
 
-`--count` accepts 1–100. `--reserve-count` accepts 0–100 and defaults to `--count`. When the initial pool is exhausted, discovery requests non-duplicate candidates until the target is accepted or 100 candidates have been considered.
+The three tier counts total 1–100. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
 
 `--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
 
@@ -97,7 +98,7 @@ The CLI is the recommended client. The API exposes:
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check |
 | `POST` | `/v1/provenance?runId=...` | Store sanitized provenance JSONL |
-| `POST` | `/v1/runs` | Start a hard-mode workflow |
+| `POST` | `/v1/runs` | Start a tiered candidate workflow |
 | `GET` | `/v1/runs` | List workflows |
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |

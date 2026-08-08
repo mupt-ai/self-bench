@@ -1,4 +1,4 @@
-import type { TaskDefinition } from "./contracts.js";
+import type { Difficulty, TaskDefinition } from "./contracts.js";
 
 export interface StaticAuditReport {
   readonly accepted: boolean;
@@ -10,32 +10,50 @@ export interface StaticAuditReport {
   };
 }
 
-export function auditHardTask(
+const thresholds: Record<
+  Difficulty,
+  {
+    readonly implementationFiles: number;
+    readonly changedLines: number;
+    readonly passToPass: number;
+  }
+> = {
+  easy: { implementationFiles: 1, changedLines: 20, passToPass: 0 },
+  medium: { implementationFiles: 2, changedLines: 50, passToPass: 1 },
+  hard: { implementationFiles: 3, changedLines: 100, passToPass: 2 },
+};
+
+export function auditTaskDefinition(
   definition: TaskDefinition,
   goldPatch: string,
   testPatch: string,
 ): StaticAuditReport {
   const gold = patchMetrics(goldPatch);
   const tests = patchMetrics(testPatch);
+  const threshold = thresholds[definition.difficulty];
   const testPathSet = new Set(tests.files);
   const blockers: string[] = [];
   const overlap = gold.files.filter((path) => testPathSet.has(path));
   if (overlap.length > 0) {
     blockers.push(`gold and held-out test patches overlap: ${overlap.join(", ")}`);
   }
-  if (gold.files.length < 3) {
-    blockers.push(`hard mode requires at least 3 implementation files; found ${gold.files.length}`);
-  }
-  if (gold.changedLines < 100) {
+  if (gold.files.length < threshold.implementationFiles) {
     blockers.push(
-      `hard mode requires at least 100 changed implementation lines; found ${gold.changedLines}`,
+      `${definition.difficulty} mode requires at least ${threshold.implementationFiles} implementation files; found ${gold.files.length}`,
+    );
+  }
+  if (gold.changedLines < threshold.changedLines) {
+    blockers.push(
+      `${definition.difficulty} mode requires at least ${threshold.changedLines} changed implementation lines; found ${gold.changedLines}`,
     );
   }
   if (tests.files.length === 0) {
     blockers.push("held-out test patch changes no files");
   }
-  if (definition.passToPass.length < 2) {
-    blockers.push("hard mode requires at least 2 pass-to-pass regression tests");
+  if (definition.passToPass.length < threshold.passToPass) {
+    blockers.push(
+      `${definition.difficulty} mode requires at least ${threshold.passToPass} pass-to-pass regression tests`,
+    );
   }
   if (
     definition.failToPass.some((path) => testCommandHardcodesPath(definition.testCommand, path)) ||

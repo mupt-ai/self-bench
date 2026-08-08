@@ -97,8 +97,9 @@ async function run(args: string[]): Promise<void> {
     args,
     options: {
       repo: { type: "string", short: "r" },
-      count: { type: "string", short: "n" },
-      "reserve-count": { type: "string" },
+      "easy-count": { type: "string" },
+      "medium-count": { type: "string" },
+      "hard-count": { type: "string" },
       "run-id": { type: "string" },
       model: { type: "string", default: "gpt-5.6-sol" },
       wait: { type: "boolean", default: false },
@@ -107,11 +108,15 @@ async function run(args: string[]): Promise<void> {
     strict: true,
   });
   const repositoryPath = resolve(parsed.values.repo ?? fail("--repo is required"));
-  const count = positiveInteger(parsed.values.count ?? fail("--count is required"), "--count");
-  const reserveCount = nonnegativeInteger(
-    parsed.values["reserve-count"] ?? String(count),
-    "--reserve-count",
-  );
+  const candidateCounts = {
+    easy: nonnegativeInteger(parsed.values["easy-count"] ?? "0", "--easy-count"),
+    medium: nonnegativeInteger(parsed.values["medium-count"] ?? "0", "--medium-count"),
+    hard: nonnegativeInteger(parsed.values["hard-count"] ?? "0", "--hard-count"),
+  };
+  const totalCandidates = candidateCounts.easy + candidateCounts.medium + candidateCounts.hard;
+  if (totalCandidates < 1 || totalCandidates > 100) {
+    fail("the total candidate count must be between 1 and 100");
+  }
   const runId = parsed.values["run-id"] ?? defaultRunId();
   const [repository, localMessages, selfbenchCommit] = await Promise.all([
     resolveRepository(repositoryPath),
@@ -136,8 +141,7 @@ async function run(args: string[]): Promise<void> {
         runId,
         repository,
         provenance,
-        count,
-        reserveCount,
+        candidateCounts,
         authoringModel: parsed.values.model,
         selfbenchCommit,
       }),
@@ -271,14 +275,6 @@ function asPolledRunStatus(value: Record<string, unknown>): PolledRunStatus {
   return { ...value, phase: value.phase };
 }
 
-function positiveInteger(value: string, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return parsed;
-}
-
 function nonnegativeInteger(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
@@ -296,12 +292,12 @@ function fail(message: string): never {
 }
 
 function printHelp(): void {
-  console.log(`SelfBench creates durable hard-mode Harbor evaluations.
+  console.log(`SelfBench creates durable tiered Harbor evaluations.
 
 Usage:
   selfbench up [--backend docker|modal] [--modal-config PATH]
-  selfbench run --repo PATH --count N [--reserve-count N] [--model MODEL] [--run-id ID]
-                [--wait] [--output OUTPUT.tar.gz]
+  selfbench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
+                [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   selfbench status RUN_ID
   selfbench cancel RUN_ID
   selfbench download RUN_ID OUTPUT.tar.gz
@@ -310,7 +306,8 @@ Usage:
 The up command starts the local stack and configures both sandbox execution and Harbor validation for
 one backend. Modal uses ~/.modal.toml unless --modal-config overrides it.
 
-SelfBench intentionally has no easy mode. The run command performs only repository metadata and
-sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.
+The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
+replaced, and the export contains only accepted tasks. The run command performs only repository metadata
+and sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.
 --output implies --wait, blocks until completion, and downloads the SHA-256-verified export.`);
 }

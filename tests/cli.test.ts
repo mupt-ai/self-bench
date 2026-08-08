@@ -148,8 +148,12 @@ printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_E
           "run",
           "--repo",
           repository,
-          "--count",
+          "--easy-count",
           "1",
+          "--medium-count",
+          "2",
+          "--hard-count",
+          "3",
           "--output",
           output,
         ],
@@ -174,7 +178,7 @@ printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_E
 
       expect(exitCode, stderr).toBe(0);
       expect(await readFile(output)).toEqual(exportBody);
-      expect(submittedRun?.count).toBe(1);
+      expect(submittedRun?.candidateCounts).toEqual({ easy: 1, medium: 2, hard: 3 });
       expect(stdout).toContain(`"output": "${output}"`);
       expect(stderr).toContain('"phase":"complete"');
     } finally {

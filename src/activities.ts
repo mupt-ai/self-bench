@@ -6,7 +6,7 @@ import { CancelledFailure, Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
 import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
-import { auditHardTask } from "./audit.js";
+import { auditTaskDefinition } from "./audit.js";
 import {
   COUPLING_REVIEW_MODEL,
   couplingReviewInput,
@@ -21,6 +21,7 @@ import {
   artifactRefSchema,
   type Candidate,
   candidateSchema,
+  type Difficulty,
   type DiscoveryResult,
   type ReviewResult,
   type RunRequest,
@@ -56,6 +57,7 @@ const discoveryPlanSchema = z.object({
   candidates: z.array(
     z.object({
       candidateId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+      difficulty: z.enum(["easy", "medium", "hard"]),
       sourcePr: z.number().int().positive(),
       sourceUrl: z.string().url(),
       baseCommit: z.string().regex(/^[0-9a-f]{40}$/i),
@@ -80,7 +82,7 @@ export interface DiscoveryShardInput {
   readonly wave: number;
   readonly shardIndex: number;
   readonly shardCount: number;
-  readonly targetCount: number;
+  readonly targetCounts: Readonly<Record<Difficulty, number>>;
   readonly excludedSourcePrs: readonly number[];
 }
 
@@ -133,8 +135,8 @@ async function discoverCandidateShard(
     input.wave < 0 ||
     !Number.isInteger(input.shardIndex) ||
     !Number.isInteger(input.shardCount) ||
-    !Number.isInteger(input.targetCount) ||
-    input.targetCount < 1 ||
+    Object.values(input.targetCounts).some((count) => !Number.isInteger(count) || count < 0) ||
+    Object.values(input.targetCounts).every((count) => count === 0) ||
     input.shardIndex < 0 ||
     input.shardIndex >= input.shardCount
   ) {
@@ -211,7 +213,7 @@ async function discoverCandidateShard(
     if (result.exitCode !== 0 || !planBytes) {
       throw new Error(`discovery shard failed in ${result.sandboxId}; log: ${logs.uri}`);
     }
-    parseDiscoveryPlan(planBytes, input.targetCount, input.excludedSourcePrs, run.repository.url);
+    parseDiscoveryPlan(planBytes, input.targetCounts, input.excludedSourcePrs, run.repository.url);
     await store.put(checkpointKey, planBytes, "application/json");
   }
   return await materializeDiscovery(
@@ -220,7 +222,7 @@ async function discoverCandidateShard(
     shard,
     planBytes,
     logs,
-    input.targetCount,
+    input.targetCounts,
     input.excludedSourcePrs,
     `${attemptPrefix}/report.json`,
     `w${input.wave}s${input.shardIndex}`,
@@ -233,7 +235,7 @@ async function materializeDiscovery(
   provenance: readonly ProvenanceMessage[],
   planBytes: Uint8Array,
   logs: ArtifactRef,
-  maxCandidates: number,
+  maxCandidates: Readonly<Record<Difficulty, number>>,
   excludedSourcePrs: readonly number[],
   reportKey: string,
   candidatePrefix: string,
@@ -280,15 +282,20 @@ async function materializeDiscovery(
 
 function parseDiscoveryPlan(
   planBytes: Uint8Array,
-  maxCandidates: number,
+  maxCandidates: Readonly<Record<Difficulty, number>>,
   excludedSourcePrs: readonly number[],
   repositoryUrl: string,
 ) {
   const plan = discoveryPlanSchema.parse(JSON.parse(Buffer.from(planBytes).toString("utf8")));
-  if (plan.candidates.length > maxCandidates) {
-    throw new Error(
-      `discovery produced ${plan.candidates.length} candidates; expected at most ${maxCandidates}`,
-    );
+  for (const difficulty of ["easy", "medium", "hard"] as const) {
+    const actual = plan.candidates.filter(
+      (candidate) => candidate.difficulty === difficulty,
+    ).length;
+    if (actual > maxCandidates[difficulty]) {
+      throw new Error(
+        `discovery produced ${actual} ${difficulty} candidates; expected at most ${maxCandidates[difficulty]}`,
+      );
+    }
   }
   const candidateIds = new Set<string>();
   const sourcePrs = new Set<number>();
@@ -386,7 +393,7 @@ async function authorCandidate(
     return {
       kind: "rejected",
       candidateId: candidate.candidateId,
-      reason: `authoring did not produce a valid hard task; log: ${log.uri}`,
+      reason: `authoring did not produce a valid ${candidate.difficulty} task; log: ${log.uri}`,
     };
   }
   return await materializeAuthoredTask(store, run, candidate, definitionBytes, bundle);
@@ -404,12 +411,13 @@ async function materializeAuthoredTask(
   );
   if (
     definition.sourcePr !== candidate.sourcePr ||
-    definition.baseCommit !== candidate.baseCommit
+    definition.baseCommit !== candidate.baseCommit ||
+    definition.difficulty !== candidate.difficulty
   ) {
     return {
       kind: "rejected",
       candidateId: candidate.candidateId,
-      reason: "authored task does not match its assigned PR and base commit",
+      reason: "authored task does not match its assigned PR, base commit, and difficulty",
     };
   }
   const [definitionRef, bundleRef] = await Promise.all([
@@ -698,7 +706,7 @@ async function auditTask(store: ArtifactStore, input: TaskStageInput): Promise<A
     const definition = taskDefinitionSchema.parse(
       JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
     );
-    const audit = auditHardTask(definition, goldPatch, testPatch);
+    const audit = auditTaskDefinition(definition, goldPatch, testPatch);
     const report = await store.put(
       `runs/${input.run.runId}/audits/${input.task.taskId}/${input.task.bundle.sha256.slice(0, 12)}.json`,
       Buffer.from(`${JSON.stringify(audit, null, 2)}\n`),
@@ -739,10 +747,10 @@ async function buildExport(store: ArtifactStore, input: ExportInput): Promise<Ar
         {
           schemaVersion: 1,
           runId: input.run.runId,
-          difficulty: "hard",
+          candidateCounts: input.run.candidateCounts,
           repository: input.run.repository,
           version: input.run.version,
-          count: manifestTasks.length,
+          acceptedCount: manifestTasks.length,
           tasks: manifestTasks,
         },
         null,
@@ -764,21 +772,31 @@ function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: numbe
     input.excludedSourcePrs.length > 0
       ? `Do not return any of these already-considered pull requests: ${input.excludedSourcePrs.join(", ")}.`
       : "No pull requests have been considered yet.";
-  return `Discover and rank up to ${input.targetCount} hard SelfBench candidates from this assigned provenance shard.
+  return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}.
 
 ${exclusions}
 
-Hard mode is the only supported mode. Each candidate must have roughly 100 or more changed implementation lines across at least 3 implementation files, focused public behavior, separable held-out tests, deterministic setup, and an authentic pre-implementation request. Prefer candidates with stable public APIs, commands, persistence boundaries, or extension seams so behavior can be tested without importing gold-specific private helpers or asserting internal implementation structure.
+Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, and unrelated cleanup:
+- easy: at least 20 changed implementation lines across at least 1 implementation file, with at least 1 viable fail-to-pass test;
+- medium: at least 50 changed implementation lines across at least 2 implementation files, with at least 1 fail-to-pass and 1 pass-to-pass test;
+- hard: at least 100 changed implementation lines across at least 3 implementation files, with at least 1 fail-to-pass and 2 pass-to-pass tests.
+Choose the highest tier whose thresholds the candidate honestly meets. Every tier also requires focused public behavior, separable held-out tests, deterministic setup, and an authentic pre-implementation request. Prefer stable public APIs, commands, persistence boundaries, or extension seams.
 
 Every candidate must be a pull request from SOURCE_REPO_URL. Repository names or pull requests mentioned inside provenance messages are context only; never follow them into another repository. sourceUrl must be the canonical GitHub pull-request URL for SOURCE_REPO_URL and sourcePr must match its number.
 
 The sanitized corpus at /work/provenance.jsonl contains ${provenanceCount} human requests. Local Pi, Claude Code, and Codex requests are preferred when they clearly correspond to the same change. Records with sourceType github-pull-request contain the non-bot PR author's exact title and optional body and are valid fallback provenance. A github-pull-request record may be used only for its own sourcePr and sourceUrl. Select provenance only by an exact sourceType, sessionId, and messageIndex present in the corpus. Never invent or reconstruct request text from implementation or tests. Inspect merged PR metadata and diffs with gh and git. Resolve the exact base and completed 40-character commits. Do not modify the repository.
 
-Return fewer than ${input.targetCount} when the shard does not contain enough valid requests; an empty candidate list is valid. Call submit_discovery exactly once. Do not return prose after the tool call.`;
+Return fewer candidates when the shard does not contain enough valid requests; an empty candidate list is valid. Call submit_discovery exactly once. Do not return prose after the tool call.`;
 }
 
 function authoringPrompt(run: RunRequest, candidate: Candidate): string {
-  return `Author exactly one hard SelfBench task for this assigned candidate:
+  const tierRequirements = {
+    easy: "at least 20 changed implementation lines across at least 1 implementation file, at least 1 fail-to-pass test, and no pass-to-pass minimum",
+    medium:
+      "at least 50 changed implementation lines across at least 2 implementation files, at least 1 fail-to-pass test, and at least 1 pass-to-pass test",
+    hard: "at least 100 changed implementation lines across at least 3 implementation files, at least 1 fail-to-pass test, and at least 2 pass-to-pass tests",
+  } as const;
+  return `Author exactly one ${candidate.difficulty} SelfBench task for this assigned candidate:
 
 ${JSON.stringify(
   {
@@ -792,11 +810,11 @@ ${JSON.stringify(
   2,
 )}
 
-Use only this candidate. Do not discover alternatives and do not run Harbor. Read /work/provenance.json only to verify the supplied authentic request. Inspect the base and completed commits. Split the completed change into a non-test gold patch and a held-out test patch. The task must meet hard mode: at least 100 changed implementation lines across at least 3 implementation files, at least one fail-to-pass test, and at least 2 pass-to-pass tests.
+Use only this candidate. Do not discover alternatives and do not run Harbor. Read /work/provenance.json only to verify the supplied authentic request. Inspect the base and completed commits. Split the completed change into a non-test gold patch and a held-out test patch. The task must meet ${candidate.difficulty} mode: ${tierRequirements[candidate.difficulty]}.
 
 Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
 
-Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "hard". testCommand must contain the literal {tests}, and every selected test path must be supplied only through that placeholder—never hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
+Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests}, and every selected test path must be supplied only through that placeholder—never hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
 
 Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }

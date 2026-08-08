@@ -18,8 +18,11 @@ const submissionSchema = z.object({
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
   repository: repositoryRefSchema,
   provenance: artifactRefSchema,
-  count: z.number().int().min(1).max(100),
-  reserveCount: z.number().int().min(0).max(100),
+  candidateCounts: z.object({
+    easy: z.number().int().min(0).max(100),
+    medium: z.number().int().min(0).max(100),
+    hard: z.number().int().min(0).max(100),
+  }),
   authoringModel: z.string().min(1).default("gpt-5.6-sol"),
   selfbenchCommit: z.string().regex(/^[0-9a-f]{40}$/i),
 });
@@ -61,8 +64,7 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
           runId: submission.runId,
           repository: submission.repository,
           provenance: submission.provenance,
-          count: submission.count,
-          reserveCount: submission.reserveCount,
+          candidateCounts: submission.candidateCounts,
           authoring: {
             provider: "openai-codex",
             model: submission.authoringModel,

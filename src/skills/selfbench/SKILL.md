@@ -1,11 +1,11 @@
 ---
 name: selfbench
-description: Author one private, hard software-engineering benchmark task from an assigned completed pull request. Use when SelfBench supplies a pinned candidate, authentic request provenance, a base commit, and a completed commit and asks for held-out tests plus a reference implementation.
+description: Author one private software-engineering benchmark task at an assigned difficulty from a completed pull request. Use when SelfBench supplies a pinned candidate, authentic request provenance, base and completed commits, and a difficulty.
 ---
 
 # SelfBench Task Authoring
 
-Create exactly one hard Harbor evaluation from the assigned candidate. Do not discover alternative pull requests. Do not run Harbor; centralized validation owns execution.
+Create exactly one Harbor evaluation at the assigned easy, medium, or hard difficulty. Do not discover alternative pull requests. Do not run Harbor; centralized validation owns execution.
 
 ## Integrity boundary
 
@@ -19,20 +19,17 @@ The coding agent must receive only a history-free base snapshot and the authenti
 
 Use the supplied provenance only to preserve the engineer's original intent. Do not reconstruct a request from the pull request, implementation, or tests.
 
-## Hard-mode gate
+## Difficulty gate
 
-Reject the candidate instead of weakening it unless all of these are true:
+Use the assigned difficulty exactly. Reject the candidate instead of changing its tier or weakening its thresholds:
 
-- the gold patch changes at least 100 implementation lines across at least 3 implementation files;
-- the change represents one coherent behavioral requirement;
-- tests can be held out without removing implementation files needed by the solver;
-- at least one fail-to-pass test fails on the base and passes on the completed change;
-- at least two focused pass-to-pass tests protect existing behavior;
-- setup and tests are deterministic in a clean checkout;
-- no external service, private credential, production resource, or mutable dependency is required;
-- the task can be completed within the declared time and resource limits.
+| Difficulty | Implementation core | Fail-to-pass | Pass-to-pass |
+| --- | --- | --- | --- |
+| easy | at least 20 changed lines across 1 implementation file | at least 1 | no minimum |
+| medium | at least 50 changed lines across 2 implementation files | at least 1 | at least 1 |
+| hard | at least 100 changed lines across 3 implementation files | at least 1 | at least 2 |
 
-SelfBench has no easy mode. Never reduce these thresholds to save a marginal candidate.
+Every tier also requires one coherent behavioral requirement, held-out tests that do not remove solver-required implementation, deterministic clean-checkout setup, no private or mutable external dependency, and completion within declared resource limits.
 
 ## Authoring procedure
 
@@ -76,7 +73,7 @@ Submit this logical shape through `submit_task`:
 {
   "definition": {
     "schemaVersion": 1,
-    "difficulty": "hard",
+    "difficulty": "medium",
     "taskId": "project-pr-123",
     "repo": "example/project",
     "baseCommit": "0123456789abcdef0123456789abcdef01234567",

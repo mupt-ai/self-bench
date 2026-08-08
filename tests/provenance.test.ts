@@ -39,7 +39,7 @@ describe("provenance sanitization", () => {
     expect(value).not.toContain("postgres://");
   });
 
-  test("extracts plausible hard pull requests from non-bot GitHub authors", () => {
+  test("extracts tier-eligible pull requests from non-bot GitHub authors", () => {
     const raw = JSON.stringify([
       {
         number: 42,
@@ -51,6 +51,17 @@ describe("provenance sanitization", () => {
         additions: 90,
         deletions: 15,
         changedFiles: 4,
+      },
+      {
+        number: 41,
+        title: "Add a focused validation rule",
+        body: "Reject malformed input.",
+        url: "https://github.com/example/project/pull/41",
+        author: { login: "human", is_bot: false },
+        isDraft: false,
+        additions: 22,
+        deletions: 0,
+        changedFiles: 1,
       },
       {
         number: 43,
@@ -86,6 +97,14 @@ describe("provenance sanitization", () => {
         content: "Add the public routing API\n\nExpose routing through the documented client.",
         sourcePr: 42,
         sourceUrl: "https://github.com/example/project/pull/42",
+      },
+      {
+        sourceType: "github-pull-request",
+        sessionId: "github:example/project#41",
+        messageIndex: 0,
+        content: "Add a focused validation rule\n\nReject malformed input.",
+        sourcePr: 41,
+        sourceUrl: "https://github.com/example/project/pull/41",
       },
     ]);
   });

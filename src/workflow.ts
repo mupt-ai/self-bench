@@ -17,6 +17,7 @@ import type {
 import type {
   AuthoredTask,
   Candidate,
+  Difficulty,
   DiscoveryProgress,
   RunRequest,
   RunResult,
@@ -60,11 +61,10 @@ const activities: SelfBenchActivities = {
   buildExport: taskActivities.buildExport,
 };
 
-const DISCOVERY_EXPANSION_SIZE = 20;
 const DISCOVERY_SHARD_COUNT = 8;
 const DISCOVERY_SHARD_OVERFETCH = 3;
-const MAX_CANDIDATES_PER_SHARD = 8;
-const MAX_DISCOVERED_CANDIDATES = 100;
+const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
+const MAX_DISCOVERED_CANDIDATES = 300;
 
 export async function selfBenchRunWorkflow(input: RunRequest): Promise<RunResult> {
   return await executeRun(input, activities, (status) => setHandler(statusQuery, () => status()));
@@ -75,10 +75,12 @@ export async function executeRun(
   activitySet: SelfBenchActivities,
   installStatusQuery: (status: () => RunStatus) => void = () => undefined,
 ): Promise<RunResult> {
+  const requested = Object.values(input.candidateCounts).reduce((sum, count) => sum + count, 0);
   let status: RunStatus = {
     runId: input.runId,
     phase: "queued",
-    requested: input.count,
+    requested,
+    requestedByDifficulty: input.candidateCounts,
     discovered: 0,
     accepted: 0,
     rejected: 0,
@@ -109,18 +111,39 @@ export async function executeRun(
     const updateDiscovery = (progress: DiscoveryProgress): void => {
       status = { ...status, discovery: progress };
     };
-    const candidates = await discoverWave(activitySet, input, {
-      wave: 0,
-      targetCount: Math.min(input.count + input.reserveCount, MAX_DISCOVERED_CANDIDATES),
-      excludedSourcePrs: [],
-      onProgress: updateDiscovery,
-    });
-    setDiscovered(candidates.length);
+    const candidates: Candidate[] = [];
+    let discoveryWave = 0;
+    while (true) {
+      const selected = selectCandidates(candidates, input.candidateCounts);
+      const missing = missingCandidateCounts(selected, input.candidateCounts);
+      if (Object.values(missing).every((count) => count === 0)) {
+        break;
+      }
+      const capacity = MAX_DISCOVERED_CANDIDATES - candidates.length;
+      if (capacity <= 0) {
+        setPhase("blocked");
+        throw candidatePoolExhausted(selected, input.candidateCounts);
+      }
+      const additions = await discoverWave(activitySet, input, {
+        wave: discoveryWave,
+        targetCounts: missing,
+        excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
+        onProgress: updateDiscovery,
+      });
+      const knownPrs = new Set(candidates.map((candidate) => candidate.sourcePr));
+      const uniqueAdditions = additions.filter((candidate) => !knownPrs.has(candidate.sourcePr));
+      if (uniqueAdditions.length === 0) {
+        setPhase("blocked");
+        throw candidatePoolExhausted(selected, input.candidateCounts);
+      }
+      candidates.push(...uniqueAdditions.slice(0, capacity));
+      setDiscovered(candidates.length);
+      discoveryWave += 1;
+    }
+    const selectedCandidates = selectCandidates(candidates, input.candidateCounts);
     const taskProgress: TaskProgress[] = [];
     const acceptedTasks: AuthoredTask[] = [];
     const taskIds = new Set<string>();
-    let cursor = 0;
-    let expansionPage = 0;
 
     const rejectProgress = (progress: TaskProgress, reason: string): void => {
       progress.status = "rejected";
@@ -131,6 +154,7 @@ export async function executeRun(
       const progress: TaskProgress = {
         candidateId: candidate.candidateId,
         taskId: candidate.candidateId,
+        difficulty: candidate.difficulty,
         status: "authoring",
       };
       taskProgress.push(progress);
@@ -235,63 +259,19 @@ export async function executeRun(
       }
     };
 
-    while (acceptedTasks.length < input.count) {
-      if (cursor >= candidates.length) {
-        const capacity = MAX_DISCOVERED_CANDIDATES - candidates.length;
-        if (capacity <= 0) {
-          setPhase("blocked");
-          throw ApplicationFailure.nonRetryable(
-            `candidate pool exhausted at ${acceptedTasks.length}/${input.count} accepted tasks`,
-            "CandidatePoolExhausted",
-          );
-        }
-        expansionPage += 1;
-        setPhase("discovering");
-        const additions = await discoverWave(activitySet, input, {
-          wave: expansionPage,
-          excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
-          targetCount: Math.min(DISCOVERY_EXPANSION_SIZE, capacity),
-          onProgress: updateDiscovery,
-        });
-        const knownPrs = new Set(candidates.map((candidate) => candidate.sourcePr));
-        const uniqueAdditions = additions.filter((candidate) => !knownPrs.has(candidate.sourcePr));
-        if (uniqueAdditions.length === 0) {
-          setPhase("blocked");
-          throw ApplicationFailure.nonRetryable(
-            `discovery expansion produced no new candidates at ${acceptedTasks.length}/${input.count}`,
-            "CandidatePoolExhausted",
-          );
-        }
-        candidates.push(...uniqueAdditions);
-        setDiscovered(candidates.length);
-      }
-      setPhase("authoring");
-      const workerCount = Math.min(input.count - acceptedTasks.length, candidates.length - cursor);
-      await Promise.all(
-        Array.from({ length: workerCount }, async () => {
-          while (acceptedTasks.length < input.count) {
-            const candidate = candidates[cursor];
-            if (!candidate) {
-              return;
-            }
-            cursor += 1;
-            await processCandidate(candidate);
-          }
-        }),
-      );
-    }
+    setPhase("authoring");
+    await Promise.all(selectedCandidates.map(processCandidate));
 
-    const selected = acceptedTasks.slice(0, input.count);
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
       run: input,
-      tasks: selected,
+      tasks: acceptedTasks,
     } satisfies ExportInput);
     status = { ...status, phase: "complete", export: exportRef };
     return {
       runId: input.runId,
       export: exportRef,
-      acceptedTaskIds: selected.map((task) => task.taskId),
+      acceptedTaskIds: acceptedTasks.map((task) => task.taskId),
     };
   } catch (error) {
     if (isCancellation(error)) {
@@ -309,7 +289,7 @@ export async function executeRun(
 
 interface DiscoveryWaveOptions {
   readonly wave: number;
-  readonly targetCount: number;
+  readonly targetCounts: RunRequest["candidateCounts"];
   readonly excludedSourcePrs: readonly number[];
   readonly onProgress: (progress: DiscoveryProgress) => void;
 }
@@ -319,10 +299,18 @@ async function discoverWave(
   run: RunRequest,
   options: DiscoveryWaveOptions,
 ): Promise<Candidate[]> {
-  const targetPerShard = Math.min(
-    MAX_CANDIDATES_PER_SHARD,
-    Math.max(1, Math.ceil(options.targetCount / DISCOVERY_SHARD_COUNT) + DISCOVERY_SHARD_OVERFETCH),
-  );
+  const targetCounts = Object.fromEntries(
+    (["easy", "medium", "hard"] as const).map((difficulty) => [
+      difficulty,
+      options.targetCounts[difficulty] === 0
+        ? 0
+        : Math.min(
+            MAX_CANDIDATES_PER_TIER_PER_SHARD,
+            Math.ceil(options.targetCounts[difficulty] / DISCOVERY_SHARD_COUNT) +
+              DISCOVERY_SHARD_OVERFETCH,
+          ),
+    ]),
+  ) as Record<Difficulty, number>;
   let completedShards = 0;
   let failedShards = 0;
   let candidateCount = 0;
@@ -343,7 +331,7 @@ async function discoverWave(
           wave: options.wave,
           shardIndex,
           shardCount: DISCOVERY_SHARD_COUNT,
-          targetCount: targetPerShard,
+          targetCounts,
           excludedSourcePrs: options.excludedSourcePrs,
         } satisfies DiscoveryShardInput);
         completedShards += 1;
@@ -372,6 +360,46 @@ async function discoverWave(
     seenPrs.add(candidate.sourcePr);
     return true;
   });
+}
+
+function selectCandidates(
+  candidates: readonly Candidate[],
+  counts: RunRequest["candidateCounts"],
+): Candidate[] {
+  const selectedCounts: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0 };
+  return candidates.filter((candidate) => {
+    if (selectedCounts[candidate.difficulty] >= counts[candidate.difficulty]) {
+      return false;
+    }
+    selectedCounts[candidate.difficulty] += 1;
+    return true;
+  });
+}
+
+function missingCandidateCounts(
+  selected: readonly Candidate[],
+  requested: RunRequest["candidateCounts"],
+): Record<Difficulty, number> {
+  const actual: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0 };
+  for (const candidate of selected) {
+    actual[candidate.difficulty] += 1;
+  }
+  return {
+    easy: requested.easy - actual.easy,
+    medium: requested.medium - actual.medium,
+    hard: requested.hard - actual.hard,
+  };
+}
+
+function candidatePoolExhausted(
+  selected: readonly Candidate[],
+  requested: RunRequest["candidateCounts"],
+): ApplicationFailure {
+  const missing = missingCandidateCounts(selected, requested);
+  return ApplicationFailure.nonRetryable(
+    `candidate pool exhausted; missing easy=${missing.easy}, medium=${missing.medium}, hard=${missing.hard}`,
+    "CandidatePoolExhausted",
+  );
 }
 
 function infrastructureFailureMessage(error: unknown): string {

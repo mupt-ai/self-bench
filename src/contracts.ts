@@ -18,12 +18,27 @@ export const artifactRefSchema = z.object({
 
 export type ArtifactRef = z.infer<typeof artifactRefSchema>;
 
+export const difficultySchema = z.enum(["easy", "medium", "hard"]);
+export type Difficulty = z.infer<typeof difficultySchema>;
+
+const candidateCountsSchema = z
+  .object({
+    easy: z.number().int().min(0).max(100),
+    medium: z.number().int().min(0).max(100),
+    hard: z.number().int().min(0).max(100),
+  })
+  .refine(({ easy, medium, hard }) => easy + medium + hard >= 1, {
+    message: "at least one candidate must be requested",
+  })
+  .refine(({ easy, medium, hard }) => easy + medium + hard <= 100, {
+    message: "at most 100 candidates may be requested",
+  });
+
 export const runRequestSchema = z.object({
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
   repository: repositoryRefSchema,
   provenance: artifactRefSchema,
-  count: z.number().int().min(1).max(100),
-  reserveCount: z.number().int().min(0).max(100),
+  candidateCounts: candidateCountsSchema,
   authoring: z.object({
     provider: z.literal("openai-codex"),
     model: z.string().min(1),
@@ -41,6 +56,7 @@ export type RunRequest = z.infer<typeof runRequestSchema>;
 
 export const candidateSchema = z.object({
   candidateId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  difficulty: difficultySchema,
   sourcePr: z.number().int().positive(),
   sourceUrl: z.string().url(),
   baseCommit: commitSchema,
@@ -53,7 +69,7 @@ export type Candidate = z.infer<typeof candidateSchema>;
 
 export const taskDefinitionSchema = z.object({
   schemaVersion: z.literal(1),
-  difficulty: z.literal("hard"),
+  difficulty: difficultySchema,
   taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
   repo: z.string().min(1),
   baseCommit: commitSchema,
@@ -126,6 +142,7 @@ export type RunPhase =
 export interface TaskProgress {
   taskId: string;
   candidateId: string;
+  difficulty: Difficulty;
   status:
     | "authoring"
     | "auditing"
@@ -150,6 +167,7 @@ export interface RunStatus {
   readonly runId: string;
   readonly phase: RunPhase;
   readonly requested: number;
+  readonly requestedByDifficulty: Readonly<Record<Difficulty, number>>;
   readonly discovered: number;
   readonly accepted: number;
   readonly rejected: number;

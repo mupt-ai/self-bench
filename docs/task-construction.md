@@ -1,6 +1,6 @@
 # Task construction and validation
 
-SelfBench creates hard Harbor evaluations from completed pull requests. This document defines the task boundary, validation gates, repair behavior, and export contents.
+SelfBench creates easy, medium, and hard Harbor evaluations from completed pull requests. This document defines the task boundary, validation gates, repair behavior, and export contents.
 
 ## Terms
 
@@ -19,18 +19,17 @@ Each task is grounded in one retained human request. SelfBench prefers exact use
 
 GitHub records are stored with a distinct `github-pull-request` source type, canonical URL, and PR number. Discovery cannot pair the request from one PR with another PR. A model-authored benchmark instruction may restate the retained request but may not add behavior inferred only from the implementation or tests.
 
-## Hard-mode gates
+## Difficulty gates
 
-Every accepted task must have:
+Profiles are eligibility rules, not empirical claims about model success:
 
-- at least 100 added or removed non-header lines in the non-test reference patch;
-- at least three changed implementation paths;
-- a held-out test patch with no file overlap with the reference patch;
-- at least one fail-to-pass test;
-- at least two pass-to-pass regression tests;
-- deterministic, repository-native setup and test commands;
-- a passing nop/oracle split;
-- an independent anti-coupling review.
+| Difficulty | Reference patch | Fail-to-pass | Pass-to-pass |
+| --- | --- | --- | --- |
+| easy | at least 20 changed lines across 1 implementation path | at least 1 | no minimum |
+| medium | at least 50 changed lines across 2 implementation paths | at least 1 | at least 1 |
+| hard | at least 100 changed lines across 3 implementation paths | at least 1 | at least 2 |
+
+Every accepted task also requires a held-out test patch with no file overlap with the reference patch, deterministic repository-native setup and tests, a passing nop/oracle split, and independent anti-coupling review.
 
 The size gate is mechanical. Generated or vendored code suitability remains a review judgment. Git LFS, submodules, generated changes, and service-heavy integration suites receive no special path and may be rejected during authoring or validation.
 
