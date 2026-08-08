@@ -37,6 +37,14 @@ export function auditHardTask(
   if (definition.passToPass.length < 2) {
     blockers.push("hard mode requires at least 2 pass-to-pass regression tests");
   }
+  if (
+    definition.failToPass.some((path) => testCommandHardcodesPath(definition.testCommand, path)) ||
+    definition.passToPass.some((path) => testCommandHardcodesPath(definition.testCommand, path))
+  ) {
+    blockers.push(
+      'test command must not hard-code fail-to-pass or pass-to-pass paths outside "{tests}"',
+    );
+  }
   return {
     accepted: blockers.length === 0,
     blockers,
@@ -46,6 +54,10 @@ export function auditHardTask(
       testFiles: tests.files.length,
     },
   };
+}
+
+function testCommandHardcodesPath(command: string, path: string): boolean {
+  return command.replace("{tests}", "").includes(path);
 }
 
 function patchMetrics(patch: string): { files: string[]; changedLines: number } {

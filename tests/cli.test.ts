@@ -12,6 +12,50 @@ afterEach(async () => {
 });
 
 describe("SelfBench CLI", () => {
+  test("up translates backend flags into stack configuration", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-cli-up-"));
+    roots.push(root);
+    const binaryDirectory = join(root, "bin");
+    const calls = join(root, "docker-calls");
+    const modalConfig = join(root, "modal.toml");
+    await mkdir(binaryDirectory);
+    await writeFile(modalConfig, "[profile]\n");
+    const docker = join(binaryDirectory, "docker");
+    await writeFile(
+      docker,
+      `#!/bin/sh
+printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" >> "$DOCKER_CALLS"
+`,
+    );
+    await chmod(docker, 0o755);
+
+    const child = Bun.spawn(
+      [process.execPath, "src/cli.ts", "up", "--backend", "modal", "--modal-config", modalConfig],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          DOCKER_CALLS: calls,
+          PATH: `${binaryDirectory}:${process.env.PATH ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+
+    expect(exitCode, stderr).toBe(0);
+    expect(stdout).toContain("running with the modal backend");
+    const invocations = await readFile(calls, "utf8");
+    expect(invocations).not.toContain("Dockerfile.sandbox");
+    expect(invocations).toContain("compose --file");
+    expect(invocations).toContain(`|modal|modal|${modalConfig}`);
+  });
+
   test("run --output waits for completion and downloads a verified export", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-cli-"));
     roots.push(root);

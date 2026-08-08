@@ -38,7 +38,7 @@ describe("Harbor task compiler", () => {
         baseCommit: commit,
         workdir: "project",
         setupCommand: "npm ci --ignore-scripts",
-        testCommand: "test {tests}",
+        testCommand: "test {tests} && test {tests}",
         failToPass: ["tests/new"],
         passToPass: ["tests/a", "tests/b"],
         testPaths: ["tests/new"],
@@ -84,14 +84,19 @@ describe("Harbor task compiler", () => {
     expect(verifier).toContain("deterministic");
     expect(verifier).not.toContain("npm ci --ignore-scripts");
     expect(verifier).toContain("/app/project/tests/new");
+    expect(verifier).not.toContain("{tests}");
+    expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
+    expect(verifier).toContain('PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin');
     const dockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
     expect(dockerfile).toContain("UV_CACHE_DIR=/opt/uv-cache");
     expect(dockerfile.indexOf("nodejs.org/dist")).toBeLessThan(
       dockerfile.indexOf("npm install --global bun"),
     );
+    expect(dockerfile).toContain("&& corepack enable");
+    expect(dockerfile).toContain("PLAYWRIGHT_BROWSERS_PATH=/opt/playwright");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(14);
+    ).toBe(19);
   });
 
   test("detects supported dependency manifests without treating source changes as dependencies", () => {

@@ -31,7 +31,7 @@ Compose mounts the default auth files read-only. Override their host paths befor
 ```bash
 export SELFBENCH_PI_AUTH_PATH=/absolute/path/to/pi-auth.json
 export SELFBENCH_CODEX_AUTH_PATH=/absolute/path/to/codex-auth.json
-docker compose up -d --build
+node dist/cli.js up
 ```
 
 ## Execution backends
@@ -41,8 +41,7 @@ docker compose up -d --build
 Build the worker's sandbox image once:
 
 ```bash
-docker build -f Dockerfile.sandbox -t selfbench-sandbox:local .
-docker compose up -d --build
+node dist/cli.js up --backend docker
 ```
 
 Docker defaults to one activity at a time because sandboxes share the host. Each candidate defaults to 4 CPUs, 8,192 MB RAM, and 20,480 MB storage. Authored tasks may request other positive limits.
@@ -54,13 +53,13 @@ Authenticate Modal and mount its profile into the worker:
 ```bash
 modal token new
 
-SELFBENCH_EXECUTION_BACKEND=modal \
-SELFBENCH_HARBOR_ENVIRONMENT=modal \
-SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml" \
-docker compose up -d --build
+node dist/cli.js up --backend modal
+
+# If your profile is not at ~/.modal.toml:
+node dist/cli.js up --backend modal --modal-config /absolute/path/to/.modal.toml
 ```
 
-Without `SELFBENCH_MODAL_CONFIG_PATH`, Compose mounts `/dev/null`; Docker-only installations do not need a Modal profile. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
+`selfbench up` selects both sandbox execution and Harbor validation for the requested backend. Modal mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
 Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery and authoring stop after eight minutes without process output; review stops after five. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard.
 
@@ -121,13 +120,13 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_ARTIFACT_DIR` | `.selfbench/artifacts` | Local artifact store |
 | `SELFBENCH_GCS_BUCKET` | — | GCS artifact store |
 | `SELFBENCH_GCS_PREFIX` | `selfbench` | GCS artifact store |
-| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker |
-| `SELFBENCH_HARBOR_ENVIRONMENT` | execution backend | Worker |
+| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; set by `selfbench up --backend` locally |
+| `SELFBENCH_HARBOR_ENVIRONMENT` | execution backend | Worker; set by `selfbench up --backend` locally |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
-| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount |
+| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `selfbench up --modal-config` locally |
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |

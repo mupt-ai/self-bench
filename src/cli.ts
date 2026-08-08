@@ -12,6 +12,9 @@ import { type PolledRunStatus, waitForRun } from "./run-wait.js";
 
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {
+  case "up":
+    await up(rest);
+    break;
   case "run":
     await run(rest);
     break;
@@ -35,6 +38,58 @@ switch (command) {
     break;
   default:
     throw new Error(`unknown command: ${command}`);
+}
+
+async function up(args: string[]): Promise<void> {
+  const parsed = parseArgs({
+    args,
+    options: {
+      backend: { type: "string", default: "docker" },
+      "modal-config": { type: "string" },
+    },
+    strict: true,
+  });
+  if (parsed.values.backend !== "docker" && parsed.values.backend !== "modal") {
+    fail('--backend must be "docker" or "modal"');
+  }
+  if (parsed.values.backend === "docker" && parsed.values["modal-config"] !== undefined) {
+    fail("--modal-config requires --backend modal");
+  }
+
+  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const composeFile = resolve(projectRoot, "compose.yaml");
+  const backend = parsed.values.backend;
+  const environment = {
+    ...process.env,
+    SELFBENCH_EXECUTION_BACKEND: backend,
+    SELFBENCH_HARBOR_ENVIRONMENT: backend,
+    ...(backend === "modal"
+      ? {
+          SELFBENCH_MODAL_CONFIG_PATH: resolve(
+            parsed.values["modal-config"] ?? resolve(homedir(), ".modal.toml"),
+          ),
+        }
+      : {}),
+  };
+
+  if (backend === "docker") {
+    await runCommand(
+      "docker",
+      [
+        "build",
+        "-f",
+        resolve(projectRoot, "Dockerfile.sandbox"),
+        "-t",
+        "selfbench-sandbox:local",
+        projectRoot,
+      ],
+      { env: environment },
+    );
+  }
+  await runCommand("docker", ["compose", "--file", composeFile, "up", "-d", "--build"], {
+    env: environment,
+  });
+  console.log(`SelfBench is running with the ${backend} backend at http://127.0.0.1:8080`);
 }
 
 async function run(args: string[]): Promise<void> {
@@ -244,12 +299,16 @@ function printHelp(): void {
   console.log(`SelfBench creates durable hard-mode Harbor evaluations.
 
 Usage:
+  selfbench up [--backend docker|modal] [--modal-config PATH]
   selfbench run --repo PATH --count N [--reserve-count N] [--model MODEL] [--run-id ID]
                 [--wait] [--output OUTPUT.tar.gz]
   selfbench status RUN_ID
   selfbench cancel RUN_ID
   selfbench download RUN_ID OUTPUT.tar.gz
   selfbench list
+
+The up command starts the local stack and configures both sandbox execution and Harbor validation for
+one backend. Modal uses ~/.modal.toml unless --modal-config overrides it.
 
 SelfBench intentionally has no easy mode. The run command performs only repository metadata and
 sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.

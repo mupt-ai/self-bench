@@ -5,7 +5,7 @@ import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 14;
+const COMPILER_REVISION = 19;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -276,8 +276,11 @@ function toolchainDockerfile(toolchains: readonly string[]): string {
     uv: "RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh",
     python:
       "RUN uv python install 3.11 3.12 3.13 && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3 && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python",
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the output is a shell variable.
-    node: `RUN arch="$(dpkg --print-architecture)" && case "$arch" in arm64) node_arch=arm64 ;; amd64) node_arch=x64 ;; *) exit 1 ;; esac && curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-${"${node_arch}"}.tar.xz" | tar -C /usr/local --strip-components=1 -xJ`,
+    node: `ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" && chmod 755 "$PLAYWRIGHT_BROWSERS_PATH" \\
+    && arch="$(dpkg --print-architecture)" && case "$arch" in arm64) node_arch=arm64 ;; amd64) node_arch=x64 ;; *) exit 1 ;; esac \\
+    && curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-\${node_arch}.tar.xz" | tar -C /usr/local --strip-components=1 -xJ \\
+    && corepack enable`,
     bun: "RUN npm install --global bun@1.3.14",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the output is a shell variable.
     go: `RUN arch="$(dpkg --print-architecture)" && curl -fsSL "https://go.dev/dl/go1.25.0.linux-${"${arch}"}.tar.gz" | tar -C /usr/local -xz`,
@@ -355,11 +358,14 @@ fail_to_pass=0
 pass_to_pass=0
 deterministic=0
 setup_completed=0
+fail_to_pass_exit_code=-1
+fail_to_pass_repeat_exit_code=-1
+pass_to_pass_exit_code=-1
 verifier_cache=""
 
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
 run_verifier_command() {
-  runuser -u verifier -- env UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1"
+  runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1"
   local status=$?
   kill_verifier_processes
   return "$status"
@@ -395,24 +401,37 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   cp -a /opt/uv-cache/. "$verifier_cache"/
   chown -R verifier:verifier "$verifier_cache"
   if run_verifier_command ${shellQuote(f2p)}; then
+    fail_to_pass_exit_code=0
     fail_to_pass=1
-    if run_verifier_command ${shellQuote(f2p)}; then deterministic=1; fi
+    if run_verifier_command ${shellQuote(f2p)}; then
+      fail_to_pass_repeat_exit_code=0
+      deterministic=1
+    else
+      fail_to_pass_repeat_exit_code=$?
+    fi
+  else
+    fail_to_pass_exit_code=$?
   fi
-  if run_verifier_command ${shellQuote(p2p)}; then pass_to_pass=1; fi
+  if run_verifier_command ${shellQuote(p2p)}; then
+    pass_to_pass_exit_code=0
+    pass_to_pass=1
+  else
+    pass_to_pass_exit_code=$?
+  fi
   rm -rf "$verifier_cache"
 fi
 
 reward=0
 if [ "$patch_applied" -eq 1 ] && [ "$fail_to_pass" -eq 1 ] && [ "$pass_to_pass" -eq 1 ] && [ "$deterministic" -eq 1 ]; then reward=1; fi
 cat > /logs/verifier/reward.json <<EOF
-{"reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic, "setup_completed": $setup_completed}
+{"reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic, "setup_completed": $setup_completed, "fail_to_pass_exit_code": $fail_to_pass_exit_code, "fail_to_pass_repeat_exit_code": $fail_to_pass_repeat_exit_code, "pass_to_pass_exit_code": $pass_to_pass_exit_code}
 EOF
 exit 0
 `;
 }
 
 function taskCommand(task: TaskDefinition, tests: readonly string[]): string {
-  return task.testCommand.replace("{tests}", tests.map(shellQuote).join(" "));
+  return task.testCommand.replaceAll("{tests}", tests.map(shellQuote).join(" "));
 }
 
 function assertSafeTaskPaths(task: TaskDefinition): void {
