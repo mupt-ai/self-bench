@@ -46,6 +46,7 @@ import {
   loadPiSubscriptionAuth,
 } from "./subscription-auth.js";
 
+const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 const DISCOVERY_TIMEOUT_MS = 45 * 60 * 1000;
 const AGENT_INACTIVITY_TIMEOUT_MS = 8 * 60 * 1000;
 const AUTHORING_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -499,7 +500,7 @@ async function validateTask(
       nop: { passed: nopPassed, result: nopRef },
       oracle: { passed: oraclePassed, result: oracleRef },
       ...(!nopPassed || !oraclePassed
-        ? { reason: "Harbor nop/oracle gates did not both pass" }
+        ? { reason: harborGateFailureReason(nopPassed, nopChecks, oraclePassed, oracleChecks) }
         : {}),
     };
   });
@@ -795,7 +796,7 @@ Use only this candidate. Do not discover alternatives and do not run Harbor. Rea
 
 Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
 
-Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "hard". testCommand must contain the literal {tests}. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands and only required toolchains. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
+Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "hard". testCommand must contain the literal {tests}, and every selected test path must be supplied only through that placeholder—never hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
 
 Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }
@@ -873,14 +874,52 @@ async function runHarborGate(
     { allowFailure: true, timeoutMs: 3 * 60 * 60 * 1000, signal },
   );
   if (result.exitCode !== 0) {
-    throw new Error(`Harbor ${agent} exited ${result.exitCode} for ${taskId}`);
+    throw ApplicationFailure.create({
+      message: harborCommandFailureMessage(agent, taskId, result.exitCode, result.stderr),
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
   }
   const parsed = await readHarborJobResult(jobsDirectory, jobName);
   const infrastructureError = harborInfrastructureError(parsed.trial);
   if (infrastructureError) {
-    throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructureError}`);
+    throw ApplicationFailure.create({
+      message: `Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructureError}`,
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
   }
   return parsed;
+}
+
+function harborCommandFailureMessage(
+  agent: "nop" | "oracle",
+  taskId: string,
+  exitCode: number,
+  stderr: string,
+): string {
+  const detail = stderr.trim().split("\n").at(-1);
+  return `Harbor ${agent} exited ${exitCode} for ${taskId}${detail ? `: ${detail}` : ""}`;
+}
+
+function harborGateFailureReason(
+  nopPassed: boolean,
+  nopChecks: Record<string, unknown>,
+  oraclePassed: boolean,
+  oracleChecks: Record<string, unknown>,
+): string {
+  const formatChecks = (checks: Record<string, unknown>): string =>
+    [
+      "patch_applied",
+      "fail_to_pass",
+      "pass_to_pass",
+      "deterministic",
+      "setup_completed",
+      "fail_to_pass_exit_code",
+      "fail_to_pass_repeat_exit_code",
+      "pass_to_pass_exit_code",
+    ]
+      .map((key) => `${key}=${String(checks[key] ?? "missing")}`)
+      .join(", ");
+  return `Harbor gates failed: nop=${nopPassed} (${formatChecks(nopChecks)}); oracle=${oraclePassed} (${formatChecks(oracleChecks)})`;
 }
 
 async function withActivityHeartbeats<T>(

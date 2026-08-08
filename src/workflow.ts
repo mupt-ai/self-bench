@@ -135,92 +135,104 @@ export async function executeRun(
       };
       taskProgress.push(progress);
       setTasks(taskProgress);
-      const authored = await activitySet.authorCandidate({
-        run: input,
-        candidate,
-      } satisfies AuthorCandidateInput);
-      if (authored.kind === "rejected") {
-        rejectProgress(progress, authored.reason);
-        return;
-      }
-      let task = authored.task;
-      if (taskIds.has(task.taskId)) {
-        rejectProgress(progress, `authoring repeated task ID ${task.taskId}`);
-        return;
-      }
-      taskIds.add(task.taskId);
-      progress.taskId = task.taskId;
-
-      progress.status = "auditing";
-      setTasks(taskProgress);
-      const audit = await activitySet.auditTask({ run: input, task } satisfies TaskStageInput);
-      if (!audit.accepted) {
-        rejectProgress(progress, audit.reason ?? "audit rejected task");
-        return;
-      }
-
-      progress.status = "validating";
-      setTasks(taskProgress);
-      const validation = await activitySet.validateTask({
-        run: input,
-        task,
-      } satisfies TaskStageInput);
-      if (!validation.accepted) {
-        rejectProgress(progress, validation.reason ?? "validation rejected task");
-        return;
-      }
-
-      progress.status = "reviewing";
-      setTasks(taskProgress);
-      let review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
-      if (!review.accepted) {
-        progress.status = "repairing";
-        setTasks(taskProgress);
-        const repaired = await activitySet.repairTask({
+      try {
+        const authored = await activitySet.authorCandidate({
           run: input,
-          task,
-          review: review.report,
-        } satisfies RepairTaskInput);
-        if (repaired.kind === "rejected") {
-          rejectProgress(progress, repaired.reason);
+          candidate,
+        } satisfies AuthorCandidateInput);
+        if (authored.kind === "rejected") {
+          rejectProgress(progress, authored.reason);
           return;
         }
-        task = repaired.task;
+        let task = authored.task;
+        if (taskIds.has(task.taskId)) {
+          rejectProgress(progress, `authoring repeated task ID ${task.taskId}`);
+          return;
+        }
+        taskIds.add(task.taskId);
+        progress.taskId = task.taskId;
 
         progress.status = "auditing";
         setTasks(taskProgress);
-        const repairAudit = await activitySet.auditTask({
-          run: input,
-          task,
-        } satisfies TaskStageInput);
-        if (!repairAudit.accepted) {
-          rejectProgress(progress, repairAudit.reason ?? "audit rejected repaired task");
+        const audit = await activitySet.auditTask({ run: input, task } satisfies TaskStageInput);
+        if (!audit.accepted) {
+          rejectProgress(progress, audit.reason ?? "audit rejected task");
           return;
         }
 
         progress.status = "validating";
         setTasks(taskProgress);
-        const repairValidation = await activitySet.validateTask({
+        const validation = await activitySet.validateTask({
           run: input,
           task,
         } satisfies TaskStageInput);
-        if (!repairValidation.accepted) {
-          rejectProgress(progress, repairValidation.reason ?? "validation rejected repaired task");
+        if (!validation.accepted) {
+          rejectProgress(progress, validation.reason ?? "validation rejected task");
           return;
         }
 
         progress.status = "reviewing";
         setTasks(taskProgress);
-        review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
+        let review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
         if (!review.accepted) {
-          rejectProgress(progress, review.reason ?? "review rejected repaired task");
-          return;
-        }
-      }
+          progress.status = "repairing";
+          setTasks(taskProgress);
+          const repaired = await activitySet.repairTask({
+            run: input,
+            task,
+            review: review.report,
+          } satisfies RepairTaskInput);
+          if (repaired.kind === "rejected") {
+            rejectProgress(progress, repaired.reason);
+            return;
+          }
+          task = repaired.task;
 
-      progress.status = "accepted";
-      acceptedTasks.push(task);
-      setTasks(taskProgress);
+          progress.status = "auditing";
+          setTasks(taskProgress);
+          const repairAudit = await activitySet.auditTask({
+            run: input,
+            task,
+          } satisfies TaskStageInput);
+          if (!repairAudit.accepted) {
+            rejectProgress(progress, repairAudit.reason ?? "audit rejected repaired task");
+            return;
+          }
+
+          progress.status = "validating";
+          setTasks(taskProgress);
+          const repairValidation = await activitySet.validateTask({
+            run: input,
+            task,
+          } satisfies TaskStageInput);
+          if (!repairValidation.accepted) {
+            rejectProgress(
+              progress,
+              repairValidation.reason ?? "validation rejected repaired task",
+            );
+            return;
+          }
+
+          progress.status = "reviewing";
+          setTasks(taskProgress);
+          review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
+          if (!review.accepted) {
+            rejectProgress(progress, review.reason ?? "review rejected repaired task");
+            return;
+          }
+        }
+
+        progress.status = "accepted";
+        acceptedTasks.push(task);
+        setTasks(taskProgress);
+      } catch (error) {
+        if (!isHarborInfrastructureFailure(error)) {
+          throw error;
+        }
+        progress.status = "infrastructure_failed";
+        progress.reason = infrastructureFailureMessage(error);
+        setTasks(taskProgress);
+      }
     };
 
     while (acceptedTasks.length < input.count) {
@@ -360,6 +372,30 @@ async function discoverWave(
     seenPrs.add(candidate.sourcePr);
     return true;
   });
+}
+
+function infrastructureFailureMessage(error: unknown): string {
+  let cause = error;
+  let message = error instanceof Error ? error.message : String(error);
+  while (cause instanceof Error) {
+    if (cause instanceof ApplicationFailure && cause.type === "HarborInfrastructureFailure") {
+      return cause.message;
+    }
+    message = cause.message;
+    cause = cause.cause;
+  }
+  return message;
+}
+
+function isHarborInfrastructureFailure(error: unknown): boolean {
+  let cause = error;
+  while (cause instanceof Error) {
+    if (cause instanceof ApplicationFailure && cause.type === "HarborInfrastructureFailure") {
+      return true;
+    }
+    cause = cause.cause;
+  }
+  return false;
 }
 
 function isNonRetryableActivityFailure(error: unknown): boolean {

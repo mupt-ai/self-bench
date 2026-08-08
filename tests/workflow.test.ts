@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CancelledFailure } from "@temporalio/workflow";
+import { ApplicationFailure, CancelledFailure } from "@temporalio/workflow";
 import type { SelfBenchActivities } from "../src/activities.js";
 import type { ArtifactRef, Candidate, RunRequest, RunStatus } from "../src/contracts.js";
 import { executeRun } from "../src/workflow.js";
@@ -183,6 +183,64 @@ describe("SelfBench workflow", () => {
 
     expect(reserveStartedBeforeSlow).toBe(true);
     expect([...result.acceptedTaskIds].sort()).toEqual(["reserve-task", "slow-task"]);
+  });
+
+  test("consumes a reserve after exhausted Harbor infrastructure retries", async () => {
+    const activities: SelfBenchActivities = {
+      discoverCandidateShard: async ({ shardIndex }) => ({
+        candidates: shardIndex === 0 ? [candidate("infra", 1), candidate("reserve", 2)] : [],
+        report: artifact,
+      }),
+      authorCandidate: async ({ candidate: value }) => ({
+        kind: "authored",
+        task: {
+          candidateId: value.candidateId,
+          taskId: `${value.candidateId}-task`,
+          definition: artifact,
+          bundle: artifact,
+        },
+      }),
+      auditTask: async ({ task }) => ({ taskId: task.taskId, accepted: true, report: artifact }),
+      validateTask: async ({ task }) => {
+        if (task.taskId === "infra-task") {
+          throw new Error("Activity task failed", {
+            cause: ApplicationFailure.retryable(
+              "Modal image build failed after retries",
+              "HarborInfrastructureFailure",
+            ),
+          });
+        }
+        return {
+          taskId: task.taskId,
+          accepted: true,
+          nop: { passed: true, result: artifact },
+          oracle: { passed: true, result: artifact },
+        };
+      },
+      reviewTask: async ({ task }) => ({ taskId: task.taskId, accepted: true, report: artifact }),
+      repairTask: async () => {
+        throw new Error("unexpected repair");
+      },
+      buildExport: async () => artifact,
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    const result = await executeRun(run, activities, (status) => {
+      currentStatus = status;
+    });
+
+    expect(result.acceptedTaskIds).toEqual(["reserve-task"]);
+    expect(currentStatus?.().phase).toBe("complete");
+    expect(currentStatus?.().rejected).toBe(0);
+    expect(currentStatus?.().tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          taskId: "infra-task",
+          status: "infrastructure_failed",
+          reason: "Modal image build failed after retries",
+        }),
+      ]),
+    );
   });
 
   test("consumes a reserve after candidate rejection and exports exactly the target", async () => {

@@ -45,11 +45,10 @@ cd selfbench
 npm install -g @earendil-works/pi-coding-agent@0.84.0
 bun install --frozen-lockfile
 bun run build
-docker build -f Dockerfile.sandbox -t selfbench-sandbox:local .
 
 export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 export GH_TOKEN="$(gh auth token)"
-docker compose up -d --build
+node dist/cli.js up
 
 until curl --fail http://127.0.0.1:8080/healthz; do sleep 2; done
 ```
@@ -92,10 +91,10 @@ Generation defaults to Pi with `gpt-5.6-sol` at high reasoning. Multi-task runs 
 ```bash
 modal token new
 
-SELFBENCH_EXECUTION_BACKEND=modal \
-SELFBENCH_HARBOR_ENVIRONMENT=modal \
-SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml" \
-docker compose up -d --build
+node dist/cli.js up --backend modal
+
+# If your profile is not at ~/.modal.toml:
+node dist/cli.js up --backend modal --modal-config /absolute/path/to/.modal.toml
 ```
 
 Discovery partitions requests across eight independently retryable workers. Modal defaults to 20 concurrent activities and starts another candidate whenever one is rejected. Model processes stream progress; discovery and authoring stop after eight minutes without output, while review stops after five.

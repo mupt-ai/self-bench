@@ -132,6 +132,7 @@ export interface TaskProgress {
     | "validating"
     | "reviewing"
     | "repairing"
+    | "infrastructure_failed"
     | "rejected"
     | "accepted";
   reason?: string;

@@ -36,6 +36,30 @@ describe("hard-mode audit", () => {
     expect(auditHardTask(definition, gold, tests).accepted).toBe(true);
   });
 
+  test("rejects a test command that hard-codes selected paths outside the placeholder", () => {
+    const gold = ["src/a.ts", "src/b.ts", "src/c.ts"]
+      .map(
+        (path, index) =>
+          `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n${Array.from({ length: index === 0 ? 98 : 1 }, (_, line) => `+line-${index}-${line}`).join("\n")}`,
+      )
+      .join("\n");
+    const tests =
+      "diff --git a/tests/new.ts b/tests/new.ts\n--- a/tests/new.ts\n+++ b/tests/new.ts\n+test";
+    const audit = auditHardTask(
+      {
+        ...definition,
+        testCommand: "test {tests} && test tests/new",
+      },
+      gold,
+      tests,
+    );
+
+    expect(audit.accepted).toBe(false);
+    expect(audit.blockers).toContain(
+      'test command must not hard-code fail-to-pass or pass-to-pass paths outside "{tests}"',
+    );
+  });
+
   test("rejects easy-sized and overlapping patches", () => {
     const patch =
       "diff --git a/tests/new.ts b/tests/new.ts\n--- a/tests/new.ts\n+++ b/tests/new.ts\n+line";
