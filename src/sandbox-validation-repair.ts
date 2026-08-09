@@ -93,6 +93,7 @@ const pi = await runCommand(
     "json",
     "--no-session",
     "--no-approve",
+    "--no-skills",
     "--no-prompt-templates",
     "--no-context-files",
     "--no-extensions",
@@ -104,7 +105,7 @@ const pi = await runCommand(
     "high",
     "--tools",
     "read,bash,grep,find,ls",
-    (await readFile(promptPath, "utf8")).trim(),
+    `@${promptPath}`,
   ],
   {
     allowFailure: true,
