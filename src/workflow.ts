@@ -13,6 +13,7 @@ import type {
   RepairTaskInput,
   SelfBenchActivities,
   TaskStageInput,
+  ValidationRepairTaskInput,
 } from "./activities.js";
 import type {
   AuthoredTask,
@@ -27,7 +28,9 @@ import type {
 
 export const statusQuery = defineQuery<RunStatus>("status");
 
-const taskActivities = proxyActivities<Omit<SelfBenchActivities, "discoverCandidateShard">>({
+const taskActivities = proxyActivities<
+  Omit<SelfBenchActivities, "discoverCandidateShard" | "repairValidationTask">
+>({
   startToCloseTimeout: "7 hours",
   heartbeatTimeout: "10 minutes",
   cancellationType: "WAIT_CANCELLATION_COMPLETED",
@@ -38,6 +41,15 @@ const taskActivities = proxyActivities<Omit<SelfBenchActivities, "discoverCandid
     maximumAttempts: 4,
   },
 });
+
+const validationRepairActivity = proxyActivities<Pick<SelfBenchActivities, "repairValidationTask">>(
+  {
+    startToCloseTimeout: "2 hours",
+    heartbeatTimeout: "10 minutes",
+    cancellationType: "WAIT_CANCELLATION_COMPLETED",
+    retry: { maximumAttempts: 1 },
+  },
+);
 
 const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
   startToCloseTimeout: "1 hour",
@@ -55,6 +67,7 @@ const activities: SelfBenchActivities = {
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   authorCandidate: taskActivities.authorCandidate,
   validateTask: taskActivities.validateTask,
+  repairValidationTask: validationRepairActivity.repairValidationTask,
   reviewTask: taskActivities.reviewTask,
   repairTask: taskActivities.repairTask,
   auditTask: taskActivities.auditTask,
@@ -186,13 +199,45 @@ export async function executeRun(
 
         progress.status = "validating";
         setTasks(taskProgress);
-        const validation = await activitySet.validateTask({
+        let validation = await activitySet.validateTask({
           run: input,
           task,
         } satisfies TaskStageInput);
         if (!validation.accepted) {
-          rejectProgress(progress, validation.reason ?? "validation rejected task");
-          return;
+          progress.status = "repairing";
+          setTasks(taskProgress);
+          const repaired = await activitySet.repairValidationTask({
+            run: input,
+            task,
+            validation,
+          } satisfies ValidationRepairTaskInput);
+          if (repaired.kind === "rejected") {
+            rejectProgress(progress, repaired.reason);
+            return;
+          }
+          task = repaired.task;
+
+          progress.status = "auditing";
+          setTasks(taskProgress);
+          const repairAudit = await activitySet.auditTask({
+            run: input,
+            task,
+          } satisfies TaskStageInput);
+          if (!repairAudit.accepted) {
+            rejectProgress(progress, repairAudit.reason ?? "audit rejected validation repair");
+            return;
+          }
+
+          progress.status = "validating";
+          setTasks(taskProgress);
+          validation = await activitySet.validateTask({
+            run: input,
+            task,
+          } satisfies TaskStageInput);
+          if (!validation.accepted) {
+            rejectProgress(progress, validation.reason ?? "validation rejected repaired harness");
+            return;
+          }
         }
 
         progress.status = "reviewing";

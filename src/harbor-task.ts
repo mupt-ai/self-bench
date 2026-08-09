@@ -5,7 +5,7 @@ import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 19;
+const COMPILER_REVISION = 22;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -116,7 +116,10 @@ export async function refreshHarborTask(
   if (manifest.taskId !== definition.taskId) {
     throw new Error(`bundle task ${String(manifest.taskId)} does not match ${definition.taskId}`);
   }
-  const goldPatch = await readFile(join(outputDirectory, "solution/gold.patch"), "utf8");
+  const [goldPatch, testPatch] = await Promise.all([
+    readFile(join(outputDirectory, "solution/gold.patch"), "utf8"),
+    readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
+  ]);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
   await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition));
@@ -134,7 +137,18 @@ export async function refreshHarborTask(
   ]);
   await writeFile(
     manifestPath,
-    `${JSON.stringify({ ...manifest, compilerRevision: COMPILER_REVISION }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        ...manifest,
+        compilerRevision: COMPILER_REVISION,
+        difficulty: definition.difficulty,
+        definitionSha256: sha256(JSON.stringify(definition)),
+        testPatchSha256: sha256(testPatch),
+        goldPatchSha256: sha256(goldPatch),
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 
@@ -171,7 +185,7 @@ function taskToml(task: TaskDefinition): string {
     `timeout_sec = ${task.timeouts.setupSeconds + task.timeouts.testsSeconds}.0`,
     'user = "root"',
     'environment_mode = "separate"',
-    'network_mode = "no-network"',
+    'network_mode = "public"',
     "",
     "[[verifier.collect]]",
     'service = "main"',
@@ -280,6 +294,7 @@ function toolchainDockerfile(toolchains: readonly string[]): string {
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" && chmod 755 "$PLAYWRIGHT_BROWSERS_PATH" \\
     && arch="$(dpkg --print-architecture)" && case "$arch" in arm64) node_arch=arm64 ;; amd64) node_arch=x64 ;; *) exit 1 ;; esac \\
     && curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-\${node_arch}.tar.xz" | tar -C /usr/local --strip-components=1 -xJ \\
+    && mkdir -p /opt/corepack && chmod 755 /opt/corepack \\
     && corepack enable`,
     bun: "RUN npm install --global bun@1.3.14",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the output is a shell variable.
@@ -302,6 +317,7 @@ ENV DEBIAN_FRONTEND=noninteractive \\
     UV_PYTHON_BIN_DIR=/usr/local/bin \\
     RUSTUP_HOME=/usr/local/rustup \\
     CARGO_HOME=/usr/local/cargo \\
+    COREPACK_HOME=/opt/corepack \\
     PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 RUN apt-get update && apt-get install -y --no-install-recommends \\
     bash build-essential ca-certificates curl git jq passwd pkg-config procps unzip xz-utils \\
@@ -364,9 +380,30 @@ pass_to_pass_exit_code=-1
 verifier_cache=""
 
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
+# Some toolchains fetch dependencies at test runtime (e.g. Next.js e2e installs),
+# so a single registry connection reset must not be misread as a dead test. Retry
+# only infrastructure-style failures with backoff; real assertion failures fail fast.
 run_verifier_command() {
-  runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1"
-  local status=$?
+  local logfile
+  logfile="$(mktemp /tmp/selfbench-verifier-command-XXXXXX.log)"
+  local attempt=1
+  local status=1
+  while [ "$attempt" -le 3 ]; do
+    : > "$logfile"
+    runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1" >"$logfile" 2>&1
+    status=$?
+    if [ "$status" -eq 0 ]; then
+      break
+    fi
+    if [ "$attempt" -lt 3 ] && grep -qE 'ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|ENOTFOUND|EAI_AGAIN|META_FETCH_FAIL|FetchError|EPIPE|EPERM|registry\\.npmjs' "$logfile"; then
+      sleep "$((10 * attempt))"
+      attempt=$((attempt + 1))
+      continue
+    fi
+    break
+  done
+  cat "$logfile"
+  rm -f "$logfile"
   kill_verifier_processes
   return "$status"
 }

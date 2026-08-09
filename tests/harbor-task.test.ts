@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compileHarborTask, goldPatchChangesDependencyManifests } from "../src/harbor-task.js";
+import {
+  compileHarborTask,
+  goldPatchChangesDependencyManifests,
+  refreshHarborTask,
+} from "../src/harbor-task.js";
+import { sha256 } from "../src/hash.js";
 import { runCommand } from "../src/process.js";
 
 const roots: string[] = [];
@@ -75,6 +80,7 @@ describe("Harbor task compiler", () => {
     );
     const verifierDockerfile = await readFile(join(output, "tests/Dockerfile"), "utf8");
     expect(verifierDockerfile).toContain("COPY dependency-setup.patch");
+    expect(verifierDockerfile).toContain("COREPACK_HOME=/opt/corepack");
     expect(verifierDockerfile).toContain("npm ci --ignore-scripts");
     expect(verifierDockerfile).toContain("git -C /app reset --hard -q HEAD");
     expect(verifierDockerfile).toContain("COPY test.patch test.sh /tests/");
@@ -83,6 +89,8 @@ describe("Harbor task compiler", () => {
     expect(dependencyPatch).not.toContain("value.txt");
     const verifier = await readFile(join(output, "tests/test.sh"), "utf8");
     expect(verifier).toContain("deterministic");
+    expect(verifier).toContain("selfbench-verifier-command");
+    expect(verifier).toContain("ECONNRESET|ETIMEDOUT");
     expect(verifier).not.toContain("npm ci --ignore-scripts");
     expect(verifier).toContain("/app/project/tests/new");
     expect(verifier).not.toContain("{tests}");
@@ -97,7 +105,22 @@ describe("Harbor task compiler", () => {
     expect(dockerfile).toContain("PLAYWRIGHT_BROWSERS_PATH=/opt/playwright");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(19);
+    ).toBe(22);
+
+    const repairedDefinition = {
+      ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
+      testCommand: "test --repaired {tests}",
+    };
+    const repairedPatch =
+      "diff --git a/tests/new b/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new\n@@ -0,0 +1 @@\n+repaired\n";
+    await writeFile(join(output, "tests/test.patch"), repairedPatch);
+    await refreshHarborTask(output, repairedDefinition);
+    const refreshedManifest = JSON.parse(
+      await readFile(join(output, ".selfbench-manifest.json"), "utf8"),
+    );
+    expect(refreshedManifest.definitionSha256).toBe(sha256(JSON.stringify(repairedDefinition)));
+    expect(refreshedManifest.testPatchSha256).toBe(sha256(repairedPatch));
+    expect(await readFile(join(output, "tests/test.sh"), "utf8")).toContain("--repaired");
   });
 
   test("detects supported dependency manifests without treating source changes as dependencies", () => {

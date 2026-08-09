@@ -66,6 +66,9 @@ function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivit
       nop: { passed: true, result: artifact },
       oracle: { passed: true, result: artifact },
     }),
+    repairValidationTask: async () => {
+      throw new Error("unexpected validation repair");
+    },
     reviewTask: async ({ task }) => ({ taskId: task.taskId, accepted: true, report: artifact }),
     repairTask: async () => {
       throw new Error("unexpected repair");
@@ -208,6 +211,51 @@ describe("SelfBench workflow", () => {
         reason: "Modal image build failed after retries",
       }),
     ]);
+  });
+
+  test("repairs a failed validation once and repeats audit and validation", async () => {
+    const calls: string[] = [];
+    let validations = 0;
+    const activities = acceptingActivities([candidate("initial", 1)]);
+    activities.auditTask = async ({ task }) => {
+      calls.push("audit");
+      return { taskId: task.taskId, accepted: true, report: artifact };
+    };
+    activities.validateTask = async ({ task }) => {
+      calls.push("validate");
+      validations += 1;
+      return {
+        taskId: task.taskId,
+        accepted: validations === 2,
+        nop: { passed: true, result: artifact },
+        oracle: { passed: validations === 2, result: artifact },
+        ...(validations === 1 ? { reason: "test command failed" } : {}),
+      };
+    };
+    activities.repairValidationTask = async ({ task, validation }) => {
+      calls.push("validation-repair");
+      expect(validation.reason).toBe("test command failed");
+      return {
+        kind: "authored",
+        task: { ...task, bundle: { ...artifact, uri: "file:///validation-repaired" } },
+      };
+    };
+    activities.reviewTask = async ({ task }) => {
+      calls.push("review");
+      return { taskId: task.taskId, accepted: true, report: artifact };
+    };
+
+    const result = await executeRun(run, activities);
+
+    expect(calls).toEqual([
+      "audit",
+      "validate",
+      "validation-repair",
+      "audit",
+      "validate",
+      "review",
+    ]);
+    expect(result.acceptedTaskIds).toEqual(["initial-task"]);
   });
 
   test("repairs a coupled task and repeats every acceptance gate", async () => {

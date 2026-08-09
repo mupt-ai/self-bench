@@ -114,10 +114,12 @@ export const validationResultSchema = z.object({
   nop: z.object({
     passed: z.boolean(),
     result: artifactRefSchema,
+    output: artifactRefSchema.optional(),
   }),
   oracle: z.object({
     passed: z.boolean(),
     result: artifactRefSchema,
+    output: artifactRefSchema.optional(),
   }),
   reason: z.string().optional(),
 });

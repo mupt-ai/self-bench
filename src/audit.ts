@@ -63,6 +63,12 @@ export function auditTaskDefinition(
       'test command must not hard-code fail-to-pass or pass-to-pass paths outside "{tests}"',
     );
   }
+  if (definition.testCommand.split("{tests}").length !== 2) {
+    blockers.push('test command must contain "{tests}" exactly once');
+  }
+  if (/(["'])\{tests\}\1/.test(definition.testCommand)) {
+    blockers.push('test command must expand "{tests}" as an unquoted shell argument list');
+  }
   return {
     accepted: blockers.length === 0,
     blockers,

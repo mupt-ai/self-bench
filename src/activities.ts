@@ -35,7 +35,11 @@ import {
   scanBaseContractArtifacts,
 } from "./coupling.js";
 import { assertPullRequestBelongsToRepository } from "./github.js";
-import { harborInfrastructureError, readHarborJobResult } from "./harbor-results.js";
+import {
+  type HarborJobResult,
+  harborInfrastructureError,
+  readHarborJobResult,
+} from "./harbor-results.js";
 import { refreshHarborTask } from "./harbor-task.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
@@ -95,6 +99,10 @@ export interface RepairTaskInput extends TaskStageInput {
   readonly review: ArtifactRef;
 }
 
+export interface ValidationRepairTaskInput extends TaskStageInput {
+  readonly validation: ValidationResult;
+}
+
 export interface ExportInput {
   readonly run: RunRequest;
   readonly tasks: readonly AuthoredTask[];
@@ -104,6 +112,7 @@ export interface SelfBenchActivities {
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
   authorCandidate(input: AuthorCandidateInput): Promise<AuthorOutcome>;
   validateTask(input: TaskStageInput): Promise<ValidationResult>;
+  repairValidationTask(input: ValidationRepairTaskInput): Promise<AuthorOutcome>;
   reviewTask(input: TaskStageInput): Promise<ReviewResult>;
   repairTask(input: RepairTaskInput): Promise<AuthorOutcome>;
   auditTask(input: TaskStageInput): Promise<AuditResult>;
@@ -117,6 +126,7 @@ export function createActivities(config: SelfBenchConfig): SelfBenchActivities {
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
     authorCandidate: (input) => authorCandidate(store, sandbox, input),
     validateTask: (input) => validateTask(store, config.harborEnvironment, input),
+    repairValidationTask: (input) => repairValidationTask(store, sandbox, input),
     reviewTask: (input) => reviewTask(store, sandbox, input),
     repairTask: (input) => repairTask(store, sandbox, input),
     auditTask: (input) => auditTask(store, input),
@@ -490,28 +500,180 @@ async function validateTask(
       numberValue(oracleChecks.pass_to_pass) >= 1 &&
       numberValue(oracleChecks.deterministic) >= 1 &&
       numberValue(oracleChecks.setup_completed) >= 1;
-    const [nopRef, oracleRef] = await Promise.all([
+    const nopOutput = verifierOutput(nop);
+    const oracleOutput = verifierOutput(oracle);
+    const [nopRef, oracleRef, nopOutputRef, oracleOutputRef] = await Promise.all([
       store.put(
         `${attemptPrefix}/nop.json`,
-        Buffer.from(`${JSON.stringify(nop, null, 2)}\n`),
+        Buffer.from(`${JSON.stringify({ job: nop.job, trial: nop.trial }, null, 2)}\n`),
         "application/json",
       ),
       store.put(
         `${attemptPrefix}/oracle.json`,
-        Buffer.from(`${JSON.stringify(oracle, null, 2)}\n`),
+        Buffer.from(`${JSON.stringify({ job: oracle.job, trial: oracle.trial }, null, 2)}\n`),
         "application/json",
       ),
+      nopOutput
+        ? store.put(`${attemptPrefix}/nop-verifier.log`, Buffer.from(nopOutput), "text/plain")
+        : undefined,
+      oracleOutput
+        ? store.put(`${attemptPrefix}/oracle-verifier.log`, Buffer.from(oracleOutput), "text/plain")
+        : undefined,
     ]);
     return {
       taskId: input.task.taskId,
       accepted: nopPassed && oraclePassed,
-      nop: { passed: nopPassed, result: nopRef },
-      oracle: { passed: oraclePassed, result: oracleRef },
+      nop: {
+        passed: nopPassed,
+        result: nopRef,
+        ...(nopOutputRef ? { output: nopOutputRef } : {}),
+      },
+      oracle: {
+        passed: oraclePassed,
+        result: oracleRef,
+        ...(oracleOutputRef ? { output: oracleOutputRef } : {}),
+      },
       ...(!nopPassed || !oraclePassed
-        ? { reason: harborGateFailureReason(nopPassed, nopChecks, oraclePassed, oracleChecks) }
+        ? {
+            reason: harborGateFailureReason(
+              nopPassed,
+              nopChecks,
+              oraclePassed,
+              oracleChecks,
+              nopOutput,
+              oracleOutput,
+            ),
+          }
         : {}),
     };
   });
+}
+
+async function repairValidationTask(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  input: ValidationRepairTaskInput,
+): Promise<AuthorOutcome> {
+  Context.current().heartbeat(`repairing validation harness for ${input.task.taskId}`);
+  const checkpointPrefix = `runs/${input.run.runId}/validation-repairs/${input.task.taskId}/${input.task.bundle.sha256.slice(0, 12)}`;
+  const [definitionCheckpoint, bundleCheckpoint] = await Promise.all([
+    store.getByKey(`${checkpointPrefix}/definition.json`),
+    store.getByKey(`${checkpointPrefix}/harbor-task.tar.gz`),
+  ]);
+  if (definitionCheckpoint || bundleCheckpoint) {
+    if (!definitionCheckpoint || !bundleCheckpoint) {
+      throw new Error(`incomplete validation repair checkpoint for ${input.task.taskId}`);
+    }
+    const definition = taskDefinitionSchema.parse(
+      JSON.parse(Buffer.from(definitionCheckpoint).toString("utf8")),
+    );
+    return {
+      kind: "authored",
+      task: {
+        ...input.task,
+        taskId: definition.taskId,
+        definition: await store.put(
+          `${checkpointPrefix}/definition.json`,
+          definitionCheckpoint,
+          "application/json",
+        ),
+        bundle: await store.put(
+          `${checkpointPrefix}/harbor-task.tar.gz`,
+          bundleCheckpoint,
+          "application/gzip",
+        ),
+      },
+    };
+  }
+
+  const attemptPrefix = `${checkpointPrefix}/attempt-${Context.current().info.attempt}`;
+  const [bundle, definition, repairer, authJson, nopOutput, oracleOutput] = await Promise.all([
+    store.get(input.task.bundle),
+    store.get(input.task.definition),
+    readAsset("dist/sandbox-validation-repair.bundle.js"),
+    loadPiSubscriptionAuth(),
+    input.validation.nop.output ? store.get(input.validation.nop.output) : undefined,
+    input.validation.oracle.output ? store.get(input.validation.oracle.output) : undefined,
+  ]);
+  const diagnostics = Buffer.from(
+    [
+      input.validation.reason ?? "validation failed without a reason",
+      nopOutput ? `\n--- nop verifier output ---\n${Buffer.from(nopOutput).toString("utf8")}` : "",
+      oracleOutput
+        ? `\n--- oracle verifier output ---\n${Buffer.from(oracleOutput).toString("utf8")}`
+        : "",
+    ].join(""),
+  );
+  const result = await withActivityHeartbeats(
+    `running validation repair sandbox for ${input.task.taskId}`,
+    (options) =>
+      sandbox.run(
+        {
+          runId: input.run.runId,
+          stage: `validation-repair-${input.task.taskId}`,
+          timeoutMs: 2 * 60 * 60 * 1000,
+          inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
+          files: [
+            { path: "/work/task.tar.gz", contents: bundle },
+            { path: "/work/original-definition.json", contents: definition },
+            { path: "/work/validation-diagnostics.txt", contents: diagnostics },
+            { path: "/work/sandbox-validation-repair.js", contents: repairer },
+          ],
+          outputPaths: [
+            "/work/repaired-definition.json",
+            "/work/repaired-test.patch",
+            "/work/repair-report.json",
+          ],
+          secrets: { SELFBENCH_PI_AUTH_JSON: authJson },
+          environment: { SELFBENCH_REPAIR_MODEL: input.run.authoring.model },
+          command: [
+            "node",
+            "/work/sandbox-validation-repair.js",
+            "/work/task.tar.gz",
+            "/work/original-definition.json",
+            "/work/validation-diagnostics.txt",
+            "/work/repaired-definition.json",
+            "/work/repaired-test.patch",
+            "/work/repair-report.json",
+          ],
+        },
+        options,
+      ),
+  );
+  const repairedDefinition = result.outputs["/work/repaired-definition.json"];
+  const repairedTestPatch = result.outputs["/work/repaired-test.patch"];
+  const repairReport = result.outputs["/work/repair-report.json"];
+  const logs = await store.put(
+    `${attemptPrefix}/sandbox.log`,
+    Buffer.from(`${result.stdout}\n${result.stderr}`),
+    "text/plain",
+  );
+  if (result.exitCode !== 0 || !repairedDefinition || !repairedTestPatch || !repairReport) {
+    return {
+      kind: "rejected",
+      candidateId: input.task.candidateId,
+      reason: `validation repair failed in ${result.sandboxId}; log: ${logs.uri}`,
+    };
+  }
+  const parsedDefinition = taskDefinitionSchema.parse(
+    JSON.parse(Buffer.from(repairedDefinition).toString("utf8")),
+  );
+  const repairedBundle = await withTaskBundle(store, input.task, async (taskDirectory, root) => {
+    await writeFile(join(taskDirectory, "tests/test.patch"), repairedTestPatch);
+    await refreshHarborTask(taskDirectory, parsedDefinition);
+    const output = join(root, "repaired-task.tar.gz");
+    await runCommand("tar", ["-czf", output, "-C", root, "harbor-task"]);
+    return await readFile(output);
+  });
+  await store.put(`${attemptPrefix}/report.json`, repairReport, "application/json");
+  const [definitionRef, bundleRef] = await Promise.all([
+    store.put(`${checkpointPrefix}/definition.json`, repairedDefinition, "application/json"),
+    store.put(`${checkpointPrefix}/harbor-task.tar.gz`, repairedBundle, "application/gzip"),
+  ]);
+  return {
+    kind: "authored",
+    task: { ...input.task, definition: definitionRef, bundle: bundleRef },
+  };
 }
 
 async function reviewTask(
@@ -814,7 +976,9 @@ Use only this candidate. Do not discover alternatives and do not run Harbor. Rea
 
 Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
 
-Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests}, and every selected test path must be supplied only through that placeholder—never hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
+Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands with the package manager version declared by the repository and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, native compiler, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user.
+
+Before submission, preflight the exact split locally against the pinned base and completed states: the base plus held-out test patch must make failToPass fail while passToPass succeeds, and the completed implementation plus the same held-out patch must make both selections succeed twice. If setup or focused tests cannot be run within the authoring sandbox, reject the candidate instead of guessing a testCommand. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
 
 Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }
@@ -869,7 +1033,7 @@ async function runHarborGate(
   taskId: string,
   environment: SelfBenchConfig["harborEnvironment"],
   signal: AbortSignal,
-): Promise<{ job: unknown; trial: unknown }> {
+): Promise<HarborJobResult> {
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
   const result = await runCommand(
     "harbor",
@@ -923,6 +1087,8 @@ function harborGateFailureReason(
   nopChecks: Record<string, unknown>,
   oraclePassed: boolean,
   oracleChecks: Record<string, unknown>,
+  nopOutput?: string,
+  oracleOutput?: string,
 ): string {
   const formatChecks = (checks: Record<string, unknown>): string =>
     [
@@ -937,7 +1103,31 @@ function harborGateFailureReason(
     ]
       .map((key) => `${key}=${String(checks[key] ?? "missing")}`)
       .join(", ");
-  return `Harbor gates failed: nop=${nopPassed} (${formatChecks(nopChecks)}); oracle=${oraclePassed} (${formatChecks(oracleChecks)})`;
+  const diagnostics = [
+    ...(!nopPassed && nopOutput ? [`nop verifier tail:\n${boundedTail(nopOutput)}`] : []),
+    ...(!oraclePassed && oracleOutput
+      ? [`oracle verifier tail:\n${boundedTail(oracleOutput)}`]
+      : []),
+  ];
+  return `Harbor gates failed: nop=${nopPassed} (${formatChecks(nopChecks)}); oracle=${oraclePassed} (${formatChecks(oracleChecks)})${diagnostics.length > 0 ? `\n${diagnostics.join("\n")}` : ""}`;
+}
+
+function verifierOutput(
+  result: Awaited<ReturnType<typeof readHarborJobResult>>,
+): string | undefined {
+  const combined = result.verifier?.combined;
+  const stderr = result.verifier?.stderr;
+  if (combined && stderr) {
+    return `${combined.trimEnd()}\n\n--- verifier stderr ---\n${stderr}`;
+  }
+  return stderr ?? combined;
+}
+
+function boundedTail(value: string, maxBytes = 8_000): string {
+  const buffer = Buffer.from(value);
+  return buffer.length <= maxBytes
+    ? value.trimEnd()
+    : `[truncated ${buffer.length - maxBytes} bytes]\n${buffer.subarray(-maxBytes).toString("utf8").trimEnd()}`;
 }
 
 async function withActivityHeartbeats<T>(
