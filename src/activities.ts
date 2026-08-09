@@ -587,23 +587,15 @@ async function repairValidationTask(
   }
 
   const attemptPrefix = `${checkpointPrefix}/attempt-${Context.current().info.attempt}`;
-  const [bundle, definition, repairer, authJson, nopOutput, oracleOutput] = await Promise.all([
+  const [bundle, definition, repairer, authJson] = await Promise.all([
     store.get(input.task.bundle),
     store.get(input.task.definition),
     readAsset("dist/sandbox-validation-repair.bundle.js"),
     loadPiSubscriptionAuth(),
-    input.validation.nop.output ? store.get(input.validation.nop.output) : undefined,
-    input.validation.oracle.output ? store.get(input.validation.oracle.output) : undefined,
   ]);
-  const diagnostics = Buffer.from(
-    [
-      input.validation.reason ?? "validation failed without a reason",
-      nopOutput ? `\n--- nop verifier output ---\n${Buffer.from(nopOutput).toString("utf8")}` : "",
-      oracleOutput
-        ? `\n--- oracle verifier output ---\n${Buffer.from(oracleOutput).toString("utf8")}`
-        : "",
-    ].join(""),
-  );
+  // Full verifier logs remain durable artifacts. The validation reason already carries bounded
+  // tails for failed gates, which keeps the repair prompt within the model context window.
+  const diagnostics = Buffer.from(input.validation.reason ?? "validation failed without a reason");
   const result = await withActivityHeartbeats(
     `running validation repair sandbox for ${input.task.taskId}`,
     (options) =>
