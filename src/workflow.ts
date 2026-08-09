@@ -17,6 +17,7 @@ import type {
 } from "./activities.js";
 import type {
   AuthoredTask,
+  AuthorOutcome,
   Candidate,
   Difficulty,
   DiscoveryProgress,
@@ -206,11 +207,20 @@ export async function executeRun(
         if (!validation.accepted) {
           progress.status = "repairing";
           setTasks(taskProgress);
-          const repaired = await activitySet.repairValidationTask({
-            run: input,
-            task,
-            validation,
-          } satisfies ValidationRepairTaskInput);
+          let repaired: AuthorOutcome;
+          try {
+            repaired = await activitySet.repairValidationTask({
+              run: input,
+              task,
+              validation,
+            } satisfies ValidationRepairTaskInput);
+          } catch (error) {
+            if (isCancellation(error)) {
+              throw error;
+            }
+            rejectProgress(progress, "validation repair failed after its single activity attempt");
+            return;
+          }
           if (repaired.kind === "rejected") {
             rejectProgress(progress, repaired.reason);
             return;
@@ -246,11 +256,20 @@ export async function executeRun(
         if (!review.accepted) {
           progress.status = "repairing";
           setTasks(taskProgress);
-          const repaired = await activitySet.repairTask({
-            run: input,
-            task,
-            review: review.report,
-          } satisfies RepairTaskInput);
+          let repaired: AuthorOutcome;
+          try {
+            repaired = await activitySet.repairTask({
+              run: input,
+              task,
+              review: review.report,
+            } satisfies RepairTaskInput);
+          } catch (error) {
+            if (isCancellation(error)) {
+              throw error;
+            }
+            rejectProgress(progress, "test repair failed after activity retries");
+            return;
+          }
           if (repaired.kind === "rejected") {
             rejectProgress(progress, repaired.reason);
             return;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ApplicationFailure, CancelledFailure } from "@temporalio/workflow";
+import { RetryState } from "@temporalio/common";
+import { ActivityFailure, ApplicationFailure, CancelledFailure } from "@temporalio/workflow";
 import type { SelfBenchActivities } from "../src/activities.js";
 import type {
   ArtifactRef,
@@ -258,6 +259,81 @@ describe("SelfBench workflow", () => {
     expect(result.acceptedTaskIds).toEqual(["initial-task"]);
   });
 
+  test("rejects only the candidate when validation repair exhausts its one attempt", async () => {
+    const activities = acceptingActivities([
+      candidate("timed-out", 1),
+      candidate("successful-sibling", 2),
+    ]);
+    activities.validateTask = async ({ task }) => ({
+      taskId: task.taskId,
+      accepted: task.candidateId === "successful-sibling",
+      nop: { passed: true, result: artifact },
+      oracle: { passed: task.candidateId === "successful-sibling", result: artifact },
+      ...(task.candidateId === "successful-sibling" ? {} : { reason: "oracle failed" }),
+    });
+    activities.repairValidationTask = async () => {
+      throw new Error("Activity task failed", {
+        cause: new Error("validation repair sandbox produced no output for 480000ms"),
+      });
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    const result = await executeRun(
+      { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } },
+      activities,
+      (status) => {
+        currentStatus = status;
+      },
+    );
+
+    expect(result.acceptedTaskIds).toEqual(["successful-sibling-task"]);
+    expect(currentStatus?.().phase).toBe("complete");
+    expect(currentStatus?.().accepted).toBe(1);
+    expect(currentStatus?.().rejected).toBe(1);
+    expect(currentStatus?.().tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidateId: "timed-out",
+          status: "rejected",
+          reason: "validation repair failed after its single activity attempt",
+        }),
+        expect.objectContaining({
+          candidateId: "successful-sibling",
+          status: "accepted",
+        }),
+      ]),
+    );
+  });
+
+  test("propagates cancellation from validation repair", async () => {
+    const activities = acceptingActivities([candidate("cancelled-repair", 1)]);
+    activities.validateTask = async ({ task }) => ({
+      taskId: task.taskId,
+      accepted: false,
+      nop: { passed: true, result: artifact },
+      oracle: { passed: false, result: artifact },
+      reason: "oracle failed",
+    });
+    activities.repairValidationTask = async () => {
+      throw new ActivityFailure(
+        "Activity task failed",
+        "repairValidationTask",
+        "activity-id",
+        RetryState.CANCEL_REQUESTED,
+        "worker",
+        new CancelledFailure("cancelled"),
+      );
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    await expect(
+      executeRun(run, activities, (status) => {
+        currentStatus = status;
+      }),
+    ).rejects.toBeInstanceOf(ActivityFailure);
+    expect(currentStatus?.().phase).toBe("cancelled");
+  });
+
   test("repairs a coupled task and repeats every acceptance gate", async () => {
     const calls: string[] = [];
     let reviews = 0;
@@ -298,5 +374,35 @@ describe("SelfBench workflow", () => {
 
     expect(calls).toEqual(["audit", "validate", "review", "repair", "audit", "validate", "review"]);
     expect(result.acceptedTaskIds).toEqual(["initial-task"]);
+  });
+
+  test("rejects only the candidate when test repair fails after retries", async () => {
+    const activities = acceptingActivities([candidate("repair-failed", 1)]);
+    activities.reviewTask = async ({ task }) => ({
+      taskId: task.taskId,
+      accepted: false,
+      report: artifact,
+      reason: "coupled test",
+    });
+    activities.repairTask = async () => {
+      throw new Error("Activity task failed", {
+        cause: new Error("test repair sandbox exited 1"),
+      });
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    const result = await executeRun(run, activities, (status) => {
+      currentStatus = status;
+    });
+
+    expect(result.acceptedTaskIds).toEqual([]);
+    expect(currentStatus?.().phase).toBe("complete");
+    expect(currentStatus?.().tasks).toEqual([
+      expect.objectContaining({
+        candidateId: "repair-failed",
+        status: "rejected",
+        reason: "test repair failed after activity retries",
+      }),
+    ]);
   });
 });
