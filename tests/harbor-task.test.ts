@@ -57,7 +57,7 @@ describe("Harbor task compiler", () => {
     );
     await writeFile(
       join(authored, "test.patch"),
-      "diff --git a/tests/new b/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new\n@@ -0,0 +1 @@\n+test\n",
+      "diff --git a/project/tests/new b/project/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/project/tests/new\n@@ -0,0 +1 @@\n+test\ndiff --git a/project/fixture.config.js b/project/fixture.config.js\nnew file mode 100644\n--- /dev/null\n+++ b/project/fixture.config.js\n@@ -0,0 +1 @@\n+export default {}\n",
     );
     await writeFile(
       join(authored, "gold.patch"),
@@ -93,6 +93,11 @@ describe("Harbor task compiler", () => {
     expect(verifier).toContain("ECONNRESET|ETIMEDOUT");
     expect(verifier).not.toContain("npm ci --ignore-scripts");
     expect(verifier).toContain("/app/project/tests/new");
+    expect(verifier).toContain("/app/project/fixture.config.js");
+    expect(verifier).toContain("--exclude='project/fixture.config.js'");
+    expect(verifier).toContain(
+      "for protected_path in 'project/fixture.config.js' 'project/tests/new'; do",
+    );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
     expect(verifier).toContain('PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin');
@@ -105,7 +110,7 @@ describe("Harbor task compiler", () => {
     expect(dockerfile).toContain("PLAYWRIGHT_BROWSERS_PATH=/opt/playwright");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(22);
+    ).toBe(23);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),

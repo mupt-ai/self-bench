@@ -202,7 +202,9 @@ export function summarizeResult(
     passed:
       !exception &&
       Object.keys(rewards).length > 0 &&
-      Object.values(rewards).every((reward) => reward >= 1),
+      (rewards.reward === undefined
+        ? Object.values(rewards).every((reward) => reward >= 1)
+        : rewards.reward >= 1),
     rewards,
     ...(exception ? { exception } : {}),
   };

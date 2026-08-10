@@ -28,6 +28,23 @@ describe("matrix result summary", () => {
     expect(summary.exception).toBe("sandbox failed");
   });
 
+  test("accepts a reward with zero-valued diagnostic fields", () => {
+    const summary = summarizeResult("task-a", "gpt-5.6-terra", "job-a", {
+      verifier_result: {
+        rewards: {
+          reward: 1,
+          patch_applied: 1,
+          fail_to_pass: 1,
+          pass_to_pass: 1,
+          deterministic: 1,
+          setup_completed: 1,
+          fail_to_pass_exit_code: 0,
+        },
+      },
+    });
+    expect(summary.passed).toBe(true);
+  });
+
   test("does not pass a trial with no verifier rewards", () => {
     const summary = summarizeResult("task-a", "gpt-5.6-terra", "job-a", {
       trial_results: [{ verifier_result: { rewards: {} } }],

@@ -3,9 +3,10 @@ import { join, posix, resolve, sep } from "node:path";
 import { type TaskDefinition, taskDefinitionSchema } from "./contracts.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
+import { patchPaths } from "./repair.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 22;
+const COMPILER_REVISION = 23;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -25,6 +26,7 @@ export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskF
   if (!testPatch.startsWith("diff --git ")) {
     throw new Error("test.patch is not a Git patch");
   }
+  assertSafePatchPaths(testPatch);
   if (!goldPatch.startsWith("diff --git ")) {
     throw new Error("gold.patch is not a Git patch");
   }
@@ -72,7 +74,7 @@ export async function compileHarborTask(
     writeFile(join(solution, "gold.patch"), task.goldPatch),
     writeFile(join(solution, "solve.sh"), solutionScript()),
     writeFile(join(tests, "test.patch"), task.testPatch),
-    writeFile(join(tests, "test.sh"), testScript(task.definition)),
+    writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(task.definition)),
     writeFile(
       join(tests, "Dockerfile"),
@@ -120,9 +122,10 @@ export async function refreshHarborTask(
     readFile(join(outputDirectory, "solution/gold.patch"), "utf8"),
     readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
   ]);
+  assertSafePatchPaths(testPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
-  await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition));
+  await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition, testPatch));
   await Promise.all([
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
     writeFile(join(outputDirectory, "environment/Dockerfile"), agentDockerfile(definition)),
@@ -354,8 +357,13 @@ git -C /app apply --binary --whitespace=nowarn /solution/gold.patch
 `;
 }
 
-function testScript(task: TaskDefinition): string {
-  const repositoryTestPaths = task.testPaths.map((path) => repositoryRelativePath(task, path));
+function testScript(task: TaskDefinition, testPatch: string): string {
+  const repositoryTestPaths = [
+    ...new Set([
+      ...task.testPaths.map((path) => repositoryRelativePath(task, path)),
+      ...patchPaths(testPatch),
+    ]),
+  ].sort();
   const exclusions = repositoryTestPaths
     .flatMap((path) => [
       `--exclude=${shellQuote(path.replace(/\/$/, ""))}`,
@@ -423,8 +431,10 @@ if [ "$patch_applied" -eq 1 ]; then setup_completed=1; fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   kill_verifier_processes
-  git -C /app restore --source=HEAD --staged --worktree -- ${protectedPaths} 2>/dev/null || true
-  git -C /app clean -fd -- ${protectedPaths} >/dev/null 2>&1 || true
+  for protected_path in ${protectedPaths}; do
+    git -C /app restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
+    git -C /app clean -fd -- "$protected_path" >/dev/null 2>&1 || true
+  done
   git -C /app apply --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
   if [ "$patch_applied" -eq 1 ]; then
     for protected_path in ${protectedAbsolute}; do protect_held_out_path "$protected_path"; done
@@ -479,6 +489,24 @@ function assertSafeTaskPaths(task: TaskDefinition): void {
     const resolved = resolve("/repo", path);
     if (resolved !== "/repo" && !resolved.startsWith(`/repo${sep}`)) {
       throw new Error(`task path escapes repository: ${path}`);
+    }
+  }
+}
+
+function assertSafePatchPaths(patch: string): void {
+  const paths = patchPaths(patch);
+  if (paths.length === 0) {
+    throw new Error("test.patch changes no files");
+  }
+  for (const path of paths) {
+    const resolved = resolve("/repo", path);
+    if (
+      resolved === "/repo" ||
+      !resolved.startsWith(`/repo${sep}`) ||
+      resolved.startsWith(`/repo${sep}.git${sep}`) ||
+      resolved === `/repo${sep}.git`
+    ) {
+      throw new Error(`test patch path escapes repository: ${path}`);
     }
   }
 }
