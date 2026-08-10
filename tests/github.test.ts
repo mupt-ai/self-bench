@@ -23,7 +23,7 @@ describe("GitHub repository boundaries", () => {
     expect(() =>
       assertPullRequestBelongsToRepository(
         "https://github.com/vercel/next.js.git",
-        "https://github.com/mupt-ai/selfbench/pull/20",
+        "https://github.com/mupt-ai/self-bench/pull/20",
         20,
       ),
     ).toThrow("does not match vercel/next.js#20");

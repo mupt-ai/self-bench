@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mupt-ai/selfbench.git"
+    "url": "https://github.com/mupt-ai/self-bench.git"
   },
   "type": "module",
   "bin": {

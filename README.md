@@ -1,6 +1,6 @@
 # SelfBench
 
-[![CI](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml)
+[![CI](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 SelfBench turns completed GitHub pull requests into private software-engineering evaluations that coding agents can run with [Harbor](https://harborframework.com), the task format and runner that executes an agent and grades its result.
@@ -39,8 +39,8 @@ Pi authentication powers discovery, authoring, and review; Codex CLI authenticat
 ### Start SelfBench
 
 ```bash
-git clone https://github.com/mupt-ai/selfbench.git
-cd selfbench
+git clone https://github.com/mupt-ai/self-bench.git
+cd self-bench
 
 npm install -g @earendil-works/pi-coding-agent@0.84.0
 bun install --frozen-lockfile
