@@ -85,8 +85,8 @@ async function resolveMatrixTasks(
     throw new Error("provide exactly one of exportPath or tasksPath");
   }
   const tasks = await materializeExport(resolve(options.exportPath), materializedTasksDirectory);
-  if (tasks.length !== 10) {
-    throw new Error(`expected exactly 10 exported tasks, found ${tasks.length}`);
+  if (tasks.length < 1) {
+    throw new Error(`found no Harbor tasks in ${resolve(options.exportPath)}`);
   }
   return tasks;
 }

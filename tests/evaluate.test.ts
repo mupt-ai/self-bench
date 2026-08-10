@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMatrix, summarizeResult } from "../src/evaluate.js";
+import { runCommand } from "../src/process.js";
 
 describe("matrix result summary", () => {
   test("accepts a Harbor trial only when every reward passes", () => {
@@ -48,6 +49,35 @@ describe("matrix task inputs", () => {
     await expect(
       runMatrix({
         tasksPath: tasks,
+        jobsDirectory: join(root, "jobs"),
+        authPath: join(root, "auth.json"),
+        harborPath: "false",
+      }),
+    ).rejects.toThrow("Harbor produced no result for task-a/gpt-5.6-");
+  });
+
+  test("accepts an export containing a non-ten task count", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-evaluate-export-test-"));
+    const taskRoot = join(root, "expanded", "harbor-task");
+    const packageRoot = join(root, "package");
+    const taskArchive = join(root, "task-a.tar.gz");
+    const exportArchive = join(root, "export.tar.gz");
+    await Promise.all([
+      mkdir(taskRoot, { recursive: true }),
+      mkdir(join(packageRoot, "tasks"), { recursive: true }),
+    ]);
+    await writeFile(join(taskRoot, "task.toml"), 'schema_version = "1.4"\n');
+    await runCommand("tar", ["-czf", taskArchive, "-C", join(root, "expanded"), "harbor-task"]);
+    await copyFile(taskArchive, join(packageRoot, "tasks", "task-a.tar.gz"));
+    await runCommand("tar", ["-czf", exportArchive, "-C", packageRoot, "tasks"]);
+    await writeFile(
+      join(root, "auth.json"),
+      JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: "token" } }),
+    );
+
+    await expect(
+      runMatrix({
+        exportPath: exportArchive,
         jobsDirectory: join(root, "jobs"),
         authPath: join(root, "auth.json"),
         harborPath: "false",
