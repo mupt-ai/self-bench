@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArgs } from "node:util";
-import { runMatrix } from "./evaluate.js";
+import { MATRIX_MODELS, type MatrixModel, runMatrix } from "./evaluate.js";
 
 const parsed = parseArgs({
   options: {
@@ -12,6 +12,7 @@ const parsed = parseArgs({
     environment: { type: "string", default: "modal" },
     concurrency: { type: "string", default: "3" },
     auth: { type: "string" },
+    model: { type: "string", multiple: true },
     help: { type: "boolean", short: "h" },
   },
   strict: true,
@@ -27,6 +28,7 @@ Options:
   --harbor PATH              Harbor executable (default: harbor)
   --environment docker|modal Execution environment (default: modal)
   --concurrency N            Concurrent trials (default: 3)
+  --model MODEL              Run only this model; may be repeated
   --auth FILE                Codex ChatGPT auth.json path
   -h, --help                 Show this help`);
   process.exit(0);
@@ -36,6 +38,7 @@ if (environment !== "docker" && environment !== "modal") {
   throw new Error("--environment must be docker or modal");
 }
 const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
+const models = evaluationModels(parsed.values.model);
 const summaries = await runMatrix({
   ...(parsed.values.export ? { exportPath: parsed.values.export } : {}),
   ...(parsed.values.tasks ? { tasksPath: parsed.values.tasks } : {}),
@@ -44,6 +47,11 @@ const summaries = await runMatrix({
   concurrency,
   ...(parsed.values.harbor ? { harborPath: parsed.values.harbor } : {}),
   ...(parsed.values.auth ? { authPath: parsed.values.auth } : {}),
+  ...(models ? { models } : {}),
+  onTrialComplete: (summary, completed, total) => {
+    const status = summary.passed ? "passed" : summary.exception ? "error" : "failed";
+    console.error(`[${completed}/${total}] ${summary.model} ${summary.taskId}: ${status}`);
+  },
 });
 console.log(
   JSON.stringify(
@@ -59,6 +67,20 @@ console.log(
 
 function fail(message: string): never {
   throw new Error(message);
+}
+
+function evaluationModels(values: string[] | undefined): readonly MatrixModel[] | undefined {
+  if (!values) {
+    return undefined;
+  }
+  const allowed = new Set<string>(MATRIX_MODELS);
+  const invalid = values.filter((value) => !allowed.has(value));
+  if (invalid.length > 0) {
+    throw new Error(
+      `--model must be one of ${MATRIX_MODELS.join(", ")}; got ${invalid.join(", ")}`,
+    );
+  }
+  return [...new Set(values)] as MatrixModel[];
 }
 
 function positiveInteger(value: string | undefined, label: string): number {

@@ -21,14 +21,43 @@ describe("Harbor result loading", () => {
     roots.push(root);
     await mkdir(join(root, "job", "task__trial"), { recursive: true });
     await writeFile(join(root, "job", "result.json"), JSON.stringify({ stats: {} }));
-    await writeFile(
-      join(root, "job", "task__trial", "result.json"),
-      JSON.stringify({ verifier_result: { rewards: { reward: 1 } } }),
-    );
+    await mkdir(join(root, "job", "task__trial", "verifier"));
+    await Promise.all([
+      writeFile(
+        join(root, "job", "task__trial", "result.json"),
+        JSON.stringify({ verifier_result: { rewards: { reward: 1 } } }),
+      ),
+      writeFile(
+        join(root, "job", "task__trial", "verifier", "test-stdout.txt"),
+        "combined output\n",
+      ),
+      writeFile(join(root, "job", "task__trial", "verifier", "test-stderr.txt"), "stderr output\n"),
+    ]);
 
     const result = await readHarborJobResult(root, "job");
     expect(result.job).toEqual({ stats: {} });
     expect(result.trial).toEqual({ verifier_result: { rewards: { reward: 1 } } });
+    expect(result.verifier).toEqual({
+      combined: "combined output\n",
+      stderr: "stderr output\n",
+    });
+  });
+
+  test("preserves aggregate fallback when stale local trial directories coexist", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-harbor-result-"));
+    roots.push(root);
+    await Promise.all([
+      mkdir(join(root, "job", "old-trial"), { recursive: true }),
+      mkdir(join(root, "job", "new-trial"), { recursive: true }),
+    ]);
+    const aggregate = { verifier_result: { rewards: { reward: 1 } } };
+    await Promise.all([
+      writeFile(join(root, "job", "result.json"), JSON.stringify({ trial_results: [aggregate] })),
+      writeFile(join(root, "job", "old-trial", "result.json"), JSON.stringify({ stale: true })),
+      writeFile(join(root, "job", "new-trial", "result.json"), JSON.stringify({ stale: false })),
+    ]);
+
+    expect((await readHarborJobResult(root, "job")).trial).toEqual(aggregate);
   });
 
   test("separates environment infrastructure from task build failures", () => {

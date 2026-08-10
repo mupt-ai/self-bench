@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
-import { writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { open, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
@@ -97,8 +100,9 @@ async function run(args: string[]): Promise<void> {
     args,
     options: {
       repo: { type: "string", short: "r" },
-      count: { type: "string", short: "n" },
-      "reserve-count": { type: "string" },
+      "easy-count": { type: "string" },
+      "medium-count": { type: "string" },
+      "hard-count": { type: "string" },
       "run-id": { type: "string" },
       model: { type: "string", default: "gpt-5.6-sol" },
       wait: { type: "boolean", default: false },
@@ -107,11 +111,15 @@ async function run(args: string[]): Promise<void> {
     strict: true,
   });
   const repositoryPath = resolve(parsed.values.repo ?? fail("--repo is required"));
-  const count = positiveInteger(parsed.values.count ?? fail("--count is required"), "--count");
-  const reserveCount = nonnegativeInteger(
-    parsed.values["reserve-count"] ?? String(count),
-    "--reserve-count",
-  );
+  const candidateCounts = {
+    easy: nonnegativeInteger(parsed.values["easy-count"] ?? "0", "--easy-count"),
+    medium: nonnegativeInteger(parsed.values["medium-count"] ?? "0", "--medium-count"),
+    hard: nonnegativeInteger(parsed.values["hard-count"] ?? "0", "--hard-count"),
+  };
+  const totalCandidates = candidateCounts.easy + candidateCounts.medium + candidateCounts.hard;
+  if (totalCandidates < 1 || totalCandidates > 100) {
+    fail("the total candidate count must be between 1 and 100");
+  }
   const runId = parsed.values["run-id"] ?? defaultRunId();
   const [repository, localMessages, selfbenchCommit] = await Promise.all([
     resolveRepository(repositoryPath),
@@ -136,8 +144,7 @@ async function run(args: string[]): Promise<void> {
         runId,
         repository,
         provenance,
-        count,
-        reserveCount,
+        candidateCounts,
         authoringModel: parsed.values.model,
         selfbenchCommit,
       }),
@@ -226,13 +233,36 @@ async function download(runId: string, outputPath: string): Promise<void> {
     const value = (await response.json()) as Record<string, unknown>;
     throw new Error(String(value.error ?? `SelfBench API returned ${response.status}`));
   }
-  const destination = resolve(outputPath);
-  const body = Buffer.from(await response.arrayBuffer());
   const expectedSha256 = response.headers.get("x-content-sha256");
-  if (!expectedSha256 || sha256(body) !== expectedSha256) {
-    throw new Error("downloaded export failed its SHA-256 integrity check");
+  if (!expectedSha256 || !response.body) {
+    throw new Error("SelfBench API returned an export without integrity metadata");
   }
-  await writeFile(destination, body, { flag: "wx" });
+  const destination = resolve(outputPath);
+  const file = await open(destination, "wx");
+  let verified = false;
+  try {
+    const hash = createHash("sha256");
+    const hasher = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        hash.update(chunk);
+        callback(undefined, chunk);
+      },
+    });
+    await pipeline(
+      Readable.fromWeb(response.body as unknown as NodeReadableStream),
+      hasher,
+      file.createWriteStream(),
+    );
+    if (hash.digest("hex") !== expectedSha256) {
+      throw new Error("downloaded export failed its SHA-256 integrity check");
+    }
+    verified = true;
+  } finally {
+    await file.close().catch(() => undefined);
+    if (!verified) {
+      await rm(destination, { force: true });
+    }
+  }
   console.log(JSON.stringify({ runId, output: destination }, null, 2));
 }
 
@@ -271,14 +301,6 @@ function asPolledRunStatus(value: Record<string, unknown>): PolledRunStatus {
   return { ...value, phase: value.phase };
 }
 
-function positiveInteger(value: string, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return parsed;
-}
-
 function nonnegativeInteger(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
@@ -296,12 +318,12 @@ function fail(message: string): never {
 }
 
 function printHelp(): void {
-  console.log(`SelfBench creates durable hard-mode Harbor evaluations.
+  console.log(`SelfBench creates durable tiered Harbor evaluations.
 
 Usage:
   selfbench up [--backend docker|modal] [--modal-config PATH]
-  selfbench run --repo PATH --count N [--reserve-count N] [--model MODEL] [--run-id ID]
-                [--wait] [--output OUTPUT.tar.gz]
+  selfbench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
+                [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   selfbench status RUN_ID
   selfbench cancel RUN_ID
   selfbench download RUN_ID OUTPUT.tar.gz
@@ -310,7 +332,8 @@ Usage:
 The up command starts the local stack and configures both sandbox execution and Harbor validation for
 one backend. Modal uses ~/.modal.toml unless --modal-config overrides it.
 
-SelfBench intentionally has no easy mode. The run command performs only repository metadata and
-sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.
+The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
+replaced, and the export contains only accepted tasks. The run command performs only repository metadata
+and sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.
 --output implies --wait, blocks until completion, and downloads the SHA-256-verified export.`);
 }

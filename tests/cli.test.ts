@@ -148,8 +148,12 @@ printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_E
           "run",
           "--repo",
           repository,
-          "--count",
+          "--easy-count",
           "1",
+          "--medium-count",
+          "2",
+          "--hard-count",
+          "3",
           "--output",
           output,
         ],
@@ -174,11 +178,48 @@ printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_E
 
       expect(exitCode, stderr).toBe(0);
       expect(await readFile(output)).toEqual(exportBody);
-      expect(submittedRun?.count).toBe(1);
+      expect(submittedRun?.candidateCounts).toEqual({ easy: 1, medium: 2, hard: 3 });
       expect(stdout).toContain(`"output": "${output}"`);
       expect(stderr).toContain('"phase":"complete"');
     } finally {
       server.stop(true);
     }
   }, 10_000);
+
+  test("download removes an output that fails streamed integrity verification", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-cli-download-"));
+    roots.push(root);
+    const output = join(root, "result.tar.gz");
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        new Response("corrupt export", {
+          headers: { "x-content-sha256": sha256(Buffer.from("expected export")) },
+        }),
+    });
+
+    try {
+      const child = Bun.spawn([process.execPath, "src/cli.ts", "download", "example-run", output], {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          SELFBENCH_API_TOKEN: "",
+          SELFBENCH_API_URL: `http://127.0.0.1:${server.port}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [exitCode, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stderr).text(),
+      ]);
+
+      expect(exitCode).not.toBe(0);
+      expect(stderr).toContain("SHA-256 integrity check");
+      expect(await readFile(output).catch(() => undefined)).toBeUndefined();
+    } finally {
+      server.stop(true);
+    }
+  });
 });

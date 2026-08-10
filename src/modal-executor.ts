@@ -125,10 +125,9 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       for (const path of request.outputPaths ?? []) {
         try {
           outputs[path] = await sandbox.filesystem.readBytes(path);
-        } catch (error) {
-          if (exitCode === 0) {
-            throw error;
-          }
+        } catch {
+          // Callers validate required outputs after persisting stdout/stderr. Returning an
+          // absent output keeps the model or command failure diagnosable.
         }
       }
       return { sandboxId: sandbox.sandboxId, exitCode, stdout, stderr, outputs };

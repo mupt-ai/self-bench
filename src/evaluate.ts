@@ -7,6 +7,7 @@ import { runCommand } from "./process.js";
 import { assertCodexSubscriptionAuth } from "./subscription-auth.js";
 
 export const MATRIX_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
+export type MatrixModel = (typeof MATRIX_MODELS)[number];
 const CODEX_VERSION = "0.146.1";
 
 export interface MatrixOptions {
@@ -17,11 +18,17 @@ export interface MatrixOptions {
   readonly environment?: "docker" | "modal";
   readonly concurrency?: number;
   readonly authPath?: string;
+  readonly models?: readonly MatrixModel[];
+  readonly onTrialComplete?: (
+    summary: MatrixTrialSummary,
+    completed: number,
+    total: number,
+  ) => void;
 }
 
 export interface MatrixTrialSummary {
   readonly taskId: string;
-  readonly model: (typeof MATRIX_MODELS)[number];
+  readonly model: MatrixModel;
   readonly jobName: string;
   readonly passed: boolean;
   readonly rewards: Readonly<Record<string, number>>;
@@ -35,17 +42,25 @@ export async function runMatrix(options: MatrixOptions): Promise<readonly Matrix
   const taskDirectories = await resolveMatrixTasks(options, tasksDirectory);
   const authPath = resolve(options.authPath ?? join(homedir(), ".codex/auth.json"));
   await assertSubscriptionAuth(authPath);
-  const work = MATRIX_MODELS.flatMap((model) =>
+  const models = options.models ?? MATRIX_MODELS;
+  if (models.length < 1) {
+    throw new Error("provide at least one evaluation model");
+  }
+  const work = models.flatMap((model) =>
     taskDirectories.map((taskDirectory) => ({ model, taskDirectory })),
   );
+  let completed = 0;
   const summaries = await parallelMap(work, options.concurrency ?? 3, async (item) => {
-    return await runTrial({
+    const summary = await runTrial({
       jobsDirectory: root,
       harborPath: options.harborPath ?? "harbor",
       environment: options.environment ?? "modal",
       authPath,
       ...item,
     });
+    completed += 1;
+    options.onTrialComplete?.(summary, completed, work.length);
+    return summary;
   });
   await writeFile(
     join(root, "summary.json"),
@@ -56,7 +71,7 @@ export async function runMatrix(options: MatrixOptions): Promise<readonly Matrix
         agentVersion: CODEX_VERSION,
         auth: "codex-subscription",
         reasoningEffort: "high",
-        models: MATRIX_MODELS,
+        models,
         taskCount: taskDirectories.length,
         trials: summaries,
       },
@@ -85,15 +100,15 @@ async function resolveMatrixTasks(
     throw new Error("provide exactly one of exportPath or tasksPath");
   }
   const tasks = await materializeExport(resolve(options.exportPath), materializedTasksDirectory);
-  if (tasks.length !== 10) {
-    throw new Error(`expected exactly 10 exported tasks, found ${tasks.length}`);
+  if (tasks.length < 1) {
+    throw new Error(`found no Harbor tasks in ${resolve(options.exportPath)}`);
   }
   return tasks;
 }
 
 async function runTrial(input: {
   readonly taskDirectory: string;
-  readonly model: (typeof MATRIX_MODELS)[number];
+  readonly model: MatrixModel;
   readonly jobsDirectory: string;
   readonly harborPath: string;
   readonly environment: "docker" | "modal";
@@ -111,40 +126,49 @@ async function runTrial(input: {
   delete environment.OPENAI_API_KEY;
   environment.CODEX_FORCE_AUTH_JSON = "1";
   environment.CODEX_AUTH_JSON_PATH = input.authPath;
-  const result = await runCommand(
-    input.harborPath,
-    [
-      "run",
-      "--path",
-      input.taskDirectory,
-      "--agent",
-      "codex",
-      "--model",
-      input.model,
-      "--ak",
-      `version=${CODEX_VERSION}`,
-      "--ak",
-      "reasoning_effort=high",
-      "--env",
-      input.environment,
-      "--job-name",
-      jobName,
-      "--jobs-dir",
-      input.jobsDirectory,
-      "--n-concurrent",
-      "1",
-      "--max-retries",
-      "1",
-      "--delete",
-      "--yes",
-      "--quiet",
-    ],
-    { allowFailure: true, env: environment, timeoutMs: 4 * 60 * 60 * 1000 },
-  );
+  let result: Awaited<ReturnType<typeof runCommand>>;
+  try {
+    result = await runCommand(
+      input.harborPath,
+      [
+        "run",
+        "--path",
+        input.taskDirectory,
+        "--agent",
+        "codex",
+        "--model",
+        input.model,
+        "--ak",
+        `version=${CODEX_VERSION}`,
+        "--ak",
+        "reasoning_effort=high",
+        "--env",
+        input.environment,
+        "--job-name",
+        jobName,
+        "--jobs-dir",
+        input.jobsDirectory,
+        "--n-concurrent",
+        "1",
+        "--max-retries",
+        "1",
+        "--delete",
+        "--yes",
+        "--quiet",
+      ],
+      { allowFailure: true, env: environment, timeoutMs: 4 * 60 * 60 * 1000 },
+    );
+  } catch (error) {
+    return failedTrial(taskId, input.model, jobName, errorMessage(error));
+  }
   const completed = await tryReadHarborJobResult(input.jobsDirectory, jobName);
   if (!completed) {
-    throw new Error(
-      `Harbor produced no result for ${taskId}/${input.model} (exit ${result.exitCode}): ${result.stderr.slice(-1000)}`,
+    const detail = result.stderr.trim() || result.stdout.trim();
+    return failedTrial(
+      taskId,
+      input.model,
+      jobName,
+      `Harbor produced no result (exit ${result.exitCode})${detail ? `: ${detail.slice(-1000)}` : ""}`,
     );
   }
   return summarizeResult(taskId, input.model, jobName, completed.trial);
@@ -152,7 +176,7 @@ async function runTrial(input: {
 
 export function summarizeResult(
   taskId: string,
-  model: (typeof MATRIX_MODELS)[number],
+  model: MatrixModel,
   jobName: string,
   result: unknown,
 ): MatrixTrialSummary {
@@ -178,10 +202,25 @@ export function summarizeResult(
     passed:
       !exception &&
       Object.keys(rewards).length > 0 &&
-      Object.values(rewards).every((reward) => reward >= 1),
+      (rewards.reward === undefined
+        ? Object.values(rewards).every((reward) => reward >= 1)
+        : rewards.reward >= 1),
     rewards,
     ...(exception ? { exception } : {}),
   };
+}
+
+function failedTrial(
+  taskId: string,
+  model: MatrixModel,
+  jobName: string,
+  exception: string,
+): MatrixTrialSummary {
+  return { taskId, model, jobName, passed: false, rewards: {}, exception };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function materializeExport(exportPath: string, tasksDirectory: string): Promise<string[]> {

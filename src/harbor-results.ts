@@ -1,9 +1,15 @@
 import { readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 
+export interface HarborVerifierOutput {
+  readonly combined?: string;
+  readonly stderr?: string;
+}
+
 export interface HarborJobResult {
   readonly job: unknown;
   readonly trial: unknown;
+  readonly verifier?: HarborVerifierOutput;
 }
 
 const infrastructurePatterns = [
@@ -39,31 +45,37 @@ export async function readHarborJobResult(
 ): Promise<HarborJobResult> {
   const jobDirectory = join(jobsDirectory, jobName);
   const job = JSON.parse(await readFile(join(jobDirectory, "result.json"), "utf8")) as unknown;
-  if (isRecord(job) && Array.isArray(job.trial_results) && job.trial_results.length === 1) {
-    return { job, trial: job.trial_results[0] };
-  }
   const entries = await readdir(jobDirectory, { withFileTypes: true });
-  const trialResults: unknown[] = [];
+  const trials: Array<{ directory: string; result: unknown }> = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
-    const raw = await readFile(join(jobDirectory, entry.name, "result.json"), "utf8").catch(
-      (error: unknown) => (isNotFound(error) ? undefined : Promise.reject(error)),
+    const directory = join(jobDirectory, entry.name);
+    const raw = await readFile(join(directory, "result.json"), "utf8").catch((error: unknown) =>
+      isNotFound(error) ? undefined : Promise.reject(error),
     );
     if (raw) {
-      trialResults.push(JSON.parse(raw) as unknown);
+      trials.push({ directory, result: JSON.parse(raw) as unknown });
     }
   }
-  if (trialResults.length !== 1) {
-    if (trialResults.length === 0 && isRecord(job) && job.finished_at === null) {
-      throw new IncompleteHarborJobError(`Harbor job ${jobName} has not finished`);
-    }
-    throw new Error(
-      `expected one Harbor trial result in ${jobDirectory}, found ${trialResults.length}`,
-    );
+  const aggregateTrials =
+    isRecord(job) && Array.isArray(job.trial_results) ? job.trial_results : [];
+  const [onlyTrial] = trials;
+  if (onlyTrial && trials.length === 1) {
+    return {
+      job,
+      trial: onlyTrial.result,
+      ...(await readVerifierOutput(onlyTrial.directory)),
+    };
   }
-  return { job, trial: trialResults[0] };
+  if (aggregateTrials.length === 1) {
+    return { job, trial: aggregateTrials[0] };
+  }
+  if (trials.length === 0 && isRecord(job) && job.finished_at === null) {
+    throw new IncompleteHarborJobError(`Harbor job ${jobName} has not finished`);
+  }
+  throw new Error(`expected one Harbor trial result in ${jobDirectory}, found ${trials.length}`);
 }
 
 export async function tryReadHarborJobResult(
@@ -95,6 +107,25 @@ export async function archiveIncompleteHarborJob(
     }
     throw error;
   }
+}
+
+async function readVerifierOutput(
+  trialDirectory: string,
+): Promise<{ readonly verifier?: HarborVerifierOutput }> {
+  const verifierDirectory = join(trialDirectory, "verifier");
+  const [combined, stderr] = await Promise.all([
+    readOptionalText(join(verifierDirectory, "test-stdout.txt")),
+    readOptionalText(join(verifierDirectory, "test-stderr.txt")),
+  ]);
+  return combined || stderr
+    ? { verifier: { ...(combined ? { combined } : {}), ...(stderr ? { stderr } : {}) } }
+    : {};
+}
+
+async function readOptionalText(path: string): Promise<string | undefined> {
+  return await readFile(path, "utf8").catch((error: unknown) =>
+    isNotFound(error) ? undefined : Promise.reject(error),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

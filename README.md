@@ -1,11 +1,11 @@
 # SelfBench
 
-[![CI](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/selfbench/actions/workflows/ci.yml)
+[![CI](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-SelfBench turns completed GitHub pull requests into private, hard software-engineering evaluations that coding agents can run with [Harbor](https://harborframework.com), the task format and runner that executes an agent and grades its result.
+SelfBench turns completed GitHub pull requests into private software-engineering evaluations that coding agents can run with [Harbor](https://harborframework.com), the task format and runner that executes an agent and grades its result.
 
-It recovers the human-written request, separates the known-good implementation from tests hidden from evaluated agents, proves the task fails without a solution and passes with the reference solution, and rejects tests that depend on private details of that saved implementation. SelfBench supports hard mode only: every task must clear the size, file-spread, and test requirements below.
+It recovers the human-written request, separates the known-good implementation from tests hidden from evaluated agents, proves the task fails without a solution and passes with the reference solution, and rejects tests that depend on private details of that saved implementation. SelfBench supports easy, medium, and hard eligibility profiles; all tiers retain the same validation and anti-coupling gates.
 
 ## How it works
 
@@ -13,7 +13,7 @@ It recovers the human-written request, separates the known-good implementation f
 
 1. **Discover** merged pull requests with a human-authored request.
 2. **Author** a standalone instruction and split implementation from tests.
-3. **Audit** hard-mode size, patch separation, and task structure.
+3. **Audit** tier-specific size, patch separation, and task structure.
 4. **Validate without a solution (`nop`)** to prove new tests fail while regressions pass.
 5. **Validate with the reference solution (`oracle`)** to prove the known-good change passes everything.
 6. **Review** for instructions that reveal the solution and tests that depend on its private structure.
@@ -22,7 +22,7 @@ It recovers the human-written request, separates the known-good implementation f
 
 Requests come from local Pi, Claude Code, or Codex sessions when available. For other repositories, SelfBench can use a merged, non-bot GitHub pull request's exact title and body. GitHub provenance is labeled separately and bound to that exact repository and PR number.
 
-Every exported task has at least 100 changed implementation lines across at least three implementation files, one test that fails before the change and passes afterward, and two existing regression tests that pass both before and afterward. “Hard” is an eligibility profile, not a claim that every model will fail the task.
+Eligibility profiles are mechanical starting points, not claims about model pass rates: easy requires at least 20 changed implementation lines across one file; medium requires 50 lines across two files; hard requires 100 lines across three files. Every tier requires a fail-to-pass test; medium requires one existing regression test and hard requires two.
 
 ## Run it locally
 
@@ -39,8 +39,8 @@ Pi authentication powers discovery, authoring, and review; Codex CLI authenticat
 ### Start SelfBench
 
 ```bash
-git clone https://github.com/mupt-ai/selfbench.git
-cd selfbench
+git clone https://github.com/mupt-ai/self-bench.git
+cd self-bench
 
 npm install -g @earendil-works/pi-coding-agent@0.84.0
 bun install --frozen-lockfile
@@ -64,14 +64,15 @@ export SELFBENCH_API_URL=http://127.0.0.1:8080
 
 node dist/cli.js run \
   --repo /absolute/path/to/your/repository \
-  --count 10 \
-  --reserve-count 10 \
+  --easy-count 5 \
+  --medium-count 10 \
+  --hard-count 5 \
   --output ./selfbench-tasks.tar.gz
 ```
 
 `--output` waits for the Temporal workflow, downloads the completed export, and verifies its SHA-256. Without `--output` or `--wait`, submission is asynchronous.
 
-`--count` is the number of accepted tasks. `--reserve-count` gives discovery extra candidates to consume when authoring or validation rejects an initial candidate.
+Each `--*-count` is the number of candidates that enter authoring at that tier—not an accepted-task target. Rejected candidates are not replaced, and the export contains only tasks that pass every gate.
 
 Useful follow-up commands:
 
@@ -157,7 +158,7 @@ tasks/
 
 Exports include base repository snapshots, held-out tests, and reference solutions. They intentionally exclude Git history, source sessions, and model transcripts. Treat every export as sensitive, unencrypted benchmark material.
 
-Read [task construction and validation](docs/task-construction.md) for the hard-mode contract, anti-coupling rules, repair boundary, and archive semantics.
+Read [task construction and validation](docs/task-construction.md) for tier contracts, anti-coupling rules, repair boundary, and archive semantics.
 
 ## Architecture
 

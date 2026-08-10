@@ -112,7 +112,7 @@ export function extractGitHubPullRequestProvenance(
     const body = typeof value.body === "string" ? value.body.trim() : "";
     const changedLines = nonnegativeNumber(value.additions) + nonnegativeNumber(value.deletions);
     const changedFiles = nonnegativeNumber(value.changedFiles);
-    if (!sourcePr || !sourceUrl || !title || changedLines < 100 || changedFiles < 3) {
+    if (!sourcePr || !sourceUrl || !title || changedLines < 20 || changedFiles < 1) {
       continue;
     }
     assertPullRequestBelongsToRepository(repositoryUrl, sourceUrl, sourcePr);

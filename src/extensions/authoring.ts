@@ -6,7 +6,7 @@ import { Type } from "@sinclair/typebox";
 const taskDefinition = Type.Object(
   {
     schemaVersion: Type.Literal(1),
-    difficulty: Type.Literal("hard"),
+    difficulty: Type.Union([Type.Literal("easy"), Type.Literal("medium"), Type.Literal("hard")]),
     taskId: Type.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }),
     repo: Type.String({ minLength: 1 }),
     baseCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
@@ -47,8 +47,8 @@ const taskDefinition = Type.Object(
 export default function authoringExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "submit_task",
-    label: "Submit hard SelfBench task",
-    description: "Submit exactly one complete hard-mode task for the assigned candidate.",
+    label: "Submit SelfBench task",
+    description: "Submit exactly one complete task at the assigned difficulty.",
     parameters: Type.Object(
       {
         definition: taskDefinition,

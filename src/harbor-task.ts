@@ -3,9 +3,10 @@ import { join, posix, resolve, sep } from "node:path";
 import { type TaskDefinition, taskDefinitionSchema } from "./contracts.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
+import { patchPaths } from "./repair.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 19;
+const COMPILER_REVISION = 23;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -25,6 +26,7 @@ export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskF
   if (!testPatch.startsWith("diff --git ")) {
     throw new Error("test.patch is not a Git patch");
   }
+  assertSafePatchPaths(testPatch);
   if (!goldPatch.startsWith("diff --git ")) {
     throw new Error("gold.patch is not a Git patch");
   }
@@ -72,7 +74,7 @@ export async function compileHarborTask(
     writeFile(join(solution, "gold.patch"), task.goldPatch),
     writeFile(join(solution, "solve.sh"), solutionScript()),
     writeFile(join(tests, "test.patch"), task.testPatch),
-    writeFile(join(tests, "test.sh"), testScript(task.definition)),
+    writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(task.definition)),
     writeFile(
       join(tests, "Dockerfile"),
@@ -96,7 +98,7 @@ export async function compileHarborTask(
         harborSchemaVersion: HARBOR_SCHEMA_VERSION,
         compilerRevision: COMPILER_REVISION,
         taskId: task.definition.taskId,
-        difficulty: "hard",
+        difficulty: task.definition.difficulty,
         definitionSha256: sha256(JSON.stringify(task.definition)),
         testPatchSha256: sha256(task.testPatch),
         goldPatchSha256: sha256(task.goldPatch),
@@ -116,10 +118,14 @@ export async function refreshHarborTask(
   if (manifest.taskId !== definition.taskId) {
     throw new Error(`bundle task ${String(manifest.taskId)} does not match ${definition.taskId}`);
   }
-  const goldPatch = await readFile(join(outputDirectory, "solution/gold.patch"), "utf8");
+  const [goldPatch, testPatch] = await Promise.all([
+    readFile(join(outputDirectory, "solution/gold.patch"), "utf8"),
+    readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
+  ]);
+  assertSafePatchPaths(testPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
-  await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition));
+  await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition, testPatch));
   await Promise.all([
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
     writeFile(join(outputDirectory, "environment/Dockerfile"), agentDockerfile(definition)),
@@ -134,7 +140,18 @@ export async function refreshHarborTask(
   ]);
   await writeFile(
     manifestPath,
-    `${JSON.stringify({ ...manifest, compilerRevision: COMPILER_REVISION }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        ...manifest,
+        compilerRevision: COMPILER_REVISION,
+        difficulty: definition.difficulty,
+        definitionSha256: sha256(JSON.stringify(definition)),
+        testPatchSha256: sha256(testPatch),
+        goldPatchSha256: sha256(goldPatch),
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 
@@ -156,7 +173,7 @@ function taskToml(task: TaskDefinition): string {
     `name = ${tomlString(`selfbench/${task.taskId}`)}`,
     'version = "1.0.0"',
     `description = ${tomlString(`Reproduce ${task.taskId} from its authentic engineer request.`)}`,
-    'keywords = ["software-engineering", "private-swe", "selfbench", "hard"]',
+    `keywords = ["software-engineering", "private-swe", "selfbench", ${tomlString(task.difficulty)}]`,
     "",
     "[metadata]",
     ...Object.entries(metadata).map(([key, value]) => `${key} = ${tomlValue(value)}`),
@@ -171,7 +188,7 @@ function taskToml(task: TaskDefinition): string {
     `timeout_sec = ${task.timeouts.setupSeconds + task.timeouts.testsSeconds}.0`,
     'user = "root"',
     'environment_mode = "separate"',
-    'network_mode = "no-network"',
+    'network_mode = "public"',
     "",
     "[[verifier.collect]]",
     'service = "main"',
@@ -280,6 +297,7 @@ function toolchainDockerfile(toolchains: readonly string[]): string {
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" && chmod 755 "$PLAYWRIGHT_BROWSERS_PATH" \\
     && arch="$(dpkg --print-architecture)" && case "$arch" in arm64) node_arch=arm64 ;; amd64) node_arch=x64 ;; *) exit 1 ;; esac \\
     && curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-\${node_arch}.tar.xz" | tar -C /usr/local --strip-components=1 -xJ \\
+    && mkdir -p /opt/corepack && chmod 755 /opt/corepack \\
     && corepack enable`,
     bun: "RUN npm install --global bun@1.3.14",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the output is a shell variable.
@@ -302,6 +320,7 @@ ENV DEBIAN_FRONTEND=noninteractive \\
     UV_PYTHON_BIN_DIR=/usr/local/bin \\
     RUSTUP_HOME=/usr/local/rustup \\
     CARGO_HOME=/usr/local/cargo \\
+    COREPACK_HOME=/opt/corepack \\
     PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 RUN apt-get update && apt-get install -y --no-install-recommends \\
     bash build-essential ca-certificates curl git jq passwd pkg-config procps unzip xz-utils \\
@@ -338,8 +357,13 @@ git -C /app apply --binary --whitespace=nowarn /solution/gold.patch
 `;
 }
 
-function testScript(task: TaskDefinition): string {
-  const repositoryTestPaths = task.testPaths.map((path) => repositoryRelativePath(task, path));
+function testScript(task: TaskDefinition, testPatch: string): string {
+  const repositoryTestPaths = [
+    ...new Set([
+      ...task.testPaths.map((path) => repositoryRelativePath(task, path)),
+      ...patchPaths(testPatch),
+    ]),
+  ].sort();
   const exclusions = repositoryTestPaths
     .flatMap((path) => [
       `--exclude=${shellQuote(path.replace(/\/$/, ""))}`,
@@ -364,9 +388,30 @@ pass_to_pass_exit_code=-1
 verifier_cache=""
 
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
+# Some toolchains fetch dependencies at test runtime (e.g. Next.js e2e installs),
+# so a single registry connection reset must not be misread as a dead test. Retry
+# only infrastructure-style failures with backoff; real assertion failures fail fast.
 run_verifier_command() {
-  runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1"
-  local status=$?
+  local logfile
+  logfile="$(mktemp /tmp/selfbench-verifier-command-XXXXXX.log)"
+  local attempt=1
+  local status=1
+  while [ "$attempt" -le 3 ]; do
+    : > "$logfile"
+    runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1" >"$logfile" 2>&1
+    status=$?
+    if [ "$status" -eq 0 ]; then
+      break
+    fi
+    if [ "$attempt" -lt 3 ] && grep -qE 'ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|ENOTFOUND|EAI_AGAIN|META_FETCH_FAIL|FetchError|EPIPE|EPERM|registry\\.npmjs' "$logfile"; then
+      sleep "$((10 * attempt))"
+      attempt=$((attempt + 1))
+      continue
+    fi
+    break
+  done
+  cat "$logfile"
+  rm -f "$logfile"
   kill_verifier_processes
   return "$status"
 }
@@ -386,8 +431,10 @@ if [ "$patch_applied" -eq 1 ]; then setup_completed=1; fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   kill_verifier_processes
-  git -C /app restore --source=HEAD --staged --worktree -- ${protectedPaths} 2>/dev/null || true
-  git -C /app clean -fd -- ${protectedPaths} >/dev/null 2>&1 || true
+  for protected_path in ${protectedPaths}; do
+    git -C /app restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
+    git -C /app clean -fd -- "$protected_path" >/dev/null 2>&1 || true
+  done
   git -C /app apply --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
   if [ "$patch_applied" -eq 1 ]; then
     for protected_path in ${protectedAbsolute}; do protect_held_out_path "$protected_path"; done
@@ -442,6 +489,24 @@ function assertSafeTaskPaths(task: TaskDefinition): void {
     const resolved = resolve("/repo", path);
     if (resolved !== "/repo" && !resolved.startsWith(`/repo${sep}`)) {
       throw new Error(`task path escapes repository: ${path}`);
+    }
+  }
+}
+
+function assertSafePatchPaths(patch: string): void {
+  const paths = patchPaths(patch);
+  if (paths.length === 0) {
+    throw new Error("test.patch changes no files");
+  }
+  for (const path of paths) {
+    const resolved = resolve("/repo", path);
+    if (
+      resolved === "/repo" ||
+      !resolved.startsWith(`/repo${sep}`) ||
+      resolved.startsWith(`/repo${sep}.git${sep}`) ||
+      resolved === `/repo${sep}.git`
+    ) {
+      throw new Error(`test patch path escapes repository: ${path}`);
     }
   }
 }
