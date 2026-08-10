@@ -913,9 +913,9 @@ async function buildExport(store: ArtifactStore, input: ExportInput): Promise<Ar
     );
     const archive = join(root, "export.tar.gz");
     await runCommand("tar", ["-czf", archive, "-C", root, "manifest.json", "tasks"]);
-    return await store.put(
+    return await store.putFile(
       `runs/${input.run.runId}/export/attempt-${Context.current().info.attempt}/selfbench-${input.run.runId}.tar.gz`,
-      await readFile(archive),
+      archive,
       "application/gzip",
     );
   });

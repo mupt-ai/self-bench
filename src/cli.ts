@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
-import { writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { open, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
@@ -230,13 +233,36 @@ async function download(runId: string, outputPath: string): Promise<void> {
     const value = (await response.json()) as Record<string, unknown>;
     throw new Error(String(value.error ?? `SelfBench API returned ${response.status}`));
   }
-  const destination = resolve(outputPath);
-  const body = Buffer.from(await response.arrayBuffer());
   const expectedSha256 = response.headers.get("x-content-sha256");
-  if (!expectedSha256 || sha256(body) !== expectedSha256) {
-    throw new Error("downloaded export failed its SHA-256 integrity check");
+  if (!expectedSha256 || !response.body) {
+    throw new Error("SelfBench API returned an export without integrity metadata");
   }
-  await writeFile(destination, body, { flag: "wx" });
+  const destination = resolve(outputPath);
+  const file = await open(destination, "wx");
+  let verified = false;
+  try {
+    const hash = createHash("sha256");
+    const hasher = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        hash.update(chunk);
+        callback(undefined, chunk);
+      },
+    });
+    await pipeline(
+      Readable.fromWeb(response.body as unknown as NodeReadableStream),
+      hasher,
+      file.createWriteStream(),
+    );
+    if (hash.digest("hex") !== expectedSha256) {
+      throw new Error("downloaded export failed its SHA-256 integrity check");
+    }
+    verified = true;
+  } finally {
+    await file.close().catch(() => undefined);
+    if (!verified) {
+      await rm(destination, { force: true });
+    }
+  }
   console.log(JSON.stringify({ runId, output: destination }, null, 2));
 }
 

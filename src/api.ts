@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { pipeline } from "node:stream/promises";
 import { Client } from "@temporalio/client";
 import { z } from "zod";
 import { createArtifactStore } from "./artifacts.js";
@@ -95,14 +96,14 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
           sendJson(response, 409, { error: "run export is not ready" });
           return;
         }
-        const body = await artifacts.get(status.export);
+        const body = await artifacts.openRead(status.export);
         response.writeHead(200, {
           "content-type": status.export.contentType,
-          "content-length": body.byteLength,
+          "content-length": status.export.sizeBytes,
           "content-disposition": `attachment; filename="selfbench-${runMatch[1]}.tar.gz"`,
           "x-content-sha256": status.export.sha256,
         });
-        response.end(body);
+        await pipeline(body, response);
         return;
       }
       if (runMatch?.[1] && request.method === "GET" && !runMatch[2]) {
@@ -133,6 +134,10 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
       }
       sendJson(response, 404, { error: "not found" });
     } catch (error) {
+      if (response.headersSent) {
+        response.destroy(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       sendJson(response, error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 500, {
         error: message,
