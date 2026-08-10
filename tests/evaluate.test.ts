@@ -46,14 +46,21 @@ describe("matrix task inputs", () => {
       join(root, "auth.json"),
       JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: "token" } }),
     );
-    await expect(
-      runMatrix({
-        tasksPath: tasks,
-        jobsDirectory: join(root, "jobs"),
-        authPath: join(root, "auth.json"),
-        harborPath: "false",
-      }),
-    ).rejects.toThrow("Harbor produced no result for task-a/gpt-5.6-");
+    const progress: string[] = [];
+    const results = await runMatrix({
+      tasksPath: tasks,
+      jobsDirectory: join(root, "jobs"),
+      authPath: join(root, "auth.json"),
+      harborPath: "false",
+      models: ["gpt-5.6-sol"],
+      onTrialComplete: (summary, completed, total) => {
+        progress.push(`${summary.model}:${completed}/${total}`);
+      },
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.model).toBe("gpt-5.6-sol");
+    expect(results[0]?.exception).toContain("Harbor produced no result");
+    expect(progress).toEqual(["gpt-5.6-sol:1/1"]);
   });
 
   test("accepts an export containing a non-ten task count", async () => {
@@ -75,14 +82,16 @@ describe("matrix task inputs", () => {
       JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: "token" } }),
     );
 
-    await expect(
-      runMatrix({
-        exportPath: exportArchive,
-        jobsDirectory: join(root, "jobs"),
-        authPath: join(root, "auth.json"),
-        harborPath: "false",
-      }),
-    ).rejects.toThrow("Harbor produced no result for task-a/gpt-5.6-");
+    const results = await runMatrix({
+      exportPath: exportArchive,
+      jobsDirectory: join(root, "jobs"),
+      authPath: join(root, "auth.json"),
+      harborPath: "false",
+      models: ["gpt-5.6-luna"],
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.model).toBe("gpt-5.6-luna");
+    expect(results[0]?.exception).toContain("Harbor produced no result");
   });
 
   test("rejects ambiguous task inputs", async () => {
