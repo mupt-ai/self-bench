@@ -26,6 +26,7 @@
   },
   "scripts": {
     "build": "bun run build:server && bun run build:review",
+    "cli": "bun run src/cli.ts",
     "build:review": "vite build --config review/vite.config.ts",
     "build:server": "tsc -p tsconfig.build.json && bun build src/sandbox-author.ts --target=node --outfile=dist/sandbox-author.bundle.js && bun build src/sandbox-review.ts --target=node --outfile=dist/sandbox-review.bundle.js && bun build src/sandbox-repair.ts --target=node --outfile=dist/sandbox-repair.bundle.js && bun build src/sandbox-validation-repair.ts --target=node --outfile=dist/sandbox-validation-repair.bundle.js",
     "check": "biome check . && tsc --noEmit -p tsconfig.json && bun run typecheck:review",
