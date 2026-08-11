@@ -71,13 +71,15 @@ export SELFBENCH_API_URL=http://127.0.0.1:8080
 
 selfbench run \
   --repo /absolute/path/to/your/repository \
-  --easy-count 1 \
+  --easy-count 30 \
+  --medium-count 30 \
+  --hard-count 10 \
   --output ./selfbench-evals.tar.gz
 ```
 
 The `--repo` directory must be a Git checkout with a GitHub `origin`. SelfBench pins the current `HEAD`; uncommitted changes are ignored. It discovers candidate requests from sanitized local coding-session messages and merged, non-bot GitHub pull requests.
 
-`--easy-count 1` means “author one candidate.” It does **not** guarantee one accepted task. Candidates can be rejected during authoring, validation, audit, or review, and rejected candidates are not replaced. Use `--medium-count` and `--hard-count` for other tiers.
+This quick start authors 70 candidates: 30 easy, 30 medium, and 10 hard. Counts are authoring budgets, not accepted-task guarantees. Candidates can be rejected during authoring, validation, audit, or review, and rejected candidates are not replaced.
 
 A run may take hours. `--output` waits for the run to finish, then downloads and SHA-256-verifies the accepted tasks.
 
