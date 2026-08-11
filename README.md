@@ -1,190 +1,76 @@
 # SelfBench
 
-[![CI](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+SelfBench turns completed GitHub changes into private [Harbor](https://harborframework.com/) evaluations for coding agents.
 
-SelfBench turns completed GitHub pull requests into private software-engineering evaluations that coding agents can run with [Harbor](https://harborframework.com), the task format and runner that executes an agent and grades its result.
+It finds real feature requests, builds a task from the repository's base commit, hides the tests and reference solution, and validates that the task fails without a solution and passes with one.
 
-It recovers the human-written request, separates the known-good implementation from tests hidden from evaluated agents, proves the task fails without a solution and passes with the reference solution, and rejects tests that depend on private details of that saved implementation. SelfBench supports easy, medium, and hard eligibility profiles; all tiers retain the same validation and anti-coupling gates.
+## Quickstart: make an eval from a repository
 
-## How it works
+You need Docker (8 GB RAM and 20 GB free), Node.js 22+, Bun 1.3.14+, `gh`, Pi, and Codex CLI. Authenticate first:
 
-[Temporal](https://temporal.io/) durably coordinates every run and carries each task through eight steps:
+```bash
+gh auth login
+# In Pi: /login -> OpenAI Codex
+codex login
+```
 
-1. **Discover** merged pull requests with a human-authored request.
-2. **Author** a standalone instruction and split implementation from tests.
-3. **Audit** tier-specific size, patch separation, and task structure.
-4. **Validate without a solution (`nop`)** to prove new tests fail while regressions pass.
-5. **Validate with the reference solution (`oracle`)** to prove the known-good change passes everything.
-6. **Review** for instructions that reveal the solution and tests that depend on its private structure.
-7. **Repair held-out tests once** when that dependency is fixable, then repeat audit, validation, and review.
-8. **Export** accepted tasks as a sensitive, unencrypted Harbor bundle.
-
-Requests come from local Pi, Claude Code, or Codex sessions when available. For other repositories, SelfBench can use a merged, non-bot GitHub pull request's exact title and body. GitHub provenance is labeled separately and bound to that exact repository and PR number.
-
-Eligibility profiles are mechanical starting points, not claims about model pass rates: easy requires at least 20 changed implementation lines across one file; medium requires 50 lines across two files; hard requires 100 lines across three files. Every tier requires a fail-to-pass test; medium requires one existing regression test and hard requires two.
-
-## Run it locally
-
-### Requirements
-
-- Docker Engine with Compose v2, at least 8 GB RAM, and 20 GB free disk;
-- Node.js 22+, Bun 1.3.14+, Git, `curl`, and OpenSSL;
-- [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`;
-- [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) 0.84.0; start its interactive UI, run `/login`, and select OpenAI Codex;
-- Codex CLI logged into a ChatGPT subscription with `codex login`.
-
-Pi authentication powers discovery, authoring, and review; Codex CLI authentication powers the optional test-repair step. SelfBench verifies that both are subscription-backed and does not silently fall back to `OPENAI_API_KEY`.
-
-### Start SelfBench
+Clone SelfBench and build it:
 
 ```bash
 git clone https://github.com/mupt-ai/self-bench.git
 cd self-bench
-
 npm install -g @earendil-works/pi-coding-agent@0.84.0
 bun install --frozen-lockfile
 bun run build
+```
 
+Start the local stack:
+
+```bash
 export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 export GH_TOKEN="$(gh auth token)"
 node dist/cli.js up
-
 until curl --fail http://127.0.0.1:8080/healthz; do sleep 2; done
 ```
 
-The stack is Postgres, Temporal, an ordinary HTTP API, and a long-running worker. The worker launches disposable Docker sandboxes; there is no MinIO service or separate computer runner.
-
-### Generate tasks
-
-Run this from the same shell so the CLI uses the API token exported above:
+Now point SelfBench at **your checked-out repository**. It uses the repo's `origin` URL and current `HEAD`, then discovers eligible completed changes from local coding sessions and merged GitHub pull requests:
 
 ```bash
 export SELFBENCH_API_URL=http://127.0.0.1:8080
 
 node dist/cli.js run \
   --repo /absolute/path/to/your/repository \
-  --easy-count 5 \
-  --medium-count 10 \
-  --hard-count 5 \
-  --output ./selfbench-tasks.tar.gz
+  --easy-count 1 \
+  --output ./my-evals.tar.gz
 ```
 
-`--output` waits for the Temporal workflow, downloads the completed export, and verifies its SHA-256. Without `--output` or `--wait`, submission is asynchronous.
+`my-evals.tar.gz` contains the accepted Harbor tasks. `--easy-count 1` is one candidate-generation attempt, **not** a guarantee that one task will be accepted. Rejected candidates are not replaced. Use `--medium-count` or `--hard-count` for the other tiers.
 
-Each `--*-count` is the number of candidates that enter authoring at that tier—not an accepted-task target. Rejected candidates are not replaced, and the export contains only tasks that pass every gate.
+The repository must be a Git checkout with a GitHub `origin`, and SelfBench must find at least one usable local request or merged non-bot pull request. Uncommitted changes are ignored.
 
-Useful follow-up commands:
+## What happens next?
+
+Run an agent against an extracted task with Harbor, or evaluate a whole export with the included matrix runner. See [Running evaluations](docs/evaluations.md).
+
+For the validation contract and task format, see [task construction](docs/task-construction.md). For credentials, Modal, persistence, and deployment, see [operations](docs/operations.md).
+
+## Commands
 
 ```bash
 node dist/cli.js status RUN_ID
 node dist/cli.js list
 node dist/cli.js cancel RUN_ID
-node dist/cli.js download RUN_ID ./selfbench-RUN_ID.tar.gz
+node dist/cli.js download RUN_ID ./my-evals.tar.gz
 ```
 
-Generation defaults to Pi with `gpt-5.6-sol` at high reasoning. Multi-task runs can take hours and consume substantial model subscription and sandbox capacity.
-
-## Use Modal for parallel sandboxes
-
-[Modal](https://modal.com/) is an optional hosted sandbox provider that replaces host Docker execution; it requires a separate Modal account and may incur usage charges. Temporal still owns the workflow.
-
-```bash
-modal token new
-
-node dist/cli.js up --backend modal
-
-# If your profile is not at ~/.modal.toml:
-node dist/cli.js up --backend modal --modal-config /absolute/path/to/.modal.toml
-```
-
-Discovery partitions requests across eight independently retryable workers. Modal defaults to 20 concurrent activities and starts another candidate whenever one is rejected. Model processes stream progress; discovery and authoring stop after eight minutes without output, while review stops after five.
-
-See [operations and deployment](docs/operations.md) for auth-file overrides, persistence, the HTTP API, GCS, and the Cloud Run topology.
-
-## Run agents with Harbor
-
-Extract one task from the export, then run it with Harbor. The `solution/` directory is mounted only for explicit oracle validation, never for coding-agent trials.
-
-```bash
-mkdir -p ./export ./selected-task
-tar -xzf ./selfbench-tasks.tar.gz -C ./export
-
-TASK_ID="$(jq -r '.tasks[0].taskId' ./export/manifest.json)"
-tar -xzf "./export/tasks/$TASK_ID.tar.gz" -C ./selected-task
-
-uv tool install --python 3.12 'harbor[modal]==0.20.1.dev202608040148'
-
-export CODEX_FORCE_AUTH_JSON=1
-export CODEX_AUTH_JSON_PATH="$HOME/.codex/auth.json"
-env -u OPENAI_API_KEY harbor run \
-  --path ./selected-task/harbor-task \
-  --agent codex \
-  --model gpt-5.6-sol \
-  --ak version=0.146.1 \
-  --ak reasoning_effort=high \
-  --env modal \
-  --jobs-dir ./harbor-jobs \
-  --yes
-```
-
-For a 10-task export, `dist/eval-main.js` runs every task through `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna` at high reasoning and reuses completed Harbor jobs after restart:
-
-```bash
-env -u OPENAI_API_KEY node dist/eval-main.js \
-  --export ./selfbench-tasks.tar.gz \
-  --jobs ./matrix-jobs \
-  --harbor harbor \
-  --environment modal \
-  --concurrency 20 \
-  --auth "$HOME/.codex/auth.json"
-```
-
-The harness rejects non-ChatGPT Codex auth and does not forward `OPENAI_API_KEY`.
-
-## What an export contains
-
-```text
-manifest.json
-tasks/
-└── TASK_ID.tar.gz
-    └── harbor-task/
-        ├── task.toml
-        ├── instruction.md
-        ├── environment/
-        ├── tests/
-        └── solution/
-```
-
-Exports include base repository snapshots, held-out tests, and reference solutions. They intentionally exclude Git history, source sessions, and model transcripts. Treat every export as sensitive, unencrypted benchmark material.
-
-Read [task construction and validation](docs/task-construction.md) for tier contracts, anti-coupling rules, repair boundary, and archive semantics.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    CLI -->|HTTP| API
-    API --> Temporal
-    Temporal --> Worker
-    Worker -->|8 discovery shards| Sandboxes[Docker or Modal sandboxes]
-    Worker --> Harbor
-    API --> Store[Local volume or GCS]
-    Worker --> Store
-```
-
-The API only starts and queries workflows. The worker owns GitHub access, model sessions, Harbor, and sandbox execution. Cloud Run can host the API because it only handles HTTP requests; the worker must run continuously on a long-lived container platform.
+`--output` waits for completion and verifies the downloaded archive's SHA-256. Runs can take hours because every candidate is authored, audited, sandbox-validated, and independently reviewed.
 
 ## Development
-
-SelfBench is TypeScript. Harbor remains an external executable.
 
 ```bash
 bun install --frozen-lockfile
 bun run validate
 ```
-
-`bun run validate` runs Biome, strict TypeScript checks, tests, and production builds. The complete task-authoring rubric lives in [`src/skills/selfbench/SKILL.md`](src/skills/selfbench/SKILL.md).
 
 ## License
 
