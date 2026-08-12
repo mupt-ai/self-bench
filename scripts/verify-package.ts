@@ -1,0 +1,57 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const root = resolve(import.meta.dir, "..");
+const temporary = await mkdtemp(join(tmpdir(), "self-bench-package-"));
+async function run(command: string, args: string[], cwd = root): Promise<string> {
+  const child = Bun.spawn([command, ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`${command} ${args.join(" ")} failed:\n${stderr || stdout}`);
+  }
+  return stdout;
+}
+
+try {
+  await run("bun", ["pm", "pack", "--destination", temporary]);
+  const tarballs = (await Array.fromAsync(new Bun.Glob("*.tgz").scan({ cwd: temporary }))).map(
+    (name) => join(temporary, name),
+  );
+  const tarball = tarballs[0] ?? (() => {
+    throw new Error("bun pm pack did not create a tarball");
+  })();
+  const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+    name: string;
+    version: string;
+  };
+  const installRoot = join(temporary, "install");
+  await run("mkdir", ["-p", installRoot]);
+  await run("bun", ["init", "--yes"], installRoot);
+  await run("bun", ["add", "--no-save", tarball], installRoot);
+  const executable = join(installRoot, "node_modules", ".bin", "self-bench");
+  const help = await run(executable, ["--help"], installRoot);
+  if (!help.includes("self-bench up")) {
+    throw new Error("installed self-bench did not print the expected CLI help");
+  }
+  for (const asset of ["compose.yaml", "Dockerfile", "Dockerfile.sandbox", "src/skills/selfbench/SKILL.md"]) {
+    await readFile(join(installRoot, "node_modules", packageJson.name, asset));
+  }
+  const installedPackage = JSON.parse(
+    await readFile(join(installRoot, "node_modules", packageJson.name, "package.json"), "utf8"),
+  ) as { name: string; version: string };
+  if (installedPackage.name !== packageJson.name || installedPackage.version !== packageJson.version) {
+    throw new Error("installed package metadata does not match the workspace package");
+  }
+  console.log(`verified ${installedPackage.name}@${installedPackage.version}`);
+} finally {
+  await rm(temporary, { recursive: true, force: true });
+}

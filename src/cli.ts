@@ -9,6 +9,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { buildCommit } from "./build-metadata.js";
 import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
@@ -64,6 +65,7 @@ async function up(args: string[]): Promise<void> {
   const backend = parsed.values.backend;
   const environment = {
     ...process.env,
+    SELFBENCH_BUILD_COMMIT: await resolveSelfBenchCommit(),
     SELFBENCH_EXECUTION_BACKEND: backend,
     SELFBENCH_HARBOR_ENVIRONMENT: backend,
     ...(backend === "modal"
@@ -212,8 +214,17 @@ async function resolveSelfBenchCommit(): Promise<string> {
   if (process.env.SELFBENCH_BUILD_COMMIT) {
     return process.env.SELFBENCH_BUILD_COMMIT;
   }
+  if (/^[0-9a-f]{40}$/i.test(buildCommit) && !/^0+$/.test(buildCommit)) {
+    return buildCommit;
+  }
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  return (await runCommand("git", ["-C", root, "rev-parse", "HEAD"])).stdout.trim();
+  try {
+    return (await runCommand("git", ["-C", root, "rev-parse", "HEAD"])).stdout.trim();
+  } catch {
+    throw new Error(
+      "SelfBench was built without commit metadata; set SELFBENCH_BUILD_COMMIT to a full commit SHA",
+    );
+  }
 }
 
 async function passthrough(method: "GET" | "POST", path: string): Promise<void> {
@@ -321,13 +332,13 @@ function printHelp(): void {
   console.log(`SelfBench creates durable tiered Harbor evaluations.
 
 Usage:
-  selfbench up [--backend docker|modal] [--modal-config PATH]
-  selfbench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
-                [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
-  selfbench status RUN_ID
-  selfbench cancel RUN_ID
-  selfbench download RUN_ID OUTPUT.tar.gz
-  selfbench list
+  self-bench up [--backend docker|modal] [--modal-config PATH]
+  self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
+                  [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
+  self-bench status RUN_ID
+  self-bench cancel RUN_ID
+  self-bench download RUN_ID OUTPUT.tar.gz
+  self-bench list
 
 The up command starts the local stack and configures both sandbox execution and Harbor validation for
 one backend. Modal uses ~/.modal.toml unless --modal-config overrides it.

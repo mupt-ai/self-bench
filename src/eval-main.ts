@@ -21,7 +21,7 @@ if (parsed.values.help) {
   console.log(`Run Harbor tasks through the fixed Codex subscription model matrix.
 
 Usage:
-  selfbench-eval (--export FILE.tar.gz | --tasks DIRECTORY) --jobs DIRECTORY [options]
+  self-bench-eval (--export FILE.tar.gz | --tasks DIRECTORY) --jobs DIRECTORY [options]
 
 Options:
   --tasks DIRECTORY          Expanded Harbor tasks (one or more)

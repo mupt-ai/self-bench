@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "selfbench-review",
+      "name": "self-bench",
       "dependencies": {
         "@google-cloud/storage": "^7.17.0",
         "@pierre/diffs": "1.2.12",

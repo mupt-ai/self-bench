@@ -24,7 +24,7 @@ describe("SelfBench CLI", () => {
     await writeFile(
       docker,
       `#!/bin/sh
-printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" >> "$DOCKER_CALLS"
+printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" "$SELFBENCH_BUILD_COMMIT" >> "$DOCKER_CALLS"
 `,
     );
     await chmod(docker, 0o755);
@@ -53,7 +53,8 @@ printf '%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_E
     const invocations = await readFile(calls, "utf8");
     expect(invocations).not.toContain("Dockerfile.sandbox");
     expect(invocations).toContain("compose --file");
-    expect(invocations).toContain(`|modal|modal|${modalConfig}`);
+    expect(invocations).toContain(`|modal|modal|${modalConfig}|`);
+    expect(invocations).toMatch(/\|[0-9a-f]{40}\n/);
   });
 
   test("run --output waits for completion and downloads a verified export", async () => {
