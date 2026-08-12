@@ -34,5 +34,7 @@ jobs:
       - run: bun run validate
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/')
-        run: test "${GITHUB_REF_NAME#v}" = "$(node -p \"require('./package.json').version\")"
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME#v}" = "$package_version"
       - run: npm publish --access public
