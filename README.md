@@ -2,7 +2,7 @@
 
 SelfBench turns completed GitHub changes into private [Harbor](https://harborframework.com/) evaluations for coding agents. It finds real feature requests, builds tasks from the repository's base commit, hides the tests and reference solution, and checks that each task fails without a solution and passes with one.
 
-SelfBench is distributed as the [`self-bench`](https://www.npmjs.com/package/self-bench) npm package. The published CLI requires Node.js 22 or newer. Use **Bun** only when developing SelfBench from source.
+SelfBench is distributed as the [`self-bench`](https://www.npmjs.com/package/self-bench) package and installed with **Bun**.
 
 ## Choose your setup
 
@@ -15,28 +15,28 @@ After a run is submitted, the workflow continues independently of the waiting CL
 
 ## Prerequisites
 
-Installing the npm package requires Node.js 22 or newer. Running evaluations additionally requires:
+Installing the package requires [Bun](https://bun.sh/) 1.3.14 or newer. Running evaluations additionally requires:
 
 - Docker with Compose
 - `gh`, authenticated with access to the source repository
 - Pi with an authenticated `openai-codex` account
 - Codex CLI with an authenticated account
 
-Building SelfBench from source requires [Bun](https://bun.sh/) 1.3.14 or newer. Modal execution additionally requires a Modal account and token. Temporal Cloud execution additionally requires a Temporal Cloud namespace and a durable artifact store such as Google Cloud Storage.
+Modal execution additionally requires a Modal account and token. Temporal Cloud execution additionally requires a Temporal Cloud namespace and a durable artifact store such as Google Cloud Storage.
 
 ## Install
 
-The npm package is named `self-bench`; it installs a command named `selfbench`. Install it globally:
+The package is named `self-bench`; it installs a command named `selfbench`. Install it globally with Bun:
 
 ```bash
-npm install --global self-bench
+bun install --global self-bench
 selfbench --help
 ```
 
 You can also try it without a global installation:
 
 ```bash
-npx --yes --package self-bench selfbench --help
+bunx --package self-bench selfbench --help
 ```
 
 To develop SelfBench itself, clone the repository and use Bun:
