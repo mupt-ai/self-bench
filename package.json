@@ -1,5 +1,5 @@
 {
-  "name": "selfbench",
+  "name": "self-bench",
   "version": "0.3.0",
   "description": "Turn completed repository changes into durable, private Harbor evaluations",
   "license": "MIT",
@@ -25,7 +25,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "bun run build:server && bun run build:review",
+    "build": "bun run clean && bun run build:server && bun run build:review",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "cli": "bun run src/cli.ts",
     "build:review": "vite build --config review/vite.config.ts",
     "build:server": "tsc -p tsconfig.build.json && bun build src/sandbox-author.ts --target=node --outfile=dist/sandbox-author.bundle.js && bun build src/sandbox-review.ts --target=node --outfile=dist/sandbox-review.bundle.js && bun build src/sandbox-repair.ts --target=node --outfile=dist/sandbox-repair.bundle.js && bun build src/sandbox-validation-repair.ts --target=node --outfile=dist/sandbox-validation-repair.bundle.js",
@@ -34,11 +35,15 @@
     "dev:review": "vite --config review/vite.config.ts",
     "dev:worker": "tsx src/worker-main.ts",
     "format": "biome format --write .",
+    "prepack": "bun run build",
     "start:api": "node dist/api-main.js",
     "start:worker": "node dist/worker-main.js",
     "test": "bun test tests review/src",
     "typecheck:review": "tsc --noEmit -p review/tsconfig.json",
     "validate": "bun run check && bun run test && bun run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.0",
