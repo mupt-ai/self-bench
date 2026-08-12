@@ -27,7 +27,7 @@ if (parsed.values.help) {
   console.log(`Repair coupled tests in expanded Harbor tasks.
 
 Usage:
-  selfbench-repair --tasks DIRECTORY --review REPORT.json --output DIRECTORY [options]
+  self-bench-repair --tasks DIRECTORY --review REPORT.json --output DIRECTORY [options]
 
 Options:
   --concurrency N  Concurrent repair sandboxes (default: 9)

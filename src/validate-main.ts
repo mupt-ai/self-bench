@@ -21,7 +21,7 @@ if (parsed.values.help) {
   console.log(`Run Harbor nop and oracle gates for expanded SelfBench tasks.
 
 Usage:
-  selfbench-validate --tasks DIRECTORY --jobs DIRECTORY [options]
+  self-bench-validate --tasks DIRECTORY --jobs DIRECTORY [options]
 
 Options:
   --environment NAME  Harbor environment (default: modal)

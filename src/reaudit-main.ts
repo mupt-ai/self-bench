@@ -36,7 +36,7 @@ if (parsed.values.help) {
   console.log(`Re-audit expanded Harbor tasks for test-to-gold coupling.
 
 Usage:
-  selfbench-reaudit --tasks DIRECTORY --output REPORT.json [options]
+  self-bench-reaudit --tasks DIRECTORY --output REPORT.json [options]
 
 Options:
   --concurrency N  Concurrent Sol reviews (default: 10)

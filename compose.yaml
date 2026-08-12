@@ -32,7 +32,10 @@ services:
 
   api:
     image: selfbench:local
-    build: .
+    build:
+      context: .
+      args:
+        SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     depends_on:
       - temporal
     environment: &selfbench-environment
@@ -53,7 +56,10 @@ services:
 
   worker:
     image: selfbench:local
-    build: .
+    build:
+      context: .
+      args:
+        SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     command: ["node", "dist/worker-main.js"]
     depends_on:
       - temporal

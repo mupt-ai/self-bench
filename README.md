@@ -26,18 +26,20 @@ Modal execution additionally requires a Modal account and token. Temporal Cloud 
 
 ## Install
 
-The package is named `self-bench`; it installs a command named `selfbench`. Install it globally with Bun:
+Install the CLI from the npm registry with Bun:
 
 ```bash
-bun install --global self-bench
-selfbench --help
+bun add --global self-bench
+self-bench --help
 ```
 
-You can also try it without a global installation:
+For one-off use without a global install:
 
 ```bash
-bunx --package self-bench selfbench --help
+bunx self-bench --help
 ```
+
+The package exposes `dist/cli.js` as `self-bench`.
 
 To develop SelfBench itself, clone the repository and use Bun:
 
@@ -47,7 +49,7 @@ cd self-bench
 bun install --frozen-lockfile
 bun run build
 bun link
-selfbench --help
+self-bench --help
 ```
 
 During development, run the TypeScript entrypoint without linking:
@@ -72,15 +74,15 @@ This starts Postgres, Temporal, the SelfBench API, and a worker on your machine.
 export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 export GH_TOKEN="$(gh auth token)"
 
-selfbench up --backend docker
+self-bench up --backend docker
 export SELFBENCH_API_URL=http://127.0.0.1:8080
 
-selfbench run \
+self-bench run \
   --repo /absolute/path/to/your/repository \
   --easy-count 30 \
   --medium-count 30 \
   --hard-count 10 \
-  --output ./selfbench-evals.tar.gz
+  --output ./self-bench-evals.tar.gz
 ```
 
 The `--repo` directory must be a Git checkout with a GitHub `origin`. SelfBench pins the current `HEAD`; uncommitted changes are ignored. It discovers candidate requests from sanitized local coding-session messages and merged, non-bot GitHub pull requests.
@@ -92,10 +94,10 @@ A run may take hours. `--output` waits for the run to finish, then downloads and
 ## Local commands
 
 ```bash
-selfbench status RUN_ID
-selfbench list
-selfbench cancel RUN_ID
-selfbench download RUN_ID ./selfbench-evals.tar.gz
+self-bench status RUN_ID
+self-bench list
+self-bench cancel RUN_ID
+self-bench download RUN_ID ./self-bench-evals.tar.gz
 ```
 
 If you are working from source rather than using `bun link`, use the same commands through Bun:
@@ -117,7 +119,7 @@ Named Docker volumes retain Temporal history and generated artifacts. Back them 
 For large repositories or unattended runs, use Temporal Cloud for workflow state and Modal for disposable execution sandboxes. Temporal Cloud does not host the SelfBench API or worker; deploy those separately.
 
 ```text
-selfbench CLI
+self-bench CLI
     -> SelfBench API
     -> Temporal Cloud namespace
     -> persistent SelfBench worker
@@ -194,11 +196,11 @@ Provide the Codex auth JSON to the worker at `/home/node/.codex/auth.json` (the 
 ### 4. Run against the hosted service
 
 ```bash
-selfbench run \
+self-bench run \
   --repo /absolute/path/to/your/repository \
   --easy-count 2 \
   --medium-count 2 \
-  --output ./selfbench-evals.tar.gz
+  --output ./self-bench-evals.tar.gz
 ```
 
 The CLI uploads only repository metadata and sanitized provenance. The worker performs discovery, authoring, sandbox validation, review, audit, and export remotely.
@@ -219,17 +221,17 @@ The local `up` command configures one execution backend for the stack:
 
 ```bash
 # Local Docker sandboxes; simplest, usually one activity at a time
-selfbench up --backend docker
+self-bench up --backend docker
 
 # Modal sandboxes; better for concurrency and larger runs
 modal token new
-selfbench up --backend modal
+self-bench up --backend modal
 ```
 
-For Modal, `selfbench up` uses `~/.modal.toml` by default. Override it with:
+For Modal, `self-bench up` uses `~/.modal.toml` by default. Override it with:
 
 ```bash
-selfbench up --backend modal --modal-config /absolute/path/to/.modal.toml
+self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 ```
 
 ## Development

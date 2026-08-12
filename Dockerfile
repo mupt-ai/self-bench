@@ -1,10 +1,12 @@
 FROM oven/bun:1.3.14-debian AS build
 
 WORKDIR /app
+ARG SELFBENCH_BUILD_COMMIT
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY biome.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY scripts ./scripts
 RUN bun run build:server
 
 FROM docker:29.4.0-cli AS docker-cli

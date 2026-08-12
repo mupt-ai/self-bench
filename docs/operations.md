@@ -31,7 +31,7 @@ Compose mounts the default auth files read-only. Override their host paths befor
 ```bash
 export SELFBENCH_PI_AUTH_PATH=/absolute/path/to/pi-auth.json
 export SELFBENCH_CODEX_AUTH_PATH=/absolute/path/to/codex-auth.json
-node dist/cli.js up
+self-bench up
 ```
 
 ## Execution backends
@@ -41,7 +41,7 @@ node dist/cli.js up
 Build the worker's sandbox image once:
 
 ```bash
-node dist/cli.js up --backend docker
+self-bench up --backend docker
 ```
 
 Docker defaults to one activity at a time because sandboxes share the host. Each candidate defaults to 4 CPUs, 8,192 MB RAM, and 20,480 MB storage. Authored tasks may request other positive limits.
@@ -53,19 +53,19 @@ Authenticate Modal and mount its profile into the worker:
 ```bash
 modal token new
 
-node dist/cli.js up --backend modal
+self-bench up --backend modal
 
 # If your profile is not at ~/.modal.toml:
-node dist/cli.js up --backend modal --modal-config /absolute/path/to/.modal.toml
+self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 ```
 
-`selfbench up` selects both sandbox execution and Harbor validation for the requested backend. Modal mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
+`self-bench up` selects both sandbox execution and Harbor validation for the requested backend. Modal mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
 Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery and authoring stop after eight minutes without process output; review stops after five. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard.
 
 ## CLI behavior
 
-`selfbench run` requires an absolute or relative path to a Git checkout whose `origin` is an HTTPS or SSH GitHub URL. It pins `HEAD`; uncommitted content is excluded.
+`self-bench run` requires an absolute or relative path to a Git checkout whose `origin` is an HTTPS or SSH GitHub URL. It pins `HEAD`; uncommitted content is excluded.
 
 The CLI collects two types of provenance:
 
@@ -75,13 +75,13 @@ The CLI collects two types of provenance:
 GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
 
 ```bash
-node dist/cli.js run \
+self-bench run \
   --repo /absolute/path/to/repository \
   --easy-count 5 \
   --medium-count 10 \
   --hard-count 5 \
   --model gpt-5.6-sol \
-  --output ./selfbench-tasks.tar.gz
+  --output ./self-bench-tasks.tar.gz
 ```
 
 The three tier counts total 1–100. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
@@ -121,13 +121,13 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_ARTIFACT_DIR` | `.selfbench/artifacts` | Local artifact store |
 | `SELFBENCH_GCS_BUCKET` | — | GCS artifact store |
 | `SELFBENCH_GCS_PREFIX` | `selfbench` | GCS artifact store |
-| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; set by `selfbench up --backend` locally |
-| `SELFBENCH_HARBOR_ENVIRONMENT` | execution backend | Worker; set by `selfbench up --backend` locally |
+| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; set by `self-bench up --backend` locally |
+| `SELFBENCH_HARBOR_ENVIRONMENT` | execution backend | Worker; set by `self-bench up --backend` locally |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
-| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `selfbench up --modal-config` locally |
+| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `self-bench up --modal-config` locally |
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |

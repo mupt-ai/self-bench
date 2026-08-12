@@ -1,25 +1,38 @@
 {
   "name": "self-bench",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Turn completed repository changes into durable, private Harbor evaluations",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/mupt-ai/self-bench.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "bin": {
-    "selfbench": "dist/cli.js",
-    "selfbench-agent-smoke": "dist/agent-smoke-main.js",
-    "selfbench-eval": "dist/eval-main.js",
-    "selfbench-reaudit": "dist/reaudit-main.js",
-    "selfbench-repair": "dist/repair-main.js",
-    "selfbench-validate": "dist/validate-main.js"
+    "self-bench": "dist/cli.js",
+    "self-bench-agent-smoke": "dist/agent-smoke-main.js",
+    "self-bench-eval": "dist/eval-main.js",
+    "self-bench-reaudit": "dist/reaudit-main.js",
+    "self-bench-repair": "dist/repair-main.js",
+    "self-bench-validate": "dist/validate-main.js"
   },
   "files": [
     "dist",
-    "src/extensions",
-    "src/skills"
+    "src",
+    "docs",
+    "compose.yaml",
+    "Dockerfile",
+    "Dockerfile.sandbox",
+    "bun.lock",
+    "scripts",
+    "biome.json",
+    "tsconfig.json",
+    "tsconfig.build.json",
+    ".dockerignore"
   ],
   "engines": {
     "node": ">=22"
@@ -29,21 +42,21 @@
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "cli": "bun run src/cli.ts",
     "build:review": "vite build --config review/vite.config.ts",
-    "build:server": "tsc -p tsconfig.build.json && bun build src/sandbox-author.ts --target=node --outfile=dist/sandbox-author.bundle.js && bun build src/sandbox-review.ts --target=node --outfile=dist/sandbox-review.bundle.js && bun build src/sandbox-repair.ts --target=node --outfile=dist/sandbox-repair.bundle.js && bun build src/sandbox-validation-repair.ts --target=node --outfile=dist/sandbox-validation-repair.bundle.js",
+    "build:server": "tsc -p tsconfig.build.json && bun build src/sandbox-author.ts --target=node --outfile=dist/sandbox-author.bundle.js && bun build src/sandbox-review.ts --target=node --outfile=dist/sandbox-review.bundle.js && bun build src/sandbox-repair.ts --target=node --outfile=dist/sandbox-repair.bundle.js && bun build src/sandbox-validation-repair.ts --target=node --outfile=dist/sandbox-validation-repair.bundle.js && bun run build:metadata",
+    "build:metadata": "bun scripts/write-build-metadata.ts",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run validate",
+    "verify:package": "bun scripts/verify-package.ts",
     "check": "biome check . && tsc --noEmit -p tsconfig.json && bun run typecheck:review",
     "dev:api": "tsx src/api-main.ts",
     "dev:review": "vite --config review/vite.config.ts",
     "dev:worker": "tsx src/worker-main.ts",
     "format": "biome format --write .",
-    "prepack": "bun run build",
     "start:api": "node dist/api-main.js",
     "start:worker": "node dist/worker-main.js",
     "test": "bun test tests review/src",
     "typecheck:review": "tsc --noEmit -p review/tsconfig.json",
-    "validate": "bun run check && bun run test && bun run build"
-  },
-  "publishConfig": {
-    "access": "public"
+    "validate": "bun run check && bun run test && bun run build && bun run verify:package"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.0",

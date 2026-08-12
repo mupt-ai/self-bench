@@ -18,7 +18,7 @@ if (parsed.values.help) {
   console.log(`Attempt installation and instantiation of every pinned Harbor adapter.
 
 Usage:
-  selfbench-agent-smoke --task DIRECTORY --jobs DIRECTORY [options]
+  self-bench-agent-smoke --task DIRECTORY --jobs DIRECTORY [options]
 
 Options:
   --harbor PATH              Harbor executable (default: harbor)
