@@ -2,7 +2,7 @@
 
 SelfBench turns completed GitHub changes into private [Harbor](https://harborframework.com/) evaluations for coding agents. It finds real feature requests, builds tasks from the repository's base commit, hides the tests and reference solution, and checks that each task fails without a solution and passes with one.
 
-SelfBench is a TypeScript package. Use **Bun** to install dependencies, build the package, and run the development CLI.
+SelfBench is distributed as the [`self-bench`](https://www.npmjs.com/package/self-bench) npm package. The published CLI requires Node.js 22 or newer. Use **Bun** only when developing SelfBench from source.
 
 ## Choose your setup
 
@@ -15,31 +15,37 @@ After a run is submitted, the workflow continues independently of the waiting CL
 
 ## Prerequisites
 
-All setups require:
+Installing the npm package requires Node.js 22 or newer. Running evaluations additionally requires:
 
-- [Bun](https://bun.sh/) 1.3.14 or newer
 - Docker with Compose
-- Node.js 22 or newer (the built service images use Node)
 - `gh`, authenticated with access to the source repository
 - Pi with an authenticated `openai-codex` account
 - Codex CLI with an authenticated account
 
-Modal execution additionally requires a Modal account and token. Temporal Cloud execution additionally requires a Temporal Cloud namespace and a durable artifact store such as Google Cloud Storage.
+Building SelfBench from source requires [Bun](https://bun.sh/) 1.3.14 or newer. Modal execution additionally requires a Modal account and token. Temporal Cloud execution additionally requires a Temporal Cloud namespace and a durable artifact store such as Google Cloud Storage.
 
-## Install from source
+## Install
 
-The package is not currently published to npm. Clone the repository and build it locally:
+The npm package is named `self-bench`; it installs a command named `selfbench`. Install it globally:
+
+```bash
+npm install --global self-bench
+selfbench --help
+```
+
+You can also try it without a global installation:
+
+```bash
+npx --yes --package self-bench selfbench --help
+```
+
+To develop SelfBench itself, clone the repository and use Bun:
 
 ```bash
 git clone https://github.com/mupt-ai/self-bench.git
 cd self-bench
 bun install --frozen-lockfile
 bun run build
-```
-
-The compiled CLI is `dist/cli.js`, and the package exposes it as `selfbench`. To use `selfbench` directly from this checkout:
-
-```bash
 bun link
 selfbench --help
 ```
