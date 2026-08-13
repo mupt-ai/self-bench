@@ -4,7 +4,6 @@ import { assertPullRequestBelongsToRepository, githubRepository } from "./github
 import { runCommand } from "./process.js";
 
 export type SessionProvenanceFormat = "codex" | "claude-code" | "pi" | "generic";
-export type ProvenanceFormat = SessionProvenanceFormat | "github-pull-request";
 
 interface ProvenanceMessageBase {
   readonly sessionId: string;

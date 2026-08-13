@@ -3,7 +3,6 @@ import { z } from "zod";
 const environmentSchema = z.object({
   SELFBENCH_API_HOST: z.string().default("127.0.0.1"),
   SELFBENCH_API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
-  SELFBENCH_API_URL: z.string().url().default("http://127.0.0.1:8080"),
   SELFBENCH_API_TOKEN: z.string().min(1).optional(),
   SELFBENCH_ARTIFACT_BACKEND: z.enum(["local", "gcs"]).default("local"),
   SELFBENCH_ARTIFACT_DIR: z.string().default(".selfbench/artifacts"),
@@ -36,7 +35,6 @@ const environmentSchema = z.object({
 export interface SelfBenchConfig {
   readonly apiHost: string;
   readonly apiPort: number;
-  readonly apiUrl: string;
   readonly apiToken?: string;
   readonly buildCommit?: string;
   readonly activityConcurrency: number;
@@ -81,7 +79,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
   return {
     apiHost: value.SELFBENCH_API_HOST,
     apiPort: value.SELFBENCH_API_PORT,
-    apiUrl: value.SELFBENCH_API_URL,
     ...(value.SELFBENCH_API_TOKEN ? { apiToken: value.SELFBENCH_API_TOKEN } : {}),
     ...(value.SELFBENCH_BUILD_COMMIT
       ? { buildCommit: value.SELFBENCH_BUILD_COMMIT.toLowerCase() }

@@ -6,8 +6,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY biome.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY review ./review
 COPY scripts ./scripts
-RUN bun run build:server
+RUN bun run build
 
 FROM docker:29.4.0-cli AS docker-cli
 

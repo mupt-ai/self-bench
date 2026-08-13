@@ -5,20 +5,19 @@ import { fileURLToPath } from "node:url";
 import { CancelledFailure, Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
-import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
-import { auditTaskDefinition } from "./audit.js";
+import { type ArtifactStore, createArtifactStore } from "../artifacts.js";
+import { auditTaskDefinition } from "../audit.js";
 import {
   COUPLING_REVIEW_MODEL,
   couplingReviewInput,
   couplingReviewSchema,
-} from "./codex-review.js";
-import type { SelfBenchConfig } from "./config.js";
+} from "../codex-review.js";
+import type { SelfBenchConfig } from "../config.js";
 import {
   type ArtifactRef,
   type AuditResult,
   type AuthoredTask,
   type AuthorOutcome,
-  artifactRefSchema,
   type Candidate,
   candidateSchema,
   type Difficulty,
@@ -27,29 +26,29 @@ import {
   type RunRequest,
   taskDefinitionSchema,
   type ValidationResult,
-} from "./contracts.js";
+} from "../contracts.js";
 import {
   buildCouplingEvidence,
   discoverContractArtifacts,
   resolveCouplingReview,
   scanBaseContractArtifacts,
-} from "./coupling.js";
-import { assertPullRequestBelongsToRepository } from "./github.js";
+} from "../coupling.js";
+import { assertPullRequestBelongsToRepository } from "../github.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
   readHarborJobResult,
-} from "./harbor-results.js";
-import { refreshHarborTask } from "./harbor-task.js";
-import { sha256 } from "./hash.js";
-import { runCommand } from "./process.js";
-import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "./provenance.js";
-import { createSandboxExecutor, type SandboxExecutor, type SandboxRunOptions } from "./sandbox.js";
+} from "../harbor-results.js";
+import { refreshHarborTask } from "../harbor-task.js";
+import { sha256 } from "../hash.js";
+import { runCommand } from "../process.js";
+import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../provenance.js";
+import { createSandboxExecutor, type SandboxExecutor, type SandboxRunOptions } from "../sandbox.js";
 import {
   githubToken,
   loadCodexSubscriptionAuth,
   loadPiSubscriptionAuth,
-} from "./subscription-auth.js";
+} from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 const DISCOVERY_TIMEOUT_MS = 45 * 60 * 1000;
@@ -1204,7 +1203,7 @@ function parseProvenance(value: Uint8Array): ProvenanceMessage[] {
 }
 
 function readAsset(relativePath: string): Promise<Buffer> {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
   return readFile(join(root, relativePath));
 }
 
@@ -1229,8 +1228,4 @@ function numberValue(value: unknown): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function parseArtifactReference(value: unknown): ArtifactRef {
-  return artifactRefSchema.parse(value);
 }
