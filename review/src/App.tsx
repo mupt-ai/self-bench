@@ -229,16 +229,14 @@ function TaskPanel({
   removed: boolean;
   onToggle: () => void;
 }) {
-  const definition = parseJson(task.textFiles.get("definition.json"));
+  const taskManifest = parseJson(task.textFiles.get(".selfbench-manifest.json"));
   return (
     <article className="task-detail surface">
       <div className="detail-header">
         <div>
           <p className="eyebrow">TASK</p>
           <h2>{task.taskId}</h2>
-          <p className="muted">
-            {String(definition?.difficulty ?? "unknown")} · {String(definition?.repo ?? "")}
-          </p>
+          <p className="muted">{String(taskManifest?.difficulty ?? "unknown")}</p>
         </div>
         <button
           type="button"
@@ -249,12 +247,10 @@ function TaskPanel({
         </button>
       </div>
       <DetailBlock title="Prompt">
-        <pre>
-          {String(definition?.prompt ?? task.textFiles.get("instruction.md") ?? "No prompt")}
-        </pre>
+        <pre>{task.textFiles.get("instruction.md") ?? "Missing instruction.md"}</pre>
       </DetailBlock>
-      <DetailBlock title="Task definition">
-        <pre>{task.textFiles.get("definition.json") ?? "Missing definition.json"}</pre>
+      <DetailBlock title="Task configuration">
+        <pre>{task.textFiles.get("task.toml") ?? "Missing task.toml"}</pre>
       </DetailBlock>
       <DetailBlock title="Gold patch">
         <PatchBlock patch={task.textFiles.get("solution/gold.patch")} />

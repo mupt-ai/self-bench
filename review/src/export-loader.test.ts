@@ -33,19 +33,38 @@ describe("export review bundles", () => {
 
     expect(result.manifest.acceptedCount).toBe(1);
     expect(result.manifest.tasks.map((task) => task.taskId)).toEqual(["task-a"]);
-    expect(result.tasks[0]?.textFiles.get("definition.json")).toBe('{"taskId":"task-a"}');
+    expect(result.tasks[0]?.textFiles.get(".selfbench-manifest.json")).toBe(
+      '{"taskId":"task-a","difficulty":"easy"}',
+    );
+    expect(result.tasks[0]?.textFiles.get("instruction.md")).toBe("Review task-a");
+    expect(result.tasks[0]?.textFiles.get("task.toml")).toBe('version = "1.0"');
   });
 });
 
 async function taskArchive(taskId: string): Promise<Uint8Array> {
-  const data = new TextEncoder().encode(JSON.stringify({ taskId }));
-  const header = new Uint8Array(512);
-  write(header, 0, "harbor-task/definition.json");
-  write(header, 124, data.length.toString(8).padStart(11, "0"));
-  header[156] = 48;
-  const tar = new Uint8Array(512 + Math.ceil(data.length / 512) * 512 + 1024);
-  tar.set(header);
-  tar.set(data, 512);
+  const entries = [
+    ["harbor-task/.selfbench-manifest.json", JSON.stringify({ taskId, difficulty: "easy" })],
+    ["harbor-task/instruction.md", `Review ${taskId}`],
+    ["harbor-task/task.toml", 'version = "1.0"'],
+  ];
+  const chunks: Uint8Array[] = [];
+  for (const [name, value] of entries) {
+    const data = new TextEncoder().encode(value);
+    const header = new Uint8Array(512);
+    write(header, 0, name);
+    write(header, 124, data.length.toString(8).padStart(11, "0"));
+    header[156] = 48;
+    const chunk = new Uint8Array(512 + Math.ceil(data.length / 512) * 512);
+    chunk.set(header);
+    chunk.set(data, 512);
+    chunks.push(chunk);
+  }
+  const tar = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 1024));
+  let offset = 0;
+  for (const chunk of chunks) {
+    tar.set(chunk, offset);
+    offset += chunk.length;
+  }
   const compressed = await new Response(
     new Blob([tar.buffer]).stream().pipeThrough(new CompressionStream("gzip")),
   ).arrayBuffer();
