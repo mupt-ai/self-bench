@@ -38,22 +38,6 @@ export async function loadCodexSubscriptionAuth(): Promise<string> {
   });
 }
 
-export async function subscriptionBearerToken(model: string): Promise<string> {
-  const result = await runCommand("pi", [
-    "auth",
-    "print-bearer-token",
-    "--provider",
-    "openai-codex",
-    "--model",
-    model,
-  ]);
-  const token = result.stdout.trim();
-  if (!token) {
-    throw new Error(`Pi returned no openai-codex subscription bearer token for ${model}`);
-  }
-  return token;
-}
-
 export async function githubToken(): Promise<string | undefined> {
   if (process.env.GH_TOKEN) {
     return process.env.GH_TOKEN;

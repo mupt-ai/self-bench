@@ -355,7 +355,3 @@ function verifyArtifact(reference: ArtifactRef, value: Uint8Array): void {
     throw new Error(`artifact integrity check failed: ${reference.uri}`);
   }
 }
-
-export async function artifactSize(path: string): Promise<number> {
-  return (await stat(path)).size;
-}

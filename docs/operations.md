@@ -153,7 +153,7 @@ SELFBENCH_TEMPORAL_API_KEY=...
 SELFBENCH_TEMPORAL_TLS=true
 ```
 
-Run `node dist/worker-main.js` from the same image digest on a long-running container platform, not a scale-to-zero request service. Give it the same Temporal, task queue, and GCS configuration plus:
+Run `node dist/temporal/worker-main.js` from the same image digest on a long-running container platform, not a scale-to-zero request service. Give it the same Temporal, task queue, and GCS configuration plus:
 
 ```text
 SELFBENCH_EXECUTION_BACKEND=modal

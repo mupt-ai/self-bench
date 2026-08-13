@@ -5,6 +5,5 @@
 dist
 jobs
 node_modules
-review
 tests
 *.md

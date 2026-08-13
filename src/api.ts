@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import { Client } from "@temporalio/client";
 import { z } from "zod";
 import { createArtifactStore } from "./artifacts.js";
@@ -12,8 +15,8 @@ import {
   repositoryRefSchema,
   runRequestSchema,
 } from "./contracts.js";
-import { connectTemporalClient } from "./temporal.js";
-import { selfBenchRunWorkflow, statusQuery } from "./workflow.js";
+import { connectTemporalClient } from "./temporal/connection.js";
+import { selfBenchRunWorkflow, statusQuery } from "./temporal/workflow.js";
 
 const submissionSchema = z.object({
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
@@ -37,6 +40,13 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       if (request.method === "GET" && url.pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
+        return;
+      }
+      if (
+        request.method === "GET" &&
+        (url.pathname === "/" || url.pathname.startsWith("/assets/"))
+      ) {
+        await sendReviewAsset(response, url.pathname);
         return;
       }
       if (!authorized(request, config.apiToken)) {
@@ -227,6 +237,34 @@ function authorized(request: IncomingMessage, token: string | undefined): boolea
     expectedBuffer.length === suppliedBuffer.length &&
     timingSafeEqual(expectedBuffer, suppliedBuffer)
   );
+}
+
+async function sendReviewAsset(response: ServerResponse, pathname: string): Promise<void> {
+  const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
+  const root = join(dirname(fileURLToPath(import.meta.url)), "review");
+  const path = join(root, relativePath);
+  if (!path.startsWith(`${root}/`)) {
+    sendJson(response, 400, { error: "invalid asset path" });
+    return;
+  }
+  try {
+    const body = await readFile(path);
+    response.writeHead(200, {
+      "content-type": contentType(path),
+      "content-length": body.byteLength,
+      "cache-control": pathname === "/" ? "no-cache" : "public, max-age=31536000, immutable",
+    });
+    response.end(body);
+  } catch {
+    sendJson(response, 404, { error: "asset not found" });
+  }
+}
+
+function contentType(path: string): string {
+  if (path.endsWith(".html")) return "text/html; charset=utf-8";
+  if (path.endsWith(".css")) return "text/css; charset=utf-8";
+  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  return "application/octet-stream";
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown): void {

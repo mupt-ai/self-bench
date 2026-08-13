@@ -60,7 +60,7 @@ services:
       context: .
       args:
         SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
-    command: ["node", "dist/worker-main.js"]
+    command: ["node", "dist/temporal/worker-main.js"]
     depends_on:
       - temporal
     environment:

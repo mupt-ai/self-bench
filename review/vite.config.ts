@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     allowedHosts: ["avyays-mac-mini.tailf3cee5.ts.net"],
     proxy: {
-      "/api": "http://127.0.0.1:8080",
+      "/v1": "http://127.0.0.1:8080",
     },
   },
   preview: {

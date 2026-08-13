@@ -130,15 +130,10 @@ export type RunPhase =
   | "queued"
   | "discovering"
   | "authoring"
-  | "validating"
-  | "reviewing"
-  | "repairing"
-  | "auditing"
   | "exporting"
   | "complete"
   | "blocked"
   | "failed"
-  | "cancelling"
   | "cancelled";
 
 export interface TaskProgress {

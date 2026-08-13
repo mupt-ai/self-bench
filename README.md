@@ -177,7 +177,7 @@ export SELFBENCH_API_TOKEN=use-a-secret-value
 Run the same image with this command:
 
 ```bash
-node dist/worker-main.js
+node dist/temporal/worker-main.js
 ```
 
 Give the worker the Temporal, GCS, and task-queue settings above, plus the credentials it needs to discover, author, validate, and review tasks:

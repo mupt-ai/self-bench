@@ -7,15 +7,6 @@ import {
   setHandler,
 } from "@temporalio/workflow";
 import type {
-  AuthorCandidateInput,
-  DiscoveryShardInput,
-  ExportInput,
-  RepairTaskInput,
-  SelfBenchActivities,
-  TaskStageInput,
-  ValidationRepairTaskInput,
-} from "./activities.js";
-import type {
   AuthoredTask,
   AuthorOutcome,
   Candidate,
@@ -25,7 +16,16 @@ import type {
   RunResult,
   RunStatus,
   TaskProgress,
-} from "./contracts.js";
+} from "../contracts.js";
+import type {
+  AuthorCandidateInput,
+  DiscoveryShardInput,
+  ExportInput,
+  RepairTaskInput,
+  SelfBenchActivities,
+  TaskStageInput,
+  ValidationRepairTaskInput,
+} from "./activities.js";
 
 export const statusQuery = defineQuery<RunStatus>("status");
 

@@ -1,11 +1,10 @@
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
+import { loadConfig } from "../config.js";
+import { removeEmptyModalCredentialOverrides } from "../modal-auth.js";
+import { runCommand } from "../process.js";
 import { createActivities } from "./activities.js";
-import { loadConfig } from "./config.js";
-import { removeEmptyModalCredentialOverrides } from "./modal-auth.js";
-import { runCommand } from "./process.js";
-import { connectTemporalWorker } from "./temporal.js";
+import { connectTemporalWorker } from "./connection.js";
 
 removeEmptyModalCredentialOverrides();
 const config = loadConfig();
@@ -14,10 +13,7 @@ if (config.execution.kind === "docker" || config.harborEnvironment === "docker")
   await runCommand("docker", ["compose", "version"], { timeoutMs: 30_000 });
 }
 const connection = await connectTemporalWorker(config.temporal);
-const javascriptWorkflow = fileURLToPath(new URL("./workflow.js", import.meta.url));
-const workflowsPath = existsSync(javascriptWorkflow)
-  ? javascriptWorkflow
-  : fileURLToPath(new URL("./workflow.ts", import.meta.url));
+const workflowsPath = fileURLToPath(new URL("./workflow.js", import.meta.url));
 const worker = await Worker.create({
   connection,
   namespace: config.temporal.namespace,

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, ApplicationFailure, CancelledFailure } from "@temporalio/workflow";
-import type { SelfBenchActivities } from "../src/activities.js";
 import type {
   ArtifactRef,
   Candidate,
@@ -9,7 +8,8 @@ import type {
   RunRequest,
   RunStatus,
 } from "../src/contracts.js";
-import { executeRun } from "../src/workflow.js";
+import type { SelfBenchActivities } from "../src/temporal/activities.js";
+import { executeRun } from "../src/temporal/workflow.js";
 
 const artifact: ArtifactRef = {
   uri: "file:///artifact",
