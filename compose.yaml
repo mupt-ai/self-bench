@@ -66,17 +66,17 @@ services:
     environment:
       <<: *selfbench-environment
       GH_TOKEN: ${GH_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MODAL_TOKEN_ID: ${MODAL_TOKEN_ID:-}
       MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET:-}
-      CODEX_AUTH_JSON_PATH: /root/.codex/auth.json
+      SELFBENCH_PI_AUTH_JSON: ${SELFBENCH_PI_AUTH_JSON:-}
+      SELFBENCH_CODEX_AUTH_JSON: ${SELFBENCH_CODEX_AUTH_JSON:-}
     user: root
     group_add:
       - ${DOCKER_GID:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/root/.modal.toml:ro
-      - ${SELFBENCH_PI_AUTH_PATH:-${HOME}/.pi/agent/auth.json}:/root/.pi/agent/auth.json:ro
-      - ${SELFBENCH_CODEX_AUTH_PATH:-${HOME}/.codex/auth.json}:/root/.codex/auth.json:ro
       - artifacts:/var/lib/selfbench/artifacts
     restart: on-failure
 

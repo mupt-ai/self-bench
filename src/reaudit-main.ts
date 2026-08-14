@@ -20,7 +20,7 @@ import {
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
 import { createSandboxExecutor, type SandboxExecutor } from "./sandbox.js";
-import { loadPiSubscriptionAuth } from "./subscription-auth.js";
+import { loadPiModelAuth } from "./subscription-auth.js";
 
 const parsed = parseArgs({
   options: {
@@ -50,9 +50,9 @@ const outputPath = resolve(parsed.values.output ?? fail("--output is required"))
 const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
 const config = loadConfig();
 const sandbox = createSandboxExecutor(config.execution);
-const [taskIds, piAuth, reviewer] = await Promise.all([
+const [taskIds, modelAuth, reviewer] = await Promise.all([
   readdir(tasksDirectory),
-  loadPiSubscriptionAuth(),
+  loadPiModelAuth(),
   readFile(join(assetRoot(), "dist/sandbox-review.bundle.js")),
 ]);
 const directories = (
@@ -79,7 +79,7 @@ const tasks = await parallelMap(directories, concurrency, async (taskDirectory) 
   const taskId = basename(taskDirectory);
   console.error(`reviewing ${taskId}`);
   try {
-    const report = await auditTask(taskDirectory, taskId, piAuth, reviewer, sandbox);
+    const report = await auditTask(taskDirectory, taskId, modelAuth, reviewer, sandbox);
     console.error(`${taskId}: ${report.resolution.verdict}`);
     return report;
   } catch (error) {
@@ -113,7 +113,7 @@ console.log(JSON.stringify({ output: outputPath, ...report.summary }, null, 2));
 async function auditTask(
   taskDirectory: string,
   taskId: string,
-  piAuth: string,
+  modelAuth: { apiKey?: string; authJson?: string },
   reviewer: Uint8Array,
   sandbox: SandboxExecutor,
 ) {
@@ -151,7 +151,10 @@ async function auditTask(
         },
       ],
       outputPaths: ["/work/review.json"],
-      secrets: { SELFBENCH_PI_AUTH_JSON: piAuth },
+      secrets: {
+        ...(modelAuth.apiKey ? { OPENAI_API_KEY: modelAuth.apiKey } : {}),
+        ...(modelAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: modelAuth.authJson } : {}),
+      },
       environment: { SELFBENCH_REVIEW_OUTPUT: "/work/review.json" },
       command: ["node", "/work/sandbox-review.js"],
     });

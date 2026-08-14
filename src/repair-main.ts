@@ -9,7 +9,7 @@ import { loadConfig } from "./config.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
 import { createSandboxExecutor } from "./sandbox.js";
-import { loadCodexSubscriptionAuth } from "./subscription-auth.js";
+import { loadCodexModelAuth } from "./subscription-auth.js";
 
 const parsed = parseArgs({
   options: {
@@ -79,8 +79,8 @@ for (const source of sourceTasks) {
 
 const config = loadConfig();
 const sandbox = createSandboxExecutor(config.execution);
-const [authJson, repairer] = await Promise.all([
-  loadCodexSubscriptionAuth(),
+const [modelAuth, repairer] = await Promise.all([
+  loadCodexModelAuth(),
   readFile(join(assetRoot(), "dist/sandbox-repair.bundle.js")),
 ]);
 const results = await parallelMap([...coupled.values()], concurrency, async (taskReview) => {
@@ -103,7 +103,10 @@ const results = await parallelMap([...coupled.values()], concurrency, async (tas
         { path: "/work/sandbox-repair.js", contents: repairer },
       ],
       outputPaths: ["/work/repaired-task.tar.gz", "/work/repair-report.json"],
-      secrets: { SELFBENCH_CODEX_AUTH_JSON: authJson },
+      secrets: {
+        ...(modelAuth.apiKey ? { OPENAI_API_KEY: modelAuth.apiKey } : {}),
+        ...(modelAuth.authJson ? { SELFBENCH_CODEX_AUTH_JSON: modelAuth.authJson } : {}),
+      },
       environment: { SELFBENCH_REPAIR_MODEL: parsed.values.model ?? "gpt-5.6-sol" },
       command: [
         "node",

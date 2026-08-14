@@ -68,10 +68,19 @@ await Promise.all([
 ]);
 
 const piHome = join(homedir(), ".pi/agent");
-const piAuth = process.env.SELFBENCH_PI_AUTH_JSON ?? fail("SELFBENCH_PI_AUTH_JSON is required");
+const piAuth = process.env.SELFBENCH_PI_AUTH_JSON;
+if (!process.env.OPENAI_API_KEY && !piAuth) {
+  fail("OPENAI_API_KEY or SELFBENCH_PI_AUTH_JSON is required");
+}
 await mkdir(piHome, { recursive: true });
 await Promise.all([
-  writeFile(join(piHome, "auth.json"), piAuth).then(() => chmod(join(piHome, "auth.json"), 0o600)),
+  ...(piAuth
+    ? [
+        writeFile(join(piHome, "auth.json"), piAuth).then(() =>
+          chmod(join(piHome, "auth.json"), 0o600),
+        ),
+      ]
+    : []),
   writeFile(join(piHome, "settings.json"), `${JSON.stringify({ transport: "auto" })}\n`),
 ]);
 const promptPath = join(tmpdir(), `selfbench-validation-repair-${originalDefinition.taskId}.md`);
@@ -98,7 +107,7 @@ const pi = await runCommand(
     "--no-context-files",
     "--no-extensions",
     "--provider",
-    "openai-codex",
+    process.env.OPENAI_API_KEY ? "openai" : "openai-codex",
     "--model",
     process.env.SELFBENCH_REPAIR_MODEL ?? "gpt-5.6-sol",
     "--thinking",
@@ -111,7 +120,7 @@ const pi = await runCommand(
     allowFailure: true,
     timeoutMs: 90 * 60 * 1000,
     cwd: repositoryDirectory,
-    env: withoutApiKey(process.env),
+    env: process.env,
     onOutput: (stream, chunk) => {
       (stream === "stdout" ? process.stdout : process.stderr).write(chunk);
     },
@@ -162,12 +171,6 @@ await Promise.all([
     )}\n`,
   ),
 ]);
-
-function withoutApiKey(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const output = { ...environment };
-  delete output.OPENAI_API_KEY;
-  return output;
-}
 
 function fail(message: string): never {
   throw new Error(message);

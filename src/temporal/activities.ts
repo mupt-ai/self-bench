@@ -44,11 +44,7 @@ import { sha256 } from "../hash.js";
 import { runCommand } from "../process.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../provenance.js";
 import { createSandboxExecutor, type SandboxExecutor, type SandboxRunOptions } from "../sandbox.js";
-import {
-  githubToken,
-  loadCodexSubscriptionAuth,
-  loadPiSubscriptionAuth,
-} from "../subscription-auth.js";
+import { githubToken, loadCodexModelAuth, loadPiModelAuth } from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 const DISCOVERY_TIMEOUT_MS = 45 * 60 * 1000;
@@ -177,7 +173,7 @@ async function discoverCandidateShard(
   } else {
     const [extension, piAuth, ghToken] = await Promise.all([
       readAsset("src/extensions/discovery.ts"),
-      loadPiSubscriptionAuth(),
+      loadPiModelAuth(),
       githubToken(),
     ]);
     Context.current().heartbeat(
@@ -199,7 +195,8 @@ async function discoverCandidateShard(
             ],
             outputPaths: ["/work/discovery.json"],
             secrets: {
-              SELFBENCH_PI_AUTH_JSON: piAuth,
+              ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
+              ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
               ...(ghToken ? { GH_TOKEN: ghToken } : {}),
             },
             environment: {
@@ -355,7 +352,7 @@ async function authorCandidate(
     readAsset("src/extensions/authoring.ts"),
     readAsset("src/skills/selfbench/SKILL.md"),
     readAsset("dist/sandbox-author.bundle.js"),
-    loadPiSubscriptionAuth(),
+    loadPiModelAuth(),
     githubToken(),
   ]);
   const prompt = authoringPrompt(run, candidate);
@@ -377,7 +374,8 @@ async function authorCandidate(
           ],
           outputPaths: ["/work/task.tar.gz", "/work/definition.json"],
           secrets: {
-            SELFBENCH_PI_AUTH_JSON: piAuth,
+            ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
+            ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
             ...(ghToken ? { GH_TOKEN: ghToken } : {}),
           },
           environment: {
@@ -590,9 +588,8 @@ async function repairValidationTask(
     store.get(input.task.bundle),
     store.get(input.task.definition),
     readAsset("dist/sandbox-validation-repair.bundle.js"),
-    loadPiSubscriptionAuth(),
-  ]);
-  // Full verifier logs remain durable artifacts. The validation reason already carries bounded
+    loadPiModelAuth(),
+  ]); // Full verifier logs remain durable artifacts. The validation reason already carries bounded
   // tails for failed gates, which keeps the repair prompt within the model context window.
   const diagnostics = Buffer.from(input.validation.reason ?? "validation failed without a reason");
   const result = await withActivityHeartbeats(
@@ -615,7 +612,10 @@ async function repairValidationTask(
             "/work/repaired-test.patch",
             "/work/repair-report.json",
           ],
-          secrets: { SELFBENCH_PI_AUTH_JSON: authJson },
+          secrets: {
+            ...(authJson.apiKey ? { OPENAI_API_KEY: authJson.apiKey } : {}),
+            ...(authJson.authJson ? { SELFBENCH_PI_AUTH_JSON: authJson.authJson } : {}),
+          },
           environment: { SELFBENCH_REPAIR_MODEL: input.run.authoring.model },
           command: [
             "node",
@@ -703,7 +703,7 @@ async function reviewTask(
     });
     const [reviewer, authJson] = await Promise.all([
       readAsset("dist/sandbox-review.bundle.js"),
-      loadPiSubscriptionAuth(),
+      loadPiModelAuth(),
     ]);
     const result = await withActivityHeartbeats(
       `running sandboxed coupling review for ${input.task.taskId}`,
@@ -727,7 +727,10 @@ async function reviewTask(
               },
             ],
             outputPaths: ["/work/review.json"],
-            secrets: { SELFBENCH_PI_AUTH_JSON: authJson },
+            secrets: {
+              ...(authJson.apiKey ? { OPENAI_API_KEY: authJson.apiKey } : {}),
+              ...(authJson.authJson ? { SELFBENCH_PI_AUTH_JSON: authJson.authJson } : {}),
+            },
             environment: { SELFBENCH_REVIEW_OUTPUT: "/work/review.json" },
             command: ["node", "/work/sandbox-review.js"],
           },
@@ -795,7 +798,7 @@ async function repairTask(
     store.get(input.task.bundle),
     store.get(input.review),
     readAsset("dist/sandbox-repair.bundle.js"),
-    loadCodexSubscriptionAuth(),
+    loadCodexModelAuth(),
   ]);
   const result = await withActivityHeartbeats(
     `running test repair sandbox for ${input.task.taskId}`,
@@ -812,7 +815,10 @@ async function repairTask(
             { path: "/work/sandbox-repair.js", contents: repairer },
           ],
           outputPaths: ["/work/repaired-task.tar.gz", "/work/repair-report.json"],
-          secrets: { SELFBENCH_CODEX_AUTH_JSON: authJson },
+          secrets: {
+            ...(authJson.apiKey ? { OPENAI_API_KEY: authJson.apiKey } : {}),
+            ...(authJson.authJson ? { SELFBENCH_CODEX_AUTH_JSON: authJson.authJson } : {}),
+          },
           environment: { SELFBENCH_REPAIR_MODEL: input.run.authoring.model },
           command: [
             "node",
@@ -979,7 +985,7 @@ function modalAgentScript(extension: string, tool: string): string {
 clone_source
 cd /work/repo
 pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
-  --extension /work/${extension} --provider openai-codex --model "$AUTHOR_MODEL" --thinking high \\
+  --extension /work/${extension} --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,${tool} "$(cat /work/prompt.txt)" 2>&1`;
 }
 
@@ -990,7 +996,7 @@ mkdir -p /work/tasks
 cd /work/repo
 pi --print --mode json --no-session --no-approve --no-prompt-templates --no-context-files --no-extensions \\
   --skill /work/selfbench-skill --extension /work/authoring.ts \\
-  --provider openai-codex --model "$AUTHOR_MODEL" --thinking high \\
+  --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)" 2>&1
 node /work/sandbox-author.js /work/tasks /work/repo /work/harbor-task
 cp /work/tasks/*/definition.json /work/definition.json
@@ -1000,9 +1006,13 @@ tar -czf /work/task.tar.gz -C /work harbor-task`;
 function sandboxBootstrap(): string {
   return `set -euo pipefail
 mkdir -p "$HOME/.pi/agent"
-printf '%s' "$SELFBENCH_PI_AUTH_JSON" > "$HOME/.pi/agent/auth.json"
+if [ -n "\${SELFBENCH_PI_AUTH_JSON:-}" ]; then
+  printf '%s' "$SELFBENCH_PI_AUTH_JSON" > "$HOME/.pi/agent/auth.json"
+  chmod 600 "$HOME/.pi/agent/auth.json"
+fi
 printf '%s\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
-chmod 600 "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/settings.json"
+chmod 600 "$HOME/.pi/agent/settings.json"
+model_provider() { [ -n "\${OPENAI_API_KEY:-}" ] && printf openai || printf openai-codex; }
 cleanup() { rm -f "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/settings.json" "$HOME/.git-credentials"; }
 trap cleanup EXIT
 clone_source() {
