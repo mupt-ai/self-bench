@@ -1,262 +1,186 @@
-# SelfBench
+# self-bench
 
-SelfBench turns completed GitHub changes into private [Harbor](https://harborframework.com/) evaluations for coding agents. It finds real feature requests, builds tasks from the repository's base commit, hides the tests and reference solution, and checks that each task fails without a solution and passes with one.
+[![npm version](https://img.shields.io/npm/v/self-bench?color=blue&label=npm)](https://www.npmjs.com/package/self-bench)
+[![CI](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/mupt-ai/self-bench/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/mupt-ai/self-bench?color=green)](./LICENSE)
+[![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh/)
+[![TypeScript](https://img.shields.io/badge/lang-TypeScript-3178c6?logo=typescript&logoColor=fff)](https://www.typescriptlang.org/)
 
-SelfBench is distributed as the [`self-bench`](https://www.npmjs.com/package/self-bench) package and installed with **Bun**.
+**self-bench builds private coding-agent benchmarks from work already completed in your repository, so you can compare coding agents and models on tasks drawn from your own codebase.**
 
-## Choose your setup
+It finds completed requests from local coding sessions and merged GitHub pull requests, then reconstructs each task from the commit before the change. For every accepted task, self-bench creates hidden tests and a reference solution, proves that the task fails without a solution and passes with the original implementation, and exports a native task for [Harbor](https://harborframework.com/), a runner for coding-agent evaluations.
 
-| Setup | Best for | Execution | State |
-| --- | --- | --- | --- |
-| Local | Trying SelfBench or small runs | Docker on your machine | Local Docker volumes |
-| Temporal Cloud | Large repositories, long runs, and reliable unattended execution | Modal sandboxes | Temporal Cloud + object storage |
+The result is a private `.tar.gz` benchmark that you can run against multiple models:
 
-After a run is submitted, the workflow continues independently of the waiting CLI process. The local worker still depends on your machine and its Docker stack; Temporal Cloud is the recommended setup when a run may take hours or your laptop should not be responsible for the worker.
+```text
+Your repository history
+        ↓
+completed requests + implementations
+        ↓
+validated Harbor tasks with hidden tests
+        ↓
+gpt-5.6-luna vs gpt-5.6-terra vs gpt-5.6-sol
+```
 
-## Prerequisites
+## Quickstart
 
-Installing the package requires [Bun](https://bun.sh/) 1.3.14 or newer. Running evaluations additionally requires:
+This path runs the self-bench API, worker, and [Temporal](https://temporal.io/) workflow state locally while using [Modal](https://modal.com/) for disposable task-generation and validation sandboxes.
 
+### Prerequisites
+
+- [Bun](https://bun.sh/) 1.3.14 or newer
 - Docker with Compose
-- `gh`, authenticated with access to the source repository
-- Pi with an authenticated `openai-codex` account
-- Codex CLI with an authenticated account
+- [Modal](https://modal.com/) CLI, account, and token (`pip install modal`)
+- [`gh`](https://cli.github.com/), authenticated with read access to the repository
+- An OpenAI API key with access to `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`
+- A Git checkout with a GitHub `origin` and completed work in its history
 
-Modal execution additionally requires a Modal account and token. Temporal Cloud execution additionally requires a Temporal Cloud namespace and a durable artifact store such as Google Cloud Storage.
-
-## Install
-
-Install the CLI from the npm registry with Bun:
+Install self-bench and authenticate Modal and GitHub:
 
 ```bash
 bun add --global self-bench
-self-bench --help
+modal token new
+gh auth login
 ```
 
-For one-off use without a global install:
+Set the model and GitHub credentials used by the local worker, plus a random token that protects the local self-bench API:
 
 ```bash
-bunx self-bench --help
+export OPENAI_API_KEY=...
+export GH_TOKEN="$(gh auth token)"
+export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 ```
 
-The package exposes `dist/cli.js` as `self-bench`.
+### 1. Start self-bench
 
-To develop SelfBench itself, clone the repository and use Bun:
+```bash
+self-bench up --backend modal
+export SELFBENCH_API_URL=http://127.0.0.1:8080
+```
+
+This starts Postgres, Temporal, the self-bench API, and a worker in Docker. The worker sends sandbox work to Modal; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API.
+
+### 2. Build a benchmark
+
+```bash
+self-bench run \
+  --repo /absolute/path/to/your/repository \
+  --easy-count 10 \
+  --medium-count 10 \
+  --hard-count 10 \
+  --output ./self-bench-evals.tar.gz
+```
+
+Easy, medium, and hard candidates require at least 20, 50, and 100 changed implementation lines across 1, 2, and 3 paths respectively; the counts are generation budgets, not guarantees that every candidate will pass validation.
+
+The repository must be a Git checkout with a GitHub `origin`. self-bench pins its current `HEAD`, ignores uncommitted changes, and may take hours to author, validate, review, and export the accepted tasks. `--output` waits for completion and verifies the downloaded archive with SHA-256.
+
+### 3. Compare models with Harbor
+
+Install Harbor and extract the generated tasks:
+
+```bash
+uv tool install --python 3.12 'harbor[modal]==0.20.1.dev202608040148'
+
+mkdir -p ./self-bench-export ./self-bench-tasks
+tar -xzf ./self-bench-evals.tar.gz -C ./self-bench-export
+for archive in ./self-bench-export/tasks/*.tar.gz; do
+  task_id="$(basename "$archive" .tar.gz)"
+  mkdir -p "./self-bench-tasks/$task_id"
+  tar -xzf "$archive" --strip-components=1 -C "./self-bench-tasks/$task_id"
+done
+```
+
+Run Harbor's Codex agent adapter once per model. Each command evaluates all extracted tasks at high reasoning:
+
+```bash
+for model in gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol; do
+  harbor run \
+    --path ./self-bench-tasks \
+    --agent codex \
+    --model "$model" \
+    --ak version=0.146.1 \
+    --ak reasoning_effort=high \
+    --env modal \
+    --jobs-dir "./harbor-jobs/$model" \
+    --n-concurrent 20 \
+    --yes
+done
+```
+
+Harbor stores the three result sets under `./harbor-jobs/`. The evaluated agent receives the base repository and task instruction, but not the hidden tests or reference solution.
+
+See [Running self-bench evaluations](docs/evaluations.md) for running one task and using the optional resumable matrix helper.
+
+## Run management
+
+Closing the waiting CLI does not cancel a submitted workflow. If the local worker or Docker stack stops, work pauses until the worker is restarted.
+
+```bash
+self-bench list                    # find run IDs
+self-bench status RUN_ID
+self-bench cancel RUN_ID
+self-bench download RUN_ID ./self-bench-evals.tar.gz
+```
+
+Stop the local stack with:
+
+```bash
+self-bench down
+```
+
+Named Docker volumes retain Temporal history and generated artifacts.
+
+## Other deployments
+
+The quickstart is the recommended setup: a local stack with Modal sandboxes.
+
+- **Local stack + Docker sandboxes:** use `self-bench up --backend docker` when you want all execution on your machine.
+- **Temporal Cloud + Modal:** use this for persistent unattended workers and large repositories.
+
+See [Operations and deployment](docs/operations.md) for backend configuration, credentials, persistence, object storage, and the complete Temporal Cloud deployment.
+
+## How tasks are validated
+
+An accepted task must:
+
+1. Preserve a real human request from repository history.
+2. Start from the repository state before the completed change.
+3. Include hidden tests that fail against the base snapshot.
+4. Pass after applying the original implementation.
+5. Survive deterministic reruns and an independent model review that rejects tests tied to private details of the reference solution.
+
+Exports contain repository snapshots, hidden tests, and reference solutions. They are sensitive and unencrypted; keep them private.
+
+See [Task construction and validation](docs/task-construction.md) for the full acceptance rules and archive format.
+
+## Development
 
 ```bash
 git clone https://github.com/mupt-ai/self-bench.git
 cd self-bench
 bun install --frozen-lockfile
-bun run build
-bun link
-self-bench --help
+bun run validate
 ```
 
-During development, run the TypeScript entrypoint without linking:
+Run the CLI directly from source:
 
 ```bash
 bun run cli -- --help
-```
-
-Authenticate the tools before starting a run:
-
-```bash
-gh auth login
-# In Pi: /login -> OpenAI Codex
-codex login
-```
-
-## Quick start: local Docker
-
-This starts Postgres, Temporal, the SelfBench API, and a worker on your machine. The worker runs sandbox validation through Docker.
-
-```bash
-export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
-export GH_TOKEN="$(gh auth token)"
-
-self-bench up --backend docker
-export SELFBENCH_API_URL=http://127.0.0.1:8080
-
-self-bench run \
-  --repo /absolute/path/to/your/repository \
-  --easy-count 30 \
-  --medium-count 30 \
-  --hard-count 10 \
-  --output ./self-bench-evals.tar.gz
-```
-
-The `--repo` directory must be a Git checkout with a GitHub `origin`. SelfBench pins the current `HEAD`; uncommitted changes are ignored. It discovers candidate requests from sanitized local coding-session messages and merged, non-bot GitHub pull requests.
-
-This quick start authors 70 candidates: 30 easy, 30 medium, and 10 hard. Counts are authoring budgets, not accepted-task guarantees. Candidates can be rejected during authoring, validation, audit, or review, and rejected candidates are not replaced.
-
-A run may take hours. `--output` waits for the run to finish, then downloads and SHA-256-verifies the accepted tasks.
-
-## Local commands
-
-```bash
-self-bench status RUN_ID
-self-bench list
-self-bench cancel RUN_ID
-self-bench download RUN_ID ./self-bench-evals.tar.gz
-```
-
-If you are working from source rather than using `bun link`, use the same commands through Bun:
-
-```bash
-bun run cli -- status RUN_ID
-```
-
-Stop the local stack with Docker Compose:
-
-```bash
-docker compose down
-```
-
-Named Docker volumes retain Temporal history and generated artifacts. Back them up before removing them if you need to resume or inspect old runs.
-
-## Reliable setup for larger repositories
-
-For large repositories or unattended runs, use Temporal Cloud for workflow state and Modal for disposable execution sandboxes. Temporal Cloud does not host the SelfBench API or worker; deploy those separately.
-
-```text
-self-bench CLI
-    -> SelfBench API
-    -> Temporal Cloud namespace
-    -> persistent SelfBench worker
-    -> Modal sandboxes
-    -> GCS artifact storage
-```
-
-The API and worker must use the same image version, Temporal namespace, task queue, artifact configuration, and `SELFBENCH_BUILD_COMMIT`. Keep the worker running on a long-lived container service; do not run it on a scale-to-zero request service. The API can run as a normal HTTP service.
-
-### 1. Prepare Temporal Cloud and GCS
-
-Create a Temporal Cloud namespace and obtain its address, namespace, API key, and TLS settings. Create a GCS bucket for SelfBench artifacts and give the worker/API service accounts access only to the SelfBench prefix.
-
-Set these values in the API and worker environments:
-
-```bash
-SELFBENCH_TEMPORAL_ADDRESS=your-namespace.tmprl.cloud:7233
-SELFBENCH_TEMPORAL_NAMESPACE=your-namespace
-SELFBENCH_TEMPORAL_API_KEY=...
-SELFBENCH_TEMPORAL_TLS=true
-SELFBENCH_TASK_QUEUE=selfbench-production
-SELFBENCH_ARTIFACT_BACKEND=gcs
-SELFBENCH_GCS_BUCKET=your-selfbench-artifacts
-SELFBENCH_GCS_PREFIX=selfbench
-```
-
-Do not use the local Compose defaults (`temporal` database credentials, loopback Temporal address, or local artifact volume) in a hosted deployment.
-
-### 2. Deploy the API
-
-Build and deploy `Dockerfile` as a service listening on port 8080. Configure:
-
-```bash
-SELFBENCH_API_HOST=0.0.0.0
-SELFBENCH_API_TOKEN=use-a-secret-value
-SELFBENCH_ARTIFACT_BACKEND=gcs
-SELFBENCH_GCS_BUCKET=your-selfbench-artifacts
-SELFBENCH_GCS_PREFIX=selfbench
-SELFBENCH_TEMPORAL_ADDRESS=...
-SELFBENCH_TEMPORAL_NAMESPACE=...
-SELFBENCH_TEMPORAL_API_KEY=...
-SELFBENCH_TEMPORAL_TLS=true
-SELFBENCH_TASK_QUEUE=selfbench-production
-```
-
-Then point the CLI at the API:
-
-```bash
-export SELFBENCH_API_URL=https://selfbench-api.example.com
-export SELFBENCH_API_TOKEN=use-a-secret-value
-```
-
-### 3. Deploy the worker
-
-Run the same image with this command:
-
-```bash
-node dist/temporal/worker-main.js
-```
-
-Give the worker the Temporal, GCS, and task-queue settings above, plus the credentials it needs to discover, author, validate, and review tasks:
-
-```bash
-SELFBENCH_EXECUTION_BACKEND=modal
-SELFBENCH_HARBOR_ENVIRONMENT=modal
-MODAL_TOKEN_ID=...
-MODAL_TOKEN_SECRET=...
-GH_TOKEN=...
-SELFBENCH_PI_AUTH_JSON=...
-```
-
-Provide the Codex auth JSON to the worker at `/home/node/.codex/auth.json` (the default location in the production image), for example through a read-only secret mount. Alternatively, mount it elsewhere and set `CODEX_AUTH_JSON_PATH` to that file. Keep model credentials in the worker only; the API does not need them.
-
-### 4. Run against the hosted service
-
-```bash
-self-bench run \
-  --repo /absolute/path/to/your/repository \
-  --easy-count 2 \
-  --medium-count 2 \
-  --output ./self-bench-evals.tar.gz
-```
-
-The CLI uploads only repository metadata and sanitized provenance. The worker performs discovery, authoring, sandbox validation, review, audit, and export remotely.
-
-### Large-repository guidance
-
-- Prefer Modal over local Docker so the run is not tied to your laptop's CPU, memory, or Docker daemon.
-- Start with one or two candidates per tier to confirm credentials, provenance, and repository compatibility before increasing the budget.
-- Treat counts as authoring attempts, not accepted-task guarantees.
-- Keep the worker alive for the entire run; discovery and authoring are retryable, but a missing worker stops progress.
-- Keep GCS and Temporal state persistent. Do not delete the artifact prefix or Temporal namespace while runs are active.
-- Use a dedicated task queue for each deployment and ensure the API and worker use exactly the same value.
-- Use `status`, `list`, and `download` from any machine that can reach the API.
-
-## Backend options
-
-The local `up` command configures one execution backend for the stack:
-
-```bash
-# Local Docker sandboxes; simplest, usually one activity at a time
-self-bench up --backend docker
-
-# Modal sandboxes; better for concurrency and larger runs
-modal token new
-self-bench up --backend modal
-```
-
-For Modal, `self-bench up` uses `~/.modal.toml` by default. Override it with:
-
-```bash
-self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
-```
-
-## Development
-
-```bash
-bun install --frozen-lockfile
-bun run check
-bun run test
-bun run build
-bun run validate
 ```
 
 Useful development commands:
 
 ```bash
-bun run cli -- --help
 bun run dev:api
 bun run dev:worker
 bun run dev:review
 ```
 
-More detail is available in:
+## Documentation
 
-- [Task construction](docs/task-construction.md)
-- [Evaluation workflows](docs/evaluations.md)
+- [Task construction and validation](docs/task-construction.md)
+- [Running evaluations](docs/evaluations.md)
 - [Operations and deployment](docs/operations.md)
 
 ## License

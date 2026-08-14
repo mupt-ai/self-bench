@@ -18,7 +18,7 @@ const parsed = parseArgs({
   strict: true,
 });
 if (parsed.values.help) {
-  console.log(`Run Harbor tasks through the fixed Codex subscription model matrix.
+  console.log(`Run Harbor tasks through the fixed Codex model matrix.
 
 Usage:
   self-bench-eval (--export FILE.tar.gz | --tasks DIRECTORY) --jobs DIRECTORY [options]
@@ -29,7 +29,7 @@ Options:
   --environment docker|modal Execution environment (default: modal)
   --concurrency N            Concurrent trials (default: 3)
   --model MODEL              Run only this model; may be repeated
-  --auth FILE                Codex ChatGPT auth.json path
+  --auth FILE                Optional Codex ChatGPT auth.json fallback
   -h, --help                 Show this help`);
   process.exit(0);
 }

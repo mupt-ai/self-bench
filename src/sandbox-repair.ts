@@ -50,13 +50,15 @@ await runCommand("git", [
 ]);
 await runCommand("git", ["-C", repositoryDirectory, "add", "-N", "--all"]);
 
+const codexAuth = process.env.SELFBENCH_CODEX_AUTH_JSON;
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey && !codexAuth) {
+  fail("OPENAI_API_KEY or SELFBENCH_CODEX_AUTH_JSON is required");
+}
 const codexHome = join(homedir(), ".codex");
 const authPath = join(codexHome, "auth.json");
 await mkdir(codexHome, { recursive: true });
-await writeFile(
-  authPath,
-  process.env.SELFBENCH_CODEX_AUTH_JSON ?? fail("SELFBENCH_CODEX_AUTH_JSON is required"),
-);
+await writeFile(authPath, codexAuth ?? `${JSON.stringify({ OPENAI_API_KEY: apiKey })}\n`);
 await chmod(authPath, 0o600);
 const promptPath = join(tmpdir(), `selfbench-repair-${taskId}.md`);
 await writeFile(
@@ -86,7 +88,7 @@ const codex = await runCommand(
   {
     allowFailure: true,
     timeoutMs: 90 * 60 * 1000,
-    env: withoutApiKey(process.env),
+    env: process.env,
     input: await readFile(promptPath, "utf8"),
     onOutput: (stream, chunk) => {
       (stream === "stdout" ? process.stdout : process.stderr).write(chunk);
@@ -148,12 +150,6 @@ await writeFile(
     2,
   )}\n`,
 );
-
-function withoutApiKey(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const output = { ...environment };
-  delete output.OPENAI_API_KEY;
-  return output;
-}
 
 function fail(message: string): never {
   throw new Error(message);

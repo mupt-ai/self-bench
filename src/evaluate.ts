@@ -4,7 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { archiveIncompleteHarborJob, tryReadHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
-import { assertCodexSubscriptionAuth } from "./subscription-auth.js";
+import { assertCodexSubscriptionAuth, openAiApiKey } from "./subscription-auth.js";
 
 export const MATRIX_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
 export type MatrixModel = (typeof MATRIX_MODELS)[number];
@@ -40,8 +40,11 @@ export async function runMatrix(options: MatrixOptions): Promise<readonly Matrix
   const tasksDirectory = join(root, "tasks");
   await mkdir(root, { recursive: true });
   const taskDirectories = await resolveMatrixTasks(options, tasksDirectory);
+  const apiKey = openAiApiKey();
   const authPath = resolve(options.authPath ?? join(homedir(), ".codex/auth.json"));
-  await assertSubscriptionAuth(authPath);
+  if (!apiKey) {
+    await assertSubscriptionAuth(authPath);
+  }
   const models = options.models ?? MATRIX_MODELS;
   if (models.length < 1) {
     throw new Error("provide at least one evaluation model");
@@ -55,7 +58,7 @@ export async function runMatrix(options: MatrixOptions): Promise<readonly Matrix
       jobsDirectory: root,
       harborPath: options.harborPath ?? "harbor",
       environment: options.environment ?? "modal",
-      authPath,
+      ...(!apiKey ? { authPath } : {}),
       ...item,
     });
     completed += 1;
@@ -69,7 +72,7 @@ export async function runMatrix(options: MatrixOptions): Promise<readonly Matrix
         schemaVersion: 1,
         agent: "codex",
         agentVersion: CODEX_VERSION,
-        auth: "codex-subscription",
+        auth: apiKey ? "openai-api-key" : "codex-subscription",
         reasoningEffort: "high",
         models,
         taskCount: taskDirectories.length,
@@ -112,7 +115,7 @@ async function runTrial(input: {
   readonly jobsDirectory: string;
   readonly harborPath: string;
   readonly environment: "docker" | "modal";
-  readonly authPath: string;
+  readonly authPath?: string;
 }): Promise<MatrixTrialSummary> {
   const taskId = basename(input.taskDirectory);
   const jobName = `${taskId}-${input.model}`.toLowerCase().replace(/[^a-z0-9_.-]/g, "-");
@@ -123,9 +126,11 @@ async function runTrial(input: {
   await archiveIncompleteHarborJob(input.jobsDirectory, jobName);
 
   const environment = { ...process.env };
-  delete environment.OPENAI_API_KEY;
-  environment.CODEX_FORCE_AUTH_JSON = "1";
-  environment.CODEX_AUTH_JSON_PATH = input.authPath;
+  if (input.authPath) {
+    delete environment.OPENAI_API_KEY;
+    environment.CODEX_FORCE_AUTH_JSON = "1";
+    environment.CODEX_AUTH_JSON_PATH = input.authPath;
+  }
   let result: Awaited<ReturnType<typeof runCommand>>;
   try {
     result = await runCommand(

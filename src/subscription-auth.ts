@@ -3,6 +3,34 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "./process.js";
 
+export interface PiModelAuth {
+  readonly provider: "openai" | "openai-codex";
+  readonly apiKey?: string;
+  readonly authJson?: string;
+}
+
+export interface CodexModelAuth {
+  readonly apiKey?: string;
+  readonly authJson?: string;
+}
+
+export function openAiApiKey(): string | undefined {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  return key || undefined;
+}
+
+export async function loadPiModelAuth(): Promise<PiModelAuth> {
+  const apiKey = openAiApiKey();
+  return apiKey
+    ? { provider: "openai", apiKey }
+    : { provider: "openai-codex", authJson: await loadPiSubscriptionAuth() };
+}
+
+export async function loadCodexModelAuth(): Promise<CodexModelAuth> {
+  const apiKey = openAiApiKey();
+  return apiKey ? { apiKey } : { authJson: await loadCodexSubscriptionAuth() };
+}
+
 export async function loadPiSubscriptionAuth(): Promise<string> {
   const raw =
     process.env.SELFBENCH_PI_AUTH_JSON ??
@@ -28,7 +56,8 @@ export function assertCodexSubscriptionAuth(value: unknown, source = "Codex auth
 
 export async function loadCodexSubscriptionAuth(): Promise<string> {
   const path = process.env.CODEX_AUTH_JSON_PATH ?? join(homedir(), ".codex/auth.json");
-  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  const raw = process.env.SELFBENCH_CODEX_AUTH_JSON ?? (await readFile(path, "utf8"));
+  const parsed = JSON.parse(raw) as unknown;
   assertCodexSubscriptionAuth(parsed, path);
   const auth = parsed as Record<string, unknown>;
   return JSON.stringify({

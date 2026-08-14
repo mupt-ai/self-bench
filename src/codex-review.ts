@@ -28,45 +28,54 @@ export const couplingReviewSchema = z.object({
 export type CouplingReview = z.infer<typeof couplingReviewSchema>;
 
 export async function reviewCouplingWithCodex(input: {
-  readonly authJson: string;
+  readonly apiKey?: string;
+  readonly authJson?: string;
   readonly prompt: string;
   readonly signal?: AbortSignal;
   readonly fetch?: typeof fetch;
 }): Promise<CouplingReview> {
-  const credential = parseCredential(input.authJson);
-  const accountId = accountIdFromToken(credential.access);
+  const subscription =
+    !input.apiKey && input.authJson ? parseCredential(input.authJson) : undefined;
+  if (!input.apiKey && !subscription) {
+    throw new Error("OpenAI model authentication is required");
+  }
   const request = input.fetch ?? fetch;
-  const response = await request("https://chatgpt.com/backend-api/codex/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${credential.access}`,
-      "ChatGPT-Account-Id": accountId,
-      Originator: "selfbench",
-      "OpenAI-Beta": "responses=experimental",
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
+  const response = await request(
+    subscription
+      ? "https://chatgpt.com/backend-api/codex/responses"
+      : "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${subscription?.access ?? input.apiKey}`,
+        ...(subscription ? { "ChatGPT-Account-Id": accountIdFromToken(subscription.access) } : {}),
+        Originator: "selfbench",
+        "OpenAI-Beta": "responses=experimental",
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: COUPLING_REVIEW_MODEL,
+        store: false,
+        stream: true,
+        instructions:
+          "You are an independent benchmark-quality reviewer. Analyze the supplied evidence and call submit_review exactly once.",
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: input.prompt }],
+          },
+        ],
+        reasoning: { effort: "high", summary: "auto" },
+        text: { verbosity: "low" },
+        include: ["reasoning.encrypted_content"],
+        tools: [reviewTool()],
+        tool_choice: { type: "function", name: "submit_review" },
+        parallel_tool_calls: false,
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
     },
-    body: JSON.stringify({
-      model: COUPLING_REVIEW_MODEL,
-      store: false,
-      stream: true,
-      instructions:
-        "You are an independent benchmark-quality reviewer. Analyze the supplied evidence and call submit_review exactly once.",
-      input: [
-        {
-          role: "user",
-          content: [{ type: "input_text", text: input.prompt }],
-        },
-      ],
-      reasoning: { effort: "high", summary: "auto" },
-      text: { verbosity: "low" },
-      include: ["reasoning.encrypted_content"],
-      tools: [reviewTool()],
-      tool_choice: { type: "function", name: "submit_review" },
-      parallel_tool_calls: false,
-    }),
-    ...(input.signal ? { signal: input.signal } : {}),
-  });
+  );
   const responseText = await response.text();
   if (!response.ok) {
     throw new Error(
@@ -74,6 +83,27 @@ export async function reviewCouplingWithCodex(input: {
     );
   }
   return parseCodexReviewEvents(responseText);
+}
+
+function parseCredential(value: string): { access: string } {
+  const parsed = JSON.parse(value) as unknown;
+  const credential = isRecord(parsed) ? parsed["openai-codex"] : undefined;
+  if (!isRecord(credential) || typeof credential.access !== "string") {
+    throw new Error("Pi auth does not contain an OpenAI Codex subscription access token");
+  }
+  return { access: credential.access };
+}
+
+function accountIdFromToken(token: string): string {
+  const payload = JSON.parse(
+    Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"),
+  ) as unknown;
+  const auth = isRecord(payload) ? payload["https://api.openai.com/auth"] : undefined;
+  const accountId = isRecord(auth) ? auth.chatgpt_account_id : undefined;
+  if (typeof accountId !== "string" || !accountId) {
+    throw new Error("OpenAI Codex subscription token has no ChatGPT account ID");
+  }
+  return accountId;
 }
 
 export function parseCodexReviewEvents(value: string): CouplingReview {
@@ -146,27 +176,6 @@ ${testPatch}
 ${goldPatch}
 \`\`\`
 `;
-}
-
-function parseCredential(value: string): { access: string } {
-  const parsed = JSON.parse(value) as unknown;
-  const credential = isRecord(parsed) ? parsed["openai-codex"] : undefined;
-  if (!isRecord(credential) || typeof credential.access !== "string") {
-    throw new Error("Pi auth does not contain an OpenAI Codex subscription access token");
-  }
-  return { access: credential.access };
-}
-
-function accountIdFromToken(token: string): string {
-  const payload = JSON.parse(
-    Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"),
-  ) as unknown;
-  const auth = isRecord(payload) ? payload["https://api.openai.com/auth"] : undefined;
-  const accountId = isRecord(auth) ? auth.chatgpt_account_id : undefined;
-  if (typeof accountId !== "string" || !accountId) {
-    throw new Error("OpenAI Codex subscription token has no ChatGPT account ID");
-  }
-  return accountId;
 }
 
 function reviewTool(): Record<string, unknown> {

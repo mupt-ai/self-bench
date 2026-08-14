@@ -22,6 +22,9 @@ switch (command) {
   case "run":
     await run(rest);
     break;
+  case "down":
+    await down();
+    break;
   case "status":
     await passthrough("GET", `/v1/runs/${requiredArgument(rest, "run ID")}`);
     break;
@@ -95,6 +98,11 @@ async function up(args: string[]): Promise<void> {
     env: environment,
   });
   console.log(`SelfBench is running with the ${backend} backend at http://127.0.0.1:8080`);
+}
+
+async function down(): Promise<void> {
+  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  await runCommand("docker", ["compose", "--file", resolve(projectRoot, "compose.yaml"), "down"]);
 }
 
 async function run(args: string[]): Promise<void> {
@@ -333,6 +341,7 @@ function printHelp(): void {
 
 Usage:
   self-bench up [--backend docker|modal] [--modal-config PATH]
+  self-bench down
   self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
                   [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   self-bench status RUN_ID

@@ -18,21 +18,12 @@ Temporal and artifact state live in the `selfbench_temporal-postgres` and `selfb
 
 ## Credentials
 
-SelfBench uses three separate credentials:
+self-bench requires GitHub and model credentials:
 
 - `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required.
-- Pi's `openai-codex` entry in `~/.pi/agent/auth.json` powers discovery, authoring, and review.
-- `~/.codex/auth.json` powers the constrained repair step and agent evaluation.
+- `OPENAI_API_KEY` powers discovery, authoring, review, constrained repair, and model evaluation. This is the recommended model-authentication path.
 
-Both model credentials must be backed by a ChatGPT subscription. SelfBench removes API-key fields and does not fall back to `OPENAI_API_KEY`.
-
-Compose mounts the default auth files read-only. Override their host paths before starting the stack when necessary:
-
-```bash
-export SELFBENCH_PI_AUTH_PATH=/absolute/path/to/pi-auth.json
-export SELFBENCH_CODEX_AUTH_PATH=/absolute/path/to/codex-auth.json
-self-bench up
-```
+Existing deployments may continue using ChatGPT subscription authentication by providing both `SELFBENCH_PI_AUTH_JSON` and `SELFBENCH_CODEX_AUTH_JSON`. API-key authentication takes precedence when `OPENAI_API_KEY` is set.
 
 ## Execution backends
 
@@ -131,11 +122,11 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |
-| `SELFBENCH_PI_AUTH_PATH` | `~/.pi/agent/auth.json` | Compose host mount |
-| `SELFBENCH_PI_AUTH_JSON` | — | Worker secret alternative |
-| `SELFBENCH_CODEX_AUTH_PATH` | `~/.codex/auth.json` | Compose host mount |
+| `OPENAI_API_KEY` | — | Worker sandboxes and matrix harness |
+| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi subscription-auth fallback |
+| `SELFBENCH_CODEX_AUTH_JSON` | — | Optional Codex subscription-auth fallback |
 | `GH_TOKEN` | — | Worker GitHub reads |
-| `CODEX_AUTH_JSON_PATH` | `~/.codex/auth.json` | Worker and matrix harness |
+| `CODEX_AUTH_JSON_PATH` | `~/.codex/auth.json` | Optional matrix subscription-auth file |
 
 ## Cloud topology
 
@@ -161,7 +152,7 @@ SELFBENCH_HARBOR_ENVIRONMENT=modal
 MODAL_TOKEN_ID=...
 MODAL_TOKEN_SECRET=...
 GH_TOKEN=...
-SELFBENCH_PI_AUTH_JSON=...
+OPENAI_API_KEY=...
 ```
 
 The worker owns model, GitHub, Modal, and Harbor credentials. Use separate least-privilege service accounts and a secret manager. Grant GCS object access only to the configured prefix, use a TLS-enabled Temporal namespace, and keep API/worker image digests and `SELFBENCH_TASK_QUEUE` identical.
@@ -173,6 +164,6 @@ This repository defines the application boundary, not turnkey cloud infrastructu
 - Exports contain source snapshots, held-out tests, and reference solutions. They are sensitive and unencrypted.
 - Artifact references carry byte length and SHA-256; reads verify integrity.
 - Local artifact paths and GCS object names are confined to their configured roots. GCS IAM should enforce the same prefix independently.
-- Author and review sandboxes receive only Pi's validated `openai-codex` OAuth entry. Repair receives a validated ChatGPT Codex token set with API-key fields removed.
+- Sandboxes receive only the selected model credential: `OPENAI_API_KEY` by default, or a stage-specific subscription credential for compatibility deployments.
 - Sandboxes contain both a source checkout and a short-lived model credential. Use SelfBench only with repositories you trust to execute; it is not a malware-analysis service.
 - Docker uses disposable containers and volumes and removes them after normal completion. A host crash can leave resources for an operator to inspect and remove. Modal uses disposable Sandboxes.
