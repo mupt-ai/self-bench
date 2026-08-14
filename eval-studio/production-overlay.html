@@ -1,0 +1,74 @@
+<style>
+.upload-primary,.header-actions,.mobile-header>button:last-child,.upload-modal,.modal-scrim,.empty-actions,.empty-format,.kpi-grid,.meta-strip,.meta-strip,.meta-strip{display:none!important}
+.brand .brand-mark{display:none!important}
+.selfbench-lockup{display:flex;align-items:center;gap:9px}
+.selfbench-dari{flex:none;width:22px;height:22px}
+.brand.compact .selfbench-dari{width:18px;height:18px}
+.selfbench-lockup .selfbench-name{display:flex;align-items:flex-start;flex-direction:column;gap:1px;line-height:1}
+.selfbench-lockup strong{color:var(--ink);font:500 15px/1 var(--mono);letter-spacing:-.06em}
+.brand.compact .selfbench-lockup strong{font-size:13px}
+.selfbench-by{color:var(--mint);font:500 8px var(--mono);letter-spacing:.06em;text-decoration:none}
+.selfbench-by:hover{color:var(--mint-bright)}
+.selfbench-github{display:inline-flex;align-items:center;gap:7px;color:var(--dim);font:500 10px var(--mono);text-decoration:none}
+.selfbench-github:hover{color:var(--ink)}
+.selfbench-github svg{flex:none}
+</style>
+<script>
+(()=>{
+  const repo="https://github.com/mupt-ai/self-bench";
+  const dariMark='<svg class="selfbench-dari" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><circle cx="512" cy="512" r="461.94" fill="#11241d"/><g fill="#eafff4"><path d="M227.174 643.267C309.13 501.04 353.3 382.247 461.711 379.747c100.278 6.927 172.975 162.686 217.376 263.52h110.942c-81.304-117.797-196.325-301.555-326.906-303.36-166.044-4.954-236.495 312.426-235.949 303.36"/><path d="M657.933 552.765h177.78V487.33l-224.079 18.712 44.162 15.727zM327.444 446.849h14.02v89.346h-14.02z"/><path d="M368.884 403.285h13.92v129.377h-13.92z"/><path d="M413.178 382.234h13.886v144.712h-13.886zm48.935-4.033h13.886v144.712h-13.886z"/><path d="M525.783 410.11h.44v-.31h-.44zm-13.447.421v118.442h13.887V423.498a300 300 0 0 0-13.887-12.967"/><path d="m593.563 507.768-329.946 33.841-85.683 11.157h444.87c-9.563-15.205-19.29-30.327-29.241-44.998"/></g></svg>';
+  const githubMark='<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.22.48-2.69-1.07-2.69-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+
+  const clean=()=>{
+    document.querySelectorAll(".upload-primary,.header-actions,.mobile-header>button:last-child,.upload-modal,.modal-scrim,.empty-actions,.empty-format,.kpi-grid,.meta-strip,.meta-strip,.meta-strip").forEach((element)=>element.remove());
+
+    const emptyCopy=document.querySelector(".empty-state>p:not(.eyebrow)");
+    if(emptyCopy){
+      const copy="No evaluations yet. Results will appear here when Harbor evaluations are created.";
+      if(emptyCopy.textContent!==copy) emptyCopy.textContent=copy;
+    }
+
+    document.querySelectorAll(".brand").forEach((brand)=>{
+      if(brand.dataset.selfbenchBrand) return;
+      const oldMark=brand.querySelector(".brand-mark");
+      if(!oldMark) return;
+      brand.dataset.selfbenchBrand="true";
+      const lockup=document.createElement("span");
+      lockup.className="selfbench-lockup";
+      const nameWrap=document.createElement("span");
+      nameWrap.className="selfbench-name";
+      const name=document.createElement("strong");
+      name.textContent="selfbench";
+      const by=document.createElement("a");
+      by.href="https://dari.dev";
+      by.target="_blank";
+      by.rel="noreferrer";
+      by.className="selfbench-by";
+      by.textContent="by dari.dev";
+      nameWrap.append(name,by);
+      lockup.innerHTML=dariMark;
+      lockup.appendChild(nameWrap);
+      brand.replaceChildren(lockup);
+    });
+
+    const sidebar=document.querySelector(".sidebar");
+    const footer=sidebar?.querySelector(".sidebar-footer");
+    if(footer&&!footer.querySelector(".selfbench-github")){
+      sidebar.querySelector(".selfbench-github")?.remove();
+      const link=document.createElement("a");
+      link.href=repo;
+      link.target="_blank";
+      link.rel="noreferrer";
+      link.className="selfbench-github";
+      link.setAttribute("aria-label","View selfbench on GitHub");
+      link.innerHTML=githubMark+"GitHub";
+      footer.replaceChildren(link);
+    }
+  };
+
+  new MutationObserver(clean).observe(document.getElementById("root"),{childList:true,subtree:true});
+  clean();
+})();
+</script>
+</body>
+</html>

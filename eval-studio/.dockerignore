@@ -1,0 +1,14 @@
+.git
+.gitignore
+Dockerfile
+README.md
+Makefile
+compose.yaml
+sample-data
+*.db
+*.db-shm
+*.db-wal
+web/node_modules
+web/dist
+web/.vite
+web/*.tsbuildinfo

@@ -1,0 +1,7 @@
+bin/
+eval-studio.db
+eval-studio.db-shm
+eval-studio.db-wal
+web/dist/
+web/node_modules/
+*.tsbuildinfo

@@ -1,0 +1,12 @@
+services:
+  eval-studio:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      EVAL_STUDIO_ADMIN_TOKEN: ${EVAL_STUDIO_ADMIN_TOKEN:?Set EVAL_STUDIO_ADMIN_TOKEN before starting Eval Studio}
+    volumes:
+      - eval-studio-data:/data
+
+volumes:
+  eval-studio-data:
