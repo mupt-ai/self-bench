@@ -91,24 +91,24 @@ for archive in ./self-bench-export/tasks/*.tar.gz; do
 done
 ```
 
-Run Harbor's Codex agent adapter once per model. Each command evaluates all extracted tasks at high reasoning:
+Run Harbor's Codex agent adapter once for all three models. Harbor evaluates every extracted task at high reasoning and keeps the model results in one job directory:
 
 ```bash
-for model in gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol; do
-  harbor run \
-    --path ./self-bench-tasks \
-    --agent codex \
-    --model "$model" \
-    --ak version=0.146.1 \
-    --ak reasoning_effort=high \
-    --env modal \
-    --jobs-dir "./harbor-jobs/$model" \
-    --n-concurrent 20 \
-    --yes
-done
+harbor run \
+  --path ./self-bench-tasks \
+  --agent codex \
+  --model gpt-5.6-luna \
+  --model gpt-5.6-terra \
+  --model gpt-5.6-sol \
+  --ak version=0.146.1 \
+  --ak reasoning_effort=high \
+  --env modal \
+  --jobs-dir ./harbor-jobs \
+  --n-concurrent 20 \
+  --yes
 ```
 
-Harbor stores the three result sets under `./harbor-jobs/`. The evaluated agent receives the base repository and task instruction, but not the hidden tests or reference solution.
+The evaluated agent receives the base repository and task instruction, but not the hidden tests or reference solution.
 
 See [Running self-bench evaluations](docs/evaluations.md) for running one task and using the optional resumable matrix helper.
 
