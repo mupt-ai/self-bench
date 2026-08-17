@@ -32,6 +32,7 @@ export class VercelSdkFixture {
   commandStartStatus = 200;
   readonly commandStartStatuses: number[] = [];
   commandExitCode: number | null = 7;
+  commandStatusDelayMs = 0;
   commandStatusFails = false;
   deleteFailuresRemaining = 0;
   deleteFailureMessage = "simulated lost delete response";
@@ -123,6 +124,9 @@ export class VercelSdkFixture {
         );
       }
       if (method === "GET" && url.pathname.endsWith("/cmd/cmd_test")) {
+        if (this.commandStatusDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, this.commandStatusDelayMs));
+        }
         if (this.commandStatusFails) {
           throw new DOMException("simulated command status failure", "AbortError");
         }

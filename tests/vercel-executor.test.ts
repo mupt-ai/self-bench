@@ -419,6 +419,23 @@ describe("VercelSandboxExecutor", () => {
     expect(progress).toEqual([7, 7, 7, 7]);
   });
 
+  test("stops output inactivity timing before bounded completion settlement", async () => {
+    const fixture = new VercelSdkFixture();
+    fixture.commandStatusDelayMs = 30;
+    const executor = new VercelSandboxExecutor(config, fixture.fetch);
+
+    const result = await executor.run({
+      runId: "completion-settlement",
+      stage: "author",
+      command: ["true"],
+      timeoutMs: 1_000,
+      inactivityTimeoutMs: 10,
+    });
+
+    expect(result.exitCode).toBe(7);
+    expect(fixture.calls.at(-1)?.method).toBe("DELETE");
+  });
+
   test("does not treat empty log events as output activity", async () => {
     const fixture = new VercelSdkFixture();
     fixture.commandExitCode = null;

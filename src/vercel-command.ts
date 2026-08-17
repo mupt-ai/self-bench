@@ -49,10 +49,13 @@ export async function executeVercelCommand(input: {
 
     armInactivityTimer();
     await consumeLogs(command, stdout, stderr, options, armInactivityTimer, signal);
+    // The log stream closes when remote execution ends. From here on, the
+    // bounded completion request is provider settlement rather than command
+    // output inactivity.
+    clearInactivityTimer();
     const completed = await command.wait({
       signal: AbortSignal.any([signal, AbortSignal.timeout(COMPLETION_REQUEST_TIMEOUT_MS)]),
     });
-    clearInactivityTimer();
 
     const outputs: Record<string, Uint8Array> = {};
     for (const path of request.outputPaths ?? []) {
