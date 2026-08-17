@@ -84,6 +84,7 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
           version: {
             selfbenchCommit: config.buildCommit ?? submission.selfbenchCommit,
             executionBackend: config.execution.kind,
+            harborEnvironment: config.harborEnvironment,
             sandboxImage: config.execution.image,
             schema: 1,
           },

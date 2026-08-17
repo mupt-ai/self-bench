@@ -20,6 +20,8 @@ const infrastructurePatterns = [
   /modal.*(?:unavailable|timed out|timeout)/i,
   /image build for im-[a-z0-9]+ failed/i,
   /all predefined address pools have been fully subnetted/i,
+  /mounts denied/i,
+  /network-policy[\s\S]*could not process rule/i,
 ];
 
 class IncompleteHarborJobError extends Error {}

@@ -1,13 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
-import { loadConfig } from "../config.js";
+import { loadWorkerConfig } from "../config.js";
 import { removeEmptyModalCredentialOverrides } from "../modal-auth.js";
 import { runCommand } from "../process.js";
 import { createActivities } from "./activities.js";
 import { connectTemporalWorker } from "./connection.js";
 
 removeEmptyModalCredentialOverrides();
-const config = loadConfig();
+const config = loadWorkerConfig();
 if (config.execution.kind === "docker" || config.harborEnvironment === "docker") {
   await runCommand("docker", ["info"], { timeoutMs: 30_000 });
   await runCommand("docker", ["compose", "version"], { timeoutMs: 30_000 });

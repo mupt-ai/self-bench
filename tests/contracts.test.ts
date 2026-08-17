@@ -34,6 +34,7 @@ const request = {
   version: {
     selfbenchCommit: "b".repeat(40),
     executionBackend: "docker",
+    harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
     schema: 1,
   },
@@ -63,6 +64,83 @@ describe("contracts", () => {
       runRequestSchema.safeParse({
         ...request,
         candidateCounts: { easy: 34, medium: 34, hard: 33 },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("persists Vercel generation separately from its Docker or Modal Harbor backend", () => {
+    for (const harborEnvironment of ["docker", "modal"]) {
+      expect(
+        runRequestSchema.safeParse({
+          ...request,
+          candidateCounts: { easy: 1, medium: 0, hard: 0 },
+          version: {
+            ...request.version,
+            executionBackend: "vercel",
+            harborEnvironment,
+            sandboxImage: `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`,
+          },
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      runRequestSchema.safeParse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: {
+          ...request.version,
+          executionBackend: "vercel",
+          harborEnvironment: "vercel",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("persists cross-provider Docker and Modal generation/Harbor pairs", () => {
+    for (const [executionBackend, harborEnvironment] of [
+      ["docker", "modal"],
+      ["modal", "docker"],
+    ] as const) {
+      expect(
+        runRequestSchema.parse({
+          ...request,
+          candidateCounts: { easy: 1, medium: 0, hard: 0 },
+          version: {
+            ...request.version,
+            executionBackend,
+            harborEnvironment,
+          },
+        }).version,
+      ).toMatchObject({ executionBackend, harborEnvironment });
+    }
+  });
+
+  test("normalizes legacy schema-1 Docker and Modal requests to their matching Harbor backend", () => {
+    for (const executionBackend of ["docker", "modal"] as const) {
+      const parsed = runRequestSchema.parse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: {
+          ...request.version,
+          executionBackend,
+          harborEnvironment: undefined,
+        },
+      });
+
+      expect(parsed.version.harborEnvironment).toBe(executionBackend);
+    }
+  });
+
+  test("does not infer a Harbor backend for Vercel schema-1 requests", () => {
+    expect(
+      runRequestSchema.safeParse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: {
+          ...request.version,
+          executionBackend: "vercel",
+          harborEnvironment: undefined,
+        },
       }).success,
     ).toBe(false);
   });

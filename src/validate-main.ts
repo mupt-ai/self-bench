@@ -3,6 +3,7 @@
 import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { harborChildEnvironment } from "./harbor-environment.js";
 import { harborInfrastructureError, readHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
@@ -116,7 +117,11 @@ async function runGate(
       "--yes",
       "--quiet",
     ],
-    { allowFailure: true, timeoutMs: 4 * 60 * 60 * 1000 },
+    {
+      allowFailure: true,
+      env: harborChildEnvironment(),
+      timeoutMs: 4 * 60 * 60 * 1000,
+    },
   );
   if (process.exitCode !== 0) {
     throw new Error(`Harbor ${agent} exited ${process.exitCode}: ${process.stderr.slice(-1_000)}`);

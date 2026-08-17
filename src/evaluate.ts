@@ -1,6 +1,7 @@
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { harborChildEnvironment } from "./harbor-environment.js";
 import { archiveIncompleteHarborJob, tryReadHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
@@ -125,7 +126,7 @@ async function runTrial(input: {
   }
   await archiveIncompleteHarborJob(input.jobsDirectory, jobName);
 
-  const environment = { ...process.env };
+  const environment = harborChildEnvironment();
   if (input.authPath) {
     delete environment.OPENAI_API_KEY;
     environment.CODEX_FORCE_AUTH_JSON = "1";

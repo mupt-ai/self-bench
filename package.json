@@ -65,6 +65,7 @@
     "@temporalio/common": "^1.13.2",
     "@temporalio/worker": "^1.13.2",
     "@temporalio/workflow": "^1.13.2",
+    "@vercel/sandbox": "3.0.0",
     "modal": "^0.9.0",
     "zod": "^4.1.12"
   },

@@ -49,12 +49,94 @@ printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBO
     ]);
 
     expect(exitCode, stderr).toBe(0);
-    expect(stdout).toContain("running with the modal backend");
+    expect(stdout).toContain("modal generation and modal Harbor");
     const invocations = await readFile(calls, "utf8");
     expect(invocations).not.toContain("Dockerfile.sandbox");
     expect(invocations).toContain("compose --file");
     expect(invocations).toContain(`|modal|modal|${modalConfig}|`);
     expect(invocations).toMatch(/\|[0-9a-f]{40}\n/);
+  });
+
+  test("requires an explicit Docker or Modal Harbor backend for Vercel", async () => {
+    const child = Bun.spawn([process.execPath, "src/cli.ts", "up", "--backend", "vercel"], {
+      cwd: join(import.meta.dir, ".."),
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("--harbor-environment is required with --backend vercel");
+  });
+
+  test("configures every supported mixed generation and Harbor provider pair", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-cli-mixed-up-"));
+    roots.push(root);
+    const binaryDirectory = join(root, "bin");
+    const calls = join(root, "docker-calls");
+    const modalConfig = join(root, "modal.toml");
+    await mkdir(binaryDirectory);
+    await writeFile(modalConfig, "[profile]\n");
+    const docker = join(binaryDirectory, "docker");
+    await writeFile(
+      docker,
+      `#!/bin/sh
+printf '%s|%s|%s|%s\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" >> "$DOCKER_CALLS"
+`,
+    );
+    await chmod(docker, 0o755);
+    const environment = {
+      ...process.env,
+      DOCKER_CALLS: calls,
+      PATH: `${binaryDirectory}:${process.env.PATH ?? ""}`,
+      SELFBENCH_VERCEL_IMAGE: `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`,
+      VERCEL_TOKEN: "token",
+      VERCEL_TEAM_ID: "team",
+      VERCEL_PROJECT_ID: "project",
+    };
+
+    for (const args of [
+      ["up", "--backend", "vercel", "--harbor-environment", "docker"],
+      ["up", "--backend", "vercel", "--harbor-environment", "modal", "--modal-config", modalConfig],
+      ["up", "--backend", "modal", "--harbor-environment", "docker", "--modal-config", modalConfig],
+      ["up", "--backend", "docker", "--harbor-environment", "modal", "--modal-config", modalConfig],
+    ]) {
+      const child = Bun.spawn([process.execPath, "src/cli.ts", ...args], {
+        cwd: join(import.meta.dir, ".."),
+        env: environment,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [exitCode, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stderr).text(),
+      ]);
+      expect(exitCode, stderr).toBe(0);
+    }
+
+    const invocations = (await readFile(calls, "utf8")).trim().split("\n");
+    const vercelWithDockerHarbor = invocations.filter((line) => line.includes("|vercel|docker|"));
+    expect(vercelWithDockerHarbor).toHaveLength(1);
+    expect(vercelWithDockerHarbor[0]).not.toContain("Dockerfile.sandbox");
+
+    const vercelWithModalHarbor = invocations.filter((line) =>
+      line.includes(`|vercel|modal|${modalConfig}`),
+    );
+    expect(vercelWithModalHarbor).toHaveLength(1);
+    expect(vercelWithModalHarbor[0]).not.toContain("Dockerfile.sandbox");
+
+    const modalWithDockerHarbor = invocations.filter((line) =>
+      line.includes(`|modal|docker|${modalConfig}`),
+    );
+    expect(modalWithDockerHarbor).toHaveLength(1);
+    expect(modalWithDockerHarbor[0]).not.toContain("Dockerfile.sandbox");
+
+    const dockerWithModalHarbor = invocations.filter((line) =>
+      line.includes(`|docker|modal|${modalConfig}`),
+    );
+    expect(dockerWithModalHarbor).toHaveLength(2);
+    expect(dockerWithModalHarbor.some((line) => line.includes("Dockerfile.sandbox"))).toBe(true);
   });
 
   test("run --output waits for completion and downloads a verified export", async () => {

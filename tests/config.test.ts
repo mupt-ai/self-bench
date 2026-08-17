@@ -1,0 +1,128 @@
+import { describe, expect, test } from "bun:test";
+import { defaultStandaloneConcurrency, loadConfig, loadWorkerConfig } from "../src/config.js";
+
+const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
+
+describe("SelfBench configuration", () => {
+  test("preserves the matching Harbor defaults for Docker and Modal", () => {
+    expect(
+      loadConfig({
+        SELFBENCH_ACTIVITY_CONCURRENCY: "",
+        SELFBENCH_VERCEL_IMAGE: "",
+      }).harborEnvironment,
+    ).toBe("docker");
+    expect(
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "modal",
+      }).harborEnvironment,
+    ).toBe("modal");
+  });
+
+  test("uses a conservative Vercel concurrency within the initial Pro allocation rate", () => {
+    const config = loadConfig({
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      SELFBENCH_VERCEL_IMAGE: image,
+    });
+
+    expect(config.activityConcurrency).toBe(4);
+    expect(
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "vercel",
+        SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+        SELFBENCH_VERCEL_IMAGE: image,
+        SELFBENCH_ACTIVITY_CONCURRENCY: "6",
+      }).activityConcurrency,
+    ).toBe(6);
+    expect(defaultStandaloneConcurrency(config, 10)).toBe(4);
+    expect(defaultStandaloneConcurrency(loadWorkerConfig({}), 10)).toBe(10);
+  });
+
+  test("requires an explicit Docker or Modal Harbor backend for Vercel", () => {
+    expect(() =>
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "vercel",
+        VERCEL_TOKEN: "token",
+        VERCEL_TEAM_ID: "team",
+        VERCEL_PROJECT_ID: "project",
+        SELFBENCH_VERCEL_IMAGE: image,
+      }),
+    ).toThrow("SELFBENCH_HARBOR_ENVIRONMENT is required");
+  });
+
+  test("requires a complete nonblank Vercel credential triple", () => {
+    const base = {
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      SELFBENCH_VERCEL_IMAGE: image,
+    };
+
+    for (const credentials of [
+      {},
+      { VERCEL_TOKEN: "token" },
+      { VERCEL_TOKEN: "token", VERCEL_TEAM_ID: "team" },
+      {
+        VERCEL_TOKEN: "token",
+        VERCEL_TEAM_ID: "team",
+        VERCEL_PROJECT_ID: "   ",
+      },
+    ]) {
+      expect(() => loadWorkerConfig({ ...base, ...credentials })).toThrow(
+        "VERCEL_TOKEN, VERCEL_TEAM_ID, and VERCEL_PROJECT_ID are required",
+      );
+    }
+  });
+
+  test("trims explicit Vercel credentials and retains the selected Harbor backend", () => {
+    const config = loadWorkerConfig({
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "modal",
+      SELFBENCH_VERCEL_IMAGE: `  ${image}  `,
+      VERCEL_TOKEN: "  token  ",
+      VERCEL_TEAM_ID: "  team  ",
+      VERCEL_PROJECT_ID: "  project  ",
+    });
+
+    expect(config.execution).toEqual({
+      kind: "vercel",
+      credentials: {
+        token: "token",
+        teamId: "team",
+        projectId: "project",
+      },
+      image,
+    });
+    expect(config.harborEnvironment).toBe("modal");
+  });
+
+  test("does not require worker credentials to load API metadata", () => {
+    const config = loadConfig({
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      SELFBENCH_VERCEL_IMAGE: image,
+    });
+
+    expect(config.execution).toEqual({ kind: "vercel", image });
+  });
+
+  test("requires a digest-pinned Vercel image", () => {
+    const base = {
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      VERCEL_TOKEN: "token",
+      VERCEL_TEAM_ID: "team",
+      VERCEL_PROJECT_ID: "project",
+    };
+
+    expect(() => loadConfig(base)).toThrow("SELFBENCH_VERCEL_IMAGE is required");
+    expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_IMAGE: "vercel/sandbox/node:22" })).toThrow(
+      "SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest",
+    );
+    expect(() =>
+      loadConfig({ ...base, SELFBENCH_VERCEL_IMAGE: `@sha256:${"a".repeat(64)}` }),
+    ).toThrow("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
+    expect(() =>
+      loadConfig({ ...base, SELFBENCH_VERCEL_IMAGE: `repo@tag@sha256:${"a".repeat(64)}` }),
+    ).toThrow("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
+  });
+});

@@ -27,6 +27,7 @@ const run: RunRequest = {
   version: {
     selfbenchCommit: "b".repeat(40),
     executionBackend: "docker",
+    harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
     schema: 1,
   },

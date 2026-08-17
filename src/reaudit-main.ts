@@ -10,7 +10,7 @@ import {
   couplingReviewInput,
   couplingReviewSchema,
 } from "./codex-review.js";
-import { loadConfig } from "./config.js";
+import { defaultStandaloneConcurrency, loadWorkerConfig } from "./config.js";
 import {
   buildCouplingEvidence,
   discoverContractArtifacts,
@@ -27,7 +27,7 @@ const parsed = parseArgs({
     tasks: { type: "string" },
     task: { type: "string" },
     output: { type: "string" },
-    concurrency: { type: "string", default: "10" },
+    concurrency: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
   strict: true,
@@ -39,7 +39,7 @@ Usage:
   self-bench-reaudit --tasks DIRECTORY --output REPORT.json [options]
 
 Options:
-  --concurrency N  Concurrent Sol reviews (default: 10)
+  --concurrency N  Concurrent Sol reviews (default: 10; Vercel: worker setting, default 4)
   --task ID        Review only one task ID
   -h, --help       Show this help`);
   process.exit(0);
@@ -47,8 +47,11 @@ Options:
 
 const tasksDirectory = resolve(parsed.values.tasks ?? fail("--tasks is required"));
 const outputPath = resolve(parsed.values.output ?? fail("--output is required"));
-const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
-const config = loadConfig();
+const config = loadWorkerConfig();
+const concurrency = positiveInteger(
+  parsed.values.concurrency ?? String(defaultStandaloneConcurrency(config, 10)),
+  "--concurrency",
+);
 const sandbox = createSandboxExecutor(config.execution);
 const [taskIds, modelAuth, reviewer] = await Promise.all([
   readdir(tasksDirectory),

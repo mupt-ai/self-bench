@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { harborChildEnvironment } from "./harbor-environment.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
 
@@ -99,7 +100,11 @@ export async function smokeAllAdapters(
           "--yes",
           "--quiet",
         ],
-        { allowFailure: true, timeoutMs: 60 * 60 * 1000 },
+        {
+          allowFailure: true,
+          env: harborChildEnvironment(),
+          timeoutMs: 60 * 60 * 1000,
+        },
       );
       const summary: AdapterSmokeResult = {
         agent,
