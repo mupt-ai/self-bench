@@ -4,6 +4,7 @@ import { harborChildEnvironment } from "../src/harbor-environment.js";
 describe("Harbor child environment", () => {
   test("removes Vercel control credentials while preserving selected Harbor credentials", () => {
     const source = {
+      VERCEL_AUTH_TOKEN: "cli-token",
       VERCEL_TOKEN: "vercel-token",
       VERCEL_TEAM_ID: "team",
       VERCEL_PROJECT_ID: "project",

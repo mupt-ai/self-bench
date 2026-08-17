@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { harborChildEnvironment } from "./harbor-environment.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
+import type { HarborEnvironment } from "./providers.js";
 
 export const HARBOR_AGENT_ADAPTERS = [
   "oracle",
@@ -49,7 +50,7 @@ export interface AdapterSmokeOptions {
   readonly taskDirectory: string;
   readonly jobsDirectory: string;
   readonly harborPath?: string;
-  readonly environment?: "docker" | "modal";
+  readonly environment?: HarborEnvironment;
   readonly concurrency?: number;
 }
 

@@ -10,6 +10,7 @@ export const vercelFixtureConfig = {
     projectId: "prj_test",
   },
   image: vercelFixtureImage,
+  timeoutCapMs: 2 * 60 * 60 * 1_000,
 };
 
 export interface RecordedVercelCall {

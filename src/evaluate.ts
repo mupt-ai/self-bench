@@ -5,6 +5,7 @@ import { harborChildEnvironment } from "./harbor-environment.js";
 import { archiveIncompleteHarborJob, tryReadHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
+import type { HarborEnvironment } from "./providers.js";
 import { assertCodexSubscriptionAuth, openAiApiKey } from "./subscription-auth.js";
 
 export const MATRIX_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
@@ -16,7 +17,7 @@ export interface MatrixOptions {
   readonly tasksPath?: string;
   readonly jobsDirectory: string;
   readonly harborPath?: string;
-  readonly environment?: "docker" | "modal";
+  readonly environment?: HarborEnvironment;
   readonly concurrency?: number;
   readonly authPath?: string;
   readonly models?: readonly MatrixModel[];
@@ -115,7 +116,7 @@ async function runTrial(input: {
   readonly model: MatrixModel;
   readonly jobsDirectory: string;
   readonly harborPath: string;
-  readonly environment: "docker" | "modal";
+  readonly environment: HarborEnvironment;
   readonly authPath?: string;
 }): Promise<MatrixTrialSummary> {
   const taskId = basename(input.taskDirectory);

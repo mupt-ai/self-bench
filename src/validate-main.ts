@@ -7,6 +7,7 @@ import { harborChildEnvironment } from "./harbor-environment.js";
 import { harborInfrastructureError, readHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
+import { type HarborEnvironment, isHarborEnvironment } from "./providers.js";
 
 const parsed = parseArgs({
   options: {
@@ -34,7 +35,7 @@ Options:
 const tasksDirectory = resolve(parsed.values.tasks ?? fail("--tasks is required"));
 const jobsDirectory = resolve(parsed.values.jobs ?? fail("--jobs is required"));
 const environment = parsed.values.environment ?? "modal";
-if (environment !== "modal" && environment !== "docker") {
+if (!isHarborEnvironment(environment)) {
   throw new Error("--environment must be modal or docker");
 }
 const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
@@ -91,7 +92,7 @@ async function runGate(
   taskDirectory: string,
   taskId: string,
   agent: "nop" | "oracle",
-  environment: "docker" | "modal",
+  environment: HarborEnvironment,
   jobsDirectory: string,
 ): Promise<{ readonly passed: boolean; readonly rewards: Readonly<Record<string, number>> }> {
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;

@@ -41,6 +41,7 @@ const runVersionSchema = z
     executionBackend: z.enum(EXECUTION_BACKENDS),
     harborEnvironment: z.enum(HARBOR_ENVIRONMENTS).optional(),
     sandboxImage: z.string().min(1),
+    sandboxTimeoutCapMs: z.number().int().min(100).optional(),
     schema: z.literal(1),
   })
   .transform((version, context) => {
@@ -51,6 +52,14 @@ const runVersionSchema = z
         code: "custom",
         message: `harborEnvironment is required for ${version.executionBackend} execution`,
         path: ["harborEnvironment"],
+      });
+      return z.NEVER;
+    }
+    if (version.sandboxTimeoutCapMs !== undefined && version.executionBackend !== "vercel") {
+      context.addIssue({
+        code: "custom",
+        message: "sandboxTimeoutCapMs is only valid for Vercel execution",
+        path: ["sandboxTimeoutCapMs"],
       });
       return z.NEVER;
     }

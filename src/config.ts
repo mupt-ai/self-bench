@@ -6,6 +6,7 @@ import {
   type HarborEnvironment,
   matchingHarborEnvironment,
 } from "./providers.js";
+import { parseSandboxTimeoutCapText, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox-timeout.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -25,6 +26,9 @@ const environmentSchema = z.object({
   SELFBENCH_MODAL_ENVIRONMENT: z.string().optional(),
   SELFBENCH_MODAL_IMAGE: z.string().default("node:22-bookworm"),
   SELFBENCH_VERCEL_IMAGE: z.preprocess(emptyStringAsUndefined, z.string().trim().min(1).optional()),
+  // Keep provider-specific validation in the Vercel branch so a stale Vercel
+  // variable cannot break an otherwise unrelated Docker or Modal worker.
+  SELFBENCH_VERCEL_TIMEOUT_CAP: z.preprocess(emptyStringAsUndefined, z.string().optional()),
   SELFBENCH_BUILD_COMMIT: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z
@@ -60,13 +64,14 @@ type ExecutionConfig =
       readonly environment?: string;
       readonly image: string;
     }
-  | { readonly kind: "vercel"; readonly image: string };
+  | { readonly kind: "vercel"; readonly image: string; readonly timeoutCapMs: number };
 
 type WorkerExecutionConfig =
   | Exclude<ExecutionConfig, { readonly kind: "vercel" }>
   | {
       readonly kind: "vercel";
       readonly image: string;
+      readonly timeoutCapMs: number;
       readonly credentials: VercelCredentials;
     };
 
@@ -149,7 +154,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       if (!isDigestPinnedOciImage(image)) {
         fail("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
       }
-      execution = { kind: "vercel", image };
+      execution = {
+        kind: "vercel",
+        image,
+        timeoutCapMs: vercelTimeoutCap(value.SELFBENCH_VERCEL_TIMEOUT_CAP),
+      };
       break;
     }
   }
@@ -208,6 +217,18 @@ function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
     fail("VERCEL_TOKEN, VERCEL_TEAM_ID, and VERCEL_PROJECT_ID are required for Vercel execution");
   }
   return { token, teamId, projectId };
+}
+
+function vercelTimeoutCap(value: string | undefined): number {
+  if (value === undefined) {
+    return STANDARD_VERCEL_TIMEOUT_CAP_MS;
+  }
+  return z
+    .number()
+    .int()
+    .min(100)
+    .max(STANDARD_VERCEL_TIMEOUT_CAP_MS)
+    .parse(parseSandboxTimeoutCapText(value));
 }
 
 function fail(message: string): never {

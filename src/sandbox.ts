@@ -1,6 +1,7 @@
 import type { SelfBenchWorkerConfig } from "./config.js";
 import { DockerSandboxExecutor } from "./docker-executor.js";
 import { ModalSandboxExecutor } from "./modal-executor.js";
+import { TimeoutCappedSandboxExecutor } from "./sandbox-timeout.js";
 import { VercelSandboxExecutor } from "./vercel-executor.js";
 
 export interface SandboxFile {
@@ -52,6 +53,9 @@ export function createSandboxExecutor(config: SelfBenchWorkerConfig["execution"]
     case "modal":
       return new ModalSandboxExecutor(config);
     case "vercel":
-      return new VercelSandboxExecutor(config);
+      return new TimeoutCappedSandboxExecutor(
+        new VercelSandboxExecutor(config),
+        config.timeoutCapMs,
+      );
   }
 }

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { defaultStandaloneConcurrency, loadConfig, loadWorkerConfig } from "../src/config.js";
+import {
+  HOBBY_VERCEL_TIMEOUT_CAP_MS,
+  STANDARD_VERCEL_TIMEOUT_CAP_MS,
+} from "../src/sandbox-timeout.js";
 
 const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 
@@ -91,6 +95,7 @@ describe("SelfBench configuration", () => {
         projectId: "project",
       },
       image,
+      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
     });
     expect(config.harborEnvironment).toBe("modal");
   });
@@ -102,7 +107,52 @@ describe("SelfBench configuration", () => {
       SELFBENCH_VERCEL_IMAGE: image,
     });
 
-    expect(config.execution).toEqual({ kind: "vercel", image });
+    expect(config.execution).toEqual({
+      kind: "vercel",
+      image,
+      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
+    });
+  });
+
+  test("parses explicit Vercel timeout caps and defaults to the standard stage ceiling", () => {
+    const base = {
+      SELFBENCH_EXECUTION_BACKEND: "vercel",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      SELFBENCH_VERCEL_IMAGE: image,
+    };
+
+    expect(loadConfig(base).execution).toMatchObject({
+      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
+    });
+    expect(loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "45m" }).execution).toMatchObject({
+      timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
+    });
+    expect(loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "2700s" }).execution).toMatchObject({
+      timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
+    });
+    expect(
+      loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "2700000" }).execution,
+    ).toMatchObject({ timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS });
+    expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "forty-five" })).toThrow();
+    expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "3h" })).toThrow();
+    expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "25h" })).toThrow();
+  });
+
+  test("does not let a malformed Vercel-only cap break Docker or Modal", () => {
+    for (const backend of ["docker", "modal"] as const) {
+      expect(
+        loadConfig({
+          SELFBENCH_EXECUTION_BACKEND: backend,
+          SELFBENCH_VERCEL_TIMEOUT_CAP: "not-a-duration",
+        }).execution.kind,
+      ).toBe(backend);
+      expect(
+        loadConfig({
+          SELFBENCH_EXECUTION_BACKEND: backend,
+          SELFBENCH_VERCEL_TIMEOUT_CAP: "25h",
+        }).execution.kind,
+      ).toBe(backend);
+    }
   });
 
   test("requires a digest-pinned Vercel image", () => {

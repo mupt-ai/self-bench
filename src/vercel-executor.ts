@@ -287,7 +287,7 @@ function validateConfig(config: VercelExecutionConfig): VercelExecutionConfig {
   if (!isDigestPinnedOciImage(image)) {
     throw new Error("Vercel execution requires a digest-pinned image");
   }
-  return { kind: "vercel", credentials, image };
+  return { kind: "vercel", credentials, image, timeoutCapMs: config.timeoutCapMs };
 }
 
 function validateRequest(request: SandboxRequest): {

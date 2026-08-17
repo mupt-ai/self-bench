@@ -79,6 +79,7 @@ describe("contracts", () => {
             executionBackend: "vercel",
             harborEnvironment,
             sandboxImage: `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`,
+            sandboxTimeoutCapMs: 45 * 60 * 1_000,
           },
         }).success,
       ).toBe(true);
@@ -92,6 +93,16 @@ describe("contracts", () => {
           executionBackend: "vercel",
           harborEnvironment: "vercel",
         },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("rejects Vercel-only timeout metadata on other execution providers", () => {
+    expect(
+      runRequestSchema.safeParse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: { ...request.version, sandboxTimeoutCapMs: 45 * 60 * 1_000 },
       }).success,
     ).toBe(false);
   });
