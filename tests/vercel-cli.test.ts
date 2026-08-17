@@ -99,6 +99,55 @@ describe("VercelCli", () => {
     expect(runner.captured[2]).toContain("a");
   });
 
+  test("continues VCR tag listings with the CLI next cursor", async () => {
+    const runner = new FakeRunner();
+    runner.enqueueJson({
+      tags: [
+        {
+          tag: "first",
+          manifestDigest: `sha256:${"a".repeat(64)}`,
+          status: "ready",
+        },
+      ],
+      nextCursor: "cursor-2",
+    });
+    runner.enqueueJson({
+      tags: [
+        {
+          tag: "second",
+          manifestDigest: `sha256:${"b".repeat(64)}`,
+          status: "ready",
+        },
+      ],
+      nextCursor: null,
+    });
+    const cli = new VercelCli(runner);
+
+    expect(
+      await cli.listTags({
+        teamSlug: "test-team",
+        projectId: "prj_test",
+        repository: "selfbench-runtime",
+      }),
+    ).toHaveLength(2);
+    expect(runner.captured[1]).toEqual([
+      "vcr",
+      "tag",
+      "list",
+      "selfbench-runtime",
+      "--json",
+      "--limit",
+      "100",
+      "--project",
+      "prj_test",
+      "--scope",
+      "test-team",
+      "--non-interactive",
+      "--next",
+      "cursor-2",
+    ]);
+  });
+
   test("keeps VCR lookup project-scoped and publishes the exact sandbox Dockerfile", async () => {
     const runner = new FakeRunner();
     runner.enqueueText("", 1, '{"error":{"code":"not_found"}}');
