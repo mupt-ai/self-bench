@@ -2,8 +2,14 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+const options = process.argv.slice(2);
+const dockerBuild = options.length === 1 && options[0] === "--docker-build";
+if (options.length > 0 && !dockerBuild) {
+  throw new Error(`unknown verify-package argument: ${options.join(" ")}`);
+}
 const root = resolve(import.meta.dir, "..");
 const temporary = await mkdtemp(join(tmpdir(), "self-bench-package-"));
+
 async function run(command: string, args: string[], cwd = root): Promise<string> {
   const child = Bun.spawn([command, ...args], {
     cwd,
@@ -42,14 +48,32 @@ try {
   if (!help.includes("self-bench up")) {
     throw new Error("installed self-bench did not print the expected CLI help");
   }
-  for (const asset of ["compose.yaml", "Dockerfile", "Dockerfile.sandbox", "src/skills/selfbench/SKILL.md"]) {
-    await readFile(join(installRoot, "node_modules", packageJson.name, asset));
+  const installedRoot = join(installRoot, "node_modules", packageJson.name);
+  for (const asset of [
+    ".dockerignore",
+    "compose.yaml",
+    "Dockerfile",
+    "Dockerfile.sandbox",
+    "review/index.html",
+    "review/src/App.tsx",
+    "review/vite.config.ts",
+    "src/extensions/authoring.ts",
+    "src/skills/selfbench/SKILL.md",
+  ]) {
+    await readFile(join(installedRoot, asset));
   }
   const installedPackage = JSON.parse(
-    await readFile(join(installRoot, "node_modules", packageJson.name, "package.json"), "utf8"),
+    await readFile(join(installedRoot, "package.json"), "utf8"),
   ) as { name: string; version: string };
   if (installedPackage.name !== packageJson.name || installedPackage.version !== packageJson.version) {
     throw new Error("installed package metadata does not match the workspace package");
+  }
+  if (dockerBuild) {
+    await run(
+      "docker",
+      ["build", "--target", "build", "--file", join(installedRoot, "Dockerfile"), installedRoot],
+      installedRoot,
+    );
   }
   console.log(`verified ${installedPackage.name}@${installedPackage.version}`);
 } finally {

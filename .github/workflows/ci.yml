@@ -22,3 +22,5 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run validate
+      - name: Verify packed application build stage
+        run: bun run verify:package:docker
