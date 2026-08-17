@@ -195,6 +195,11 @@ describe("VercelSandboxExecutor", () => {
       ),
     ).toHaveLength(3);
     expect(sleeps.slice(0, 2)).toEqual([30_000, 30_000]);
+    expect(
+      fixture.calls.some(
+        (call) => call.method === "GET" && call.path.startsWith("/api/v2/sandboxes/selfbench-"),
+      ),
+    ).toBe(false);
   });
 
   test("deletes a sandbox when its input upload fails", async () => {
@@ -553,6 +558,46 @@ describe("VercelSandboxExecutor", () => {
     ).toHaveLength(2);
     expect(fixture.calls.filter((call) => call.method === "DELETE")).toHaveLength(1);
     expect(sleeps).toEqual([250]);
+  });
+
+  test("fails cleanup when an ambiguous create never becomes visible", async () => {
+    const fixture = new VercelSdkFixture();
+    fixture.createFailsAfterAllocation = true;
+    fixture.getNotFoundResponsesRemaining = 4;
+    const sleeps: number[] = [];
+    const executor = new VercelSandboxExecutor(config, fixture.fetch, async (delayMs, signal) => {
+      signal.throwIfAborted();
+      sleeps.push(delayMs);
+    });
+
+    let failure: unknown;
+    try {
+      await executor.run({
+        runId: "hidden-create",
+        stage: "author",
+        command: ["true"],
+        timeoutMs: 60_000,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ name: "AbortError" });
+    expect(String(failure)).toContain("simulated lost create response");
+    expect(String(failure)).toContain("Vercel sandbox cleanup also failed");
+    expect(String(failure)).toContain(
+      "sandbox absence remained unconfirmed after an ambiguous create failure",
+    );
+    expect(
+      fixture.calls.filter(
+        (call) =>
+          call.method === "GET" &&
+          call.path.startsWith(`/api/v2/sandboxes/${fixture.sandboxName}?`),
+      ),
+    ).toHaveLength(4);
+    expect(fixture.calls.some((call) => call.method === "DELETE")).toBe(false);
+    expect(fixture.sandboxExists).toBe(true);
+    expect(sleeps).toEqual([250, 750, 1_500]);
   });
 
   test("retains the primary failure while surfacing a cleanup failure", async () => {

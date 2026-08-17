@@ -76,6 +76,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
     let terminationError: unknown;
     let sandbox: Sandbox | undefined;
     let deletePromise: Promise<void> | undefined;
+    let allocationMayExist = false;
 
     const deleteHandle = (): Promise<void> => {
       if (!sandbox) {
@@ -112,7 +113,11 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         resources.vcpus,
         request.timeoutMs,
         controller.signal,
+        (value) => {
+          allocationMayExist = value;
+        },
       );
+      allocationMayExist = false;
       throwIfTerminated(terminationError);
 
       const session = sandbox.currentSession();
@@ -169,7 +174,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
     clearTimeout(hardTimeout);
     options.signal?.removeEventListener("abort", abort);
     try {
-      await this.#cleanup(name, sandbox, deleteHandle);
+      await this.#cleanup(name, sandbox, deleteHandle, allocationMayExist);
     } catch (cleanupError) {
       const publicCleanupError = sanitizeCleanupError(cleanupError, this.#config.credentials.token);
       outcome = outcome.ok
@@ -193,8 +198,11 @@ export class VercelSandboxExecutor implements SandboxExecutor {
     vcpus: number,
     timeoutMs: number,
     signal: AbortSignal,
+    setAllocationMayExist: (value: boolean) => void,
   ): Promise<Sandbox> {
     for (let retries = 0; ; retries += 1) {
+      signal.throwIfAborted();
+      setAllocationMayExist(true);
       try {
         return await Sandbox.create({
           ...this.#config.credentials,
@@ -208,6 +216,9 @@ export class VercelSandboxExecutor implements SandboxExecutor {
           timeout: timeoutMs,
         });
       } catch (error) {
+        if (createErrorConfirmsNoAllocation(error)) {
+          setAllocationMayExist(false);
+        }
         if (
           !(error instanceof APIError) ||
           error.response.status !== 429 ||
@@ -224,6 +235,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
     name: string,
     sandbox: Sandbox | undefined,
     deleteHandle: () => Promise<void>,
+    allocationMayExist: boolean,
   ): Promise<void> {
     let directDeleteError: unknown;
     if (sandbox) {
@@ -233,6 +245,9 @@ export class VercelSandboxExecutor implements SandboxExecutor {
       } catch (error) {
         directDeleteError = error;
       }
+    }
+    if (!sandbox && !allocationMayExist) {
+      return;
     }
 
     try {
@@ -252,6 +267,9 @@ export class VercelSandboxExecutor implements SandboxExecutor {
           });
         } catch (error) {
           if (error instanceof APIError && error.response.status === 404) {
+            if (sandbox) {
+              return;
+            }
             continue;
           }
           throw error;
@@ -266,6 +284,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         }
         return;
       }
+      throw new Error("sandbox absence remained unconfirmed after an ambiguous create failure");
     } catch (recoveryError) {
       const errors =
         directDeleteError === undefined ? [recoveryError] : [directDeleteError, recoveryError];
@@ -372,6 +391,14 @@ function createRetryDelayMs(response: Response): number {
   return Math.min(CREATE_RATE_LIMIT_MAX_DELAY_MS, Math.max(0, Math.ceil(requestedDelay)));
 }
 
+function createErrorConfirmsNoAllocation(error: unknown): boolean {
+  if (!(error instanceof APIError)) {
+    return false;
+  }
+  const status = error.response.status;
+  return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 499;
+}
+
 function throwIfTerminated(error: unknown): void {
   if (error !== undefined) {
     throw error;
@@ -385,12 +412,22 @@ function abortReason(signal: AbortSignal | undefined): unknown {
 function attachCleanupError(primaryError: unknown, cleanupError: unknown): unknown {
   if (primaryError instanceof Error) {
     const cleanupMessage = errorMessage(cleanupError).slice(0, 500);
-    primaryError.message = `${primaryError.message}; Vercel sandbox cleanup also failed: ${cleanupMessage}`;
-    Object.defineProperty(primaryError, "cleanupError", {
-      configurable: true,
-      value: cleanupError,
-    });
-    return primaryError;
+    const message = `${primaryError.message}; Vercel sandbox cleanup also failed: ${cleanupMessage}`;
+    try {
+      Object.defineProperties(primaryError, {
+        cleanupError: { configurable: true, value: cleanupError },
+        message: { configurable: true, value: message, writable: true },
+      });
+      return primaryError;
+    } catch {
+      const wrapped = new Error(message, { cause: primaryError });
+      wrapped.name = primaryError.name;
+      Object.defineProperty(wrapped, "cleanupError", {
+        configurable: true,
+        value: cleanupError,
+      });
+      return wrapped;
+    }
   }
   return new AggregateError(
     [primaryError, cleanupError],

@@ -21,7 +21,10 @@ const environmentSchema = z.object({
   SELFBENCH_GCS_PREFIX: z.string().default("selfbench"),
   SELFBENCH_EXECUTION_BACKEND: z.enum(EXECUTION_BACKENDS).default("docker"),
   SELFBENCH_DOCKER_IMAGE: z.string().default("selfbench-sandbox:local"),
-  SELFBENCH_HARBOR_ENVIRONMENT: z.enum(HARBOR_ENVIRONMENTS).optional(),
+  SELFBENCH_HARBOR_ENVIRONMENT: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(HARBOR_ENVIRONMENTS).optional(),
+  ),
   SELFBENCH_MODAL_APP: z.string().default("selfbench"),
   SELFBENCH_MODAL_ENVIRONMENT: z.string().optional(),
   SELFBENCH_MODAL_IMAGE: z.string().default("node:22-bookworm"),

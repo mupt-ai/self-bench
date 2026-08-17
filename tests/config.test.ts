@@ -12,12 +12,14 @@ describe("SelfBench configuration", () => {
     expect(
       loadConfig({
         SELFBENCH_ACTIVITY_CONCURRENCY: "",
+        SELFBENCH_HARBOR_ENVIRONMENT: "",
         SELFBENCH_VERCEL_IMAGE: "",
       }).harborEnvironment,
     ).toBe("docker");
     expect(
       loadConfig({
         SELFBENCH_EXECUTION_BACKEND: "modal",
+        SELFBENCH_HARBOR_ENVIRONMENT: "",
       }).harborEnvironment,
     ).toBe("modal");
   });
@@ -49,6 +51,7 @@ describe("SelfBench configuration", () => {
         VERCEL_TOKEN: "token",
         VERCEL_TEAM_ID: "team",
         VERCEL_PROJECT_ID: "project",
+        SELFBENCH_HARBOR_ENVIRONMENT: "",
         SELFBENCH_VERCEL_IMAGE: image,
       }),
     ).toThrow("SELFBENCH_HARBOR_ENVIRONMENT is required");
