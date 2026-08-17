@@ -79,6 +79,15 @@ export async function ensureVercelRuntimeImage(input: {
     }
 
     const tags = await services.cli.listTags({ ...scope, repository });
+    const compatible = tags.every((candidate) => candidate.tag.startsWith(IMAGE_TAG_PREFIX));
+    if (!compatible) {
+      services.reporter.warn(
+        `VCR repository "${repository}" contains unrelated images. SelfBench will not modify it.`,
+      );
+      repository = await requestVcrRepositoryName(services);
+      continue;
+    }
+
     const matching = tags.find((candidate) => candidate.tag === tag);
     if (matching) {
       if (
@@ -104,16 +113,7 @@ export async function ensureVercelRuntimeImage(input: {
       );
       break;
     }
-
-    const compatible =
-      tags.length === 0 || tags.some((candidate) => candidate.tag.startsWith(IMAGE_TAG_PREFIX));
-    if (compatible) {
-      break;
-    }
-    services.reporter.warn(
-      `VCR repository "${repository}" contains unrelated images. SelfBench will not modify it.`,
-    );
-    repository = await requestVcrRepositoryName(services);
+    break;
   }
 
   const ready = await services.reporter.task(

@@ -270,13 +270,19 @@ describe("self-bench setup vercel", () => {
     expect(observedToken).toBe("stored-token");
   });
 
-  test("protects an unrelated VCR repository and accepts an explicit replacement name", async () => {
+  test("protects a mixed VCR repository and accepts an explicit replacement name", async () => {
     const directory = await configDirectory();
+    const fingerprint = await vercelRuntimeFingerprint(repositoryRoot);
     const cli = new FakeCli();
     cli.projects.push({ id: "prj_existing", name: "existing" });
     cli.repositories.add("selfbench-runtime");
     cli.tags.set("selfbench-runtime", [
       { tag: "production", manifestDigest: `sha256:${"d".repeat(64)}`, status: "ready" },
+      {
+        tag: `selfbench-${fingerprint}`,
+        manifestDigest: `sha256:${"e".repeat(64)}`,
+        status: "ready",
+      },
     ]);
     const prompter = new FakePrompter();
     prompter.selections.push(team.id, "existing", "prj_existing");
@@ -289,7 +295,7 @@ describe("self-bench setup vercel", () => {
     );
 
     expect(result.profile.vcrRepository).toBe("selfbench-runtime-2");
-    expect(cli.tags.get("selfbench-runtime")).toHaveLength(1);
+    expect(cli.tags.get("selfbench-runtime")).toHaveLength(2);
     expect(cli.builds).toEqual([
       {
         repository: "selfbench-runtime-2",
