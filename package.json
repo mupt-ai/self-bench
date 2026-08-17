@@ -23,6 +23,7 @@
   "files": [
     "dist",
     "src",
+    "review",
     "docs",
     "compose.yaml",
     "Dockerfile",
@@ -47,6 +48,7 @@
     "prepack": "bun run build",
     "prepublishOnly": "bun run validate",
     "verify:package": "bun scripts/verify-package.ts",
+    "verify:package:docker": "bun scripts/verify-package.ts --docker-build",
     "check": "biome check . && tsc --noEmit -p tsconfig.json && bun run typecheck:review",
     "dev:api": "tsx src/api-main.ts",
     "dev:review": "vite --config review/vite.config.ts",
