@@ -6,6 +6,8 @@ export interface CommandResult {
   readonly exitCode: number;
 }
 
+export type CommandOutputHandler = (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
+
 export interface CommandOptions {
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -14,7 +16,7 @@ export interface CommandOptions {
   readonly inactivityTimeoutMs?: number;
   readonly allowFailure?: boolean;
   readonly signal?: AbortSignal;
-  readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
+  readonly onOutput?: CommandOutputHandler;
 }
 
 export class InactivityTimeoutError extends Error {

@@ -59,6 +59,7 @@
     "validate": "bun run check && bun run test && bun run build && bun run verify:package"
   },
   "dependencies": {
+    "@clack/prompts": "1.7.0",
     "@google-cloud/storage": "^7.17.0",
     "@temporalio/activity": "^1.13.2",
     "@temporalio/client": "^1.13.2",

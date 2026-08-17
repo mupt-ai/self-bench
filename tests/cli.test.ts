@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256 } from "../src/hash.js";
 import { runCommand } from "../src/process.js";
+import { saveVercelProfile } from "../src/vercel-profile.js";
 
 const roots: string[] = [];
 
@@ -12,6 +13,20 @@ afterEach(async () => {
 });
 
 describe("SelfBench CLI", () => {
+  test("setup vercel fails before external work when no interactive terminal is attached", async () => {
+    const child = Bun.spawn([process.execPath, "src/cli.ts", "setup", "vercel", "--verbose"], {
+      cwd: join(import.meta.dir, ".."),
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("requires an interactive terminal");
+    expect(stderr).toContain("VERCEL_TOKEN");
+  });
+
   test("up translates backend flags into stack configuration", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-cli-up-"));
     roots.push(root);
@@ -68,6 +83,114 @@ printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBO
 
     expect(exitCode).not.toBe(0);
     expect(stderr).toContain("--harbor-environment is required with --backend vercel");
+  });
+
+  test("explains how to configure Vercel when no profile or complete environment exists", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-cli-missing-vercel-profile-"));
+    roots.push(root);
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "src/cli.ts",
+        "up",
+        "--backend",
+        "vercel",
+        "--harbor-environment",
+        "docker",
+      ],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          SELFBENCH_CONFIG_DIR: join(root, ".selfbench"),
+          SELFBENCH_VERCEL_IMAGE: "",
+          VERCEL_TOKEN: "",
+          VERCEL_TEAM_ID: "",
+          VERCEL_PROJECT_ID: "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("run self-bench setup vercel");
+    expect(stderr).toContain("VERCEL_TOKEN");
+  });
+
+  test("up resolves a saved Vercel profile without requiring exported credentials", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-cli-vercel-profile-"));
+    roots.push(root);
+    const binaryDirectory = join(root, "bin");
+    const configDirectory = join(root, ".selfbench");
+    const calls = join(root, "docker-calls");
+    await mkdir(binaryDirectory);
+    await saveVercelProfile({
+      directory: configDirectory,
+      profileName: "default",
+      token: "stored-vercel-token",
+      profile: {
+        teamId: "team_saved",
+        teamSlug: "saved-team",
+        teamName: "Saved Team",
+        projectId: "prj_saved",
+        projectName: "saved-project",
+        vcrRepository: "selfbench-runtime",
+        image: `selfbench-runtime@sha256:${"b".repeat(64)}`,
+        runtimeFingerprint: "c".repeat(64),
+        timeoutCapMs: 45 * 60 * 1_000,
+        capabilityCheckedAt: "2026-08-16T12:00:00.000Z",
+      },
+    });
+    const docker = join(binaryDirectory, "docker");
+    await writeFile(
+      docker,
+      `#!/bin/sh
+printf '%s|%s|%s|%s|%s\n' "$*" "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" "$SELFBENCH_VERCEL_IMAGE" "$SELFBENCH_VERCEL_TIMEOUT_CAP" >> "$DOCKER_CALLS"
+`,
+    );
+    await chmod(docker, 0o755);
+
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "src/cli.ts",
+        "up",
+        "--backend",
+        "vercel",
+        "--harbor-environment",
+        "docker",
+      ],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          DOCKER_CALLS: calls,
+          PATH: `${binaryDirectory}:${process.env.PATH ?? ""}`,
+          SELFBENCH_CONFIG_DIR: configDirectory,
+          SELFBENCH_VERCEL_IMAGE: "",
+          VERCEL_TOKEN: "",
+          VERCEL_TEAM_ID: "",
+          VERCEL_PROJECT_ID: "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+
+    expect(exitCode, stderr).toBe(0);
+    expect(stdout).toContain("vercel generation and docker Harbor");
+    const invocation = await readFile(calls, "utf8");
+    expect(invocation).toContain("|team_saved|prj_saved|");
+    expect(invocation).toContain(`selfbench-runtime@sha256:${"b".repeat(64)}`);
+    expect(invocation).toContain("|2700000ms\n");
+    expect(invocation).not.toContain("stored-vercel-token");
   });
 
   test("configures every supported mixed generation and Harbor provider pair", async () => {
