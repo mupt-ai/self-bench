@@ -25,7 +25,7 @@ self-bench requires GitHub and model credentials:
 
 Existing deployments may continue using ChatGPT subscription authentication by providing both `SELFBENCH_PI_AUTH_JSON` and `SELFBENCH_CODEX_AUTH_JSON`. API-key authentication takes precedence when `OPENAI_API_KEY` is set.
 
-Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. Vercel execution requires the explicit `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` triple described below. Keep all of these on the worker; the API does not need provider or model credentials.
+Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. Keep provider credentials on the worker; the API does not need them.
 
 ## Execution backends and Harbor
 
@@ -40,7 +40,7 @@ self-bench up --backend docker --harbor-environment modal
 self-bench up --backend modal --harbor-environment docker
 ```
 
-Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices.
+Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the effective Vercel timeout cap when applicable.
 
 ### Docker
 
@@ -71,85 +71,88 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 
 ### Vercel Sandbox
 
-Vercel is a generation backend only; choose Docker or Modal for Harbor. The workflow includes authoring and repair stages with two-hour sandbox deadlines, so the owning Vercel scope must have an effective limit of at least two hours. Vercel currently documents a 45-minute Hobby maximum and a 24-hour Pro/Enterprise maximum. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs.
+Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes, review requests 15 minutes, and authoring and repair request two hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
-#### 1. Create a project and access token
+#### Interactive local setup
 
-Create or select a project in the team that should own both the sandboxes and their runtime image. The project does not need a deployment. Create a short-lived, project-scoped [Vercel access token](https://vercel.com/docs/accounts/access-tokens) for that project and record the team and project IDs from Vercel settings.
-
-The Vercel SDK can use ambient OIDC when code runs on Vercel infrastructure. SelfBench worker configuration instead requires explicit `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` values. Vercel CLI login authenticates only the image-publication workflow; its session is not passed to the worker.
-
-#### 2. Publish the runtime image
-
-SelfBench requires its pinned Node, Pi, Codex, GitHub CLI, and `/work` runtime, so rolling Vercel managed images are not used. Publish `Dockerfile.sandbox` to the same project's [Vercel Container Registry](https://vercel.com/docs/container-registry/getting-started) as `linux/amd64`. Install the current [Vercel CLI](https://vercel.com/docs/cli) on the operator machine first:
+Install the current Vercel CLI and make sure Docker is available for the runtime-image build:
 
 ```bash
-npm install --global vercel
-vercel login
-
-export VERCEL_PROJECT_ID=prj_...
-IMAGE_TAG="$(git rev-parse --short HEAD)"
-
-vercel vcr login --project "$VERCEL_PROJECT_ID" docker
-vercel vcr build \
-  --project "$VERCEL_PROJECT_ID" \
-  --platform linux/amd64 \
-  --push \
-  docker . "selfbench-sandbox:$IMAGE_TAG" \
-  -- --file Dockerfile.sandbox
-
-vercel vcr tag inspect \
-  --project "$VERCEL_PROJECT_ID" \
-  --format json \
-  selfbench-sandbox "$IMAGE_TAG"
+npm install --global vercel@latest
+self-bench setup vercel
 ```
 
-Wait for VCR to report the image as `Ready`, then copy its immutable `sha256:...` digest. Configure the project-relative form so team and project slugs are not embedded in exported run metadata:
+Interactive setup keeps long-running publication and capability checks compact, with a live elapsed timer that freezes when each step completes. Use `self-bench setup vercel --verbose` to stream the underlying Vercel CLI and Docker build output; compact mode reveals retained command output automatically when a step fails.
+
+Setup uses Vercel CLI browser login for control-plane selection and VCR publication. It then:
+
+1. shows a searchable team or personal-scope picker;
+2. offers a searchable existing-project picker or creation of a dedicated project;
+3. asks for a project name, defaulting to `selfbench-sandbox`, and retries rather than silently suffixing an unavailable name;
+4. publishes the pinned `Dockerfile.sandbox` runtime to the project's `selfbench-runtime` VCR repository;
+5. prints the Vercel token page and asks for a manually created access token restricted to the selected project, with terminal echo disabled;
+6. creates and immediately deletes a one-vCPU, nonpersistent probe sandbox to verify the token, image, command execution, cleanup, and effective duration ceiling;
+7. activates the profile only after every required check succeeds.
+
+The project does not need a deployment. Its metered use is billed to its owning Vercel scope. CLI login and worker configuration are deliberately separate: CLI login selects and provisions resources, while the project-scoped token plus team and project IDs configure the SelfBench worker. Although the Vercel SDK supports ambient OIDC on Vercel infrastructure, SelfBench does not use it.
+
+Profiles live in `~/.selfbench/config.json`; tokens live separately in `~/.selfbench/credentials.json`. The directory is mode `0700`, both files are mode `0600`, writes are atomic, and displayed setup output never includes the token. Override the directory with `SELFBENCH_CONFIG_DIR` when isolation is needed. To maintain more than one project profile:
 
 ```bash
-export SELFBENCH_VERCEL_IMAGE='selfbench-sandbox@sha256:...'
+self-bench setup vercel --profile secondary
+self-bench up --backend vercel --vercel-profile secondary --harbor-environment modal
 ```
 
-Tags and rolling aliases are rejected. VCR repositories are project-scoped by default; a sandbox in another project cannot use the image unless the repository is explicitly shared. Keeping the token, project ID, and image in the same project is the simplest configuration.
+Without `--vercel-profile`, `self-bench up` uses the active profile most recently saved by setup. Rerunning setup revalidates the existing project and token by default. It fingerprints the exact Dockerfile—including its digest-pinned base and pinned tool defaults—plus the fingerprint schema and target platform; if the matching immutable VCR image is already ready, publication is skipped. A changed runtime produces a new content-derived tag and digest. The final image reference is always digest-pinned, and existing digests are not deleted automatically. If the default VCR repository contains unrelated images, setup leaves it untouched and asks for another name.
 
-#### 3. Start the worker
+When rerunning setup for a named profile, the available actions are:
+
+- **Revalidate** keeps the saved team, project, and token. It verifies current access, reuses a compatible ready image, republishes only if the runtime fingerprint changed, reruns the temporary Sandbox capability probe, and refreshes the saved image digest and timeout cap.
+- **Replace the access token** keeps the saved team and project, requests a new project-scoped token, and activates it only after verification succeeds. It replaces only the locally stored credential; revoke the old token separately in Vercel if necessary.
+- **Choose another team or project** repoints the same local profile name after the new project, image, and token pass verification. It does not delete the previous Vercel project or images. Use a different `--profile` name instead when both configurations should remain available.
+
+If setup is interrupted after creating a project or VCR repository, it reports the failure and leaves the durable resource in place; rerun setup to continue. It never activates a partial profile. Vercel projects and VCR images are reusable across SelfBench runs and persist after `self-bench down`.
+
+#### Start the local worker
+
+```bash
+self-bench up --backend vercel --harbor-environment modal
+# self-bench up --backend vercel --harbor-environment docker
+```
+
+Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. `self-bench up` resolves the profile, then validates the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
+
+The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and repair requests then run for at most 45 minutes and return exit 124 on timeout, so only the affected candidate is rejected. Discovery and review retain their shorter requested limits. The effective cap is included in run and export metadata.
+
+#### Environment-only and unattended workers
+
+`self-bench setup vercel` is intentionally interactive. CI and long-running workers can provide the same resolved values through environment variables or a secret manager:
 
 ```bash
 export VERCEL_TOKEN=...
 export VERCEL_TEAM_ID=team_...
 export VERCEL_PROJECT_ID=prj_...
-export SELFBENCH_VERCEL_IMAGE='selfbench-sandbox@sha256:...'
+export SELFBENCH_VERCEL_IMAGE='selfbench-runtime@sha256:...'
+export SELFBENCH_VERCEL_TIMEOUT_CAP=2h  # use 45m when that is the verified ceiling
 
-# Choose exactly one Harbor environment.
 self-bench up --backend vercel --harbor-environment modal
-# self-bench up --backend vercel --harbor-environment docker
 ```
 
-Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. `self-bench up` validates the complete credential triple and digest-pinned image before starting Compose.
+The image must already have been published from `Dockerfile.sandbox` to the same project's VCR as `linux/amd64`. Use the bare repository-plus-digest form shown above; tags and rolling aliases are rejected. VCR repositories are project-scoped by default, so a sandbox in another project cannot use the image unless the repository is explicitly shared. Explicit token and image values take precedence over profile values, and a lower timeout cap may be supplied; an override cannot exceed the profile's verified ceiling. Supplying a complete credential/image environment requires no local profile; partial team or project overrides are rejected rather than combined across scopes.
 
 Vercel defaults to four concurrent worker activities. A standard SelfBench sandbox requests 4 vCPUs, which Vercel pairs with 8 GB of memory, plus 32 GB of ephemeral disk. Unsupported CPU/memory combinations are rejected before allocation. Raise `SELFBENCH_ACTIVITY_CONCURRENCY` only after considering the team's allocation limits and budget. Lower it—often to `1`—when using Docker Harbor on a smaller local machine, because the Vercel-oriented default does not account for local Harbor capacity.
 
 Each sandbox run uses a fresh nonpersistent sandbox (`persistent: false`). SelfBench does not create snapshots or resume stopped sandboxes, and it attempts to delete every sandbox when the run ends. If deletion cannot be confirmed, the activity fails so the cleanup problem remains visible. If the worker crashes before cleanup, compute may continue until the provider timeout; Vercel then discards the filesystem, although the stopped sandbox record may remain for up to 14 days unless manually deleted.
 
-For manual inventory, install and authenticate Vercel's separate [Sandbox CLI](https://vercel.com/docs/sandbox/cli-reference), then include stopped records in the listing:
-
-```bash
-npm install --global sandbox
-sandbox login
-sandbox list --all
-sandbox snapshots list
-sandbox remove UNEXPECTED_SANDBOX_NAME
-```
-
-Cancel active workflows and let cleanup finish before stopping the stack. The project dashboard provides the same inspection and removal boundary.
+Cancel active workflows and let cleanup finish before stopping the stack.
 
 Common failures:
 
-- `timeout should be <= 45m` means Vercel is applying the Hobby duration ceiling. Verify the token, team/project ownership, and effective paid plan; after a new paid plan starts, entitlement propagation may lag. Retry a cheap, short-lived create at the intended timeout later before contacting Vercel Support if a correctly scoped Pro/Enterprise project still receives it.
+- A newly changed paid plan may take time to propagate its longer timeout entitlement. Rerun `self-bench setup vercel` to repeat the short-lived capability probe and update the saved cap; if a correctly scoped paid project continues to detect 45 minutes, verify team/project ownership before contacting Vercel Support.
 - `not_found` on create usually means the image belongs to another project or is private and unshared. Prefer the same project and a bare digest reference.
 - `image_not_ready` means VCR has not finished optimizing the `linux/amd64` image.
 - Repeated HTTP 429 allocation failures indicate project/team allocation pressure. The executor honors bounded `Retry-After` retries; reduce activity concurrency if pressure continues.
-- Cleanup errors fail the activity rather than silently leaving reusable state. Inspect and remove the exact `selfbench-...` sandbox before retrying.
+- Cleanup errors fail the activity rather than silently leaving reusable state and include the exact `selfbench-...` sandbox name for diagnosis.
 
 ## CLI behavior
 
@@ -217,10 +220,12 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `self-bench up --modal-config` locally |
-| `SELFBENCH_VERCEL_IMAGE` | — | Required digest-pinned VCR image for Vercel execution |
-| `VERCEL_TOKEN` | — | Vercel worker; explicit access token |
-| `VERCEL_TEAM_ID` | — | Vercel worker |
-| `VERCEL_PROJECT_ID` | — | Vercel worker; must be able to resolve the configured image |
+| `SELFBENCH_VERCEL_IMAGE` | profile or — | Required digest-pinned VCR image for Vercel execution |
+| `SELFBENCH_VERCEL_TIMEOUT_CAP` | `2h` | Vercel worker and API; accepts integer milliseconds or `ms`, `s`, `m`, `h` units |
+| `SELFBENCH_CONFIG_DIR` | `~/.selfbench` | Local CLI profile directory; not needed with a complete Vercel environment |
+| `VERCEL_TOKEN` | profile or unset | Vercel worker; explicit project-scoped access token |
+| `VERCEL_TEAM_ID` | profile or unset | Vercel worker |
+| `VERCEL_PROJECT_ID` | profile or unset | Vercel worker; must be able to resolve the configured image |
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |
@@ -264,13 +269,14 @@ For Vercel generation, replace the execution settings above with:
 ```text
 SELFBENCH_EXECUTION_BACKEND=vercel
 SELFBENCH_HARBOR_ENVIRONMENT=modal  # or docker
-SELFBENCH_VERCEL_IMAGE=selfbench-sandbox@sha256:...
+SELFBENCH_VERCEL_IMAGE=selfbench-runtime@sha256:...
+SELFBENCH_VERCEL_TIMEOUT_CAP=2h     # or the verified 45m ceiling
 VERCEL_TOKEN=...
 VERCEL_TEAM_ID=team_...
 VERCEL_PROJECT_ID=prj_...
 ```
 
-Keep the Vercel credential triple on the worker only. A project-scoped token is sufficient when the runtime image belongs to that project. The API must also receive `SELFBENCH_EXECUTION_BACKEND`, `SELFBENCH_HARBOR_ENVIRONMENT`, and the non-secret `SELFBENCH_VERCEL_IMAGE` because it stamps the generation backend, Harbor environment, and image into each run manifest; it never needs the credential triple.
+Keep the Vercel credential triple on the worker only. A project-scoped token is sufficient when the runtime image belongs to that project. The API must also receive `SELFBENCH_EXECUTION_BACKEND`, `SELFBENCH_HARBOR_ENVIRONMENT`, `SELFBENCH_VERCEL_IMAGE`, and `SELFBENCH_VERCEL_TIMEOUT_CAP` because it stamps the generation backend, Harbor environment, image, and effective timeout cap into each run manifest; it never needs the credential triple.
 
 This repository defines the application boundary, not turnkey cloud infrastructure. Project, region, ingress, IAM, GCS, and Temporal provisioning remain deployment-specific.
 

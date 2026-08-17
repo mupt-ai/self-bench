@@ -15,9 +15,15 @@ import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
+import { SetupCanceledError } from "./terminal-prompts.js";
+import { applyVercelProfile } from "./vercel-profile.js";
+import { setupVercel } from "./vercel-setup.js";
 
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {
+  case "setup":
+    await setup(rest);
+    break;
   case "up":
     await up(rest);
     break;
@@ -49,6 +55,33 @@ switch (command) {
     throw new Error(`unknown command: ${command}`);
 }
 
+async function setup(args: string[]): Promise<void> {
+  const [provider, ...providerArgs] = args;
+  if (provider !== "vercel") {
+    fail("setup currently supports only: self-bench setup vercel");
+  }
+  const parsed = parseArgs({
+    args: providerArgs,
+    options: {
+      profile: { type: "string", default: "default" },
+      verbose: { type: "boolean", default: false },
+    },
+    strict: true,
+  });
+  try {
+    await setupVercel({
+      profileName: parsed.values.profile,
+      verbose: parsed.values.verbose,
+    });
+  } catch (error) {
+    if (error instanceof SetupCanceledError) {
+      process.exitCode = 130;
+      return;
+    }
+    throw error;
+  }
+}
+
 async function up(args: string[]): Promise<void> {
   const parsed = parseArgs({
     args,
@@ -56,6 +89,7 @@ async function up(args: string[]): Promise<void> {
       backend: { type: "string", default: "docker" },
       "harbor-environment": { type: "string" },
       "modal-config": { type: "string" },
+      "vercel-profile": { type: "string" },
     },
     strict: true,
   });
@@ -80,7 +114,10 @@ async function up(args: string[]): Promise<void> {
   if (!usesModal && parsed.values["modal-config"] !== undefined) {
     fail("--modal-config requires Modal generation or Harbor");
   }
-  const environment = {
+  if (backend !== "vercel" && parsed.values["vercel-profile"] !== undefined) {
+    fail("--vercel-profile requires Vercel generation");
+  }
+  let environment: NodeJS.ProcessEnv = {
     ...process.env,
     SELFBENCH_BUILD_COMMIT: await resolveSelfBenchCommit(),
     SELFBENCH_EXECUTION_BACKEND: backend,
@@ -94,6 +131,7 @@ async function up(args: string[]): Promise<void> {
       : {}),
   };
   if (backend === "vercel") {
+    environment = await applyVercelProfile(environment, parsed.values["vercel-profile"]);
     loadWorkerConfig(environment);
   }
 
@@ -359,8 +397,9 @@ function printHelp(): void {
   console.log(`SelfBench creates durable tiered Harbor evaluations.
 
 Usage:
+  self-bench setup vercel [--profile NAME] [--verbose]
   self-bench up [--backend docker|modal|vercel] [--harbor-environment docker|modal]
-                [--modal-config PATH]
+                [--modal-config PATH] [--vercel-profile NAME]
   self-bench down
   self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
                   [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
@@ -371,7 +410,8 @@ Usage:
 
 The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
 requires --harbor-environment because Harbor does not support Vercel. Modal generation or Harbor uses
-~/.modal.toml unless --modal-config overrides it.
+~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
+project, publish the pinned runtime image, verify access, and save an owner-only local profile.
 
 The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
 replaced, and the export contains only accepted tasks. The run command performs only repository metadata

@@ -136,7 +136,7 @@ Named Docker volumes retain Temporal history and generated artifacts.
 The quickstart is the recommended setup: a local stack with Modal sandboxes.
 
 - **Local stack + Docker sandboxes:** use `self-bench up --backend docker` when you want all execution on your machine.
-- **Local stack + Vercel Sandbox:** configure a Vercel project, access token, and digest-pinned VCR image, then explicitly choose Docker or Modal for Harbor validation.
+- **Local stack + Vercel Sandbox:** run `self-bench setup vercel`, then explicitly choose Docker or Modal for Harbor validation.
 - **Temporal Cloud + Modal:** use this for persistent unattended workers and large repositories.
 
 See [Operations and deployment](docs/operations.md) for backend configuration, credentials, persistence, object storage, and the complete Temporal Cloud deployment.
@@ -149,6 +149,7 @@ self-bench up --backend docker
 self-bench up --backend modal
 
 # Vercel generation with either supported Harbor environment
+self-bench setup vercel
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
 
