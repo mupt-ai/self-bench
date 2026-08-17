@@ -10,8 +10,10 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildCommit } from "./build-metadata.js";
+import { loadWorkerConfig } from "./config.js";
 import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
+import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
 
 const [command, ...rest] = process.argv.slice(2);
@@ -52,26 +54,38 @@ async function up(args: string[]): Promise<void> {
     args,
     options: {
       backend: { type: "string", default: "docker" },
+      "harbor-environment": { type: "string" },
       "modal-config": { type: "string" },
     },
     strict: true,
   });
-  if (parsed.values.backend !== "docker" && parsed.values.backend !== "modal") {
-    fail('--backend must be "docker" or "modal"');
+  if (!isExecutionBackend(parsed.values.backend)) {
+    fail('--backend must be "docker", "modal", or "vercel"');
   }
-  if (parsed.values.backend === "docker" && parsed.values["modal-config"] !== undefined) {
-    fail("--modal-config requires --backend modal");
+  if (
+    parsed.values["harbor-environment"] !== undefined &&
+    !isHarborEnvironment(parsed.values["harbor-environment"])
+  ) {
+    fail('--harbor-environment must be "docker" or "modal"');
   }
 
   const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const composeFile = resolve(projectRoot, "compose.yaml");
   const backend = parsed.values.backend;
+  const harborEnvironment =
+    parsed.values["harbor-environment"] ??
+    matchingHarborEnvironment(backend) ??
+    fail(`--harbor-environment is required with --backend ${backend}`);
+  const usesModal = backend === "modal" || harborEnvironment === "modal";
+  if (!usesModal && parsed.values["modal-config"] !== undefined) {
+    fail("--modal-config requires Modal generation or Harbor");
+  }
   const environment = {
     ...process.env,
     SELFBENCH_BUILD_COMMIT: await resolveSelfBenchCommit(),
     SELFBENCH_EXECUTION_BACKEND: backend,
-    SELFBENCH_HARBOR_ENVIRONMENT: backend,
-    ...(backend === "modal"
+    SELFBENCH_HARBOR_ENVIRONMENT: harborEnvironment,
+    ...(usesModal
       ? {
           SELFBENCH_MODAL_CONFIG_PATH: resolve(
             parsed.values["modal-config"] ?? resolve(homedir(), ".modal.toml"),
@@ -79,6 +93,9 @@ async function up(args: string[]): Promise<void> {
         }
       : {}),
   };
+  if (backend === "vercel") {
+    loadWorkerConfig(environment);
+  }
 
   if (backend === "docker") {
     await runCommand(
@@ -97,7 +114,9 @@ async function up(args: string[]): Promise<void> {
   await runCommand("docker", ["compose", "--file", composeFile, "up", "-d", "--build"], {
     env: environment,
   });
-  console.log(`SelfBench is running with the ${backend} backend at http://127.0.0.1:8080`);
+  console.log(
+    `SelfBench is running with ${backend} generation and ${harborEnvironment} Harbor at http://127.0.0.1:8080`,
+  );
 }
 
 async function down(): Promise<void> {
@@ -340,7 +359,8 @@ function printHelp(): void {
   console.log(`SelfBench creates durable tiered Harbor evaluations.
 
 Usage:
-  self-bench up [--backend docker|modal] [--modal-config PATH]
+  self-bench up [--backend docker|modal|vercel] [--harbor-environment docker|modal]
+                [--modal-config PATH]
   self-bench down
   self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
                   [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
@@ -349,8 +369,9 @@ Usage:
   self-bench download RUN_ID OUTPUT.tar.gz
   self-bench list
 
-The up command starts the local stack and configures both sandbox execution and Harbor validation for
-one backend. Modal uses ~/.modal.toml unless --modal-config overrides it.
+The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
+requires --harbor-environment because Harbor does not support Vercel. Modal generation or Harbor uses
+~/.modal.toml unless --modal-config overrides it.
 
 The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
 replaced, and the export contains only accepted tasks. The run command performs only repository metadata

@@ -1,7 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { harborChildEnvironment } from "./harbor-environment.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
+import type { HarborEnvironment } from "./providers.js";
 
 export const HARBOR_AGENT_ADAPTERS = [
   "oracle",
@@ -48,7 +50,7 @@ export interface AdapterSmokeOptions {
   readonly taskDirectory: string;
   readonly jobsDirectory: string;
   readonly harborPath?: string;
-  readonly environment?: "docker" | "modal";
+  readonly environment?: HarborEnvironment;
   readonly concurrency?: number;
 }
 
@@ -99,7 +101,11 @@ export async function smokeAllAdapters(
           "--yes",
           "--quiet",
         ],
-        { allowFailure: true, timeoutMs: 60 * 60 * 1000 },
+        {
+          allowFailure: true,
+          env: harborChildEnvironment(),
+          timeoutMs: 60 * 60 * 1000,
+        },
       );
       const summary: AdapterSmokeResult = {
         agent,

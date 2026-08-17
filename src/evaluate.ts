@@ -1,9 +1,11 @@
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { harborChildEnvironment } from "./harbor-environment.js";
 import { archiveIncompleteHarborJob, tryReadHarborJobResult } from "./harbor-results.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
+import type { HarborEnvironment } from "./providers.js";
 import { assertCodexSubscriptionAuth, openAiApiKey } from "./subscription-auth.js";
 
 export const MATRIX_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
@@ -15,7 +17,7 @@ export interface MatrixOptions {
   readonly tasksPath?: string;
   readonly jobsDirectory: string;
   readonly harborPath?: string;
-  readonly environment?: "docker" | "modal";
+  readonly environment?: HarborEnvironment;
   readonly concurrency?: number;
   readonly authPath?: string;
   readonly models?: readonly MatrixModel[];
@@ -114,7 +116,7 @@ async function runTrial(input: {
   readonly model: MatrixModel;
   readonly jobsDirectory: string;
   readonly harborPath: string;
-  readonly environment: "docker" | "modal";
+  readonly environment: HarborEnvironment;
   readonly authPath?: string;
 }): Promise<MatrixTrialSummary> {
   const taskId = basename(input.taskDirectory);
@@ -125,7 +127,7 @@ async function runTrial(input: {
   }
   await archiveIncompleteHarborJob(input.jobsDirectory, jobName);
 
-  const environment = { ...process.env };
+  const environment = harborChildEnvironment();
   if (input.authPath) {
     delete environment.OPENAI_API_KEY;
     environment.CODEX_FORCE_AUTH_JSON = "1";

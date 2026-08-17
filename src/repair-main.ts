@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { loadConfig } from "./config.js";
+import { defaultStandaloneConcurrency, loadWorkerConfig } from "./config.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
 import { createSandboxExecutor } from "./sandbox.js";
@@ -17,7 +17,7 @@ const parsed = parseArgs({
     review: { type: "string" },
     output: { type: "string" },
     task: { type: "string" },
-    concurrency: { type: "string", default: "9" },
+    concurrency: { type: "string" },
     model: { type: "string", default: "gpt-5.6-sol" },
     help: { type: "boolean", short: "h" },
   },
@@ -30,7 +30,7 @@ Usage:
   self-bench-repair --tasks DIRECTORY --review REPORT.json --output DIRECTORY [options]
 
 Options:
-  --concurrency N  Concurrent repair sandboxes (default: 9)
+  --concurrency N  Concurrent repair sandboxes (default: 9; Vercel: worker setting, default 4)
   --model MODEL    Codex subscription model (default: gpt-5.6-sol)
   --task ID        Repair only one coupled task
   -h, --help       Show this help`);
@@ -43,7 +43,11 @@ const outputDirectory = resolve(parsed.values.output ?? fail("--output is requir
 if (outputDirectory === tasksDirectory || outputDirectory.startsWith(`${tasksDirectory}/`)) {
   throw new Error("--output must be outside --tasks");
 }
-const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
+const config = loadWorkerConfig();
+const concurrency = positiveInteger(
+  parsed.values.concurrency ?? String(defaultStandaloneConcurrency(config, 9)),
+  "--concurrency",
+);
 const rawReview = JSON.parse(await readFile(reviewPath, "utf8")) as unknown;
 const review = reviewReport(rawReview);
 const coupled = new Map(
@@ -77,7 +81,6 @@ for (const source of sourceTasks) {
   }
 }
 
-const config = loadConfig();
 const sandbox = createSandboxExecutor(config.execution);
 const [modelAuth, repairer] = await Promise.all([
   loadCodexModelAuth(),

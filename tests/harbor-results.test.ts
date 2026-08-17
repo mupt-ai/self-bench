@@ -101,6 +101,23 @@ describe("Harbor result loading", () => {
         },
       }),
     ).toContain("Image build");
+    expect(
+      harborInfrastructureError({
+        exception_info: {
+          exception_type: "RuntimeError",
+          exception_message:
+            "docker compose exec network-policy allow failed: Error: Could not process rule",
+        },
+      }),
+    ).toContain("Could not process rule");
+    expect(
+      harborInfrastructureError({
+        exception_info: {
+          exception_type: "RuntimeError",
+          exception_message: "Error response from daemon: mounts denied: /data/jobs",
+        },
+      }),
+    ).toContain("mounts denied");
   });
 
   test("archives an interrupted job before retrying it", async () => {

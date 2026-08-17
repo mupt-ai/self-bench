@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS, matchingHarborEnvironment } from "./providers.js";
 
 export const commitSchema = z.string().regex(/^[0-9a-f]{40}$/i, "expected a full commit SHA");
 
@@ -34,6 +35,37 @@ const candidateCountsSchema = z
     message: "at most 100 candidates may be requested",
   });
 
+const runVersionSchema = z
+  .object({
+    selfbenchCommit: commitSchema,
+    executionBackend: z.enum(EXECUTION_BACKENDS),
+    harborEnvironment: z.enum(HARBOR_ENVIRONMENTS).optional(),
+    sandboxImage: z.string().min(1),
+    sandboxTimeoutCapMs: z.number().int().min(100).optional(),
+    schema: z.literal(1),
+  })
+  .transform((version, context) => {
+    const harborEnvironment =
+      version.harborEnvironment ?? matchingHarborEnvironment(version.executionBackend);
+    if (!harborEnvironment) {
+      context.addIssue({
+        code: "custom",
+        message: `harborEnvironment is required for ${version.executionBackend} execution`,
+        path: ["harborEnvironment"],
+      });
+      return z.NEVER;
+    }
+    if (version.sandboxTimeoutCapMs !== undefined && version.executionBackend !== "vercel") {
+      context.addIssue({
+        code: "custom",
+        message: "sandboxTimeoutCapMs is only valid for Vercel execution",
+        path: ["sandboxTimeoutCapMs"],
+      });
+      return z.NEVER;
+    }
+    return { ...version, harborEnvironment };
+  });
+
 export const runRequestSchema = z.object({
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
   repository: repositoryRefSchema,
@@ -44,12 +76,7 @@ export const runRequestSchema = z.object({
     model: z.string().min(1),
     reasoningEffort: z.literal("high"),
   }),
-  version: z.object({
-    selfbenchCommit: commitSchema,
-    executionBackend: z.enum(["docker", "modal"]),
-    sandboxImage: z.string().min(1),
-    schema: z.literal(1),
-  }),
+  version: runVersionSchema,
 });
 
 export type RunRequest = z.infer<typeof runRequestSchema>;

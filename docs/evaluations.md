@@ -16,6 +16,8 @@ tasks/
 
 Exports include repository snapshots, held-out tests, and reference solutions. They are sensitive and unencrypted; keep them private.
 
+The provider that generated an export does not constrain where Harbor runs it. Every task has the same provider-neutral Harbor layout, and `manifest.json` records the generation backend and the Harbor environment used for self-bench's nop/oracle gates. For later coding-agent trials, independently choose `--environment docker` or `--environment modal`. Harbor does not currently provide a Vercel environment; Vercel Sandbox is used only during benchmark generation.
+
 ## Run one task
 
 Extract the export and select a task:

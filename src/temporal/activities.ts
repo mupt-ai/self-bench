@@ -12,7 +12,7 @@ import {
   couplingReviewInput,
   couplingReviewSchema,
 } from "../codex-review.js";
-import type { SelfBenchConfig } from "../config.js";
+import type { SelfBenchConfig, SelfBenchWorkerConfig } from "../config.js";
 import {
   type ArtifactRef,
   type AuditResult,
@@ -34,6 +34,7 @@ import {
   scanBaseContractArtifacts,
 } from "../coupling.js";
 import { assertPullRequestBelongsToRepository } from "../github.js";
+import { harborChildEnvironment } from "../harbor-environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -114,7 +115,7 @@ export interface SelfBenchActivities {
   buildExport(input: ExportInput): Promise<ArtifactRef>;
 }
 
-export function createActivities(config: SelfBenchConfig): SelfBenchActivities {
+export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivities {
   const store = createArtifactStore(config.artifact);
   const sandbox = createSandboxExecutor(config.execution);
   return {
@@ -1054,7 +1055,12 @@ async function runHarborGate(
       "--yes",
       "--quiet",
     ],
-    { allowFailure: true, timeoutMs: 3 * 60 * 60 * 1000, signal },
+    {
+      allowFailure: true,
+      env: harborChildEnvironment(),
+      timeoutMs: 3 * 60 * 60 * 1000,
+      signal,
+    },
   );
   if (result.exitCode !== 0) {
     throw ApplicationFailure.create({

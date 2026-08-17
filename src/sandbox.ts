@@ -1,6 +1,8 @@
-import type { SelfBenchConfig } from "./config.js";
+import type { SelfBenchWorkerConfig } from "./config.js";
 import { DockerSandboxExecutor } from "./docker-executor.js";
 import { ModalSandboxExecutor } from "./modal-executor.js";
+import { TimeoutCappedSandboxExecutor } from "./sandbox-timeout.js";
+import { VercelSandboxExecutor } from "./vercel-executor.js";
 
 export interface SandboxFile {
   readonly path: string;
@@ -44,8 +46,16 @@ export interface SandboxExecutor {
   close(): void;
 }
 
-export function createSandboxExecutor(config: SelfBenchConfig["execution"]): SandboxExecutor {
-  return config.kind === "modal"
-    ? new ModalSandboxExecutor(config)
-    : new DockerSandboxExecutor(config);
+export function createSandboxExecutor(config: SelfBenchWorkerConfig["execution"]): SandboxExecutor {
+  switch (config.kind) {
+    case "docker":
+      return new DockerSandboxExecutor(config);
+    case "modal":
+      return new ModalSandboxExecutor(config);
+    case "vercel":
+      return new TimeoutCappedSandboxExecutor(
+        new VercelSandboxExecutor(config),
+        config.timeoutCapMs,
+      );
+  }
 }

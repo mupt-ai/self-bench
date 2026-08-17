@@ -11,6 +11,7 @@ import type { SelfBenchConfig } from "./config.js";
 import {
   artifactRefSchema,
   type RunPhase,
+  type RunRequest,
   type RunStatus,
   repositoryRefSchema,
   runRequestSchema,
@@ -68,26 +69,10 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
         return;
       }
       if (request.method === "POST" && url.pathname === "/v1/runs") {
-        const submission = submissionSchema.parse(
+        const workflowInput = buildRunRequest(
+          config,
           JSON.parse((await readBody(request)).toString("utf8")),
         );
-        const workflowInput = runRequestSchema.parse({
-          runId: submission.runId,
-          repository: submission.repository,
-          provenance: submission.provenance,
-          candidateCounts: submission.candidateCounts,
-          authoring: {
-            provider: "openai-codex",
-            model: submission.authoringModel,
-            reasoningEffort: "high",
-          },
-          version: {
-            selfbenchCommit: config.buildCommit ?? submission.selfbenchCommit,
-            executionBackend: config.execution.kind,
-            sandboxImage: config.execution.image,
-            schema: 1,
-          },
-        });
         await client.workflow.start(selfBenchRunWorkflow, {
           workflowId: workflowInput.runId,
           taskQueue: config.temporal.taskQueue,
@@ -165,6 +150,34 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
     );
     await connection.close();
   };
+}
+
+export function buildRunRequest(
+  config: SelfBenchConfig,
+  submission: z.input<typeof submissionSchema>,
+): RunRequest {
+  const parsed = submissionSchema.parse(submission);
+  return runRequestSchema.parse({
+    runId: parsed.runId,
+    repository: parsed.repository,
+    provenance: parsed.provenance,
+    candidateCounts: parsed.candidateCounts,
+    authoring: {
+      provider: "openai-codex",
+      model: parsed.authoringModel,
+      reasoningEffort: "high",
+    },
+    version: {
+      selfbenchCommit: config.buildCommit ?? parsed.selfbenchCommit,
+      executionBackend: config.execution.kind,
+      harborEnvironment: config.harborEnvironment,
+      sandboxImage: config.execution.image,
+      ...(config.execution.kind === "vercel"
+        ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
+        : {}),
+      schema: 1,
+    },
+  });
 }
 
 async function queryStatus(

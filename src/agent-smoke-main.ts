@@ -2,6 +2,7 @@
 
 import { parseArgs } from "node:util";
 import { smokeAllAdapters } from "./agent-smoke.js";
+import { isHarborEnvironment } from "./providers.js";
 
 const parsed = parseArgs({
   options: {
@@ -27,8 +28,8 @@ Options:
   -h, --help                 Show this help`);
   process.exit(0);
 }
-const environment = parsed.values.environment;
-if (environment !== "docker" && environment !== "modal") {
+const environment = parsed.values.environment ?? "modal";
+if (!isHarborEnvironment(environment)) {
   throw new Error("--environment must be docker or modal");
 }
 const results = await smokeAllAdapters({

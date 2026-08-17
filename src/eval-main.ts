@@ -2,6 +2,7 @@
 
 import { parseArgs } from "node:util";
 import { MATRIX_MODELS, type MatrixModel, runMatrix } from "./evaluate.js";
+import { isHarborEnvironment } from "./providers.js";
 
 const parsed = parseArgs({
   options: {
@@ -33,8 +34,8 @@ Options:
   -h, --help                 Show this help`);
   process.exit(0);
 }
-const environment = parsed.values.environment;
-if (environment !== "docker" && environment !== "modal") {
+const environment = parsed.values.environment ?? "modal";
+if (!isHarborEnvironment(environment)) {
   throw new Error("--environment must be docker or modal");
 }
 const concurrency = positiveInteger(parsed.values.concurrency, "--concurrency");
