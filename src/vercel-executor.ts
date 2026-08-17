@@ -39,6 +39,9 @@ type Sleep = (delayMs: number, signal: AbortSignal) => Promise<void>;
 class VercelHardTimeoutError extends Error {
   constructor(name: string, stage: string, timeoutMs: number) {
     super(`Vercel sandbox ${name} stage ${stage} exceeded ${timeoutMs}ms`);
+    // Passed as the abort reason to in-flight SDK calls, so it carries the
+    // standard DOMException timeout name. run() converts it into an exit-124
+    // result rather than throwing.
     this.name = "TimeoutError";
   }
 }
