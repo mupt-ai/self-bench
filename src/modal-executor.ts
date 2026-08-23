@@ -132,7 +132,6 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         process.wait().then(
           (value) => {
             exitCode = value;
-            notifyFailure();
           },
           (error: unknown) => {
             processError = error;

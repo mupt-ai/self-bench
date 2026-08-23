@@ -103,6 +103,57 @@ describe("ModalSandboxExecutor", () => {
     expect(allocations).toBe(0);
   });
 
+  test("drains successful output after the process reports completion", async () => {
+    const stdout = new ReadableStream<string>({
+      async start(controller) {
+        await Bun.sleep(20);
+        controller.enqueue("late output");
+        controller.close();
+      },
+    });
+    const emptyStream = () =>
+      new ReadableStream<string>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    const sandbox = {
+      sandboxId: "sb-success",
+      filesystem: {
+        writeText: async () => undefined,
+        writeBytes: async () => undefined,
+        readBytes: async () => new Uint8Array(),
+      },
+      exec: async () => ({
+        closeStdin: async () => undefined,
+        stdout,
+        stderr: emptyStream(),
+        wait: async () => 0,
+      }),
+      terminate: async () => undefined,
+    };
+    const client = {
+      apps: { fromName: async () => ({}) },
+      images: { fromRegistry: () => ({ dockerfileCommands: () => ({}) }) },
+      sandboxes: { create: async () => sandbox },
+      secrets: { fromObject: async () => ({}) },
+      close: () => undefined,
+    } as unknown as ModalClient;
+    const executor = new ModalSandboxExecutor(
+      { kind: "modal", app: "selfbench", image: "node:22-bookworm" },
+      client,
+    );
+
+    const result = await executor.run({
+      runId: "modal-test",
+      stage: "success-probe",
+      timeoutMs: 1_000,
+      command: ["true"],
+    });
+
+    expect(result.stdout).toBe("late output");
+  });
+
   test("closes process stdin before waiting for completion", async () => {
     let stdinClosed = false;
     const emptyStream = () =>
