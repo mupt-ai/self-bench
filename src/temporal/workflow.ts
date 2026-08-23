@@ -1,3 +1,4 @@
+import { RetryState } from "@temporalio/common";
 import {
   ActivityFailure,
   ApplicationFailure,
@@ -215,7 +216,7 @@ export async function executeRun(
               validation,
             } satisfies ValidationRepairTaskInput);
           } catch (error) {
-            if (isCancellation(error)) {
+            if (isCancellation(error) || !isExhaustedActivityFailure(error)) {
               throw error;
             }
             rejectProgress(progress, "validation repair failed after its single activity attempt");
@@ -264,7 +265,7 @@ export async function executeRun(
               review: review.report,
             } satisfies RepairTaskInput);
           } catch (error) {
-            if (isCancellation(error)) {
+            if (isCancellation(error) || !isExhaustedActivityFailure(error)) {
               throw error;
             }
             rejectProgress(progress, "test repair failed after activity retries");
@@ -314,7 +315,10 @@ export async function executeRun(
         acceptedTasks.push(task);
         setTasks(taskProgress);
       } catch (error) {
-        if (!isHarborInfrastructureFailure(error)) {
+        if (isCancellation(error)) {
+          throw error;
+        }
+        if (!isExhaustedActivityFailure(error) && !isHarborInfrastructureFailure(error)) {
           throw error;
         }
         progress.status = "infrastructure_failed";
@@ -403,10 +407,7 @@ async function discoverWave(
         reportProgress();
         return result;
       } catch (error) {
-        if (isCancellation(error)) {
-          throw error;
-        }
-        if (isNonRetryableActivityFailure(error)) {
+        if (isCancellation(error) || !isExhaustedActivityFailure(error)) {
           throw error;
         }
         failedShards += 1;
@@ -466,6 +467,12 @@ function candidatePoolExhausted(
   );
 }
 
+function isExhaustedActivityFailure(error: unknown): error is ActivityFailure {
+  return (
+    error instanceof ActivityFailure && error.retryState === RetryState.MAXIMUM_ATTEMPTS_REACHED
+  );
+}
+
 function infrastructureFailureMessage(error: unknown): string {
   let cause = error;
   let message = error instanceof Error ? error.message : String(error);
@@ -484,20 +491,6 @@ function isHarborInfrastructureFailure(error: unknown): boolean {
   while (cause instanceof Error) {
     if (cause instanceof ApplicationFailure && cause.type === "HarborInfrastructureFailure") {
       return true;
-    }
-    cause = cause.cause;
-  }
-  return false;
-}
-
-function isNonRetryableActivityFailure(error: unknown): boolean {
-  if (!(error instanceof ActivityFailure)) {
-    return false;
-  }
-  let cause: unknown = error.cause;
-  while (cause instanceof Error) {
-    if (cause instanceof ApplicationFailure) {
-      return cause.nonRetryable === true;
     }
     cause = cause.cause;
   }

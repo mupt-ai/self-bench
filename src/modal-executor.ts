@@ -1,11 +1,12 @@
 import { type Image, ModalClient, type Secret } from "modal";
 import type { SelfBenchConfig } from "./config.js";
 import { InactivityTimeoutError, RollingOutput } from "./process.js";
-import type {
-  SandboxExecutor,
-  SandboxRequest,
-  SandboxResult,
-  SandboxRunOptions,
+import {
+  SandboxExecutionError,
+  type SandboxExecutor,
+  type SandboxRequest,
+  type SandboxResult,
+  type SandboxRunOptions,
 } from "./sandbox.js";
 
 export class ModalSandboxExecutor implements SandboxExecutor {
@@ -22,10 +23,12 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   }
 
   async run(request: SandboxRequest, options: SandboxRunOptions = {}): Promise<SandboxResult> {
+    options.signal?.throwIfAborted();
     const app = await this.#client.apps.fromName(this.#config.app, {
       createIfMissing: true,
       ...(this.#config.environment ? { environment: this.#config.environment } : {}),
     });
+    options.signal?.throwIfAborted();
     if (!this.#image) {
       this.#image = this.#buildImage();
     }
@@ -44,6 +47,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
     };
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
+      options.signal?.throwIfAborted();
       for (const file of request.files ?? []) {
         if (typeof file.contents === "string") {
           await sandbox.filesystem.writeText(file.contents, file.path);
@@ -106,21 +110,29 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         }
       };
       armInactivityTimer();
-      const [exitCode, stdout, stderr] = await Promise.all([
-        process.wait(),
-        consume("stdout", process.stdout, stdoutOutput),
-        consume("stderr", process.stderr, stderrOutput),
-      ])
-        .then(([exitCode]) => {
-          if (inactivityError) {
-            throw inactivityError;
-          }
-          return [exitCode, stdoutOutput.text(), stderrOutput.text()] as const;
-        })
-        .catch((error: unknown) => {
-          throw inactivityError ?? error;
-        })
-        .finally(clearInactivityTimer);
+      const settled = await Promise.allSettled([
+        process.wait().catch((error: unknown) => {
+          void sandbox.terminate();
+          throw error;
+        }),
+        consume("stdout", process.stdout, stdoutOutput).catch((error: unknown) => {
+          void sandbox.terminate();
+          throw error;
+        }),
+        consume("stderr", process.stderr, stderrOutput).catch((error: unknown) => {
+          void sandbox.terminate();
+          throw error;
+        }),
+      ]).finally(clearInactivityTimer);
+      const [processResult, ...streamResults] = settled;
+      const rejectedStream = streamResults.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      const executionError =
+        inactivityError ??
+        (processResult.status === "rejected" ? processResult.reason : undefined) ??
+        rejectedStream?.reason;
+      const exitCode = processResult.status === "fulfilled" ? processResult.value : 1;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
         try {
@@ -130,7 +142,21 @@ export class ModalSandboxExecutor implements SandboxExecutor {
           // absent output keeps the model or command failure diagnosable.
         }
       }
-      return { sandboxId: sandbox.sandboxId, exitCode, stdout, stderr, outputs };
+      const result = {
+        sandboxId: sandbox.sandboxId,
+        exitCode,
+        stdout: stdoutOutput.text(),
+        stderr: stderrOutput.text(),
+        outputs,
+      };
+      if (executionError) {
+        throw new SandboxExecutionError(
+          `${executionError instanceof Error ? executionError.message : String(executionError)}; sandbox ${sandbox.sandboxId}`,
+          result,
+          { cause: executionError },
+        );
+      }
+      return result;
     } finally {
       options.signal?.removeEventListener("abort", abort);
       await sandbox.terminate().catch(() => undefined);
