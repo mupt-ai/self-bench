@@ -6,7 +6,7 @@ import type { CommandOutputHandler } from "../src/process.js";
 import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox-timeout.js";
+} from "../src/sandbox/timeout.js";
 import type { PromptChoice, SetupPrompter } from "../src/terminal-prompts.js";
 import type { SetupReporter, SetupTaskLabels } from "../src/terminal-reporter.js";
 import type { VcrTag, VercelProject, VercelTeam } from "../src/vercel-cli.js";

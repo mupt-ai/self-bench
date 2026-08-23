@@ -2,13 +2,13 @@
 
 import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { defaultStandaloneConcurrency, loadWorkerConfig } from "./config.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
-import { createSandboxExecutor } from "./sandbox.js";
+import { projectRoot } from "./project-paths.js";
+import { createSandboxExecutor } from "./sandbox/index.js";
 import { loadCodexModelAuth } from "./subscription-auth.js";
 
 const parsed = parseArgs({
@@ -189,7 +189,7 @@ function reviewReport(value: unknown): { readonly tasks: readonly ReviewTask[] }
 }
 
 function assetRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  return projectRoot(import.meta.url);
 }
 
 function positiveInteger(value: string | undefined, label: string): number {

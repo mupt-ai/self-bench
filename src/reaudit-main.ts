@@ -3,7 +3,6 @@
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
   COUPLING_REVIEW_MODEL,
@@ -19,7 +18,8 @@ import {
 } from "./coupling.js";
 import { parallelMap } from "./parallel.js";
 import { runCommand } from "./process.js";
-import { createSandboxExecutor, type SandboxExecutor } from "./sandbox.js";
+import { projectRoot } from "./project-paths.js";
+import { createSandboxExecutor, type SandboxExecutor } from "./sandbox/index.js";
 import { loadPiModelAuth } from "./subscription-auth.js";
 
 const parsed = parseArgs({
@@ -182,7 +182,7 @@ async function auditTask(
 }
 
 function assetRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  return projectRoot(import.meta.url);
 }
 
 function positiveInteger(value: string | undefined, label: string): number {

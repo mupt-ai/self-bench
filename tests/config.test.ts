@@ -3,7 +3,7 @@ import { defaultStandaloneConcurrency, loadConfig, loadWorkerConfig } from "../s
 import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox-timeout.js";
+} from "../src/sandbox/timeout.js";
 
 const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 

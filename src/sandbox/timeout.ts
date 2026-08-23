@@ -3,7 +3,7 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
-} from "./sandbox.js";
+} from "./contracts.js";
 
 export const STANDARD_VERCEL_TIMEOUT_CAP_MS = 2 * 60 * 60 * 1_000;
 export const HOBBY_VERCEL_TIMEOUT_CAP_MS = 45 * 60 * 1_000;

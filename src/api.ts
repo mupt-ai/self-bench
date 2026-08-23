@@ -1,9 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { fileURLToPath } from "node:url";
 import { Client } from "@temporalio/client";
 import { z } from "zod";
 import { createArtifactStore } from "./artifacts.js";
@@ -16,6 +15,7 @@ import {
   repositoryRefSchema,
   runRequestSchema,
 } from "./contracts.js";
+import { projectRoot } from "./project-paths.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow, statusQuery } from "./temporal/workflow.js";
 
@@ -254,7 +254,7 @@ function authorized(request: IncomingMessage, token: string | undefined): boolea
 
 async function sendReviewAsset(response: ServerResponse, pathname: string): Promise<void> {
   const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
-  const root = join(dirname(fileURLToPath(import.meta.url)), "review");
+  const root = join(projectRoot(import.meta.url), "dist/review");
   const path = join(root, relativePath);
   if (!path.startsWith(`${root}/`)) {
     sendJson(response, 400, { error: "invalid asset path" });

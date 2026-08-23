@@ -1,14 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import type { SelfBenchConfig } from "./config.js";
-import { runCommand } from "./process.js";
+import type { SelfBenchConfig } from "../../config.js";
+import { runCommand } from "../../process.js";
 import type {
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
-} from "./sandbox.js";
+} from "../contracts.js";
 
 export class DockerSandboxExecutor implements SandboxExecutor {
   readonly #config: Extract<SelfBenchConfig["execution"], { kind: "docker" }>;

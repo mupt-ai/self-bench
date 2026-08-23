@@ -69,6 +69,10 @@ describe("Harbor task compiler", () => {
     expect(await readFile(join(output, "instruction.md"), "utf8")).toBe(
       "Implement the requested behavior.\n",
     );
+    expect(JSON.parse(await readFile(join(output, "definition.json"), "utf8"))).toMatchObject({
+      taskId: "example",
+      difficulty: "medium",
+    });
     const taskToml = await readFile(join(output, "task.toml"), "utf8");
     expect(taskToml).toContain('difficulty = "medium"');
     expect(taskToml).toContain('"medium"');
@@ -110,7 +114,7 @@ describe("Harbor task compiler", () => {
     expect(dockerfile).toContain("PLAYWRIGHT_BROWSERS_PATH=/opt/playwright");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(23);
+    ).toBe(24);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
@@ -126,6 +130,10 @@ describe("Harbor task compiler", () => {
     expect(refreshedManifest.definitionSha256).toBe(sha256(JSON.stringify(repairedDefinition)));
     expect(refreshedManifest.testPatchSha256).toBe(sha256(repairedPatch));
     expect(await readFile(join(output, "tests/test.sh"), "utf8")).toContain("--repaired");
+    expect(JSON.parse(await readFile(join(output, "definition.json"), "utf8"))).toMatchObject({
+      taskId: "example",
+      testCommand: "test --repaired {tests}",
+    });
   });
 
   test("detects supported dependency manifests without treating source changes as dependencies", () => {

@@ -2,7 +2,7 @@
 
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { compileHarborTask } from "./harbor-task.js";
+import { compileHarborTask } from "../../harbor-task.js";
 
 const [tasksRoot, repositoryDirectory, outputDirectory] = process.argv.slice(2);
 if (!tasksRoot || !repositoryDirectory || !outputDirectory) {

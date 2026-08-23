@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { APIError, Sandbox } from "@vercel/sandbox";
 import type { VercelCredentials } from "./config.js";
-import { HOBBY_VERCEL_TIMEOUT_CAP_MS, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox-timeout.js";
+import { HOBBY_VERCEL_TIMEOUT_CAP_MS, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox/timeout.js";
 
 const PROBE_COMMAND_TIMEOUT_MS = 15_000;
 const CLEANUP_TIMEOUT_MS = 60_000;
