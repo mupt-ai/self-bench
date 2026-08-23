@@ -44,7 +44,13 @@ import { refreshHarborTask } from "../harbor-task.js";
 import { sha256 } from "../hash.js";
 import { runCommand } from "../process.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../provenance.js";
-import { createSandboxExecutor, type SandboxExecutor, type SandboxRunOptions } from "../sandbox.js";
+import {
+  createSandboxExecutor,
+  SandboxExecutionError,
+  type SandboxExecutor,
+  type SandboxResult,
+  type SandboxRunOptions,
+} from "../sandbox.js";
 import { githubToken, loadCodexModelAuth, loadPiModelAuth } from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
@@ -180,36 +186,38 @@ async function discoverCandidateShard(
     Context.current().heartbeat(
       `starting discovery wave ${input.wave} shard ${input.shardIndex} over ${shard.length} messages`,
     );
-    const result = await withActivityHeartbeats(
-      `running discovery wave ${input.wave} shard ${input.shardIndex}`,
-      (options) =>
-        sandbox.run(
-          {
-            runId: run.runId,
-            stage: `discover-${input.wave}-${input.shardIndex}`,
-            timeoutMs: DISCOVERY_TIMEOUT_MS,
-            inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
-            files: [
-              { path: "/work/discovery.ts", contents: extension },
-              { path: "/work/provenance.jsonl", contents: shardBytes },
-              { path: "/work/prompt.txt", contents: discoveryShardPrompt(input, shard.length) },
-            ],
-            outputPaths: ["/work/discovery.json"],
-            secrets: {
-              ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-              ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
-              ...(ghToken ? { GH_TOKEN: ghToken } : {}),
+    const result = await runSandboxWithFailureLog(store, `${attemptPrefix}/modal.log`, () =>
+      withActivityHeartbeats(
+        `running discovery wave ${input.wave} shard ${input.shardIndex}`,
+        (options) =>
+          sandbox.run(
+            {
+              runId: run.runId,
+              stage: `discover-${input.wave}-${input.shardIndex}`,
+              timeoutMs: DISCOVERY_TIMEOUT_MS,
+              inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
+              files: [
+                { path: "/work/discovery.ts", contents: extension },
+                { path: "/work/provenance.jsonl", contents: shardBytes },
+                { path: "/work/prompt.txt", contents: discoveryShardPrompt(input, shard.length) },
+              ],
+              outputPaths: ["/work/discovery.json"],
+              secrets: {
+                ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
+                ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
+                ...(ghToken ? { GH_TOKEN: ghToken } : {}),
+              },
+              environment: {
+                SOURCE_REPO_URL: run.repository.url,
+                SOURCE_COMMIT: run.repository.commit,
+                AUTHOR_MODEL: run.authoring.model,
+                SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
+              },
+              command: ["bash", "-lc", modalAgentScript("discovery.ts", "submit_discovery")],
             },
-            environment: {
-              SOURCE_REPO_URL: run.repository.url,
-              SOURCE_COMMIT: run.repository.commit,
-              AUTHOR_MODEL: run.authoring.model,
-              SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
-            },
-            command: ["bash", "-lc", modalAgentScript("discovery.ts", "submit_discovery")],
-          },
-          options,
-        ),
+            options,
+          ),
+      ),
     );
     planBytes = result.outputs["/work/discovery.json"];
     logs = await store.put(
@@ -357,9 +365,9 @@ async function authorCandidate(
     githubToken(),
   ]);
   const prompt = authoringPrompt(run, candidate);
-  const result = await withActivityHeartbeats(
-    `running author sandbox for ${candidate.candidateId}`,
-    (options) =>
+  const attemptLogKey = `runs/${run.runId}/authoring/${candidate.candidateId}/attempt-${Context.current().info.attempt}/modal.log`;
+  const result = await runSandboxWithFailureLog(store, attemptLogKey, () =>
+    withActivityHeartbeats(`running author sandbox for ${candidate.candidateId}`, (options) =>
       sandbox.run(
         {
           runId: run.runId,
@@ -389,9 +397,10 @@ async function authorCandidate(
         },
         options,
       ),
+    ),
   );
   const log = await store.put(
-    `runs/${run.runId}/authoring/${candidate.candidateId}/attempt-${Context.current().info.attempt}/modal.log`,
+    attemptLogKey,
     Buffer.from(`${result.stdout}\n${result.stderr}`),
     "text/plain",
   );
@@ -985,9 +994,9 @@ function modalAgentScript(extension: string, tool: string): string {
   return `${sandboxBootstrap()}
 clone_source
 cd /work/repo
-pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
+run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
   --extension /work/${extension} --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,${tool} "$(cat /work/prompt.txt)" 2>&1`;
+  --tools read,bash,grep,find,ls,${tool} "$(cat /work/prompt.txt)"`;
 }
 
 function authoringScript(): string {
@@ -995,10 +1004,10 @@ function authoringScript(): string {
 clone_source
 mkdir -p /work/tasks
 cd /work/repo
-pi --print --mode json --no-session --no-approve --no-prompt-templates --no-context-files --no-extensions \\
+run_with_heartbeat pi --print --mode json --no-session --no-approve --no-prompt-templates --no-context-files --no-extensions \\
   --skill /work/selfbench-skill --extension /work/authoring.ts \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)" 2>&1
+  --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)"
 node /work/sandbox-author.js /work/tasks /work/repo /work/harbor-task
 cp /work/tasks/*/definition.json /work/definition.json
 tar -czf /work/task.tar.gz -C /work harbor-task`;
@@ -1014,6 +1023,25 @@ fi
 printf '%s\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
 chmod 600 "$HOME/.pi/agent/settings.json"
 model_provider() { [ -n "\${OPENAI_API_KEY:-}" ] && printf openai || printf openai-codex; }
+run_with_heartbeat() {
+  "$@" 2>&1 &
+  local command_pid=$!
+  (
+    while sleep 60; do
+      printf '[selfbench] agent process %s still running at %s\n' "$command_pid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+    done
+  ) &
+  local heartbeat_pid=$!
+  trap 'kill "$command_pid" "$heartbeat_pid" 2>/dev/null || true' TERM INT
+  set +e
+  wait "$command_pid"
+  local command_status=$?
+  set -e
+  kill "$heartbeat_pid" 2>/dev/null || true
+  wait "$heartbeat_pid" 2>/dev/null || true
+  trap - TERM INT
+  return "$command_status"
+}
 cleanup() { rm -f "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/settings.json" "$HOME/.git-credentials"; }
 trap cleanup EXIT
 clone_source() {
@@ -1135,6 +1163,26 @@ function boundedTail(value: string, maxBytes = 8_000): string {
   return buffer.length <= maxBytes
     ? value.trimEnd()
     : `[truncated ${buffer.length - maxBytes} bytes]\n${buffer.subarray(-maxBytes).toString("utf8").trimEnd()}`;
+}
+
+async function runSandboxWithFailureLog(
+  store: ArtifactStore,
+  logKey: string,
+  action: () => Promise<SandboxResult>,
+): Promise<SandboxResult> {
+  try {
+    return await action();
+  } catch (error) {
+    if (!(error instanceof SandboxExecutionError)) {
+      throw error;
+    }
+    const log = await store.put(
+      logKey,
+      Buffer.from(`${error.result.stdout}\n${error.result.stderr}`),
+      "text/plain",
+    );
+    throw new Error(`${error.message}; partial log: ${log.uri}`, { cause: error });
+  }
 }
 
 async function withActivityHeartbeats<T>(

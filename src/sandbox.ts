@@ -41,6 +41,17 @@ export interface SandboxResult {
   readonly outputs: Readonly<Record<string, Uint8Array>>;
 }
 
+export class SandboxExecutionError extends Error {
+  constructor(
+    message: string,
+    readonly result: SandboxResult,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "SandboxExecutionError";
+  }
+}
+
 export interface SandboxExecutor {
   run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult>;
   close(): void;

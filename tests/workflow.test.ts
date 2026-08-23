@@ -95,6 +95,51 @@ describe("SelfBench workflow", () => {
     expect(currentStatus?.().phase).toBe("cancelled");
   });
 
+  test("tolerates only retry-exhausted discovery shards", async () => {
+    const activities = acceptingActivities([]);
+    activities.discoverCandidateShard = async ({ shardIndex }) => {
+      if (shardIndex === 0) {
+        throw new ActivityFailure(
+          "Activity task failed",
+          "discoverCandidateShard",
+          "activity-id",
+          RetryState.MAXIMUM_ATTEMPTS_REACHED,
+          "worker",
+          new Error("discovery sandbox unavailable"),
+        );
+      }
+      return {
+        candidates: shardIndex === 1 ? [candidate("surviving-candidate", 1)] : [],
+        report: artifact,
+      };
+    };
+
+    const result = await executeRun(run, activities);
+
+    expect(result.acceptedTaskIds).toEqual(["surviving-candidate-task"]);
+  });
+
+  test("propagates deterministic discovery errors", async () => {
+    const activities = acceptingActivities([]);
+    activities.discoverCandidateShard = async ({ shardIndex }) => {
+      if (shardIndex === 0) {
+        throw new Error("invalid discovery implementation");
+      }
+      return {
+        candidates: [candidate(`candidate-${shardIndex}`, shardIndex + 1)],
+        report: artifact,
+      };
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    await expect(
+      executeRun(run, activities, (status) => {
+        currentStatus = status;
+      }),
+    ).rejects.toThrow("invalid discovery implementation");
+    expect(currentStatus?.().phase).toBe("failed");
+  });
+
   test("authors the exact mixed tier budgets and exports accepted tasks", async () => {
     const candidates = [
       candidate("easy-1", 1, "easy"),
@@ -215,6 +260,74 @@ describe("SelfBench workflow", () => {
     ]);
   });
 
+  test("isolates an exhausted authoring activity and completes successful siblings", async () => {
+    const activities = acceptingActivities([
+      candidate("timed-out", 1),
+      candidate("successful-sibling", 2),
+    ]);
+    const originalAuthor = activities.authorCandidate;
+    activities.authorCandidate = async (input) => {
+      if (input.candidate.candidateId === "timed-out") {
+        throw new ActivityFailure(
+          "Activity task failed",
+          "authorCandidate",
+          "activity-id",
+          RetryState.MAXIMUM_ATTEMPTS_REACHED,
+          "worker",
+          ApplicationFailure.retryable(
+            "author sandbox produced no output for 480000ms; partial log: file:///modal.log",
+            "Error",
+          ),
+        );
+      }
+      return await originalAuthor(input);
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    const result = await executeRun(
+      { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } },
+      activities,
+      (status) => {
+        currentStatus = status;
+      },
+    );
+
+    expect(result.acceptedTaskIds).toEqual(["successful-sibling-task"]);
+    expect(currentStatus?.().phase).toBe("complete");
+    expect(currentStatus?.().tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidateId: "timed-out",
+          status: "infrastructure_failed",
+          reason: expect.stringContaining("partial log: file:///modal.log"),
+        }),
+        expect.objectContaining({ candidateId: "successful-sibling", status: "accepted" }),
+      ]),
+    );
+  });
+
+  test("propagates non-retryable candidate activity failures", async () => {
+    const activities = acceptingActivities([candidate("invalid", 1)]);
+    activities.authorCandidate = async () => {
+      throw new ActivityFailure(
+        "Activity task failed",
+        "authorCandidate",
+        "activity-id",
+        RetryState.NON_RETRYABLE_FAILURE,
+        "worker",
+        ApplicationFailure.nonRetryable("invalid task contract", "InvalidTask"),
+      );
+    };
+    let currentStatus: (() => RunStatus) | undefined;
+
+    await expect(
+      executeRun(run, activities, (status) => {
+        currentStatus = status;
+      }),
+    ).rejects.toBeInstanceOf(ActivityFailure);
+    expect(currentStatus?.().phase).toBe("failed");
+  });
+
   test("repairs a failed validation once and repeats audit and validation", async () => {
     const calls: string[] = [];
     let validations = 0;
@@ -273,9 +386,14 @@ describe("SelfBench workflow", () => {
       ...(task.candidateId === "successful-sibling" ? {} : { reason: "oracle failed" }),
     });
     activities.repairValidationTask = async () => {
-      throw new Error("Activity task failed", {
-        cause: new Error("validation repair sandbox produced no output for 480000ms"),
-      });
+      throw new ActivityFailure(
+        "Activity task failed",
+        "repairValidationTask",
+        "activity-id",
+        RetryState.MAXIMUM_ATTEMPTS_REACHED,
+        "worker",
+        new Error("validation repair sandbox produced no output for 480000ms"),
+      );
     };
     let currentStatus: (() => RunStatus) | undefined;
 
@@ -386,9 +504,14 @@ describe("SelfBench workflow", () => {
       reason: "coupled test",
     });
     activities.repairTask = async () => {
-      throw new Error("Activity task failed", {
-        cause: new Error("test repair sandbox exited 1"),
-      });
+      throw new ActivityFailure(
+        "Activity task failed",
+        "repairTask",
+        "activity-id",
+        RetryState.MAXIMUM_ATTEMPTS_REACHED,
+        "worker",
+        new Error("test repair sandbox exited 1"),
+      );
     };
     let currentStatus: (() => RunStatus) | undefined;
 

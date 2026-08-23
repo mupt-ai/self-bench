@@ -1,12 +1,16 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { type Image, ModalClient, type Secret } from "modal";
 import type { SelfBenchConfig } from "./config.js";
 import { InactivityTimeoutError, RollingOutput } from "./process.js";
-import type {
-  SandboxExecutor,
-  SandboxRequest,
-  SandboxResult,
-  SandboxRunOptions,
+import {
+  SandboxExecutionError,
+  type SandboxExecutor,
+  type SandboxRequest,
+  type SandboxResult,
+  type SandboxRunOptions,
 } from "./sandbox.js";
+
+const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
 
 export class ModalSandboxExecutor implements SandboxExecutor {
   readonly #client: ModalClient;
@@ -22,10 +26,12 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   }
 
   async run(request: SandboxRequest, options: SandboxRunOptions = {}): Promise<SandboxResult> {
+    options.signal?.throwIfAborted();
     const app = await this.#client.apps.fromName(this.#config.app, {
       createIfMissing: true,
       ...(this.#config.environment ? { environment: this.#config.environment } : {}),
     });
+    options.signal?.throwIfAborted();
     if (!this.#image) {
       this.#image = this.#buildImage();
     }
@@ -39,11 +45,14 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       tags: { run_id: request.runId, stage: request.stage },
     });
 
+    let notifyFailure = (): void => {};
     const abort = () => {
+      notifyFailure();
       void sandbox.terminate();
     };
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
+      options.signal?.throwIfAborted();
       for (const file of request.files ?? []) {
         if (typeof file.contents === "string") {
           await sandbox.filesystem.writeText(file.contents, file.path);
@@ -60,8 +69,12 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       await process.closeStdin();
       const stdoutOutput = new RollingOutput();
       const stderrOutput = new RollingOutput();
+      const readers = new Set<ReadableStreamDefaultReader<string | Uint8Array>>();
       let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
       let inactivityError: InactivityTimeoutError | undefined;
+      const failure = new Promise<void>((resolve) => {
+        notifyFailure = resolve;
+      });
       const clearInactivityTimer = (): void => {
         if (inactivityTimer) {
           clearTimeout(inactivityTimer);
@@ -78,7 +91,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
             `Modal sandbox ${sandbox.sandboxId} stage ${request.stage}`,
             request.inactivityTimeoutMs ?? 0,
           );
-          void sandbox.terminate();
+          notifyFailure();
         }, request.inactivityTimeoutMs);
         inactivityTimer.unref();
       };
@@ -88,6 +101,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         output: RollingOutput,
       ): Promise<void> => {
         const reader = stream.getReader();
+        readers.add(reader);
         try {
           while (true) {
             const { value, done } = await reader.read();
@@ -102,25 +116,38 @@ export class ModalSandboxExecutor implements SandboxExecutor {
             }
           }
         } finally {
+          readers.delete(reader);
           reader.releaseLock();
         }
       };
+      let exitCode: number | undefined;
+      let processError: unknown;
+      let streamError: unknown;
+      const captureFailure = (error: unknown): void => {
+        streamError ??= error;
+        notifyFailure();
+      };
       armInactivityTimer();
-      const [exitCode, stdout, stderr] = await Promise.all([
-        process.wait(),
-        consume("stdout", process.stdout, stdoutOutput),
-        consume("stderr", process.stderr, stderrOutput),
-      ])
-        .then(([exitCode]) => {
-          if (inactivityError) {
-            throw inactivityError;
-          }
-          return [exitCode, stdoutOutput.text(), stderrOutput.text()] as const;
-        })
-        .catch((error: unknown) => {
-          throw inactivityError ?? error;
-        })
-        .finally(clearInactivityTimer);
+      const completion = Promise.all([
+        process.wait().then(
+          (value) => {
+            exitCode = value;
+          },
+          (error: unknown) => {
+            processError = error;
+            notifyFailure();
+          },
+        ),
+        consume("stdout", process.stdout, stdoutOutput).catch(captureFailure),
+        consume("stderr", process.stderr, stderrOutput).catch(captureFailure),
+      ]);
+      await Promise.race([completion, failure.then(() => delay(FAILURE_DRAIN_TIMEOUT_MS))]).finally(
+        clearInactivityTimer,
+      );
+      if (readers.size > 0) {
+        void Promise.allSettled([...readers].map((reader) => reader.cancel()));
+      }
+      const executionError = inactivityError ?? processError ?? streamError;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
         try {
@@ -130,7 +157,21 @@ export class ModalSandboxExecutor implements SandboxExecutor {
           // absent output keeps the model or command failure diagnosable.
         }
       }
-      return { sandboxId: sandbox.sandboxId, exitCode, stdout, stderr, outputs };
+      const result = {
+        sandboxId: sandbox.sandboxId,
+        exitCode: exitCode ?? 1,
+        stdout: stdoutOutput.text(),
+        stderr: stderrOutput.text(),
+        outputs,
+      };
+      if (executionError) {
+        throw new SandboxExecutionError(
+          `${executionError instanceof Error ? executionError.message : String(executionError)}; sandbox ${sandbox.sandboxId}`,
+          result,
+          { cause: executionError },
+        );
+      }
+      return result;
     } finally {
       options.signal?.removeEventListener("abort", abort);
       await sandbox.terminate().catch(() => undefined);
