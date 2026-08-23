@@ -5,7 +5,7 @@ import { SandboxExecutionError } from "../src/sandbox.js";
 
 describe("ModalSandboxExecutor", () => {
   test("preserves partial output and sandbox identity when execution throws", async () => {
-    const stream = (value: string, delayedValue?: string) =>
+    const stream = (value: string, delayedValue?: string, remainOpen = false) =>
       new ReadableStream<string>({
         async start(controller) {
           controller.enqueue(value);
@@ -13,7 +13,9 @@ describe("ModalSandboxExecutor", () => {
             await Bun.sleep(10);
             controller.enqueue(delayedValue);
           }
-          controller.close();
+          if (!remainOpen) {
+            controller.close();
+          }
         },
       });
     const sandbox = {
@@ -21,13 +23,14 @@ describe("ModalSandboxExecutor", () => {
       filesystem: {
         writeText: async () => undefined,
         writeBytes: async () => undefined,
-        readBytes: async () => {
-          throw new Error("missing output");
-        },
+        readBytes: async (path: string) =>
+          path === "/work/partial.json"
+            ? Buffer.from('{"status":"partial"}')
+            : Promise.reject(new Error("missing output")),
       },
       exec: async () => ({
         closeStdin: async () => undefined,
-        stdout: stream("partial stdout", " after failure"),
+        stdout: stream("partial stdout", " after failure", true),
         stderr: stream("partial stderr"),
         wait: async () => {
           throw new Error("transport failed");
@@ -53,6 +56,7 @@ describe("ModalSandboxExecutor", () => {
         stage: "failed-probe",
         timeoutMs: 1_000,
         command: ["false"],
+        outputPaths: ["/work/partial.json"],
       });
       throw new Error("expected execution to fail");
     } catch (error) {
@@ -64,7 +68,7 @@ describe("ModalSandboxExecutor", () => {
         exitCode: 1,
         stdout: "partial stdout after failure",
         stderr: "partial stderr",
-        outputs: {},
+        outputs: { "/work/partial.json": Buffer.from('{"status":"partial"}') },
       });
     }
   });

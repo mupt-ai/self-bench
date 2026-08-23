@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { type Image, ModalClient, type Secret } from "modal";
 import type { SelfBenchConfig } from "./config.js";
 import { InactivityTimeoutError, RollingOutput } from "./process.js";
@@ -8,6 +9,8 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "./sandbox.js";
+
+const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
 
 export class ModalSandboxExecutor implements SandboxExecutor {
   readonly #client: ModalClient;
@@ -42,7 +45,9 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       tags: { run_id: request.runId, stage: request.stage },
     });
 
+    let notifyFailure = (): void => {};
     const abort = () => {
+      notifyFailure();
       void sandbox.terminate();
     };
     options.signal?.addEventListener("abort", abort, { once: true });
@@ -64,8 +69,12 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       await process.closeStdin();
       const stdoutOutput = new RollingOutput();
       const stderrOutput = new RollingOutput();
+      const readers = new Set<ReadableStreamDefaultReader<string | Uint8Array>>();
       let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
       let inactivityError: InactivityTimeoutError | undefined;
+      const failure = new Promise<void>((resolve) => {
+        notifyFailure = resolve;
+      });
       const clearInactivityTimer = (): void => {
         if (inactivityTimer) {
           clearTimeout(inactivityTimer);
@@ -82,7 +91,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
             `Modal sandbox ${sandbox.sandboxId} stage ${request.stage}`,
             request.inactivityTimeoutMs ?? 0,
           );
-          void sandbox.terminate();
+          notifyFailure();
         }, request.inactivityTimeoutMs);
         inactivityTimer.unref();
       };
@@ -92,6 +101,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         output: RollingOutput,
       ): Promise<void> => {
         const reader = stream.getReader();
+        readers.add(reader);
         try {
           while (true) {
             const { value, done } = await reader.read();
@@ -106,33 +116,39 @@ export class ModalSandboxExecutor implements SandboxExecutor {
             }
           }
         } finally {
+          readers.delete(reader);
           reader.releaseLock();
         }
       };
+      let exitCode: number | undefined;
+      let processError: unknown;
+      let streamError: unknown;
+      const captureFailure = (error: unknown): void => {
+        streamError ??= error;
+        notifyFailure();
+      };
       armInactivityTimer();
-      const settled = await Promise.allSettled([
-        process.wait().catch((error: unknown) => {
-          void sandbox.terminate();
-          throw error;
-        }),
-        consume("stdout", process.stdout, stdoutOutput).catch((error: unknown) => {
-          void sandbox.terminate();
-          throw error;
-        }),
-        consume("stderr", process.stderr, stderrOutput).catch((error: unknown) => {
-          void sandbox.terminate();
-          throw error;
-        }),
-      ]).finally(clearInactivityTimer);
-      const [processResult, ...streamResults] = settled;
-      const rejectedStream = streamResults.find(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
+      const completion = Promise.all([
+        process.wait().then(
+          (value) => {
+            exitCode = value;
+            notifyFailure();
+          },
+          (error: unknown) => {
+            processError = error;
+            notifyFailure();
+          },
+        ),
+        consume("stdout", process.stdout, stdoutOutput).catch(captureFailure),
+        consume("stderr", process.stderr, stderrOutput).catch(captureFailure),
+      ]);
+      await Promise.race([completion, failure.then(() => delay(FAILURE_DRAIN_TIMEOUT_MS))]).finally(
+        clearInactivityTimer,
       );
-      const executionError =
-        inactivityError ??
-        (processResult.status === "rejected" ? processResult.reason : undefined) ??
-        rejectedStream?.reason;
-      const exitCode = processResult.status === "fulfilled" ? processResult.value : 1;
+      if (readers.size > 0) {
+        void Promise.allSettled([...readers].map((reader) => reader.cancel()));
+      }
+      const executionError = inactivityError ?? processError ?? streamError;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
         try {
@@ -144,7 +160,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       }
       const result = {
         sandboxId: sandbox.sandboxId,
-        exitCode,
+        exitCode: exitCode ?? 1,
         stdout: stdoutOutput.text(),
         stderr: stderrOutput.text(),
         outputs,
