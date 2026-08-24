@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildCommit } from "./build-metadata.js";
 import { loadWorkerConfig } from "./config.js";
+import { MAX_CANDIDATES_PER_RUN } from "./contracts.js";
 import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
@@ -183,8 +184,8 @@ async function run(args: string[]): Promise<void> {
     hard: nonnegativeInteger(parsed.values["hard-count"] ?? "0", "--hard-count"),
   };
   const totalCandidates = candidateCounts.easy + candidateCounts.medium + candidateCounts.hard;
-  if (totalCandidates < 1 || totalCandidates > 100) {
-    fail("the total candidate count must be between 1 and 100");
+  if (totalCandidates < 1 || totalCandidates > MAX_CANDIDATES_PER_RUN) {
+    fail(`the total candidate count must be between 1 and ${MAX_CANDIDATES_PER_RUN}`);
   }
   const runId = parsed.values["run-id"] ?? defaultRunId();
   const [repository, localMessages, selfbenchCommit] = await Promise.all([

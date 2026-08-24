@@ -9,6 +9,7 @@ import { createArtifactStore } from "./artifacts.js";
 import type { SelfBenchConfig } from "./config.js";
 import {
   artifactRefSchema,
+  MAX_CANDIDATES_PER_RUN,
   type RunPhase,
   type RunRequest,
   type RunStatus,
@@ -24,9 +25,9 @@ const submissionSchema = z.object({
   repository: repositoryRefSchema,
   provenance: artifactRefSchema,
   candidateCounts: z.object({
-    easy: z.number().int().min(0).max(100),
-    medium: z.number().int().min(0).max(100),
-    hard: z.number().int().min(0).max(100),
+    easy: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
+    medium: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
+    hard: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
   }),
   authoringModel: z.string().min(1).default("gpt-5.6-sol"),
   selfbenchCommit: z.string().regex(/^[0-9a-f]{40}$/i),

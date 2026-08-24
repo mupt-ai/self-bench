@@ -22,17 +22,19 @@ export type ArtifactRef = z.infer<typeof artifactRefSchema>;
 export const difficultySchema = z.enum(["easy", "medium", "hard"]);
 export type Difficulty = z.infer<typeof difficultySchema>;
 
+export const MAX_CANDIDATES_PER_RUN = 10_000;
+
 const candidateCountsSchema = z
   .object({
-    easy: z.number().int().min(0).max(100),
-    medium: z.number().int().min(0).max(100),
-    hard: z.number().int().min(0).max(100),
+    easy: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
+    medium: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
+    hard: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
   })
   .refine(({ easy, medium, hard }) => easy + medium + hard >= 1, {
     message: "at least one candidate must be requested",
   })
-  .refine(({ easy, medium, hard }) => easy + medium + hard <= 100, {
-    message: "at most 100 candidates may be requested",
+  .refine(({ easy, medium, hard }) => easy + medium + hard <= MAX_CANDIDATES_PER_RUN, {
+    message: `at most ${MAX_CANDIDATES_PER_RUN} candidates may be requested`,
   });
 
 const runVersionSchema = z

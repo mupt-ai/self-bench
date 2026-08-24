@@ -47,7 +47,7 @@ describe("contracts", () => {
     }
   });
 
-  test("requires between one and one hundred candidates across tiers", () => {
+  test("requires between one and ten thousand candidates across tiers", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
@@ -57,13 +57,13 @@ describe("contracts", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
-        candidateCounts: { easy: 34, medium: 33, hard: 33 },
+        candidateCounts: { easy: 3_334, medium: 3_333, hard: 3_333 },
       }).success,
     ).toBe(true);
     expect(
       runRequestSchema.safeParse({
         ...request,
-        candidateCounts: { easy: 34, medium: 34, hard: 33 },
+        candidateCounts: { easy: 3_334, medium: 3_334, hard: 3_333 },
       }).success,
     ).toBe(false);
   });

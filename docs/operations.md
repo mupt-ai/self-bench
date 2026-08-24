@@ -175,7 +175,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The three tier counts total 1–100. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
+The three tier counts total 1–10,000. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
 
 `--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
 

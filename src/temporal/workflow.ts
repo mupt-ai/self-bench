@@ -18,6 +18,7 @@ import type {
   RunStatus,
   TaskProgress,
 } from "../contracts.js";
+import { MAX_CANDIDATES_PER_RUN } from "../contracts.js";
 import type {
   AuthorCandidateInput,
   DiscoveryShardInput,
@@ -79,7 +80,7 @@ const activities: SelfBenchActivities = {
 const DISCOVERY_SHARD_COUNT = 8;
 const DISCOVERY_SHARD_OVERFETCH = 3;
 const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
-const MAX_DISCOVERED_CANDIDATES = 300;
+const MAX_DISCOVERED_CANDIDATES = MAX_CANDIDATES_PER_RUN * 3;
 
 export async function selfBenchRunWorkflow(input: RunRequest): Promise<RunResult> {
   return await executeRun(input, activities, (status) => setHandler(statusQuery, () => status()));
