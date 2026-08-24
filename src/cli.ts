@@ -15,9 +15,8 @@ import { runCommand } from "./process.js";
 import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
+import { applyVercelProfile, setupVercel } from "./setup/vercel/index.js";
 import { SetupCanceledError } from "./terminal-prompts.js";
-import { applyVercelProfile } from "./vercel-profile.js";
-import { setupVercel } from "./vercel-setup.js";
 
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256 } from "../src/hash.js";
 import { runCommand } from "../src/process.js";
-import { saveVercelProfile } from "../src/vercel-profile.js";
+import { saveVercelProfile } from "../src/setup/vercel/profile.js";
 
 const roots: string[] = [];
 

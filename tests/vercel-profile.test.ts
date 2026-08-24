@@ -9,7 +9,7 @@ import {
   profileFilePaths,
   saveVercelProfile,
   type VercelProfile,
-} from "../src/vercel-profile.js";
+} from "../src/setup/vercel/profile.js";
 
 const roots: string[] = [];
 const image = `selfbench-runtime@sha256:${"a".repeat(64)}`;

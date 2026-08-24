@@ -1,15 +1,16 @@
 import { dirname, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import type { VercelCredentials } from "./config.js";
+import type { VercelCredentials } from "../../config.js";
 import {
   isInteractiveTerminal,
   SetupCanceledError,
   type SetupPrompter,
   TerminalPrompter,
-} from "./terminal-prompts.js";
-import { type SetupReporter, TerminalSetupReporter } from "./terminal-reporter.js";
-import { VercelCli, type VercelProject, type VercelTeam } from "./vercel-cli.js";
+} from "../../terminal-prompts.js";
+import { type SetupReporter, TerminalSetupReporter } from "../../terminal-reporter.js";
+import { VercelCli, type VercelProject, type VercelTeam } from "./cli.js";
+import { probeVercelCapability, type VercelCapability } from "./probe.js";
 import {
   loadVercelProfileData,
   saveVercelProfile,
@@ -17,14 +18,13 @@ import {
   type VercelProfile,
   type VercelProfileData,
   validateVercelProfileName,
-} from "./vercel-profile.js";
+} from "./profile.js";
 import {
   DEFAULT_VCR_REPOSITORY,
   ensureVercelRuntimeImage,
   type VercelRuntimeImageCli,
   vercelRuntimeFingerprint,
-} from "./vercel-runtime-image.js";
-import { probeVercelCapability, type VercelCapability } from "./vercel-setup-probe.js";
+} from "./runtime-image.js";
 
 const DEFAULT_PROFILE_NAME = "default";
 const DEFAULT_PROJECT_NAME = "selfbench-sandbox";
@@ -402,7 +402,7 @@ function imageDigest(image: string): string {
 }
 
 function defaultProjectRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 }
 
 function errorMessage(error: unknown): string {
