@@ -3,7 +3,7 @@ import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "../src/sandbox/timeout.js";
-import { probeVercelCapability, type VercelSandboxProbeApi } from "../src/vercel-setup-probe.js";
+import { probeVercelCapability, type VercelSandboxProbeApi } from "../src/setup/vercel/probe.js";
 
 const credentials = {
   token: "vcp_super_secret",

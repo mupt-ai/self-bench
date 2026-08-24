@@ -7,12 +7,16 @@ import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "../src/sandbox/timeout.js";
+import type { VcrTag, VercelProject, VercelTeam } from "../src/setup/vercel/cli.js";
+import { loadVercelProfileData, saveVercelProfile } from "../src/setup/vercel/profile.js";
+import { vercelRuntimeFingerprint } from "../src/setup/vercel/runtime-image.js";
+import {
+  setupVercel,
+  type VercelSetupCli,
+  type VercelSetupServices,
+} from "../src/setup/vercel/setup.js";
 import type { PromptChoice, SetupPrompter } from "../src/terminal-prompts.js";
 import type { SetupReporter, SetupTaskLabels } from "../src/terminal-reporter.js";
-import type { VcrTag, VercelProject, VercelTeam } from "../src/vercel-cli.js";
-import { loadVercelProfileData, saveVercelProfile } from "../src/vercel-profile.js";
-import { vercelRuntimeFingerprint } from "../src/vercel-runtime-image.js";
-import { setupVercel, type VercelSetupCli, type VercelSetupServices } from "../src/vercel-setup.js";
 
 const roots: string[] = [];
 const repositoryRoot = join(import.meta.dir, "..");

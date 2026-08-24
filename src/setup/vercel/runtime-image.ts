@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { sha256 } from "./hash.js";
-import type { CommandOutputHandler } from "./process.js";
-import type { SetupPrompter } from "./terminal-prompts.js";
-import type { SetupReporter } from "./terminal-reporter.js";
-import type { VcrTag } from "./vercel-cli.js";
+import { sha256 } from "../../hash.js";
+import type { CommandOutputHandler } from "../../process.js";
+import type { SetupPrompter } from "../../terminal-prompts.js";
+import type { SetupReporter } from "../../terminal-reporter.js";
+import type { VcrTag } from "./cli.js";
 
 export const DEFAULT_VCR_REPOSITORY = "selfbench-runtime";
 

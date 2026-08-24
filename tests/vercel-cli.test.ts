@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CommandOutputHandler, CommandResult } from "../src/process.js";
-import { VercelCli, type VercelCommandRunner } from "../src/vercel-cli.js";
+import { VercelCli, type VercelCommandRunner } from "../src/setup/vercel/cli.js";
 
 class FakeRunner implements VercelCommandRunner {
   readonly captured: string[][] = [];

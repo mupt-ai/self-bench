@@ -4,7 +4,10 @@ import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/pr
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { parseSandboxTimeoutCapText, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox/timeout.js";
+import {
+  parseSandboxTimeoutCapText,
+  STANDARD_VERCEL_TIMEOUT_CAP_MS,
+} from "../../sandbox/timeout.js";
 
 const CONFIG_FILE = "config.json";
 const CREDENTIALS_FILE = "credentials.json";

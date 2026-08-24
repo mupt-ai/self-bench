@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { type CommandOutputHandler, type CommandResult, runCommand } from "./process.js";
+import { type CommandOutputHandler, type CommandResult, runCommand } from "../../process.js";
 
 const MINIMUM_CLI_VERSION = [59, 1, 3] as const;
 const PAGE_SIZE = "100";
