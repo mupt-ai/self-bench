@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
@@ -51,10 +51,20 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
       if (!candidates) {
         throw new Error("submit_discovery received no candidates");
       }
-      writeFileSync(output, `${JSON.stringify({ candidates }, null, 2)}\n`, { flag: "wx" });
+      const exclusionsPath = process.env.SELFBENCH_DISCOVERY_EXCLUSIONS;
+      if (!exclusionsPath) {
+        throw new Error("SELFBENCH_DISCOVERY_EXCLUSIONS is not configured");
+      }
+      const excluded = new Set<number>(JSON.parse(readFileSync(exclusionsPath, "utf8")));
+      const accepted = candidates.filter(
+        ({ sourcePr }) => sourcePr !== undefined && !excluded.has(sourcePr),
+      );
+      writeFileSync(output, `${JSON.stringify({ candidates: accepted }, null, 2)}\n`, {
+        flag: "wx",
+      });
       return {
-        content: [{ type: "text", text: `Submitted ${candidates.length} candidates.` }],
-        details: { candidates },
+        content: [{ type: "text", text: `Submitted ${accepted.length} new candidates.` }],
+        details: { candidates: accepted },
       };
     },
   });

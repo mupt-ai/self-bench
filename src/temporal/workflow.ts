@@ -19,6 +19,7 @@ import type {
   TaskProgress,
 } from "../contracts.js";
 import { MAX_CANDIDATES_PER_RUN } from "../contracts.js";
+import { parallelMap } from "../parallel.js";
 import type {
   AuthorCandidateInput,
   DiscoveryShardInput,
@@ -81,6 +82,7 @@ const DISCOVERY_SHARD_COUNT = 8;
 const DISCOVERY_SHARD_OVERFETCH = 3;
 const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
 const MAX_DISCOVERED_CANDIDATES = MAX_CANDIDATES_PER_RUN * 3;
+const MAX_CONCURRENT_CANDIDATES = 100;
 
 export async function selfBenchRunWorkflow(input: RunRequest): Promise<RunResult> {
   return await executeRun(input, activities, (status) => setHandler(statusQuery, () => status()));
@@ -329,7 +331,7 @@ export async function executeRun(
     };
 
     setPhase("authoring");
-    await Promise.all(selectedCandidates.map(processCandidate));
+    await parallelMap(selectedCandidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({

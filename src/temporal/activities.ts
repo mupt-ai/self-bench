@@ -198,6 +198,10 @@ async function discoverCandidateShard(
               inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
               files: [
                 { path: "/work/discovery.ts", contents: extension },
+                {
+                  path: "/work/excluded-source-prs.json",
+                  contents: JSON.stringify(input.excludedSourcePrs),
+                },
                 { path: "/work/provenance.jsonl", contents: shardBytes },
                 { path: "/work/prompt.txt", contents: discoveryShardPrompt(input, shard.length) },
               ],
@@ -211,6 +215,7 @@ async function discoverCandidateShard(
                 SOURCE_REPO_URL: run.repository.url,
                 SOURCE_COMMIT: run.repository.commit,
                 AUTHOR_MODEL: run.authoring.model,
+                SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
                 SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
               },
               command: ["bash", "-lc", modalAgentScript("discovery.ts", "submit_discovery")],
@@ -937,13 +942,7 @@ async function buildExport(store: ArtifactStore, input: ExportInput): Promise<Ar
 }
 
 function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
-  const exclusions =
-    input.excludedSourcePrs.length > 0
-      ? `Do not return any of these already-considered pull requests: ${input.excludedSourcePrs.join(", ")}.`
-      : "No pull requests have been considered yet.";
-  return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}.
-
-${exclusions}
+  return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}. The submit_discovery tool silently removes pull requests already considered in earlier discovery waves.
 
 Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, and unrelated cleanup:
 - easy: at least 20 changed implementation lines across at least 1 implementation file, with at least 1 viable fail-to-pass test;

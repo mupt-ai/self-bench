@@ -187,6 +187,38 @@ describe("SelfBench workflow", () => {
     expect(currentStatus?.().rejected).toBe(1);
   });
 
+  test("bounds candidate activity fanout for large runs", async () => {
+    const candidates = Array.from({ length: 101 }, (_unused, index) =>
+      candidate(`candidate-${index}`, index + 1),
+    );
+    const activities = acceptingActivities(candidates);
+    let active = 0;
+    let peak = 0;
+    activities.authorCandidate = async ({ candidate: value }) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      active -= 1;
+      return {
+        kind: "authored",
+        task: {
+          candidateId: value.candidateId,
+          taskId: `${value.candidateId}-task`,
+          definition: artifact,
+          bundle: artifact,
+        },
+      };
+    };
+
+    const result = await executeRun(
+      { ...run, candidateCounts: { easy: 0, medium: 0, hard: candidates.length } },
+      activities,
+    );
+
+    expect(peak).toBe(100);
+    expect(result.acceptedTaskIds).toHaveLength(candidates.length);
+  });
+
   test("expands discovery only until every tier authoring budget is filled", async () => {
     const targetCounts: Array<Record<Difficulty, number>> = [];
     const activities = acceptingActivities([]);
