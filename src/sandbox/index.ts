@@ -1,6 +1,6 @@
 import type { SelfBenchWorkerConfig } from "../config.js";
-import { DockerSandboxExecutor } from "./providers/docker.js";
-import { ModalSandboxExecutor } from "./providers/modal.js";
+import { DockerSandboxExecutor } from "./providers/docker/executor.js";
+import { ModalSandboxExecutor } from "./providers/modal/executor.js";
 import { VercelSandboxExecutor } from "./providers/vercel/executor.js";
 import { TimeoutCappedSandboxExecutor } from "./timeout.js";
 

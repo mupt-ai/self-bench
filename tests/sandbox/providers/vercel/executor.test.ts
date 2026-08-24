@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { InactivityTimeoutError } from "../../../src/process.js";
-import { VercelSandboxExecutor } from "../../../src/sandbox/providers/vercel/executor.js";
+import { InactivityTimeoutError } from "../../../../src/process.js";
+import { VercelSandboxExecutor } from "../../../../src/sandbox/providers/vercel/executor.js";
 import {
   vercelFixtureConfig as config,
   vercelFixtureImage as image,
   vercelRequestBody as requestBody,
   VercelSdkFixture,
-} from "../../support/vercel-sdk-fixture.js";
+} from "../../../support/vercel-sdk-fixture.js";
 
 describe("VercelSandboxExecutor", () => {
   test("constructs and closes without making an eager SDK request", () => {

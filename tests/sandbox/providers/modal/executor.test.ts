@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ModalClient } from "modal";
-import { SandboxExecutionError } from "../../../src/sandbox/contracts.js";
-import { ModalSandboxExecutor } from "../../../src/sandbox/providers/modal.js";
+import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";
+import { ModalSandboxExecutor } from "../../../../src/sandbox/providers/modal/executor.js";
 
 describe("ModalSandboxExecutor", () => {
   test("preserves partial output and sandbox identity when execution throws", async () => {
