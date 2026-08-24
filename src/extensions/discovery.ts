@@ -22,7 +22,6 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
               sourceUrl: Type.String({ minLength: 1 }),
               baseCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
               completedCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
-              request: Type.String({ minLength: 1 }),
               provenance: Type.Object({
                 sourceType: Type.Union([
                   Type.Literal("pi"),

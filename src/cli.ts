@@ -14,6 +14,13 @@ import { loadWorkerConfig } from "./config.js";
 import { MAX_CANDIDATES_PER_RUN } from "./contracts.js";
 import { runCommand } from "./process.js";
 import { collectRepositoryProvenance } from "./provenance.js";
+import {
+  applyProvenanceAssociationManifests,
+  associationSessionSummaries,
+  createProvenanceAssociationManifest,
+  resolveMergedPullRequest,
+  writeProvenanceAssociationManifest,
+} from "./provenance-associations.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
 import { applyVercelProfile, setupVercel } from "./setup/vercel/index.js";
@@ -29,6 +36,9 @@ switch (command) {
     break;
   case "run":
     await run(rest);
+    break;
+  case "associate":
+    await associate(rest);
     break;
   case "down":
     await down();
@@ -162,6 +172,56 @@ async function down(): Promise<void> {
   await runCommand("docker", ["compose", "--file", resolve(projectRoot, "compose.yaml"), "down"]);
 }
 
+async function associate(args: string[]): Promise<void> {
+  const parsed = parseArgs({
+    args,
+    options: {
+      repo: { type: "string", short: "r" },
+      pr: { type: "string" },
+      session: { type: "string", multiple: true },
+      output: { type: "string", short: "o" },
+      "list-sessions": { type: "boolean", default: false },
+    },
+    strict: true,
+  });
+  const repositoryPath = resolve(parsed.values.repo ?? fail("--repo is required"));
+  const [repository, localMessages] = await Promise.all([
+    resolveRepository(repositoryPath),
+    collectRepositoryProvenance(repositoryPath, process.env.HOME ?? homedir()),
+  ]);
+  const sessions = associationSessionSummaries(localMessages);
+  if (parsed.values["list-sessions"]) {
+    console.log(JSON.stringify({ repository: repository.url, sessions }, null, 2));
+    return;
+  }
+
+  const sourcePr = positiveInteger(parsed.values.pr ?? fail("--pr is required"), "--pr");
+  const output = resolve(parsed.values.output ?? fail("--output is required"));
+  const selectors = parsed.values.session ?? [];
+  const pullRequest = await resolveMergedPullRequest(repository.url, sourcePr);
+  const manifest = createProvenanceAssociationManifest({
+    repositoryUrl: repository.url,
+    pullRequest,
+    messages: localMessages,
+    sessionSelectors: selectors,
+  });
+  await writeProvenanceAssociationManifest(output, manifest);
+  console.log(
+    JSON.stringify(
+      {
+        output,
+        repository: manifest.repository,
+        sourcePr: manifest.sourcePr,
+        sourceUrl: manifest.sourceUrl,
+        sessions: selectors.length,
+        messages: manifest.messages.length,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 async function run(args: string[]): Promise<void> {
   const parsed = parseArgs({
     args,
@@ -174,6 +234,7 @@ async function run(args: string[]): Promise<void> {
       model: { type: "string", default: "gpt-5.6-sol" },
       wait: { type: "boolean", default: false },
       output: { type: "string", short: "o" },
+      association: { type: "string", multiple: true },
     },
     strict: true,
   });
@@ -188,11 +249,16 @@ async function run(args: string[]): Promise<void> {
     fail(`the total candidate count must be between 1 and ${MAX_CANDIDATES_PER_RUN}`);
   }
   const runId = parsed.values["run-id"] ?? defaultRunId();
-  const [repository, localMessages, selfbenchCommit] = await Promise.all([
+  const [repository, collectedMessages, selfbenchCommit] = await Promise.all([
     resolveRepository(repositoryPath),
     collectRepositoryProvenance(repositoryPath, process.env.HOME ?? homedir()),
     resolveSelfBenchCommit(),
   ]);
+  const localMessages = await applyProvenanceAssociationManifests(
+    collectedMessages,
+    repository.url,
+    parsed.values.association ?? [],
+  );
   const corpus = Buffer.from(
     localMessages.length > 0
       ? `${localMessages.map((message) => JSON.stringify(message)).join("\n")}\n`
@@ -222,6 +288,7 @@ async function run(args: string[]): Promise<void> {
       {
         ...response,
         localProvenanceMessages: localMessages.length,
+        associationManifests: parsed.values.association?.length ?? 0,
       },
       null,
       2,
@@ -374,6 +441,14 @@ function asPolledRunStatus(value: Record<string, unknown>): PolledRunStatus {
   return { ...value, phase: value.phase };
 }
 
+function positiveInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return parsed;
+}
+
 function nonnegativeInteger(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
@@ -398,8 +473,12 @@ Usage:
   self-bench up [--backend docker|modal|vercel] [--harbor-environment docker|modal]
                 [--modal-config PATH] [--vercel-profile NAME]
   self-bench down
+  self-bench associate --repo PATH --list-sessions
+  self-bench associate --repo PATH --pr NUMBER --session TYPE:SESSION_ID [...]
+                       --output ASSOCIATION.json
   self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
-                  [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
+                  [--model MODEL] [--association ASSOCIATION.json ...]
+                  [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   self-bench status RUN_ID
   self-bench cancel RUN_ID
   self-bench download RUN_ID OUTPUT.tar.gz
@@ -409,6 +488,10 @@ The up command starts the local stack. Docker and Modal default Harbor to the ma
 requires --harbor-environment because Harbor does not support Vercel. Modal generation or Harbor uses
 ~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
 project, publish the pinned runtime image, verify access, and save an owner-only local profile.
+
+The associate command runs locally. It verifies a merged GitHub PR and writes a create-only, text-free
+manifest that binds exact sanitized messages from selected local sessions; it never uploads or starts a run.
+Pass the manifest to run with --association (repeatable). No LLM participates in association.
 
 The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
 replaced, and the export contains only accepted tasks. The run command performs only repository metadata

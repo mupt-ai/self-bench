@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertProvenanceMatchesPullRequest,
+  combineRunProvenance,
   extractGitHubPullRequestProvenance,
   extractProvenanceMessages,
   redactSecrets,
@@ -26,6 +27,28 @@ describe("provenance sanitization", () => {
         sessionId: "session-1",
         messageIndex: 0,
         content: "Build the feature",
+      },
+    ]);
+  });
+
+  test("preserves local user-message text outside required secret redaction", () => {
+    const raw = [
+      { type: "session", id: "session-1" },
+      {
+        type: "message",
+        parentId: "parent",
+        message: { role: "user", content: "  Keep this spacing.\n\n" },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n");
+
+    expect(extractProvenanceMessages(raw, "pi")).toEqual([
+      {
+        sourceType: "pi",
+        sessionId: "session-1",
+        messageIndex: 0,
+        content: "  Keep this spacing.\n\n",
       },
     ]);
   });
@@ -107,6 +130,47 @@ describe("provenance sanitization", () => {
         sourceUrl: "https://github.com/example/project/pull/41",
       },
     ]);
+  });
+
+  test("prefers explicit local associations over GitHub fallback for the same PR", () => {
+    const local = {
+      sourceType: "codex" as const,
+      sessionId: "session-1",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+    const github = {
+      sourceType: "github-pull-request" as const,
+      sessionId: "github:example/project#42",
+      messageIndex: 0,
+      content: "Fallback title",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+
+    expect(combineRunProvenance("https://github.com/example/project", [local], [github])).toEqual([
+      local,
+    ]);
+  });
+
+  test("binds explicitly associated local provenance to its exact pull request", () => {
+    const message = {
+      sourceType: "pi" as const,
+      sessionId: "session-1",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+
+    expect(() =>
+      assertProvenanceMatchesPullRequest(message, 41, "https://github.com/example/project/pull/41"),
+    ).toThrow("does not match provenance");
+    expect(() =>
+      assertProvenanceMatchesPullRequest(message, 42, "https://github.com/example/project/pull/42"),
+    ).not.toThrow();
   });
 
   test("binds GitHub provenance to its exact pull request", () => {

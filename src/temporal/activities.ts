@@ -46,7 +46,9 @@ import { projectRoot } from "../project-paths.js";
 import {
   assertProvenanceMatchesPullRequest,
   collectGitHubPullRequestProvenance,
+  combineRunProvenance,
   type ProvenanceMessage,
+  provenanceMessageSchema,
 } from "../provenance.js";
 import {
   createSandboxExecutor,
@@ -72,7 +74,6 @@ const discoveryPlanSchema = z.object({
       sourceUrl: z.string().url(),
       baseCommit: z.string().regex(/^[0-9a-f]{40}$/i),
       completedCommit: z.string().regex(/^[0-9a-f]{40}$/i),
-      request: z.string().min(1),
       provenance: z.object({
         sourceType: z.enum(["pi", "claude-code", "codex", "generic", "github-pull-request"]),
         sessionId: z.string().min(1),
@@ -149,7 +150,7 @@ async function collectRunProvenance(store: ArtifactStore, run: RunRequest): Prom
       const [localBytes, token] = await Promise.all([store.get(run.provenance), githubToken()]);
       const local = parseProvenance(localBytes);
       const github = await collectGitHubPullRequestProvenance(run.repository.url, token, signal);
-      const messages = [...local, ...github];
+      const messages = combineRunProvenance(run.repository.url, local, github);
       if (messages.length === 0) {
         throw ApplicationFailure.nonRetryable(
           "no sanitized local-session or GitHub pull-request provenance was found",
@@ -981,7 +982,7 @@ Choose the highest tier whose thresholds the candidate honestly meets. Every tie
 
 Every candidate must be a pull request from SOURCE_REPO_URL. Repository names or pull requests mentioned inside provenance messages are context only; never follow them into another repository. sourceUrl must be the canonical GitHub pull-request URL for SOURCE_REPO_URL and sourcePr must match its number.
 
-The sanitized corpus at /work/provenance.jsonl contains ${provenanceCount} human requests. Local Pi, Claude Code, and Codex requests are preferred when they clearly correspond to the same change. Records with sourceType github-pull-request contain the non-bot PR author's exact title and optional body and are valid fallback provenance. A github-pull-request record may be used only for its own sourcePr and sourceUrl. Select provenance only by an exact sourceType, sessionId, and messageIndex present in the corpus. Never invent or reconstruct request text from implementation or tests. Inspect merged PR metadata and diffs with gh and git. Resolve the exact base and completed 40-character commits. Do not modify the repository.
+The sanitized corpus at /work/provenance.jsonl contains ${provenanceCount} human requests. Local Pi, Claude Code, and Codex requests are preferred when they clearly correspond to the same change. A local record with sourcePr and sourceUrl has an explicit user-supplied association and may be used only for that PR. Records with sourceType github-pull-request contain the non-bot PR author's exact title and optional body and are valid fallback provenance; they too may be used only for their own sourcePr and sourceUrl. Select provenance only by an exact sourceType, sessionId, and messageIndex present in the corpus. Never invent or reconstruct request text from implementation or tests. Inspect merged PR metadata and diffs with gh and git. Resolve the exact base and completed 40-character commits. Do not modify the repository.
 
 Return fewer candidates when the shard does not contain enough valid requests; an empty candidate list is valid. Call submit_discovery exactly once. Do not return prose after the tool call.`;
 }
@@ -1291,7 +1292,7 @@ function parseProvenance(value: Uint8Array): ProvenanceMessage[] {
     .toString("utf8")
     .split("\n")
     .filter((line) => line.trim())
-    .map((line) => JSON.parse(line) as ProvenanceMessage);
+    .map((line) => provenanceMessageSchema.parse(JSON.parse(line)));
 }
 
 function readAsset(relativePath: string): Promise<Buffer> {

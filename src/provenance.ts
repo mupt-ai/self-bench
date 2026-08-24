@@ -1,23 +1,38 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { z } from "zod";
 import { assertPullRequestBelongsToRepository, githubRepository } from "./github.js";
 import { runCommand } from "./process.js";
 
 export type SessionProvenanceFormat = "codex" | "claude-code" | "pi" | "generic";
 
-interface ProvenanceMessageBase {
-  readonly sessionId: string;
-  readonly messageIndex: number;
-  readonly content: string;
-}
+const provenanceMessageBaseSchema = z.object({
+  sessionId: z.string().min(1),
+  messageIndex: z.number().int().nonnegative(),
+  content: z.string().min(1),
+});
 
-export type ProvenanceMessage =
-  | (ProvenanceMessageBase & { readonly sourceType: SessionProvenanceFormat })
-  | (ProvenanceMessageBase & {
-      readonly sourceType: "github-pull-request";
-      readonly sourcePr: number;
-      readonly sourceUrl: string;
-    });
+const localProvenanceMessageSchema = provenanceMessageBaseSchema
+  .extend({
+    sourceType: z.enum(["codex", "claude-code", "pi", "generic"]),
+    sourcePr: z.number().int().positive().optional(),
+    sourceUrl: z.string().url().optional(),
+  })
+  .refine(
+    (message) => (message.sourcePr === undefined) === (message.sourceUrl === undefined),
+    "sourcePr and sourceUrl must be supplied together",
+  );
+
+export const provenanceMessageSchema = z.union([
+  localProvenanceMessageSchema,
+  provenanceMessageBaseSchema.extend({
+    sourceType: z.literal("github-pull-request"),
+    sourcePr: z.number().int().positive(),
+    sourceUrl: z.string().url(),
+  }),
+]);
+
+export type ProvenanceMessage = z.infer<typeof provenanceMessageSchema>;
 
 interface JsonRecord {
   readonly [key: string]: unknown;
@@ -139,13 +154,36 @@ export function extractGitHubPullRequestProvenance(
   return messages;
 }
 
+export function combineRunProvenance(
+  repositoryUrl: string,
+  local: readonly ProvenanceMessage[],
+  github: readonly ProvenanceMessage[],
+): ProvenanceMessage[] {
+  const explicitlyAssociatedPrs = new Set<number>();
+  for (const message of local) {
+    if (message.sourcePr === undefined || message.sourceUrl === undefined) {
+      continue;
+    }
+    assertPullRequestBelongsToRepository(repositoryUrl, message.sourceUrl, message.sourcePr);
+    explicitlyAssociatedPrs.add(message.sourcePr);
+  }
+  return [
+    ...local,
+    ...github.filter(
+      (message) =>
+        message.sourceType !== "github-pull-request" ||
+        !explicitlyAssociatedPrs.has(message.sourcePr),
+    ),
+  ];
+}
+
 export function assertProvenanceMatchesPullRequest(
   message: ProvenanceMessage,
   sourcePr: number,
   sourceUrl: string,
 ): void {
   if (
-    message.sourceType === "github-pull-request" &&
+    (message.sourcePr !== undefined || message.sourceUrl !== undefined) &&
     (message.sourcePr !== sourcePr || message.sourceUrl !== sourceUrl)
   ) {
     throw new Error(
@@ -169,8 +207,8 @@ export function extractProvenanceMessages(
     if (role !== "user") {
       continue;
     }
-    const content = redactSecrets(rawContent.trim());
-    if (!content || looksInjected(content)) {
+    const content = redactSecrets(rawContent);
+    if (!content.trim() || looksInjected(content)) {
       continue;
     }
     result.push({ sourceType: resolved, sessionId, messageIndex, content });
@@ -427,7 +465,8 @@ async function listJsonFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-    .map((entry) => join(entry.parentPath, entry.name));
+    .map((entry) => join(entry.parentPath, entry.name))
+    .sort();
 }
 
 function encodeSessionPath(path: string): string {
