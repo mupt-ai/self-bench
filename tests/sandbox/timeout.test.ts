@@ -4,11 +4,11 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
-} from "../src/sandbox.js";
+} from "../../src/sandbox/contracts.js";
 import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   TimeoutCappedSandboxExecutor,
-} from "../src/sandbox-timeout.js";
+} from "../../src/sandbox/timeout.js";
 
 class RecordingExecutor implements SandboxExecutor {
   readonly requests: SandboxRequest[] = [];

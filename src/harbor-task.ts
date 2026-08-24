@@ -6,7 +6,7 @@ import { runCommand } from "./process.js";
 import { patchPaths } from "./repair.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 23;
+const COMPILER_REVISION = 24;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -70,6 +70,10 @@ export async function compileHarborTask(
   await Promise.all([
     cp(snapshot, join(environment, "repo.tar.gz")),
     cp(snapshot, join(tests, "repo.tar.gz")),
+    writeFile(
+      join(outputDirectory, "definition.json"),
+      `${JSON.stringify(task.definition, null, 2)}\n`,
+    ),
     writeFile(join(outputDirectory, "instruction.md"), `${task.definition.prompt.trim()}\n`),
     writeFile(join(solution, "gold.patch"), task.goldPatch),
     writeFile(join(solution, "solve.sh"), solutionScript()),
@@ -127,6 +131,7 @@ export async function refreshHarborTask(
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
   await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition, testPatch));
   await Promise.all([
+    writeFile(join(outputDirectory, "definition.json"), `${JSON.stringify(definition, null, 2)}\n`),
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
     writeFile(join(outputDirectory, "environment/Dockerfile"), agentDockerfile(definition)),
     writeFile(

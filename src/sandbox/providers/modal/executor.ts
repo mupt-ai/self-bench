@@ -1,14 +1,14 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { type Image, ModalClient, type Secret } from "modal";
-import type { SelfBenchConfig } from "./config.js";
-import { InactivityTimeoutError, RollingOutput } from "./process.js";
+import type { SelfBenchConfig } from "../../../config.js";
+import { InactivityTimeoutError, RollingOutput } from "../../../process.js";
 import {
   SandboxExecutionError,
   type SandboxExecutor,
   type SandboxRequest,
   type SandboxResult,
   type SandboxRunOptions,
-} from "./sandbox.js";
+} from "../../contracts.js";
 
 const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
 

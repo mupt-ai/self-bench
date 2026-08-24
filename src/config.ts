@@ -6,7 +6,7 @@ import {
   type HarborEnvironment,
   matchingHarborEnvironment,
 } from "./providers.js";
-import { parseSandboxTimeoutCapText, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox-timeout.js";
+import { parseSandboxTimeoutCapText, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox/timeout.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;

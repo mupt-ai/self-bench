@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { reviewCouplingWithCodex } from "./codex-review.js";
+import { reviewCouplingWithCodex } from "../../codex-review.js";
 
 const apiKey = process.env.OPENAI_API_KEY;
 const authJson = process.env.SELFBENCH_PI_AUTH_JSON;

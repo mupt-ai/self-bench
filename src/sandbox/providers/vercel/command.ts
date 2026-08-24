@@ -1,7 +1,7 @@
 import type { Command, Session } from "@vercel/sandbox";
-import { InactivityTimeoutError, type RollingOutput } from "./process.js";
-import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "./sandbox.js";
-import { VercelCommandStartError } from "./vercel-fetch.js";
+import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
+import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
+import { VercelCommandStartError } from "./fetch.js";
 
 export const VERCEL_WORK_DIRECTORY = "/work";
 

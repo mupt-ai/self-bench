@@ -1,7 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { CancelledFailure, Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
@@ -43,6 +42,7 @@ import {
 import { refreshHarborTask } from "../harbor-task.js";
 import { sha256 } from "../hash.js";
 import { runCommand } from "../process.js";
+import { projectRoot } from "../project-paths.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../provenance.js";
 import {
   createSandboxExecutor,
@@ -50,7 +50,7 @@ import {
   type SandboxExecutor,
   type SandboxResult,
   type SandboxRunOptions,
-} from "../sandbox.js";
+} from "../sandbox/index.js";
 import { githubToken, loadCodexModelAuth, loadPiModelAuth } from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
@@ -1267,8 +1267,7 @@ function parseProvenance(value: Uint8Array): ProvenanceMessage[] {
 }
 
 function readAsset(relativePath: string): Promise<Buffer> {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-  return readFile(join(root, relativePath));
+  return readFile(join(projectRoot(import.meta.url), relativePath));
 }
 
 function rewards(trial: unknown): Record<string, unknown> {

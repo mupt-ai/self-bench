@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox-timeout.js";
+} from "../src/sandbox/timeout.js";
 import { probeVercelCapability, type VercelSandboxProbeApi } from "../src/vercel-setup-probe.js";
 
 const credentials = {

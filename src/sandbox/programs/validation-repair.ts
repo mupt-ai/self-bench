@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 
-import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { taskDefinitionSchema } from "./contracts.js";
-import { runCommand } from "./process.js";
+import { taskDefinitionSchema } from "../../contracts.js";
+import { runCommand } from "../../process.js";
 import {
   assertValidationRepair,
   validationRepairPaths,
   validationRepairPrompt,
-} from "./validation-repair.js";
+} from "../../validation-repair.js";
+import { prepareRepairTask } from "./prepare-repair.js";
 
 const [archivePath, definitionPath, diagnosticsPath, outputDefinition, outputPatch, outputReport] =
   process.argv.slice(2);
@@ -26,14 +27,7 @@ if (
   );
 }
 
-const extractedDirectory = "/work/task";
-const repositoryDirectory = "/work/repo";
-await Promise.all([mkdir(extractedDirectory, { recursive: true }), mkdir(repositoryDirectory)]);
-await runCommand("tar", ["-xzf", archivePath, "-C", extractedDirectory]);
-const taskDirectory = await access(join(extractedDirectory, "instruction.md")).then(
-  () => extractedDirectory,
-  () => join(extractedDirectory, "harbor-task"),
-);
+const { taskDirectory, repositoryDirectory } = await prepareRepairTask(archivePath);
 const [instruction, originalPatch, diagnostics, originalDefinitionBytes] = await Promise.all([
   readFile(join(taskDirectory, "instruction.md"), "utf8"),
   readFile(join(taskDirectory, "tests/test.patch"), "utf8"),
@@ -43,24 +37,6 @@ const [instruction, originalPatch, diagnostics, originalDefinitionBytes] = await
 const originalDefinition = taskDefinitionSchema.parse(JSON.parse(originalDefinitionBytes));
 const allowedPaths = validationRepairPaths(originalPatch);
 
-await runCommand("tar", [
-  "-xzf",
-  join(taskDirectory, "tests/repo.tar.gz"),
-  "-C",
-  repositoryDirectory,
-]);
-await runCommand("git", ["-C", repositoryDirectory, "init", "-q"]);
-await runCommand("git", ["-C", repositoryDirectory, "config", "user.name", "SelfBench"]);
-await runCommand("git", ["-C", repositoryDirectory, "config", "user.email", "selfbench@local"]);
-await runCommand("git", ["-C", repositoryDirectory, "add", "-A"]);
-await runCommand("git", ["-C", repositoryDirectory, "commit", "-qm", "base"]);
-await runCommand("git", [
-  "-C",
-  repositoryDirectory,
-  "apply",
-  join(taskDirectory, "tests/test.patch"),
-]);
-await runCommand("git", ["-C", repositoryDirectory, "add", "-N", "--all"]);
 await Promise.all([
   writeFile("/work/definition.json", `${JSON.stringify(originalDefinition, null, 2)}\n`),
   writeFile("/work/gold.patch", await readFile(join(taskDirectory, "solution/gold.patch"))),

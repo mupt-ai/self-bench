@@ -5,16 +5,16 @@ import {
   isDigestPinnedOciImage,
   type SelfBenchWorkerConfig,
   type VercelCredentials,
-} from "./config.js";
-import { RollingOutput } from "./process.js";
+} from "../../../config.js";
+import { RollingOutput } from "../../../process.js";
 import type {
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
-} from "./sandbox.js";
-import { executeVercelCommand, VERCEL_WORK_DIRECTORY } from "./vercel-command.js";
-import { preventAmbiguousVercelCommandStartRetries } from "./vercel-fetch.js";
+} from "../../contracts.js";
+import { executeVercelCommand, VERCEL_WORK_DIRECTORY } from "./command.js";
+import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
 
 const CLEANUP_TIMEOUT_MS = 60_000;
 const CLEANUP_RETRY_DELAY_MS = 1_000;

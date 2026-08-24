@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildRunRequest } from "../src/api.js";
 import { loadConfig } from "../src/config.js";
-import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox-timeout.js";
+import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
 
 const submission = {
   runId: "run-timeout-metadata",
