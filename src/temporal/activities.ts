@@ -942,7 +942,7 @@ async function buildExport(store: ArtifactStore, input: ExportInput): Promise<Ar
 }
 
 function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
-  return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}. The submit_discovery tool silently removes pull requests already considered in earlier discovery waves.
+  return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}. Before selecting a pull request, query its number against /work/excluded-source-prs.json with jq; do not print or read the full exclusion list into context. The submit_discovery tool also removes any already-considered pull requests as a final safeguard.
 
 Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, and unrelated cleanup:
 - easy: at least 20 changed implementation lines across at least 1 implementation file, with at least 1 viable fail-to-pass test;
