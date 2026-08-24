@@ -74,20 +74,27 @@ export async function collectRepositoryProvenance(
 
 export async function collectGitHubPullRequestProvenance(
   repositoryUrl: string,
+  token?: string,
 ): Promise<ProvenanceMessage[]> {
   const repository = githubRepository(repositoryUrl);
-  const result = await runCommand("gh", [
-    "pr",
-    "list",
-    "--repo",
-    repository,
-    "--state",
-    "merged",
-    "--limit",
-    String(GITHUB_PULL_REQUEST_LIMIT),
-    "--json",
-    "number,title,body,url,author,isDraft,additions,deletions,changedFiles",
-  ]);
+  const result = await runCommand(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--repo",
+      repository,
+      "--state",
+      "merged",
+      "--limit",
+      String(GITHUB_PULL_REQUEST_LIMIT),
+      "--json",
+      "number,title,body,url,author,isDraft,additions,deletions,changedFiles",
+    ],
+    {
+      env: token ? { ...process.env, GH_TOKEN: token } : process.env,
+    },
+  );
   return extractGitHubPullRequestProvenance(result.stdout, repositoryUrl);
 }
 

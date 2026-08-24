@@ -158,12 +158,9 @@ Common failures:
 
 `self-bench run` requires an absolute or relative path to a Git checkout whose `origin` is an HTTPS or SSH GitHub URL. It pins `HEAD`; uncommitted content is excluded.
 
-The CLI collects two types of provenance:
+The CLI collects sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees, then uploads that local corpus with the run request. The workflow starts by running a Temporal activity on the worker that fetches exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds. It stores the combined local and GitHub corpus as a run artifact before discovery begins.
 
-1. sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees;
-2. exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds.
-
-GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
+GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. A run can proceed with only local or only GitHub provenance, but fails when the combined corpus is empty. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
 
 ```bash
 self-bench run \

@@ -34,7 +34,10 @@ import type {
 export const statusQuery = defineQuery<RunStatus>("status");
 
 const taskActivities = proxyActivities<
-  Omit<SelfBenchActivities, "discoverCandidateShard" | "repairValidationTask">
+  Omit<
+    SelfBenchActivities,
+    "collectRunProvenance" | "discoverCandidateShard" | "repairValidationTask"
+  >
 >({
   startToCloseTimeout: "7 hours",
   heartbeatTimeout: "10 minutes",
@@ -56,6 +59,18 @@ const validationRepairActivity = proxyActivities<Pick<SelfBenchActivities, "repa
   },
 );
 
+const provenanceActivities = proxyActivities<Pick<SelfBenchActivities, "collectRunProvenance">>({
+  startToCloseTimeout: "5 minutes",
+  heartbeatTimeout: "3 minutes",
+  cancellationType: "WAIT_CANCELLATION_COMPLETED",
+  retry: {
+    initialInterval: "5 seconds",
+    backoffCoefficient: 2,
+    maximumInterval: "1 minute",
+    maximumAttempts: 3,
+  },
+});
+
 const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
   startToCloseTimeout: "1 hour",
   heartbeatTimeout: "10 minutes",
@@ -69,6 +84,7 @@ const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverC
 });
 
 const activities: SelfBenchActivities = {
+  collectRunProvenance: provenanceActivities.collectRunProvenance,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   authorCandidate: taskActivities.authorCandidate,
   validateTask: taskActivities.validateTask,
@@ -127,6 +143,8 @@ export async function executeRun(
 
   try {
     setPhase("discovering");
+    const provenance = await activitySet.collectRunProvenance(input);
+    const run = { ...input, provenance };
     const updateDiscovery = (progress: DiscoveryProgress): void => {
       status = { ...status, discovery: progress };
     };
@@ -143,7 +161,7 @@ export async function executeRun(
         setPhase("blocked");
         throw candidatePoolExhausted(selected, input.candidateCounts);
       }
-      const additions = await discoverWave(activitySet, input, {
+      const additions = await discoverWave(activitySet, run, {
         wave: discoveryWave,
         targetCounts: missing,
         excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
@@ -180,7 +198,7 @@ export async function executeRun(
       setTasks(taskProgress);
       try {
         const authored = await activitySet.authorCandidate({
-          run: input,
+          run,
           candidate,
         } satisfies AuthorCandidateInput);
         if (authored.kind === "rejected") {
@@ -197,7 +215,7 @@ export async function executeRun(
 
         progress.status = "auditing";
         setTasks(taskProgress);
-        const audit = await activitySet.auditTask({ run: input, task } satisfies TaskStageInput);
+        const audit = await activitySet.auditTask({ run, task } satisfies TaskStageInput);
         if (!audit.accepted) {
           rejectProgress(progress, audit.reason ?? "audit rejected task");
           return;
@@ -206,7 +224,7 @@ export async function executeRun(
         progress.status = "validating";
         setTasks(taskProgress);
         let validation = await activitySet.validateTask({
-          run: input,
+          run,
           task,
         } satisfies TaskStageInput);
         if (!validation.accepted) {
@@ -215,7 +233,7 @@ export async function executeRun(
           let repaired: AuthorOutcome;
           try {
             repaired = await activitySet.repairValidationTask({
-              run: input,
+              run,
               task,
               validation,
             } satisfies ValidationRepairTaskInput);
@@ -235,7 +253,7 @@ export async function executeRun(
           progress.status = "auditing";
           setTasks(taskProgress);
           const repairAudit = await activitySet.auditTask({
-            run: input,
+            run,
             task,
           } satisfies TaskStageInput);
           if (!repairAudit.accepted) {
@@ -246,7 +264,7 @@ export async function executeRun(
           progress.status = "validating";
           setTasks(taskProgress);
           validation = await activitySet.validateTask({
-            run: input,
+            run,
             task,
           } satisfies TaskStageInput);
           if (!validation.accepted) {
@@ -257,14 +275,14 @@ export async function executeRun(
 
         progress.status = "reviewing";
         setTasks(taskProgress);
-        let review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
+        let review = await activitySet.reviewTask({ run, task } satisfies TaskStageInput);
         if (!review.accepted) {
           progress.status = "repairing";
           setTasks(taskProgress);
           let repaired: AuthorOutcome;
           try {
             repaired = await activitySet.repairTask({
-              run: input,
+              run,
               task,
               review: review.report,
             } satisfies RepairTaskInput);
@@ -284,7 +302,7 @@ export async function executeRun(
           progress.status = "auditing";
           setTasks(taskProgress);
           const repairAudit = await activitySet.auditTask({
-            run: input,
+            run,
             task,
           } satisfies TaskStageInput);
           if (!repairAudit.accepted) {
@@ -295,7 +313,7 @@ export async function executeRun(
           progress.status = "validating";
           setTasks(taskProgress);
           const repairValidation = await activitySet.validateTask({
-            run: input,
+            run,
             task,
           } satisfies TaskStageInput);
           if (!repairValidation.accepted) {
@@ -308,7 +326,7 @@ export async function executeRun(
 
           progress.status = "reviewing";
           setTasks(taskProgress);
-          review = await activitySet.reviewTask({ run: input, task } satisfies TaskStageInput);
+          review = await activitySet.reviewTask({ run, task } satisfies TaskStageInput);
           if (!review.accepted) {
             rejectProgress(progress, review.reason ?? "review rejected repaired task");
             return;
@@ -336,7 +354,7 @@ export async function executeRun(
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
-      run: input,
+      run,
       tasks: acceptedTasks,
     } satisfies ExportInput);
     status = { ...status, phase: "complete", export: exportRef };

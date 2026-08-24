@@ -43,7 +43,11 @@ import { refreshHarborTask } from "../harbor-task.js";
 import { sha256 } from "../hash.js";
 import { runCommand } from "../process.js";
 import { projectRoot } from "../project-paths.js";
-import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../provenance.js";
+import {
+  assertProvenanceMatchesPullRequest,
+  collectGitHubPullRequestProvenance,
+  type ProvenanceMessage,
+} from "../provenance.js";
 import {
   createSandboxExecutor,
   SandboxExecutionError,
@@ -111,6 +115,7 @@ export interface ExportInput {
 }
 
 export interface SelfBenchActivities {
+  collectRunProvenance(run: RunRequest): Promise<ArtifactRef>;
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
   authorCandidate(input: AuthorCandidateInput): Promise<AuthorOutcome>;
   validateTask(input: TaskStageInput): Promise<ValidationResult>;
@@ -125,6 +130,7 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
   const store = createArtifactStore(config.artifact);
   const sandbox = createSandboxExecutor(config.execution);
   return {
+    collectRunProvenance: (run) => collectRunProvenance(store, run),
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
     authorCandidate: (input) => authorCandidate(store, sandbox, input),
     validateTask: (input) => validateTask(store, config.harborEnvironment, input),
@@ -134,6 +140,25 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
     auditTask: (input) => auditTask(store, input),
     buildExport: (input) => buildExport(store, input),
   };
+}
+
+async function collectRunProvenance(store: ArtifactStore, run: RunRequest): Promise<ArtifactRef> {
+  Context.current().heartbeat("collecting merged GitHub pull requests");
+  const [localBytes, token] = await Promise.all([store.get(run.provenance), githubToken()]);
+  const local = parseProvenance(localBytes);
+  const github = await collectGitHubPullRequestProvenance(run.repository.url, token);
+  const messages = [...local, ...github];
+  if (messages.length === 0) {
+    throw ApplicationFailure.nonRetryable(
+      "no sanitized local-session or GitHub pull-request provenance was found",
+      "NoProvenance",
+    );
+  }
+  return await store.put(
+    `runs/${run.runId}/input/combined-provenance.jsonl`,
+    Buffer.from(`${messages.map((message) => JSON.stringify(message)).join("\n")}\n`),
+    "application/x-ndjson",
+  );
 }
 
 async function discoverCandidateShard(
