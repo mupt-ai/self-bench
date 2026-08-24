@@ -13,6 +13,7 @@ import type {
   Candidate,
   Difficulty,
   DiscoveryProgress,
+  DiscoveryResult,
   RunRequest,
   RunResult,
   RunStatus,
@@ -370,58 +371,92 @@ async function discoverWave(
   run: RunRequest,
   options: DiscoveryWaveOptions,
 ): Promise<Candidate[]> {
-  const targetCounts = Object.fromEntries(
+  const targetCounts = discoveryShardTargets(options.targetCounts);
+  const progress = discoveryProgress(options);
+  progress.report();
+
+  const shards = await Promise.all(
+    Array.from({ length: DISCOVERY_SHARD_COUNT }, (_unused, shardIndex) =>
+      discoverShard(activitySet, run, options, targetCounts, shardIndex, progress),
+    ),
+  );
+  return uniqueCandidates(interleave(shards.map((shard) => shard.candidates)));
+}
+
+function discoveryShardTargets(
+  targetCounts: RunRequest["candidateCounts"],
+): Record<Difficulty, number> {
+  return Object.fromEntries(
     (["easy", "medium", "hard"] as const).map((difficulty) => [
       difficulty,
-      options.targetCounts[difficulty] === 0
+      targetCounts[difficulty] === 0
         ? 0
         : Math.min(
             MAX_CANDIDATES_PER_TIER_PER_SHARD,
-            Math.ceil(options.targetCounts[difficulty] / DISCOVERY_SHARD_COUNT) +
-              DISCOVERY_SHARD_OVERFETCH,
+            Math.ceil(targetCounts[difficulty] / DISCOVERY_SHARD_COUNT) + DISCOVERY_SHARD_OVERFETCH,
           ),
     ]),
   ) as Record<Difficulty, number>;
+}
+
+function discoveryProgress(options: DiscoveryWaveOptions) {
   let completedShards = 0;
   let failedShards = 0;
-  let candidateCount = 0;
-  const reportProgress = (): void =>
+  let candidates = 0;
+  const report = (): void =>
     options.onProgress({
       wave: options.wave,
       totalShards: DISCOVERY_SHARD_COUNT,
       completedShards,
       failedShards,
-      candidates: candidateCount,
+      candidates,
     });
-  reportProgress();
-  const shards = await Promise.all(
-    Array.from({ length: DISCOVERY_SHARD_COUNT }, async (_unused, shardIndex) => {
-      try {
-        const result = await activitySet.discoverCandidateShard({
-          run,
-          wave: options.wave,
-          shardIndex,
-          shardCount: DISCOVERY_SHARD_COUNT,
-          targetCounts,
-          excludedSourcePrs: options.excludedSourcePrs,
-        } satisfies DiscoveryShardInput);
-        completedShards += 1;
-        candidateCount += result.candidates.length;
-        reportProgress();
-        return result;
-      } catch (error) {
-        if (isCancellation(error) || !isExhaustedActivityFailure(error)) {
-          throw error;
-        }
-        failedShards += 1;
-        reportProgress();
-        return { candidates: [], report: undefined };
-      }
-    }),
-  );
-  const ranked = interleave(shards.map((shard) => shard.candidates));
+
+  return {
+    report,
+    complete(candidateCount: number): void {
+      completedShards += 1;
+      candidates += candidateCount;
+      report();
+    },
+    fail(): void {
+      failedShards += 1;
+      report();
+    },
+  };
+}
+
+async function discoverShard(
+  activitySet: SelfBenchActivities,
+  run: RunRequest,
+  options: DiscoveryWaveOptions,
+  targetCounts: Readonly<Record<Difficulty, number>>,
+  shardIndex: number,
+  progress: ReturnType<typeof discoveryProgress>,
+): Promise<Pick<DiscoveryResult, "candidates">> {
+  try {
+    const result = await activitySet.discoverCandidateShard({
+      run,
+      wave: options.wave,
+      shardIndex,
+      shardCount: DISCOVERY_SHARD_COUNT,
+      targetCounts,
+      excludedSourcePrs: options.excludedSourcePrs,
+    } satisfies DiscoveryShardInput);
+    progress.complete(result.candidates.length);
+    return result;
+  } catch (error) {
+    if (isCancellation(error) || !isExhaustedActivityFailure(error)) {
+      throw error;
+    }
+    progress.fail();
+    return { candidates: [] };
+  }
+}
+
+function uniqueCandidates(candidates: readonly Candidate[]): Candidate[] {
   const seenPrs = new Set<number>();
-  return ranked.filter((candidate) => {
+  return candidates.filter((candidate) => {
     if (seenPrs.has(candidate.sourcePr)) {
       return false;
     }
