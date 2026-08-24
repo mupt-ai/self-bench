@@ -13,7 +13,10 @@ import { buildCommit } from "./build-metadata.js";
 import { loadWorkerConfig } from "./config.js";
 import { MAX_CANDIDATES_PER_RUN } from "./contracts.js";
 import { runCommand } from "./process.js";
-import { collectRepositoryProvenance } from "./provenance.js";
+import {
+  collectRepositoryProvenance,
+  collectRepositoryProvenanceWithMetadata,
+} from "./provenance.js";
 import {
   applyProvenanceAssociationManifests,
   associationSessionSummaries,
@@ -185,11 +188,12 @@ async function associate(args: string[]): Promise<void> {
     strict: true,
   });
   const repositoryPath = resolve(parsed.values.repo ?? fail("--repo is required"));
-  const [repository, localMessages] = await Promise.all([
+  const [repository, collected] = await Promise.all([
     resolveRepository(repositoryPath),
-    collectRepositoryProvenance(repositoryPath, process.env.HOME ?? homedir()),
+    collectRepositoryProvenanceWithMetadata(repositoryPath, process.env.HOME ?? homedir()),
   ]);
-  const sessions = associationSessionSummaries(localMessages);
+  const localMessages = collected.messages;
+  const sessions = associationSessionSummaries(localMessages, collected.sessions);
   if (parsed.values["list-sessions"]) {
     console.log(JSON.stringify({ repository: repository.url, sessions }, null, 2));
     return;
@@ -489,9 +493,9 @@ requires --harbor-environment because Harbor does not support Vercel. Modal gene
 ~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
 project, publish the pinned runtime image, verify access, and save an owner-only local profile.
 
-The associate command runs locally. It verifies a merged GitHub PR and writes a create-only, text-free
-manifest that binds exact sanitized messages from selected local sessions; it never uploads or starts a run.
-Pass the manifest to run with --association (repeatable). No LLM participates in association.
+The associate command runs locally. --list-sessions prints selectors, counts, local paths, and modification
+times, but never request text. Association writes a create-only, text-free manifest; it never uploads or
+starts a run. Pass the manifest to run with --association (repeatable). No LLM participates in association.
 
 The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
 replaced, and the export contains only accepted tasks. The run command performs only repository metadata

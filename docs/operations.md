@@ -170,7 +170,7 @@ Use an optional local association manifest when you know which coding session pr
 self-bench associate --repo /absolute/path/to/repository --list-sessions
 ```
 
-The listing contains source type, session ID, and retained user-message count, but no request text. Select one or more complete sessions and bind them to one merged PR:
+The newest sessions appear first. The listing contains source type, session ID, retained user-message count, the local session file path (with the home directory abbreviated as `~`), and its filesystem modification timestamp. These fields stay in terminal output only: they are not written to the association manifest or uploaded. Request text is never printed. Treat paths and timestamps as private metadata, and redirect the listing only to a protected file if it must be saved. Select one or more complete sessions and bind them to one merged PR:
 
 ```bash
 self-bench associate \
@@ -195,7 +195,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The run command re-collects and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
+The run command re-collects and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
 
 Association is deliberately a user assertion, not an LLM decision. Only the local CLI can see the local session stores. An LLM would make the binding nondeterministic, expose more request text, and could invent a correspondence. Remote model discovery can still rank candidates, but materialization resolves an exact retained message and enforces the explicit PR binding.
 

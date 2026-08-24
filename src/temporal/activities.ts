@@ -270,6 +270,7 @@ async function discoverCandidateShard(
     store,
     run,
     shard,
+    provenance,
     planBytes,
     logs,
     input.targetCounts,
@@ -283,6 +284,7 @@ async function materializeDiscovery(
   store: ArtifactStore,
   run: RunRequest,
   provenance: readonly ProvenanceMessage[],
+  allProvenance: readonly ProvenanceMessage[],
   planBytes: Uint8Array,
   logs: ArtifactRef,
   maxCandidates: Readonly<Record<Difficulty, number>>,
@@ -294,16 +296,7 @@ async function materializeDiscovery(
 
   const candidates: Candidate[] = [];
   for (const raw of plan.candidates) {
-    const message = provenance.find(
-      (item) =>
-        item.sourceType === raw.provenance.sourceType &&
-        item.sessionId === raw.provenance.sessionId &&
-        item.messageIndex === raw.provenance.messageIndex,
-    );
-    if (!message) {
-      throw new Error(`candidate ${raw.candidateId} references unknown provenance`);
-    }
-    assertProvenanceMatchesPullRequest(message, raw.sourcePr, raw.sourceUrl);
+    const message = selectCandidateProvenance(provenance, allProvenance, raw);
     const staged = Buffer.from(
       `${JSON.stringify({ source: message, messages: [{ role: "user", content: message.content }] })}\n`,
     );
@@ -328,6 +321,38 @@ async function materializeDiscovery(
     "application/json",
   );
   return { candidates, report };
+}
+
+export function selectCandidateProvenance(
+  available: readonly ProvenanceMessage[],
+  allProvenance: readonly ProvenanceMessage[],
+  candidate: {
+    readonly candidateId: string;
+    readonly sourcePr: number;
+    readonly sourceUrl: string;
+    readonly provenance: {
+      readonly sourceType: ProvenanceMessage["sourceType"];
+      readonly sessionId: string;
+      readonly messageIndex: number;
+    };
+  },
+): ProvenanceMessage {
+  const message = available.find(
+    (item) =>
+      item.sourceType === candidate.provenance.sourceType &&
+      item.sessionId === candidate.provenance.sessionId &&
+      item.messageIndex === candidate.provenance.messageIndex,
+  );
+  if (!message) {
+    throw new Error(`candidate ${candidate.candidateId} references unknown provenance`);
+  }
+  assertProvenanceMatchesPullRequest(
+    message,
+    candidate.sourcePr,
+    candidate.sourceUrl,
+    allProvenance,
+  );
+  return message;
 }
 
 function parseDiscoveryPlan(

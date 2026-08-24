@@ -4,8 +4,10 @@ import {
   combineRunProvenance,
   extractGitHubPullRequestProvenance,
   extractProvenanceMessages,
+  type ProvenanceMessage,
   redactSecrets,
 } from "../src/provenance.js";
+import { selectCandidateProvenance } from "../src/temporal/activities.js";
 
 describe("provenance sanitization", () => {
   test("extracts human Codex messages and ignores injected context", () => {
@@ -171,6 +173,49 @@ describe("provenance sanitization", () => {
     expect(() =>
       assertProvenanceMatchesPullRequest(message, 42, "https://github.com/example/project/pull/42"),
     ).not.toThrow();
+  });
+
+  test("backend rejects unbound local provenance when a PR has an explicit association", () => {
+    const unbound: ProvenanceMessage = {
+      sourceType: "pi",
+      sessionId: "unbound-session",
+      messageIndex: 0,
+      content: "A different request",
+    };
+    const bound: ProvenanceMessage = {
+      sourceType: "codex",
+      sessionId: "bound-session",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+    const candidate = {
+      candidateId: "candidate-42",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+      provenance: {
+        sourceType: unbound.sourceType,
+        sessionId: unbound.sessionId,
+        messageIndex: unbound.messageIndex,
+      },
+    };
+
+    const discoveryShard = [unbound];
+    const completeCorpus = [unbound, bound];
+    expect(() => selectCandidateProvenance(discoveryShard, completeCorpus, candidate)).toThrow(
+      "has explicit local provenance; unbound local provenance cannot be selected",
+    );
+    expect(
+      selectCandidateProvenance([bound], [unbound, bound], {
+        ...candidate,
+        provenance: {
+          sourceType: bound.sourceType,
+          sessionId: bound.sessionId,
+          messageIndex: bound.messageIndex,
+        },
+      }),
+    ).toBe(bound);
   });
 
   test("binds GitHub provenance to its exact pull request", () => {

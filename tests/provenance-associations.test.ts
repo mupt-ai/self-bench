@@ -45,19 +45,44 @@ afterEach(async () => {
 });
 
 describe("provenance association manifests", () => {
-  test("lists local sessions without exposing message content", () => {
-    expect(associationSessionSummaries(messages)).toEqual([
+  test("lists local sessions with identifying file metadata but without message content", () => {
+    expect(
+      associationSessionSummaries(messages, [
+        {
+          sourceType: "pi",
+          sessionId: "session-a",
+          path: "~/.pi/agent/sessions/a.jsonl",
+          modifiedAt: "2026-08-24T01:00:00.000Z",
+        },
+        {
+          sourceType: "pi",
+          sessionId: "session-a",
+          path: "~/.pi/agent/sessions/archived-a.jsonl",
+          modifiedAt: "2026-08-24T02:00:00.000Z",
+        },
+        {
+          sourceType: "pi",
+          sessionId: "session-b",
+          path: "~/.pi/agent/sessions/b.jsonl",
+          modifiedAt: "2026-08-23T01:00:00.000Z",
+        },
+      ]),
+    ).toEqual([
       {
         selector: "pi:session-a",
         sourceType: "pi",
         sessionId: "session-a",
         messageCount: 2,
+        modifiedAt: "2026-08-24T02:00:00.000Z",
+        paths: ["~/.pi/agent/sessions/a.jsonl", "~/.pi/agent/sessions/archived-a.jsonl"],
       },
       {
         selector: "pi:session-b",
         sourceType: "pi",
         sessionId: "session-b",
         messageCount: 1,
+        modifiedAt: "2026-08-23T01:00:00.000Z",
+        paths: ["~/.pi/agent/sessions/b.jsonl"],
       },
     ]);
   });

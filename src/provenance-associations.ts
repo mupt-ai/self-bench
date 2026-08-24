@@ -3,7 +3,11 @@ import { z } from "zod";
 import { assertPullRequestBelongsToRepository, githubRepository } from "./github.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
-import type { ProvenanceMessage, SessionProvenanceFormat } from "./provenance.js";
+import type {
+  LocalSessionMetadata,
+  ProvenanceMessage,
+  SessionProvenanceFormat,
+} from "./provenance.js";
 
 const localSourceTypeSchema = z.enum(["pi", "claude-code", "codex"]);
 type LocalSourceType = z.infer<typeof localSourceTypeSchema>;
@@ -34,6 +38,8 @@ export interface AssociationSessionSummary {
   readonly sourceType: LocalSourceType;
   readonly sessionId: string;
   readonly messageCount: number;
+  readonly modifiedAt?: string;
+  readonly paths?: readonly string[];
 }
 
 export interface MergedPullRequest {
@@ -43,7 +49,24 @@ export interface MergedPullRequest {
 
 export function associationSessionSummaries(
   messages: readonly ProvenanceMessage[],
+  metadata: readonly LocalSessionMetadata[] = [],
 ): AssociationSessionSummary[] {
+  const metadataBySelector = new Map<string, { modifiedAt: string; paths: Set<string> }>();
+  for (const session of metadata) {
+    if (!isLocalSourceType(session.sourceType)) {
+      continue;
+    }
+    const selector = sessionSelector(session.sourceType, session.sessionId);
+    const existing = metadataBySelector.get(selector);
+    metadataBySelector.set(selector, {
+      modifiedAt:
+        !existing || session.modifiedAt > existing.modifiedAt
+          ? session.modifiedAt
+          : existing.modifiedAt,
+      paths: new Set([...(existing?.paths ?? []), session.path]),
+    });
+  }
+
   const counts = new Map<string, AssociationSessionSummary>();
   for (const message of messages) {
     if (!isLocalSourceType(message.sourceType)) {
@@ -51,14 +74,25 @@ export function associationSessionSummaries(
     }
     const selector = sessionSelector(message.sourceType, message.sessionId);
     const existing = counts.get(selector);
+    const sessionMetadata = metadataBySelector.get(selector);
     counts.set(selector, {
       selector,
       sourceType: message.sourceType,
       sessionId: message.sessionId,
       messageCount: (existing?.messageCount ?? 0) + 1,
+      ...(sessionMetadata
+        ? {
+            modifiedAt: sessionMetadata.modifiedAt,
+            paths: [...sessionMetadata.paths].sort(),
+          }
+        : {}),
     });
   }
-  return [...counts.values()].sort((left, right) => left.selector.localeCompare(right.selector));
+  return [...counts.values()].sort(
+    (left, right) =>
+      (right.modifiedAt ?? "").localeCompare(left.modifiedAt ?? "") ||
+      left.selector.localeCompare(right.selector),
+  );
 }
 
 export function createProvenanceAssociationManifest(input: {

@@ -316,6 +316,40 @@ printf '%s\\n' '{"number":42,"url":"https://github.com/example/project/pull/42",
     );
     await chmod(gh, 0o755);
 
+    const listChild = Bun.spawn(
+      [process.execPath, "src/cli.ts", "associate", "--repo", repository, "--list-sessions"],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          HOME: home,
+          PATH: `${binaryDirectory}:${process.env.PATH ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [listExitCode, listStdout, listStderr] = await Promise.all([
+      listChild.exited,
+      new Response(listChild.stdout).text(),
+      new Response(listChild.stderr).text(),
+    ]);
+    expect(listExitCode, listStderr).toBe(0);
+    expect(JSON.parse(listStdout)).toEqual({
+      repository: "https://github.com/example/project.git",
+      sessions: [
+        {
+          selector: "pi:session-1",
+          sourceType: "pi",
+          sessionId: "session-1",
+          messageCount: 1,
+          modifiedAt: expect.any(String),
+          paths: ["~/.pi/agent/sessions/repository/session.jsonl"],
+        },
+      ],
+    });
+    expect(listStdout).not.toContain(request);
+
     const child = Bun.spawn(
       [
         process.execPath,
