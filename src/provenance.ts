@@ -75,6 +75,7 @@ export async function collectRepositoryProvenance(
 export async function collectGitHubPullRequestProvenance(
   repositoryUrl: string,
   token?: string,
+  signal?: AbortSignal,
 ): Promise<ProvenanceMessage[]> {
   const repository = githubRepository(repositoryUrl);
   const result = await runCommand(
@@ -93,6 +94,7 @@ export async function collectGitHubPullRequestProvenance(
     ],
     {
       env: token ? { ...process.env, GH_TOKEN: token } : process.env,
+      ...(signal ? { signal } : {}),
     },
   );
   return extractGitHubPullRequestProvenance(result.stdout, repositoryUrl);
