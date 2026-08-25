@@ -18,6 +18,21 @@ const submission = {
 };
 
 describe("API run metadata", () => {
+  test("accepts up to ten thousand candidates", () => {
+    const built = buildRunRequest(loadConfig(), {
+      ...submission,
+      candidateCounts: { easy: 3_334, medium: 3_333, hard: 3_333 },
+    });
+
+    expect(built.candidateCounts).toEqual({ easy: 3_334, medium: 3_333, hard: 3_333 });
+    expect(() =>
+      buildRunRequest(loadConfig(), {
+        ...submission,
+        candidateCounts: { easy: 3_334, medium: 3_334, hard: 3_333 },
+      }),
+    ).toThrow();
+  });
+
   test("persists the effective Vercel timeout cap with provider and Harbor metadata", () => {
     const config = loadConfig({
       SELFBENCH_EXECUTION_BACKEND: "vercel",

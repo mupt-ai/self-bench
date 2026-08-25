@@ -158,12 +158,46 @@ Common failures:
 
 `self-bench run` requires an absolute or relative path to a Git checkout whose `origin` is an HTTPS or SSH GitHub URL. It pins `HEAD`; uncommitted content is excluded.
 
-The CLI collects two types of provenance:
+The CLI collects sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees, then uploads that local corpus with the run request. The workflow starts by running a Temporal activity on the worker that fetches exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds. It stores the combined local and GitHub corpus as a run artifact before discovery begins.
 
-1. sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees;
-2. exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds.
+GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. A run can proceed with only local or only GitHub provenance, but fails when the combined corpus is empty. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
 
-GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
+### Explicit local-session association
+
+Use an optional local association manifest when you know which coding session produced a merged PR and do not want remote discovery to infer that correspondence. First list the sanitized sessions found for the repository and all of its worktrees:
+
+```bash
+self-bench associate --repo /absolute/path/to/repository --list-sessions
+```
+
+The newest sessions appear first. The listing contains source type, session ID, retained user-message count, the local session file path (with the home directory abbreviated as `~`), and its filesystem modification timestamp. These fields stay in terminal output only: they are not written to the association manifest or uploaded. Request text is never printed. Treat paths and timestamps as private metadata, and redirect the listing only to a protected file if it must be saved. Select one or more complete sessions and bind them to one merged PR:
+
+```bash
+self-bench associate \
+  --repo /absolute/path/to/repository \
+  --pr 123 \
+  --session pi:01a03611-1df5-7f46-a88e-e24f4987b745 \
+  --session claude-code:9dd842c0-59d8-4838-8f29-cff97820f4e8 \
+  --output ./pr-123-sessions.json
+```
+
+`associate` calls `gh pr view` to verify that the PR is merged and belongs to the repository. It then writes the output with create-only semantics and owner-only permissions. The manifest is deterministic and text-free: it contains the repository, canonical PR identity, each selected local message identity, and a SHA-256 of the exact sanitized and whitespace-normalized content SelfBench retains. It does **not** contain request text, upload anything, mutate the repository, or start a run. Keep it private anyway because session identifiers and PR associations can be sensitive.
+
+Pass one or more manifests explicitly when starting a run:
+
+```bash
+self-bench run \
+  --repo /absolute/path/to/repository \
+  --association ./pr-123-sessions.json \
+  --easy-count 5 \
+  --medium-count 10 \
+  --hard-count 5 \
+  --output ./self-bench-tasks.tar.gz
+```
+
+The run command re-collects, whitespace-normalizes, and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact retained messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
+
+Association is deliberately a user assertion, not an LLM decision. Only the local CLI can see the local session stores. An LLM would make the binding nondeterministic, expose more request text, and could invent a correspondence. Remote model discovery can still rank candidates, but materialization resolves an exact retained message and enforces the explicit PR binding.
 
 ```bash
 self-bench run \
@@ -175,7 +209,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The three tier counts total 1–100. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
+The three tier counts total 1–10,000. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
 
 `--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
 

@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertProvenanceMatchesPullRequest,
+  combineRunProvenance,
   extractGitHubPullRequestProvenance,
   extractProvenanceMessages,
+  type ProvenanceMessage,
   redactSecrets,
 } from "../src/provenance.js";
+import { selectCandidateProvenance } from "../src/temporal/activities.js";
 
 describe("provenance sanitization", () => {
   test("extracts human Codex messages and ignores injected context", () => {
@@ -26,6 +29,31 @@ describe("provenance sanitization", () => {
         sessionId: "session-1",
         messageIndex: 0,
         content: "Build the feature",
+      },
+    ]);
+  });
+
+  test("normalizes local user-message whitespace before secret redaction", () => {
+    const raw = [
+      { type: "session", id: "session-1" },
+      {
+        type: "message",
+        parentId: "parent",
+        message: {
+          role: "user",
+          content: "  Authorization: Bearer private-token keep this spacing.\n\n",
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n");
+
+    expect(extractProvenanceMessages(raw, "pi")).toEqual([
+      {
+        sourceType: "pi",
+        sessionId: "session-1",
+        messageIndex: 0,
+        content: "Authorization: Bearer [REDACTED] keep this spacing.",
       },
     ]);
   });
@@ -107,6 +135,90 @@ describe("provenance sanitization", () => {
         sourceUrl: "https://github.com/example/project/pull/41",
       },
     ]);
+  });
+
+  test("prefers explicit local associations over GitHub fallback for the same PR", () => {
+    const local = {
+      sourceType: "codex" as const,
+      sessionId: "session-1",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+    const github = {
+      sourceType: "github-pull-request" as const,
+      sessionId: "github:example/project#42",
+      messageIndex: 0,
+      content: "Fallback title",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+
+    expect(combineRunProvenance("https://github.com/example/project", [local], [github])).toEqual([
+      local,
+    ]);
+  });
+
+  test("binds explicitly associated local provenance to its exact pull request", () => {
+    const message = {
+      sourceType: "pi" as const,
+      sessionId: "session-1",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+
+    expect(() =>
+      assertProvenanceMatchesPullRequest(message, 41, "https://github.com/example/project/pull/41"),
+    ).toThrow("does not match provenance");
+    expect(() =>
+      assertProvenanceMatchesPullRequest(message, 42, "https://github.com/example/project/pull/42"),
+    ).not.toThrow();
+  });
+
+  test("backend rejects unbound local provenance when a PR has an explicit association", () => {
+    const unbound: ProvenanceMessage = {
+      sourceType: "pi",
+      sessionId: "unbound-session",
+      messageIndex: 0,
+      content: "A different request",
+    };
+    const bound: ProvenanceMessage = {
+      sourceType: "codex",
+      sessionId: "bound-session",
+      messageIndex: 0,
+      content: "Build the feature",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+    };
+    const candidate = {
+      candidateId: "candidate-42",
+      sourcePr: 42,
+      sourceUrl: "https://github.com/example/project/pull/42",
+      provenance: {
+        sourceType: unbound.sourceType,
+        sessionId: unbound.sessionId,
+        messageIndex: unbound.messageIndex,
+      },
+    };
+
+    const discoveryShard = [unbound];
+    const completeCorpus = [unbound, bound];
+    expect(() => selectCandidateProvenance(discoveryShard, completeCorpus, candidate)).toThrow(
+      "has explicit local provenance; unbound local provenance cannot be selected",
+    );
+    expect(
+      selectCandidateProvenance([bound], [unbound, bound], {
+        ...candidate,
+        provenance: {
+          sourceType: bound.sourceType,
+          sessionId: bound.sessionId,
+          messageIndex: bound.messageIndex,
+        },
+      }),
+    ).toBe(bound);
   });
 
   test("binds GitHub provenance to its exact pull request", () => {
