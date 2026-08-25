@@ -258,8 +258,8 @@ export function extractProvenanceMessages(
     if (role !== "user") {
       continue;
     }
-    const content = redactSecrets(rawContent);
-    if (!content.trim() || looksInjected(content)) {
+    const content = redactSecrets(rawContent.trim());
+    if (!content || looksInjected(content)) {
       continue;
     }
     result.push({ sourceType: resolved, sessionId, messageIndex, content });

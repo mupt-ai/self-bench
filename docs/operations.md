@@ -181,7 +181,7 @@ self-bench associate \
   --output ./pr-123-sessions.json
 ```
 
-`associate` calls `gh pr view` to verify that the PR is merged and belongs to the repository. It then writes the output with create-only semantics and owner-only permissions. The manifest is deterministic and text-free: it contains the repository, canonical PR identity, each selected local message identity, and a SHA-256 of the exact sanitized content. It does **not** contain request text, upload anything, mutate the repository, or start a run. Keep it private anyway because session identifiers and PR associations can be sensitive.
+`associate` calls `gh pr view` to verify that the PR is merged and belongs to the repository. It then writes the output with create-only semantics and owner-only permissions. The manifest is deterministic and text-free: it contains the repository, canonical PR identity, each selected local message identity, and a SHA-256 of the exact sanitized and whitespace-normalized content SelfBench retains. It does **not** contain request text, upload anything, mutate the repository, or start a run. Keep it private anyway because session identifiers and PR associations can be sensitive.
 
 Pass one or more manifests explicitly when starting a run:
 
@@ -195,7 +195,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The run command re-collects and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
+The run command re-collects, whitespace-normalizes, and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact retained messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
 
 Association is deliberately a user assertion, not an LLM decision. Only the local CLI can see the local session stores. An LLM would make the binding nondeterministic, expose more request text, and could invent a correspondence. Remote model discovery can still rank candidates, but materialization resolves an exact retained message and enforces the explicit PR binding.
 

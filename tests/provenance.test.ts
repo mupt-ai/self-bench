@@ -33,13 +33,16 @@ describe("provenance sanitization", () => {
     ]);
   });
 
-  test("preserves local user-message text outside required secret redaction", () => {
+  test("normalizes local user-message whitespace before secret redaction", () => {
     const raw = [
       { type: "session", id: "session-1" },
       {
         type: "message",
         parentId: "parent",
-        message: { role: "user", content: "  Keep this spacing.\n\n" },
+        message: {
+          role: "user",
+          content: "  Authorization: Bearer private-token keep this spacing.\n\n",
+        },
       },
     ]
       .map((record) => JSON.stringify(record))
@@ -50,7 +53,7 @@ describe("provenance sanitization", () => {
         sourceType: "pi",
         sessionId: "session-1",
         messageIndex: 0,
-        content: "  Keep this spacing.\n\n",
+        content: "Authorization: Bearer [REDACTED] keep this spacing.",
       },
     ]);
   });

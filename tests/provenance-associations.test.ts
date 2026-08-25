@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ProvenanceMessage } from "../src/provenance.js";
+import { sha256 } from "../src/hash.js";
+import { extractProvenanceMessages, type ProvenanceMessage } from "../src/provenance.js";
 import {
   applyProvenanceAssociationManifests,
   associationSessionSummaries,
@@ -85,6 +86,34 @@ describe("provenance association manifests", () => {
         paths: ["~/.pi/agent/sessions/b.jsonl"],
       },
     ]);
+  });
+
+  test("hashes the exact sanitized and whitespace-normalized retained message", () => {
+    const raw = [
+      { type: "session", id: "normalized-session" },
+      {
+        type: "message",
+        parentId: "parent",
+        message: {
+          role: "user",
+          content: "  Authorization: Bearer private-token build routing.\n\n",
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n");
+    const retained = extractProvenanceMessages(raw, "pi");
+    const manifest = createProvenanceAssociationManifest({
+      repositoryUrl,
+      pullRequest: { sourcePr: 42, sourceUrl },
+      messages: retained,
+      sessionSelectors: ["pi:normalized-session"],
+    });
+
+    expect(retained[0]?.content).toBe("Authorization: Bearer [REDACTED] build routing.");
+    expect(manifest.messages[0]?.contentSha256).toBe(
+      sha256("Authorization: Bearer [REDACTED] build routing."),
+    );
   });
 
   test("creates a deterministic text-free manifest for exact sanitized messages", () => {
