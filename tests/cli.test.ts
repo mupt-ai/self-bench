@@ -276,7 +276,7 @@ printf '%s|%s|%s|%s\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_EN
       mkdir(sessionDirectory, { recursive: true }),
     ]);
     const gh = join(binaryDirectory, "gh");
-    await writeFile(gh, "#!/bin/sh\nprintf '[]\\n'\n");
+    await writeFile(gh, "#!/bin/sh\nexit 99\n");
     await chmod(gh, 0o755);
     await runCommand("git", ["init", "-q", repository]);
     await runCommand("git", ["-C", repository, "config", "user.email", "test@example.com"]);
@@ -305,6 +305,7 @@ printf '%s|%s|%s|%s\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_EN
     );
 
     const exportBody = Buffer.from("verified export");
+    let uploadedProvenance = "";
     let submittedRun: Record<string, unknown> | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -312,6 +313,7 @@ printf '%s|%s|%s|%s\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_EN
       fetch: async (request) => {
         const url = new URL(request.url);
         if (request.method === "POST" && url.pathname === "/v1/provenance") {
+          uploadedProvenance = await request.text();
           return Response.json({
             uri: "local://provenance",
             sha256: "a".repeat(64),
@@ -384,6 +386,7 @@ printf '%s|%s|%s|%s\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_EN
 
       expect(exitCode, stderr).toBe(0);
       expect(await readFile(output)).toEqual(exportBody);
+      expect(uploadedProvenance).toContain("Build the feature");
       expect(submittedRun?.candidateCounts).toEqual({ easy: 1, medium: 2, hard: 3 });
       expect(stdout).toContain(`"output": "${output}"`);
       expect(stderr).toContain('"phase":"complete"');

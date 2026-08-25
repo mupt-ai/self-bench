@@ -18,6 +18,12 @@ const artifact: ArtifactRef = {
   contentType: "application/json",
 };
 
+const combinedProvenance: ArtifactRef = {
+  ...artifact,
+  uri: "file:///combined-provenance.jsonl",
+  contentType: "application/x-ndjson",
+};
+
 const run: RunRequest = {
   runId: "workflow-test",
   repository: { url: "https://github.com/example/repo.git", commit: "a".repeat(40) },
@@ -48,6 +54,7 @@ function candidate(id: string, sourcePr: number, difficulty: Difficulty = "hard"
 
 function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivities {
   return {
+    collectRunProvenance: async () => artifact,
     discoverCandidateShard: async ({ shardIndex }) => ({
       candidates: shardIndex === 0 ? discovered : [],
       report: artifact,
@@ -80,6 +87,20 @@ function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivit
 }
 
 describe("SelfBench workflow", () => {
+  test("uses remotely collected pull request provenance for discovery", async () => {
+    const activities = acceptingActivities([candidate("candidate", 1)]);
+    activities.collectRunProvenance = async () => combinedProvenance;
+    activities.discoverCandidateShard = async ({ run: discoveryRun, shardIndex }) => {
+      expect(discoveryRun.provenance).toEqual(combinedProvenance);
+      return {
+        candidates: shardIndex === 0 ? [candidate("candidate", 1)] : [],
+        report: artifact,
+      };
+    };
+
+    await executeRun(run, activities);
+  });
+
   test("propagates discovery cancellation", async () => {
     let currentStatus: (() => RunStatus) | undefined;
     const activities = acceptingActivities([]);

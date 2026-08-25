@@ -13,7 +13,7 @@ import { buildCommit } from "./build-metadata.js";
 import { loadWorkerConfig } from "./config.js";
 import { MAX_CANDIDATES_PER_RUN } from "./contracts.js";
 import { runCommand } from "./process.js";
-import { collectGitHubPullRequestProvenance, collectRepositoryProvenance } from "./provenance.js";
+import { collectRepositoryProvenance } from "./provenance.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
 import { applyVercelProfile, setupVercel } from "./setup/vercel/index.js";
@@ -193,12 +193,11 @@ async function run(args: string[]): Promise<void> {
     collectRepositoryProvenance(repositoryPath, process.env.HOME ?? homedir()),
     resolveSelfBenchCommit(),
   ]);
-  const githubMessages = await collectGitHubPullRequestProvenance(repository.url);
-  const messages = [...localMessages, ...githubMessages];
-  if (messages.length === 0) {
-    throw new Error("no sanitized local-session or GitHub pull-request provenance was found");
-  }
-  const corpus = Buffer.from(`${messages.map((message) => JSON.stringify(message)).join("\n")}\n`);
+  const corpus = Buffer.from(
+    localMessages.length > 0
+      ? `${localMessages.map((message) => JSON.stringify(message)).join("\n")}\n`
+      : "",
+  );
   const provenance = await requestJson(`/v1/provenance?runId=${encodeURIComponent(runId)}`, {
     method: "POST",
     body: corpus,
@@ -222,9 +221,7 @@ async function run(args: string[]): Promise<void> {
     JSON.stringify(
       {
         ...response,
-        provenanceMessages: messages.length,
         localProvenanceMessages: localMessages.length,
-        githubPullRequestMessages: githubMessages.length,
       },
       null,
       2,
