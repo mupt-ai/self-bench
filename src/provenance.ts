@@ -1,23 +1,50 @@
-import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { basename, join, relative } from "node:path";
+import { z } from "zod";
 import { assertPullRequestBelongsToRepository, githubRepository } from "./github.js";
 import { runCommand } from "./process.js";
 
 export type SessionProvenanceFormat = "codex" | "claude-code" | "pi" | "generic";
 
-interface ProvenanceMessageBase {
+const provenanceMessageBaseSchema = z.object({
+  sessionId: z.string().min(1),
+  messageIndex: z.number().int().nonnegative(),
+  content: z.string().min(1),
+});
+
+const localProvenanceMessageSchema = provenanceMessageBaseSchema
+  .extend({
+    sourceType: z.enum(["codex", "claude-code", "pi", "generic"]),
+    sourcePr: z.number().int().positive().optional(),
+    sourceUrl: z.string().url().optional(),
+  })
+  .refine(
+    (message) => (message.sourcePr === undefined) === (message.sourceUrl === undefined),
+    "sourcePr and sourceUrl must be supplied together",
+  );
+
+export const provenanceMessageSchema = z.union([
+  localProvenanceMessageSchema,
+  provenanceMessageBaseSchema.extend({
+    sourceType: z.literal("github-pull-request"),
+    sourcePr: z.number().int().positive(),
+    sourceUrl: z.string().url(),
+  }),
+]);
+
+export type ProvenanceMessage = z.infer<typeof provenanceMessageSchema>;
+
+export interface LocalSessionMetadata {
+  readonly sourceType: SessionProvenanceFormat;
   readonly sessionId: string;
-  readonly messageIndex: number;
-  readonly content: string;
+  readonly path: string;
+  readonly modifiedAt: string;
 }
 
-export type ProvenanceMessage =
-  | (ProvenanceMessageBase & { readonly sourceType: SessionProvenanceFormat })
-  | (ProvenanceMessageBase & {
-      readonly sourceType: "github-pull-request";
-      readonly sourcePr: number;
-      readonly sourceUrl: string;
-    });
+export interface RepositoryProvenanceCollection {
+  readonly messages: readonly ProvenanceMessage[];
+  readonly sessions: readonly LocalSessionMetadata[];
+}
 
 interface JsonRecord {
   readonly [key: string]: unknown;
@@ -51,9 +78,19 @@ export async function collectRepositoryProvenance(
   repositoryPath: string,
   homeDirectory: string,
 ): Promise<ProvenanceMessage[]> {
+  return [
+    ...(await collectRepositoryProvenanceWithMetadata(repositoryPath, homeDirectory)).messages,
+  ];
+}
+
+export async function collectRepositoryProvenanceWithMetadata(
+  repositoryPath: string,
+  homeDirectory: string,
+): Promise<RepositoryProvenanceCollection> {
   const worktrees = await repositoryWorktrees(repositoryPath);
   const encodedWorktrees = worktrees.flatMap((path) => [path, encodeSessionPath(path)]);
   const messages: ProvenanceMessage[] = [];
+  const sessions: LocalSessionMetadata[] = [];
 
   for (const [format, relativeRoot] of SOURCE_ROOTS) {
     const root = join(homeDirectory, relativeRoot);
@@ -65,11 +102,27 @@ export async function collectRepositoryProvenance(
       ) {
         continue;
       }
-      messages.push(...extractProvenanceMessages(raw, format, basename(path)));
+      const extracted = extractProvenanceMessages(raw, format, basename(path));
+      if (extracted.length === 0) {
+        continue;
+      }
+      messages.push(...extracted);
+      const file = await stat(path).catch(() => undefined);
+      if (file) {
+        const sessionIds = new Set(extracted.map((message) => message.sessionId));
+        for (const sessionId of sessionIds) {
+          sessions.push({
+            sourceType: format,
+            sessionId,
+            path: displaySessionPath(path, homeDirectory),
+            modifiedAt: file.mtime.toISOString(),
+          });
+        }
+      }
     }
   }
 
-  return deduplicateMessages(messages);
+  return { messages: deduplicateMessages(messages), sessions };
 }
 
 export async function collectGitHubPullRequestProvenance(
@@ -139,17 +192,53 @@ export function extractGitHubPullRequestProvenance(
   return messages;
 }
 
+export function combineRunProvenance(
+  repositoryUrl: string,
+  local: readonly ProvenanceMessage[],
+  github: readonly ProvenanceMessage[],
+): ProvenanceMessage[] {
+  const explicitlyAssociatedPrs = new Set<number>();
+  for (const message of local) {
+    if (message.sourcePr === undefined || message.sourceUrl === undefined) {
+      continue;
+    }
+    assertPullRequestBelongsToRepository(repositoryUrl, message.sourceUrl, message.sourcePr);
+    explicitlyAssociatedPrs.add(message.sourcePr);
+  }
+  return [
+    ...local,
+    ...github.filter(
+      (message) =>
+        message.sourceType !== "github-pull-request" ||
+        !explicitlyAssociatedPrs.has(message.sourcePr),
+    ),
+  ];
+}
+
 export function assertProvenanceMatchesPullRequest(
   message: ProvenanceMessage,
   sourcePr: number,
   sourceUrl: string,
+  provenance: readonly ProvenanceMessage[] = [message],
 ): void {
   if (
-    message.sourceType === "github-pull-request" &&
+    (message.sourcePr !== undefined || message.sourceUrl !== undefined) &&
     (message.sourcePr !== sourcePr || message.sourceUrl !== sourceUrl)
   ) {
     throw new Error(
       `pull request ${sourceUrl}#${sourcePr} does not match provenance ${message.sourceUrl}#${message.sourcePr}`,
+    );
+  }
+  const hasExplicitLocalAssociation = provenance.some(
+    (item) => item.sourceType !== "github-pull-request" && item.sourcePr === sourcePr,
+  );
+  if (
+    hasExplicitLocalAssociation &&
+    message.sourceType !== "github-pull-request" &&
+    (message.sourcePr !== sourcePr || message.sourceUrl !== sourceUrl)
+  ) {
+    throw new Error(
+      `pull request ${sourceUrl}#${sourcePr} has explicit local provenance; unbound local provenance cannot be selected`,
     );
   }
 }
@@ -427,11 +516,17 @@ async function listJsonFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-    .map((entry) => join(entry.parentPath, entry.name));
+    .map((entry) => join(entry.parentPath, entry.name))
+    .sort();
 }
 
 function encodeSessionPath(path: string): string {
   return path.replaceAll("/", "-");
+}
+
+function displaySessionPath(path: string, homeDirectory: string): string {
+  const fromHome = relative(homeDirectory, path);
+  return fromHome && !fromHome.startsWith("..") ? `~/${fromHome}` : path;
 }
 
 function deduplicateMessages(messages: readonly ProvenanceMessage[]): ProvenanceMessage[] {

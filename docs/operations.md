@@ -162,6 +162,43 @@ The CLI collects sanitized user messages from Pi, Claude Code, and Codex session
 
 GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. A run can proceed with only local or only GitHub provenance, but fails when the combined corpus is empty. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
 
+### Explicit local-session association
+
+Use an optional local association manifest when you know which coding session produced a merged PR and do not want remote discovery to infer that correspondence. First list the sanitized sessions found for the repository and all of its worktrees:
+
+```bash
+self-bench associate --repo /absolute/path/to/repository --list-sessions
+```
+
+The newest sessions appear first. The listing contains source type, session ID, retained user-message count, the local session file path (with the home directory abbreviated as `~`), and its filesystem modification timestamp. These fields stay in terminal output only: they are not written to the association manifest or uploaded. Request text is never printed. Treat paths and timestamps as private metadata, and redirect the listing only to a protected file if it must be saved. Select one or more complete sessions and bind them to one merged PR:
+
+```bash
+self-bench associate \
+  --repo /absolute/path/to/repository \
+  --pr 123 \
+  --session pi:01a03611-1df5-7f46-a88e-e24f4987b745 \
+  --session claude-code:9dd842c0-59d8-4838-8f29-cff97820f4e8 \
+  --output ./pr-123-sessions.json
+```
+
+`associate` calls `gh pr view` to verify that the PR is merged and belongs to the repository. It then writes the output with create-only semantics and owner-only permissions. The manifest is deterministic and text-free: it contains the repository, canonical PR identity, each selected local message identity, and a SHA-256 of the exact sanitized and whitespace-normalized content SelfBench retains. It does **not** contain request text, upload anything, mutate the repository, or start a run. Keep it private anyway because session identifiers and PR associations can be sensitive.
+
+Pass one or more manifests explicitly when starting a run:
+
+```bash
+self-bench run \
+  --repo /absolute/path/to/repository \
+  --association ./pr-123-sessions.json \
+  --easy-count 5 \
+  --medium-count 10 \
+  --hard-count 5 \
+  --output ./self-bench-tasks.tar.gz
+```
+
+The run command re-collects, whitespace-normalizes, and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact retained messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
+
+Association is deliberately a user assertion, not an LLM decision. Only the local CLI can see the local session stores. An LLM would make the binding nondeterministic, expose more request text, and could invent a correspondence. Remote model discovery can still rank candidates, but materialization resolves an exact retained message and enforces the explicit PR binding.
+
 ```bash
 self-bench run \
   --repo /absolute/path/to/repository \
