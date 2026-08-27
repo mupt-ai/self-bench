@@ -1,4 +1,4 @@
-export const EXECUTION_BACKENDS = ["docker", "modal", "vercel"] as const;
+export const EXECUTION_BACKENDS = ["docker", "modal", "vercel", "e2b"] as const;
 export type ExecutionBackend = (typeof EXECUTION_BACKENDS)[number];
 
 export const HARBOR_ENVIRONMENTS = ["docker", "modal"] as const;

@@ -2,6 +2,10 @@
 .github
 .selfbench
 .venv
+.env
+.env.*
+*.key
+*.pem
 dist
 jobs
 node_modules

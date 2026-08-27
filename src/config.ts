@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./e2b-template.js";
 import {
   EXECUTION_BACKENDS,
   type ExecutionBackend,
@@ -6,7 +7,12 @@ import {
   type HarborEnvironment,
   matchingHarborEnvironment,
 } from "./providers.js";
-import { parseSandboxTimeoutCapText, STANDARD_VERCEL_TIMEOUT_CAP_MS } from "./sandbox/timeout.js";
+import {
+  HOBBY_E2B_TIMEOUT_CAP_MS,
+  parseSandboxTimeoutCapText,
+  STANDARD_E2B_TIMEOUT_CAP_MS,
+  STANDARD_VERCEL_TIMEOUT_CAP_MS,
+} from "./sandbox/timeout.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -29,9 +35,11 @@ const environmentSchema = z.object({
   SELFBENCH_MODAL_ENVIRONMENT: z.string().optional(),
   SELFBENCH_MODAL_IMAGE: z.string().default("node:22-bookworm"),
   SELFBENCH_VERCEL_IMAGE: z.preprocess(emptyStringAsUndefined, z.string().trim().min(1).optional()),
-  // Keep provider-specific validation in the Vercel branch so a stale Vercel
-  // variable cannot break an otherwise unrelated Docker or Modal worker.
+  // Keep provider-specific validation in its provider branch so stale hosted
+  // provider variables cannot break an otherwise unrelated worker.
   SELFBENCH_VERCEL_TIMEOUT_CAP: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+  SELFBENCH_E2B_TEMPLATE: z.preprocess(emptyStringAsUndefined, z.string().trim().min(1).optional()),
+  SELFBENCH_E2B_TIMEOUT_CAP: z.preprocess(emptyStringAsUndefined, z.string().optional()),
   SELFBENCH_BUILD_COMMIT: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z
@@ -59,6 +67,11 @@ export interface VercelCredentials {
   readonly projectId: string;
 }
 
+export interface E2BCredentials {
+  readonly apiKey: string;
+  readonly domain?: string;
+}
+
 type ExecutionConfig =
   | { readonly kind: "docker"; readonly image: string }
   | {
@@ -67,21 +80,29 @@ type ExecutionConfig =
       readonly environment?: string;
       readonly image: string;
     }
-  | { readonly kind: "vercel"; readonly image: string; readonly timeoutCapMs: number };
+  | { readonly kind: "vercel"; readonly image: string; readonly timeoutCapMs: number }
+  | { readonly kind: "e2b"; readonly image: string; readonly timeoutCapMs: number };
 
 type WorkerExecutionConfig =
-  | Exclude<ExecutionConfig, { readonly kind: "vercel" }>
+  | Exclude<ExecutionConfig, { readonly kind: "vercel" | "e2b" }>
   | {
       readonly kind: "vercel";
       readonly image: string;
       readonly timeoutCapMs: number;
       readonly credentials: VercelCredentials;
+    }
+  | {
+      readonly kind: "e2b";
+      readonly image: string;
+      readonly timeoutCapMs: number;
+      readonly credentials: E2BCredentials;
     };
 
 const DEFAULT_ACTIVITY_CONCURRENCY = {
   docker: 1,
   modal: 20,
   vercel: 4,
+  e2b: 4,
 } as const satisfies Record<ExecutionBackend, number>;
 
 export interface SelfBenchConfig {
@@ -164,6 +185,23 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       };
       break;
     }
+    case "e2b": {
+      const image = normalizeE2BTemplateReference(
+        value.SELFBENCH_E2B_TEMPLATE ??
+          fail(
+            "SELFBENCH_E2B_TEMPLATE is required for E2B execution; build the SelfBench template first",
+          ),
+      );
+      if (image === "base") {
+        fail("SELFBENCH_E2B_TEMPLATE must reference a custom SelfBench template, not E2B base");
+      }
+      execution = {
+        kind: "e2b",
+        image,
+        timeoutCapMs: e2bTimeoutCap(value.SELFBENCH_E2B_TIMEOUT_CAP),
+      };
+      break;
+    }
   }
 
   return {
@@ -193,23 +231,35 @@ export function loadWorkerConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): SelfBenchWorkerConfig {
   const config = loadConfig(environment);
-  if (config.execution.kind !== "vercel") {
-    return { ...config, execution: config.execution };
+  switch (config.execution.kind) {
+    case "vercel":
+      return {
+        ...config,
+        execution: {
+          ...config.execution,
+          credentials: vercelCredentials(environment),
+        },
+      };
+    case "e2b":
+      return {
+        ...config,
+        execution: {
+          ...config.execution,
+          credentials: e2bCredentials(environment),
+        },
+      };
+    default:
+      return { ...config, execution: config.execution };
   }
-  return {
-    ...config,
-    execution: {
-      ...config.execution,
-      credentials: vercelCredentials(environment),
-    },
-  };
 }
 
 export function defaultStandaloneConcurrency(
   config: Pick<SelfBenchConfig, "activityConcurrency" | "execution">,
   existingDefault: number,
 ): number {
-  return config.execution.kind === "vercel" ? config.activityConcurrency : existingDefault;
+  return config.execution.kind === "vercel" || config.execution.kind === "e2b"
+    ? config.activityConcurrency
+    : existingDefault;
 }
 
 function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
@@ -222,16 +272,31 @@ function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
   return { token, teamId, projectId };
 }
 
-function vercelTimeoutCap(value: string | undefined): number {
-  if (value === undefined) {
-    return STANDARD_VERCEL_TIMEOUT_CAP_MS;
+function e2bCredentials(environment: NodeJS.ProcessEnv): E2BCredentials {
+  const apiKey = environment.E2B_API_KEY?.trim();
+  if (!apiKey) {
+    fail("E2B_API_KEY is required for E2B execution");
   }
-  return z
-    .number()
-    .int()
-    .min(100)
-    .max(STANDARD_VERCEL_TIMEOUT_CAP_MS)
-    .parse(parseSandboxTimeoutCapText(value));
+  const domain = normalizeE2BDomain(environment.E2B_DOMAIN);
+  return { apiKey, ...(domain ? { domain } : {}) };
+}
+
+function vercelTimeoutCap(value: string | undefined): number {
+  return providerTimeoutCap(value, STANDARD_VERCEL_TIMEOUT_CAP_MS);
+}
+
+function e2bTimeoutCap(value: string | undefined): number {
+  if (value === undefined) {
+    return HOBBY_E2B_TIMEOUT_CAP_MS;
+  }
+  return providerTimeoutCap(value, STANDARD_E2B_TIMEOUT_CAP_MS);
+}
+
+function providerTimeoutCap(value: string | undefined, maximumMs: number): number {
+  if (value === undefined) {
+    return maximumMs;
+  }
+  return z.number().int().min(100).max(maximumMs).parse(parseSandboxTimeoutCapText(value));
 }
 
 function fail(message: string): never {

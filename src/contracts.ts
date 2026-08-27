@@ -57,10 +57,14 @@ const runVersionSchema = z
       });
       return z.NEVER;
     }
-    if (version.sandboxTimeoutCapMs !== undefined && version.executionBackend !== "vercel") {
+    if (
+      version.sandboxTimeoutCapMs !== undefined &&
+      version.executionBackend !== "vercel" &&
+      version.executionBackend !== "e2b"
+    ) {
       context.addIssue({
         code: "custom",
-        message: "sandboxTimeoutCapMs is only valid for Vercel execution",
+        message: "sandboxTimeoutCapMs is only valid for Vercel or E2B execution",
         path: ["sandboxTimeoutCapMs"],
       });
       return z.NEVER;

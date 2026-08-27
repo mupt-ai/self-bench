@@ -8,6 +8,10 @@ import type {
 export const STANDARD_VERCEL_TIMEOUT_CAP_MS = 2 * 60 * 60 * 1_000;
 export const HOBBY_VERCEL_TIMEOUT_CAP_MS = 45 * 60 * 1_000;
 
+// E2B keeps a sandbox alive for at most 24 hours on Pro and 1 hour on Hobby.
+export const STANDARD_E2B_TIMEOUT_CAP_MS = 24 * 60 * 60 * 1_000;
+export const HOBBY_E2B_TIMEOUT_CAP_MS = 60 * 60 * 1_000;
+
 export function parseSandboxTimeoutCapText(value: string): number | undefined {
   const normalized = value.trim().toLowerCase();
   if (normalized === "") {

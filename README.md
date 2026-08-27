@@ -10,7 +10,7 @@
 
 It finds completed requests from local coding sessions and merged GitHub pull requests, then reconstructs each task from the commit before the change. For every accepted task, self-bench creates hidden tests and a reference solution, proves that the task fails without a solution and passes with the original implementation, and exports a native task for [Harbor](https://harborframework.com/), a runner for coding-agent evaluations.
 
-SelfBench is sandbox-agnostic: run generation locally with Docker or on Modal or Vercel Sandbox. Generation and Harbor validation are configured independently, so Modal is optional.
+SelfBench is sandbox-agnostic: run generation locally with Docker or on Modal, Vercel Sandbox, or E2B. Generation and Harbor validation are configured independently, so Modal is optional.
 
 The result is a private `.tar.gz` benchmark that you can run against multiple models:
 
@@ -134,16 +134,17 @@ Named Docker volumes retain Temporal history and generated artifacts.
 
 ## Choose a sandbox backend
 
-The quickstart uses local Docker sandboxes so it works without a hosted sandbox account. For more concurrency or unattended runs, generation can use Modal or Vercel Sandbox instead:
+The quickstart uses local Docker sandboxes so it works without a hosted sandbox account. For more concurrency or unattended runs, generation can use Modal, Vercel Sandbox, or E2B instead:
 
 - **Docker:** `self-bench up --backend docker` keeps generation and validation on your machine.
 - **Modal:** authenticate with `modal token new`, then run `self-bench up --backend modal`.
 - **Vercel Sandbox:** run `self-bench setup vercel`, then choose Docker or Modal for Harbor validation.
-- **Temporal Cloud + Modal:** use this for persistent unattended workers and large repositories.
+- **E2B:** build the pinned SelfBench runtime with `self-bench setup e2b --name NAME[:TAG]`, then choose Docker or Modal for Harbor validation.
+- **Temporal Cloud + Modal/E2B:** use a persistent worker for unattended runs and large repositories.
 
 See [Operations and deployment](docs/operations.md) for provider setup, credentials, persistence, object storage, and Temporal Cloud deployment.
 
-Generation sandboxes and Harbor validation are independent choices. Docker and Modal retain their matching defaults; Vercel must name a Harbor environment because Harbor does not currently provide a Vercel environment:
+Generation sandboxes and Harbor validation are independent choices. Docker and Modal retain their matching defaults; Vercel and E2B must name a Harbor environment because Harbor supports neither as an environment:
 
 ```bash
 # Matching defaults
@@ -155,12 +156,19 @@ self-bench setup vercel
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
 
+# E2B generation uses a required prebuilt template; setup never installs at runtime
+export E2B_API_KEY=...
+self-bench setup e2b --name selfbench-runtime:v1
+export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
+self-bench up --backend e2b --harbor-environment docker
+# self-bench up --backend e2b --harbor-environment modal
+
 # Explicit cross-provider combinations are also supported
 self-bench up --backend docker --harbor-environment modal
 self-bench up --backend modal --harbor-environment docker
 ```
 
-Provider selection belongs to the worker, so all runs on one task queue use the same pairing. See [Vercel Sandbox setup](docs/operations.md#vercel-sandbox) for project authentication, publishing the runtime image, limits, cleanup, and troubleshooting.
+Provider selection belongs to the worker, so all runs on one task queue use the same pairing. See [Operations and deployment](docs/operations.md) for Vercel and [E2B setup](docs/operations.md#e2b) for template builds, credentials, plan limits, resources, cleanup, and unattended deployment.
 
 ## How tasks are validated
 
