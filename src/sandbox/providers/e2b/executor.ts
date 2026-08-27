@@ -247,7 +247,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             exitCode: HARD_TIMEOUT_EXIT_CODE,
             stdout: stdout.text(),
             stderr: stderr.text(),
-            outputs: partialOutputs,
+            outputs: {},
           },
         };
       } else if (terminationError !== undefined && options.signal?.aborted) {
@@ -776,6 +776,7 @@ async function raceWithTermination<T>(
   operation: Promise<T>,
   termination: Promise<never>,
 ): Promise<T> {
+  void operation.catch(() => undefined);
   return await Promise.race([operation, termination]);
 }
 

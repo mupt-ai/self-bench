@@ -569,15 +569,17 @@ describe("E2BSandboxExecutor", () => {
     expect(fixture.calls).toContain("sandbox.kill");
   });
 
-  test("enforces an overall hard timeout when the provider never settles", async () => {
+  test("enforces an overall hard timeout without returning partial outputs", async () => {
     const fixture = new E2BSdkFixture();
     fixture.holdCommand = true;
+    fixture.outputs.set("/work/partial.json", Buffer.from("partial"));
     const executor = new E2BSandboxExecutor(config, fixture.api);
 
     const result = await executor.run({
       runId: "hard-timeout",
       stage: "author",
       command: ["true"],
+      outputPaths: ["/work/partial.json"],
       timeoutMs: 100,
     });
 
