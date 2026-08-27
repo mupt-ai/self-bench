@@ -8,7 +8,7 @@ ARG GH_VERSION=2.89.0
 ARG TARGETARCH=amd64
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git jq ripgrep unzip xz-utils \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git jq ripgrep skopeo unzip xz-utils \
   && rm -rf /var/lib/apt/lists/*
 RUN case "${TARGETARCH}" in \
     amd64) GH_SHA256=d0422caade520530e76c1c558da47daebaa8e1203d6b7ff10ad7d6faba3490d8 ;; \

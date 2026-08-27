@@ -38,6 +38,7 @@ export function assertValidationRepair(
     "repo",
     "baseCommit",
     "workdir",
+    "environment",
     "sourcePr",
     "sourceUrl",
     "prompt",
@@ -80,13 +81,13 @@ The failed nop/oracle validation diagnostics are:
 ${input.diagnostics.trim()}
 </validation_diagnostics>
 
-Fix the task so its repository-native verifier is rigorous and runnable. You may edit the allowed held-out tests and /work/definition.json. In definition.json you may change only setupCommand, testCommand, failToPass, passToPass, testPaths, toolchains, timeouts, and resources. Never change task identity, difficulty, repository, base commit, workdir, source pull request, prompt, or reference solution.
+Fix the task so its repository-native verifier is rigorous and runnable. You may edit the allowed held-out tests and /work/definition.json. In definition.json you may change only testCommand, failToPass, passToPass, testPaths, timeouts, and resources. Never change task identity, difficulty, repository, base commit, workdir, environment contract, source pull request, prompt, or reference solution.
 
 The required validation split is:
 - nop: the base repository plus held-out tests must make failToPass fail while passToPass succeeds;
 - oracle: after /work/task/solution/gold.patch is applied, failToPass and passToPass must both succeed deterministically.
 
-Use the verifier diagnostics rather than guessing. Inspect repository package scripts and CI for the native test command. Keep {tests} as a list-safe placeholder; do not quote the whole placeholder, assign it to one scalar, or hard-code selected paths elsewhere. Use one test mode/bundler per command instead of chaining equivalent suites. Put dependency installation, native builds, fixture generation, and browser/runtime installation in setupCommand, not testCommand. Pin the repository's declared package manager and use frozen installs. Browser-backed tests must install required browser binaries and OS dependencies during setup. Run focused nop/oracle-style commands in the sandbox when feasible.
+Use the verifier diagnostics rather than guessing. Inspect repository package scripts and CI for the native test command. Keep {tests} as a list-safe placeholder; do not quote the whole placeholder, assign it to one scalar, or hard-code selected paths elsewhere. Use one test mode/bundler per command instead of chaining equivalent suites. Do not move dependency installation, native builds, fixture generation, or browser installation into testCommand; environment repair owns those requirements. Run focused nop/oracle-style commands in the sandbox when feasible.
 
 Do not weaken, delete, or skip requested behavioral coverage merely to make commands exit zero. A passing base with no solution is not acceptable. If no rigorous runnable split exists, leave the files and definition unchanged and explain why in the final response.
 

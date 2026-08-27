@@ -5,28 +5,16 @@ import { Type } from "@sinclair/typebox";
 
 const taskDefinition = Type.Object(
   {
-    schemaVersion: Type.Literal(1),
+    schemaVersion: Type.Literal(2),
     difficulty: Type.Union([Type.Literal("easy"), Type.Literal("medium"), Type.Literal("hard")]),
     taskId: Type.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }),
     repo: Type.String({ minLength: 1 }),
     baseCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
     workdir: Type.String({ minLength: 1 }),
-    setupCommand: Type.String({ minLength: 1 }),
     testCommand: Type.String({ minLength: 1 }),
     failToPass: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
     passToPass: Type.Array(Type.String({ minLength: 1 })),
     testPaths: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-    toolchains: Type.Array(
-      Type.Union([
-        Type.Literal("uv"),
-        Type.Literal("bun"),
-        Type.Literal("go"),
-        Type.Literal("node"),
-        Type.Literal("python"),
-        Type.Literal("rust"),
-      ]),
-      { minItems: 1 },
-    ),
     sourcePr: Type.Integer({ minimum: 1 }),
     sourceUrl: Type.String({ minLength: 1 }),
     prompt: Type.String({ minLength: 1 }),

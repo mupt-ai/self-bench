@@ -36,18 +36,41 @@ describe("Harbor task compiler", () => {
     await writeFile(
       join(authored, "definition.json"),
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         difficulty: "medium",
         taskId: "example",
         repo: "example/repo",
         baseCommit: commit,
         workdir: "project",
-        setupCommand: "npm ci --ignore-scripts",
         testCommand: "test {tests} && test {tests}",
         failToPass: ["tests/new"],
         passToPass: ["tests/a", "tests/b"],
         testPaths: ["tests/new"],
-        toolchains: ["bun"],
+        environment: {
+          schemaVersion: 1,
+          baseImage: `node:22-bookworm@sha256:${"a".repeat(64)}`,
+          rootSetupCommand:
+            "apt-get update && apt-get install -y --no-install-recommends bash git passwd procps tar",
+          setupCommand: "npm ci --ignore-scripts",
+          smokeCommand: "npm --version",
+          environmentVariables: { PLAYWRIGHT_BROWSERS_PATH: "/opt/playwright" },
+          services: [
+            {
+              name: "redis",
+              image: `redis:7@sha256:${"b".repeat(64)}`,
+              environmentVariables: {},
+              healthcheck: {
+                test: ["CMD", "redis-cli", "ping"],
+                intervalSeconds: 2,
+                timeoutSeconds: 1,
+                retries: 10,
+                startPeriodSeconds: 0,
+              },
+            },
+          ],
+          source: "ci-adapted",
+          evidence: [{ path: "project/package.json", reason: "Defines dependencies." }],
+        },
         sourcePr: 1,
         sourceUrl: "https://github.com/example/repo/pull/1",
         prompt: "Implement the requested behavior.",
@@ -84,10 +107,11 @@ describe("Harbor task compiler", () => {
     );
     const verifierDockerfile = await readFile(join(output, "tests/Dockerfile"), "utf8");
     expect(verifierDockerfile).toContain("COPY dependency-setup.patch");
-    expect(verifierDockerfile).toContain("COREPACK_HOME=/opt/corepack");
-    expect(verifierDockerfile).toContain("npm ci --ignore-scripts");
+    expect(verifierDockerfile).toContain("FROM node:22-bookworm@sha256:");
+    expect(verifierDockerfile).toContain("COPY root-setup.sh");
+    expect(verifierDockerfile).not.toContain("npm ci --ignore-scripts");
     expect(verifierDockerfile).toContain("git -C /app reset --hard -q HEAD");
-    expect(verifierDockerfile).toContain("COPY test.patch test.sh /tests/");
+    expect(verifierDockerfile).toContain("COPY test.patch test.sh task-test.sh /tests/");
     const dependencyPatch = await readFile(join(output, "tests/dependency-setup.patch"), "utf8");
     expect(dependencyPatch).toContain('left-pad":"1.1.0');
     expect(dependencyPatch).not.toContain("value.txt");
@@ -104,17 +128,20 @@ describe("Harbor task compiler", () => {
     );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
-    expect(verifier).toContain('PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin');
+    expect(verifier).toContain("runuser -u verifier --preserve-environment");
     const dockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
-    expect(dockerfile).toContain("UV_CACHE_DIR=/opt/uv-cache");
-    expect(dockerfile.indexOf("nodejs.org/dist")).toBeLessThan(
-      dockerfile.indexOf("npm install --global bun"),
+    expect(dockerfile).toContain('ENV PLAYWRIGHT_BROWSERS_PATH="/opt/playwright"');
+    expect(await readFile(join(output, "environment/setup.sh"), "utf8")).toContain(
+      "npm ci --ignore-scripts",
     );
-    expect(dockerfile).toContain("&& corepack enable");
-    expect(dockerfile).toContain("PLAYWRIGHT_BROWSERS_PATH=/opt/playwright");
+    expect(await readFile(join(output, "tests/smoke.sh"), "utf8")).toContain("npm --version");
+    expect(await Bun.file(join(output, "environment/docker-compose.yaml")).exists()).toBe(false);
+    const compose = JSON.parse(await readFile(join(output, "tests/docker-compose.yaml"), "utf8"));
+    expect(compose.services.main.depends_on.redis.condition).toBe("service_healthy");
+    expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(24);
+    ).toBe(26);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),

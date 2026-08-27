@@ -1,12 +1,13 @@
 import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, posix, resolve, sep } from "node:path";
 import { type TaskDefinition, taskDefinitionSchema } from "./contracts.js";
+import { assertEnvironmentEvidence, assertEnvironmentPolicy } from "./environment.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 import { patchPaths } from "./repair.js";
 
 const HARBOR_SCHEMA_VERSION = "1.4";
-const COMPILER_REVISION = 24;
+const COMPILER_REVISION = 26;
 
 export interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
@@ -18,6 +19,7 @@ export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskF
   const definition = taskDefinitionSchema.parse(
     JSON.parse(await readFile(join(directory, "definition.json"), "utf8")),
   );
+  assertEnvironmentPolicy(definition.environment);
   assertSafeTaskPaths(definition);
   const [testPatch, goldPatch] = await Promise.all([
     readFile(join(directory, "test.patch"), "utf8"),
@@ -48,6 +50,18 @@ export async function compileHarborTask(
     "-e",
     `${task.definition.baseCommit}^{commit}`,
   ]);
+  const repositoryFiles = await runCommand("git", [
+    "-C",
+    repositoryDirectory,
+    "ls-tree",
+    "-r",
+    "--name-only",
+    task.definition.baseCommit,
+  ]);
+  assertEnvironmentEvidence(
+    task.definition.environment,
+    new Set(repositoryFiles.stdout.split("\n").filter(Boolean)),
+  );
   await rm(outputDirectory, { recursive: true, force: true });
   const environment = join(outputDirectory, "environment");
   const solution = join(outputDirectory, "solution");
@@ -79,11 +93,15 @@ export async function compileHarborTask(
     writeFile(join(solution, "solve.sh"), solutionScript()),
     writeFile(join(tests, "test.patch"), task.testPatch),
     writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
+    writeFile(join(tests, "task-test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(task.definition)),
     writeFile(
       join(tests, "Dockerfile"),
       verifierDockerfile(task.definition, preinstallGoldDependencies),
     ),
+    ...environmentContextFiles(environment, task.definition),
+    ...environmentContextFiles(tests, task.definition),
+    ...serviceComposeFiles(tests, task.definition),
     writeFile(join(outputDirectory, "task.toml"), taskToml(task.definition)),
     ...(preinstallGoldDependencies
       ? [writeFile(join(tests, "dependency-setup.patch"), dependencySetupPatch)]
@@ -93,6 +111,13 @@ export async function compileHarborTask(
   await Promise.all([
     chmod(join(solution, "solve.sh"), 0o755),
     chmod(join(tests, "test.sh"), 0o755),
+    chmod(join(tests, "task-test.sh"), 0o755),
+    chmod(join(environment, "root-setup.sh"), 0o755),
+    chmod(join(environment, "setup.sh"), 0o755),
+    chmod(join(environment, "smoke.sh"), 0o755),
+    chmod(join(tests, "root-setup.sh"), 0o755),
+    chmod(join(tests, "setup.sh"), 0o755),
+    chmod(join(tests, "smoke.sh"), 0o755),
   ]);
   await writeFile(
     join(outputDirectory, ".selfbench-manifest.json"),
@@ -106,6 +131,7 @@ export async function compileHarborTask(
         definitionSha256: sha256(JSON.stringify(task.definition)),
         testPatchSha256: sha256(task.testPatch),
         goldPatchSha256: sha256(task.goldPatch),
+        environmentSha256: sha256(JSON.stringify(task.definition.environment)),
       },
       null,
       2,
@@ -117,6 +143,7 @@ export async function refreshHarborTask(
   outputDirectory: string,
   definition: TaskDefinition,
 ): Promise<void> {
+  assertEnvironmentPolicy(definition.environment);
   const manifestPath = join(outputDirectory, ".selfbench-manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
   if (manifest.taskId !== definition.taskId) {
@@ -129,19 +156,30 @@ export async function refreshHarborTask(
   assertSafePatchPaths(testPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
-  await writeFile(join(outputDirectory, "tests/test.sh"), testScript(definition, testPatch));
+  const verifierScript = testScript(definition, testPatch);
+  await Promise.all([
+    writeFile(join(outputDirectory, "tests/test.sh"), verifierScript),
+    writeFile(join(outputDirectory, "tests/task-test.sh"), verifierScript),
+  ]);
+  const environment = join(outputDirectory, "environment");
+  const tests = join(outputDirectory, "tests");
   await Promise.all([
     writeFile(join(outputDirectory, "definition.json"), `${JSON.stringify(definition, null, 2)}\n`),
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
-    writeFile(join(outputDirectory, "environment/Dockerfile"), agentDockerfile(definition)),
+    writeFile(join(environment, "Dockerfile"), agentDockerfile(definition)),
     writeFile(
-      join(outputDirectory, "tests/Dockerfile"),
+      join(tests, "Dockerfile"),
       verifierDockerfile(definition, preinstallGoldDependencies),
     ),
+    ...environmentContextFiles(environment, definition),
+    ...environmentContextFiles(tests, definition),
+    rm(join(environment, "docker-compose.yaml"), { force: true }),
+    ...serviceComposeFiles(tests, definition),
     preinstallGoldDependencies
-      ? writeFile(join(outputDirectory, "tests/dependency-setup.patch"), dependencySetupPatch)
-      : rm(join(outputDirectory, "tests/dependency-setup.patch"), { force: true }),
-    chmod(join(outputDirectory, "tests/test.sh"), 0o755),
+      ? writeFile(join(tests, "dependency-setup.patch"), dependencySetupPatch)
+      : rm(join(tests, "dependency-setup.patch"), { force: true }),
+    chmod(join(tests, "test.sh"), 0o755),
+    chmod(join(tests, "task-test.sh"), 0o755),
   ]);
   await writeFile(
     manifestPath,
@@ -153,6 +191,7 @@ export async function refreshHarborTask(
         definitionSha256: sha256(JSON.stringify(definition)),
         testPatchSha256: sha256(testPatch),
         goldPatchSha256: sha256(goldPatch),
+        environmentSha256: sha256(JSON.stringify(definition.environment)),
       },
       null,
       2,
@@ -218,52 +257,137 @@ function taskToml(task: TaskDefinition): string {
 }
 
 function agentDockerfile(task: TaskDefinition): string {
-  return `${toolchainDockerfile(task.toolchains)}
-RUN useradd --create-home --shell /bin/bash agent
-${repositoryDockerfile(task)}
-RUN git -C /app reset --hard -q HEAD \\
+  return `${baseDockerfile(task)}
+RUN useradd --create-home --shell /bin/bash agent \\
+    && git -C /app reset --hard -q HEAD \\
     && git -C /app clean -fdq \\
     && mkdir -p /opt/selfbench \\
     && cp -a /app/.git /opt/selfbench/base.git \\
-    && chown -R agent:agent /app /home/agent /opt/uv-cache \\
+    && chown -R agent:agent /app /home/agent \\
     && chown -R root:root /opt/selfbench \\
-    && chmod 700 /opt/selfbench \\
-    && mkdir -p /home/agent/.cache/uv \\
-    && chown -R agent:agent /home/agent/.cache
-ENV UV_CACHE_DIR=/home/agent/.cache/uv \\
-    UV_NO_BUILD_ISOLATION=1
+    && chmod 700 /opt/selfbench
+ENV HOME=/home/agent
 USER agent
 WORKDIR /app
 `;
 }
 
 function verifierDockerfile(task: TaskDefinition, preinstallGoldDependencies: boolean): string {
-  return `${toolchainDockerfile(task.toolchains)}
-${repositoryDockerfile(task)}
+  return `${baseDockerfile(task)}
 ${preinstallGoldDependencies ? goldDependencySetupLayer(task) : ""}
 RUN useradd --create-home --shell /bin/bash verifier \\
-    && chown -R verifier:verifier /app /opt/uv-cache \\
+    && chown -R verifier:verifier /app /home/verifier \\
     && mkdir -p /opt/selfbench \\
-    && chmod 700 /opt/selfbench \\
-    && mkdir -p /home/verifier/.cache/uv \\
-    && chown -R verifier:verifier /home/verifier/.cache
-ENV UV_CACHE_DIR=/home/verifier/.cache/uv \\
-    UV_NO_BUILD_ISOLATION=1
-COPY test.patch test.sh /tests/
-RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh
+    && chmod 700 /opt/selfbench
+ENV HOME=/home/verifier
+COPY test.patch test.sh task-test.sh /tests/
+RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh /tests/task-test.sh
 WORKDIR /app
 `;
+}
+
+function baseDockerfile(task: TaskDefinition): string {
+  const environmentVariables = Object.entries(task.environment.environmentVariables)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `ENV ${name}=${JSON.stringify(value)}`)
+    .join("\n");
+  return `FROM ${task.environment.baseImage}
+USER root
+ENTRYPOINT []
+COPY root-setup.sh /tmp/selfbench-root-setup.sh
+RUN /bin/sh /tmp/selfbench-root-setup.sh \\
+    && command -v bash >/dev/null \\
+    && command -v git >/dev/null \\
+    && command -v pkill >/dev/null \\
+    && command -v runuser >/dev/null \\
+    && command -v tar >/dev/null \\
+    && command -v useradd >/dev/null \\
+    && rm /tmp/selfbench-root-setup.sh
+${environmentVariables}
+COPY setup.sh smoke.sh /opt/selfbench-environment/
+COPY repo.tar.gz /tmp/repo.tar.gz
+RUN mkdir -p /app \\
+    && tar -xzf /tmp/repo.tar.gz -C /app \\
+    && rm /tmp/repo.tar.gz \\
+    && git -C /app init -q \\
+    && git -C /app config user.email selfbench@local \\
+    && git -C /app config user.name selfbench \\
+    && git -C /app add -A \\
+    && git -C /app commit -qm base \\
+    && chmod 755 /opt/selfbench-environment/setup.sh /opt/selfbench-environment/smoke.sh \\
+    && cd ${shellQuote(`/app/${task.workdir}`)} \\
+    && /opt/selfbench-environment/setup.sh`;
 }
 
 function goldDependencySetupLayer(task: TaskDefinition): string {
   return `COPY dependency-setup.patch /tmp/selfbench-dependency-setup.patch
 RUN git -C /app apply --binary --whitespace=nowarn /tmp/selfbench-dependency-setup.patch \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
-    && bash -lc ${shellQuote(task.setupCommand)} \\
+    && /opt/selfbench-environment/setup.sh \\
     && git -C /app reset --hard -q HEAD \\
     && git -C /app clean -fdq \\
     && rm /tmp/selfbench-dependency-setup.patch
 `;
+}
+
+function environmentContextFiles(directory: string, task: TaskDefinition): Promise<void>[] {
+  return [
+    writeFile(
+      join(directory, "root-setup.sh"),
+      posixShellScript(task.environment.rootSetupCommand),
+    ),
+    writeFile(join(directory, "setup.sh"), bashScript(task.environment.setupCommand)),
+    writeFile(join(directory, "smoke.sh"), smokeScript(task)),
+  ];
+}
+
+function serviceComposeFiles(directory: string, task: TaskDefinition): Promise<void>[] {
+  const path = join(directory, "docker-compose.yaml");
+  if (task.environment.services.length === 0) {
+    return [rm(path, { force: true })];
+  }
+  const dependsOn = Object.fromEntries(
+    task.environment.services.map((service) => [service.name, { condition: "service_healthy" }]),
+  );
+  const services = Object.fromEntries(
+    task.environment.services.map((service) => [
+      service.name,
+      {
+        image: service.image,
+        environment: service.environmentVariables,
+        ...(service.command ? { command: service.command.map(escapeComposeInterpolation) } : {}),
+        healthcheck: {
+          test: service.healthcheck.test.map(escapeComposeInterpolation),
+          interval: `${service.healthcheck.intervalSeconds}s`,
+          timeout: `${service.healthcheck.timeoutSeconds}s`,
+          retries: service.healthcheck.retries,
+          start_period: `${service.healthcheck.startPeriodSeconds}s`,
+        },
+      },
+    ]),
+  );
+  return [
+    writeFile(
+      path,
+      `${JSON.stringify({ services: { main: { build: ".", depends_on: dependsOn }, ...services } }, null, 2)}\n`,
+    ),
+  ];
+}
+
+function escapeComposeInterpolation(value: string): string {
+  return value.replaceAll("$", "$$");
+}
+
+function posixShellScript(command: string): string {
+  return `#!/bin/sh\nset -eu\n${command.trim()}\n`;
+}
+
+function bashScript(command: string): string {
+  return `#!/usr/bin/env bash\nset -euo pipefail\n${command.trim()}\n`;
+}
+
+function smokeScript(task: TaskDefinition): string {
+  return `#!/usr/bin/env bash\nset -euo pipefail\ncd ${shellQuote(`/app/${task.workdir}`)}\n${task.environment.smokeCommand.trim()}\n`;
 }
 
 export function goldPatchChangesDependencyManifests(patch: string): boolean {
@@ -291,68 +415,6 @@ function isDependencyManifest(path: string): boolean {
     ) ||
     /^(?:go\.(?:mod|sum)|Cargo\.(?:toml|lock))$/.test(name)
   );
-}
-
-function toolchainDockerfile(toolchains: readonly string[]): string {
-  const layers: Record<string, string> = {
-    uv: "RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh",
-    python:
-      "RUN uv python install 3.11 3.12 3.13 && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3 && ln -sf /usr/local/bin/python3.12 /usr/local/bin/python",
-    node: `ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" && chmod 755 "$PLAYWRIGHT_BROWSERS_PATH" \\
-    && arch="$(dpkg --print-architecture)" && case "$arch" in arm64) node_arch=arm64 ;; amd64) node_arch=x64 ;; *) exit 1 ;; esac \\
-    && curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-\${node_arch}.tar.xz" | tar -C /usr/local --strip-components=1 -xJ \\
-    && mkdir -p /opt/corepack && chmod 755 /opt/corepack \\
-    && corepack enable`,
-    bun: "RUN npm install --global bun@1.3.14",
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the output is a shell variable.
-    go: `RUN arch="$(dpkg --print-architecture)" && curl -fsSL "https://go.dev/dl/go1.25.0.linux-${"${arch}"}.tar.gz" | tar -C /usr/local -xz`,
-    rust: "RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | env RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.90.0",
-  };
-  const selected = new Set(toolchains);
-  if (selected.has("python")) {
-    selected.add("uv");
-  }
-  if (selected.has("bun")) {
-    selected.add("node");
-  }
-  const order = ["uv", "python", "node", "bun", "go", "rust"];
-  return `FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive \\
-    UV_LINK_MODE=copy \\
-    UV_CACHE_DIR=/opt/uv-cache \\
-    UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python \\
-    UV_PYTHON_BIN_DIR=/usr/local/bin \\
-    RUSTUP_HOME=/usr/local/rustup \\
-    CARGO_HOME=/usr/local/cargo \\
-    COREPACK_HOME=/opt/corepack \\
-    PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
-RUN apt-get update && apt-get install -y --no-install-recommends \\
-    bash build-essential ca-certificates curl git jq passwd pkg-config procps unzip xz-utils \\
-    && rm -rf /var/lib/apt/lists/*
-${order
-  .filter((name) => selected.has(name))
-  .map((name) => layers[name])
-  .filter(Boolean)
-  .join("\n")}`;
-}
-
-function repositoryDockerfile(task: TaskDefinition): string {
-  const pythonBuildDependencies = task.toolchains.includes("python")
-    ? ` \\
-    && find /app -path '*/.venv/bin/python' -exec uv pip install --python '{}' 'setuptools>=70' wheel ';'`
-    : "";
-  return `COPY repo.tar.gz /tmp/repo.tar.gz
-RUN mkdir -p /app && tar -xzf /tmp/repo.tar.gz -C /app && rm /tmp/repo.tar.gz \\
-    && git -C /app init -q \\
-    && git -C /app config user.email selfbench@local \\
-    && git -C /app config user.name selfbench \\
-    && git -C /app add -A \\
-    && git -C /app commit -qm base
-RUN mkdir -p /opt/uv-cache && chmod 777 /opt/uv-cache \\
-    && cd ${shellQuote(`/app/${task.workdir}`)} \\
-    && bash -lc ${shellQuote(task.setupCommand)}${pythonBuildDependencies} \\
-    && chmod -R a+rwX /opt/uv-cache`;
 }
 
 function solutionScript(): string {
@@ -390,11 +452,9 @@ setup_completed=0
 fail_to_pass_exit_code=-1
 fail_to_pass_repeat_exit_code=-1
 pass_to_pass_exit_code=-1
-verifier_cache=""
-
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
-# Some toolchains fetch dependencies at test runtime (e.g. Next.js e2e installs),
-# so a single registry connection reset must not be misread as a dead test. Retry
+# Some test runners fetch dependencies at runtime, so a single registry connection
+# reset must not be misread as a dead test. Retry
 # only infrastructure-style failures with backoff; real assertion failures fail fast.
 run_verifier_command() {
   local logfile
@@ -403,7 +463,7 @@ run_verifier_command() {
   local status=1
   while [ "$attempt" -le 3 ]; do
     : > "$logfile"
-    runuser -u verifier -- env PATH="/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" UV_CACHE_DIR="$verifier_cache" UV_NO_BUILD_ISOLATION=1 bash -lc "$1" >"$logfile" 2>&1
+    runuser -u verifier --preserve-environment -- bash -c "$1" >"$logfile" 2>&1
     status=$?
     if [ "$status" -eq 0 ]; then
       break
@@ -449,9 +509,6 @@ fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   cd ${shellQuote(`/app/${task.workdir}`)}
-  verifier_cache="$(mktemp -d /tmp/selfbench-verifier-uv-XXXXXX)"
-  cp -a /opt/uv-cache/. "$verifier_cache"/
-  chown -R verifier:verifier "$verifier_cache"
   if run_verifier_command ${shellQuote(f2p)}; then
     fail_to_pass_exit_code=0
     fail_to_pass=1
@@ -470,7 +527,6 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   else
     pass_to_pass_exit_code=$?
   fi
-  rm -rf "$verifier_cache"
 fi
 
 reward=0
