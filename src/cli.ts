@@ -71,15 +71,21 @@ switch (command) {
 
 async function setup(args: string[]): Promise<void> {
   const [provider, ...providerArgs] = args;
-  if (provider === "e2b") {
-    await setupE2B(providerArgs);
-    return;
+  switch (provider) {
+    case "e2b":
+      await setupE2B(providerArgs);
+      return;
+    case "vercel":
+      await setupVercelProvider(providerArgs);
+      return;
+    default:
+      fail("setup supports: self-bench setup vercel | self-bench setup e2b");
   }
-  if (provider !== "vercel") {
-    fail("setup supports: self-bench setup vercel | self-bench setup e2b");
-  }
+}
+
+async function setupVercelProvider(args: string[]): Promise<void> {
   const parsed = parseArgs({
-    args: providerArgs,
+    args,
     options: {
       profile: { type: "string", default: "default" },
       verbose: { type: "boolean", default: false },
