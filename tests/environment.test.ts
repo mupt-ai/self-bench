@@ -4,6 +4,7 @@ import {
   assertEnvironmentEvidence,
   assertEnvironmentOnlyRepair,
   assertEnvironmentPolicy,
+  isRepairableEnvironmentFailure,
 } from "../src/environment.js";
 
 const environment: TaskEnvironment = {
@@ -83,6 +84,20 @@ describe("environment contracts", () => {
     expect(() =>
       assertEnvironmentPolicy({ ...environment, rootSetupCommand: "docker build ." }),
     ).toThrow("must not invoke Docker-in-Docker");
+  });
+
+  test("separates deterministic environment defects from provider image-build failures", () => {
+    expect(isRepairableEnvironmentFailure("Dockerfile parse error near fi")).toBe(true);
+    expect(
+      isRepairableEnvironmentFailure("failed to solve: process did not complete successfully"),
+    ).toBe(true);
+    expect(isRepairableEnvironmentFailure("Docker Compose launch failed after 1 attempt")).toBe(
+      true,
+    );
+    expect(isRepairableEnvironmentFailure("ImageBuildError: image build for im-abc failed")).toBe(
+      false,
+    );
+    expect(isRepairableEnvironmentFailure("Modal unavailable while building image")).toBe(false);
   });
 
   test("requires evidence from the pinned repository", () => {

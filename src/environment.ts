@@ -85,6 +85,12 @@ export function assertEnvironmentEvidence(
   }
 }
 
+export function isRepairableEnvironmentFailure(message: string): boolean {
+  return /Dockerfile|failed to solve|did not complete successfully|Docker Compose launch failed|service .*(?:unhealthy|failed)|no such file or directory/i.test(
+    message,
+  );
+}
+
 export function assertEnvironmentOnlyRepair(
   original: TaskDefinition,
   repaired: TaskDefinition,

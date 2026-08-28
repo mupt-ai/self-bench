@@ -40,6 +40,7 @@ import {
   assertEnvironmentOnlyRepair,
   assertEnvironmentPolicy,
   environmentAuthoringPrompt,
+  isRepairableEnvironmentFailure,
 } from "../environment.js";
 import { assertPullRequestBelongsToRepository } from "../github.js";
 import { harborChildEnvironment } from "../harbor-environment.js";
@@ -713,10 +714,7 @@ async function preflightEnvironment(
         );
       }
     } catch (error) {
-      if (
-        error instanceof CancelledFailure ||
-        (error instanceof ApplicationFailure && error.type === HARBOR_INFRASTRUCTURE_FAILURE_TYPE)
-      ) {
+      if (error instanceof CancelledFailure) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
@@ -1306,12 +1304,6 @@ run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills 
   --tools read,bash,grep,find,ls,submit_environment "$(cat /work/prompt.txt)"
 node /work/sandbox-environment.js /work/source-task.tar.gz /work/draft-definition.json \\
   /work/environment-output/environment.json /work/repo /work/task.tar.gz /work/definition.json`;
-}
-
-function isRepairableEnvironmentFailure(message: string): boolean {
-  return /ImageBuildError|image build|Dockerfile|failed to solve|did not complete successfully|Docker Compose launch failed|service .*(?:unhealthy|failed)|no such file or directory/i.test(
-    message,
-  );
 }
 
 function environmentPreflightScript(): string {
