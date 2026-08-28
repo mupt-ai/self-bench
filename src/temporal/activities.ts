@@ -708,16 +708,22 @@ async function preflightEnvironment(
       const checks = rewards(result.trial);
       accepted = !exception(result.trial) && numberValue(checks.reward) >= 1;
       if (!accepted) {
-        reason = verifierOutput(result) ?? "environment smoke command failed without output";
+        reason = boundedTail(
+          verifierOutput(result) ?? "environment smoke command failed without output",
+        );
       }
     } catch (error) {
-      if (error instanceof CancelledFailure) {
+      if (
+        error instanceof CancelledFailure ||
+        (error instanceof ApplicationFailure && error.type === HARBOR_INFRASTRUCTURE_FAILURE_TYPE)
+      ) {
         throw error;
       }
-      reason = error instanceof Error ? error.message : String(error);
-      if (!isRepairableEnvironmentFailure(reason)) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isRepairableEnvironmentFailure(message)) {
         throw error;
       }
+      reason = boundedTail(message);
     }
     const report = await store.put(
       `${prefix}/report.json`,
