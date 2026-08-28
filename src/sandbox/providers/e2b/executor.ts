@@ -3,17 +3,15 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   AuthenticationError,
   type CommandHandle,
-  type CommandResult,
   E2B,
   InvalidArgumentError,
   type Sandbox,
   type SandboxInfo,
   SandboxNotFoundError,
-  type SandboxPaginator,
 } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../config.js";
-import { normalizeE2BDomain, normalizeE2BTemplateReference } from "../../../e2b-template.js";
-import { InactivityTimeoutError, RollingOutput } from "../../../process.js";
+import { RollingOutput } from "../../../process.js";
+import { normalizeE2BDomain, normalizeE2BTemplateReference } from "../../../setup/e2b/template.js";
 import {
   SandboxExecutionError,
   type SandboxExecutor,
@@ -21,6 +19,16 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../contracts.js";
+import { E2B_WORK_DIRECTORY, executeE2BCommand } from "./command.js";
+import {
+  abortReason,
+  createTerminationGate,
+  raceWithSignal,
+  raceWithTermination,
+} from "./lifecycle.js";
+import type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
+
+export type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
 
 const CLEANUP_REQUEST_TIMEOUT_MS = 30_000;
 const CLEANUP_CALL_TIMEOUT_MS = 10_000;
@@ -30,7 +38,6 @@ const CREATE_REQUEST_TIMEOUT_MS = CLEANUP_REQUEST_TIMEOUT_MS;
 const DIAGNOSTIC_TIMEOUT_MS = 5_000;
 const HARD_TIMEOUT_EXIT_CODE = 124;
 const MAX_E2B_TIMEOUT_MS = 24 * 60 * 60 * 1_000;
-const WORK_DIRECTORY = "/work";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
 
@@ -48,23 +55,6 @@ const DEFAULT_LIFECYCLE_TIMINGS: E2BLifecycleTimings = {
   cleanupTimeoutMs: CLEANUP_REQUEST_TIMEOUT_MS,
   commandKillGraceMs: COMMAND_KILL_GRACE_MS,
   diagnosticTimeoutMs: DIAGNOSTIC_TIMEOUT_MS,
-};
-
-export type E2BSandboxHandle = Pick<
-  Sandbox,
-  "sandboxId" | "commands" | "files" | "getInfo" | "kill"
->;
-
-export type E2BSandboxApi = {
-  create(
-    template: string,
-    options: Parameters<typeof Sandbox.create>[1],
-  ): Promise<E2BSandboxHandle>;
-  getInfo(sandboxId: string, options?: Parameters<typeof Sandbox.getInfo>[1]): Promise<SandboxInfo>;
-  kill(sandboxId: string, options?: Parameters<typeof Sandbox.kill>[1]): Promise<boolean>;
-  list(
-    options?: Parameters<typeof Sandbox.list>[0],
-  ): Pick<SandboxPaginator, "hasNext" | "nextItems">;
 };
 
 type Sleep = (delayMs: number, signal: AbortSignal) => Promise<void>;
@@ -204,22 +194,22 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       }
       throwIfTerminated(terminationError);
 
-      const execution = await this.#executeCommand(
+      const execution = await executeE2BCommand({
         sandbox,
         request,
         options,
-        controller.signal,
+        signal: controller.signal,
         terminate,
         stdout,
         stderr,
-        termination.promise,
-        (handle) => {
+        termination: termination.promise,
+        setCommand: (handle) => {
           command = handle;
           if (terminationError !== undefined) {
             killCommand();
           }
         },
-      );
+      });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: execution };
     } catch (error) {
@@ -291,97 +281,6 @@ export class E2BSandboxExecutor implements SandboxExecutor {
   }
 
   close(): void {}
-
-  async #executeCommand(
-    sandbox: E2BSandboxHandle,
-    request: SandboxRequest,
-    options: SandboxRunOptions,
-    signal: AbortSignal,
-    terminate: (error: unknown) => void,
-    stdout: RollingOutput,
-    stderr: RollingOutput,
-    termination: Promise<never>,
-    setCommand: (command: CommandHandle) => void,
-  ): Promise<SandboxResult> {
-    let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
-    const clearInactivityTimer = (): void => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-        inactivityTimer = undefined;
-      }
-    };
-    const armInactivityTimer = (): void => {
-      clearInactivityTimer();
-      if (!request.inactivityTimeoutMs) {
-        return;
-      }
-      inactivityTimer = setTimeout(() => {
-        terminate(
-          new InactivityTimeoutError(
-            `E2B sandbox ${sandbox.sandboxId} stage ${request.stage}`,
-            request.inactivityTimeoutMs ?? 0,
-          ),
-        );
-      }, request.inactivityTimeoutMs);
-      inactivityTimer.unref();
-    };
-    const capture = (stream: "stdout" | "stderr", data: string): void => {
-      const chunk = Buffer.from(data);
-      if (chunk.byteLength === 0) {
-        return;
-      }
-      (stream === "stdout" ? stdout : stderr).push(chunk);
-      options.onProgress?.({ stream, bytes: chunk.byteLength });
-      armInactivityTimer();
-    };
-
-    try {
-      const command = await raceWithTermination(
-        sandbox.commands
-          .run(shellCommand(request.command), {
-            background: true,
-            cwd: WORK_DIRECTORY,
-            envs: workloadEnvironment(request),
-            onStderr: (data) => capture("stderr", data),
-            onStdout: (data) => capture("stdout", data),
-            signal,
-            timeoutMs: request.timeoutMs,
-          })
-          .then((handle) => {
-            setCommand(handle);
-            return handle;
-          }),
-        termination,
-      );
-      armInactivityTimer();
-
-      let completed: CommandResult;
-      try {
-        completed = await raceWithTermination(command.wait(), termination);
-      } catch (error) {
-        if (!isCommandResult(error)) {
-          throw error;
-        }
-        completed = error;
-      }
-      clearInactivityTimer();
-      captureUnstreamedCommandOutput(completed, stdout, stderr);
-
-      const outputs = await raceWithTermination(
-        collectOutputs(sandbox, request, completed.exitCode, signal),
-        termination,
-      );
-      return {
-        sandboxId: sandbox.sandboxId,
-        exitCode: completed.exitCode,
-        stdout: stdout.text(),
-        stderr: stderr.text(),
-        outputs,
-      };
-    } finally {
-      clearInactivityTimer();
-    }
-  }
 
   async #cleanup(
     metadata: Readonly<Record<string, string>>,
@@ -634,48 +533,12 @@ function validateAllocatedSandbox(
 
 function assertWorkPath(path: string): void {
   const normalized = posix.normalize(path);
-  if (!path.startsWith(`${WORK_DIRECTORY}/`) || !normalized.startsWith(`${WORK_DIRECTORY}/`)) {
-    throw new Error(`sandbox path must be beneath ${WORK_DIRECTORY}: ${path}`);
+  if (
+    !path.startsWith(`${E2B_WORK_DIRECTORY}/`) ||
+    !normalized.startsWith(`${E2B_WORK_DIRECTORY}/`)
+  ) {
+    throw new Error(`sandbox path must be beneath ${E2B_WORK_DIRECTORY}: ${path}`);
   }
-}
-
-function shellCommand(command: readonly string[]): string {
-  return command.map(shellQuote).join(" ");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function workloadEnvironment(request: SandboxRequest): Record<string, string> {
-  const environment = { ...request.environment, ...request.secrets };
-  for (const key of Object.keys(environment)) {
-    if (key.startsWith("E2B_")) {
-      delete environment[key];
-    }
-  }
-  return environment;
-}
-
-async function collectOutputs(
-  sandbox: E2BSandboxHandle,
-  request: SandboxRequest,
-  exitCode: number,
-  signal: AbortSignal,
-): Promise<Record<string, Uint8Array>> {
-  const outputs: Record<string, Uint8Array> = {};
-  for (const path of request.outputPaths ?? []) {
-    try {
-      outputs[path] = await sandbox.files.read(path, { format: "bytes", signal });
-    } catch (error) {
-      if (exitCode === 0) {
-        throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
-          cause: error,
-        });
-      }
-    }
-  }
-  return outputs;
 }
 
 async function collectPartialOutputs(
@@ -720,32 +583,6 @@ function collectFailureResult(
   };
 }
 
-function captureUnstreamedCommandOutput(
-  completed: CommandResult,
-  stdout: RollingOutput,
-  stderr: RollingOutput,
-): void {
-  // E2B normally invokes the streaming callbacks. A transport can still return
-  // buffered result text without having delivered callbacks, so retain it when
-  // the corresponding rolling stream is empty instead of dropping diagnostics.
-  if (!stdout.text() && completed.stdout) {
-    stdout.push(Buffer.from(completed.stdout));
-  }
-  if (!stderr.text() && completed.stderr) {
-    stderr.push(Buffer.from(completed.stderr));
-  }
-}
-
-function isCommandResult(error: unknown): error is CommandResult {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as Partial<CommandResult>).exitCode === "number" &&
-    typeof (error as Partial<CommandResult>).stdout === "string" &&
-    typeof (error as Partial<CommandResult>).stderr === "string"
-  );
-}
-
 function createErrorConfirmsNoAllocation(error: unknown): boolean {
   return error instanceof AuthenticationError || error instanceof InvalidArgumentError;
 }
@@ -758,47 +595,6 @@ function cleanupOptions(
     requestTimeoutMs,
     signal,
   };
-}
-
-function createTerminationGate(): {
-  readonly promise: Promise<never>;
-  readonly reject: (error: unknown) => void;
-} {
-  let reject = (_error: unknown): void => {};
-  const promise = new Promise<never>((_resolve, rejectPromise) => {
-    reject = rejectPromise;
-  });
-  void promise.catch(() => undefined);
-  return { promise, reject };
-}
-
-async function raceWithTermination<T>(
-  operation: Promise<T>,
-  termination: Promise<never>,
-): Promise<T> {
-  void operation.catch(() => undefined);
-  return await Promise.race([operation, termination]);
-}
-
-async function raceWithSignal<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void operation.catch(() => undefined);
-    throw abortReason(signal);
-  }
-  let removeAbortListener = (): void => {};
-  const aborted = new Promise<never>((_resolve, reject) => {
-    const abort = (): void => {
-      void operation.catch(() => undefined);
-      reject(abortReason(signal));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    removeAbortListener = () => signal.removeEventListener("abort", abort);
-  });
-  try {
-    return await Promise.race([operation, aborted]);
-  } finally {
-    removeAbortListener();
-  }
 }
 
 async function waitForCommandKill(
@@ -815,10 +611,6 @@ async function waitForCommandKill(
   } catch {
     // Sandbox cleanup remains the authoritative process/resource stop.
   }
-}
-
-function abortReason(signal: AbortSignal | undefined): unknown {
-  return signal?.reason ?? new DOMException("The operation was aborted", "AbortError");
 }
 
 function throwIfTerminated(error: unknown): void {

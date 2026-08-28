@@ -1,5 +1,6 @@
 import { E2B } from "e2b";
-import type { SelfBenchWorkerConfig } from "./config.js";
+import type { SelfBenchWorkerConfig } from "../../../config.js";
+import { raceWithSignal } from "./lifecycle.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
 
@@ -36,27 +37,6 @@ function createE2BStartupApi(config: E2BExecutionConfig): E2BStartupApi {
     exists: async (template, signal) =>
       await client.Template.exists(template, { requestTimeoutMs: 30_000, signal }),
   };
-}
-
-async function raceWithSignal<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void operation.catch(() => undefined);
-    throw signal.reason;
-  }
-  let removeAbortListener = (): void => {};
-  const aborted = new Promise<never>((_resolve, reject) => {
-    const abort = (): void => {
-      void operation.catch(() => undefined);
-      reject(signal.reason);
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    removeAbortListener = () => signal.removeEventListener("abort", abort);
-  });
-  try {
-    return await Promise.race([operation, aborted]);
-  } finally {
-    removeAbortListener();
-  }
 }
 
 function errorMessage(error: unknown): string {

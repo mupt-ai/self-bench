@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { loadWorkerConfig } from "../config.js";
-import { validateE2BWorkerStartup } from "../e2b-startup.js";
 import { removeEmptyModalCredentialOverrides } from "../modal-auth.js";
 import { runCommand } from "../process.js";
+import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { createActivities } from "./activities.js";
 import { connectTemporalWorker } from "./connection.js";
 

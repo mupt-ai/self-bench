@@ -10,7 +10,7 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildCommit } from "./build-metadata.js";
-import { type E2BCredentials, loadWorkerConfig } from "./config.js";
+import { loadWorkerConfig } from "./config.js";
 import { MAX_CANDIDATES_PER_RUN } from "./contracts.js";
 import { runCommand } from "./process.js";
 import {
@@ -26,7 +26,7 @@ import {
 } from "./provenance-associations.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
-import { buildSelfBenchE2BTemplate } from "./setup/e2b.js";
+import { setupE2B } from "./setup/e2b/index.js";
 import { applyVercelProfile, setupVercel } from "./setup/vercel/index.js";
 import { SetupCanceledError } from "./terminal-prompts.js";
 
@@ -98,46 +98,6 @@ async function setup(args: string[]): Promise<void> {
     }
     throw error;
   }
-}
-
-async function setupE2B(args: string[]): Promise<void> {
-  const parsed = parseArgs({
-    args,
-    options: {
-      name: { type: "string" },
-      cpus: { type: "string", default: "4" },
-      "memory-mib": { type: "string", default: "8192" },
-    },
-    strict: true,
-  });
-  const name = parsed.values.name?.trim() || fail("--name is required for self-bench setup e2b");
-  const apiKey = process.env.E2B_API_KEY?.trim();
-  if (!apiKey) {
-    fail("E2B_API_KEY is required for self-bench setup e2b");
-  }
-  const domain = process.env.E2B_DOMAIN?.trim();
-  const credentials: E2BCredentials = { apiKey, ...(domain ? { domain } : {}) };
-  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const result = await buildSelfBenchE2BTemplate({
-    name,
-    cpuCount: positiveInteger(parsed.values.cpus, "--cpus"),
-    memoryMiB: positiveInteger(parsed.values["memory-mib"], "--memory-mib"),
-    credentials,
-    projectRoot,
-    onLog: (message) => console.error(message),
-  });
-  console.log(
-    JSON.stringify(
-      {
-        template: result.name,
-        templateId: result.templateId,
-        buildId: result.buildId,
-        configure: `export SELFBENCH_E2B_TEMPLATE=${shellAssignment(result.name)}`,
-      },
-      null,
-      2,
-    ),
-  );
 }
 
 async function up(args: string[]): Promise<void> {
@@ -514,10 +474,6 @@ function defaultRunId(): string {
 
 function fail(message: string): never {
   throw new Error(message);
-}
-
-function shellAssignment(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 function printHelp(): void {

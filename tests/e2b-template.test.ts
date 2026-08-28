@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeE2BDomain } from "../src/e2b-template.js";
+import { normalizeE2BDomain } from "../src/setup/e2b/index.js";
 
 describe("E2B domain normalization", () => {
   test("accepts default and non-default ports", () => {

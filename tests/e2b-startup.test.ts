@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { type E2BStartupApi, validateE2BWorkerStartup } from "../src/e2b-startup.js";
+import {
+  type E2BStartupApi,
+  validateE2BWorkerStartup,
+} from "../src/sandbox/providers/e2b/startup.js";
 
 const config = {
   kind: "e2b" as const,

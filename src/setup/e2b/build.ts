@@ -1,11 +1,11 @@
 import { resolve } from "node:path";
 import { type BuildInfo, E2B, type LogEntry, type TemplateClass } from "e2b";
-import type { E2BCredentials } from "../config.js";
+import type { E2BCredentials } from "../../config.js";
 import {
   normalizeE2BBuildName,
   normalizeE2BDomain,
   normalizeE2BTemplateReference,
-} from "../e2b-template.js";
+} from "./template.js";
 
 const TEMPLATE_BUILD_REQUEST_TIMEOUT_MS = 60_000;
 

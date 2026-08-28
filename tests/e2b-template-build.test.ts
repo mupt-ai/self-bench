@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { BuildInfo, LogEntry, TemplateClass } from "e2b";
-import { buildSelfBenchE2BTemplate, type E2BTemplateBuildApi } from "../src/setup/e2b.js";
+import { buildSelfBenchE2BTemplate, type E2BTemplateBuildApi } from "../src/setup/e2b/index.js";
 
 const credentials = { apiKey: "e2b_test_key" };
 

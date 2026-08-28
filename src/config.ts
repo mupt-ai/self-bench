@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./e2b-template.js";
 import {
   EXECUTION_BACKENDS,
   type ExecutionBackend,
@@ -13,6 +12,7 @@ import {
   STANDARD_E2B_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "./sandbox/timeout.js";
+import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./setup/e2b/template.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
