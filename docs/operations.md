@@ -298,7 +298,7 @@ The CLI is the recommended client. The API exposes:
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
 
-Run status includes its phase, accepted/rejected counts, per-candidate stage, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID; the separate agent matrix is resumable through completed Harbor job reuse.
+Run status includes its phase, accepted/rejected counts, per-candidate stage, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 
@@ -334,11 +334,10 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |
-| `OPENAI_API_KEY` | — | Worker sandboxes and matrix harness |
+| `OPENAI_API_KEY` | — | Worker sandboxes |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi subscription-auth fallback |
 | `SELFBENCH_CODEX_AUTH_JSON` | — | Optional Codex subscription-auth fallback |
 | `GH_TOKEN` | — | Worker GitHub reads |
-| `CODEX_AUTH_JSON_PATH` | `~/.codex/auth.json` | Optional matrix subscription-auth file |
 
 ## Cloud topology
 

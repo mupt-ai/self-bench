@@ -15,7 +15,6 @@
   "bin": {
     "self-bench": "dist/cli.js",
     "self-bench-agent-smoke": "dist/agent-smoke-main.js",
-    "self-bench-eval": "dist/eval-main.js",
     "self-bench-reaudit": "dist/reaudit-main.js",
     "self-bench-repair": "dist/repair-main.js",
     "self-bench-validate": "dist/validate-main.js"
