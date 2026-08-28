@@ -173,7 +173,7 @@ export function buildRunRequest(
       executionBackend: config.execution.kind,
       harborEnvironment: config.harborEnvironment,
       sandboxImage: config.execution.image,
-      ...(config.execution.kind === "vercel"
+      ...(config.execution.kind === "vercel" || config.execution.kind === "e2b"
         ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
         : {}),
       schema: 1,

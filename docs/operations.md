@@ -25,22 +25,24 @@ self-bench requires GitHub and model credentials:
 
 Existing deployments may continue using ChatGPT subscription authentication by providing both `SELFBENCH_PI_AUTH_JSON` and `SELFBENCH_CODEX_AUTH_JSON`. API-key authentication takes precedence when `OPENAI_API_KEY` is set.
 
-Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. Keep provider credentials on the worker; the API does not need them.
+Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended Vercel workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; E2B setup reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring, semantic review, and repair sandboxes. It separately invokes Harbor for nop/oracle validation. Docker and Modal default Harbor to the matching environment. Vercel has no Harbor environment, so `--harbor-environment docker|modal` is mandatory.
+SelfBench uses one provider for discovery, authoring, semantic review, and repair sandboxes. It separately invokes Harbor for nop/oracle validation. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
 
 ```bash
 self-bench up --backend docker                         # Docker + Docker
 self-bench up --backend modal                          # Modal + Modal
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
+self-bench up --backend e2b --harbor-environment docker
+self-bench up --backend e2b --harbor-environment modal
 self-bench up --backend docker --harbor-environment modal
 self-bench up --backend modal --harbor-environment docker
 ```
 
-Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the effective Vercel timeout cap when applicable.
+Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
 
 ### Docker
 
@@ -68,6 +70,71 @@ self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
 Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery and authoring stop after eight minutes without process output; review stops after five. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard.
+
+### E2B
+
+E2B is a generation backend only; choose Docker or Modal for Harbor. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, Codex, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
+
+#### Build the template
+
+Create an E2B API key, export it only in the shell that performs setup, and choose a versioned template name or tag:
+
+```bash
+export E2B_API_KEY=...
+# Optional only for an E2B-compatible private/control-plane domain:
+# export E2B_DOMAIN=e2b.example.com
+
+self-bench setup e2b --name selfbench-runtime:v1
+```
+
+This noninteractive command uses the pinned `e2b@2.46.0` SDK to parse the packaged `Dockerfile.sandbox` with the package root as its file context, then calls `Template.build`. It does not require the E2B CLI or a local Docker daemon. Setup accepts a lowercase `name[:tag]` (letters, digits, hyphens, and underscores, plus periods in a tag) and rejects malformed names before any SDK call. The Dockerfile pins its base image and tool versions, supplies an `amd64` default for E2B's `TARGETARCH` parser, and ends at `WORKDIR /work`. Build requests have a 60-second per-request control-plane timeout while the build itself may run longer. Build logs go to stderr; on success the command prints JSON containing the exact template reference returned by E2B, template ID, build ID, and a shell-safe `SELFBENCH_E2B_TEMPLATE` export. Preserve the build ID in deployment records and use a new versioned name/tag when rebuilding so run metadata can identify the intended runtime reference; a mutable tag is not an immutable build identifier.
+
+A standard SelfBench request expects 4 CPUs and 8,192 MiB. E2B 2.46 assigns CPU and memory when the template is built and exposes no per-sandbox resource override. Setup therefore uses those values by default:
+
+```bash
+self-bench setup e2b \
+  --name selfbench-runtime:v1 \
+  --cpus 4 \
+  --memory-mib 8192
+```
+
+The executor verifies E2B's allocated CPU and memory before uploading source files and fails with a resource-mismatch diagnostic if the configured template differs from the request. Change the setup resource flags only for a custom caller that also sets matching `SandboxRequest` resources; ordinary SelfBench activities use the standard values. Disk size is likewise template/platform controlled and cannot be mapped per create by this SDK version.
+
+E2B templates are durable account resources and are not removed by `self-bench down`. Build a new versioned template for runtime changes and retire old templates according to your E2B retention policy. Each workflow stage still gets a fresh sandbox from that template.
+
+#### Start a worker
+
+Configure the template reference printed by setup, keep the API key in the worker environment, and explicitly choose Harbor:
+
+```bash
+export E2B_API_KEY=...
+export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
+# Optional; defaults to the Hobby-compatible one-hour ceiling:
+export SELFBENCH_E2B_TIMEOUT_CAP=1h
+
+self-bench up --backend e2b --harbor-environment docker
+# Or, with Modal credentials/profile configured:
+# self-bench up --backend e2b --harbor-environment modal
+```
+
+Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
+
+E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes, review requests 15 minutes, and authoring/repair request two hours, so the configured cap centrally shortens only longer stages. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
+
+Commands run under `/work`. Inputs and binary outputs are transferred with E2B's file API, and paths outside `/work` are rejected before allocation. Stdout/stderr stream progress while retaining only the latest 8 MiB per stream for diagnostics. Output inactivity cancels the command and sandbox. Workload environment and stage secrets are scoped to the command; SelfBench does not create durable account-level E2B Secrets.
+
+Every normal completion, command failure, cancellation, inactivity timeout, and hard timeout enters cleanup. On failure or termination, SelfBench requests command kill first, collects requested partial outputs in parallel under one bounded diagnostic deadline, and only then removes the sandbox. It first tries the sandbox handle, but never treats E2B's `kill(false)` alone as proof of absence: it falls back to static kill by sandbox ID and uses `getInfo`; only `SandboxNotFoundError` independently confirms that the sandbox is gone. Cleanup calls and retries share a bounded deadline, and a stuck provider promise cannot hold the activity open indefinitely.
+
+A create request carries unique SelfBench allocation metadata. If cancellation, timeout, or response loss leaves creation ambiguous before an ID is returned, cleanup searches all listed states (including paused sandboxes) by that metadata and also accepts a late-arriving create handle. If allocation absence or deletion cannot be confirmed within the cleanup window, the activity fails with the allocation context rather than silently reporting success. A provider could still allocate after that bounded recovery window; E2B's requested `onTimeout: kill` lifecycle is the final bound. A worker process crash can likewise bypass client cleanup.
+
+All `E2B_*` variables are treated as control-plane values. Compose passes the supported API key/domain settings only to the worker, not the API, and SelfBench strips the entire prefix from E2B workload commands and Harbor child environments. The API receives only `SELFBENCH_E2B_TEMPLATE` and `SELFBENCH_E2B_TIMEOUT_CAP` so it can stamp run/export metadata. The sandbox still receives repository content and the selected model/GitHub workload credentials, so use only trusted repositories and apply E2B account budget and network controls before unattended runs.
+
+Common failures:
+
+- `E2B template ... does not exist or is not accessible` at worker startup means the name/tag is wrong, the API key belongs to another account, or the optional domain is wrong. Re-export the exact `configure` value from setup or rebuild the template.
+- A resource-mismatch error means the template was built with CPU or memory that does not match the stage request. Rebuild the standard template with 4 CPUs and 8,192 MiB.
+- A timeout-limit error after raising the cap means the E2B plan does not support that lifetime. Restore `SELFBENCH_E2B_TIMEOUT_CAP=1h` or use a verified paid-plan value.
+- A cleanup error includes the sandbox ID or allocation context but redacts the API key. Inspect active sandboxes in E2B, kill any matching `selfbench_allocation` metadata, then resolve control-plane access before retrying.
 
 ### Vercel Sandbox
 
@@ -246,16 +313,20 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_ARTIFACT_DIR` | `.selfbench/artifacts` | Local artifact store |
 | `SELFBENCH_GCS_BUCKET` | — | GCS artifact store |
 | `SELFBENCH_GCS_PREFIX` | `selfbench` | GCS artifact store |
-| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; `docker`, `modal`, or `vercel` |
+| `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; `docker`, `modal`, `vercel`, or `e2b` |
 | `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | Docker worker |
-| `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel |
-| `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel | Worker |
+| `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
+| `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `self-bench up --modal-config` locally |
 | `SELFBENCH_VERCEL_IMAGE` | profile or — | Required digest-pinned VCR image for Vercel execution |
 | `SELFBENCH_VERCEL_TIMEOUT_CAP` | `2h` | Vercel worker and API; accepts integer milliseconds or `ms`, `s`, `m`, `h` units |
+| `SELFBENCH_E2B_TEMPLATE` | — | Required E2B template name/tag/ID for API and worker |
+| `SELFBENCH_E2B_TIMEOUT_CAP` | `1h` | E2B worker and API; accepts integer milliseconds or `ms`, `s`, `m`, `h` units, up to `24h` |
+| `E2B_API_KEY` | — | Worker-only E2B control credential; required for E2B workers |
+| `E2B_DOMAIN` | E2B default | Optional worker-only E2B control-plane domain |
 | `SELFBENCH_CONFIG_DIR` | `~/.selfbench` | Local CLI profile directory; not needed with a complete Vercel environment |
 | `VERCEL_TOKEN` | profile or unset | Vercel worker; explicit project-scoped access token |
 | `VERCEL_TEAM_ID` | profile or unset | Vercel worker |
@@ -298,6 +369,17 @@ OPENAI_API_KEY=...
 
 The worker owns model, GitHub, Modal, and Harbor credentials. Use separate least-privilege service accounts and a secret manager. Grant GCS object access only to the configured prefix, use a TLS-enabled Temporal namespace, and keep API/worker image digests and `SELFBENCH_TASK_QUEUE` identical.
 
+For E2B generation on a long-running worker, replace the execution settings above with:
+
+```text
+SELFBENCH_EXECUTION_BACKEND=e2b
+SELFBENCH_HARBOR_ENVIRONMENT=docker  # or modal
+SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
+SELFBENCH_E2B_TIMEOUT_CAP=1h         # raise only to a verified plan limit
+E2B_API_KEY=...
+# E2B_DOMAIN=...                     # only for a custom E2B domain
+```
+
 For Vercel generation, replace the execution settings above with:
 
 ```text
@@ -322,4 +404,4 @@ This repository defines the application boundary, not turnkey cloud infrastructu
 - Sandboxes receive only the selected model credential: `OPENAI_API_KEY` by default, or a stage-specific subscription credential for compatibility deployments.
 - Sandboxes contain both a source checkout and a short-lived model credential. Use SelfBench only with repositories you trust to execute; it is not a malware-analysis service.
 - Docker uses disposable containers and volumes and removes them after normal completion. A host crash can leave resources for an operator to inspect and remove. Modal uses disposable Sandboxes. Vercel uses nonpersistent named sandboxes, attempts permanent deletion after each run, and fails the activity when deletion cannot be confirmed; inspect the project after worker crashes or cleanup failures.
-- Vercel control credentials authenticate only the worker's Sandbox control plane and are stripped before Harbor starts. They are never workload command secrets.
+- Vercel and E2B control credentials authenticate only the worker's sandbox control plane. Compose does not pass them to the API; `harborChildEnvironment` strips them before Harbor starts, and the E2B executor strips them from workload command environments. They are never workload secrets.

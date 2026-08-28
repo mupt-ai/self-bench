@@ -26,6 +26,7 @@ import {
 } from "./provenance-associations.js";
 import { isExecutionBackend, isHarborEnvironment, matchingHarborEnvironment } from "./providers.js";
 import { type PolledRunStatus, waitForRun } from "./run-wait.js";
+import { setupE2B } from "./setup/e2b/index.js";
 import { applyVercelProfile, setupVercel } from "./setup/vercel/index.js";
 import { SetupCanceledError } from "./terminal-prompts.js";
 
@@ -70,11 +71,21 @@ switch (command) {
 
 async function setup(args: string[]): Promise<void> {
   const [provider, ...providerArgs] = args;
-  if (provider !== "vercel") {
-    fail("setup currently supports only: self-bench setup vercel");
+  switch (provider) {
+    case "e2b":
+      await setupE2B(providerArgs);
+      return;
+    case "vercel":
+      await setupVercelProvider(providerArgs);
+      return;
+    default:
+      fail("setup supports: self-bench setup vercel | self-bench setup e2b");
   }
+}
+
+async function setupVercelProvider(args: string[]): Promise<void> {
   const parsed = parseArgs({
-    args: providerArgs,
+    args,
     options: {
       profile: { type: "string", default: "default" },
       verbose: { type: "boolean", default: false },
@@ -107,7 +118,7 @@ async function up(args: string[]): Promise<void> {
     strict: true,
   });
   if (!isExecutionBackend(parsed.values.backend)) {
-    fail('--backend must be "docker", "modal", or "vercel"');
+    fail('--backend must be "docker", "modal", "vercel", or "e2b"');
   }
   if (
     parsed.values["harbor-environment"] !== undefined &&
@@ -145,6 +156,8 @@ async function up(args: string[]): Promise<void> {
   };
   if (backend === "vercel") {
     environment = await applyVercelProfile(environment, parsed.values["vercel-profile"]);
+  }
+  if (backend === "vercel" || backend === "e2b") {
     loadWorkerConfig(environment);
   }
 
@@ -474,7 +487,8 @@ function printHelp(): void {
 
 Usage:
   self-bench setup vercel [--profile NAME] [--verbose]
-  self-bench up [--backend docker|modal|vercel] [--harbor-environment docker|modal]
+  self-bench setup e2b --name NAME[:TAG] [--cpus N] [--memory-mib N]
+  self-bench up [--backend docker|modal|vercel|e2b] [--harbor-environment docker|modal]
                 [--modal-config PATH] [--vercel-profile NAME]
   self-bench down
   self-bench associate --repo PATH --list-sessions
@@ -489,9 +503,11 @@ Usage:
   self-bench list
 
 The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
-requires --harbor-environment because Harbor does not support Vercel. Modal generation or Harbor uses
+and E2B require --harbor-environment because Harbor supports neither. Modal generation or Harbor uses
 ~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
-project, publish the pinned runtime image, verify access, and save an owner-only local profile.
+project, publish the pinned runtime image, verify access, and save an owner-only local profile. E2B setup
+is noninteractive: with E2B_API_KEY set, it builds Dockerfile.sandbox under the requested versioned name;
+set SELFBENCH_E2B_TEMPLATE to the printed template before starting the stack.
 
 The associate command runs locally. --list-sessions prints selectors, counts, local paths, and modification
 times, but never request text. Association writes a create-only, text-free manifest; it never uploads or

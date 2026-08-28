@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildRunRequest } from "../src/api.js";
 import { loadConfig } from "../src/config.js";
-import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
+import { HOBBY_E2B_TIMEOUT_CAP_MS, HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
 
 const submission = {
   runId: "run-timeout-metadata",
@@ -52,7 +52,26 @@ describe("API run metadata", () => {
     });
   });
 
-  test("does not add Vercel timeout metadata to other providers", () => {
+  test("persists the effective E2B timeout cap and template metadata", () => {
+    const config = loadConfig({
+      SELFBENCH_EXECUTION_BACKEND: "e2b",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+      SELFBENCH_E2B_TEMPLATE: "selfbench-runtime:v1",
+      SELFBENCH_E2B_TIMEOUT_CAP: "1h",
+      SELFBENCH_BUILD_COMMIT: "e".repeat(40),
+    });
+
+    expect(buildRunRequest(config, submission).version).toEqual({
+      selfbenchCommit: "e".repeat(40),
+      executionBackend: "e2b",
+      harborEnvironment: "docker",
+      sandboxImage: "selfbench-runtime:v1",
+      sandboxTimeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS,
+      schema: 1,
+    });
+  });
+
+  test("does not add hosted-provider timeout metadata to Docker", () => {
     const version = buildRunRequest(
       loadConfig({ SELFBENCH_BUILD_COMMIT: "e".repeat(40) }),
       submission,

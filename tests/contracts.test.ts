@@ -97,7 +97,39 @@ describe("contracts", () => {
     ).toBe(false);
   });
 
-  test("rejects Vercel-only timeout metadata on other execution providers", () => {
+  test("persists E2B generation separately from its Docker or Modal Harbor backend", () => {
+    for (const harborEnvironment of ["docker", "modal"]) {
+      const parsed = runRequestSchema.safeParse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: {
+          ...request.version,
+          executionBackend: "e2b",
+          harborEnvironment,
+          sandboxImage: "selfbench-runtime:v1",
+          sandboxTimeoutCapMs: 60 * 60 * 1_000,
+        },
+      });
+      expect(parsed.success).toBe(true);
+    }
+  });
+
+  test("requires an explicit Harbor backend for E2B schema-1 requests", () => {
+    expect(
+      runRequestSchema.safeParse({
+        ...request,
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        version: {
+          ...request.version,
+          executionBackend: "e2b",
+          harborEnvironment: undefined,
+          sandboxImage: "selfbench-runtime:v1",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("rejects hosted-only timeout metadata on Docker and Modal", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,

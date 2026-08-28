@@ -13,5 +13,10 @@ export function harborChildEnvironment(
   for (const key of VERCEL_CONTROL_CREDENTIALS) {
     delete child[key];
   }
+  for (const key of Object.keys(child)) {
+    if (key.startsWith("E2B_")) {
+      delete child[key];
+    }
+  }
   return child;
 }

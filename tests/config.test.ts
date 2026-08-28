@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { defaultStandaloneConcurrency, loadConfig, loadWorkerConfig } from "../src/config.js";
 import {
+  HOBBY_E2B_TIMEOUT_CAP_MS,
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
+  STANDARD_E2B_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "../src/sandbox/timeout.js";
 
@@ -156,6 +158,89 @@ describe("SelfBench configuration", () => {
         }).execution.kind,
       ).toBe(backend);
     }
+  });
+
+  test("requires explicit E2B template, Harbor environment, and worker API key", () => {
+    const base = {
+      SELFBENCH_EXECUTION_BACKEND: "e2b",
+      SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+    };
+
+    expect(() => loadConfig(base)).toThrow("SELFBENCH_E2B_TEMPLATE is required");
+    expect(() => loadConfig({ ...base, SELFBENCH_E2B_TEMPLATE: "base" })).toThrow(
+      "must reference a custom SelfBench template",
+    );
+    expect(() => loadConfig({ ...base, SELFBENCH_E2B_TEMPLATE: "Not Lowercase" })).toThrow(
+      "invalid E2B template reference",
+    );
+    expect(() =>
+      loadConfig({
+        ...base,
+        SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
+        SELFBENCH_HARBOR_ENVIRONMENT: "",
+      }),
+    ).toThrow("SELFBENCH_HARBOR_ENVIRONMENT is required");
+    expect(() =>
+      loadWorkerConfig({ ...base, SELFBENCH_E2B_TEMPLATE: "selfbench-runtime" }),
+    ).toThrow("E2B_API_KEY is required");
+    expect(() =>
+      loadWorkerConfig({
+        ...base,
+        SELFBENCH_E2B_TEMPLATE: "team/selfbench-runtime:v1",
+        E2B_API_KEY: "test-key",
+        E2B_DOMAIN: "https://custom.e2b.example/path",
+      }),
+    ).toThrow("hostname without a scheme or path");
+  });
+
+  test("loads trimmed E2B worker settings and parses its timeout cap", () => {
+    const config = loadWorkerConfig({
+      SELFBENCH_EXECUTION_BACKEND: "e2b",
+      SELFBENCH_HARBOR_ENVIRONMENT: "modal",
+      SELFBENCH_E2B_TEMPLATE: "  selfbench-runtime:v1  ",
+      SELFBENCH_E2B_TIMEOUT_CAP: "1h",
+      E2B_API_KEY: "  e2b-key  ",
+      E2B_DOMAIN: "  custom.e2b.example  ",
+    });
+
+    expect(config.execution).toEqual({
+      kind: "e2b",
+      image: "selfbench-runtime:v1",
+      timeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS,
+      credentials: { apiKey: "e2b-key", domain: "custom.e2b.example" },
+    });
+    expect(config.harborEnvironment).toBe("modal");
+    expect(config.activityConcurrency).toBe(4);
+    expect(defaultStandaloneConcurrency(config, 10)).toBe(4);
+  });
+
+  test("defaults E2B to the Hobby-compatible timeout and ignores stale values elsewhere", () => {
+    expect(
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "e2b",
+        SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+        SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
+      }).execution,
+    ).toMatchObject({ timeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS });
+    expect(
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "e2b",
+        SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+        SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
+        SELFBENCH_E2B_TIMEOUT_CAP: "24h",
+      }).execution,
+    ).toMatchObject({ timeoutCapMs: STANDARD_E2B_TIMEOUT_CAP_MS });
+    expect(() =>
+      loadConfig({
+        SELFBENCH_EXECUTION_BACKEND: "e2b",
+        SELFBENCH_HARBOR_ENVIRONMENT: "docker",
+        SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
+        SELFBENCH_E2B_TIMEOUT_CAP: "25h",
+      }),
+    ).toThrow();
+    expect(loadConfig({ SELFBENCH_E2B_TIMEOUT_CAP: "not-a-duration" }).execution.kind).toBe(
+      "docker",
+    );
   });
 
   test("requires a digest-pinned Vercel image", () => {
