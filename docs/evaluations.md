@@ -49,22 +49,34 @@ harbor run \
 
 The `solution/` directory is used only for explicit oracle validation and is never mounted for coding-agent trials.
 
-## Run the model matrix
+## Run multiple tasks or models
 
-The included matrix runner evaluates every exported task with `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`, all at high reasoning. It reuses completed Harbor jobs after a restart.
-
-From the self-bench checkout:
+Use Harbor directly for batch and model-comparison runs. Extract each task into a directory containing its `harbor-task` contents:
 
 ```bash
-export OPENAI_API_KEY=...
-node dist/eval-main.js \
-  --export ./my-evals.tar.gz \
-  --jobs ./matrix-jobs \
-  --harbor harbor \
-  --environment modal \
-  --concurrency 20
+mkdir -p ./self-bench-tasks
+for archive in ./export/tasks/*.tar.gz; do
+  task_id="$(basename "$archive" .tar.gz)"
+  mkdir -p "./self-bench-tasks/$task_id"
+  tar -xzf "$archive" --strip-components=1 -C "./self-bench-tasks/$task_id"
+done
 ```
 
-The runner writes per-task Harbor jobs and a combined `./matrix-jobs/summary.json`.
+Then pass the directory and desired models to `harbor run`:
 
-ChatGPT subscription authentication remains supported for existing deployments: omit `OPENAI_API_KEY` and pass `--auth /path/to/codex-auth.json`.
+```bash
+harbor run \
+  --path ./self-bench-tasks \
+  --agent codex \
+  --model gpt-5.6-luna \
+  --model gpt-5.6-terra \
+  --model gpt-5.6-sol \
+  --ak version=0.146.1 \
+  --ak reasoning_effort=high \
+  --env modal \
+  --jobs-dir ./harbor-jobs \
+  --n-concurrent 20 \
+  --yes
+```
+
+Harbor owns agent authentication, concurrency, retries, result persistence, and reporting. Consult Harbor's agent documentation when using Codex subscription authentication or a different agent adapter.

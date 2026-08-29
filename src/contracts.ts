@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS, matchingHarborEnvironment } from "./providers.js";
+import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "./providers.js";
 
 export const commitSchema = z.string().regex(/^[0-9a-f]{40}$/i, "expected a full commit SHA");
 
@@ -41,36 +41,21 @@ const runVersionSchema = z
   .object({
     selfbenchCommit: commitSchema,
     executionBackend: z.enum(EXECUTION_BACKENDS),
-    harborEnvironment: z.enum(HARBOR_ENVIRONMENTS).optional(),
+    harborEnvironment: z.enum(HARBOR_ENVIRONMENTS),
     sandboxImage: z.string().min(1),
     sandboxTimeoutCapMs: z.number().int().min(100).optional(),
-    schema: z.literal(1),
+    schema: z.literal(2),
   })
-  .transform((version, context) => {
-    const harborEnvironment =
-      version.harborEnvironment ?? matchingHarborEnvironment(version.executionBackend);
-    if (!harborEnvironment) {
-      context.addIssue({
-        code: "custom",
-        message: `harborEnvironment is required for ${version.executionBackend} execution`,
-        path: ["harborEnvironment"],
-      });
-      return z.NEVER;
-    }
-    if (
-      version.sandboxTimeoutCapMs !== undefined &&
-      version.executionBackend !== "vercel" &&
-      version.executionBackend !== "e2b"
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "sandboxTimeoutCapMs is only valid for Vercel or E2B execution",
-        path: ["sandboxTimeoutCapMs"],
-      });
-      return z.NEVER;
-    }
-    return { ...version, harborEnvironment };
-  });
+  .refine(
+    (version) =>
+      version.sandboxTimeoutCapMs === undefined ||
+      version.executionBackend === "vercel" ||
+      version.executionBackend === "e2b",
+    {
+      message: "sandboxTimeoutCapMs is only valid for Vercel or E2B execution",
+      path: ["sandboxTimeoutCapMs"],
+    },
+  );
 
 export const runRequestSchema = z.object({
   runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
@@ -100,42 +85,118 @@ export const candidateSchema = z.object({
 
 export type Candidate = z.infer<typeof candidateSchema>;
 
-export const taskDefinitionSchema = z.object({
-  schemaVersion: z.literal(1),
-  difficulty: difficultySchema,
-  taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
-  repo: z.string().min(1),
-  baseCommit: commitSchema,
-  workdir: z.string().min(1),
-  setupCommand: z.string().min(1),
-  testCommand: z.string().refine((value) => value.includes("{tests}"), {
-    message: 'testCommand must contain "{tests}"',
-  }),
-  failToPass: z.array(z.string().min(1)).min(1),
-  passToPass: z.array(z.string().min(1)),
-  testPaths: z.array(z.string().min(1)).min(1),
-  toolchains: z.array(z.enum(["uv", "bun", "go", "node", "python", "rust"])).min(1),
-  sourcePr: z.number().int().positive(),
-  sourceUrl: z.string().url(),
-  prompt: z.string().min(1),
-  timeouts: z.object({
-    setupSeconds: z.number().int().positive(),
-    agentSeconds: z.number().int().positive(),
-    testsSeconds: z.number().int().positive(),
-  }),
-  resources: z.object({
-    cpus: z.number().positive(),
-    memoryMb: z.number().int().positive(),
-    storageMb: z.number().int().positive(),
-  }),
+const environmentVariableNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
+const repositoryPathSchema = z
+  .string()
+  .min(1)
+  .refine((path) => !path.startsWith("/") && !path.split("/").includes(".."), {
+    message: "expected a repository-relative path without parent traversal",
+  });
+
+const environmentVariablesSchema = z.record(environmentVariableNameSchema, z.string());
+
+export const environmentServiceSchema = z
+  .object({
+    name: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]*$/)
+      .refine((name) => name !== "main", { message: 'service name "main" is reserved' }),
+    image: z.string().min(1),
+    environmentVariables: environmentVariablesSchema,
+    command: z.array(z.string()).optional(),
+    healthcheck: z
+      .object({
+        test: z.array(z.string().min(1)).min(1),
+        intervalSeconds: z.number().int().positive(),
+        timeoutSeconds: z.number().int().positive(),
+        retries: z.number().int().positive(),
+        startPeriodSeconds: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const taskEnvironmentSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    baseImage: z.string().min(1),
+    rootSetupCommand: z.string().min(1),
+    setupCommand: z.string().min(1),
+    smokeCommand: z.string().min(1),
+    environmentVariables: environmentVariablesSchema,
+    services: z.array(environmentServiceSchema),
+    source: z.enum(["repository-dockerfile", "devcontainer", "ci-adapted", "generated"]),
+    evidence: z
+      .array(
+        z
+          .object({
+            path: repositoryPathSchema,
+            reason: z.string().min(1),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
+
+export type TaskEnvironment = z.infer<typeof taskEnvironmentSchema>;
+
+export const taskDraftDefinitionSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    difficulty: difficultySchema,
+    taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+    repo: z.string().min(1),
+    baseCommit: commitSchema,
+    workdir: repositoryPathSchema.or(z.literal(".")),
+    testCommand: z.string().refine((value) => value.includes("{tests}"), {
+      message: 'testCommand must contain "{tests}"',
+    }),
+    failToPass: z.array(z.string().min(1)).min(1),
+    passToPass: z.array(z.string().min(1)),
+    testPaths: z.array(z.string().min(1)).min(1),
+    sourcePr: z.number().int().positive(),
+    sourceUrl: z.string().url(),
+    prompt: z.string().min(1),
+    timeouts: z
+      .object({
+        setupSeconds: z.number().int().positive(),
+        agentSeconds: z.number().int().positive(),
+        testsSeconds: z.number().int().positive(),
+      })
+      .strict(),
+    resources: z
+      .object({
+        cpus: z.number().positive(),
+        memoryMb: z.number().int().positive(),
+        storageMb: z.number().int().positive(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type TaskDraftDefinition = z.infer<typeof taskDraftDefinitionSchema>;
+
+export const taskDefinitionSchema = taskDraftDefinitionSchema.extend({
+  environment: taskEnvironmentSchema,
 });
 
 export type TaskDefinition = z.infer<typeof taskDefinitionSchema>;
+
+export const authoredTaskDraftSchema = z.object({
+  candidateId: z.string().min(1),
+  taskId: z.string().min(1),
+  definition: artifactRefSchema,
+  sourceBundle: artifactRefSchema,
+});
+
+export type AuthoredTaskDraft = z.infer<typeof authoredTaskDraftSchema>;
 
 export const authoredTaskSchema = z.object({
   candidateId: z.string().min(1),
   taskId: z.string().min(1),
   definition: artifactRefSchema,
+  sourceBundle: artifactRefSchema,
   bundle: artifactRefSchema,
 });
 
@@ -174,8 +235,11 @@ export interface TaskProgress {
   candidateId: string;
   difficulty: Difficulty;
   status:
-    | "authoring"
+    | "task_authoring"
+    | "environment_authoring"
     | "auditing"
+    | "preflighting"
+    | "environment_repairing"
     | "validating"
     | "reviewing"
     | "repairing"
@@ -218,9 +282,20 @@ export interface DiscoveryResult {
   readonly report: ArtifactRef;
 }
 
+export type TaskAuthorOutcome =
+  | { readonly kind: "authored"; readonly task: AuthoredTaskDraft }
+  | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
+
 export type AuthorOutcome =
   | { readonly kind: "authored"; readonly task: AuthoredTask }
   | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
+
+export interface EnvironmentPreflightResult {
+  readonly taskId: string;
+  readonly accepted: boolean;
+  readonly report: ArtifactRef;
+  readonly reason?: string;
+}
 
 export interface ReviewResult {
   readonly taskId: string;

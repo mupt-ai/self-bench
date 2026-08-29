@@ -2,18 +2,27 @@ import { describe, expect, test } from "bun:test";
 import { runRequestSchema, taskDefinitionSchema } from "../src/contracts.js";
 
 const definition = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2 as const,
   difficulty: "easy",
   taskId: "tiered-task",
   repo: "https://github.com/example/repo.git",
   baseCommit: "a".repeat(40),
-  workdir: "/app",
-  setupCommand: "bun install --frozen-lockfile",
+  workdir: ".",
   testCommand: "bun test {tests}",
   failToPass: ["new behavior"],
   passToPass: ["existing behavior"],
   testPaths: ["tests/held-out.test.ts"],
-  toolchains: ["bun" as const],
+  environment: {
+    schemaVersion: 1 as const,
+    baseImage: `node:22@sha256:${"d".repeat(64)}`,
+    rootSetupCommand: "apt-get update && apt-get install -y bash git passwd procps tar",
+    setupCommand: "bun install --frozen-lockfile",
+    smokeCommand: "bun --version",
+    environmentVariables: {},
+    services: [],
+    source: "ci-adapted" as const,
+    evidence: [{ path: "package.json", reason: "Pins Bun and the test script." }],
+  },
   sourcePr: 1,
   sourceUrl: "https://github.com/example/repo/pull/1",
   prompt: "Implement the requested behavior.",
@@ -36,7 +45,7 @@ const request = {
     executionBackend: "docker",
     harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
-    schema: 1,
+    schema: 2,
   },
 };
 
@@ -114,7 +123,7 @@ describe("contracts", () => {
     }
   });
 
-  test("requires an explicit Harbor backend for E2B schema-1 requests", () => {
+  test("requires an explicit Harbor backend for E2B requests", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
@@ -158,32 +167,28 @@ describe("contracts", () => {
     }
   });
 
-  test("normalizes legacy schema-1 Docker and Modal requests to their matching Harbor backend", () => {
-    for (const executionBackend of ["docker", "modal"] as const) {
-      const parsed = runRequestSchema.parse({
-        ...request,
-        candidateCounts: { easy: 1, medium: 0, hard: 0 },
-        version: {
-          ...request.version,
-          executionBackend,
-          harborEnvironment: undefined,
-        },
-      });
-
-      expect(parsed.version.harborEnvironment).toBe(executionBackend);
+  test("rejects legacy requests without an explicit Harbor backend", () => {
+    for (const executionBackend of ["docker", "modal", "vercel"] as const) {
+      expect(
+        runRequestSchema.safeParse({
+          ...request,
+          candidateCounts: { easy: 1, medium: 0, hard: 0 },
+          version: {
+            ...request.version,
+            executionBackend,
+            harborEnvironment: undefined,
+          },
+        }).success,
+      ).toBe(false);
     }
   });
 
-  test("does not infer a Harbor backend for Vercel schema-1 requests", () => {
+  test("rejects schema-1 run metadata", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
         candidateCounts: { easy: 1, medium: 0, hard: 0 },
-        version: {
-          ...request.version,
-          executionBackend: "vercel",
-          harborEnvironment: undefined,
-        },
+        version: { ...request.version, schema: 1 },
       }).success,
     ).toBe(false);
   });

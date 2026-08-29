@@ -176,7 +176,7 @@ export function buildRunRequest(
       ...(config.execution.kind === "vercel" || config.execution.kind === "e2b"
         ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
         : {}),
-      schema: 1,
+      schema: 2,
     },
   });
 }

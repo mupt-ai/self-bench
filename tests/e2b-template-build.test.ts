@@ -48,6 +48,7 @@ describe("buildSelfBenchE2BTemplate", () => {
     const dockerfile = await Bun.file(resolve(import.meta.dir, "../Dockerfile.sandbox")).text();
     const dockerignore = await Bun.file(resolve(import.meta.dir, "../.dockerignore")).text();
     expect(dockerfile).toContain("RUN mkdir -p /work && chmod 0777 /work\n\nWORKDIR /work");
+    expect(dockerfile).not.toContain("@openai/codex");
     expect(dockerignore).toContain(".env\n");
     expect(dockerignore).toContain("*.pem\n");
     expect(dockerignore).toContain("*.key\n");

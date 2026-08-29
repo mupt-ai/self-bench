@@ -9,11 +9,6 @@ export interface PiModelAuth {
   readonly authJson?: string;
 }
 
-export interface CodexModelAuth {
-  readonly apiKey?: string;
-  readonly authJson?: string;
-}
-
 export function openAiApiKey(): string | undefined {
   const key = process.env.OPENAI_API_KEY?.trim();
   return key || undefined;
@@ -24,11 +19,6 @@ export async function loadPiModelAuth(): Promise<PiModelAuth> {
   return apiKey
     ? { provider: "openai", apiKey }
     : { provider: "openai-codex", authJson: await loadPiSubscriptionAuth() };
-}
-
-export async function loadCodexModelAuth(): Promise<CodexModelAuth> {
-  const apiKey = openAiApiKey();
-  return apiKey ? { apiKey } : { authJson: await loadCodexSubscriptionAuth() };
 }
 
 export async function loadPiSubscriptionAuth(): Promise<string> {
@@ -46,25 +36,6 @@ export async function loadPiSubscriptionAuth(): Promise<string> {
     throw new Error("Pi auth does not contain an openai-codex subscription credential");
   }
   return JSON.stringify({ "openai-codex": credential });
-}
-
-export function assertCodexSubscriptionAuth(value: unknown, source = "Codex auth"): void {
-  if (!isRecord(value) || value.auth_mode !== "chatgpt" || !isRecord(value.tokens)) {
-    throw new Error(`${source} does not contain a ChatGPT subscription token set`);
-  }
-}
-
-export async function loadCodexSubscriptionAuth(): Promise<string> {
-  const path = process.env.CODEX_AUTH_JSON_PATH ?? join(homedir(), ".codex/auth.json");
-  const raw = process.env.SELFBENCH_CODEX_AUTH_JSON ?? (await readFile(path, "utf8"));
-  const parsed = JSON.parse(raw) as unknown;
-  assertCodexSubscriptionAuth(parsed, path);
-  const auth = parsed as Record<string, unknown>;
-  return JSON.stringify({
-    auth_mode: "chatgpt",
-    tokens: auth.tokens,
-    ...(typeof auth.last_refresh === "string" ? { last_refresh: auth.last_refresh } : {}),
-  });
 }
 
 export async function githubToken(): Promise<string | undefined> {

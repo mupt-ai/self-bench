@@ -76,7 +76,7 @@ Easy, medium, and hard candidates require at least 20, 50, and 100 changed imple
 
 The repository must be a Git checkout with a GitHub `origin`. self-bench pins its current `HEAD`, ignores uncommitted changes, and may take hours to author, validate, review, and export the accepted tasks. `--output` waits for completion and verifies the downloaded archive with SHA-256.
 
-### 3. Compare models with Harbor
+### 3. Evaluate with Harbor
 
 Install Harbor and extract the generated tasks:
 
@@ -92,7 +92,7 @@ for archive in ./self-bench-export/tasks/*.tar.gz; do
 done
 ```
 
-Run Harbor's Codex agent adapter once for all three models. Harbor evaluates every extracted task at high reasoning and keeps the model results in one job directory:
+Run Harbor's Codex agent adapter directly. Harbor evaluates every extracted task at high reasoning and keeps the model results in one job directory. Repeat with additional `--model` values when comparing models:
 
 ```bash
 harbor run \
@@ -111,7 +111,7 @@ harbor run \
 
 The evaluated agent receives the base repository and task instruction, but not the hidden tests or reference solution.
 
-See [Running self-bench evaluations](docs/evaluations.md) for running one task and using the optional resumable matrix helper.
+See [Running self-bench evaluations](docs/evaluations.md) for running tasks directly with Harbor.
 
 ## Run management
 

@@ -48,7 +48,7 @@ describe("API run metadata", () => {
       harborEnvironment: "modal",
       sandboxImage: `selfbench-runtime@sha256:${"d".repeat(64)}`,
       sandboxTimeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
-      schema: 1,
+      schema: 2,
     });
   });
 
@@ -67,7 +67,7 @@ describe("API run metadata", () => {
       harborEnvironment: "docker",
       sandboxImage: "selfbench-runtime:v1",
       sandboxTimeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS,
-      schema: 1,
+      schema: 2,
     });
   });
 

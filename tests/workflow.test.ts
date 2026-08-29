@@ -35,7 +35,7 @@ const run: RunRequest = {
     executionBackend: "docker",
     harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
-    schema: 1,
+    schema: 2,
   },
 };
 
@@ -65,8 +65,17 @@ function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivit
         candidateId: value.candidateId,
         taskId: `${value.candidateId}-task`,
         definition: artifact,
-        bundle: artifact,
+        sourceBundle: artifact,
       },
+    }),
+    authorEnvironment: async ({ task }) => ({
+      kind: "authored",
+      task: { ...task, bundle: artifact },
+    }),
+    preflightEnvironment: async ({ task }) => ({
+      taskId: task.taskId,
+      accepted: true,
+      report: artifact,
     }),
     auditTask: async ({ task }) => ({ taskId: task.taskId, accepted: true, report: artifact }),
     validateTask: async ({ task }) => ({
@@ -182,7 +191,7 @@ describe("SelfBench workflow", () => {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
-          bundle: artifact,
+          sourceBundle: artifact,
         },
       };
     };
@@ -226,7 +235,7 @@ describe("SelfBench workflow", () => {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
-          bundle: artifact,
+          sourceBundle: artifact,
         },
       };
     };
@@ -284,6 +293,63 @@ describe("SelfBench workflow", () => {
 
     expect(authored).toEqual(["first"]);
     expect(result.acceptedTaskIds).toEqual([]);
+  });
+
+  test("repairs a failed environment twice before validation", async () => {
+    const activities = acceptingActivities([candidate("environment-repair", 1)]);
+    const calls: string[] = [];
+    let preflights = 0;
+    activities.authorEnvironment = async ({ task, previousTask, diagnostics }) => {
+      calls.push(previousTask ? "repair-environment" : "author-environment");
+      if (previousTask) {
+        expect(diagnostics).toBe(`build failure ${preflights}`);
+      }
+      return {
+        kind: "authored",
+        task: {
+          ...task,
+          definition: { ...artifact, uri: `file:///environment-${calls.length}.json` },
+          bundle: { ...artifact, uri: `file:///environment-${calls.length}.tar.gz` },
+        },
+      };
+    };
+    activities.auditTask = async ({ task }) => {
+      calls.push("audit");
+      return { taskId: task.taskId, accepted: true, report: artifact };
+    };
+    activities.preflightEnvironment = async ({ task }) => {
+      calls.push("preflight");
+      preflights += 1;
+      return {
+        taskId: task.taskId,
+        accepted: preflights === 3,
+        report: artifact,
+        ...(preflights < 3 ? { reason: `build failure ${preflights}` } : {}),
+      };
+    };
+    activities.validateTask = async ({ task }) => {
+      calls.push("validate");
+      return {
+        taskId: task.taskId,
+        accepted: true,
+        nop: { passed: true, result: artifact },
+        oracle: { passed: true, result: artifact },
+      };
+    };
+
+    const result = await executeRun(run, activities);
+
+    expect(result.acceptedTaskIds).toEqual(["environment-repair-task"]);
+    expect(calls).toEqual([
+      "author-environment",
+      "audit",
+      "preflight",
+      "repair-environment",
+      "preflight",
+      "repair-environment",
+      "preflight",
+      "validate",
+    ]);
   });
 
   test("records exhausted Harbor infrastructure failure without replacement", async () => {

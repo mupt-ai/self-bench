@@ -16,14 +16,18 @@ import {
   type ArtifactRef,
   type AuditResult,
   type AuthoredTask,
+  type AuthoredTaskDraft,
   type AuthorOutcome,
   type Candidate,
   candidateSchema,
   type Difficulty,
   type DiscoveryResult,
+  type EnvironmentPreflightResult,
   type ReviewResult,
   type RunRequest,
+  type TaskAuthorOutcome,
   taskDefinitionSchema,
+  taskDraftDefinitionSchema,
   type ValidationResult,
 } from "../contracts.js";
 import {
@@ -32,6 +36,12 @@ import {
   resolveCouplingReview,
   scanBaseContractArtifacts,
 } from "../coupling.js";
+import {
+  assertEnvironmentOnlyRepair,
+  assertEnvironmentPolicy,
+  environmentAuthoringPrompt,
+  isRepairableEnvironmentFailure,
+} from "../environment.js";
 import { assertPullRequestBelongsToRepository } from "../github.js";
 import { harborChildEnvironment } from "../harbor-environment.js";
 import {
@@ -57,7 +67,7 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../sandbox/index.js";
-import { githubToken, loadCodexModelAuth, loadPiModelAuth } from "../subscription-auth.js";
+import { githubToken, loadPiModelAuth } from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 const DISCOVERY_TIMEOUT_MS = 45 * 60 * 1000;
@@ -97,6 +107,13 @@ export interface DiscoveryShardInput {
   readonly excludedSourcePrs: readonly number[];
 }
 
+export interface EnvironmentAuthoringInput {
+  readonly run: RunRequest;
+  readonly task: AuthoredTaskDraft;
+  readonly diagnostics?: string;
+  readonly previousTask?: AuthoredTask;
+}
+
 export interface TaskStageInput {
   readonly run: RunRequest;
   readonly task: AuthoredTask;
@@ -118,7 +135,9 @@ export interface ExportInput {
 export interface SelfBenchActivities {
   collectRunProvenance(run: RunRequest): Promise<ArtifactRef>;
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
-  authorCandidate(input: AuthorCandidateInput): Promise<AuthorOutcome>;
+  authorCandidate(input: AuthorCandidateInput): Promise<TaskAuthorOutcome>;
+  authorEnvironment(input: EnvironmentAuthoringInput): Promise<AuthorOutcome>;
+  preflightEnvironment(input: TaskStageInput): Promise<EnvironmentPreflightResult>;
   validateTask(input: TaskStageInput): Promise<ValidationResult>;
   repairValidationTask(input: ValidationRepairTaskInput): Promise<AuthorOutcome>;
   reviewTask(input: TaskStageInput): Promise<ReviewResult>;
@@ -134,6 +153,8 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
     collectRunProvenance: (run) => collectRunProvenance(store, run),
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
     authorCandidate: (input) => authorCandidate(store, sandbox, input),
+    authorEnvironment: (input) => authorEnvironment(store, sandbox, input),
+    preflightEnvironment: (input) => preflightEnvironment(store, config.harborEnvironment, input),
     validateTask: (input) => validateTask(store, config.harborEnvironment, input),
     repairValidationTask: (input) => repairValidationTask(store, sandbox, input),
     reviewTask: (input) => reviewTask(store, sandbox, input),
@@ -396,24 +417,24 @@ async function authorCandidate(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
   input: AuthorCandidateInput,
-): Promise<AuthorOutcome> {
+): Promise<TaskAuthorOutcome> {
   const { run, candidate } = input;
   Context.current().heartbeat(`authoring ${candidate.candidateId}`);
   const checkpointPrefix = `runs/${run.runId}/authoring/${candidate.candidateId}`;
-  const [definitionCheckpoint, bundleCheckpoint] = await Promise.all([
+  const [definitionCheckpoint, sourceCheckpoint] = await Promise.all([
     store.getByKey(`${checkpointPrefix}/definition.json`),
-    store.getByKey(`${checkpointPrefix}/harbor-task.tar.gz`),
+    store.getByKey(`${checkpointPrefix}/source-task.tar.gz`),
   ]);
-  if (definitionCheckpoint || bundleCheckpoint) {
-    if (!definitionCheckpoint || !bundleCheckpoint) {
+  if (definitionCheckpoint || sourceCheckpoint) {
+    if (!definitionCheckpoint || !sourceCheckpoint) {
       throw new Error(`incomplete authoring checkpoint for ${candidate.candidateId}`);
     }
-    return await materializeAuthoredTask(
+    return await materializeAuthoredTaskDraft(
       store,
       run,
       candidate,
       definitionCheckpoint,
-      bundleCheckpoint,
+      sourceCheckpoint,
     );
   }
   const [provenance, extension, skill, compiler, piAuth, ghToken] = await Promise.all([
@@ -441,7 +462,7 @@ async function authorCandidate(
             { path: "/work/provenance.json", contents: provenance },
             { path: "/work/prompt.txt", contents: prompt },
           ],
-          outputPaths: ["/work/task.tar.gz", "/work/definition.json"],
+          outputPaths: ["/work/source-task.tar.gz", "/work/definition.json"],
           secrets: {
             ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
             ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
@@ -464,7 +485,7 @@ async function authorCandidate(
     Buffer.from(`${result.stdout}\n${result.stderr}`),
     "text/plain",
   );
-  const bundle = result.outputs["/work/task.tar.gz"];
+  const bundle = result.outputs["/work/source-task.tar.gz"];
   const definitionBytes = result.outputs["/work/definition.json"];
   if (result.exitCode !== 0 || !bundle || !definitionBytes) {
     return {
@@ -473,17 +494,17 @@ async function authorCandidate(
       reason: `authoring did not produce a valid ${candidate.difficulty} task; log: ${log.uri}`,
     };
   }
-  return await materializeAuthoredTask(store, run, candidate, definitionBytes, bundle);
+  return await materializeAuthoredTaskDraft(store, run, candidate, definitionBytes, bundle);
 }
 
-async function materializeAuthoredTask(
+async function materializeAuthoredTaskDraft(
   store: ArtifactStore,
   run: RunRequest,
   candidate: Candidate,
   definitionBytes: Uint8Array,
   bundle: Uint8Array,
-): Promise<AuthorOutcome> {
-  const definition = taskDefinitionSchema.parse(
+): Promise<TaskAuthorOutcome> {
+  const definition = taskDraftDefinitionSchema.parse(
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
   if (
@@ -504,7 +525,7 @@ async function materializeAuthoredTask(
       "application/json",
     ),
     store.put(
-      `runs/${run.runId}/authoring/${candidate.candidateId}/harbor-task.tar.gz`,
+      `runs/${run.runId}/authoring/${candidate.candidateId}/source-task.tar.gz`,
       bundle,
       "application/gzip",
     ),
@@ -515,9 +536,217 @@ async function materializeAuthoredTask(
       candidateId: candidate.candidateId,
       taskId: definition.taskId,
       definition: definitionRef,
+      sourceBundle: bundleRef,
+    },
+  };
+}
+
+async function authorEnvironment(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  input: EnvironmentAuthoringInput,
+): Promise<AuthorOutcome> {
+  const revision = input.previousTask?.definition.sha256.slice(0, 12) ?? "initial";
+  const checkpointPrefix = `runs/${input.run.runId}/environments/${input.task.taskId}/${input.task.sourceBundle.sha256.slice(0, 12)}/${revision}`;
+  const [definitionCheckpoint, bundleCheckpoint] = await Promise.all([
+    store.getByKey(`${checkpointPrefix}/definition.json`),
+    store.getByKey(`${checkpointPrefix}/harbor-task.tar.gz`),
+  ]);
+  if (definitionCheckpoint || bundleCheckpoint) {
+    if (!definitionCheckpoint || !bundleCheckpoint) {
+      throw new Error(`incomplete environment checkpoint for ${input.task.taskId}`);
+    }
+    return await materializeEnvironmentTask(
+      store,
+      input,
+      checkpointPrefix,
+      definitionCheckpoint,
+      bundleCheckpoint,
+    );
+  }
+
+  const [draftBytes, sourceBundle, extension, compiler, piAuth, ghToken, previousBytes] =
+    await Promise.all([
+      store.get(input.task.definition),
+      store.get(input.task.sourceBundle),
+      readAsset("src/extensions/environment.ts"),
+      readAsset("dist/sandbox-environment.bundle.js"),
+      loadPiModelAuth(),
+      githubToken(),
+      input.previousTask ? store.get(input.previousTask.definition) : undefined,
+    ]);
+  const draft = taskDraftDefinitionSchema.parse(
+    JSON.parse(Buffer.from(draftBytes).toString("utf8")),
+  );
+  const previousDefinition = previousBytes
+    ? taskDefinitionSchema.parse(JSON.parse(Buffer.from(previousBytes).toString("utf8")))
+    : undefined;
+  const prompt = environmentAuthoringPrompt({
+    definition: draft,
+    ...(previousDefinition ? { original: previousDefinition.environment } : {}),
+    ...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
+  });
+  const attemptPrefix = `${checkpointPrefix}/attempt-${Context.current().info.attempt}`;
+  const result = await runSandboxWithFailureLog(store, `${attemptPrefix}/sandbox.log`, () =>
+    withActivityHeartbeats(`authoring environment for ${input.task.taskId}`, (options) =>
+      sandbox.run(
+        {
+          runId: input.run.runId,
+          stage: `environment-${input.task.taskId}-${revision}`,
+          timeoutMs: AUTHORING_TIMEOUT_MS,
+          inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
+          files: [
+            { path: "/work/environment.ts", contents: extension },
+            { path: "/work/sandbox-environment.js", contents: compiler },
+            { path: "/work/source-task.tar.gz", contents: sourceBundle },
+            { path: "/work/draft-definition.json", contents: draftBytes },
+            { path: "/work/prompt.txt", contents: prompt },
+          ],
+          outputPaths: ["/work/task.tar.gz", "/work/definition.json"],
+          secrets: {
+            ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
+            ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
+            ...(ghToken ? { GH_TOKEN: ghToken } : {}),
+          },
+          environment: {
+            SOURCE_REPO_URL: input.run.repository.url,
+            SOURCE_COMMIT: draft.baseCommit,
+            AUTHOR_MODEL: input.run.authoring.model,
+            SELFBENCH_ENVIRONMENT_OUTPUT: "/work/environment-output",
+          },
+          command: ["bash", "-lc", environmentScript()],
+        },
+        options,
+      ),
+    ),
+  );
+  const logs = await store.put(
+    `${attemptPrefix}/sandbox.log`,
+    Buffer.from(`${result.stdout}\n${result.stderr}`),
+    "text/plain",
+  );
+  const bundle = result.outputs["/work/task.tar.gz"];
+  const definitionBytes = result.outputs["/work/definition.json"];
+  if (result.exitCode !== 0 || !bundle || !definitionBytes) {
+    return {
+      kind: "rejected",
+      candidateId: input.task.candidateId,
+      reason: `environment authoring failed in ${result.sandboxId}; log: ${logs.uri}`,
+    };
+  }
+  return await materializeEnvironmentTask(store, input, checkpointPrefix, definitionBytes, bundle);
+}
+
+async function materializeEnvironmentTask(
+  store: ArtifactStore,
+  input: EnvironmentAuthoringInput,
+  checkpointPrefix: string,
+  definitionBytes: Uint8Array,
+  bundle: Uint8Array,
+): Promise<AuthorOutcome> {
+  const [draftBytes, previousBytes] = await Promise.all([
+    store.get(input.task.definition),
+    input.previousTask ? store.get(input.previousTask.definition) : undefined,
+  ]);
+  const draft = taskDraftDefinitionSchema.parse(
+    JSON.parse(Buffer.from(draftBytes).toString("utf8")),
+  );
+  const definition = taskDefinitionSchema.parse(
+    JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
+  );
+  const { environment: _environment, ...compiledDraft } = definition;
+  if (JSON.stringify(compiledDraft) !== JSON.stringify(draft)) {
+    throw new Error("environment authoring changed task semantics");
+  }
+  assertEnvironmentPolicy(definition.environment);
+  if (previousBytes) {
+    const previous = taskDefinitionSchema.parse(
+      JSON.parse(Buffer.from(previousBytes).toString("utf8")),
+    );
+    assertEnvironmentOnlyRepair(previous, definition);
+  }
+  const [definitionRef, bundleRef] = await Promise.all([
+    store.put(`${checkpointPrefix}/definition.json`, definitionBytes, "application/json"),
+    store.put(`${checkpointPrefix}/harbor-task.tar.gz`, bundle, "application/gzip"),
+  ]);
+  return {
+    kind: "authored",
+    task: {
+      candidateId: input.task.candidateId,
+      taskId: definition.taskId,
+      definition: definitionRef,
+      sourceBundle: input.task.sourceBundle,
       bundle: bundleRef,
     },
   };
+}
+
+async function preflightEnvironment(
+  store: ArtifactStore,
+  harborEnvironment: SelfBenchConfig["harborEnvironment"],
+  input: TaskStageInput,
+): Promise<EnvironmentPreflightResult> {
+  const prefix = `runs/${input.run.runId}/environment-preflights/${input.task.taskId}/${input.task.definition.sha256.slice(0, 12)}/attempt-${Context.current().info.attempt}`;
+  return await withTaskBundle(store, input.task, async (taskDirectory, root) => {
+    await writeFile(join(taskDirectory, "tests/test.sh"), environmentPreflightScript());
+    let accepted = false;
+    let reason: string | undefined;
+    let result: HarborJobResult | undefined;
+    try {
+      result = await withActivityHeartbeats(
+        `preflighting environment for ${input.task.taskId}`,
+        (options) =>
+          runHarborGate(
+            taskDirectory,
+            join(root, "jobs"),
+            "nop",
+            `${input.task.taskId}-environment-preflight`,
+            harborEnvironment,
+            options.signal,
+            false,
+          ),
+      );
+      const checks = rewards(result.trial);
+      accepted = !exception(result.trial) && numberValue(checks.reward) >= 1;
+      if (!accepted) {
+        reason = boundedTail(
+          verifierOutput(result) ?? "environment smoke command failed without output",
+        );
+      }
+    } catch (error) {
+      if (error instanceof CancelledFailure) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isRepairableEnvironmentFailure(message)) {
+        throw error;
+      }
+      reason = boundedTail(message);
+    }
+    const report = await store.put(
+      `${prefix}/report.json`,
+      Buffer.from(
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            taskId: input.task.taskId,
+            accepted,
+            ...(reason ? { reason } : {}),
+            ...(result ? { job: result.job, trial: result.trial, verifier: result.verifier } : {}),
+          },
+          null,
+          2,
+        )}\n`,
+      ),
+      "application/json",
+    );
+    return {
+      taskId: input.task.taskId,
+      accepted,
+      report,
+      ...(reason ? { reason } : {}),
+    };
+  });
 }
 
 async function validateTask(
@@ -868,7 +1097,7 @@ async function repairTask(
     store.get(input.task.bundle),
     store.get(input.review),
     readAsset("dist/sandbox-repair.bundle.js"),
-    loadCodexModelAuth(),
+    loadPiModelAuth(),
   ]);
   const result = await withActivityHeartbeats(
     `running test repair sandbox for ${input.task.taskId}`,
@@ -887,7 +1116,7 @@ async function repairTask(
           outputPaths: ["/work/repaired-task.tar.gz", "/work/repair-report.json"],
           secrets: {
             ...(authJson.apiKey ? { OPENAI_API_KEY: authJson.apiKey } : {}),
-            ...(authJson.authJson ? { SELFBENCH_CODEX_AUTH_JSON: authJson.authJson } : {}),
+            ...(authJson.authJson ? { SELFBENCH_PI_AUTH_JSON: authJson.authJson } : {}),
           },
           environment: { SELFBENCH_REPAIR_MODEL: input.run.authoring.model },
           command: [
@@ -1037,9 +1266,9 @@ Use only this candidate. Do not discover alternatives and do not run Harbor. Rea
 
 Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
 
-Call submit_task exactly once. Its definition must use schemaVersion 1 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Use repository-native frozen setup commands with the package manager version declared by the repository and only required toolchains. setupCommand must fully prepare the pinned checkout to run testCommand, including any repository build, test-fixture generation, native compiler, or browser/runtime installation required after dependency installation; inspect the repository's CI and test scripts rather than assuming install-only setup is sufficient. For Playwright tests, install the required browser and OS dependencies during setup (for example, pnpm exec playwright install --with-deps chromium); the compiler exposes a shared PLAYWRIGHT_BROWSERS_PATH to the verifier user.
+Call submit_task exactly once. Its definition must use schemaVersion 2 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Inspect repository test scripts and CI only to select the correct test command. Do not submit runtimes, setup commands, system dependencies, services, or any other environment configuration; a separate environment agent owns that contract.
 
-Before submission, preflight the exact split locally against the pinned base and completed states: the base plus held-out test patch must make failToPass fail while passToPass succeeds, and the completed implementation plus the same held-out patch must make both selections succeed twice. If setup or focused tests cannot be run within the authoring sandbox, reject the candidate instead of guessing a testCommand. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
+Before submission, verify from repository scripts and the pinned diff that the selected test identifiers belong to one repository-native test command and form the required nop/oracle split. Do not invent a test command when no stable test seam exists. A separate environment agent and backend preflight own dependency setup and executable proof. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
 
 Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }
@@ -1062,9 +1291,45 @@ run_with_heartbeat pi --print --mode json --no-session --no-approve --no-prompt-
   --skill /work/selfbench-skill --extension /work/authoring.ts \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)"
-node /work/sandbox-author.js /work/tasks /work/repo /work/harbor-task
-cp /work/tasks/*/definition.json /work/definition.json
-tar -czf /work/task.tar.gz -C /work harbor-task`;
+node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json`;
+}
+
+function environmentScript(): string {
+  return `${sandboxBootstrap()}
+clone_source
+mkdir -p /work/environment-output
+cd /work/repo
+run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
+  --extension /work/environment.ts --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --tools read,bash,grep,find,ls,submit_environment "$(cat /work/prompt.txt)"
+node /work/sandbox-environment.js /work/source-task.tar.gz /work/draft-definition.json \\
+  /work/environment-output/environment.json /work/repo /work/task.tar.gz /work/definition.json`;
+}
+
+function environmentPreflightScript(): string {
+  return `#!/bin/bash
+set -uo pipefail
+mkdir -p /logs/verifier
+smoke_status=0
+nop_status=1
+output="$(mktemp /tmp/selfbench-environment-smoke-XXXXXX.log)"
+runuser -u verifier --preserve-environment -- /opt/selfbench-environment/smoke.sh >"$output" 2>&1 || smoke_status=$?
+cat "$output"
+rm -f "$output"
+if [ "$smoke_status" -eq 0 ]; then
+  /tests/task-test.sh
+  if grep -q '"patch_applied": 1' /logs/verifier/reward.json \\
+    && grep -q '"fail_to_pass": 0' /logs/verifier/reward.json \\
+    && grep -q '"pass_to_pass": 1' /logs/verifier/reward.json \\
+    && grep -q '"setup_completed": 1' /logs/verifier/reward.json; then
+    nop_status=0
+  fi
+fi
+reward=0
+if [ "$smoke_status" -eq 0 ] && [ "$nop_status" -eq 0 ]; then reward=1; fi
+printf '{"reward": %s, "smoke_exit_code": %s, "nop_exit_code": %s}\n' "$reward" "$smoke_status" "$nop_status" > /logs/verifier/reward.json
+exit 0
+`;
 }
 
 function sandboxBootstrap(): string {
@@ -1117,6 +1382,7 @@ async function runHarborGate(
   taskId: string,
   environment: SelfBenchConfig["harborEnvironment"],
   signal: AbortSignal,
+  quiet = true,
 ): Promise<HarborJobResult> {
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
   const result = await runCommand(
@@ -1135,7 +1401,7 @@ async function runHarborGate(
       jobsDirectory,
       "--delete",
       "--yes",
-      "--quiet",
+      ...(quiet ? ["--quiet"] : []),
     ],
     {
       allowFailure: true,
@@ -1146,7 +1412,12 @@ async function runHarborGate(
   );
   if (result.exitCode !== 0) {
     throw ApplicationFailure.create({
-      message: harborCommandFailureMessage(agent, taskId, result.exitCode, result.stderr),
+      message: harborCommandFailureMessage(
+        agent,
+        taskId,
+        result.exitCode,
+        `${result.stdout}\n${result.stderr}`,
+      ),
       type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
     });
   }
@@ -1165,10 +1436,10 @@ function harborCommandFailureMessage(
   agent: "nop" | "oracle",
   taskId: string,
   exitCode: number,
-  stderr: string,
+  output: string,
 ): string {
-  const detail = stderr.trim().split("\n").at(-1);
-  return `Harbor ${agent} exited ${exitCode} for ${taskId}${detail ? `: ${detail}` : ""}`;
+  const detail = output.trim();
+  return `Harbor ${agent} exited ${exitCode} for ${taskId}${detail ? `:\n${boundedTail(detail)}` : ""}`;
 }
 
 function harborGateFailureReason(

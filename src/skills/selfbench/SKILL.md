@@ -62,7 +62,7 @@ Every tier also requires one coherent behavioral requirement, held-out tests tha
      implementation while leaving most of the request unverified.
 6. Select exact fail-to-pass and pass-to-pass test identifiers supported by one deterministic test command.
 7. Write a standalone prompt in the engineer's voice. Preserve required behavior, constraints, and acceptance criteria without leaking the completed solution.
-8. Choose only the toolchains the clean task environment needs.
+8. Do not author runtimes, setup commands, system dependencies, services, or other environment configuration. A separate environment agent derives those from the pinned repository after task authoring.
 9. Call `submit_task` exactly once. Do not write an alternate task format.
 
 ## Submitted definition
@@ -72,18 +72,16 @@ Submit this logical shape through `submit_task`:
 ```json
 {
   "definition": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "difficulty": "medium",
     "taskId": "project-pr-123",
     "repo": "example/project",
     "baseCommit": "0123456789abcdef0123456789abcdef01234567",
     "workdir": ".",
-    "setupCommand": "bun install --frozen-lockfile",
     "testCommand": "bun test {tests}",
     "failToPass": ["tests/new-behavior.test.ts"],
     "passToPass": ["tests/existing-a.test.ts", "tests/existing-b.test.ts"],
     "testPaths": ["tests/new-behavior.test.ts"],
-    "toolchains": ["node", "bun"],
     "sourcePr": 123,
     "sourceUrl": "https://github.com/example/project/pull/123",
     "prompt": "Implement the requested behavior...",
@@ -110,8 +108,7 @@ Submit this logical shape through `submit_task`:
 - Produce binary-safe Git patches beginning with `diff --git`.
 - Keep test and gold paths disjoint.
 - Exclude dependency caches, lockfile churn unrelated to the change, build output, vendored code, and generated files.
-- Keep repository-native package-manager pins and frozen install commands.
-- Do not patch around a broken base environment. Reject the candidate when reproducibility is not honest.
+- Do not patch around a broken base repository. Environment reproducibility is validated by a separate agent and backend preflight.
 - Do not include source transcripts or provenance records in either patch.
 
 ## Final check

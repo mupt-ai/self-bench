@@ -24,6 +24,7 @@ import { parallelMap } from "../parallel.js";
 import type {
   AuthorCandidateInput,
   DiscoveryShardInput,
+  EnvironmentAuthoringInput,
   ExportInput,
   RepairTaskInput,
   SelfBenchActivities,
@@ -87,6 +88,8 @@ const activities: SelfBenchActivities = {
   collectRunProvenance: provenanceActivities.collectRunProvenance,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   authorCandidate: taskActivities.authorCandidate,
+  authorEnvironment: taskActivities.authorEnvironment,
+  preflightEnvironment: taskActivities.preflightEnvironment,
   validateTask: taskActivities.validateTask,
   repairValidationTask: validationRepairActivity.repairValidationTask,
   reviewTask: taskActivities.reviewTask,
@@ -192,7 +195,7 @@ export async function executeRun(
         candidateId: candidate.candidateId,
         taskId: candidate.candidateId,
         difficulty: candidate.difficulty,
-        status: "authoring",
+        status: "task_authoring",
       };
       taskProgress.push(progress);
       setTasks(taskProgress);
@@ -205,19 +208,69 @@ export async function executeRun(
           rejectProgress(progress, authored.reason);
           return;
         }
-        let task = authored.task;
-        if (taskIds.has(task.taskId)) {
-          rejectProgress(progress, `authoring repeated task ID ${task.taskId}`);
+        const taskDraft = authored.task;
+        if (taskIds.has(taskDraft.taskId)) {
+          rejectProgress(progress, `authoring repeated task ID ${taskDraft.taskId}`);
           return;
         }
-        taskIds.add(task.taskId);
-        progress.taskId = task.taskId;
+        taskIds.add(taskDraft.taskId);
+        progress.taskId = taskDraft.taskId;
+
+        progress.status = "environment_authoring";
+        setTasks(taskProgress);
+        const environment = await activitySet.authorEnvironment({
+          run,
+          task: taskDraft,
+        } satisfies EnvironmentAuthoringInput);
+        if (environment.kind === "rejected") {
+          rejectProgress(progress, environment.reason);
+          return;
+        }
+        let task = environment.task;
 
         progress.status = "auditing";
         setTasks(taskProgress);
         const audit = await activitySet.auditTask({ run, task } satisfies TaskStageInput);
         if (!audit.accepted) {
           rejectProgress(progress, audit.reason ?? "audit rejected task");
+          return;
+        }
+
+        let preflightAccepted = false;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          progress.status = "preflighting";
+          setTasks(taskProgress);
+          const preflight = await activitySet.preflightEnvironment({
+            run,
+            task,
+          } satisfies TaskStageInput);
+          if (preflight.accepted) {
+            preflightAccepted = true;
+            break;
+          }
+          if (attempt === 2) {
+            rejectProgress(
+              progress,
+              preflight.reason ?? "environment preflight failed after two repairs",
+            );
+            return;
+          }
+          progress.status = "environment_repairing";
+          setTasks(taskProgress);
+          const repairedEnvironment = await activitySet.authorEnvironment({
+            run,
+            task: taskDraft,
+            previousTask: task,
+            diagnostics: preflight.reason ?? "environment preflight failed without diagnostics",
+          } satisfies EnvironmentAuthoringInput);
+          if (repairedEnvironment.kind === "rejected") {
+            rejectProgress(progress, repairedEnvironment.reason);
+            return;
+          }
+          task = repairedEnvironment.task;
+        }
+        if (!preflightAccepted) {
+          rejectProgress(progress, "environment preflight did not complete");
           return;
         }
 

@@ -4,11 +4,9 @@ WORKDIR /app
 ARG SELFBENCH_BUILD_COMMIT
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
-COPY biome.json tsconfig.json tsconfig.build.json ./
-COPY src ./src
-COPY review ./review
-COPY scripts ./scripts
-RUN bun run build
+COPY . .
+RUN if [ -f tsconfig.build.json ]; then bun run build; else test -f dist/api-main.js; fi
+RUN rm -rf node_modules && bun install --frozen-lockfile --production
 
 FROM docker:29.4.0-cli AS docker-cli
 
@@ -30,8 +28,8 @@ WORKDIR /app
 RUN mkdir -p /var/lib/selfbench/artifacts && chown -R node:node /var/lib/selfbench
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY src/extensions ./src/extensions
-COPY src/skills ./src/skills
+COPY --from=build /app/src/extensions ./src/extensions
+COPY --from=build /app/src/skills ./src/skills
 COPY package.json ./package.json
 
 USER node
