@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defaultStandaloneConcurrency, loadConfig, loadWorkerConfig } from "../src/config.js";
+import { loadConfig, loadWorkerConfig } from "../src/config.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
@@ -42,8 +42,6 @@ describe("SelfBench configuration", () => {
         SELFBENCH_ACTIVITY_CONCURRENCY: "6",
       }).activityConcurrency,
     ).toBe(6);
-    expect(defaultStandaloneConcurrency(config, 10)).toBe(4);
-    expect(defaultStandaloneConcurrency(loadWorkerConfig({}), 10)).toBe(10);
   });
 
   test("requires an explicit Docker or Modal Harbor backend for Vercel", () => {
@@ -211,7 +209,6 @@ describe("SelfBench configuration", () => {
     });
     expect(config.harborEnvironment).toBe("modal");
     expect(config.activityConcurrency).toBe(4);
-    expect(defaultStandaloneConcurrency(config, 10)).toBe(4);
   });
 
   test("defaults E2B to the Hobby-compatible timeout and ignores stale values elsewhere", () => {

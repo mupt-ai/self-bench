@@ -35,7 +35,7 @@ const run: RunRequest = {
     executionBackend: "docker",
     harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
-    schema: 1,
+    schema: 2,
   },
 };
 

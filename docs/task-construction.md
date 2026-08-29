@@ -59,9 +59,11 @@ A fresh model session reviews the prompt and tests without inheriting the author
 
 After repair, the task repeats static audit, nop, oracle, and independent review from the beginning. A second failure rejects the candidate.
 
-## Toolchains
+## Reproducible environments
 
-The task compiler has setup layers for Node.js, Bun, Python, Go, and Rust. The author supplies fixed repository-native setup and test commands; compatibility is validated per candidate instead of promised for every repository.
+SelfBench does not infer a generic language toolchain. After task authoring selects the held-out tests and repository-native test command, a separate environment author inspects the exact pinned base commit. It derives the runtime, dependency installation, builds, fixtures, and local services from the closest matching CI job, repository Dockerfile, devcontainer, lockfiles, and test scripts.
+
+The resulting contract pins the base and service images by digest, records repository-file evidence for each choice, keeps service credentials local and non-secret, and separates verifier-only services from the agent environment. A deterministic Harbor preflight runs both the declared smoke command and the real base-state nop test split before oracle validation. Environment defects may be repaired twice; infrastructure failures remain retryable rather than being rewritten by an agent.
 
 When the reference patch changes a recognized dependency manifest or lockfile, the hidden verifier image repeats setup with the trusted reference state and then resets source files to the base snapshot. This prevents stale base dependencies from invalidating the oracle without exposing the reference patch to the coding-agent environment.
 

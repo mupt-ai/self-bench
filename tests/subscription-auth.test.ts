@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  assertCodexSubscriptionAuth,
-  loadCodexModelAuth,
-  loadPiModelAuth,
-  loadPiSubscriptionAuth,
-} from "../src/subscription-auth.js";
+import { loadPiModelAuth, loadPiSubscriptionAuth } from "../src/subscription-auth.js";
 
 afterEach(() => {
   delete process.env.OPENAI_API_KEY;
@@ -12,23 +7,10 @@ afterEach(() => {
 });
 
 describe("subscription authentication", () => {
-  test("accepts a ChatGPT subscription token set", () => {
-    expect(() =>
-      assertCodexSubscriptionAuth({ auth_mode: "chatgpt", tokens: { access_token: "token" } }),
-    ).not.toThrow();
-  });
-
-  test("rejects API-key authentication even when another token object is present", () => {
-    expect(() =>
-      assertCodexSubscriptionAuth({ auth_mode: "apikey", tokens: { access_token: "token" } }),
-    ).toThrow("ChatGPT subscription token set");
-  });
-
-  test("prefers one OpenAI API key for Pi and Codex sandboxes", async () => {
+  test("prefers an OpenAI API key for Pi sandboxes", async () => {
     process.env.OPENAI_API_KEY = "  api-key  ";
 
     expect(await loadPiModelAuth()).toEqual({ provider: "openai", apiKey: "api-key" });
-    expect(await loadCodexModelAuth()).toEqual({ apiKey: "api-key" });
   });
 
   test("passes only the OpenAI subscription credential to sandboxes", async () => {

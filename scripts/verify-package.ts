@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -73,15 +73,38 @@ try {
     "compose.yaml",
     "Dockerfile",
     "Dockerfile.sandbox",
-    "review/index.html",
-    "review/src/App.tsx",
-    "review/vite.config.ts",
+    "docs/evaluations.md",
+    "docs/operations.md",
+    "docs/task-construction.md",
     "src/extensions/authoring.ts",
+    "src/extensions/discovery.ts",
     "src/extensions/environment.ts",
     "src/skills/selfbench/SKILL.md",
   ]) {
     await readFile(join(installedRoot, asset));
   }
+  for (const omitted of [
+    "dist/agent-smoke-main.js",
+    "dist/eval-main.js",
+    "dist/reaudit-main.js",
+    "dist/repair-main.js",
+    "dist/validate-main.js",
+    "review",
+    "scripts",
+    "src/temporal/activities.ts",
+    "tests",
+    "tsconfig.json",
+  ]) {
+    await expectMissing(join(installedRoot, omitted));
+  }
+  const runtimeDependency = join(
+    installRoot,
+    "node_modules",
+    "@sinclair",
+    "typebox",
+    "package.json",
+  );
+  await readFile(runtimeDependency);
   const installedPackage = JSON.parse(
     await readFile(join(installedRoot, "package.json"), "utf8"),
   ) as { name: string; version: string };
@@ -101,4 +124,16 @@ try {
   console.log(`verified ${installedPackage.name}@${installedPackage.version}`);
 } finally {
   await rm(temporary, { recursive: true, force: true });
+}
+
+async function expectMissing(path: string): Promise<void> {
+  try {
+    await access(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`unexpected package path: ${path}`);
 }

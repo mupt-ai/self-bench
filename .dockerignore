@@ -6,8 +6,8 @@
 .env.*
 *.key
 *.pem
-dist
 jobs
 node_modules
 tests
 *.md
+!src/skills/selfbench/SKILL.md

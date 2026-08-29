@@ -21,9 +21,9 @@ Temporal and artifact state live in the `selfbench_temporal-postgres` and `selfb
 self-bench requires GitHub and model credentials:
 
 - `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required.
-- `OPENAI_API_KEY` powers discovery, authoring, review, constrained repair, and model evaluation. This is the recommended model-authentication path.
+- `OPENAI_API_KEY` powers discovery, authoring, review, and constrained repair. This is the recommended model-authentication path.
 
-Existing deployments may continue using ChatGPT subscription authentication by providing both `SELFBENCH_PI_AUTH_JSON` and `SELFBENCH_CODEX_AUTH_JSON`. API-key authentication takes precedence when `OPENAI_API_KEY` is set.
+For ChatGPT subscription authentication, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when `OPENAI_API_KEY` is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
 
 Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended Vercel workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; E2B setup reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
 
@@ -73,7 +73,7 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 
 ### E2B
 
-E2B is a generation backend only; choose Docker or Modal for Harbor. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, Codex, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
+E2B is a generation backend only; choose Docker or Modal for Harbor. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
@@ -335,8 +335,7 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |
 | `OPENAI_API_KEY` | — | Worker sandboxes |
-| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi subscription-auth fallback |
-| `SELFBENCH_CODEX_AUTH_JSON` | — | Optional Codex subscription-auth fallback |
+| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
 | `GH_TOKEN` | — | Worker GitHub reads |
 
 ## Cloud topology
@@ -400,7 +399,7 @@ This repository defines the application boundary, not turnkey cloud infrastructu
 - Exports contain source snapshots, held-out tests, and reference solutions. They are sensitive and unencrypted.
 - Artifact references carry byte length and SHA-256; reads verify integrity.
 - Local artifact paths and GCS object names are confined to their configured roots. GCS IAM should enforce the same prefix independently.
-- Sandboxes receive only the selected model credential: `OPENAI_API_KEY` by default, or a stage-specific subscription credential for compatibility deployments.
+- Sandboxes receive only the selected model credential: `OPENAI_API_KEY` by default, or the isolated Pi `openai-codex` credential when subscription authentication is configured.
 - Sandboxes contain both a source checkout and a short-lived model credential. Use SelfBench only with repositories you trust to execute; it is not a malware-analysis service.
 - Docker uses disposable containers and volumes and removes them after normal completion. A host crash can leave resources for an operator to inspect and remove. Modal uses disposable Sandboxes. Vercel uses nonpersistent named sandboxes, attempts permanent deletion after each run, and fails the activity when deletion cannot be confirmed; inspect the project after worker crashes or cleanup failures.
 - Vercel and E2B control credentials authenticate only the worker's sandbox control plane. Compose does not pass them to the API; `harborChildEnvironment` strips them before Harbor starts, and the E2B executor strips them from workload command environments. They are never workload secrets.

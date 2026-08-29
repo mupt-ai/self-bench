@@ -45,7 +45,7 @@ const request = {
     executionBackend: "docker",
     harborEnvironment: "docker",
     sandboxImage: "selfbench-sandbox:local",
-    schema: 1,
+    schema: 2,
   },
 };
 
@@ -123,7 +123,7 @@ describe("contracts", () => {
     }
   });
 
-  test("requires an explicit Harbor backend for E2B schema-1 requests", () => {
+  test("requires an explicit Harbor backend for E2B requests", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
@@ -167,32 +167,28 @@ describe("contracts", () => {
     }
   });
 
-  test("normalizes legacy schema-1 Docker and Modal requests to their matching Harbor backend", () => {
-    for (const executionBackend of ["docker", "modal"] as const) {
-      const parsed = runRequestSchema.parse({
-        ...request,
-        candidateCounts: { easy: 1, medium: 0, hard: 0 },
-        version: {
-          ...request.version,
-          executionBackend,
-          harborEnvironment: undefined,
-        },
-      });
-
-      expect(parsed.version.harborEnvironment).toBe(executionBackend);
+  test("rejects legacy requests without an explicit Harbor backend", () => {
+    for (const executionBackend of ["docker", "modal", "vercel"] as const) {
+      expect(
+        runRequestSchema.safeParse({
+          ...request,
+          candidateCounts: { easy: 1, medium: 0, hard: 0 },
+          version: {
+            ...request.version,
+            executionBackend,
+            harborEnvironment: undefined,
+          },
+        }).success,
+      ).toBe(false);
     }
   });
 
-  test("does not infer a Harbor backend for Vercel schema-1 requests", () => {
+  test("rejects schema-1 run metadata", () => {
     expect(
       runRequestSchema.safeParse({
         ...request,
         candidateCounts: { easy: 1, medium: 0, hard: 0 },
-        version: {
-          ...request.version,
-          executionBackend: "vercel",
-          harborEnvironment: undefined,
-        },
+        version: { ...request.version, schema: 1 },
       }).success,
     ).toBe(false);
   });

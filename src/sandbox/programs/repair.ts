@@ -26,16 +26,23 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<stri
 const taskId = typeof manifest.taskId === "string" ? manifest.taskId : "unknown-task";
 const allowedPaths = patchPaths(originalPatch);
 
-const codexAuth = process.env.SELFBENCH_CODEX_AUTH_JSON;
+const piAuth = process.env.SELFBENCH_PI_AUTH_JSON;
 const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey && !codexAuth) {
-  fail("OPENAI_API_KEY or SELFBENCH_CODEX_AUTH_JSON is required");
+if (!apiKey && !piAuth) {
+  fail("OPENAI_API_KEY or SELFBENCH_PI_AUTH_JSON is required");
 }
-const codexHome = join(homedir(), ".codex");
-const authPath = join(codexHome, "auth.json");
-await mkdir(codexHome, { recursive: true });
-await writeFile(authPath, codexAuth ?? `${JSON.stringify({ OPENAI_API_KEY: apiKey })}\n`);
-await chmod(authPath, 0o600);
+const piHome = join(homedir(), ".pi/agent");
+await mkdir(piHome, { recursive: true });
+await Promise.all([
+  ...(piAuth
+    ? [
+        writeFile(join(piHome, "auth.json"), piAuth).then(() =>
+          chmod(join(piHome, "auth.json"), 0o600),
+        ),
+      ]
+    : []),
+  writeFile(join(piHome, "settings.json"), `${JSON.stringify({ transport: "auto" })}\n`),
+]);
 const promptPath = join(tmpdir(), `selfbench-repair-${taskId}.md`);
 await writeFile(
   promptPath,
@@ -47,32 +54,40 @@ await writeFile(
   }),
 );
 
-const codex = await runCommand(
-  "codex",
+const pi = await runCommand(
+  "pi",
   [
-    "exec",
+    "--print",
+    "--mode",
+    "json",
+    "--no-session",
+    "--no-approve",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-context-files",
+    "--no-extensions",
+    "--provider",
+    apiKey ? "openai" : "openai-codex",
     "--model",
     process.env.SELFBENCH_REPAIR_MODEL ?? "gpt-5.6-sol",
-    "--dangerously-bypass-approvals-and-sandbox",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--json",
-    "-C",
-    repositoryDirectory,
-    "-",
+    "--thinking",
+    "high",
+    "--tools",
+    "read,bash,edit,write,grep,find,ls",
+    `@${promptPath}`,
   ],
   {
     allowFailure: true,
     timeoutMs: 90 * 60 * 1000,
+    cwd: repositoryDirectory,
     env: process.env,
-    input: await readFile(promptPath, "utf8"),
     onOutput: (stream, chunk) => {
       (stream === "stdout" ? process.stdout : process.stderr).write(chunk);
     },
   },
 );
-if (codex.exitCode !== 0) {
-  throw new Error(`Codex repair exited ${codex.exitCode}: ${codex.stderr.slice(-2_000)}`);
+if (pi.exitCode !== 0) {
+  throw new Error(`Pi repair exited ${pi.exitCode}: ${pi.stderr.slice(-2_000)}`);
 }
 
 const [tracked, untracked] = await Promise.all([
@@ -86,7 +101,7 @@ assertRepairPaths(originalPatch, changedPaths);
 const repaired = await runCommand("git", ["-C", repositoryDirectory, "diff", "--binary", "HEAD"]);
 if (!repaired.stdout.startsWith("diff --git ")) {
   throw new Error(
-    `repair produced no held-out test patch; status=${JSON.stringify(changedPaths)}; Codex tail=${codex.stdout.slice(-4_000)}`,
+    `repair produced no held-out test patch; status=${JSON.stringify(changedPaths)}; Pi tail=${pi.stdout.slice(-4_000)}`,
   );
 }
 if (repaired.stdout === originalPatch) {
@@ -120,7 +135,7 @@ await writeFile(
       changedPaths,
       originalTestPatchSha256: sha256(originalPatch),
       repairedTestPatchSha256: sha256(repaired.stdout),
-      codexOutputTail: codex.stdout.slice(-4_000),
+      piOutputTail: pi.stdout.slice(-4_000),
     },
     null,
     2,

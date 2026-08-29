@@ -67,7 +67,7 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../sandbox/index.js";
-import { githubToken, loadCodexModelAuth, loadPiModelAuth } from "../subscription-auth.js";
+import { githubToken, loadPiModelAuth } from "../subscription-auth.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 const DISCOVERY_TIMEOUT_MS = 45 * 60 * 1000;
@@ -1097,7 +1097,7 @@ async function repairTask(
     store.get(input.task.bundle),
     store.get(input.review),
     readAsset("dist/sandbox-repair.bundle.js"),
-    loadCodexModelAuth(),
+    loadPiModelAuth(),
   ]);
   const result = await withActivityHeartbeats(
     `running test repair sandbox for ${input.task.taskId}`,
@@ -1116,7 +1116,7 @@ async function repairTask(
           outputPaths: ["/work/repaired-task.tar.gz", "/work/repair-report.json"],
           secrets: {
             ...(authJson.apiKey ? { OPENAI_API_KEY: authJson.apiKey } : {}),
-            ...(authJson.authJson ? { SELFBENCH_CODEX_AUTH_JSON: authJson.authJson } : {}),
+            ...(authJson.authJson ? { SELFBENCH_PI_AUTH_JSON: authJson.authJson } : {}),
           },
           environment: { SELFBENCH_REPAIR_MODEL: input.run.authoring.model },
           command: [

@@ -253,15 +253,6 @@ export function loadWorkerConfig(
   }
 }
 
-export function defaultStandaloneConcurrency(
-  config: Pick<SelfBenchConfig, "activityConcurrency" | "execution">,
-  existingDefault: number,
-): number {
-  return config.execution.kind === "vercel" || config.execution.kind === "e2b"
-    ? config.activityConcurrency
-    : existingDefault;
-}
-
 function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
   const token = environment.VERCEL_TOKEN?.trim();
   const teamId = environment.VERCEL_TEAM_ID?.trim();
