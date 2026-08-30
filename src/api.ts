@@ -1,37 +1,14 @@
-import { timingSafeEqual } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { join } from "node:path";
+import { createServer } from "node:http";
 import { pipeline } from "node:stream/promises";
 import { Client } from "@temporalio/client";
 import { z } from "zod";
+import { authorized, readBody, sendApiError, sendJson, sendReviewAsset } from "./api/http.js";
+import { buildRunRequest } from "./api/run-request.js";
+import { queryStatus } from "./api/status.js";
 import { createArtifactStore } from "./artifacts.js";
 import type { SelfBenchConfig } from "./config.js";
-import {
-  artifactRefSchema,
-  MAX_CANDIDATES_PER_RUN,
-  type RunPhase,
-  type RunRequest,
-  type RunStatus,
-  repositoryRefSchema,
-  runRequestSchema,
-} from "./contracts.js";
-import { projectRoot } from "./project-paths.js";
 import { connectTemporalClient } from "./temporal/connection.js";
-import { selfBenchRunWorkflow, statusQuery } from "./temporal/workflow.js";
-
-const submissionSchema = z.object({
-  runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
-  repository: repositoryRefSchema,
-  provenance: artifactRefSchema,
-  candidateCounts: z.object({
-    easy: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
-    medium: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
-    hard: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
-  }),
-  authoringModel: z.string().min(1).default("gpt-5.6-sol"),
-  selfbenchCommit: z.string().regex(/^[0-9a-f]{40}$/i),
-});
+import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 
 export async function startApi(config: SelfBenchConfig): Promise<() => Promise<void>> {
   const connection = await connectTemporalClient(config.temporal);
@@ -124,6 +101,7 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
             startedAt: execution.startTime.toISOString(),
             closedAt: execution.closeTime?.toISOString(),
           });
+          if (runs.length >= 1_000) break;
         }
         sendJson(response, 200, runs);
         return;
@@ -134,10 +112,7 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }
-      const message = error instanceof Error ? error.message : String(error);
-      sendJson(response, error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 500, {
-        error: message,
-      });
+      sendApiError(response, error);
     }
   });
 
@@ -153,139 +128,4 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
   };
 }
 
-export function buildRunRequest(
-  config: SelfBenchConfig,
-  submission: z.input<typeof submissionSchema>,
-): RunRequest {
-  const parsed = submissionSchema.parse(submission);
-  return runRequestSchema.parse({
-    runId: parsed.runId,
-    repository: parsed.repository,
-    provenance: parsed.provenance,
-    candidateCounts: parsed.candidateCounts,
-    authoring: {
-      provider: "openai-codex",
-      model: parsed.authoringModel,
-      reasoningEffort: "high",
-    },
-    version: {
-      selfbenchCommit: config.buildCommit ?? parsed.selfbenchCommit,
-      executionBackend: config.execution.kind,
-      harborEnvironment: config.harborEnvironment,
-      sandboxImage: config.execution.image,
-      ...(config.execution.kind === "vercel" || config.execution.kind === "e2b"
-        ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
-        : {}),
-      schema: 2,
-    },
-  });
-}
-
-async function queryStatus(
-  handle: ReturnType<Client["workflow"]["getHandle"]>,
-): Promise<RunStatus | object> {
-  try {
-    const [status, description] = await Promise.all([handle.query(statusQuery), handle.describe()]);
-    if (description.status.name === "RUNNING" || terminalRunPhase(status.phase)) {
-      return status;
-    }
-    const phase = executionPhase(description.status.name);
-    return {
-      ...status,
-      phase,
-      ...(phase === "failed" && !status.error
-        ? { error: `Temporal workflow ${description.status.name.toLowerCase()}` }
-        : {}),
-    };
-  } catch {
-    const description = await handle.describe();
-    return {
-      runId: description.workflowId,
-      phase: executionPhase(description.status.name),
-    };
-  }
-}
-
-function terminalRunPhase(phase: RunPhase): boolean {
-  return ["complete", "blocked", "failed", "cancelled"].includes(phase);
-}
-
-function executionPhase(status: string): RunPhase {
-  switch (status) {
-    case "COMPLETED":
-      return "complete";
-    case "CANCELED":
-      return "cancelled";
-    case "RUNNING":
-      return "queued";
-    default:
-      return "failed";
-  }
-}
-
-async function readBody(request: IncomingMessage, limit = 10 * 1024 * 1024): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += value.byteLength;
-    if (size > limit) {
-      throw new Error(`request body exceeds ${limit} bytes`);
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks);
-}
-
-function authorized(request: IncomingMessage, token: string | undefined): boolean {
-  if (!token) {
-    return true;
-  }
-  const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, "");
-  if (!supplied) {
-    return false;
-  }
-  const expectedBuffer = Buffer.from(token);
-  const suppliedBuffer = Buffer.from(supplied);
-  return (
-    expectedBuffer.length === suppliedBuffer.length &&
-    timingSafeEqual(expectedBuffer, suppliedBuffer)
-  );
-}
-
-async function sendReviewAsset(response: ServerResponse, pathname: string): Promise<void> {
-  const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
-  const root = join(projectRoot(import.meta.url), "dist/review");
-  const path = join(root, relativePath);
-  if (!path.startsWith(`${root}/`)) {
-    sendJson(response, 400, { error: "invalid asset path" });
-    return;
-  }
-  try {
-    const body = await readFile(path);
-    response.writeHead(200, {
-      "content-type": contentType(path),
-      "content-length": body.byteLength,
-      "cache-control": pathname === "/" ? "no-cache" : "public, max-age=31536000, immutable",
-    });
-    response.end(body);
-  } catch {
-    sendJson(response, 404, { error: "asset not found" });
-  }
-}
-
-function contentType(path: string): string {
-  if (path.endsWith(".html")) return "text/html; charset=utf-8";
-  if (path.endsWith(".css")) return "text/css; charset=utf-8";
-  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
-  return "application/octet-stream";
-}
-
-function sendJson(response: ServerResponse, status: number, value: unknown): void {
-  const body = `${JSON.stringify(value, null, 2)}\n`;
-  response.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(body),
-  });
-  response.end(body);
-}
+export { buildRunRequest } from "./api/run-request.js";

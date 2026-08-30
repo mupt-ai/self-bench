@@ -19,6 +19,16 @@ export interface CommandOptions {
   readonly onOutput?: CommandOutputHandler;
 }
 
+export class CommandTimeoutError extends Error {
+  constructor(
+    readonly command: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`${command} exceeded ${timeoutMs}ms`);
+    this.name = "CommandTimeoutError";
+  }
+}
+
 export class InactivityTimeoutError extends Error {
   constructor(
     readonly scope: string,
@@ -34,6 +44,7 @@ export async function runCommand(
   args: readonly string[],
   options: CommandOptions = {},
 ): Promise<CommandResult> {
+  options.signal?.throwIfAborted();
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
@@ -49,6 +60,8 @@ export async function runCommand(
     let inactivityTimer: NodeJS.Timeout | undefined;
     let forceKillTimer: NodeJS.Timeout | undefined;
     let inactivityError: InactivityTimeoutError | undefined;
+    let timeoutError: CommandTimeoutError | undefined;
+    let cancellationError: unknown;
     const clearInactivityTimer = (): void => {
       if (inactivityTimer) {
         clearTimeout(inactivityTimer);
@@ -83,15 +96,20 @@ export async function runCommand(
     child.stderr.on("data", (chunk: Buffer) => capture("stderr", stderr, chunk));
     child.on("error", reject);
 
-    const abort = () => terminate();
-    if (options.signal?.aborted) {
-      abort();
-    } else {
-      options.signal?.addEventListener("abort", abort, { once: true });
-    }
+    const abort = (): void => {
+      cancellationError = options.signal?.reason ?? new DOMException("Aborted", "AbortError");
+      terminate();
+    };
+    options.signal?.addEventListener("abort", abort, { once: true });
 
     const timeout = options.timeoutMs
-      ? setTimeout(() => terminate(), options.timeoutMs)
+      ? setTimeout(() => {
+          timeoutError = new CommandTimeoutError(
+            `${command} ${args.join(" ")}`,
+            options.timeoutMs ?? 0,
+          );
+          terminate();
+        }, options.timeoutMs)
       : undefined;
     timeout?.unref();
     armInactivityTimer();
@@ -108,10 +126,18 @@ export async function runCommand(
       const result = {
         stdout: stdout.text(),
         stderr: stderr.text(),
-        exitCode: exitCode ?? (signal ? 128 : 1),
+        exitCode: timeoutError ? 124 : (exitCode ?? (signal ? 128 : 1)),
       };
       if (inactivityError) {
         reject(inactivityError);
+        return;
+      }
+      if (cancellationError !== undefined) {
+        reject(cancellationError);
+        return;
+      }
+      if (timeoutError && !options.allowFailure) {
+        reject(timeoutError);
         return;
       }
       if (result.exitCode !== 0 && !options.allowFailure) {

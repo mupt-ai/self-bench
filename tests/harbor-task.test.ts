@@ -42,7 +42,7 @@ describe("Harbor task compiler", () => {
         repo: "example/repo",
         baseCommit: commit,
         workdir: "project",
-        testCommand: "test {tests} && test {tests}",
+        testCommand: "test {tests}",
         failToPass: ["tests/new"],
         passToPass: ["tests/a", "tests/b"],
         testPaths: ["tests/new"],

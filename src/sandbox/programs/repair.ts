@@ -8,13 +8,12 @@ import { runCommand } from "../../process.js";
 import { assertRepairPaths, patchPaths, repairPrompt } from "../../repair.js";
 import { prepareRepairTask } from "./prepare-repair.js";
 
-const [archivePath, reviewPath, outputArchive, outputReport] = process.argv.slice(2);
-if (!archivePath || !reviewPath || !outputArchive || !outputReport) {
-  throw new Error("usage: sandbox-repair TASK.tar.gz REVIEW.json OUTPUT.tar.gz OUTPUT-REPORT.json");
+const [archivePath, reviewPath, outputPatch, outputReport] = process.argv.slice(2);
+if (!archivePath || !reviewPath || !outputPatch || !outputReport) {
+  throw new Error("usage: sandbox-repair TASK.tar.gz REVIEW.json OUTPUT.patch OUTPUT-REPORT.json");
 }
 
-const { extractedDirectory, taskDirectory, repositoryDirectory } =
-  await prepareRepairTask(archivePath);
+const { taskDirectory, repositoryDirectory } = await prepareRepairTask(archivePath);
 
 const [instruction, originalPatch, review] = await Promise.all([
   readFile(join(taskDirectory, "instruction.md"), "utf8"),
@@ -108,23 +107,7 @@ if (repaired.stdout === originalPatch) {
   throw new Error("repair left the held-out test patch unchanged");
 }
 
-await writeFile(join(taskDirectory, "tests/test.patch"), repaired.stdout);
-await writeFile(
-  manifestPath,
-  `${JSON.stringify(
-    {
-      ...manifest,
-      testPatchSha256: sha256(repaired.stdout),
-      repair: {
-        model: process.env.SELFBENCH_REPAIR_MODEL ?? "gpt-5.6-sol",
-        originalTestPatchSha256: sha256(originalPatch),
-      },
-    },
-    null,
-    2,
-  )}\n`,
-);
-await runCommand("tar", ["-czf", outputArchive, "-C", extractedDirectory, "."]);
+await writeFile(outputPatch, repaired.stdout);
 await writeFile(
   outputReport,
   `${JSON.stringify(

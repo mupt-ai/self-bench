@@ -9,6 +9,7 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../contracts.js";
+import { validateSandboxRequest } from "../../request-validation.js";
 
 const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
 
@@ -27,6 +28,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
 
   async run(request: SandboxRequest, options: SandboxRunOptions = {}): Promise<SandboxResult> {
     options.signal?.throwIfAborted();
+    validateSandboxRequest(request);
     const app = await this.#client.apps.fromName(this.#config.app, {
       createIfMissing: true,
       ...(this.#config.environment ? { environment: this.#config.environment } : {}),
@@ -147,7 +149,8 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       if (readers.size > 0) {
         void Promise.allSettled([...readers].map((reader) => reader.cancel()));
       }
-      const executionError = inactivityError ?? processError ?? streamError;
+      const executionError =
+        options.signal?.reason ?? inactivityError ?? processError ?? streamError;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
         try {

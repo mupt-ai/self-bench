@@ -12,10 +12,7 @@ describe("export review bundles", () => {
         repository: { url: "https://github.com/example/repo", commit: "a".repeat(40) },
         version: { schema: 1 },
         acceptedCount: 2,
-        tasks: [
-          { taskId: "task-a", sha256: "a".repeat(64) },
-          { taskId: "task-b", sha256: "b".repeat(64) },
-        ],
+        tasks: [],
       },
       tasks: [],
       taskArchives: new Map([
@@ -23,6 +20,12 @@ describe("export review bundles", () => {
         ["task-b", await taskArchive("task-b")],
       ]),
     };
+    loaded.manifest.tasks = await Promise.all(
+      [...loaded.taskArchives].map(async ([taskId, archive]) => ({
+        taskId,
+        sha256: await digest(archive),
+      })),
+    );
     loaded.tasks = [
       { taskId: "task-a", files: new Map(), textFiles: new Map() },
       { taskId: "task-b", files: new Map(), textFiles: new Map() },
@@ -36,6 +39,11 @@ describe("export review bundles", () => {
     expect(result.tasks[0]?.textFiles.get("definition.json")).toBe('{"taskId":"task-a"}');
   });
 });
+
+async function digest(value: Uint8Array): Promise<string> {
+  const hash = await crypto.subtle.digest("SHA-256", Uint8Array.from(value));
+  return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 async function taskArchive(taskId: string): Promise<Uint8Array> {
   const data = new TextEncoder().encode(JSON.stringify({ taskId }));

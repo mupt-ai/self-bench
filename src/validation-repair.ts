@@ -57,6 +57,21 @@ export function assertValidationRepair(
   }
 }
 
+export function assertValidationRepairPatch(
+  original: TaskDefinition,
+  repaired: TaskDefinition,
+  originalTestPatch: string,
+  repairedTestPatch: string,
+): void {
+  const repairedPaths = patchPaths(repairedTestPatch);
+  assertValidationRepair(original, repaired, originalTestPatch, repairedPaths);
+  const retained = new Set(repairedPaths);
+  const missing = validationRepairPaths(originalTestPatch).filter((path) => !retained.has(path));
+  if (missing.length > 0) {
+    throw new Error(`validation repair removed held-out test paths: ${missing.join(", ")}`);
+  }
+}
+
 export function validationRepairPrompt(input: {
   readonly definition: TaskDefinition;
   readonly authenticRequest: string;

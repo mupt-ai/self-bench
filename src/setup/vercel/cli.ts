@@ -1,41 +1,28 @@
-import { spawn } from "node:child_process";
-import { resolve } from "node:path";
 import { z } from "zod";
-import { type CommandOutputHandler, type CommandResult, runCommand } from "../../process.js";
-
-const MINIMUM_CLI_VERSION = [59, 1, 3] as const;
-const PAGE_SIZE = "100";
-
-const teamSchema = z.object({
-  id: z.string().min(1),
-  slug: z.string().min(1),
-  name: z.string().min(1),
-  current: z.boolean().optional(),
-});
-
-const projectSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-});
-
-const vcrTagSchema = z.object({
-  tag: z.string().min(1),
-  manifestDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/i),
-  kind: z.enum(["manifest", "index"]).optional(),
-  status: z.string().min(1).nullable(),
-});
-
-export type VercelTeam = z.infer<typeof teamSchema>;
-export type VercelProject = z.infer<typeof projectSchema>;
-export type VcrTag = z.infer<typeof vcrTagSchema>;
-
-export interface VercelCommandRunner {
-  capture(
-    args: readonly string[],
-    options?: { readonly onOutput?: CommandOutputHandler },
-  ): Promise<CommandResult>;
-  interactive(args: readonly string[]): Promise<void>;
-}
+import type { CommandOutputHandler, CommandResult } from "../../process.js";
+import {
+  commandFailure,
+  compareVersion,
+  isNotFound,
+  MINIMUM_CLI_VERSION,
+  paginationValue,
+  parseCliVersion,
+  parseJson,
+  parseLoggedIn,
+  uniqueById,
+  VERCEL_CLI_PAGE_SIZE,
+  vcrBuildArgs,
+  vcrLoginArgs,
+} from "./cli-helpers.js";
+import { ProcessVercelCommandRunner, type VercelCommandRunner } from "./cli-runner.js";
+import {
+  projectSchema,
+  teamSchema,
+  type VcrTag,
+  type VercelProject,
+  type VercelTeam,
+  vcrTagSchema,
+} from "./cli-types.js";
 
 export class VercelCli {
   readonly #runner: VercelCommandRunner;
@@ -84,7 +71,14 @@ export class VercelCli {
         throw new Error("Vercel CLI returned a repeated teams pagination cursor");
       }
       seenPages.add(pageKey);
-      const args = ["teams", "list", "--json", "--limit", PAGE_SIZE, "--non-interactive"];
+      const args = [
+        "teams",
+        "list",
+        "--json",
+        "--limit",
+        VERCEL_CLI_PAGE_SIZE,
+        "--non-interactive",
+      ];
       if (next) {
         args.push("--next", next);
       }
@@ -118,7 +112,7 @@ export class VercelCli {
         teamSlug,
         "--json",
         "--limit",
-        PAGE_SIZE,
+        VERCEL_CLI_PAGE_SIZE,
         "--non-interactive",
       ];
       if (next) {
@@ -197,7 +191,7 @@ export class VercelCli {
       }
       seenPages.add(pageKey);
       const args = this.#vcrArgs(
-        ["vcr", "tag", "list", input.repository, "--json", "--limit", PAGE_SIZE],
+        ["vcr", "tag", "list", input.repository, "--json", "--limit", VERCEL_CLI_PAGE_SIZE],
         input.teamSlug,
         input.projectId,
       );
@@ -245,44 +239,11 @@ export class VercelCli {
     },
   ): Promise<void> {
     await this.#run(
-      [
-        "vcr",
-        "login",
-        "docker",
-        "--project",
-        input.projectId,
-        "--scope",
-        input.teamSlug,
-        "--non-interactive",
-      ],
+      vcrLoginArgs(input.teamSlug, input.projectId),
       "authenticate Docker with VCR",
       input.onOutput,
     );
-    await this.#run(
-      [
-        "vcr",
-        "build",
-        "docker",
-        input.projectRoot,
-        `${input.repository}:${input.tag}`,
-        "--project",
-        input.projectId,
-        "--platform",
-        "linux/amd64",
-        "--push",
-        "--scope",
-        input.teamSlug,
-        "--non-interactive",
-        "--",
-        "--file",
-        resolve(input.projectRoot, "Dockerfile.sandbox"),
-        // Buildx provenance attestations turn this into an OCI index. Vercel
-        // Sandbox accepts the single linux/amd64 manifest produced without them.
-        "--provenance=false",
-      ],
-      "build and publish the VCR image",
-      input.onOutput,
-    );
+    await this.#run(vcrBuildArgs(input), "build and publish the VCR image", input.onOutput);
   }
 
   async #runJson(args: readonly string[]): Promise<unknown> {
@@ -314,90 +275,5 @@ interface VcrScope {
   readonly projectId: string;
 }
 
-class ProcessVercelCommandRunner implements VercelCommandRunner {
-  async capture(
-    args: readonly string[],
-    options?: { readonly onOutput?: CommandOutputHandler },
-  ): Promise<CommandResult> {
-    return await runCommand("vercel", args, {
-      allowFailure: true,
-      ...(options?.onOutput ? { onOutput: options.onOutput } : {}),
-    });
-  }
-
-  async interactive(args: readonly string[]): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn("vercel", args, { stdio: "inherit" });
-      child.once("error", reject);
-      child.once("exit", (code, signal) => {
-        if (code === 0) {
-          resolve();
-          return;
-        }
-        reject(
-          new Error(
-            `vercel ${args.slice(0, 2).join(" ")} exited ${code ?? `after ${signal ?? "signal"}`}`,
-          ),
-        );
-      });
-    });
-  }
-}
-
-function parseCliVersion(value: string): readonly [number, number, number] | undefined {
-  const match = /(\d+)\.(\d+)\.(\d+)/.exec(value);
-  if (!match?.[1] || !match[2] || !match[3]) {
-    return undefined;
-  }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-function compareVersion(
-  left: readonly [number, number, number],
-  right: readonly [number, number, number],
-): number {
-  for (let index = 0; index < left.length; index += 1) {
-    const difference = (left[index] ?? 0) - (right[index] ?? 0);
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-  return 0;
-}
-
-function parseLoggedIn(value: string): boolean {
-  try {
-    const parsed = z
-      .object({ loggedIn: z.boolean().optional() })
-      .passthrough()
-      .parse(JSON.parse(value));
-    return parsed.loggedIn ?? true;
-  } catch {
-    return false;
-  }
-}
-
-function parseJson(value: string, context: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    throw new Error(`${context} returned invalid JSON`, { cause: error });
-  }
-}
-
-function paginationValue(value: string | number | null | undefined): string | undefined {
-  return value === undefined || value === null ? undefined : String(value);
-}
-
-function uniqueById<T extends { readonly id: string }>(values: readonly T[]): readonly T[] {
-  return [...new Map(values.map((value) => [value.id, value])).values()];
-}
-
-function isNotFound(result: CommandResult): boolean {
-  return /(?:not[_ -]?found|does not exist|\b404\b)/i.test(`${result.stdout}\n${result.stderr}`);
-}
-
-function commandFailure(action: string, result: CommandResult): Error {
-  const detail = (result.stderr.trim() || result.stdout.trim()).slice(0, 1_000);
-  return new Error(`${action} failed with exit ${result.exitCode}${detail ? `: ${detail}` : ""}`);
-}
+export type { VercelCommandRunner } from "./cli-runner.js";
+export type { VcrTag, VercelProject, VercelTeam } from "./cli-types.js";
