@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { removeEmptyModalCredentialOverrides } from "../src/modal-auth.js";
+import { removeEmptyModalCredentialOverrides } from "../../../../src/sandbox/providers/modal/auth.js";
 
 describe("Modal authentication environment", () => {
   test("removes empty overrides so SDKs can use the mounted profile", () => {
