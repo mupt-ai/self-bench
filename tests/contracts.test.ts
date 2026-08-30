@@ -56,6 +56,27 @@ describe("contracts", () => {
     }
   });
 
+  test("binds task definitions to one canonical repository and pull request", () => {
+    expect(
+      taskDefinitionSchema.safeParse({
+        ...definition,
+        repo: "example/other",
+      }).success,
+    ).toBe(false);
+    expect(
+      taskDefinitionSchema.safeParse({
+        ...definition,
+        testCommand: "bun test {tests} && bun test {tests}",
+      }).success,
+    ).toBe(false);
+    expect(
+      taskDefinitionSchema.safeParse({
+        ...definition,
+        testPaths: ["../outside.test.ts"],
+      }).success,
+    ).toBe(false);
+  });
+
   test("requires between one and ten thousand candidates across tiers", () => {
     expect(
       runRequestSchema.safeParse({

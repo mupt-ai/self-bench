@@ -27,6 +27,9 @@ export async function loadExport(input: Blob | Uint8Array): Promise<LoadedExport
     const name = `tasks/${manifestTask.taskId}.tar.gz`;
     const archiveEntry = outerEntries.find((entry) => entry.name === name);
     if (!archiveEntry) throw new Error(`export is missing ${name}`);
+    if ((await sha256(archiveEntry.data)) !== manifestTask.sha256) {
+      throw new Error(`export task ${manifestTask.taskId} failed its SHA-256 integrity check`);
+    }
     taskArchives.set(manifestTask.taskId, archiveEntry.data);
     const entries = untar(await gunzip(archiveEntry.data));
     const files = new Map<string, Uint8Array>();
@@ -73,7 +76,7 @@ export async function buildCleanExport(
 }
 
 async function gunzip(value: Uint8Array): Promise<Uint8Array> {
-  return transform(value, new DecompressionStream("gzip"));
+  return transform(value, new DecompressionStream("gzip"), 1024 * 1024 * 1024);
 }
 
 async function gzip(value: Uint8Array): Promise<Blob> {
@@ -81,25 +84,53 @@ async function gzip(value: Uint8Array): Promise<Blob> {
   return new Blob([compressed.buffer as ArrayBuffer], { type: "application/gzip" });
 }
 
-async function transform(value: Uint8Array, stream: TransformStream): Promise<Uint8Array> {
-  const output = await new Response(
-    new Blob([value.buffer as ArrayBuffer]).stream().pipeThrough(stream),
-  ).arrayBuffer();
-  return new Uint8Array(output);
+async function transform(
+  value: Uint8Array,
+  stream: TransformStream,
+  maxBytes = Number.POSITIVE_INFINITY,
+): Promise<Uint8Array> {
+  const reader = new Blob([Uint8Array.from(value)]).stream().pipeThrough(stream).getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value: chunk, done } = await reader.read();
+      if (done) break;
+      size += chunk.byteLength;
+      if (size > maxBytes) throw new Error(`archive expands beyond ${maxBytes} bytes`);
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
 }
 
 function untar(buffer: Uint8Array): TarEntry[] {
   const entries: TarEntry[] = [];
+  const names = new Set<string>();
   for (let offset = 0; offset + 512 <= buffer.length; ) {
     const header = buffer.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) break;
     const name = readString(header, 0, 100);
     const size = parseOctal(header, 124, 12);
     const type = header[156];
+    if (!safeTarPath(name) || names.has(name)) throw new Error(`unsafe tar entry: ${name}`);
+    names.add(name);
     offset += 512;
+    const paddedSize = Math.ceil(size / 512) * 512;
+    if (!Number.isSafeInteger(size) || size < 0 || offset + paddedSize > buffer.length) {
+      throw new Error(`invalid tar entry size for ${name}`);
+    }
     const data = buffer.slice(offset, offset + size);
     if (type !== 5 && name) entries.push({ name, data });
-    offset += Math.ceil(size / 512) * 512;
+    offset += paddedSize;
   }
   return entries;
 }
@@ -132,9 +163,24 @@ function tar(entries: TarEntry[]): Uint8Array {
   return output;
 }
 
+async function sha256(value: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function safeTarPath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    !path.startsWith("/") &&
+    !path.includes("\\") &&
+    !path.split("/").some((part) => part === "..")
+  );
+}
+
 function readString(bytes: Uint8Array, start: number, length: number): string {
-  const end = bytes.indexOf(0, start);
-  return new TextDecoder().decode(bytes.subarray(start, end < 0 ? start + length : end));
+  const field = bytes.subarray(start, start + length);
+  const end = field.indexOf(0);
+  return new TextDecoder().decode(end < 0 ? field : field.subarray(0, end));
 }
 
 function parseOctal(bytes: Uint8Array, start: number, length: number): number {

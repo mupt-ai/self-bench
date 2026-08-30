@@ -1,11 +1,4 @@
-import { posix } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { APIError, Sandbox } from "@vercel/sandbox";
-import {
-  isDigestPinnedOciImage,
-  type SelfBenchWorkerConfig,
-  type VercelCredentials,
-} from "../../../config.js";
+import type { Sandbox } from "@vercel/sandbox";
 import { RollingOutput } from "../../../process.js";
 import type {
   SandboxExecutor,
@@ -15,26 +8,20 @@ import type {
 } from "../../contracts.js";
 import { executeVercelCommand, VERCEL_WORK_DIRECTORY } from "./command.js";
 import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
+import {
+  abortableDelay,
+  type Sleep,
+  sandboxName,
+  VERCEL_CLEANUP_TIMEOUT_MS,
+  VercelSandboxLifecycle,
+} from "./lifecycle.js";
+import { type VercelExecutionConfig, validateConfig, validateRequest } from "./validation.js";
 
-const CLEANUP_TIMEOUT_MS = 60_000;
-const CLEANUP_RETRY_DELAY_MS = 1_000;
-const CREATE_RATE_LIMIT_RETRIES = 2;
-const CREATE_RATE_LIMIT_FALLBACK_DELAY_MS = 30_000;
-const CREATE_RATE_LIMIT_MAX_DELAY_MS = 60_000;
-const CREATE_REQUEST_TIMEOUT_MS = 60_000;
 const HARD_TIMEOUT_EXIT_CODE = 124;
-const LATE_CREATE_RECOVERY_DELAYS_MS = [0, 250, 750, 1_500] as const;
-
-type VercelExecutionConfig = Extract<
-  SelfBenchWorkerConfig["execution"],
-  { readonly kind: "vercel" }
->;
 
 type RunOutcome =
   | { readonly ok: true; readonly result: SandboxResult }
   | { readonly ok: false; readonly error: unknown };
-
-type Sleep = (delayMs: number, signal: AbortSignal) => Promise<void>;
 
 class VercelHardTimeoutError extends Error {
   constructor(name: string, stage: string, timeoutMs: number) {
@@ -82,7 +69,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
       if (!sandbox) {
         return Promise.resolve();
       }
-      deletePromise ??= sandbox.delete({ signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS) });
+      deletePromise ??= sandbox.delete({ signal: AbortSignal.timeout(VERCEL_CLEANUP_TIMEOUT_MS) });
       return deletePromise;
     };
     const terminate = (error: unknown): void => {
@@ -107,7 +94,11 @@ export class VercelSandboxExecutor implements SandboxExecutor {
 
     let outcome: RunOutcome;
     try {
-      sandbox = await this.#createSandbox(
+      sandbox = await new VercelSandboxLifecycle(
+        this.#config,
+        this.#fetch,
+        this.#sleep,
+      ).createSandbox(
         name,
         tags,
         resources.vcpus,
@@ -174,7 +165,12 @@ export class VercelSandboxExecutor implements SandboxExecutor {
     clearTimeout(hardTimeout);
     options.signal?.removeEventListener("abort", abort);
     try {
-      await this.#cleanup(name, sandbox, deleteHandle, allocationMayExist);
+      await new VercelSandboxLifecycle(this.#config, this.#fetch, this.#sleep).cleanup(
+        name,
+        sandbox,
+        deleteHandle,
+        allocationMayExist,
+      );
     } catch (cleanupError) {
       const publicCleanupError = sanitizeCleanupError(cleanupError, this.#config.credentials.token);
       outcome = outcome.ok
@@ -191,212 +187,6 @@ export class VercelSandboxExecutor implements SandboxExecutor {
   }
 
   close(): void {}
-
-  async #createSandbox(
-    name: string,
-    tags: Readonly<Record<string, string>>,
-    vcpus: number,
-    timeoutMs: number,
-    signal: AbortSignal,
-    setAllocationMayExist: (value: boolean) => void,
-  ): Promise<Sandbox> {
-    for (let retries = 0; ; retries += 1) {
-      signal.throwIfAborted();
-      setAllocationMayExist(true);
-      try {
-        return await Sandbox.create({
-          ...this.#config.credentials,
-          fetch: this.#fetch,
-          image: this.#config.image,
-          name,
-          persistent: false,
-          resources: { vcpus },
-          signal: withTimeout(signal, CREATE_REQUEST_TIMEOUT_MS),
-          tags: { ...tags },
-          timeout: timeoutMs,
-        });
-      } catch (error) {
-        if (createErrorConfirmsNoAllocation(error)) {
-          setAllocationMayExist(false);
-        }
-        if (
-          !(error instanceof APIError) ||
-          error.response.status !== 429 ||
-          retries >= CREATE_RATE_LIMIT_RETRIES
-        ) {
-          throw error;
-        }
-        await this.#sleep(createRetryDelayMs(error.response), signal);
-      }
-    }
-  }
-
-  async #cleanup(
-    name: string,
-    sandbox: Sandbox | undefined,
-    deleteHandle: () => Promise<void>,
-    allocationMayExist: boolean,
-  ): Promise<void> {
-    let directDeleteError: unknown;
-    if (sandbox) {
-      try {
-        await deleteHandle();
-        return;
-      } catch (error) {
-        directDeleteError = error;
-      }
-    }
-    if (!sandbox && !allocationMayExist) {
-      return;
-    }
-
-    try {
-      const recoveryDelays = sandbox ? [CLEANUP_RETRY_DELAY_MS] : LATE_CREATE_RECOVERY_DELAYS_MS;
-      for (const delayMs of recoveryDelays) {
-        if (delayMs > 0) {
-          await this.#sleep(delayMs, AbortSignal.timeout(CLEANUP_TIMEOUT_MS));
-        }
-        let handle: Sandbox;
-        try {
-          handle = await Sandbox.get({
-            ...this.#config.credentials,
-            fetch: this.#fetch,
-            name,
-            resume: false,
-            signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS),
-          });
-        } catch (error) {
-          if (error instanceof APIError && error.response.status === 404) {
-            if (sandbox) {
-              return;
-            }
-            continue;
-          }
-          throw error;
-        }
-        try {
-          await handle.delete({ signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS) });
-        } catch (error) {
-          if (error instanceof APIError && error.response.status === 404) {
-            return;
-          }
-          throw error;
-        }
-        return;
-      }
-      throw new Error("sandbox absence remained unconfirmed after an ambiguous create failure");
-    } catch (recoveryError) {
-      const errors =
-        directDeleteError === undefined ? [recoveryError] : [directDeleteError, recoveryError];
-      throw new AggregateError(
-        errors,
-        `failed to delete Vercel sandbox ${name}: ${errors.map(errorMessage).join("; ")}`,
-      );
-    }
-  }
-}
-
-function validateConfig(config: VercelExecutionConfig): VercelExecutionConfig {
-  const credentials: VercelCredentials = {
-    token: config.credentials.token.trim(),
-    teamId: config.credentials.teamId.trim(),
-    projectId: config.credentials.projectId.trim(),
-  };
-  if (!credentials.token || !credentials.teamId || !credentials.projectId) {
-    throw new Error("Vercel execution requires a complete nonblank credential triple");
-  }
-  const image = config.image.trim();
-  if (!isDigestPinnedOciImage(image)) {
-    throw new Error("Vercel execution requires a digest-pinned image");
-  }
-  return { kind: "vercel", credentials, image, timeoutCapMs: config.timeoutCapMs };
-}
-
-function validateRequest(request: SandboxRequest): {
-  readonly vcpus: number;
-  readonly memoryMiB: number;
-} {
-  if (!Number.isInteger(request.timeoutMs) || request.timeoutMs < 100) {
-    throw new Error("sandbox timeout must be an integer of at least 100ms");
-  }
-  if (request.timeoutMs > 24 * 60 * 60 * 1_000) {
-    throw new Error("Vercel sandbox timeout cannot exceed 24 hours");
-  }
-  if (
-    request.inactivityTimeoutMs !== undefined &&
-    (!Number.isInteger(request.inactivityTimeoutMs) || request.inactivityTimeoutMs < 1)
-  ) {
-    throw new Error("sandbox inactivity timeout must be a positive integer");
-  }
-  if (request.command.length === 0 || !request.command[0]) {
-    throw new Error("sandbox command must not be empty");
-  }
-  for (const path of [
-    ...(request.files ?? []).map((file) => file.path),
-    ...(request.outputPaths ?? []),
-  ]) {
-    assertWorkPath(path);
-  }
-
-  const vcpus = request.cpu ?? 4;
-  if (!Number.isInteger(vcpus) || (vcpus !== 1 && (vcpus < 2 || vcpus > 32 || vcpus % 2 !== 0))) {
-    throw new Error("Vercel sandbox CPU must be 1 or an even integer from 2 through 32");
-  }
-  const memoryMiB = request.memoryMiB ?? vcpus * 2048;
-  if (memoryMiB !== vcpus * 2048) {
-    throw new Error(
-      `Vercel fixes memory at 2048 MiB per vCPU; ${vcpus} vCPU requires ${vcpus * 2048} MiB`,
-    );
-  }
-  return { vcpus, memoryMiB };
-}
-
-function assertWorkPath(path: string): void {
-  const normalized = posix.normalize(path);
-  if (
-    !path.startsWith(`${VERCEL_WORK_DIRECTORY}/`) ||
-    !normalized.startsWith(`${VERCEL_WORK_DIRECTORY}/`)
-  ) {
-    throw new Error(`sandbox path must be beneath ${VERCEL_WORK_DIRECTORY}: ${path}`);
-  }
-}
-
-function sandboxName(runId: string, stage: string): string {
-  const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
-  const context = `${runId}-${stage}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-  const prefix = `selfbench-${context}`.slice(0, 128 - suffix.length - 1).replace(/-+$/g, "");
-  return `${prefix}-${suffix}`;
-}
-
-function withTimeout(signal: AbortSignal, timeoutMs: number): AbortSignal {
-  return AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
-}
-
-async function abortableDelay(delayMs: number, signal: AbortSignal): Promise<void> {
-  await delay(delayMs, undefined, { signal });
-}
-
-function createRetryDelayMs(response: Response): number {
-  const header = response.headers.get("retry-after")?.trim();
-  if (!header) {
-    return CREATE_RATE_LIMIT_FALLBACK_DELAY_MS;
-  }
-  const seconds = Number(header);
-  const requestedDelay = Number.isFinite(seconds)
-    ? seconds * 1_000
-    : Date.parse(header) - Date.now();
-  if (!Number.isFinite(requestedDelay)) {
-    return CREATE_RATE_LIMIT_FALLBACK_DELAY_MS;
-  }
-  return Math.min(CREATE_RATE_LIMIT_MAX_DELAY_MS, Math.max(0, Math.ceil(requestedDelay)));
-}
-
-function createErrorConfirmsNoAllocation(error: unknown): boolean {
-  if (!(error instanceof APIError)) {
-    return false;
-  }
-  const status = error.response.status;
-  return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 499;
 }
 
 function throwIfTerminated(error: unknown): void {

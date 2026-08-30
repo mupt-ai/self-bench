@@ -16,11 +16,13 @@ export function assertPullRequestBelongsToRepository(
   }
 }
 
-export function githubRepository(url: string): string {
+export function githubRepository(value: string): string {
   const match =
-    /^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?\/?$/i.exec(url);
+    /^(?:(?:https:\/\/github\.com\/|git@github\.com:))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i.exec(
+      value,
+    );
   if (!match?.[1] || !match[2]) {
-    throw new Error(`unsupported GitHub repository URL: ${url}`);
+    throw new Error(`unsupported GitHub repository: ${value}`);
   }
   return `${match[1]}/${match[2]}`.toLowerCase();
 }

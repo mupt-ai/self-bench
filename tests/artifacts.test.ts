@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -69,12 +69,30 @@ describe("LocalArtifactStore", () => {
     );
   });
 
-  test("rejects keys that escape the artifact root", async () => {
+  test("rejects keys and symbolic links that escape the artifact root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-artifacts-"));
+    const outside = await mkdtemp(join(tmpdir(), "selfbench-artifacts-outside-"));
+    roots.push(root, outside);
+    const store = new LocalArtifactStore(root);
+
+    await expect(store.put("../escape", Buffer.from("x"), "text/plain")).rejects.toThrow("unsafe");
+    await mkdir(join(root, "runs"));
+    await symlink(outside, join(root, "runs/link"));
+    await expect(store.put("runs/link/escape", Buffer.from("x"), "text/plain")).rejects.toThrow(
+      "non-directory component",
+    );
+  });
+
+  test("stores local artifacts with owner-only permissions", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-artifacts-"));
     roots.push(root);
     const store = new LocalArtifactStore(root);
 
-    await expect(store.put("../escape", Buffer.from("x"), "text/plain")).rejects.toThrow("unsafe");
+    const reference = await store.put("runs/private/value", Buffer.from("secret"), "text/plain");
+    const path = decodeURIComponent(new URL(reference.uri).pathname);
+
+    expect((await lstat(path)).mode & 0o077).toBe(0);
+    expect((await lstat(join(root, "runs"))).mode & 0o077).toBe(0);
   });
 });
 

@@ -7,6 +7,7 @@ export default defineConfig({
   build: {
     outDir: "../dist/review",
     emptyOutDir: true,
+    chunkSizeWarningLimit: 850,
   },
   server: {
     allowedHosts: ["avyays-mac-mini.tailf3cee5.ts.net"],

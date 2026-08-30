@@ -1,5 +1,6 @@
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { extractRegularArchive } from "../../archive.js";
 import { runCommand } from "../../process.js";
 
 export interface PreparedRepairTask {
@@ -15,18 +16,15 @@ export async function prepareRepairTask(
   const extractedDirectory = join(workDirectory, "task");
   const repositoryDirectory = join(workDirectory, "repo");
   await Promise.all([mkdir(extractedDirectory, { recursive: true }), mkdir(repositoryDirectory)]);
-  await runCommand("tar", ["-xzf", archivePath, "-C", extractedDirectory]);
+  await extractRegularArchive(archivePath, extractedDirectory);
   const taskDirectory = await access(join(extractedDirectory, "instruction.md")).then(
     () => extractedDirectory,
     () => join(extractedDirectory, "harbor-task"),
   );
 
-  await runCommand("tar", [
-    "-xzf",
-    join(taskDirectory, "tests/repo.tar.gz"),
-    "-C",
-    repositoryDirectory,
-  ]);
+  await extractRegularArchive(join(taskDirectory, "tests/repo.tar.gz"), repositoryDirectory, {
+    allowSymlinks: true,
+  });
   await runCommand("git", ["-C", repositoryDirectory, "init", "-q"]);
   await runCommand("git", ["-C", repositoryDirectory, "config", "user.name", "SelfBench"]);
   await runCommand("git", ["-C", repositoryDirectory, "config", "user.email", "selfbench@local"]);

@@ -9,6 +9,7 @@ import type {
   SandboxResult,
   SandboxRunOptions,
 } from "../../contracts.js";
+import { validateSandboxRequest } from "../../request-validation.js";
 
 export class DockerSandboxExecutor implements SandboxExecutor {
   readonly #config: Extract<SelfBenchConfig["execution"], { kind: "docker" }>;
@@ -18,6 +19,8 @@ export class DockerSandboxExecutor implements SandboxExecutor {
   }
 
   async run(request: SandboxRequest, options: SandboxRunOptions = {}): Promise<SandboxResult> {
+    options.signal?.throwIfAborted();
+    validateSandboxRequest(request);
     const root = await mkdtemp(join(tmpdir(), "selfbench-docker-"));
     const sandboxId = sandboxName(request.runId, request.stage);
     try {
@@ -50,40 +53,29 @@ export class DockerSandboxExecutor implements SandboxExecutor {
       await runCommand("docker", args, { env: { ...process.env, ...environment } });
       await runCommand("docker", ["cp", `${root}/.`, `${sandboxId}:/work/`]);
 
-      const abort = () => {
-        void runCommand("docker", ["rm", "--force", sandboxId], { allowFailure: true });
-      };
-      options.signal?.addEventListener("abort", abort, { once: true });
-      try {
-        const result = await runCommand("docker", ["start", "--attach", sandboxId], {
+      const result = await runCommand("docker", ["start", "--attach", sandboxId], {
+        allowFailure: true,
+        ...(options.signal ? { signal: options.signal } : {}),
+        timeoutMs: request.timeoutMs,
+        ...(request.inactivityTimeoutMs
+          ? { inactivityTimeoutMs: request.inactivityTimeoutMs }
+          : {}),
+        onOutput: (stream, chunk) => options.onProgress?.({ stream, bytes: chunk.byteLength }),
+      });
+      const outputs: Record<string, Uint8Array> = {};
+      for (const path of request.outputPaths ?? []) {
+        const destination = hostPath(root, path);
+        await mkdir(dirname(destination), { recursive: true });
+        const copied = await runCommand("docker", ["cp", `${sandboxId}:${path}`, destination], {
           allowFailure: true,
-          timeoutMs: request.timeoutMs,
-          ...(request.inactivityTimeoutMs
-            ? { inactivityTimeoutMs: request.inactivityTimeoutMs }
-            : {}),
-          onOutput: (stream, chunk) => options.onProgress?.({ stream, bytes: chunk.byteLength }),
         });
-        const outputs: Record<string, Uint8Array> = {};
-        for (const path of request.outputPaths ?? []) {
-          const destination = hostPath(root, path);
-          await mkdir(dirname(destination), { recursive: true });
-          const copied = await runCommand("docker", ["cp", `${sandboxId}:${path}`, destination], {
-            allowFailure: true,
-          });
-          if (copied.exitCode === 0) {
-            outputs[path] = await readFile(destination);
-          } else if (result.exitCode === 0) {
-            throw new Error(`sandbox ${sandboxId} exited successfully without output ${path}`);
-          }
+        if (copied.exitCode === 0) {
+          outputs[path] = await readFile(destination);
+        } else if (result.exitCode === 0) {
+          throw new Error(`sandbox ${sandboxId} exited successfully without output ${path}`);
         }
-        return { sandboxId, ...result, outputs };
-      } finally {
-        options.signal?.removeEventListener("abort", abort);
-        await runCommand("docker", ["rm", "--force", sandboxId], { allowFailure: true });
-        await runCommand("docker", ["volume", "rm", "--force", sandboxId], {
-          allowFailure: true,
-        });
       }
+      return { sandboxId, ...result, outputs };
     } finally {
       await runCommand("docker", ["rm", "--force", sandboxId], { allowFailure: true });
       await runCommand("docker", ["volume", "rm", "--force", sandboxId], {
