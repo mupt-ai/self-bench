@@ -1,7 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { buildCommit } from "../build-metadata.js";
 import { runCommand } from "../process.js";
+import { projectRoot } from "../project-paths.js";
 
 export async function resolveRepository(path: string): Promise<{ url: string; commit: string }> {
   const [remote, commit] = await Promise.all([
@@ -29,7 +28,7 @@ export async function resolveSelfBenchCommit(): Promise<string> {
   if (/^[0-9a-f]{40}$/i.test(buildCommit) && !/^0+$/.test(buildCommit)) {
     return buildCommit;
   }
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const root = projectRoot(import.meta.url);
   try {
     return (await runCommand("git", ["-C", root, "rev-parse", "HEAD"])).stdout.trim();
   } catch {

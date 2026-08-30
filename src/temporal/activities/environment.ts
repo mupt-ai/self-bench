@@ -27,6 +27,7 @@ import {
 import {
   boundedTail,
   exception,
+  isHarborInfrastructureApplicationFailure,
   numberValue,
   rewards,
   runHarborGate,
@@ -218,6 +219,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function isRethrownEnvironmentPreflightFailure(error: unknown): boolean {
+  return error instanceof CancelledFailure || isHarborInfrastructureApplicationFailure(error);
+}
+
 export async function preflightEnvironment(
   store: ArtifactStore,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
@@ -251,7 +256,7 @@ export async function preflightEnvironment(
         );
       }
     } catch (error) {
-      if (error instanceof CancelledFailure) {
+      if (isRethrownEnvironmentPreflightFailure(error)) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);

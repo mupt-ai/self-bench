@@ -10,6 +10,17 @@ import { runCommand } from "../../process.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 
+export function isHarborInfrastructureApplicationFailure(error: unknown): boolean {
+  let cause: unknown = error;
+  while (cause instanceof Error) {
+    if (cause instanceof ApplicationFailure && cause.type === HARBOR_INFRASTRUCTURE_FAILURE_TYPE) {
+      return true;
+    }
+    cause = cause.cause;
+  }
+  return false;
+}
+
 export async function runHarborGate(
   taskDirectory: string,
   jobsDirectory: string,

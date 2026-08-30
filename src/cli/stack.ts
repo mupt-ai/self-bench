@@ -1,9 +1,9 @@
 import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { loadWorkerConfig } from "../config.js";
 import { runCommand } from "../process.js";
+import { projectRoot as packageRoot } from "../project-paths.js";
 import {
   isExecutionBackend,
   isHarborEnvironment,
@@ -73,8 +73,8 @@ export async function up(args: string[]): Promise<void> {
     fail('--harbor-environment must be "docker" or "modal"');
   }
 
-  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const composeFile = resolve(projectRoot, "compose.yaml");
+  const root = packageRoot(import.meta.url);
+  const composeFile = resolve(root, "compose.yaml");
   const backend = parsed.values.backend;
   const harborEnvironment =
     parsed.values["harbor-environment"] ??
@@ -110,14 +110,7 @@ export async function up(args: string[]): Promise<void> {
   if (backend === "docker") {
     await runCommand(
       "docker",
-      [
-        "build",
-        "-f",
-        resolve(projectRoot, "Dockerfile.sandbox"),
-        "-t",
-        "selfbench-sandbox:local",
-        projectRoot,
-      ],
+      ["build", "-f", resolve(root, "Dockerfile.sandbox"), "-t", "selfbench-sandbox:local", root],
       { env: environment },
     );
   }
@@ -130,6 +123,10 @@ export async function up(args: string[]): Promise<void> {
 }
 
 export async function down(): Promise<void> {
-  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  await runCommand("docker", ["compose", "--file", resolve(projectRoot, "compose.yaml"), "down"]);
+  await runCommand("docker", [
+    "compose",
+    "--file",
+    resolve(packageRoot(import.meta.url), "compose.yaml"),
+    "down",
+  ]);
 }

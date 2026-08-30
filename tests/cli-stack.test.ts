@@ -64,6 +64,7 @@ printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBO
     const invocations = await readFile(calls, "utf8");
     expect(invocations).not.toContain("Dockerfile.sandbox");
     expect(invocations).toContain("compose --file");
+    expect(invocations).toContain(`--file ${join(import.meta.dir, "..", "compose.yaml")}`);
     expect(invocations).toContain(`|modal|modal|${modalConfig}|`);
     expect(invocations).toMatch(/\|[0-9a-f]{40}\n/);
   });
