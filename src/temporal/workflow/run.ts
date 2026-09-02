@@ -92,22 +92,19 @@ export async function executeRun(
       setDiscovered(candidates.length);
       discoveryWave += 1;
     }
-    const selectedCandidates = selectCandidates(candidates, input.candidateCounts);
     const taskProgress: TaskProgress[] = [];
     const acceptedTasks: AuthoredTask[] = [];
-    const taskIds = new Set<string>();
-
     const processCandidate = createCandidateProcessor({
       activitySet,
       run,
       taskProgress,
       acceptedTasks,
-      taskIds,
+      taskIds: new Map(),
       setTasks,
     });
 
     setPhase("authoring");
-    await parallelMap(selectedCandidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
+    await processWithBackfill(candidates, input.candidateCounts, taskProgress, processCandidate);
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
@@ -131,5 +128,39 @@ export async function executeRun(
       };
     }
     throw error;
+  }
+}
+
+/**
+ * Processes the first selection, then keeps replacing rejected or failed candidates from the
+ * leftover discovery pool until every tier has the requested number of accepted tasks or the
+ * pool has no unused candidate of a missing tier.
+ */
+async function processWithBackfill(
+  pool: readonly Candidate[],
+  requested: RunRequest["candidateCounts"],
+  taskProgress: readonly TaskProgress[],
+  processCandidate: (candidate: Candidate) => Promise<void>,
+): Promise<void> {
+  const processed = new Set<string>();
+  let batch = selectCandidates(pool, requested);
+  while (batch.length > 0) {
+    for (const candidate of batch) {
+      processed.add(candidate.candidateId);
+    }
+    await parallelMap(batch, MAX_CONCURRENT_CANDIDATES, processCandidate);
+    const accepted = taskProgress.filter((task) => task.status === "accepted");
+    const missing = missingCandidateCounts(
+      accepted.map((task) => ({ difficulty: task.difficulty })),
+      requested,
+    );
+    batch = selectCandidates(
+      pool.filter((candidate) => !processed.has(candidate.candidateId)),
+      {
+        easy: Math.max(0, missing.easy),
+        medium: Math.max(0, missing.medium),
+        hard: Math.max(0, missing.hard),
+      },
+    );
   }
 }

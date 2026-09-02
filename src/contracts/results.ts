@@ -1,25 +1,6 @@
-import { z } from "zod";
 import type { ArtifactRef, Difficulty } from "./common.js";
-import { artifactRefSchema } from "./common.js";
-import type { AuthoredTask, AuthoredTaskDraft, Candidate } from "./task.js";
-
-export const validationResultSchema = z.object({
-  taskId: z.string().min(1),
-  accepted: z.boolean(),
-  nop: z.object({
-    passed: z.boolean(),
-    result: artifactRefSchema,
-    output: artifactRefSchema.optional(),
-  }),
-  oracle: z.object({
-    passed: z.boolean(),
-    result: artifactRefSchema,
-    output: artifactRefSchema.optional(),
-  }),
-  reason: z.string().optional(),
-});
-
-export type ValidationResult = z.infer<typeof validationResultSchema>;
+import type { Candidate } from "./task.js";
+import type { VerifyStage } from "./verify.js";
 
 export type RunPhase =
   | "queued"
@@ -31,22 +12,24 @@ export type RunPhase =
   | "failed"
   | "cancelled";
 
+/**
+ * Per-candidate progress. `authoring` is an authoring-agent round, `verifying` the mechanical
+ * compile/audit/build/smoke/nop/oracle gates, and `reviewing` a verification-agent round; `stage`
+ * and `round` say which loop is running.
+ */
 export interface TaskProgress {
   taskId: string;
   candidateId: string;
   difficulty: Difficulty;
   status:
-    | "task_authoring"
-    | "environment_authoring"
-    | "auditing"
-    | "preflighting"
-    | "environment_repairing"
-    | "validating"
+    | "authoring"
+    | "verifying"
     | "reviewing"
-    | "repairing"
     | "infrastructure_failed"
     | "rejected"
     | "accepted";
+  stage?: VerifyStage;
+  round?: number;
   reason?: string;
 }
 
@@ -81,33 +64,4 @@ export interface RunResult {
 export interface DiscoveryResult {
   readonly candidates: readonly Candidate[];
   readonly report: ArtifactRef;
-}
-
-export type TaskAuthorOutcome =
-  | { readonly kind: "authored"; readonly task: AuthoredTaskDraft }
-  | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
-
-export type AuthorOutcome =
-  | { readonly kind: "authored"; readonly task: AuthoredTask }
-  | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
-
-export interface EnvironmentPreflightResult {
-  readonly taskId: string;
-  readonly accepted: boolean;
-  readonly report: ArtifactRef;
-  readonly reason?: string;
-}
-
-export interface ReviewResult {
-  readonly taskId: string;
-  readonly accepted: boolean;
-  readonly report: ArtifactRef;
-  readonly reason?: string;
-}
-
-export interface AuditResult {
-  readonly taskId: string;
-  readonly accepted: boolean;
-  readonly report: ArtifactRef;
-  readonly reason?: string;
 }

@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { TaskDefinition, TaskEnvironment } from "../src/contracts.js";
+import type { TaskEnvironment } from "../src/contracts.js";
 import {
   assertEnvironmentEvidence,
-  assertEnvironmentOnlyRepair,
   assertEnvironmentPolicy,
   isPlaceholderSecretValue,
-  isRepairableEnvironmentFailure,
 } from "../src/environment.js";
 
 const environment: TaskEnvironment = {
@@ -31,25 +29,6 @@ const environment: TaskEnvironment = {
   ],
   source: "ci-adapted",
   evidence: [{ path: ".github/workflows/test.yml", reason: "Defines the test job." }],
-};
-
-const definition: TaskDefinition = {
-  schemaVersion: 2,
-  difficulty: "easy",
-  taskId: "environment-test",
-  repo: "example/repo",
-  baseCommit: "c".repeat(40),
-  workdir: ".",
-  testCommand: "pnpm test {tests}",
-  failToPass: ["tests/new.test.ts"],
-  passToPass: [],
-  testPaths: ["tests/new.test.ts"],
-  sourcePr: 1,
-  sourceUrl: "https://github.com/example/repo/pull/1",
-  prompt: "Implement behavior.",
-  timeouts: { setupSeconds: 1, agentSeconds: 1, testsSeconds: 1 },
-  resources: { cpus: 1, memoryMb: 1024, storageMb: 1024 },
-  environment,
 };
 
 describe("environment contracts", () => {
@@ -130,20 +109,6 @@ describe("environment contracts", () => {
     ).toThrow("must not invoke Docker-in-Docker");
   });
 
-  test("separates deterministic environment defects from provider image-build failures", () => {
-    expect(isRepairableEnvironmentFailure("Dockerfile parse error near fi")).toBe(true);
-    expect(
-      isRepairableEnvironmentFailure("failed to solve: process did not complete successfully"),
-    ).toBe(true);
-    expect(isRepairableEnvironmentFailure("Docker Compose launch failed after 1 attempt")).toBe(
-      true,
-    );
-    expect(isRepairableEnvironmentFailure("ImageBuildError: image build for im-abc failed")).toBe(
-      false,
-    );
-    expect(isRepairableEnvironmentFailure("Modal unavailable while building image")).toBe(false);
-  });
-
   test("requires evidence from the pinned repository", () => {
     expect(() =>
       assertEnvironmentEvidence(environment, new Set([".github/workflows/test.yml"])),
@@ -151,19 +116,5 @@ describe("environment contracts", () => {
     expect(() => assertEnvironmentEvidence(environment, new Set(["package.json"]))).toThrow(
       "does not exist at the pinned commit",
     );
-  });
-
-  test("allows environment-only repairs and rejects semantic changes", () => {
-    const repaired = {
-      ...definition,
-      environment: { ...environment, setupCommand: `${environment.setupCommand} --offline` },
-    };
-    expect(() => assertEnvironmentOnlyRepair(definition, repaired)).not.toThrow();
-    expect(() => assertEnvironmentOnlyRepair(definition, definition)).toThrow(
-      "environment repair left the contract unchanged",
-    );
-    expect(() =>
-      assertEnvironmentOnlyRepair(definition, { ...repaired, testCommand: "npm test {tests}" }),
-    ).toThrow("environment repair changed task semantics");
   });
 });

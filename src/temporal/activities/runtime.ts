@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { CancelledFailure, Context } from "@temporalio/activity";
 import { extractRegularArchive } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
-import { type AuthoredTask, taskDefinitionSchema } from "../../contracts.js";
+import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../../contracts.js";
 import { refreshHarborTask } from "../../harbor-task.js";
+import { assertPiSessionFile, finalAssistantMessage } from "../../pi-session.js";
 import { projectRoot } from "../../project-paths.js";
 import { type ProvenanceMessage, provenanceMessageSchema } from "../../provenance.js";
 import {
@@ -112,4 +113,43 @@ export function parseProvenance(value: Uint8Array): ProvenanceMessage[] {
 }
 export function readAsset(relativePath: string): Promise<Buffer> {
   return readFile(join(projectRoot(import.meta.url), relativePath));
+}
+export interface StoredPiSession {
+  readonly ref: ArtifactRef;
+  readonly finalMessage?: string;
+}
+/**
+ * Persists a collected pi session file as a run artifact. An absent or malformed file yields
+ * undefined so the caller can report the round rather than fail the activity.
+ */
+export async function storePiSession(
+  store: ArtifactStore,
+  key: string,
+  bytes: Uint8Array | undefined,
+): Promise<StoredPiSession | undefined> {
+  if (!bytes || bytes.length === 0) {
+    return undefined;
+  }
+  try {
+    assertPiSessionFile(bytes);
+  } catch {
+    return undefined;
+  }
+  const ref = await store.put(key, bytes, "application/x-ndjson");
+  const finalMessage = finalAssistantMessage(bytes);
+  return { ref, ...(finalMessage ? { finalMessage } : {}) };
+}
+/** Reads the held-out and gold patches from an authored submission or a compiled task root. */
+export async function readTaskPatches(
+  directory: string,
+): Promise<{ readonly testPatch: string; readonly goldPatch: string }> {
+  const [testPatch, goldPatch] = await Promise.all([
+    readFile(join(directory, "test.patch"), "utf8").catch(() =>
+      readFile(join(directory, "tests/test.patch"), "utf8"),
+    ),
+    readFile(join(directory, "gold.patch"), "utf8").catch(() =>
+      readFile(join(directory, "solution/gold.patch"), "utf8"),
+    ),
+  ]);
+  return { testPatch, goldPatch };
 }

@@ -1,23 +1,16 @@
 import type {
   ArtifactRef,
-  AuditResult,
   AuthoredTask,
   AuthoredTaskDraft,
-  AuthorOutcome,
+  AuthoringRoundResult,
   Candidate,
   Difficulty,
   DiscoveryResult,
-  EnvironmentPreflightResult,
-  ReviewResult,
   RunRequest,
-  TaskAuthorOutcome,
-  ValidationResult,
+  VerifierRoundResult,
+  VerifyOutcome,
+  VerifyStage,
 } from "../../contracts.js";
-
-export interface AuthorCandidateInput {
-  readonly run: RunRequest;
-  readonly candidate: Candidate;
-}
 
 export interface DiscoveryShardInput {
   readonly run: RunRequest;
@@ -28,24 +21,34 @@ export interface DiscoveryShardInput {
   readonly excludedSourcePrs: readonly number[];
 }
 
-export interface EnvironmentAuthoringInput {
+/** One authoring agent turn: a fresh session on round 1, a resumed session afterwards. */
+export interface AuthoringRoundInput {
   readonly run: RunRequest;
+  readonly candidate: Candidate;
+  readonly round: number;
+  /** Previous round's pi session file; required for round > 1. */
+  readonly session?: ArtifactRef;
+  /** Previous round's stored VerifyReport JSON; required for round > 1. */
+  readonly report?: ArtifactRef;
+}
+
+/** Trusted compile + audit + Harbor build/smoke/nop/oracle for one submission. */
+export interface CompileAndVerifyInput {
+  readonly run: RunRequest;
+  readonly candidate: Candidate;
   readonly task: AuthoredTaskDraft;
-  readonly diagnostics?: string;
-  readonly previousTask?: AuthoredTask;
+  readonly stage: VerifyStage;
+  readonly round: number;
 }
 
-export interface TaskStageInput {
+/** One verification agent turn over a green task and its latest report. */
+export interface VerifierRoundInput {
   readonly run: RunRequest;
+  readonly candidate: Candidate;
   readonly task: AuthoredTask;
-}
-
-export interface RepairTaskInput extends TaskStageInput {
-  readonly review: ArtifactRef;
-}
-
-export interface ValidationRepairTaskInput extends TaskStageInput {
-  readonly validation: ValidationResult;
+  readonly report: ArtifactRef;
+  readonly round: number;
+  readonly session?: ArtifactRef;
 }
 
 export interface ExportInput {
@@ -56,13 +59,8 @@ export interface ExportInput {
 export interface SelfBenchActivities {
   collectRunProvenance(run: RunRequest): Promise<ArtifactRef>;
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
-  authorCandidate(input: AuthorCandidateInput): Promise<TaskAuthorOutcome>;
-  authorEnvironment(input: EnvironmentAuthoringInput): Promise<AuthorOutcome>;
-  preflightEnvironment(input: TaskStageInput): Promise<EnvironmentPreflightResult>;
-  validateTask(input: TaskStageInput): Promise<ValidationResult>;
-  repairValidationTask(input: ValidationRepairTaskInput): Promise<AuthorOutcome>;
-  reviewTask(input: TaskStageInput): Promise<ReviewResult>;
-  repairTask(input: RepairTaskInput): Promise<AuthorOutcome>;
-  auditTask(input: TaskStageInput): Promise<AuditResult>;
+  runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
+  compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
+  runVerifierRound(input: VerifierRoundInput): Promise<VerifierRoundResult>;
   buildExport(input: ExportInput): Promise<ArtifactRef>;
 }

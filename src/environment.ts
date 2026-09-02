@@ -1,4 +1,4 @@
-import type { TaskDefinition, TaskDraftDefinition, TaskEnvironment } from "./contracts.js";
+import type { TaskEnvironment } from "./contracts.js";
 
 const secretName = /(?:TOKEN|SECRET|PRIVATE_KEY|ACCESS_KEY|API_KEY|CREDENTIAL)/i;
 const passwordName = /PASSWORD/i;
@@ -134,35 +134,4 @@ export function assertEnvironmentEvidence(
       `environment evidence does not exist at the pinned commit: ${missing.join(", ")}`,
     );
   }
-}
-
-export function isRepairableEnvironmentFailure(message: string): boolean {
-  return /Dockerfile|failed to solve|did not complete successfully|Docker Compose launch failed|service .*(?:unhealthy|failed)|no such file or directory/i.test(
-    message,
-  );
-}
-
-export function assertEnvironmentOnlyRepair(
-  original: TaskDefinition,
-  repaired: TaskDefinition,
-): void {
-  const { environment: originalEnvironment, ...originalDraft } = original;
-  const { environment: repairedEnvironment, ...repairedDraft } = repaired;
-  if (JSON.stringify(originalDraft) !== JSON.stringify(repairedDraft)) {
-    throw new Error("environment repair changed task semantics");
-  }
-  if (JSON.stringify(originalEnvironment) === JSON.stringify(repairedEnvironment)) {
-    throw new Error("environment repair left the contract unchanged");
-  }
-}
-
-export function environmentAuthoringPrompt(input: {
-  readonly definition: TaskDraftDefinition;
-  readonly diagnostics?: string;
-  readonly original?: TaskEnvironment;
-}): string {
-  const repair = input.original
-    ? `\nThis is a bounded repair attempt. The previous environment was:\n\n${JSON.stringify(input.original, null, 2)}\n\nThe deterministic backend diagnostics were:\n\n<diagnostics>\n${input.diagnostics?.trim() || "No diagnostics were recorded."}\n</diagnostics>\n\nRepair only the environment contract. Do not alter the task definition or patches.\n`
-    : "";
-  return `Author exactly one reproducible SelfBench environment for this task definition:\n\n${JSON.stringify(input.definition, null, 2)}\n${repair}\nWork only at the currently checked-out pinned base commit. Inspect the test paths and test command, then identify the closest repository-native CI job that runs them. Inspect relevant .github/workflows files, Dockerfiles, devcontainers, lockfiles, version files, package scripts, Makefiles, and compose files. Prefer an image already used by CI or the repository, followed by a devcontainer, then an explicit translation of CI setup. Do not infer from the latest remote branch.\n\nCall submit_environment exactly once with a complete contract:\n- baseImage must be a Linux image pinned with @sha256; use skopeo inspect docker://IMAGE to resolve registry digests rather than inventing one;\n- rootSetupCommand runs as root under /bin/sh and must install the exact repository runtimes, package managers, native dependencies, and SelfBench substrate required by the chosen base image: bash, git, procps/pkill, runuser, tar, and useradd;\n- setupCommand runs from the task workdir under bash and must perform the frozen dependency install plus required builds, code generation, fixtures, browser installation, or other CI setup;\n- smokeCommand runs at runtime from the task workdir and must cheaply prove the runtime and service contract without depending on the hidden gold patch or new held-out tests;\n- environmentVariables must contain only non-secret literal values needed by tests;\n- services must represent only services needed by the focused tests, use registry digests resolved with skopeo, provide health checks, and contain no external secrets; local throwaway service passwords are allowed only inside the service definition;\n- evidence must cite repository-relative files that exist at this exact commit and explain what each established.\n\nNever copy CI secrets, deployment steps, caches, artifact uploads, hosted runner credentials, or mutable image tags. Do not use Docker-in-Docker. Do not add fallback dependencies merely because a language ecosystem might need them: every runtime and system package must be justified by the selected CI/test path. If repository evidence is incomplete, use source "generated" but still cite the nearest manifests and scripts.\n\nUse bash/read/grep/find to inspect and, when feasible, execute exploratory setup or focused smoke commands in the authoring sandbox. These exploratory checks are evidence for reasoning only; the backend preflight is authoritative. Do not return prose after the tool call.`;
 }

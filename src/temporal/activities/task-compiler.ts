@@ -6,14 +6,19 @@ import { compileHarborTask } from "../../harbor-task.js";
 import { runCommand } from "../../process.js";
 import { withTemporaryDirectory } from "./runtime.js";
 
-export class EnvironmentCompilerInfrastructureError extends Error {
+export class TaskCompilerInfrastructureError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "EnvironmentCompilerInfrastructureError";
+    this.name = "TaskCompilerInfrastructureError";
   }
 }
 
-export interface EnvironmentCompilerInput {
+/**
+ * Trusted compiler: unpacks a sandbox submission (definition.json, test.patch, gold.patch),
+ * clones the pinned repository on the worker, and renders the native Harbor task bundle.
+ * Models never hand-write task.toml, Dockerfiles, or scripts.
+ */
+export interface TaskCompilerInput {
   readonly taskId: string;
   readonly repositoryUrl: string;
   readonly definitionBytes: Uint8Array;
@@ -22,7 +27,7 @@ export interface EnvironmentCompilerInput {
   readonly signal?: AbortSignal;
 }
 
-export interface EnvironmentCompilerServices {
+export interface TaskCompilerServices {
   cloneRepository(
     repositoryUrl: string,
     commit: string,
@@ -32,9 +37,9 @@ export interface EnvironmentCompilerServices {
   ): Promise<void>;
 }
 
-export async function compileEnvironmentTask(
-  input: EnvironmentCompilerInput,
-  services: EnvironmentCompilerServices = defaultCompilerServices,
+export async function compileSubmittedTask(
+  input: TaskCompilerInput,
+  services: TaskCompilerServices = defaultCompilerServices,
 ): Promise<Uint8Array> {
   return await withTemporaryDirectory(`selfbench-compile-${input.taskId}-`, async (root) => {
     const authored = join(root, "authored");
@@ -58,12 +63,9 @@ export async function compileEnvironmentTask(
         input.signal,
       )
       .catch((error: unknown) => {
-        throw new EnvironmentCompilerInfrastructureError(
-          "failed to materialize source repository",
-          {
-            cause: error,
-          },
-        );
+        throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
+          cause: error,
+        });
       });
     await compileHarborTask(authored, repository, output);
     const bundle = join(root, "harbor-task.tar.gz");
@@ -76,7 +78,7 @@ export async function compileEnvironmentTask(
   });
 }
 
-const defaultCompilerServices: EnvironmentCompilerServices = {
+const defaultCompilerServices: TaskCompilerServices = {
   async cloneRepository(repositoryUrl, commit, destination, token, signal): Promise<void> {
     const environment: NodeJS.ProcessEnv = {
       ...process.env,

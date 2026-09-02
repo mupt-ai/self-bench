@@ -138,7 +138,7 @@ export function selectCandidates(
 }
 
 export function missingCandidateCounts(
-  selected: readonly Candidate[],
+  selected: readonly Pick<Candidate, "difficulty">[],
   requested: RunRequest["candidateCounts"],
 ): Record<Difficulty, number> {
   const actual: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0 };

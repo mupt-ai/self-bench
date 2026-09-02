@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../src/process.js";
 import {
-  compileEnvironmentTask,
-  EnvironmentCompilerInfrastructureError,
-} from "../src/temporal/activities/environment-compiler.js";
+  compileSubmittedTask,
+  TaskCompilerInfrastructureError,
+} from "../src/temporal/activities/task-compiler.js";
 
 const roots: string[] = [];
 
@@ -14,8 +14,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("trusted environment compiler rebuilds the sandbox draft against the pinned repository", async () => {
-  const root = await mkdtemp(join(tmpdir(), "selfbench-environment-compiler-"));
+test("trusted task compiler rebuilds the sandbox draft against the pinned repository", async () => {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-task-compiler-"));
   roots.push(root);
   const repository = join(root, "repository");
   const authored = join(root, "authored");
@@ -70,7 +70,7 @@ test("trusted environment compiler rebuilds the sandbox draft against the pinned
   const sourceArchive = join(root, "source.tar.gz");
   await runCommand("tar", ["-czf", sourceArchive, "-C", authored, "."]);
 
-  const bundle = await compileEnvironmentTask(
+  const bundle = await compileSubmittedTask(
     {
       taskId: definition.taskId,
       repositoryUrl: "https://github.com/example/repo.git",
@@ -92,8 +92,8 @@ test("trusted environment compiler rebuilds the sandbox draft against the pinned
   expect(listing.stdout).toContain("harbor-task/environment/repo.tar.gz");
 });
 
-test("trusted environment compiler classifies repository failures as infrastructure", async () => {
-  const root = await mkdtemp(join(tmpdir(), "selfbench-environment-compiler-"));
+test("trusted task compiler classifies repository failures as infrastructure", async () => {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-task-compiler-"));
   roots.push(root);
   const source = join(root, "source");
   await mkdir(source);
@@ -130,7 +130,7 @@ test("trusted environment compiler classifies repository failures as infrastruct
   } as const;
 
   await expect(
-    compileEnvironmentTask(
+    compileSubmittedTask(
       {
         taskId: definition.taskId,
         repositoryUrl: "https://github.com/example/repo.git",
@@ -139,5 +139,5 @@ test("trusted environment compiler classifies repository failures as infrastruct
       },
       { cloneRepository: async () => Promise.reject(new Error("network down")) },
     ),
-  ).rejects.toBeInstanceOf(EnvironmentCompilerInfrastructureError);
+  ).rejects.toBeInstanceOf(TaskCompilerInfrastructureError);
 });

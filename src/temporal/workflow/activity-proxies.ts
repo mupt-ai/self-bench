@@ -1,10 +1,10 @@
 import { proxyActivities } from "@temporalio/workflow";
 import type { SelfBenchActivities } from "../activities.js";
 
-const taskActivities = proxyActivities<
-  Omit<
+const candidateActivities = proxyActivities<
+  Pick<
     SelfBenchActivities,
-    "collectRunProvenance" | "discoverCandidateShard" | "repairValidationTask"
+    "runAuthoringRound" | "compileAndVerify" | "runVerifierRound" | "buildExport"
   >
 >({
   startToCloseTimeout: "7 hours",
@@ -17,15 +17,6 @@ const taskActivities = proxyActivities<
     maximumAttempts: 4,
   },
 });
-
-const validationRepairActivity = proxyActivities<Pick<SelfBenchActivities, "repairValidationTask">>(
-  {
-    startToCloseTimeout: "2 hours",
-    heartbeatTimeout: "10 minutes",
-    cancellationType: "WAIT_CANCELLATION_COMPLETED",
-    retry: { maximumAttempts: 1 },
-  },
-);
 
 const provenanceActivities = proxyActivities<Pick<SelfBenchActivities, "collectRunProvenance">>({
   startToCloseTimeout: "5 minutes",
@@ -54,13 +45,8 @@ const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverC
 export const workflowActivities: SelfBenchActivities = {
   collectRunProvenance: provenanceActivities.collectRunProvenance,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
-  authorCandidate: taskActivities.authorCandidate,
-  authorEnvironment: taskActivities.authorEnvironment,
-  preflightEnvironment: taskActivities.preflightEnvironment,
-  validateTask: taskActivities.validateTask,
-  repairValidationTask: validationRepairActivity.repairValidationTask,
-  reviewTask: taskActivities.reviewTask,
-  repairTask: taskActivities.repairTask,
-  auditTask: taskActivities.auditTask,
-  buildExport: taskActivities.buildExport,
+  runAuthoringRound: candidateActivities.runAuthoringRound,
+  compileAndVerify: candidateActivities.compileAndVerify,
+  runVerifierRound: candidateActivities.runVerifierRound,
+  buildExport: candidateActivities.buildExport,
 };

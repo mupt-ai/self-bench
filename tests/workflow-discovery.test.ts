@@ -92,19 +92,20 @@ describe("SelfBench workflow discovery", () => {
     const authored: string[] = [];
     let exported: string[] = [];
     const activities = acceptingActivities(candidates);
-    activities.authorCandidate = async ({ candidate: value }) => {
+    activities.runAuthoringRound = async ({ candidate: value }) => {
       authored.push(`${value.difficulty}:${value.candidateId}`);
-      if (value.candidateId === "medium-1") {
+      if (value.candidateId.startsWith("medium")) {
         return { kind: "rejected", candidateId: value.candidateId, reason: "not reproducible" };
       }
       return {
-        kind: "authored",
+        kind: "submitted",
         task: {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
           sourceBundle: artifact,
         },
+        session: artifact,
       };
     };
     activities.buildExport = async ({ tasks }) => {
@@ -135,19 +136,20 @@ describe("SelfBench workflow discovery", () => {
     const activities = acceptingActivities(candidates);
     let active = 0;
     let peak = 0;
-    activities.authorCandidate = async ({ candidate: value }) => {
+    activities.runAuthoringRound = async ({ candidate: value }) => {
       active += 1;
       peak = Math.max(peak, active);
       await new Promise((resolve) => setTimeout(resolve, 1));
       active -= 1;
       return {
-        kind: "authored",
+        kind: "submitted",
         task: {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
           sourceBundle: artifact,
         },
+        session: artifact,
       };
     };
 

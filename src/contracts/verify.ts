@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { ArtifactRef } from "./common.js";
-import type { AuthoredTask, AuthoredTaskDraft } from "./task.js";
+import { type ArtifactRef, artifactRefSchema } from "./common.js";
+import { type AuthoredTask, authoredTaskDraftSchema } from "./task.js";
 
 export const verifyStageSchema = z.enum(["authoring", "verification"]);
 export type VerifyStage = z.infer<typeof verifyStageSchema>;
@@ -42,6 +42,12 @@ export const verifyReportSchema = z
 
 export type VerifyReport = z.infer<typeof verifyReportSchema>;
 
+export const verifyOutcomeSchema = z.object({
+  report: verifyReportSchema,
+  reportRef: artifactRefSchema,
+  task: authoredTaskDraftSchema.extend({ bundle: artifactRefSchema }).optional(),
+});
+
 export interface VerifyOutcome {
   readonly report: VerifyReport;
   /** Stored JSON report for this round. */
@@ -50,20 +56,32 @@ export interface VerifyOutcome {
   readonly task?: AuthoredTask;
 }
 
-export type AuthoringRoundResult =
-  | {
-      readonly kind: "submitted";
-      readonly task: AuthoredTaskDraft;
-      readonly session: ArtifactRef;
-    }
-  | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
+const rejectedRoundSchema = z.object({
+  kind: z.literal("rejected"),
+  candidateId: z.string().min(1),
+  reason: z.string().min(1),
+});
 
-export type VerifierRoundResult =
-  | { readonly kind: "accepted"; readonly session: ArtifactRef; readonly reason: string }
-  | {
-      readonly kind: "fixed";
-      readonly task: AuthoredTaskDraft;
-      readonly session: ArtifactRef;
-      readonly summary: string;
-    }
-  | { readonly kind: "rejected"; readonly candidateId: string; readonly reason: string };
+export const authoringRoundResultSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("submitted"),
+    task: authoredTaskDraftSchema,
+    session: artifactRefSchema,
+  }),
+  rejectedRoundSchema,
+]);
+
+export type AuthoringRoundResult = z.infer<typeof authoringRoundResultSchema>;
+
+export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("accepted"), session: artifactRefSchema, reason: z.string().min(1) }),
+  z.object({
+    kind: z.literal("fixed"),
+    task: authoredTaskDraftSchema,
+    session: artifactRefSchema,
+    summary: z.string().min(1),
+  }),
+  rejectedRoundSchema,
+]);
+
+export type VerifierRoundResult = z.infer<typeof verifierRoundResultSchema>;
