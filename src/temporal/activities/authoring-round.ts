@@ -68,7 +68,7 @@ export async function runAuthoringRound(
     reportBytes,
   ] = await Promise.all([
     store.get(candidate.provenance),
-    readAsset("src/extensions/authoring.ts"),
+    readAsset("dist/extension-authoring.bundle.js"),
     readAsset("src/skills/selfbench/SKILL.md"),
     readAsset("dist/sandbox-author.bundle.js"),
     readAsset("dist/sandbox-check.bundle.js"),
