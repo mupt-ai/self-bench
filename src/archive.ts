@@ -5,10 +5,27 @@ import { runCommand } from "./process.js";
 const MAX_ARCHIVE_ENTRIES = 20_000;
 const MAX_ARCHIVE_UNPACKED_BYTES = 10 * 1024 * 1024 * 1024;
 
+export interface ExtractArchiveOptions {
+  readonly allowSymlinks?: boolean;
+  readonly signal?: AbortSignal;
+  /** Entry cap; defaults to MAX_ARCHIVE_ENTRIES for untrusted outer bundles. */
+  readonly maxEntries?: number;
+}
+
+/**
+ * Options for the repository snapshots SelfBench itself renders into a bundle
+ * (`environment/repo.tar.gz`, `tests/repo.tar.gz`). Real repositories exceed the
+ * outer-bundle entry cap, so only the unpacked-size cap applies.
+ */
+export const REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS: ExtractArchiveOptions = {
+  allowSymlinks: true,
+  maxEntries: Number.POSITIVE_INFINITY,
+};
+
 export async function extractRegularArchive(
   archive: string,
   destination: string,
-  options: { readonly allowSymlinks?: boolean; readonly signal?: AbortSignal } = {},
+  options: ExtractArchiveOptions = {},
 ): Promise<void> {
   const [names, verbose] = await Promise.all([
     runCommand("tar", ["-tzf", archive], options.signal ? { signal: options.signal } : {}),
@@ -19,8 +36,9 @@ export async function extractRegularArchive(
   if (paths.length !== entries.length) {
     throw new Error("archive listing is ambiguous");
   }
-  if (paths.length === 0 || paths.length > MAX_ARCHIVE_ENTRIES) {
-    throw new Error(`archive must contain between 1 and ${MAX_ARCHIVE_ENTRIES} entries`);
+  const maxEntries = options.maxEntries ?? MAX_ARCHIVE_ENTRIES;
+  if (paths.length === 0 || paths.length > maxEntries) {
+    throw new Error(`archive must contain between 1 and ${maxEntries} entries`);
   }
 
   const normalized = new Set<string>();

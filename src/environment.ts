@@ -49,16 +49,67 @@ function rejectSecrets(
   allowPassword: boolean,
 ): void {
   for (const [name, value] of Object.entries(variables)) {
-    if (secretName.test(name) || (!allowPassword && passwordName.test(name))) {
-      throw new Error(`${scope} variable ${name} looks like a secret`);
-    }
     if (/[\0\r\n]/.test(value)) {
       throw new Error(`${scope} variable ${name} contains a control character`);
     }
     if (/\$\{|\$[A-Za-z_]/.test(value)) {
       throw new Error(`${scope} variable ${name} must not interpolate host environment values`);
     }
+    if (
+      (secretName.test(name) || (!allowPassword && passwordName.test(name))) &&
+      !isPlaceholderSecretValue(value)
+    ) {
+      throw new Error(
+        `${scope} variable ${name} looks like a secret; only a fixed placeholder literal is allowed`,
+      );
+    }
   }
+}
+
+const knownKeyPrefix =
+  /^(?:sk[-_]|rk[-_]|pk[-_]live|gh[pousr]_|github_pat_|AKIA|ASIA|xox[abpsr]-|AIza|ya29\.|glpat-|npm_|dop_v1_|eyJ[A-Za-z0-9_-]{8,}\.)/;
+const placeholderWord =
+  /(?:^|[^a-z])(?:test(?:ing)?|dummy|fake|placeholder|example|sample|local|dev(?:elopment)?|insecure|changeme|change-me|not-?a-?(?:real-?)?(?:key|secret|token)|selfbench|ci)(?:$|[^a-z])/i;
+const PLACEHOLDER_MAX_LENGTH = 16;
+const SECRET_RUN_MIN_LENGTH = 16;
+const SECRET_RUN_ENTROPY_BITS = 3.5;
+
+/**
+ * A secret-named variable may carry a fixed placeholder literal: no entropy, short, or a documented
+ * placeholder pattern. Values shaped like real key material stay rejected.
+ */
+export function isPlaceholderSecretValue(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return true;
+  }
+  if (knownKeyPrefix.test(trimmed) || /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(trimmed)) {
+    return false;
+  }
+  const runs = trimmed.split(/[^A-Za-z0-9+/=]+/).filter(Boolean);
+  const highEntropyRun = runs.some(
+    (run) => run.length >= SECRET_RUN_MIN_LENGTH && shannonEntropy(run) >= SECRET_RUN_ENTROPY_BITS,
+  );
+  if (highEntropyRun) {
+    return false;
+  }
+  if (placeholderWord.test(trimmed) || /^(.)\1*$/.test(trimmed)) {
+    return true;
+  }
+  return trimmed.length <= PLACEHOLDER_MAX_LENGTH;
+}
+
+function shannonEntropy(value: string): number {
+  const counts = new Map<string, number>();
+  for (const character of value) {
+    counts.set(character, (counts.get(character) ?? 0) + 1);
+  }
+  let entropy = 0;
+  for (const count of counts.values()) {
+    const probability = count / value.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
 }
 
 function rejectSecretMaterial(value: string, scope: string): void {

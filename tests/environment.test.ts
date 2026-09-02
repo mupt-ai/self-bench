@@ -4,6 +4,7 @@ import {
   assertEnvironmentEvidence,
   assertEnvironmentOnlyRepair,
   assertEnvironmentPolicy,
+  isPlaceholderSecretValue,
   isRepairableEnvironmentFailure,
 } from "../src/environment.js";
 
@@ -75,6 +76,49 @@ describe("environment contracts", () => {
         environmentVariables: { CI: "1\nRUN curl attacker" },
       }),
     ).toThrow("contains a control character");
+  });
+
+  test("allows secret-named variables that carry fixed placeholder literals", () => {
+    expect(() =>
+      assertEnvironmentPolicy({
+        ...environment,
+        environmentVariables: {
+          SECRET_KEY: "selfbench-local-secret-key",
+          API_KEY: "test",
+          JWT_SECRET: "changeme",
+          ACCESS_TOKEN: "xxxxxxxxxxxxxxxxxxxxxxxx",
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("keeps rejecting secret-named variables that look like real key material", () => {
+    const rejects = (value: string): void => {
+      expect(() =>
+        assertEnvironmentPolicy({ ...environment, environmentVariables: { SECRET_KEY: value } }),
+      ).toThrow("looks like a secret");
+    };
+    rejects("9f2a7c41d3e8b56f0a1c4d7e2b9f8a6c3d5e1f7a9b2c4d6e");
+    rejects("ghp_16C7e42F292c6912E7710c838347Ae178B4a");
+    rejects("a9f3c2e1b7d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2");
+    rejects("supersecretvalue1234");
+    expect(() =>
+      assertEnvironmentPolicy({
+        ...environment,
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises host interpolation rejection.
+        environmentVariables: { SECRET_KEY: "${HOST_SECRET}" },
+      }),
+    ).toThrow("must not interpolate host environment values");
+  });
+
+  test("classifies placeholder secret values", () => {
+    expect(isPlaceholderSecretValue("")).toBe(true);
+    expect(isPlaceholderSecretValue("dev-secret")).toBe(true);
+    expect(isPlaceholderSecretValue("not-a-real-key")).toBe(true);
+    expect(isPlaceholderSecretValue("insecure-jwt-signing-key-for-ci")).toBe(true);
+    expect(isPlaceholderSecretValue("AKIAIOSFODNN7EXAMPLE")).toBe(false);
+    expect(isPlaceholderSecretValue("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")).toBe(false);
+    expect(isPlaceholderSecretValue("-----BEGIN PRIVATE KEY-----\nabc")).toBe(false);
   });
 
   test("rejects secret material and Docker-in-Docker setup", () => {
