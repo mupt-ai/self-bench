@@ -1,6 +1,6 @@
 # Task construction and validation
 
-SelfBench creates easy, medium, and hard Harbor evaluations from completed pull requests. This document defines the task boundary, validation gates, repair behavior, and export contents.
+SelfBench creates easy, medium, and hard Harbor evaluations from completed pull requests. This document defines the task boundary, the authoring and verification rounds, and export contents.
 
 ## Terms
 
@@ -31,9 +31,9 @@ Profiles are eligibility rules, not empirical claims about model success:
 | medium | at least 50 changed lines across 2 implementation paths | at least 1 | at least 1 |
 | hard | at least 100 changed lines across 3 implementation paths | at least 1 | at least 2 |
 
-Every accepted task also requires a held-out test patch with no file overlap with the reference patch, deterministic repository-native setup and tests, a passing nop/oracle split, and independent anti-coupling review.
+Every accepted task also requires a held-out test patch with no file overlap with the reference patch, deterministic repository-native setup and tests, a passing smoke/nop/oracle split, and acceptance by the independent verification agent.
 
-The size gate is mechanical. Generated or vendored code suitability remains a review judgment. Git LFS, submodules, generated changes, and service-heavy integration suites receive no special path and may be rejected during authoring or validation.
+The size gate is mechanical. Generated or vendored code suitability remains a verification judgment. Git LFS, submodules, generated changes, and service-heavy integration suites receive no special path and may be rejected during authoring or verification.
 
 ## Agent-visible boundary
 
@@ -47,23 +47,27 @@ It does not receive the held-out test patch or reference solution. Harbor mounts
 
 Held-out tests must exercise an existing public API, command, persistence boundary, or extension seam. They may not import gold-specific private helpers or prescribe exact internal SQL, query counts, private schemas, object identity, telemetry layout, incidental error wording, or UI composition unless the source request explicitly makes that artifact public.
 
-## Validation and repair
+## Authoring rounds and verification
 
-Static audit runs before sandbox validation. Harbor then proves:
+Every candidate passes through two agent-centred loops. Agents do the authoring and judging; the harness only renders, builds, and measures.
 
-1. `nop`: selected new tests fail while selected regressions pass;
+**Authoring rounds.** One authoring agent session owns the complete Harbor task: instruction, definition (test command, fail-to-pass and pass-to-pass selection, timeouts, resources) and the environment contract (base image, root setup, setup, smoke command, environment variables, services, evidence) in a single `submit_task` call. The tool runs the static check inside the sandbox first (schema, environment policy, patch path safety, audit thresholds, and a dry render of `task.toml` and both Dockerfiles into `/work/rendered/`) and returns failures to the agent, so only a submission that passes it ends the round. The worker's trusted compiler then renders `task.toml`, both Dockerfiles, the scripts, and the repository snapshot; Harbor builds the images and runs the smoke command, the `nop` split, and the `oracle` split. The result is one structured verification report (compile, audit, build, smoke, nop, oracle) stored per round. If any gate is red, the same agent session is resumed in a fresh sandbox with the report as its next message; the agent fixes the cause and resubmits. Three red rounds reject the candidate with the last report as the reason. A Harbor infrastructure failure counts as a red round with the build log as the report; three consecutive infrastructure rounds mark the candidate `infrastructure_failed` instead.
+
+The Harbor gates prove:
+
+1. `nop`: the smoke command succeeds in the built image, then selected new tests fail on the base snapshot while selected regressions pass;
 2. `oracle`: the reference patch applies and every selected test passes;
 3. determinism: the fail-to-pass selection passes a second time with the oracle.
 
-A fresh model session reviews the prompt and tests without inheriting the authoring conversation. When it finds repairable test-to-gold coupling, Temporal schedules one constrained repair in another sandbox. Repair may modify only paths already changed by the held-out test patch. It cannot change the request, base snapshot, or reference implementation.
+**Verification rounds.** A separate agent session that has not seen the authoring conversation receives the green task (instruction, held-out test patch, gold patch, environment contract, rendered files), the verification report, and the deterministic coupling evidence. It judges whether the task is a fair, self-contained benchmark: tests exercise public behaviour, no test-to-gold coupling, deterministic environment, instruction faithful to the human request. It either accepts or submits a fix. A fix may edit only the held-out tests and the environment contract (plus the test selection, timeouts, and resources that describe them), never the gold patch, the base commit, or the instruction; `submit_fix` runs the same static check before it counts. The worker re-runs compile, audit, and Harbor and resumes the same verifier session with the new report. A task is accepted only when the verifier accepts and the mechanical gates are green; otherwise the candidate is rejected with the verifier's reason after at most three verifier rounds.
 
-After repair, the task repeats static audit, nop, oracle, and independent review from the beginning. A second failure rejects the candidate.
+Rejected candidates are replaced from the leftover discovery pool until each tier holds the requested number of accepted tasks or the pool is exhausted.
 
 ## Reproducible environments
 
-SelfBench does not infer a generic language toolchain. After task authoring selects the held-out tests and repository-native test command, a separate environment author inspects the exact pinned base commit. It derives the runtime, dependency installation, builds, fixtures, and local services from the closest matching CI job, repository Dockerfile, devcontainer, lockfiles, and test scripts.
+SelfBench does not infer a generic language toolchain. The authoring agent derives the environment contract from the exact pinned base commit: runtime, dependency installation, builds, fixtures, and local services come from the closest matching CI job, repository Dockerfile, devcontainer, lockfiles, and test scripts.
 
-The resulting contract pins the base and service images by digest, records repository-file evidence for each choice, keeps service credentials local and non-secret, and separates verifier-only services from the agent environment. A deterministic Harbor preflight runs both the declared smoke command and the real base-state nop test split before oracle validation. Environment defects may be repaired twice; infrastructure failures remain retryable rather than being rewritten by an agent.
+The resulting contract pins the base and service images by digest, records repository-file evidence for each choice, keeps service credentials local and non-secret, and separates verifier-only services from the agent environment. Secret-named variables are accepted only with fixed placeholder literals; values that look like real key material or interpolate host variables are rejected. The declared smoke command runs in the built verifier image before the `nop` split, so an environment defect is reported to the authoring agent as a red smoke or build gate rather than discovered later.
 
 When the reference patch changes a recognized dependency manifest or lockfile, the hidden verifier image repeats setup with the trusted reference state and then resets source files to the base snapshot. This prevents stale base dependencies from invalidating the oracle without exposing the reference patch to the coding-agent environment.
 
@@ -91,7 +95,7 @@ harbor-task/
 └── solution/
 ```
 
-The export includes the repository snapshot at each selected base commit, held-out tests, and reference solutions. It excludes Git history, local provenance/session records, and author/reviewer transcripts.
+The export includes the repository snapshot at each selected base commit, held-out tests, and reference solutions. It excludes Git history, local provenance/session records, and the authoring and verification agent sessions (those stay in the run's artifacts).
 
 The manifest digest detects accidental corruption but is not a signature because it sits inside the same archive. Extract only exports from a trusted SelfBench deployment and store them as private benchmark material.
 

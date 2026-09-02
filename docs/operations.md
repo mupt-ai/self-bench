@@ -21,7 +21,7 @@ Temporal and artifact state live in the `selfbench_temporal-postgres` and `selfb
 self-bench requires GitHub and model credentials:
 
 - `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required.
-- `OPENAI_API_KEY` powers discovery, authoring, review, and constrained repair. This is the recommended model-authentication path.
+- `OPENAI_API_KEY` powers discovery, authoring rounds, and verification rounds. This is the recommended model-authentication path.
 
 For ChatGPT subscription authentication, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when `OPENAI_API_KEY` is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
 
@@ -29,7 +29,7 @@ Sandbox-provider credentials are separate. Modal accepts its mounted profile or 
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring, semantic review, and repair sandboxes. It separately invokes Harbor for nop/oracle validation. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
+SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every round. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
 
 ```bash
 self-bench up --backend docker                         # Docker + Docker
@@ -69,7 +69,7 @@ self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 
 When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery and authoring stop after eight minutes without process output; review stops after five. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard.
+Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request two hours.
 
 ### E2B
 
@@ -119,7 +119,7 @@ self-bench up --backend e2b --harbor-environment docker
 
 Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
 
-E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes, review requests 15 minutes, and authoring/repair request two hours, so the configured cap centrally shortens only longer stages. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
+E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or verification round requests two hours, so the configured cap centrally shortens only longer stages. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
 
 Commands run under `/work`. Inputs and binary outputs are transferred with E2B's file API, and paths outside `/work` are rejected before allocation. Stdout/stderr stream progress while retaining only the latest 8 MiB per stream for diagnostics. Output inactivity cancels the command and sandbox. Workload environment and stage secrets are scoped to the command; SelfBench does not create durable account-level E2B Secrets.
 
@@ -138,7 +138,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes, review requests 15 minutes, and authoring and repair request two hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests two hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 
@@ -189,7 +189,7 @@ self-bench up --backend vercel --harbor-environment modal
 
 Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. `self-bench up` resolves the profile, then validates the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
 
-The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and repair requests then run for at most 45 minutes and return exit 124 on timeout, so only the affected candidate is rejected. Discovery and review retain their shorter requested limits. The effective cap is included in run and export metadata.
+The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and verification rounds then run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
 
 #### Environment-only and unattended workers
 
@@ -276,7 +276,20 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The three tier counts total 1–10,000. Each is a fixed candidate authoring budget, not an accepted-task target: rejected candidates are not replaced. Discovery expands only until it fills each requested tier budget, then accepted tasks are exported.
+The three tier counts total 1–10,000. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
+
+### Replaying known candidates
+
+`self-bench replay` starts a run from candidates of an earlier run instead of discovery, for example to re-run a few previously rejected candidates through the current pipeline:
+
+```bash
+self-bench replay \
+  --source-run sb-20260901-abcd1234 \
+  --candidate w0s2-uploader --candidate w1s0-legacy \
+  --output ./replayed-tasks.tar.gz
+```
+
+The worker rebuilds each candidate from the source run's artifacts: the retained human request from `runs/<source>/provenance/<candidate>.json`, the full candidate record from the discovery `report.json` located through the `w<wave>s<shard>-` ID prefix, or, failing that, the authored `definition.json` plus a `gh pr view` lookup of the completed commit. Candidate IDs are kept, artifacts are written under the new run ID, and authoring and verification start from fresh agent sessions. The same request shape is accepted by `POST /v1/runs` as a `replay` field (`{ "sourceRunId", "candidateIds" }`) in place of `repository`, `provenance`, and `candidateCounts`.
 
 `--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
 
@@ -290,7 +303,7 @@ The CLI is the recommended client. The API exposes:
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check |
 | `POST` | `/v1/provenance?runId=...` | Store sanitized provenance JSONL |
-| `POST` | `/v1/runs` | Start a tiered candidate workflow |
+| `POST` | `/v1/runs` | Start a tiered candidate workflow, or a replay of known candidates |
 | `GET` | `/v1/runs` | List workflows |
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |
@@ -298,7 +311,7 @@ The CLI is the recommended client. The API exposes:
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
 
-Run status includes its phase, accepted/rejected counts, per-candidate stage, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
+Run status includes its phase, accepted/rejected counts, per-candidate status with the current stage (`authoring` or `verification`) and round, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 
