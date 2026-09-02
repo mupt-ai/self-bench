@@ -46,7 +46,7 @@ agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
   --skill /work/selfbench-skill --extension /work/authoring.js \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
+  --tools read,bash,grep,find,ls,verify,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
 [ "$agent_status" -eq 0 ] || exit "$agent_status"
 node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json`;
@@ -66,7 +66,7 @@ cd /work/repo
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
   --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,edit,write,grep,find,ls,accept_task,submit_fix "$(cat /work/prompt.txt)" || agent_status=$?
+  --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
 [ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
 [ -f /work/fix/fixed-definition.json ] || printf '{}\\n' > /work/fix/fixed-definition.json
