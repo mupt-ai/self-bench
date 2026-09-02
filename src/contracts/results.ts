@@ -1,4 +1,4 @@
-import type { ArtifactRef, Difficulty } from "./common.js";
+import type { ArtifactRef, Difficulty, RepositoryRef } from "./common.js";
 import type { Candidate } from "./task.js";
 import type { VerifyStage } from "./verify.js";
 
@@ -64,4 +64,11 @@ export interface RunResult {
 export interface DiscoveryResult {
   readonly candidates: readonly Candidate[];
   readonly report: ArtifactRef;
+}
+
+/** Candidates and run metadata rebuilt from a source run for a replay. */
+export interface ReplayMaterial {
+  readonly candidates: readonly Candidate[];
+  readonly repository: RepositoryRef;
+  readonly provenance: ArtifactRef;
 }

@@ -5,6 +5,7 @@ import { runAuthoringRound } from "./authoring-round.js";
 import { discoverCandidateShard } from "./discovery.js";
 import { buildExport } from "./export.js";
 import { collectRunProvenance } from "./provenance.js";
+import { rebuildReplayCandidates } from "./replay.js";
 import type { SelfBenchActivities } from "./types.js";
 import { runVerifierRound } from "./verifier-round.js";
 import { compileAndVerify } from "./verify.js";
@@ -15,6 +16,7 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
   return {
     collectRunProvenance: (run) => collectRunProvenance(store, run),
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
+    rebuildReplayCandidates: (input) => rebuildReplayCandidates(store, input),
     runAuthoringRound: (input) => runAuthoringRound(store, sandbox, input),
     compileAndVerify: (input) => compileAndVerify(store, config.harborEnvironment, input),
     runVerifierRound: (input) => runVerifierRound(store, sandbox, input),

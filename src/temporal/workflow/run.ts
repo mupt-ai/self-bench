@@ -1,12 +1,15 @@
 import { isCancellation } from "@temporalio/workflow";
-import type {
-  AuthoredTask,
-  Candidate,
-  DiscoveryProgress,
-  RunRequest,
-  RunResult,
-  RunStatus,
-  TaskProgress,
+import {
+  type AuthoredTask,
+  type Candidate,
+  type Difficulty,
+  type DiscoveryProgress,
+  isReplayRunRequest,
+  type RunRequest,
+  type RunResult,
+  type RunStatus,
+  type TaskProgress,
+  type WorkflowRunInput,
 } from "../../contracts.js";
 import { parallelMap } from "../../parallel.js";
 import type { ExportInput, SelfBenchActivities } from "../activities.js";
@@ -21,16 +24,18 @@ import {
 } from "./discovery.js";
 
 export async function executeRun(
-  input: RunRequest,
+  input: WorkflowRunInput,
   activitySet: SelfBenchActivities,
   installStatusQuery: (status: () => RunStatus) => void = () => undefined,
 ): Promise<RunResult> {
-  const requested = Object.values(input.candidateCounts).reduce((sum, count) => sum + count, 0);
+  const requestedCounts = isReplayRunRequest(input)
+    ? { easy: 0, medium: 0, hard: 0 }
+    : input.candidateCounts;
   let status: RunStatus = {
     runId: input.runId,
     phase: "queued",
-    requested,
-    requestedByDifficulty: input.candidateCounts,
+    requested: sum(requestedCounts),
+    requestedByDifficulty: requestedCounts,
     discovered: 0,
     accepted: 0,
     rejected: 0,
@@ -58,39 +63,39 @@ export async function executeRun(
 
   try {
     setPhase("discovering");
-    const provenance = await activitySet.collectRunProvenance(input);
-    const run = { ...input, provenance };
-    const updateDiscovery = (progress: DiscoveryProgress): void => {
-      status = { ...status, discovery: progress };
-    };
-    const candidates: Candidate[] = [];
-    let discoveryWave = 0;
-    while (true) {
-      const selected = selectCandidates(candidates, input.candidateCounts);
-      const missing = missingCandidateCounts(selected, input.candidateCounts);
-      if (Object.values(missing).every((count) => count === 0)) {
-        break;
-      }
-      const capacity = MAX_DISCOVERED_CANDIDATES - candidates.length;
-      if (capacity <= 0) {
-        setPhase("blocked");
-        throw candidatePoolExhausted(selected, input.candidateCounts);
-      }
-      const additions = await discoverWave(activitySet, run, {
-        wave: discoveryWave,
-        targetCounts: missing,
-        excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
-        onProgress: updateDiscovery,
-      });
-      const knownPrs = new Set(candidates.map((candidate) => candidate.sourcePr));
-      const uniqueAdditions = additions.filter((candidate) => !knownPrs.has(candidate.sourcePr));
-      if (uniqueAdditions.length === 0) {
-        setPhase("blocked");
-        throw candidatePoolExhausted(selected, input.candidateCounts);
-      }
-      candidates.push(...uniqueAdditions.slice(0, capacity));
-      setDiscovered(candidates.length);
-      discoveryWave += 1;
+    let run: RunRequest;
+    let candidates: Candidate[];
+    if (isReplayRunRequest(input)) {
+      const material = await activitySet.rebuildReplayCandidates(input);
+      candidates = [...material.candidates];
+      const candidateCounts = countByDifficulty(candidates);
+      run = {
+        runId: input.runId,
+        repository: material.repository,
+        provenance: material.provenance,
+        candidateCounts,
+        authoring: input.authoring,
+        version: input.version,
+      };
+      status = {
+        ...status,
+        requested: candidates.length,
+        requestedByDifficulty: candidateCounts,
+        discovered: candidates.length,
+      };
+    } else {
+      const provenance = await activitySet.collectRunProvenance(input);
+      run = { ...input, provenance };
+      candidates = await discoverUntilFilled(
+        activitySet,
+        run,
+        input,
+        (progress) => {
+          status = { ...status, discovery: progress };
+        },
+        setDiscovered,
+        setPhase,
+      );
     }
     const taskProgress: TaskProgress[] = [];
     const acceptedTasks: AuthoredTask[] = [];
@@ -104,7 +109,11 @@ export async function executeRun(
     });
 
     setPhase("authoring");
-    await processWithBackfill(candidates, input.candidateCounts, taskProgress, processCandidate);
+    if (isReplayRunRequest(input)) {
+      await parallelMap(candidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
+    } else {
+      await processWithBackfill(candidates, input.candidateCounts, taskProgress, processCandidate);
+    }
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
@@ -131,6 +140,46 @@ export async function executeRun(
   }
 }
 
+async function discoverUntilFilled(
+  activitySet: SelfBenchActivities,
+  run: RunRequest,
+  input: RunRequest,
+  updateDiscovery: (progress: DiscoveryProgress) => void,
+  setDiscovered: (discovered: number) => void,
+  setPhase: (phase: RunStatus["phase"]) => void,
+): Promise<Candidate[]> {
+  const candidates: Candidate[] = [];
+  let discoveryWave = 0;
+  while (true) {
+    const selected = selectCandidates(candidates, input.candidateCounts);
+    const missing = missingCandidateCounts(selected, input.candidateCounts);
+    if (Object.values(missing).every((count) => count === 0)) {
+      break;
+    }
+    const capacity = MAX_DISCOVERED_CANDIDATES - candidates.length;
+    if (capacity <= 0) {
+      setPhase("blocked");
+      throw candidatePoolExhausted(selected, input.candidateCounts);
+    }
+    const additions = await discoverWave(activitySet, run, {
+      wave: discoveryWave,
+      targetCounts: missing,
+      excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
+      onProgress: updateDiscovery,
+    });
+    const knownPrs = new Set(candidates.map((candidate) => candidate.sourcePr));
+    const uniqueAdditions = additions.filter((candidate) => !knownPrs.has(candidate.sourcePr));
+    if (uniqueAdditions.length === 0) {
+      setPhase("blocked");
+      throw candidatePoolExhausted(selected, input.candidateCounts);
+    }
+    candidates.push(...uniqueAdditions.slice(0, capacity));
+    setDiscovered(candidates.length);
+    discoveryWave += 1;
+  }
+  return candidates;
+}
+
 /**
  * Processes the first selection, then keeps replacing rejected or failed candidates from the
  * leftover discovery pool until every tier has the requested number of accepted tasks or the
@@ -150,10 +199,7 @@ async function processWithBackfill(
     }
     await parallelMap(batch, MAX_CONCURRENT_CANDIDATES, processCandidate);
     const accepted = taskProgress.filter((task) => task.status === "accepted");
-    const missing = missingCandidateCounts(
-      accepted.map((task) => ({ difficulty: task.difficulty })),
-      requested,
-    );
+    const missing = missingCandidateCounts(accepted, requested);
     batch = selectCandidates(
       pool.filter((candidate) => !processed.has(candidate.candidateId)),
       {
@@ -163,4 +209,16 @@ async function processWithBackfill(
       },
     );
   }
+}
+
+function countByDifficulty(candidates: readonly Candidate[]): Record<Difficulty, number> {
+  const counts: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0 };
+  for (const candidate of candidates) {
+    counts[candidate.difficulty] += 1;
+  }
+  return counts;
+}
+
+function sum(counts: Record<Difficulty, number>): number {
+  return counts.easy + counts.medium + counts.hard;
 }

@@ -24,11 +24,38 @@ describe("API run metadata", () => {
       candidateCounts: { easy: 3_334, medium: 3_333, hard: 3_333 },
     });
 
-    expect(built.candidateCounts).toEqual({ easy: 3_334, medium: 3_333, hard: 3_333 });
+    expect("candidateCounts" in built ? built.candidateCounts : undefined).toEqual({
+      easy: 3_334,
+      medium: 3_333,
+      hard: 3_333,
+    });
     expect(() =>
       buildRunRequest(loadConfig(), {
         ...submission,
         candidateCounts: { easy: 3_334, medium: 3_334, hard: 3_333 },
+      }),
+    ).toThrow();
+  });
+
+  test("builds a replay request that skips discovery inputs", () => {
+    const built = buildRunRequest(loadConfig(), {
+      runId: "replay-run",
+      replay: { sourceRunId: "source-run", candidateIds: ["w0s1-alpha", "w1s3-beta"] },
+      authoringModel: "gpt-5.6-sol",
+      selfbenchCommit: "c".repeat(40),
+    });
+
+    expect(built).toEqual({
+      runId: "replay-run",
+      replay: { sourceRunId: "source-run", candidateIds: ["w0s1-alpha", "w1s3-beta"] },
+      authoring: { provider: "openai-codex", model: "gpt-5.6-sol", reasoningEffort: "high" },
+      version: expect.objectContaining({ selfbenchCommit: "c".repeat(40), schema: 2 }),
+    });
+    expect(() =>
+      buildRunRequest(loadConfig(), {
+        runId: "replay-run",
+        replay: { sourceRunId: "source-run", candidateIds: [] },
+        selfbenchCommit: "c".repeat(40),
       }),
     ).toThrow();
   });

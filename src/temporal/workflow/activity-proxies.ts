@@ -18,7 +18,9 @@ const candidateActivities = proxyActivities<
   },
 });
 
-const provenanceActivities = proxyActivities<Pick<SelfBenchActivities, "collectRunProvenance">>({
+const provenanceActivities = proxyActivities<
+  Pick<SelfBenchActivities, "collectRunProvenance" | "rebuildReplayCandidates">
+>({
   startToCloseTimeout: "5 minutes",
   heartbeatTimeout: "3 minutes",
   cancellationType: "WAIT_CANCELLATION_COMPLETED",
@@ -44,6 +46,7 @@ const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverC
 
 export const workflowActivities: SelfBenchActivities = {
   collectRunProvenance: provenanceActivities.collectRunProvenance,
+  rebuildReplayCandidates: provenanceActivities.rebuildReplayCandidates,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   runAuthoringRound: candidateActivities.runAuthoringRound,
   compileAndVerify: candidateActivities.compileAndVerify,

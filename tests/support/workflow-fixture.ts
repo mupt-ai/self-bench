@@ -155,6 +155,9 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       candidates: shardIndex === 0 ? discovered : [],
       report: artifact,
     }),
+    rebuildReplayCandidates: async () => {
+      throw new Error("unexpected replay");
+    },
     runAuthoringRound: async ({ candidate: value, round }) => ({
       kind: "submitted",
       task: draft(value.candidateId),

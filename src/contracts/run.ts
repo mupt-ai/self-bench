@@ -37,17 +37,50 @@ const runVersionSchema = z
     },
   );
 
+const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
+
+const authoringSchema = z.object({
+  provider: z.literal("openai-codex"),
+  model: z.string().min(1),
+  reasoningEffort: z.literal("high"),
+});
+
 export const runRequestSchema = z.object({
-  runId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
+  runId: runIdSchema,
   repository: repositoryRefSchema,
   provenance: artifactRefSchema,
   candidateCounts: candidateCountsSchema,
-  authoring: z.object({
-    provider: z.literal("openai-codex"),
-    model: z.string().min(1),
-    reasoningEffort: z.literal("high"),
-  }),
+  authoring: authoringSchema,
   version: runVersionSchema,
 });
 
 export type RunRequest = z.infer<typeof runRequestSchema>;
+
+export const replaySchema = z
+  .object({
+    sourceRunId: runIdSchema,
+    candidateIds: z
+      .array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/))
+      .min(1)
+      .max(MAX_CANDIDATES_PER_RUN),
+  })
+  .strict();
+
+/**
+ * Starts a run from known candidates of an earlier run instead of discovery: the worker rebuilds
+ * each Candidate from the source run's artifacts and runs authoring and verification fresh.
+ */
+export const replayRunRequestSchema = z.object({
+  runId: runIdSchema,
+  replay: replaySchema,
+  authoring: authoringSchema,
+  version: runVersionSchema,
+});
+
+export type ReplayRunRequest = z.infer<typeof replayRunRequestSchema>;
+
+export type WorkflowRunInput = RunRequest | ReplayRunRequest;
+
+export function isReplayRunRequest(input: WorkflowRunInput): input is ReplayRunRequest {
+  return "replay" in input;
+}

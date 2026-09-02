@@ -6,6 +6,8 @@ import type {
   Candidate,
   Difficulty,
   DiscoveryResult,
+  ReplayMaterial,
+  ReplayRunRequest,
   RunRequest,
   VerifierRoundResult,
   VerifyOutcome,
@@ -59,6 +61,7 @@ export interface ExportInput {
 export interface SelfBenchActivities {
   collectRunProvenance(run: RunRequest): Promise<ArtifactRef>;
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
+  rebuildReplayCandidates(input: ReplayRunRequest): Promise<ReplayMaterial>;
   runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
   runVerifierRound(input: VerifierRoundInput): Promise<VerifierRoundResult>;
