@@ -1,18 +1,23 @@
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { extractRegularArchive } from "../../archive.js";
+import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../../archive.js";
 import { runCommand } from "../../process.js";
 
-export interface PreparedRepairTask {
+export interface PreparedTaskWorkspace {
   readonly extractedDirectory: string;
   readonly taskDirectory: string;
   readonly repositoryDirectory: string;
 }
 
-export async function prepareRepairTask(
+/**
+ * Unpacks a compiled Harbor task bundle and materializes its base repository snapshot as a Git
+ * working tree with the held-out test patch applied, so an agent can inspect rendered files and
+ * edit tests in place.
+ */
+export async function prepareTaskWorkspace(
   archivePath: string,
   workDirectory = "/work",
-): Promise<PreparedRepairTask> {
+): Promise<PreparedTaskWorkspace> {
   const extractedDirectory = join(workDirectory, "task");
   const repositoryDirectory = join(workDirectory, "repo");
   await Promise.all([mkdir(extractedDirectory, { recursive: true }), mkdir(repositoryDirectory)]);
@@ -22,9 +27,11 @@ export async function prepareRepairTask(
     () => join(extractedDirectory, "harbor-task"),
   );
 
-  await extractRegularArchive(join(taskDirectory, "tests/repo.tar.gz"), repositoryDirectory, {
-    allowSymlinks: true,
-  });
+  await extractRegularArchive(
+    join(taskDirectory, "tests/repo.tar.gz"),
+    repositoryDirectory,
+    REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS,
+  );
   await runCommand("git", ["-C", repositoryDirectory, "init", "-q"]);
   await runCommand("git", ["-C", repositoryDirectory, "config", "user.name", "SelfBench"]);
   await runCommand("git", ["-C", repositoryDirectory, "config", "user.email", "selfbench@local"]);

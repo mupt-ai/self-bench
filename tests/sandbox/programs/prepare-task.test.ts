@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../../../src/process.js";
-import { prepareRepairTask } from "../../../src/sandbox/programs/prepare-repair.js";
+import { prepareTaskWorkspace } from "../../../src/sandbox/programs/prepare-task.js";
 
 const roots: string[] = [];
 
@@ -11,9 +11,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe("repair sandbox preparation", () => {
+describe("verifier sandbox preparation", () => {
   test("extracts a nested task and prepares its repository with the held-out patch", async () => {
-    const root = await mkdtemp(join(tmpdir(), "selfbench-prepare-repair-"));
+    const root = await mkdtemp(join(tmpdir(), "selfbench-prepare-task-"));
     roots.push(root);
     const source = join(root, "source/harbor-task");
     const repository = join(root, "repository");
@@ -35,7 +35,7 @@ describe("repair sandbox preparation", () => {
     const archive = join(root, "task.tar.gz");
     await runCommand("tar", ["-czf", archive, "-C", join(root, "source"), "."]);
 
-    const prepared = await prepareRepairTask(archive, work);
+    const prepared = await prepareTaskWorkspace(archive, work);
 
     expect(prepared.extractedDirectory).toBe(join(work, "task"));
     expect(prepared.taskDirectory).toBe(join(work, "task/harbor-task"));

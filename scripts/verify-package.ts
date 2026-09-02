@@ -60,10 +60,7 @@ try {
     "dist/api-main.js",
     "dist/temporal/worker-main.js",
     "dist/sandbox-author.bundle.js",
-    "dist/sandbox-environment.bundle.js",
-    "dist/sandbox-review.bundle.js",
-    "dist/sandbox-repair.bundle.js",
-    "dist/sandbox-validation-repair.bundle.js",
+    "dist/sandbox-verifier.bundle.js",
     "dist/review/index.html",
   ]) {
     await readFile(join(installedRoot, asset));
