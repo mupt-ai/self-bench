@@ -60,6 +60,7 @@ try {
     "dist/api-main.js",
     "dist/temporal/worker-main.js",
     "dist/sandbox-author.bundle.js",
+    "dist/sandbox-check.bundle.js",
     "dist/sandbox-verifier.bundle.js",
     "dist/review/index.html",
   ]) {

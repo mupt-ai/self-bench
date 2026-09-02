@@ -156,6 +156,9 @@ export function serviceComposeFiles(directory: string, task: TaskDefinition): Pr
   if (task.environment.services.length === 0) {
     return [rm(path, { force: true })];
   }
+  return [writeFile(path, serviceComposeYaml(task))];
+}
+export function serviceComposeYaml(task: TaskDefinition): string {
   const dependsOn = Object.fromEntries(
     task.environment.services.map((service) => [service.name, { condition: "service_healthy" }]),
   );
@@ -176,22 +179,17 @@ export function serviceComposeFiles(directory: string, task: TaskDefinition): Pr
       },
     ]),
   );
-  return [
-    writeFile(
-      path,
-      `${JSON.stringify({ services: { main: { build: ".", depends_on: dependsOn }, ...services } }, null, 2)}\n`,
-    ),
-  ];
+  return `${JSON.stringify({ services: { main: { build: ".", depends_on: dependsOn }, ...services } }, null, 2)}\n`;
 }
 function escapeComposeInterpolation(value: string): string {
   return value.replaceAll("$", "$$");
 }
-function posixShellScript(command: string): string {
+export function posixShellScript(command: string): string {
   return `#!/bin/sh\nset -eu\n${command.trim()}\n`;
 }
-function bashScript(command: string): string {
+export function bashScript(command: string): string {
   return `#!/usr/bin/env bash\nset -euo pipefail\n${command.trim()}\n`;
 }
-function smokeScript(task: TaskDefinition): string {
+export function smokeScript(task: TaskDefinition): string {
   return `#!/usr/bin/env bash\nset -euo pipefail\ncd ${shellQuote(`/app/${task.workdir}`)}\n${task.environment.smokeCommand.trim()}\n`;
 }

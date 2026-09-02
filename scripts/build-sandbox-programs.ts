@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "..");
 const outputDirectory = join(root, "dist");
 
-const programs = ["author", "verifier"] as const;
+const programs = ["author", "check", "verifier"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all(
