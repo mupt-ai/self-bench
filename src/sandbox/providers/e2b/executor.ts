@@ -1,13 +1,15 @@
 import { type CommandHandle, E2B } from "e2b";
 import { RollingOutput } from "../../../process.js";
 import type {
+  SandboxExecResult,
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
 } from "../../contracts.js";
+import { LiveSandboxRegistry } from "../../live.js";
 import { E2BCleanup } from "./cleanup.js";
-import { executeE2BCommand } from "./command.js";
+import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
 import { abortReason, createTerminationGate, raceWithTermination } from "./lifecycle.js";
 import {
@@ -61,6 +63,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
   readonly #api: E2BSandboxApi;
   readonly #sleep: E2BSleep;
   readonly #timings: E2BLifecycleTimings;
+  readonly #live = new LiveSandboxRegistry();
 
   constructor(
     config: E2BExecutionConfig,
@@ -195,6 +198,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             killCommand();
           }
         },
+        startSupervision: (live) => this.#live.start(live.sandboxId, e2bBacking(live), options),
       });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: execution };
@@ -259,6 +263,18 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       throw outcome.error;
     }
     return outcome.result;
+  }
+
+  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
+    return this.#live.execute(sandboxId, command);
+  }
+
+  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
+    return this.#live.readFile(sandboxId, path);
+  }
+
+  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
+    return this.#live.writeFile(sandboxId, path, contents);
   }
 
   close(): void {}
