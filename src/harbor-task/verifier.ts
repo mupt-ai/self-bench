@@ -38,6 +38,8 @@ fail_to_pass_exit_code=-1
 fail_to_pass_repeat_exit_code=-1
 pass_to_pass_exit_code=-1
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
+# Harbor runs this script as root, so --preserve-environment would leak HOME=/root into the
+# verifier user's shell and break pnpm/corepack/uv caches. HOME is pinned to the verifier's home.
 # Some test runners fetch dependencies at runtime, so a single registry connection
 # reset must not be misread as a dead test. Retry
 # only infrastructure-style failures with backoff; real assertion failures fail fast.
@@ -48,7 +50,7 @@ run_verifier_command() {
   local status=1
   while [ "$attempt" -le 3 ]; do
     : > "$logfile"
-    runuser -u verifier --preserve-environment -- bash -c "$1" >"$logfile" 2>&1
+    runuser -u verifier --preserve-environment -- env HOME=/home/verifier -u XDG_CACHE_HOME bash -c "$1" >"$logfile" 2>&1
     status=$?
     if [ "$status" -eq 0 ]; then
       break

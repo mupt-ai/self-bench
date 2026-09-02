@@ -219,7 +219,7 @@ set -uo pipefail
 mkdir -p /logs/verifier
 echo '${SMOKE_MARKER}'
 smoke_status=0
-runuser -u verifier --preserve-environment -- /opt/selfbench-environment/smoke.sh 2>&1 || smoke_status=$?
+runuser -u verifier --preserve-environment -- env HOME=/home/verifier -u XDG_CACHE_HOME /opt/selfbench-environment/smoke.sh 2>&1 || smoke_status=$?
 echo "smoke exit code: $smoke_status"
 nop_ran=0
 nop_rewards='{}'

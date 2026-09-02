@@ -128,7 +128,12 @@ describe("Harbor task compiler", () => {
     );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
-    expect(verifier).toContain("runuser -u verifier --preserve-environment");
+    expect(verifier).toContain(
+      'runuser -u verifier --preserve-environment -- env HOME=/home/verifier -u XDG_CACHE_HOME bash -c "$1"',
+    );
+    expect(verifier).not.toMatch(/runuser[^\n]*--preserve-environment -- bash/);
+    expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
+    expect(verifierDockerfile).toContain("chown -R verifier:verifier /app /home/verifier");
     const dockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
     expect(dockerfile).toContain('ENV PLAYWRIGHT_BROWSERS_PATH="/opt/playwright"');
     expect(await readFile(join(output, "environment/setup.sh"), "utf8")).toContain(
