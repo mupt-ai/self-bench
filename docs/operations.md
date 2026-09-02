@@ -29,7 +29,7 @@ Sandbox-provider credentials are separate. Modal accepts its mounted profile or 
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every round. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
+SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
 
 ```bash
 self-bench up --backend docker                         # Docker + Docker
@@ -69,7 +69,7 @@ self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 
 When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request two hours.
+Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 
@@ -119,7 +119,7 @@ self-bench up --backend e2b --harbor-environment docker
 
 Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
 
-E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or verification round requests two hours, so the configured cap centrally shortens only longer stages. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
+E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or verification round requests four hours, so the configured cap centrally shortens only longer stages; under a one-hour cap an agent has room for at most one in-session verify. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
 
 Commands run under `/work`. Inputs and binary outputs are transferred with E2B's file API, and paths outside `/work` are rejected before allocation. Stdout/stderr stream progress while retaining only the latest 8 MiB per stream for diagnostics. Output inactivity cancels the command and sandbox. Workload environment and stage secrets are scoped to the command; SelfBench does not create durable account-level E2B Secrets.
 
@@ -138,7 +138,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests two hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 
