@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { type ArtifactRef, artifactRefSchema } from "./common.js";
-import { type AuthoredTask, authoredTaskDraftSchema } from "./task.js";
+import { type AuthoredTask, authoredTaskDraftSchema, authoredTaskSchema } from "./task.js";
 
 export const verifyStageSchema = z.enum(["authoring", "verification"]);
 export type VerifyStage = z.infer<typeof verifyStageSchema>;
 
 export const MAX_AUTHORING_ROUNDS = 3;
 export const MAX_VERIFIER_ROUNDS = 3;
+/** In-session `verify` calls per agent session (carried across fallback rounds). */
+export const AUTHOR_VERIFY_BUDGET = 3;
+export const VERIFIER_VERIFY_BUDGET = 2;
 
 export const harborRewardsSchema = z.record(z.string(), z.number());
 export type HarborRewards = z.infer<typeof harborRewardsSchema>;
@@ -56,6 +59,12 @@ export interface VerifyOutcome {
   readonly task?: AuthoredTask;
 }
 
+/** A green in-session verify whose payload equals the final submission; the worker reuses it. */
+const verifiedSubmissionSchema = z.object({
+  report: artifactRefSchema,
+  task: authoredTaskSchema,
+});
+
 const rejectedRoundSchema = z.object({
   kind: z.literal("rejected"),
   candidateId: z.string().min(1),
@@ -67,6 +76,8 @@ export const authoringRoundResultSchema = z.discriminatedUnion("kind", [
     kind: z.literal("submitted"),
     task: authoredTaskDraftSchema,
     session: artifactRefSchema,
+    verifyCalls: z.number().int().nonnegative().optional(),
+    verified: verifiedSubmissionSchema.optional(),
   }),
   rejectedRoundSchema,
 ]);
@@ -80,6 +91,8 @@ export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
     task: authoredTaskDraftSchema,
     session: artifactRefSchema,
     summary: z.string().min(1),
+    verifyCalls: z.number().int().nonnegative().optional(),
+    verified: verifiedSubmissionSchema.optional(),
   }),
   rejectedRoundSchema,
 ]);

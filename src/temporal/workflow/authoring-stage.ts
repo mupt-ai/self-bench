@@ -21,6 +21,7 @@ export async function authorWithVerification(
   let session: ArtifactRef | undefined;
   let report: ArtifactRef | undefined;
   let lastSummary = "no verification report";
+  let verifyCallsUsed = 0;
   const infrastructure = infrastructureCounter();
   for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
     context.update({ status: "authoring", stage: "authoring", round });
@@ -28,6 +29,7 @@ export async function authorWithVerification(
       run,
       candidate,
       round,
+      verifyCallsUsed,
       ...(session ? { session } : {}),
       ...(report ? { report } : {}),
     } satisfies AuthoringRoundInput);
@@ -35,9 +37,15 @@ export async function authorWithVerification(
       return rejected(authored.reason);
     }
     session = authored.session;
+    verifyCallsUsed += authored.verifyCalls ?? 0;
     const collision = claimTaskId(context, candidate, authored.task.taskId);
     if (collision) {
       return rejected(collision);
+    }
+    if (authored.verified) {
+      // The agent submitted exactly the payload its in-session verify reported green.
+      context.update({ taskId: authored.verified.task.taskId, status: "verifying" });
+      return { kind: "green", task: authored.verified.task, report: authored.verified.report };
     }
     context.update({ taskId: authored.task.taskId, status: "verifying" });
     const outcome = await activitySet.compileAndVerify({

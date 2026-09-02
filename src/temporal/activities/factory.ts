@@ -17,9 +17,10 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
     collectRunProvenance: (run) => collectRunProvenance(store, run),
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
     rebuildReplayCandidates: (input) => rebuildReplayCandidates(store, input),
-    runAuthoringRound: (input) => runAuthoringRound(store, sandbox, input),
+    runAuthoringRound: (input) =>
+      runAuthoringRound(store, sandbox, config.harborEnvironment, input),
     compileAndVerify: (input) => compileAndVerify(store, config.harborEnvironment, input),
-    runVerifierRound: (input) => runVerifierRound(store, sandbox, input),
+    runVerifierRound: (input) => runVerifierRound(store, sandbox, config.harborEnvironment, input),
     buildExport: (input) => buildExport(store, input),
   };
 }

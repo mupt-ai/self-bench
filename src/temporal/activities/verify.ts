@@ -30,9 +30,11 @@ export async function compileAndVerify(
   store: ArtifactStore,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: CompileAndVerifyInput,
+  artifactPrefix?: string,
 ): Promise<VerifyOutcome> {
   const { run, candidate, stage, round } = input;
-  const prefix = `runs/${run.runId}/verify/${candidate.candidateId}/${stage}-round-${round}`;
+  const prefix =
+    artifactPrefix ?? `runs/${run.runId}/verify/${candidate.candidateId}/${stage}-round-${round}`;
   const checkpoint = await store.getByKey(`${prefix}/report.json`);
   if (checkpoint) {
     return await restoreCheckpoint(store, prefix, input, checkpoint);

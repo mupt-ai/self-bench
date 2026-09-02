@@ -59,6 +59,8 @@ try {
   for (const asset of [
     "dist/api-main.js",
     "dist/temporal/worker-main.js",
+    "dist/extension-authoring.bundle.js",
+    "dist/extension-verifier.bundle.js",
     "dist/sandbox-author.bundle.js",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-verifier.bundle.js",

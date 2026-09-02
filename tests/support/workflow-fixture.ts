@@ -162,6 +162,7 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       kind: "submitted",
       task: draft(value.candidateId),
       session: ref(`file:///${value.candidateId}/authoring/session/round-${round}.jsonl`),
+      verifyCalls: 0,
     }),
     compileAndVerify: async ({ task, stage, round }) => greenOutcome(task, stage, round),
     runVerifierRound: async ({ candidate: value, round }) => ({

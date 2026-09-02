@@ -1,4 +1,9 @@
-import { type Candidate, MAX_AUTHORING_ROUNDS, type RunRequest } from "../../contracts.js";
+import {
+  AUTHOR_VERIFY_BUDGET,
+  type Candidate,
+  MAX_AUTHORING_ROUNDS,
+  type RunRequest,
+} from "../../contracts.js";
 
 const tierRequirements = {
   easy: "at least 20 changed implementation lines across at least 1 implementation file, at least 1 fail-to-pass test, and no pass-to-pass minimum",
@@ -52,14 +57,16 @@ Call submit_task exactly once per round. Its definition must use schemaVersion 2
 
 Before submission, verify from repository scripts and the pinned diff that the selected test identifiers belong to one repository-native test command and form the required nop/oracle split: on the base snapshot plus held-out tests, failToPass must fail while passToPass succeeds; with the gold patch applied, both must pass deterministically. Do not invent a test command when no stable test seam exists. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests.
 
-After you submit, the worker renders task.toml, both Dockerfiles, and the scripts from your contract, audits the patches, builds the image, and runs smoke, nop, and oracle. If any gate fails you will be resumed in a fresh sandbox with a structured verification report; fix the cause and call submit_task again with the complete corrected task. You have at most ${MAX_AUTHORING_ROUNDS} rounds. If the candidate cannot become a fair task, do not submit and explain why in your final message. Do not return prose after the tool call.
+# Verify before you submit
+
+Call verify with your complete task before you submit. It runs the static check, then the worker renders task.toml, both Dockerfiles, and the scripts from your contract, audits the patches, builds the image, and runs smoke, nop, and oracle exactly as the harness does, and returns the report (this can take up to an hour; wait for it). Fix the red gates and call verify again; you have ${AUTHOR_VERIFY_BUDGET} verify calls in this session and each result states how many remain. The gate-to-field mapping in the skill tells you which field a red gate points at. Only call submit_task once verify is green, with exactly the payload that was green, unless verify's failure is one you cannot fix within the rules, in which case do not submit and explain why in your final message. If verify itself errors on the worker, the call is not charged; retry it. If your sandbox dies mid-session you may be resumed in a fresh sandbox with the last report (at most ${MAX_AUTHORING_ROUNDS} rounds in total). Do not return prose after a tool call.
 
 Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }
 
 /** Prompt appended as the next user turn when an authoring session is resumed. */
 export function authoringResumePrompt(round: number, renderedReport: string): string {
-  return `Round ${round} of ${MAX_AUTHORING_ROUNDS}. Your previous submission did not pass verification. This is a fresh sandbox: the repository was re-cloned at the pinned base commit, your earlier working-tree edits are gone, and only this conversation carries over. Read the report, fix every failing gate, and call submit_task exactly once with the complete corrected task (definition with environment contract, held-out test patch, gold patch). Every rule from the original brief still applies; do not weaken tests or move setup into the test command merely to turn a gate green. If the failure cannot be fixed within those rules, do not submit and explain why in your final message.
+  return `Round ${round} of ${MAX_AUTHORING_ROUNDS}. Your previous submission did not pass verification. This is a fresh sandbox: the repository was re-cloned at the pinned base commit, your earlier working-tree edits are gone, and only this conversation carries over. Read the report, fix every failing gate, call verify until it is green (the result states how many verify calls remain), then call submit_task exactly once with the complete corrected task (definition with environment contract, held-out test patch, gold patch). Every rule from the original brief still applies; do not weaken tests or move setup into the test command merely to turn a gate green. If the failure cannot be fixed within those rules, do not submit and explain why in your final message.
 
 ${renderedReport.trim()}`;
 }

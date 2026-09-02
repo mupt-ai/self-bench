@@ -4,6 +4,7 @@ import {
   PI_SESSION_OUTPUT_PATH,
   piSessionArguments,
 } from "../../pi-session.js";
+import { MAILBOX_DIRECTORY, MAILBOX_DONE } from "../../sandbox/supervisor.js";
 import type { DiscoveryShardInput } from "./types.js";
 
 export function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
@@ -37,12 +38,13 @@ run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills 
 export function authoringRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
 ${collectPiSessionScript()}
+${mailboxSetup()}
 clone_source
 mkdir -p /work/tasks ${PI_SESSION_DIRECTORY}
 cd /work/repo
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
-  --skill /work/selfbench-skill --extension /work/authoring.ts \\
+  --skill /work/selfbench-skill --extension /work/authoring.js \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
@@ -57,12 +59,13 @@ node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definiti
 export function verifierRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
 ${collectPiSessionScript()}
+${mailboxSetup()}
 mkdir -p /work/verdict /work/fix ${PI_SESSION_DIRECTORY}
 node /work/sandbox-verifier.js /work/task.tar.gz
 cd /work/repo
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
-  --extension /work/verifier.ts --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,edit,write,grep,find,ls,accept_task,submit_fix "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
 [ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
@@ -70,6 +73,15 @@ collect_session
 [ -f /work/fix/fixed-test.patch ] || : > /work/fix/fixed-test.patch
 [ -f ${PI_SESSION_OUTPUT_PATH} ] || : > ${PI_SESSION_OUTPUT_PATH}
 exit "$agent_status"`;
+}
+/**
+ * Mailbox directories for the in-session verify tool; the done marker tells the worker's
+ * supervisor that the agent command is over even if the provider exit signal lags.
+ */
+function mailboxSetup(): string {
+  return `mkdir -p ${MAILBOX_DIRECTORY}/requests ${MAILBOX_DIRECTORY}/responses
+finish_round() { cleanup; : > ${MAILBOX_DONE}; }
+trap finish_round EXIT`;
 }
 function sandboxBootstrap(): string {
   return `set -euo pipefail

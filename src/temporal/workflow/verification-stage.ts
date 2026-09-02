@@ -24,6 +24,7 @@ export async function verifyWithCleanup(
   let reportGreen = true;
   let lastSummary = "all gates green";
   let session: ArtifactRef | undefined;
+  let verifyCallsUsed = 0;
   const infrastructure = infrastructureCounter();
   for (let round = 1; round <= MAX_VERIFIER_ROUNDS; round += 1) {
     context.update({ status: "reviewing", stage: "verification", round });
@@ -33,6 +34,7 @@ export async function verifyWithCleanup(
       task,
       report,
       round,
+      verifyCallsUsed,
       ...(session ? { session } : {}),
     } satisfies VerifierRoundInput);
     if (verdict.kind === "rejected") {
@@ -44,7 +46,15 @@ export async function verifyWithCleanup(
         ? { kind: "green", task, report }
         : rejected(`verifier accepted while mechanical gates were red; ${lastSummary}`);
     }
+    verifyCallsUsed += verdict.verifyCalls ?? 0;
     context.update({ status: "verifying" });
+    if (verdict.verified) {
+      task = verdict.verified.task;
+      report = verdict.verified.report;
+      reportGreen = true;
+      lastSummary = "all gates green (verified in-session)";
+      continue;
+    }
     const outcome = await activitySet.compileAndVerify({
       run,
       candidate,

@@ -1,8 +1,10 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts.js";
+import type { SelfBenchConfig } from "../../config.js";
 import {
   type ArtifactRef,
+  AUTHOR_VERIFY_BUDGET,
   type AuthoringRoundResult,
   authoringRoundResultSchema,
   verifyReportSchema,
@@ -13,6 +15,7 @@ import {
   sessionArtifactKey,
 } from "../../pi-session.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
+import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
 import { githubToken, loadPiModelAuth } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { authoringRoundScript } from "./agent-scripts.js";
@@ -24,6 +27,8 @@ import {
   storePiSession,
   withActivityHeartbeats,
 } from "./runtime.js";
+import { SessionVerifier } from "./session-verify.js";
+import { readSubmission } from "./submissions.js";
 import type { AuthoringRoundInput } from "./types.js";
 
 /**
@@ -35,6 +40,7 @@ import type { AuthoringRoundInput } from "./types.js";
 export async function runAuthoringRound(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
+  harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: AuthoringRoundInput,
 ): Promise<AuthoringRoundResult> {
   const { run, candidate, round } = input;
@@ -80,6 +86,16 @@ export async function runAuthoringRound(
       )
     : authoringPrompt(run, candidate);
   await store.put(`${prefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
+  const verifier = new SessionVerifier({
+    store,
+    harborEnvironment,
+    run,
+    candidate,
+    stage: "authoring",
+    round,
+    prefix,
+  });
+  const verifyBudget = Math.max(0, AUTHOR_VERIFY_BUDGET - (input.verifyCallsUsed ?? 0));
   const logKey = `${prefix}/attempt-${Context.current().info.attempt}/sandbox.log`;
   const result = await runSandboxWithFailureLog(store, logKey, () =>
     withActivityHeartbeats(
@@ -92,7 +108,7 @@ export async function runAuthoringRound(
             timeoutMs: AUTHORING_TIMEOUT_MS,
             inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
             files: [
-              { path: "/work/authoring.ts", contents: extension },
+              { path: "/work/authoring.js", contents: extension },
               { path: "/work/selfbench-skill/SKILL.md", contents: skill },
               { path: "/work/sandbox-author.js", contents: packager },
               { path: "/work/sandbox-check.js", contents: checker },
@@ -116,10 +132,12 @@ export async function runAuthoringRound(
               AUTHOR_MODEL: run.authoring.model,
               SELFBENCH_TASK_OUTPUT: "/work/tasks",
               SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
+              SELFBENCH_MAILBOX: MAILBOX_DIRECTORY,
+              SELFBENCH_VERIFY_BUDGET: String(verifyBudget),
             },
             command: ["bash", "-lc", authoringRoundScript(round > 1)],
           },
-          options,
+          { ...options, onLive: (live, exited) => verifier.supervise(live, exited) },
         ),
     ),
   );
@@ -147,18 +165,21 @@ export async function runAuthoringRound(
       store.put(`${prefix}/definition.json`, definitionBytes, "application/json"),
       store.put(`${prefix}/source-task.tar.gz`, bundle, "application/gzip"),
     ]);
-    const taskId = (
-      JSON.parse(Buffer.from(definitionBytes).toString("utf8")) as { taskId?: unknown }
-    ).taskId;
+    const submission = await readSubmission(definitionBytes, bundle);
+    const verified = submission
+      ? verifier.verified(submission.definition, submission.testPatch, submission.goldPatch)
+      : undefined;
     outcome = {
       kind: "submitted",
       task: {
         candidateId: candidate.candidateId,
-        taskId: typeof taskId === "string" && taskId ? taskId : candidate.candidateId,
+        taskId: submission?.taskId ?? candidate.candidateId,
         definition: definitionRef,
         sourceBundle: bundleRef,
       },
       session: session.ref,
+      verifyCalls: verifier.records.length,
+      ...(verified ? { verified } : {}),
     };
   }
   await store.put(

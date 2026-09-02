@@ -32,6 +32,8 @@ export interface AuthoringRoundInput {
   readonly session?: ArtifactRef;
   /** Previous round's stored VerifyReport JSON; required for round > 1. */
   readonly report?: ArtifactRef;
+  /** In-session verify calls already spent in earlier rounds of this session. */
+  readonly verifyCallsUsed?: number;
 }
 
 /** Trusted compile + audit + Harbor build/smoke/nop/oracle for one submission. */
@@ -51,6 +53,7 @@ export interface VerifierRoundInput {
   readonly report: ArtifactRef;
   readonly round: number;
   readonly session?: ArtifactRef;
+  readonly verifyCallsUsed?: number;
 }
 
 export interface ExportInput {

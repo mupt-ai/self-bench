@@ -1,0 +1,112 @@
+import { z } from "zod";
+import type { ArtifactStore } from "../../artifacts.js";
+import {
+  type AuthoredTaskDraft,
+  taskDefinitionSchema,
+  type VerifierRoundResult,
+} from "../../contracts.js";
+import { assertVerifierFix } from "../../verifier-fix.js";
+import { materializeDraft, type OriginalTask } from "./drafts.js";
+import type { StoredPiSession } from "./runtime.js";
+import type { SessionVerifier } from "./session-verify.js";
+import type { VerifierRoundInput } from "./types.js";
+
+export const FIX_DEFINITION_PATH = "/work/fix/fixed-definition.json";
+export const FIX_TEST_PATCH_PATH = "/work/fix/fixed-test.patch";
+export const VERDICT_PATH = "/work/verdict/verdict.json";
+
+const verdictSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("accepted"), reason: z.string().min(1) }).passthrough(),
+  z.object({ kind: z.literal("fixed"), summary: z.string().min(1) }).passthrough(),
+  z.object({ kind: z.literal("none") }),
+]);
+
+export interface VerifierOutcomeInput {
+  readonly store: ArtifactStore;
+  readonly input: VerifierRoundInput;
+  readonly prefix: string;
+  readonly result: {
+    readonly exitCode: number;
+    readonly outputs: Readonly<Record<string, Uint8Array>>;
+  };
+  readonly session: StoredPiSession | undefined;
+  readonly logUri: string;
+  readonly original: OriginalTask;
+  readonly verifier: SessionVerifier;
+}
+
+/** Turns the sandbox's verdict and fix files into the round result, validating fix boundaries. */
+export async function resolveVerifierOutcome(
+  input: VerifierOutcomeInput,
+): Promise<VerifierRoundResult> {
+  const { store, prefix, result, session, logUri, original, verifier } = input;
+  const { candidate, round } = input.input;
+  const reject = (reason: string): VerifierRoundResult => ({
+    kind: "rejected",
+    candidateId: candidate.candidateId,
+    reason: `${reason}; log: ${logUri}`,
+  });
+  const verdictBytes = result.outputs[VERDICT_PATH];
+  if (result.exitCode !== 0 || !verdictBytes || !session) {
+    return reject(`verifier round ${round} did not complete${explanation(session)}`);
+  }
+  const verdict = verdictSchema.safeParse(JSON.parse(Buffer.from(verdictBytes).toString("utf8")));
+  if (!verdict.success) {
+    return reject(`verifier round ${round} produced an unreadable verdict`);
+  }
+  await store.put(`${prefix}/verdict.json`, verdictBytes, "application/json");
+  if (verdict.data.kind === "none") {
+    return reject(`verification agent declined the task${explanation(session)}`);
+  }
+  if (verdict.data.kind === "accepted") {
+    return { kind: "accepted", session: session.ref, reason: verdict.data.reason };
+  }
+  const fixedDefinitionBytes = result.outputs[FIX_DEFINITION_PATH];
+  const fixedTestPatchBytes = result.outputs[FIX_TEST_PATCH_PATH];
+  if (!fixedDefinitionBytes || !fixedTestPatchBytes) {
+    return reject(`verifier round ${round} recorded a fix without its files`);
+  }
+  const fixedDefinitionJson = Buffer.from(fixedDefinitionBytes).toString("utf8");
+  const fixedTestPatch = Buffer.from(fixedTestPatchBytes).toString("utf8");
+  let fixedTask: AuthoredTaskDraft;
+  try {
+    const fixed = taskDefinitionSchema.parse(JSON.parse(fixedDefinitionJson));
+    assertVerifierFix({
+      original: original.definition,
+      fixed,
+      originalTestPatch: original.testPatch,
+      fixedTestPatch,
+      originalGoldPatch: original.goldPatch,
+      fixedGoldPatch: original.goldPatch,
+    });
+    fixedTask = await materializeDraft(
+      store,
+      `${prefix}/fix`,
+      candidate.candidateId,
+      JSON.stringify(fixed, null, 2),
+      fixedTestPatch,
+      original.goldPatch,
+    );
+  } catch (error) {
+    return reject(
+      `verifier fix rejected: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const verified = verifier.verified(
+    JSON.parse(fixedDefinitionJson),
+    fixedTestPatch,
+    original.goldPatch,
+  );
+  return {
+    kind: "fixed",
+    task: fixedTask,
+    session: session.ref,
+    summary: verdict.data.summary,
+    verifyCalls: verifier.records.length,
+    ...(verified ? { verified } : {}),
+  };
+}
+
+function explanation(session: StoredPiSession | undefined): string {
+  return session?.finalMessage ? `: ${session.finalMessage.slice(0, 1_000)}` : "";
+}
