@@ -158,6 +158,7 @@ Each verify gate maps to those files, so a red gate tells you which field to cha
 
 ## Patch rules
 
+- When a change spans backend and frontend, anchor the held-out tests on the backend contract through its public boundary; tests that mock the API and check only rendering are rejected as unfair.
 - Never touch paths the repository marks `export-ignore` in `.gitattributes` (for PostHog that includes everything under `.github/`): the snapshot the solver and the verifier receive is a `git archive`, so those files do not exist there and the static check rejects patches that reference them. If a change lives only in such paths, decline the task.
 - Produce binary-safe Git patches beginning with `diff --git`, with LF line endings and a final newline (use `git diff`). Both must apply cleanly to the base commit, and the gold patch must apply on top of the test patch; `verify` checks this with `git apply --check` before any build.
 - Keep test and gold paths disjoint.
