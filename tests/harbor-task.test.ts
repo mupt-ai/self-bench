@@ -129,7 +129,7 @@ describe("Harbor task compiler", () => {
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
     expect(verifier).toContain(
-      'runuser -u verifier --preserve-environment -- env HOME=/home/verifier -u XDG_CACHE_HOME bash -c "$1"',
+      'runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$1"',
     );
     expect(verifier).not.toMatch(/runuser[^\n]*--preserve-environment -- bash/);
     expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
