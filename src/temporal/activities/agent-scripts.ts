@@ -50,9 +50,10 @@ run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")
   --tools read,bash,grep,find,ls,verify,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"
-[ "$agent_status" -eq 0 ] || exit "$agent_status"
+[ "$agent_status" -eq 0 ] || { wrapper_status=$agent_status; exit "$agent_status"; }
 node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json
-${reportOutputs(["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION_OUTPUT_PATH])}`;
+${reportOutputs(["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION_OUTPUT_PATH])}
+wrapper_status=0`;
 }
 /**
  * One verification round. The sandbox program unpacks the compiled task and materializes the
@@ -77,6 +78,7 @@ echo "[selfbench] pi exited with $agent_status"
 [ -f /work/fix/fixed-test.patch ] || : > /work/fix/fixed-test.patch
 [ -f ${PI_SESSION_OUTPUT_PATH} ] || : > ${PI_SESSION_OUTPUT_PATH}
 ${reportOutputs(["/work/verdict/verdict.json", "/work/fix/fixed-definition.json", "/work/fix/fixed-test.patch", PI_SESSION_OUTPUT_PATH])}
+wrapper_status=$agent_status
 exit "$agent_status"`;
 }
 /** Prints which declared outputs exist so the archived sandbox result explains a missing read. */
@@ -91,9 +93,21 @@ echo "[selfbench] outputs:$outputs_report"`;
  * Mailbox directories for the in-session verify tool; the done marker tells the worker's
  * supervisor that the agent command is over even if the provider exit signal lags.
  */
+/**
+ * The EXIT trap records the wrapper's status for the worker. The script sets `wrapper_status`
+ * to the status it intends right before it ends, because with a real pi session `$?` at trap
+ * entry has been observed as 1 after `exit 0`; the trap also logs the command it fired on.
+ */
 function mailboxSetup(): string {
   return `mkdir -p ${MAILBOX_DIRECTORY}/requests ${MAILBOX_DIRECTORY}/responses
-finish_round() { local status=$?; cleanup; printf '%s\\n' "$status" > ${WRAPPER_STATUS_PATH}; : > ${MAILBOX_DONE}; }
+finish_round() {
+  local status=$?
+  printf '[selfbench] exit trap: status=%s command=[%s] line=%s\\n' "$status" "$BASH_COMMAND" "$LINENO" >&2
+  if [ -n "\${wrapper_status:-}" ]; then status=$wrapper_status; fi
+  cleanup
+  printf '%s\\n' "$status" > ${WRAPPER_STATUS_PATH}
+  : > ${MAILBOX_DONE}
+}
 trap finish_round EXIT`;
 }
 function sandboxBootstrap(): string {
