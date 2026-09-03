@@ -78,7 +78,7 @@ try {
     "docs/task-construction.md",
     "src/extensions/authoring.ts",
     "src/extensions/discovery.ts",
-    "src/extensions/environment.ts",
+    "src/extensions/verifier.ts",
     "src/skills/selfbench/SKILL.md",
   ]) {
     await readFile(join(installedRoot, asset));
