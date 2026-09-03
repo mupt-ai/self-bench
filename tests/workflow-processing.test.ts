@@ -13,11 +13,11 @@ import {
 } from "./support/workflow-fixture.js";
 
 describe("SelfBench workflow processing", () => {
-  test("backfills a rejected candidate from the leftover discovery pool", async () => {
+  test("runs every discovered candidate in parallel and exports every accept", async () => {
     const activities = acceptingActivities([
       candidate("first", 1),
-      candidate("reserve", 2),
-      candidate("unused", 3),
+      candidate("second", 2),
+      candidate("third", 3),
     ]);
     const authored: string[] = [];
     const original = activities.runAuthoringRound;
@@ -34,33 +34,15 @@ describe("SelfBench workflow processing", () => {
       currentStatus = status;
     });
 
-    expect(authored).toEqual(["first", "reserve"]);
-    expect(result.acceptedTaskIds).toEqual(["reserve-task"]);
-    expect(currentStatus?.().accepted).toBe(1);
+    expect([...authored].sort()).toEqual(["first", "second", "third"]);
+    expect([...result.acceptedTaskIds].sort()).toEqual(["second-task", "third-task"]);
+    expect(currentStatus?.().accepted).toBe(2);
     expect(currentStatus?.().rejected).toBe(1);
-    expect(currentStatus?.().tasks.map((task) => task.candidateId)).toEqual(["first", "reserve"]);
-  });
-  test("backfills per tier and stops when the pool has no matching candidate left", async () => {
-    const activities = acceptingActivities([
-      candidate("easy-a", 1, "easy"),
-      candidate("hard-a", 2, "hard"),
-      candidate("hard-b", 3, "hard"),
-      candidate("easy-b", 4, "easy"),
-    ]);
-    const original = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
-      if (input.candidate.candidateId.startsWith("easy")) {
-        return { kind: "rejected", candidateId: input.candidate.candidateId, reason: "no seam" };
-      }
-      return await original(input);
-    };
-
-    const result = await executeRun(
-      { ...run, candidateCounts: { easy: 1, medium: 0, hard: 1 } },
-      activities,
-    );
-
-    expect(result.acceptedTaskIds).toEqual(["hard-a-task"]);
+    expect(
+      currentStatus?.()
+        .tasks.map((task) => task.candidateId)
+        .sort(),
+    ).toEqual(["first", "second", "third"]);
   });
   test("records exhausted Harbor infrastructure failure and replaces the candidate", async () => {
     const activities = acceptingActivities([candidate("infra", 1), candidate("reserve", 2)]);

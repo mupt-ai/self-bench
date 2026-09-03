@@ -122,8 +122,14 @@ describe("SelfBench workflow discovery", () => {
       },
     );
 
-    expect(authored.sort()).toEqual(["easy:easy-1", "hard:hard-1", "medium:medium-1"]);
-    expect(exported.sort()).toEqual(["easy-1-task", "hard-1-task"]);
+    // Every discovered candidate is authored; the requested counts only size the pool.
+    expect(authored.sort()).toEqual([
+      "easy:easy-1",
+      "easy:easy-extra",
+      "hard:hard-1",
+      "medium:medium-1",
+    ]);
+    expect(exported.sort()).toEqual(["easy-1-task", "easy-extra-task", "hard-1-task"]);
     expect([...result.acceptedTaskIds].sort()).toEqual(exported);
     expect(currentStatus?.().requestedByDifficulty).toEqual({ easy: 1, medium: 1, hard: 1 });
     expect(currentStatus?.().accepted).toBe(2);

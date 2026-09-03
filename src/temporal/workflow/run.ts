@@ -112,16 +112,10 @@ export async function executeRun(
       tracker.process(run, candidate);
 
     setPhase("authoring");
-    if (isReplayRunRequest(input)) {
-      await parallelMap(candidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
-    } else {
-      await processWithBackfill(
-        candidates,
-        input.candidateCounts,
-        tracker.taskProgress,
-        processCandidate,
-      );
-    }
+    // Every candidate, discovered or replayed, runs as its own child workflow at once. The
+    // requested counts size discovery's pool; they are not a cap on accepted tasks, so a pool that
+    // yields more than requested simply exports more.
+    await parallelMap(candidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
@@ -194,37 +188,6 @@ async function discoverUntilFilled(
     discoveryWave += 1;
   }
   return candidates;
-}
-
-/**
- * Processes the first selection, then keeps replacing rejected or failed candidates from the
- * leftover discovery pool until every tier has the requested number of accepted tasks or the
- * pool has no unused candidate of a missing tier.
- */
-async function processWithBackfill(
-  pool: readonly Candidate[],
-  requested: RunRequest["candidateCounts"],
-  taskProgress: readonly TaskProgress[],
-  processCandidate: (candidate: Candidate) => Promise<void>,
-): Promise<void> {
-  const processed = new Set<string>();
-  let batch = selectCandidates(pool, requested);
-  while (batch.length > 0) {
-    for (const candidate of batch) {
-      processed.add(candidate.candidateId);
-    }
-    await parallelMap(batch, MAX_CONCURRENT_CANDIDATES, processCandidate);
-    const accepted = taskProgress.filter((task) => task.status === "accepted");
-    const missing = missingCandidateCounts(accepted, requested);
-    batch = selectCandidates(
-      pool.filter((candidate) => !processed.has(candidate.candidateId)),
-      {
-        easy: Math.max(0, missing.easy),
-        medium: Math.max(0, missing.medium),
-        hard: Math.max(0, missing.hard),
-      },
-    );
-  }
 }
 
 function countByDifficulty(candidates: readonly Candidate[]): Record<Difficulty, number> {
