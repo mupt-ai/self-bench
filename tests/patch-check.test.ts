@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { malformedPatchProblems, patchApplyCheck } from "../src/patch-check.js";
+import { exportIgnoredPaths, malformedPatchProblems, patchApplyCheck } from "../src/patch-check.js";
 import { runCommand } from "../src/process.js";
 
 const roots: string[] = [];
@@ -47,6 +47,44 @@ const goldPatch = `diff --git a/src.txt b/src.txt
 `;
 
 describe("patch apply check", () => {
+  test("rejects patches that touch export-ignored paths, including via an ancestor directory", async () => {
+    const { repo, base: dirtyBase } = await repository();
+    await writeFile(
+      join(repo, ".gitattributes"),
+      ".github/ export-ignore\ndocs/internal.md export-ignore\n",
+    );
+    await runCommand("git", ["-C", repo, "add", ".gitattributes"]);
+    await runCommand("git", ["-C", repo, "commit", "-qm", "attributes"]);
+    const base = (await runCommand("git", ["-C", repo, "rev-parse", "HEAD"])).stdout.trim();
+    expect(base).not.toBe(dirtyBase);
+    const ignoredTest = `diff --git a/.github/scripts/check.py b/.github/scripts/check.py
+new file mode 100644
+--- /dev/null
++++ b/.github/scripts/check.py
+@@ -0,0 +1 @@
++print("hi")
+`;
+    const errors = await patchApplyCheck({
+      repository: repo,
+      base,
+      testPatch: ignoredTest,
+      goldPatch,
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain("test.patch touches .github/scripts/check.py");
+    expect(errors[0]?.message).toContain("export-ignore");
+    const worktree = (await runCommand("git", ["-C", repo, "worktree", "list"])).stdout
+      .trim()
+      .split("\n");
+    expect(worktree).toHaveLength(1);
+    const scratch = join(repo, "..", "attr-check");
+    await runCommand("git", ["-C", repo, "worktree", "add", "--detach", scratch, base]);
+    expect(await exportIgnoredPaths(scratch, ["docs/internal.md", "src.txt", ".github/x"])).toEqual(
+      [".github/x", "docs/internal.md"],
+    );
+    await runCommand("git", ["-C", repo, "worktree", "remove", "--force", scratch]);
+  });
+
   test("accepts patches that apply to the clean base in both orders despite a dirty working tree", async () => {
     const { repo, base } = await repository();
     expect(await patchApplyCheck({ repository: repo, base, testPatch, goldPatch })).toEqual([]);
