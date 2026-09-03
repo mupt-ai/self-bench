@@ -6,6 +6,7 @@ import type { SelfBenchConfig } from "../../config.js";
 import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts.js";
 import type { HarborJobResult } from "../../harbor-results.js";
 import { nopGatePassed, oracleGatePassed } from "../../verify-report.js";
+import { composeDiagnostics, isUnhealthyServiceFailure, storeGateLog } from "./gate-logs.js";
 import {
   boundedTail,
   exception,
@@ -59,18 +60,18 @@ export async function runHarborGates(
     await writeFile(join(taskDirectory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
     const first = await harborRun(taskDirectory, root, task.taskId, "nop", harborEnvironment);
     if ("infrastructure" in first) {
-      return {
-        ...gates,
-        build: { ran: true, ok: false, infrastructure: true, logTail: first.infrastructure },
-      };
+      const log = await storeGateLog(store, `${prefix}/build.log`, first.infrastructure);
+      return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
     }
     await storeHarborResult(store, `${prefix}/smoke-nop`, first);
     const trialError = exceptionMessage(first.trial);
     if (trialError !== undefined) {
-      return {
-        ...gates,
-        build: { ran: true, ok: false, infrastructure: false, logTail: boundedTail(trialError) },
-      };
+      const log = await storeGateLog(
+        store,
+        `${prefix}/build.log`,
+        await failureLog(trialError, first, harborEnvironment),
+      );
+      return { ...gates, build: { ran: true, ok: false, infrastructure: false, ...log } };
     }
     const firstRewards = rewards(first.trial);
     const output = verifierOutput(first) ?? "";
@@ -79,7 +80,11 @@ export async function runHarborGates(
     gates.smoke = {
       ran: true,
       ok: smokeOk,
-      logTail: boundedTail(section(output, SMOKE_MARKER, NOP_MARKER)),
+      ...(await storeGateLog(
+        store,
+        `${prefix}/smoke.log`,
+        section(output, SMOKE_MARKER, NOP_MARKER),
+      )),
     };
     if (!smokeOk) {
       return gates;
@@ -89,7 +94,7 @@ export async function runHarborGates(
       ran: true,
       ok: nopGatePassed(nopRewards),
       rewards: nopRewards,
-      logTail: boundedTail(section(output, NOP_MARKER)),
+      ...(await storeGateLog(store, `${prefix}/nop.log`, section(output, NOP_MARKER))),
     };
     if (!gates.nop.ok) {
       return gates;
@@ -97,20 +102,22 @@ export async function runHarborGates(
     await copyFile(join(taskDirectory, "tests/task-test.sh"), join(taskDirectory, "tests/test.sh"));
     const oracle = await harborRun(taskDirectory, root, task.taskId, "oracle", harborEnvironment);
     if ("infrastructure" in oracle) {
-      return {
-        ...gates,
-        build: {
-          ran: true,
-          ok: false,
-          infrastructure: true,
-          logTail: `during oracle run: ${oracle.infrastructure}`,
-        },
-      };
+      const log = await storeGateLog(
+        store,
+        `${prefix}/oracle-build.log`,
+        `during oracle run: ${oracle.infrastructure}`,
+      );
+      return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
     }
     await storeHarborResult(store, `${prefix}/oracle`, oracle);
     const oracleError = exceptionMessage(oracle.trial);
     if (oracleError !== undefined) {
-      gates.oracle = { ran: true, ok: false, rewards: {}, logTail: boundedTail(oracleError) };
+      const log = await storeGateLog(
+        store,
+        `${prefix}/oracle.log`,
+        await failureLog(oracleError, oracle, harborEnvironment),
+      );
+      gates.oracle = { ran: true, ok: false, rewards: {}, ...log };
       return gates;
     }
     const oracleRewards = numericRewards(rewards(oracle.trial));
@@ -118,10 +125,23 @@ export async function runHarborGates(
       ran: true,
       ok: oracleGatePassed(oracleRewards),
       rewards: oracleRewards,
-      logTail: boundedTail(verifierOutput(oracle) ?? ""),
+      ...(await storeGateLog(store, `${prefix}/oracle.log`, verifierOutput(oracle) ?? "")),
     };
     return gates;
   });
+}
+
+/** Raw failure log: the trial exception, Harbor's trial.log, and compose diagnostics when relevant. */
+async function failureLog(
+  message: string,
+  result: HarborJobResult,
+  harborEnvironment: SelfBenchConfig["harborEnvironment"],
+): Promise<string> {
+  const parts = [message, result.trialLog ?? "", verifierOutput(result) ?? ""];
+  if (isUnhealthyServiceFailure(`${message}\n${result.trialLog ?? ""}`)) {
+    parts.push(await composeDiagnostics(result.trial, harborEnvironment));
+  }
+  return parts.filter((part) => part.trim().length > 0).join("\n\n");
 }
 
 async function harborRun(

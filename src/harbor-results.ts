@@ -10,6 +10,8 @@ export interface HarborJobResult {
   readonly job: unknown;
   readonly trial: unknown;
   readonly verifier?: HarborVerifierOutput;
+  /** Harbor's trial.log: environment build, compose, and agent/verifier orchestration output. */
+  readonly trialLog?: string;
 }
 
 const infrastructurePatterns = [
@@ -65,10 +67,12 @@ export async function readHarborJobResult(
     isRecord(job) && Array.isArray(job.trial_results) ? job.trial_results : [];
   const [onlyTrial] = trials;
   if (onlyTrial && trials.length === 1) {
+    const trialLog = await readOptionalText(join(onlyTrial.directory, "trial.log"));
     return {
       job,
       trial: onlyTrial.result,
       ...(await readVerifierOutput(onlyTrial.directory)),
+      ...(trialLog ? { trialLog } : {}),
     };
   }
   if (aggregateTrials.length === 1) {

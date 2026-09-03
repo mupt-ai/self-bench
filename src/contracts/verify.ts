@@ -17,7 +17,10 @@ export type HarborRewards = z.infer<typeof harborRewardsSchema>;
 const gateSchema = z.object({
   ran: z.boolean(),
   ok: z.boolean(),
+  /** Actionable excerpt: error lines with context, compose diagnostics, filtered tail. */
   logTail: z.string(),
+  /** The complete raw log stored next to the report. */
+  log: artifactRefSchema.optional(),
 });
 
 const rewardGateSchema = gateSchema.extend({ rewards: harborRewardsSchema });

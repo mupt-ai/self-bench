@@ -103,7 +103,16 @@ function gateText(gate: VerifyReport["build"] | VerifyReport["smoke"], failure: 
     return "Not run (an earlier gate failed).";
   }
   const status = gate.ok ? "OK." : `Result: ${failure}.`;
-  return gate.logTail.trim() ? `${status}\n\n\`\`\`text\n${gate.logTail.trim()}\n\`\`\`` : status;
+  return `${status}${logText(gate)}`;
+}
+
+function logText(gate: {
+  readonly logTail: string;
+  readonly log?: { readonly uri: string } | undefined;
+}): string {
+  const excerpt = gate.logTail.trim() ? `\n\n\`\`\`text\n${gate.logTail.trim()}\n\`\`\`` : "";
+  const full = gate.log ? `\n\nFull log: ${gate.log.uri}` : "";
+  return `${excerpt}${full}`;
 }
 
 function rewardGateText(gate: VerifyReport["nop"]): string {
@@ -118,8 +127,7 @@ function rewardGateText(gate: VerifyReport["nop"]): string {
       ? ["| reward | value |", "| --- | --- |", ...rows].join("\n")
       : "No rewards recorded.";
   const status = gate.ok ? "Result: OK." : "Result: FAILED.";
-  const log = gate.logTail.trim() ? `\n\n\`\`\`text\n${gate.logTail.trim()}\n\`\`\`` : "";
-  return `${status}\n\n${table}${log}`;
+  return `${status}\n\n${table}${logText(gate)}`;
 }
 
 function bulletList(items: readonly string[], heading: string): string {

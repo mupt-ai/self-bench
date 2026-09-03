@@ -114,6 +114,24 @@ describe("verify report", () => {
       "## 3. Image build\nResult: failed.\n\n```text\nE: Unable to locate package foo\n```",
     );
     expect(rendered).toContain("## 4. Smoke command (verifier image, runtime user)\nNot run");
+    const withLog = renderVerifyReport({
+      ...greenReport,
+      smoke: {
+        ran: true,
+        ok: false,
+        logTail: "smoke exit code: 1",
+        log: {
+          uri: "file:///verify-1/smoke.log",
+          sha256: "a".repeat(64),
+          sizeBytes: 10,
+          contentType: "text/plain",
+        },
+      },
+      green: false,
+    });
+    expect(withLog).toContain(
+      "```text\nsmoke exit code: 1\n```\n\nFull log: file:///verify-1/smoke.log",
+    );
     const green = renderVerifyReport(greenReport);
     expect(green).toContain("Overall: **GREEN**");
     expect(green).toContain("| fail_to_pass | 0 |");
