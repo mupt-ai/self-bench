@@ -82,7 +82,7 @@ describe("SelfBench workflow discovery", () => {
     ).rejects.toThrow("invalid discovery implementation");
     expect(currentStatus?.().phase).toBe("failed");
   });
-  test("authors the exact mixed tier budgets and exports accepted tasks", async () => {
+  test("authors every discovered candidate and exports every accept", async () => {
     const candidates = [
       candidate("easy-1", 1, "easy"),
       candidate("medium-1", 2, "medium"),
@@ -132,7 +132,7 @@ describe("SelfBench workflow discovery", () => {
     expect(exported.sort()).toEqual(["easy-1-task", "easy-extra-task", "hard-1-task"]);
     expect([...result.acceptedTaskIds].sort()).toEqual(exported);
     expect(currentStatus?.().requestedByDifficulty).toEqual({ easy: 1, medium: 1, hard: 1 });
-    expect(currentStatus?.().accepted).toBe(2);
+    expect(currentStatus?.().accepted).toBe(3);
     expect(currentStatus?.().rejected).toBe(1);
   });
   test("bounds candidate activity fanout for large runs", async () => {
