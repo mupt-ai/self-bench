@@ -158,7 +158,7 @@ Each verify gate maps to those files, so a red gate tells you which field to cha
 
 ## Patch rules
 
-- Produce binary-safe Git patches beginning with `diff --git`.
+- Produce binary-safe Git patches beginning with `diff --git`, with LF line endings and a final newline (use `git diff`). Both must apply cleanly to the base commit, and the gold patch must apply on top of the test patch; `verify` checks this with `git apply --check` before any build.
 - Keep test and gold paths disjoint.
 - Exclude dependency caches, lockfile churn unrelated to the change, build output, vendored code, and generated files.
 - Do not patch around a broken base repository. Environment reproducibility is proven by the worker's build, smoke, nop, and oracle gates.

@@ -111,6 +111,10 @@ describe("static submission check", () => {
     ]);
     expect(check({}, { testPatch: "not a patch", goldPatch }).errors).toEqual([
       { gate: "patches", message: "test patch must be a Git patch starting with diff --git" },
+      { gate: "patches", message: "test patch is missing its final newline" },
+    ]);
+    expect(check({}, { testPatch: testPatch.replaceAll("\n", "\r\n"), goldPatch }).errors).toEqual([
+      { gate: "patches", message: "test patch has CRLF line endings; write it with LF only" },
     ]);
     expect(
       check(
@@ -133,6 +137,52 @@ describe("static submission check", () => {
     expect(result.errors).toEqual([
       { gate: "fix", message: "verifier fix changed immutable definition field prompt" },
     ]);
+  });
+
+  test("the sandbox-check program proves patches apply against a clean base worktree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-check-apply-"));
+    try {
+      const repo = join(root, "repo");
+      await runCommand("git", ["init", "-q", repo]);
+      await runCommand("git", ["-C", repo, "config", "user.email", "t@example.com"]);
+      await runCommand("git", ["-C", repo, "config", "user.name", "T"]);
+      await writeFile(join(repo, "keep.txt"), "base\n");
+      await runCommand("git", ["-C", repo, "add", "."]);
+      await runCommand("git", ["-C", repo, "commit", "-qm", "base"]);
+      await Promise.all([
+        writeFile(join(root, "definition.json"), JSON.stringify(definition)),
+        writeFile(join(root, "test.patch"), testPatch),
+        writeFile(
+          join(root, "gold.patch"),
+          goldPatch.replace("@@ -0,0 +1,25 @@", "@@ -0,0 +1,30 @@"),
+        ),
+      ]);
+      const result = await runCommand("bun", [
+        "run",
+        "src/sandbox/programs/check.ts",
+        join(root, "definition.json"),
+        join(root, "test.patch"),
+        join(root, "gold.patch"),
+        root,
+        "--repository",
+        repo,
+        "--base",
+        "HEAD",
+      ]);
+      const verdict = JSON.parse(result.stdout) as {
+        ok: boolean;
+        errors: { gate: string; message: string }[];
+      };
+      expect(verdict.ok).toBe(false);
+      expect(verdict.errors).toEqual([
+        {
+          gate: "patch",
+          message: expect.stringContaining("gold.patch does not apply to the clean base tree"),
+        },
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("the sandbox-check program prints a verdict and writes the rendered tree", async () => {

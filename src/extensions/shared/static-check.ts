@@ -52,8 +52,21 @@ export function stageSubmission(
  * Runs the bundled sandbox-check program (schema, policy, paths, audit, dry render) over a staged
  * submission. The rendered tree lands under SELFBENCH_RENDER_OUTPUT (default /work) as rendered/.
  */
-export function runStaticCheck(staging: string, extra: readonly string[] = []): CheckVerdict {
+export interface PatchApplyTarget {
+  /** Git repository holding the base tree; defaults to SELFBENCH_REPO_DIRECTORY or /work/repo. */
+  readonly repository?: string;
+  /** Ref of the clean base tree in that repository. */
+  readonly base: string;
+}
+
+export function runStaticCheck(
+  staging: string,
+  extra: readonly string[] = [],
+  applyAgainst?: PatchApplyTarget,
+): CheckVerdict {
   const program = requiredEnvironment("SELFBENCH_CHECK_PROGRAM");
+  const repository =
+    applyAgainst?.repository ?? process.env.SELFBENCH_REPO_DIRECTORY ?? "/work/repo";
   const result = spawnSync(
     process.execPath,
     [
@@ -63,6 +76,7 @@ export function runStaticCheck(staging: string, extra: readonly string[] = []): 
       join(staging, "gold.patch"),
       process.env.SELFBENCH_RENDER_OUTPUT ?? "/work",
       ...extra,
+      ...(applyAgainst ? ["--repository", repository, "--base", applyAgainst.base] : []),
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );

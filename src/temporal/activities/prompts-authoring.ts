@@ -56,8 +56,9 @@ Use bash/read/grep/find to inspect and, when feasible, execute exploratory setup
 Your deliverable is the directory /work/task/ with exactly four files, written with read/write/bash and git diff:
 - definition.json: the task definition (schemaVersion 2, difficulty "${candidate.difficulty}") including the environment contract; omit prompt or keep it identical to instruction.md;
 - instruction.md: the standalone instruction the evaluated agent reads (it is authoritative for the prompt);
-- test.patch: the held-out test patch (a Git patch starting with diff --git);
-- gold.patch: the non-test reference implementation patch.
+- test.patch: the held-out test patch (a Git patch starting with diff --git, LF line endings, final newline; produce it with git diff);
+- gold.patch: the non-test reference implementation patch, same format.
+Both patches must apply cleanly to the base commit with git apply, and gold.patch must also apply on top of test.patch (the oracle order); verify proves this against a clean worktree before anything is built.
 The verify and submit_task tools take no arguments; they read /work/task/ and report missing or malformed files as static-check errors naming the file. The trusted compiler renders task.toml, both Dockerfiles, the scripts, and the repository snapshot; never write those yourself.
 
 # Submission and rounds

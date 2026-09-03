@@ -13,6 +13,7 @@ import {
   verifierDockerfile,
 } from "./harbor-task/render.js";
 import { solutionScript, testScript } from "./harbor-task/verifier.js";
+import { malformedPatchProblems } from "./patch-check.js";
 import { assertVerifierFix } from "./verifier-fix.js";
 
 export type StaticCheckGate =
@@ -20,6 +21,7 @@ export type StaticCheckGate =
   | "policy"
   | "paths"
   | "patches"
+  | "patch"
   | "audit"
   | "render"
   | "fix";
@@ -63,21 +65,15 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
   }
   guard(errors, "policy", () => assertEnvironmentPolicy(definition.environment));
   guard(errors, "paths", () => assertSafeTaskPaths(definition));
-  if (!input.testPatch.startsWith("diff --git ")) {
-    errors.push({
-      gate: "patches",
-      message: "test patch must be a Git patch starting with diff --git",
-    });
-  } else {
-    guard(errors, "paths", () => assertSafePatchPaths(input.testPatch, "test patch"));
-  }
-  if (!input.goldPatch.startsWith("diff --git ")) {
-    errors.push({
-      gate: "patches",
-      message: "gold patch must be a Git patch starting with diff --git",
-    });
-  } else {
-    guard(errors, "paths", () => assertSafePatchPaths(input.goldPatch, "gold patch"));
+  for (const [patch, label] of [
+    [input.testPatch, "test patch"],
+    [input.goldPatch, "gold patch"],
+  ] as const) {
+    const problems = malformedPatchProblems(patch, label);
+    errors.push(...problems.map((message) => ({ gate: "patches" as const, message })));
+    if (problems.length === 0) {
+      guard(errors, "paths", () => assertSafePatchPaths(patch, label));
+    }
   }
   if (errors.length === 0) {
     const audit = auditTaskDefinition(definition, input.goldPatch, input.testPatch);
@@ -97,9 +93,11 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
     });
   }
   let rendered: RenderedTaskFiles | undefined;
-  guard(errors, "render", () => {
-    rendered = renderTaskFiles(definition, input.goldPatch, input.testPatch);
-  });
+  if (!errors.some((error) => error.gate === "patches")) {
+    guard(errors, "render", () => {
+      rendered = renderTaskFiles(definition, input.goldPatch, input.testPatch);
+    });
+  }
   return { ok: errors.length === 0, errors, ...(rendered ? { rendered } : {}) };
 }
 

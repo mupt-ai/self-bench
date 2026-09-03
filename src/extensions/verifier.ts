@@ -43,11 +43,13 @@ function checkFix(
     "selfbench-fix-",
   );
   try {
-    const verdict = runStaticCheck(staging.directory, [
-      payload.original.definition,
-      payload.original.testPatch,
-      payload.original.goldPatch,
-    ]);
+    // /work/repo is the compiled task's snapshot with the held-out patch applied to its working
+    // tree; HEAD is the clean base commit the patches must apply to.
+    const verdict = runStaticCheck(
+      staging.directory,
+      [payload.original.definition, payload.original.testPatch, payload.original.goldPatch],
+      { base: "HEAD" },
+    );
     if (!verdict.ok) {
       staging.dispose();
       return staticCheckFailure(verdict, "fix");

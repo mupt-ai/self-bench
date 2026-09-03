@@ -13,6 +13,11 @@ import {
 
 const noArguments = Type.Object({}, { additionalProperties: false });
 
+/** The clean base tree the patches must apply to: /work/repo at the definition's base commit. */
+function applyTarget(definition: Record<string, unknown>): { base: string } {
+  return { base: typeof definition.baseCommit === "string" ? definition.baseCommit : "HEAD" };
+}
+
 export default function authoringExtension(pi: ExtensionAPI): void {
   const client = new VerifyClient();
   const deliverable = (): string => process.env.SELFBENCH_DELIVERABLE ?? "/work/task";
@@ -35,7 +40,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
         "selfbench-verify-",
       );
       try {
-        const verdict = runStaticCheck(staging.directory);
+        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
         if (!verdict.ok) {
           return staticCheckFailure(verdict, "task");
         }
@@ -66,7 +71,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
       const taskId = String(loaded.definition.taskId ?? "");
       const staging = stageSubmission(loaded.definition, loaded.testPatch, loaded.goldPatch);
       try {
-        const verdict = runStaticCheck(staging.directory);
+        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
         if (!verdict.ok) {
           return staticCheckFailure(verdict, "submission");
         }
