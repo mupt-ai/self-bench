@@ -11,7 +11,9 @@ import type { DiscoveryShardInput } from "./types.js";
 export function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
   return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}. Before selecting a pull request, query its number against /work/excluded-source-prs.json with jq; do not print or read the full exclusion list into context. The submit_discovery tool also removes any already-considered pull requests as a final safeguard.
 
-Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, and unrelated cleanup:
+Before proposing a pull request, list its changed files and check them against the repository's .gitattributes: any path marked export-ignore (for PostHog, everything under .github/) is absent from the task snapshot the solver receives, so it can carry neither gold changes nor tests. Never propose a pull request whose implementation lives in such paths.
+
+Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, unrelated cleanup, and files under export-ignored paths:
 - easy: at least 20 changed implementation lines across at least 1 implementation file, with at least 1 viable fail-to-pass test;
 - medium: at least 50 changed implementation lines across at least 2 implementation files, with at least 1 fail-to-pass and 1 pass-to-pass test;
 - hard: at least 100 changed implementation lines across at least 3 implementation files, with at least 1 fail-to-pass and 2 pass-to-pass tests.
