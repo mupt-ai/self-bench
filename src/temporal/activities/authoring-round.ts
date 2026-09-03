@@ -53,6 +53,10 @@ export async function runAuthoringRound(
 ): Promise<AuthoringRoundResult> {
   const { run, candidate, round } = input;
   const prefix = `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}`;
+  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
+  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
+  const attempt = Context.current().info.attempt;
+  const attemptPrefix = `${prefix}/attempt-${attempt}`;
   const checkpoint = await store.getByKey(`${prefix}/result.json`);
   if (checkpoint) {
     return authoringRoundResultSchema.parse(JSON.parse(Buffer.from(checkpoint).toString("utf8")));
@@ -93,11 +97,7 @@ export async function runAuthoringRound(
         ),
       )
     : authoringPrompt(run, candidate);
-  await store.put(`${prefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
-  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
-  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
-  const attempt = Context.current().info.attempt;
-  const attemptPrefix = `${prefix}/attempt-${attempt}`;
+  await store.put(`${attemptPrefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
   const verifier = new SessionVerifier({
     store,
     harborEnvironment,

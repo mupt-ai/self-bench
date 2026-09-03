@@ -52,6 +52,10 @@ export async function runVerifierRound(
 ): Promise<VerifierRoundResult> {
   const { run, candidate, task, round } = input;
   const prefix = `runs/${run.runId}/verification/${candidate.candidateId}/round-${round}`;
+  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
+  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
+  const attempt = Context.current().info.attempt;
+  const attemptPrefix = `${prefix}/attempt-${attempt}`;
   const checkpoint = await store.getByKey(`${prefix}/result.json`);
   if (checkpoint) {
     return verifierRoundResultSchema.parse(JSON.parse(Buffer.from(checkpoint).toString("utf8")));
@@ -81,7 +85,7 @@ export async function runVerifierRound(
   if (round === 1) {
     const material = await buildVerifierMaterial(store, task);
     await store.put(
-      `${prefix}/coupling-evidence.json`,
+      `${attemptPrefix}/coupling-evidence.json`,
       Buffer.from(`${JSON.stringify(material.couplingEvidence, null, 2)}\n`),
       "application/json",
     );
@@ -98,11 +102,7 @@ export async function runVerifierRound(
   } else {
     prompt = verifierResumePrompt(round, rendered);
   }
-  await store.put(`${prefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
-  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
-  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
-  const attempt = Context.current().info.attempt;
-  const attemptPrefix = `${prefix}/attempt-${attempt}`;
+  await store.put(`${attemptPrefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
   const verifier = new SessionVerifier({
     store,
     harborEnvironment,
