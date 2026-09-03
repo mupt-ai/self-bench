@@ -63,7 +63,7 @@ Every tier also requires one coherent behavioral requirement, held-out tests tha
 6. Select exact fail-to-pass and pass-to-pass test identifiers supported by one deterministic test command.
 7. Write a standalone prompt in the engineer's voice. Preserve required behavior, constraints, and acceptance criteria without leaking the completed solution.
 8. Author the environment contract from the pinned base commit: base image pinned by digest, root setup, dependency setup, smoke command, non-secret environment variables, services with health checks, and repository-file evidence. Derive it from the closest CI job, repository Dockerfile, devcontainer, lockfiles, and test scripts.
-9. Write the deliverable to `/work/task/`, call `verify` until it is green, then call `submit_task` once. Both tools run the static check (files present, schema, environment policy, patch path safety, audit gates, dry render) immediately and return failures for you to fix in the same session; only a passing submission ends the round. Do not write an alternate task format.
+9. Write the deliverable to `/work/task/`, call `verify` until it is green, then call `submit_task` once. If the verify budget runs out before a green report, submit your best deliverable anyway: the worker verifies it and a red result opens the next round with the report, whereas an unsubmitted round rejects the task. Both tools run the static check (files present, schema, environment policy, patch path safety, audit gates, dry render) immediately and return failures for you to fix in the same session; only a passing submission ends the round. Do not write an alternate task format.
 
 ## Deliverable files
 
