@@ -126,7 +126,8 @@ harbor-task/
   environment/         ← agent image build context
     Dockerfile         ← FROM environment.baseImage; ENV from environmentVariables; COPY + run root-setup.sh;
                          unpack repo.tar.gz into /app; git init/commit base; run setup.sh from /app/<workdir>;
-                         create user "agent", snapshot .git to /opt/selfbench/base.git
+                         commit the post-setup tree (baseline for the agent's diff); create user "agent",
+                         snapshot .git to /opt/selfbench/base.git
     root-setup.sh      ← environment.rootSetupCommand (runs as root, /bin/sh)
     setup.sh           ← environment.setupCommand (bash, cwd /app/<workdir>)
     smoke.sh           ← environment.smokeCommand (bash, cwd /app/<workdir>), run by the smoke gate before any test
@@ -134,7 +135,7 @@ harbor-task/
   tests/               ← verifier image build context (separate container, user "verifier")
     Dockerfile         ← same base layers as environment/, plus /tests with test.patch and the scripts;
                          when the gold patch changes a dependency manifest, setup.sh runs again with
-                         dependency-setup.patch applied and the source is then reset to the base
+                         dependency-setup.patch applied and only those manifest paths are reset to the base
     test.patch         ← the held-out test patch; applied by test.sh at verify time
     test.sh, task-test.sh ← generated verifier: apply test.patch, run testCommand with failToPass (twice, for
                             determinism) then passToPass under runuser verifier, write rewards

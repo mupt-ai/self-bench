@@ -45,6 +45,8 @@ An evaluated coding agent receives:
 
 It does not receive the held-out test patch or reference solution. Harbor mounts `solution/` only for the explicit oracle agent.
 
+The agent image commits the tree as it stands after `setup.sh` (the `selfbench-setup` commit) and snapshots that repository state to `/opt/selfbench/base.git`. The agent's diff (`agent.patch`) is therefore taken against the post-setup snapshot: files that setup creates and does not gitignore are never part of the agent's patch and cannot collide with the verifier image, which runs the same setup. The verifier image keeps the base commit as `HEAD`; when the gold patch changes dependency manifests it resets only those manifest paths after its extra setup pass.
+
 Held-out tests must exercise an existing public API, command, persistence boundary, or extension seam. They may not import gold-specific private helpers or prescribe exact internal SQL, query counts, private schemas, object identity, telemetry layout, incidental error wording, or UI composition unless the source request explicitly makes that artifact public.
 
 ## Authoring rounds and verification

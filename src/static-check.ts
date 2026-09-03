@@ -121,7 +121,7 @@ export function renderTaskFiles(
     "definition.json": `${JSON.stringify(definition, null, 2)}\n`,
     "environment/Dockerfile": agentDockerfile(definition),
     ...environmentScripts("environment", definition),
-    "tests/Dockerfile": verifierDockerfile(definition, preinstallGoldDependencies),
+    "tests/Dockerfile": verifierDockerfile(definition, dependencySetupPatch),
     "tests/test.sh": verifierScript,
     "tests/task-test.sh": verifierScript,
     ...environmentScripts("tests", definition),

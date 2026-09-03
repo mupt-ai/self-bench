@@ -14,6 +14,7 @@ import {
   runHarborGate,
   verifierOutput,
 } from "./harbor.js";
+import { modalBuildLogTail } from "./modal-build-log.js";
 import { withActivityHeartbeats, withTaskBundle } from "./runtime.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -146,7 +147,11 @@ async function harborRun(
     if (error instanceof CancelledFailure || !isHarborInfrastructureApplicationFailure(error)) {
       throw error;
     }
-    return { infrastructure: boundedTail(error instanceof Error ? error.message : String(error)) };
+    const message = error instanceof Error ? error.message : String(error);
+    const buildLog = await modalBuildLogTail(message);
+    return {
+      infrastructure: buildLog ? `${boundedTail(message)}\n\n${buildLog}` : boundedTail(message),
+    };
   }
 }
 

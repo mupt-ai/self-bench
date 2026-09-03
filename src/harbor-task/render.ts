@@ -1,6 +1,7 @@
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TaskDefinition } from "../contracts.js";
+import { patchPaths } from "../repair.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { shellQuote } from "./paths.js";
 
@@ -69,10 +70,13 @@ export function taskToml(task: TaskDefinition): string {
   ].join("\n")}\n`;
 }
 export function agentDockerfile(task: TaskDefinition): string {
+  // The post-setup tree is committed as the baseline for agent.patch, so files that setup.sh
+  // creates and does not gitignore never land in the agent's diff and never collide with the
+  // verifier image, which ran the same setup.
   return `${baseDockerfile(task)}
 RUN useradd --create-home --shell /bin/bash agent \\
-    && git -C /app reset --hard -q HEAD \\
-    && git -C /app clean -fdq \\
+    && git -C /app add -A \\
+    && git -C /app -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty \\
     && mkdir -p /opt/selfbench \\
     && cp -a /app/.git /opt/selfbench/base.git \\
     && chown -R agent:agent /app /home/agent \\
@@ -83,12 +87,9 @@ USER agent
 WORKDIR /app
 `;
 }
-export function verifierDockerfile(
-  task: TaskDefinition,
-  preinstallGoldDependencies: boolean,
-): string {
+export function verifierDockerfile(task: TaskDefinition, dependencySetupPatch: string): string {
   return `${baseDockerfile(task)}
-${preinstallGoldDependencies ? goldDependencySetupLayer(task) : ""}
+${dependencySetupPatch.length > 0 ? goldDependencySetupLayer(task, dependencySetupPatch) : ""}
 RUN useradd --create-home --shell /bin/bash verifier \\
     && chown -R verifier:verifier /app /home/verifier \\
     && mkdir -p /opt/selfbench \\
@@ -131,13 +132,16 @@ RUN mkdir -p /app \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
     && /opt/selfbench-environment/setup.sh`;
 }
-function goldDependencySetupLayer(task: TaskDefinition): string {
+function goldDependencySetupLayer(task: TaskDefinition, dependencySetupPatch: string): string {
+  // Only the manifest paths the gold patch touched are reset to the base snapshot; setup outputs
+  // that are not gitignored must survive, exactly as they do in the agent image.
+  const manifestPaths = patchPaths(dependencySetupPatch).map(shellQuote).join(" ");
   return `COPY dependency-setup.patch /tmp/selfbench-dependency-setup.patch
 RUN git -C /app apply --binary --whitespace=nowarn /tmp/selfbench-dependency-setup.patch \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
     && /opt/selfbench-environment/setup.sh \\
     && git -C /app reset --hard -q HEAD \\
-    && git -C /app clean -fdq \\
+    && git -C /app clean -fdq -- ${manifestPaths} \\
     && rm /tmp/selfbench-dependency-setup.patch
 `;
 }
