@@ -4,7 +4,7 @@ export const MAILBOX_DIRECTORY = "/work/mailbox";
 export const MAILBOX_REQUESTS = `${MAILBOX_DIRECTORY}/requests`;
 export const MAILBOX_RESPONSES = `${MAILBOX_DIRECTORY}/responses`;
 export const MAILBOX_DONE = `${MAILBOX_DIRECTORY}/done`;
-const DEFAULT_POLL_INTERVAL_MS = 4_000;
+const DEFAULT_POLL_INTERVAL_MS = 10_000;
 
 export interface MailboxRequest {
   readonly id: string;
