@@ -5,8 +5,16 @@ import {
   taskDefinitionSchema,
   type VerifierRoundResult,
 } from "../../contracts.js";
+import { PI_SESSION_OUTPUT_PATH } from "../../pi-session.js";
 import { assertVerifierFix } from "../../verifier-fix.js";
 import { materializeDraft, type OriginalTask } from "./drafts.js";
+import {
+  archiveSandboxResult,
+  classifyRound,
+  piExitCodeFrom,
+  SandboxOutputError,
+  type SandboxRoundResult,
+} from "./round-outcome.js";
 import type { StoredPiSession } from "./runtime.js";
 import type { SessionVerifier } from "./session-verify.js";
 import type { VerifierRoundInput } from "./types.js";
@@ -25,10 +33,7 @@ export interface VerifierOutcomeInput {
   readonly store: ArtifactStore;
   readonly input: VerifierRoundInput;
   readonly prefix: string;
-  readonly result: {
-    readonly exitCode: number;
-    readonly outputs: Readonly<Record<string, Uint8Array>>;
-  };
+  readonly result: SandboxRoundResult;
   readonly session: StoredPiSession | undefined;
   readonly logUri: string;
   readonly original: OriginalTask;
@@ -47,8 +52,28 @@ export async function resolveVerifierOutcome(
     reason: `${reason}; log: ${logUri}`,
   });
   const verdictBytes = result.outputs[VERDICT_PATH];
-  if (result.exitCode !== 0 || !verdictBytes || !session) {
-    return reject(`verifier round ${round} did not complete${explanation(session)}`);
+  const missing = await archiveSandboxResult(store, `${prefix}/sandbox-result.json`, result, [
+    VERDICT_PATH,
+    FIX_DEFINITION_PATH,
+    FIX_TEST_PATCH_PATH,
+    PI_SESSION_OUTPUT_PATH,
+  ]);
+  const classified = classifyRound({
+    round,
+    exitCode: result.exitCode,
+    piExitCode: piExitCodeFrom(result.stdout),
+    missing: missing.filter((path) => path !== PI_SESSION_OUTPUT_PATH),
+    sessionCollected: session !== undefined,
+    toolCalls: session?.toolCalls ?? [],
+    finalMessage: session?.finalMessage,
+  });
+  if (classified.kind === "infrastructure") {
+    throw new SandboxOutputError(`verifier ${classified.reason}; log: ${logUri}`);
+  }
+  if (classified.kind === "rejected" || !verdictBytes || !session) {
+    return reject(
+      `verifier ${classified.kind === "rejected" ? classified.reason : `round ${round} delivered no verdict`}`,
+    );
   }
   const verdict = verdictSchema.safeParse(JSON.parse(Buffer.from(verdictBytes).toString("utf8")));
   if (!verdict.success) {

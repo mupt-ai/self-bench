@@ -146,6 +146,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         stdout,
         stderr,
         startSupervision: () => this.#live.start(name, vercelBacking(session), options),
+        sleep: this.#sleep,
       });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: { sandboxId: sandbox.name, ...outputs } };

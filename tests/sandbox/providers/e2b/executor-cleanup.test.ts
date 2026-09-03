@@ -132,7 +132,7 @@ describe("E2BSandboxExecutor cleanup", () => {
     fixture.exitCode = 0;
 
     await expect(
-      new E2BSandboxExecutor(config, fixture.api).run({
+      new E2BSandboxExecutor(config, fixture.api, async () => undefined).run({
         runId: "missing-output",
         stage: "author",
         command: ["true"],

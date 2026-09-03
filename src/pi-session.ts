@@ -126,3 +126,35 @@ export function finalAssistantMessage(bytes: Uint8Array): string | undefined {
   }
   return undefined;
 }
+
+/** Names of tool calls the assistant made in a pi session, in order (e.g. verify, submit_task). */
+export function toolCallNames(bytes: Uint8Array): string[] {
+  const names: string[] = [];
+  for (const line of Buffer.from(bytes).toString("utf8").split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const message = (entry as { type?: unknown; message?: { role?: unknown; content?: unknown } })
+      ?.message;
+    if (
+      (entry as { type?: unknown })?.type !== "message" ||
+      message?.role !== "assistant" ||
+      !Array.isArray(message.content)
+    ) {
+      continue;
+    }
+    for (const part of message.content) {
+      const call = part as { type?: unknown; name?: unknown };
+      if (call?.type === "toolCall" && typeof call.name === "string") {
+        names.push(call.name);
+      }
+    }
+  }
+  return names;
+}

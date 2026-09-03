@@ -48,8 +48,10 @@ run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,verify,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
+echo "[selfbench] pi exited with $agent_status"
 [ "$agent_status" -eq 0 ] || exit "$agent_status"
-node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json`;
+node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json
+${reportOutputs(["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION_OUTPUT_PATH])}`;
 }
 /**
  * One verification round. The sandbox program unpacks the compiled task and materializes the
@@ -68,11 +70,21 @@ run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")
   --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "$(cat /work/prompt.txt)" || agent_status=$?
 collect_session
+echo "[selfbench] pi exited with $agent_status"
 [ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
 [ -f /work/fix/fixed-definition.json ] || printf '{}\\n' > /work/fix/fixed-definition.json
 [ -f /work/fix/fixed-test.patch ] || : > /work/fix/fixed-test.patch
 [ -f ${PI_SESSION_OUTPUT_PATH} ] || : > ${PI_SESSION_OUTPUT_PATH}
+${reportOutputs(["/work/verdict/verdict.json", "/work/fix/fixed-definition.json", "/work/fix/fixed-test.patch", PI_SESSION_OUTPUT_PATH])}
 exit "$agent_status"`;
+}
+/** Prints which declared outputs exist so the archived sandbox result explains a missing read. */
+function reportOutputs(paths: readonly string[]): string {
+  return `outputs_report=""
+for output_path in ${paths.join(" ")}; do
+  if [ -f "$output_path" ]; then outputs_report="$outputs_report $output_path:present($(wc -c < "$output_path" | tr -d ' ')B)"; else outputs_report="$outputs_report $output_path:missing"; fi
+done
+echo "[selfbench] outputs:$outputs_report"`;
 }
 /**
  * Mailbox directories for the in-session verify tool; the done marker tells the worker's

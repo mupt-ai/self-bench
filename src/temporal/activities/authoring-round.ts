@@ -22,6 +22,12 @@ import { authoringRoundScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, AUTHORING_TIMEOUT_MS } from "./constants.js";
 import { authoringPrompt, authoringResumePrompt } from "./prompts-authoring.js";
 import {
+  archiveSandboxResult,
+  classifyRound,
+  piExitCodeFrom,
+  SandboxOutputError,
+} from "./round-outcome.js";
+import {
   readAsset,
   runSandboxWithFailureLog,
   storePiSession,
@@ -154,12 +160,29 @@ export async function runAuthoringRound(
   );
   const bundle = result.outputs["/work/source-task.tar.gz"];
   const definitionBytes = result.outputs["/work/definition.json"];
+  const missing = await archiveSandboxResult(store, `${prefix}/sandbox-result.json`, result, [
+    "/work/source-task.tar.gz",
+    "/work/definition.json",
+    PI_SESSION_OUTPUT_PATH,
+  ]);
+  const verdict = classifyRound({
+    round,
+    exitCode: result.exitCode,
+    piExitCode: piExitCodeFrom(result.stdout),
+    missing: missing.filter((path) => path !== PI_SESSION_OUTPUT_PATH),
+    sessionCollected: session !== undefined,
+    toolCalls: session?.toolCalls ?? [],
+    finalMessage: session?.finalMessage,
+  });
+  if (verdict.kind === "infrastructure") {
+    throw new SandboxOutputError(`authoring ${verdict.reason}; log: ${log.uri}`);
+  }
   let outcome: AuthoringRoundResult;
-  if (result.exitCode !== 0 || !bundle || !definitionBytes || !session) {
+  if (verdict.kind === "rejected" || !bundle || !definitionBytes || !session) {
     outcome = {
       kind: "rejected",
       candidateId: candidate.candidateId,
-      reason: `authoring round ${round} produced no submission${session ? explanation(session) : ""}; log: ${log.uri}`,
+      reason: `authoring ${verdict.kind === "rejected" ? verdict.reason : `round ${round} produced no submission`}; log: ${log.uri}`,
     };
   } else {
     const [definitionRef, bundleRef] = await Promise.all([
@@ -189,11 +212,4 @@ export async function runAuthoringRound(
     "application/json",
   );
   return outcome;
-}
-
-function explanation(session: {
-  readonly finalMessage?: string;
-  readonly ref: ArtifactRef;
-}): string {
-  return session.finalMessage ? `: ${session.finalMessage.slice(0, 1_000)}` : "";
 }

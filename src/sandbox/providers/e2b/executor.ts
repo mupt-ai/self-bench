@@ -201,6 +201,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
           }
         },
         startSupervision: (live) => this.#live.start(live.sandboxId, e2bBacking(live), options),
+        sleep: this.#sleep,
       });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: execution };

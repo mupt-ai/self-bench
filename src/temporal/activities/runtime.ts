@@ -6,7 +6,7 @@ import { extractRegularArchive } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
 import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../../contracts.js";
 import { refreshHarborTask } from "../../harbor-task.js";
-import { assertPiSessionFile, finalAssistantMessage } from "../../pi-session.js";
+import { assertPiSessionFile, finalAssistantMessage, toolCallNames } from "../../pi-session.js";
 import { projectRoot } from "../../project-paths.js";
 import { type ProvenanceMessage, provenanceMessageSchema } from "../../provenance.js";
 import {
@@ -117,6 +117,8 @@ export function readAsset(relativePath: string): Promise<Buffer> {
 export interface StoredPiSession {
   readonly ref: ArtifactRef;
   readonly finalMessage?: string;
+  /** Tool calls the assistant made, in order. */
+  readonly toolCalls: readonly string[];
 }
 /**
  * Persists a collected pi session file as a run artifact. An absent or malformed file yields
@@ -137,7 +139,7 @@ export async function storePiSession(
   }
   const ref = await store.put(key, bytes, "application/x-ndjson");
   const finalMessage = finalAssistantMessage(bytes);
-  return { ref, ...(finalMessage ? { finalMessage } : {}) };
+  return { ref, toolCalls: toolCallNames(bytes), ...(finalMessage ? { finalMessage } : {}) };
 }
 /** Reads the held-out and gold patches from an authored submission or a compiled task root. */
 export async function readTaskPatches(

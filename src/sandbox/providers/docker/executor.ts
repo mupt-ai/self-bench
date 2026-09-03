@@ -11,6 +11,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { type LiveSandboxBacking, LiveSandboxRegistry } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 
 export class DockerSandboxExecutor implements SandboxExecutor {
@@ -75,11 +76,14 @@ export class DockerSandboxExecutor implements SandboxExecutor {
       for (const path of request.outputPaths ?? []) {
         const destination = hostPath(root, path);
         await mkdir(dirname(destination), { recursive: true });
-        const copied = await runCommand("docker", ["cp", `${sandboxId}:${path}`, destination], {
-          allowFailure: true,
+        const { value } = await readOutputWithRetry(async () => {
+          const copied = await runCommand("docker", ["cp", `${sandboxId}:${path}`, destination], {
+            allowFailure: true,
+          });
+          return copied.exitCode === 0 ? await readFile(destination) : undefined;
         });
-        if (copied.exitCode === 0) {
-          outputs[path] = await readFile(destination);
+        if (value !== undefined) {
+          outputs[path] = value;
         } else if (result.exitCode === 0) {
           throw new Error(`sandbox ${sandboxId} exited successfully without output ${path}`);
         }

@@ -2,6 +2,7 @@ import type { CommandHandle, CommandResult } from "e2b";
 import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { raceWithTermination } from "./lifecycle.js";
 import type { E2BSandboxHandle } from "./types.js";
 
@@ -18,6 +19,8 @@ export async function executeE2BCommand(input: {
   readonly termination: Promise<never>;
   readonly setCommand: (command: CommandHandle) => void;
   readonly startSupervision?: (sandbox: E2BSandboxHandle) => Supervision;
+  /** Backoff between output-read retries; injectable so tests stay fast. */
+  readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<SandboxResult> {
   const { sandbox, request, options, signal, terminate, stdout, stderr, termination, setCommand } =
     input;
@@ -91,7 +94,7 @@ export async function executeE2BCommand(input: {
     captureUnstreamedCommandOutput(completed, stdout, stderr);
 
     const outputs = await raceWithTermination(
-      collectOutputs(sandbox, request, completed.exitCode, signal),
+      collectOutputs(sandbox, request, completed.exitCode, signal, input.sleep),
       termination,
     );
     return {
@@ -163,17 +166,20 @@ async function collectOutputs(
   request: SandboxRequest,
   exitCode: number,
   signal: AbortSignal,
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>,
 ): Promise<Record<string, Uint8Array>> {
   const outputs: Record<string, Uint8Array> = {};
   for (const path of request.outputPaths ?? []) {
-    try {
-      outputs[path] = await sandbox.files.read(path, { format: "bytes", signal });
-    } catch (error) {
-      if (exitCode === 0) {
-        throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
-          cause: error,
-        });
-      }
+    const { value, lastError } = await readOutputWithRetry(
+      () => sandbox.files.read(path, { format: "bytes", signal }),
+      { signal, ...(sleep ? { sleep: (ms) => sleep(ms, signal) } : {}) },
+    );
+    if (value !== undefined) {
+      outputs[path] = value;
+    } else if (exitCode === 0) {
+      throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
+        cause: lastError,
+      });
     }
   }
   return outputs;

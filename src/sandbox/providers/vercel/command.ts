@@ -2,6 +2,7 @@ import type { Command, Session } from "@vercel/sandbox";
 import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { VercelCommandStartError } from "./fetch.js";
 
 export const VERCEL_WORK_DIRECTORY = "/work";
@@ -17,6 +18,8 @@ export async function executeVercelCommand(input: {
   readonly stdout: RollingOutput;
   readonly stderr: RollingOutput;
   readonly startSupervision?: () => Supervision;
+  /** Backoff between output-read retries; injectable so tests stay fast. */
+  readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<Omit<SandboxResult, "sandboxId">> {
   const { session, request, options, signal, terminate, stdout, stderr } = input;
   let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
@@ -69,15 +72,21 @@ export async function executeVercelCommand(input: {
 
     const outputs: Record<string, Uint8Array> = {};
     for (const path of request.outputPaths ?? []) {
-      const output = await session.readFileToBuffer({ path }, { signal });
-      if (output === null) {
+      const { value } = await readOutputWithRetry(
+        async () => (await session.readFileToBuffer({ path }, { signal })) ?? undefined,
+        {
+          signal,
+          ...(input.sleep ? { sleep: (ms) => input.sleep?.(ms, signal) ?? Promise.resolve() } : {}),
+        },
+      );
+      if (value === undefined) {
         if (completed.exitCode === 0) {
           throw new Error(
             `sandbox ${session.sessionId} exited successfully without output ${path}`,
           );
         }
       } else {
-        outputs[path] = output;
+        outputs[path] = value;
       }
     }
     return {

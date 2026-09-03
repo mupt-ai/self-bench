@@ -11,6 +11,7 @@ import {
   type SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 import { modalBacking } from "./live.js";
 
@@ -166,11 +167,11 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         supervisionError;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
-        try {
-          outputs[path] = await sandbox.filesystem.readBytes(path);
-        } catch {
-          // Callers validate required outputs after persisting stdout/stderr. Returning an
-          // absent output keeps the model or command failure diagnosable.
+        // Callers validate required outputs after persisting stdout/stderr. Returning an
+        // absent output keeps the model or command failure diagnosable.
+        const { value } = await readOutputWithRetry(() => sandbox.filesystem.readBytes(path));
+        if (value !== undefined) {
+          outputs[path] = value;
         }
       }
       const result = {
