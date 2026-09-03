@@ -130,6 +130,48 @@ export function finalAssistantMessage(bytes: Uint8Array): string | undefined {
 }
 
 /** Names of tool calls the assistant made in a pi session, in order (e.g. verify, submit_task). */
+/**
+ * The provider error that ended the session, when pi's last assistant message stopped with
+ * `stopReason: "error"` (pi still exits 0 in print mode, so the wrapper cannot tell).
+ */
+export function sessionProviderError(bytes: Uint8Array): string | undefined {
+  const lines = Buffer.from(bytes)
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => line.trim().length > 0);
+  for (const line of lines.reverse()) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const message = (entry as { type?: unknown; message?: unknown }).message;
+    if (
+      (entry as { type?: unknown }).type !== "message" ||
+      typeof message !== "object" ||
+      message === null ||
+      (message as { role?: unknown }).role !== "assistant"
+    ) {
+      continue;
+    }
+    const { stopReason, errorMessage } = message as {
+      stopReason?: unknown;
+      errorMessage?: unknown;
+    };
+    if (stopReason !== "error") {
+      return undefined;
+    }
+    return typeof errorMessage === "string" && errorMessage.trim()
+      ? errorMessage.trim()
+      : "provider error";
+  }
+  return undefined;
+}
+
 export function toolCallNames(bytes: Uint8Array): string[] {
   const names: string[] = [];
   for (const line of Buffer.from(bytes).toString("utf8").split("\n")) {

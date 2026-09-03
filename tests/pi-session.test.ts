@@ -7,6 +7,7 @@ import {
   PI_SESSION_OUTPUT_PATH,
   piSessionArguments,
   sessionArtifactKey,
+  sessionProviderError,
 } from "../src/pi-session.js";
 
 const header = JSON.stringify({
@@ -62,5 +63,27 @@ describe("pi session helpers", () => {
     expect(script).toContain(`if [ -f ${PI_RESUMED_SESSION_PATH} ]`);
     expect(script).toContain(`ls -1 ${PI_SESSION_DIRECTORY}/*.jsonl`);
     expect(script).toContain(`cp "$session_file" ${PI_SESSION_OUTPUT_PATH}`);
+  });
+
+  test("reports the provider error that ended a session", () => {
+    const entry = (message: Record<string, unknown>) =>
+      JSON.stringify({ type: "message", id: "x", timestamp: "t", message });
+    const failed = [
+      JSON.stringify({ type: "session", id: "s", version: 3, timestamp: "t", cwd: "/work/repo" }),
+      entry({ role: "user", content: [{ type: "text", text: "go" }] }),
+      entry({
+        role: "assistant",
+        content: [{ type: "text", text: "looking" }],
+        stopReason: "stop",
+      }),
+      entry({ role: "assistant", content: [], stopReason: "error", errorMessage: "Not Found" }),
+    ].join("\n");
+    expect(sessionProviderError(Buffer.from(failed))).toBe("Not Found");
+    const fine = [
+      JSON.stringify({ type: "session", id: "s", version: 3, timestamp: "t", cwd: "/work/repo" }),
+      entry({ role: "assistant", content: [], stopReason: "error", errorMessage: "transient" }),
+      entry({ role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "stop" }),
+    ].join("\n");
+    expect(sessionProviderError(Buffer.from(fine))).toBeUndefined();
   });
 });

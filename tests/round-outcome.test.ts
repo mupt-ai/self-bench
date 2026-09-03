@@ -180,6 +180,19 @@ describe("round classification", () => {
     }
   });
 
+  test("a session that ended in a provider error is retried, not rejected", () => {
+    expect(
+      classifyRound({ ...base, exitCode: 1, providerError: "Not Found", finalMessage: "checking" }),
+    ).toEqual({
+      kind: "infrastructure",
+      reason:
+        "round 1: the model provider failed mid-session (Not Found) before a terminal tool call",
+    });
+    expect(
+      classifyRound({ ...base, providerError: "Not Found", toolCalls: ["verify", "accept_task"] }),
+    ).toEqual({ kind: "ok" });
+  });
+
   test("reads terminal tool calls from a pi session", () => {
     const session = [
       JSON.stringify({ type: "session", id: "s", version: 3, timestamp: "t", cwd: "/work/repo" }),

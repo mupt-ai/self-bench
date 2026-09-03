@@ -68,6 +68,7 @@ export async function resolveVerifierOutcome(
     sessionCollected: session !== undefined,
     toolCalls: session?.toolCalls ?? [],
     finalMessage: session?.finalMessage,
+    providerError: session?.providerError,
   });
   if (classified.kind === "infrastructure") {
     throw new SandboxOutputError(`verifier ${classified.reason}; log: ${logUri}`);

@@ -182,6 +182,7 @@ export async function runAuthoringRound(
     sessionCollected: session !== undefined,
     toolCalls: session?.toolCalls ?? [],
     finalMessage: session?.finalMessage,
+    providerError: session?.providerError,
   });
   if (verdict.kind === "infrastructure") {
     throw new SandboxOutputError(`authoring ${verdict.reason}; log: ${log.uri}`);

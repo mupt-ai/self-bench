@@ -72,6 +72,8 @@ export interface RoundClassification {
   readonly sessionCollected: boolean;
   readonly toolCalls: readonly string[];
   readonly finalMessage?: string | undefined;
+  /** The provider error that ended the session, if pi's last assistant turn failed. */
+  readonly providerError?: string | undefined;
 }
 
 /**
@@ -87,6 +89,12 @@ export function classifyRound(input: RoundClassification): RoundVerdict {
   const explanation = input.finalMessage
     ? `; agent said: ${input.finalMessage.slice(0, 1_000)}`
     : "";
+  if (input.providerError && !terminal) {
+    return {
+      kind: "infrastructure",
+      reason: `round ${input.round}: the model provider failed mid-session (${input.providerError.slice(0, 200)}) before a terminal tool call`,
+    };
+  }
   if (input.exitCode === 0 && input.missing.length === 0 && input.sessionCollected) {
     return { kind: "ok" };
   }
