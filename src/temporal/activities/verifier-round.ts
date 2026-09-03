@@ -67,9 +67,8 @@ export async function runVerifierRound(
     );
   }
   Context.current().heartbeat(`verifying ${task.taskId} round ${round}`);
-  const [bundle, reportBytes, extension, program, checker, piAuth, sessionBytes, original] =
+  const [reportBytes, extension, program, checker, piAuth, sessionBytes, original] =
     await Promise.all([
-      store.get(task.bundle),
       store.get(input.report),
       readAsset("dist/extension-verifier.bundle.js"),
       readAsset("dist/sandbox-verifier.bundle.js"),
@@ -118,7 +117,7 @@ export async function runVerifierRound(
   const sandboxResult = await runSandboxWithFailureLog(store, logKey, () =>
     withActivityHeartbeats(
       `running verifier sandbox for ${task.taskId} round ${round}`,
-      (options) =>
+      async (options) =>
         sandbox.run(
           {
             runId: run.runId,
@@ -126,7 +125,9 @@ export async function runVerifierRound(
             timeoutMs: VERIFIER_TIMEOUT_MS,
             inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
             files: [
-              { path: "/work/task.tar.gz", contents: bundle },
+              // Loaded inline: nothing in this activity's scope may keep the repository snapshot
+              // (hundreds of MB) alive after the executor has uploaded it.
+              { path: "/work/task.tar.gz", contents: await store.get(task.bundle) },
               { path: "/work/sandbox-verifier.js", contents: program },
               { path: "/work/sandbox-check.js", contents: checker },
               { path: "/work/verifier.js", contents: extension },

@@ -8,6 +8,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { arrayBufferOf } from "./bytes.js";
 import { E2BCleanup } from "./cleanup.js";
 import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
@@ -174,14 +175,17 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             request.files.map((file) => ({
               path: file.path,
               data:
-                typeof file.contents === "string"
-                  ? file.contents
-                  : Uint8Array.from(file.contents).buffer,
+                typeof file.contents === "string" ? file.contents : arrayBufferOf(file.contents),
             })),
             { signal: controller.signal },
           ),
           termination.promise,
         );
+        // The request lives as long as the command runs (hours). Drop the uploaded bytes now so a
+        // repository snapshot of hundreds of MB is not pinned per running round.
+        for (const file of request.files) {
+          (file as { contents: string | Uint8Array }).contents = "";
+        }
       }
       throwIfTerminated(terminationError);
 
