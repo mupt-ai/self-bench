@@ -151,6 +151,9 @@ export function greenOutcome(
 export function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivities {
   return {
     collectRunProvenance: async () => artifact,
+    collectExcludedSourcePrs: async () => {
+      throw new Error("unexpected cross-run exclusion");
+    },
     discoverCandidateShard: async ({ shardIndex }) => ({
       candidates: shardIndex === 0 ? discovered : [],
       report: artifact,

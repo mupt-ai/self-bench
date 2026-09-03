@@ -1,4 +1,3 @@
-import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts.js";
@@ -13,6 +12,7 @@ import { githubRepository } from "../../github.js";
 import { runCommand } from "../../process.js";
 import { provenanceMessageSchema } from "../../provenance.js";
 import { githubToken } from "../../subscription-auth.js";
+import { safeHeartbeat } from "./runtime.js";
 
 const MAX_DISCOVERY_ATTEMPTS = 5;
 
@@ -44,7 +44,7 @@ export async function rebuildReplayCandidates(
   const candidates: Candidate[] = [];
   const messages: string[] = [];
   for (const candidateId of input.replay.candidateIds) {
-    heartbeat(`rebuilding ${candidateId} from ${input.replay.sourceRunId}`);
+    safeHeartbeat(`rebuilding ${candidateId} from ${input.replay.sourceRunId}`);
     const rebuilt = await rebuildReplayCandidate(
       store,
       input.replay.sourceRunId,
@@ -162,14 +162,6 @@ async function findDefinition(
     }
   }
   return undefined;
-}
-
-function heartbeat(detail: string): void {
-  try {
-    Context.current().heartbeat(detail);
-  } catch {
-    // Not running inside a Temporal activity (unit tests); heartbeats are best-effort.
-  }
 }
 
 function repositoryUrlFromPullRequest(sourceUrl: string): string {

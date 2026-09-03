@@ -3,6 +3,7 @@ import type { SelfBenchWorkerConfig } from "../../config.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import { runAuthoringRound } from "./authoring-round.js";
 import { discoverCandidateShard } from "./discovery.js";
+import { collectExcludedSourcePrs } from "./excluded-source-prs.js";
 import { buildExport } from "./export.js";
 import { collectRunProvenance } from "./provenance.js";
 import { rebuildReplayCandidates } from "./replay.js";
@@ -15,6 +16,7 @@ export function createActivities(config: SelfBenchWorkerConfig): SelfBenchActivi
   const sandbox = createSandboxExecutor(config.execution);
   return {
     collectRunProvenance: (run) => collectRunProvenance(store, run),
+    collectExcludedSourcePrs: (runIds) => collectExcludedSourcePrs(store, runIds),
     discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
     rebuildReplayCandidates: (input) => rebuildReplayCandidates(store, input),
     runAuthoringRound: (input) =>

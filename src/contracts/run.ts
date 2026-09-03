@@ -45,11 +45,17 @@ const authoringSchema = z.object({
   reasoningEffort: z.literal("high"),
 });
 
+export const MAX_EXCLUDED_RUNS = 100;
+
+/** Run IDs whose processed source PRs discovery must never propose again. */
+export const excludeRunsSchema = z.array(runIdSchema).max(MAX_EXCLUDED_RUNS);
+
 export const runRequestSchema = z.object({
   runId: runIdSchema,
   repository: repositoryRefSchema,
   provenance: artifactRefSchema,
   candidateCounts: candidateCountsSchema,
+  excludeRuns: excludeRunsSchema.optional(),
   authoring: authoringSchema,
   version: runVersionSchema,
 });

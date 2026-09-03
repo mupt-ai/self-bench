@@ -19,7 +19,10 @@ const candidateActivities = proxyActivities<
 });
 
 const provenanceActivities = proxyActivities<
-  Pick<SelfBenchActivities, "collectRunProvenance" | "rebuildReplayCandidates">
+  Pick<
+    SelfBenchActivities,
+    "collectRunProvenance" | "collectExcludedSourcePrs" | "rebuildReplayCandidates"
+  >
 >({
   startToCloseTimeout: "5 minutes",
   heartbeatTimeout: "3 minutes",
@@ -46,6 +49,7 @@ const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverC
 
 export const workflowActivities: SelfBenchActivities = {
   collectRunProvenance: provenanceActivities.collectRunProvenance,
+  collectExcludedSourcePrs: provenanceActivities.collectExcludedSourcePrs,
   rebuildReplayCandidates: provenanceActivities.rebuildReplayCandidates,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   runAuthoringRound: candidateActivities.runAuthoringRound,

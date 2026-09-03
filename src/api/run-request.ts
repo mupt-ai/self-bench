@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SelfBenchConfig } from "../config.js";
 import {
   artifactRefSchema,
+  excludeRunsSchema,
   MAX_CANDIDATES_PER_RUN,
   type ReplayRunRequest,
   type RunRequest,
@@ -27,6 +28,7 @@ const submissionSchema = z.object({
     medium: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
     hard: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
   }),
+  excludeRuns: excludeRunsSchema.optional(),
 });
 
 const replaySubmissionSchema = z.object({ ...commonSchema, replay: replaySchema });
@@ -54,6 +56,9 @@ export function buildRunRequest(
     repository: parsed.repository,
     provenance: parsed.provenance,
     candidateCounts: parsed.candidateCounts,
+    ...(parsed.excludeRuns && parsed.excludeRuns.length > 0
+      ? { excludeRuns: parsed.excludeRuns }
+      : {}),
     authoring: authoring(parsed.authoringModel),
     version: version(config, parsed.selfbenchCommit),
   });

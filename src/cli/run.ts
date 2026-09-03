@@ -22,6 +22,7 @@ export async function run(args: string[]): Promise<void> {
       wait: { type: "boolean", default: false },
       output: { type: "string", short: "o" },
       association: { type: "string", multiple: true },
+      "exclude-run": { type: "string", multiple: true },
     },
     strict: true,
   });
@@ -36,6 +37,7 @@ export async function run(args: string[]): Promise<void> {
     fail(`the total candidate count must be between 1 and ${MAX_CANDIDATES_PER_RUN}`);
   }
   const runId = parsed.values["run-id"] ?? defaultRunId();
+  const excludeRuns = parsed.values["exclude-run"] ?? [];
   const [repository, collectedMessages, selfbenchCommit] = await Promise.all([
     resolveRepository(repositoryPath),
     collectRepositoryProvenance(repositoryPath, process.env.HOME ?? homedir()),
@@ -64,6 +66,7 @@ export async function run(args: string[]): Promise<void> {
         repository,
         provenance,
         candidateCounts,
+        ...(excludeRuns.length > 0 ? { excludeRuns } : {}),
         authoringModel: parsed.values.model,
         selfbenchCommit,
       }),

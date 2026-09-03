@@ -123,6 +123,14 @@ export async function withTemporaryDirectory<T>(
     await rm(root, { recursive: true, force: true });
   }
 }
+/** Heartbeats when running inside a Temporal activity; a no-op in unit tests. */
+export function safeHeartbeat(detail: string): void {
+  try {
+    Context.current().heartbeat(detail);
+  } catch {
+    // Not running inside a Temporal activity; heartbeats are best-effort.
+  }
+}
 export function parseProvenance(value: Uint8Array): ProvenanceMessage[] {
   return Buffer.from(value)
     .toString("utf8")

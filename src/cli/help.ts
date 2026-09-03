@@ -12,7 +12,7 @@ Usage:
                        --output ASSOCIATION.json
   self-bench run --repo PATH [--easy-count N] [--medium-count N] [--hard-count N]
                   [--model MODEL] [--association ASSOCIATION.json ...]
-                  [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
+                  [--exclude-run RUN_ID ...] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   self-bench replay --source-run RUN_ID --candidate ID [--candidate ID ...]
                      [--model MODEL] [--run-id ID] [--wait] [--output OUTPUT.tar.gz]
   self-bench status RUN_ID
@@ -35,7 +35,9 @@ The tier counts are accepted-task targets. A rejected candidate is replaced from
 pool until each tier is filled or the pool is exhausted, and the export contains only accepted tasks. The
 run command performs only repository metadata and sanitized provenance upload locally; discovery, authoring
 rounds, mechanical verification, and independent verification rounds run remotely. --output implies --wait,
-blocks until completion, and downloads the SHA-256-verified export.
+blocks until completion, and downloads the SHA-256-verified export. --exclude-run (repeatable) names
+earlier runs whose source pull requests discovery must skip, whatever their outcome there; the export also
+drops accepted tasks that repeat a source pull request and lists them in its manifest.
 
 The replay command skips discovery: the worker rebuilds the named candidates from the source run's stored
 provenance, discovery reports, and authored definitions, then runs authoring and verification fresh.`);

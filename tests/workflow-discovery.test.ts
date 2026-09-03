@@ -189,4 +189,75 @@ describe("SelfBench workflow discovery", () => {
     ]);
     expect([...result.acceptedTaskIds].sort()).toEqual(["easy-task", "medium-task"]);
   });
+  test("seeds every discovery wave with pull requests from excluded runs", async () => {
+    const excludedRuns: string[][] = [];
+    const exclusions: number[][] = [];
+    const authored: string[] = [];
+    const activities = acceptingActivities([]);
+    activities.collectExcludedSourcePrs = async (runIds) => {
+      excludedRuns.push([...runIds]);
+      return [7, 9];
+    };
+    activities.discoverCandidateShard = async ({ wave, shardIndex, excludedSourcePrs }) => {
+      if (shardIndex !== 0) {
+        return { candidates: [], report: artifact };
+      }
+      exclusions.push([...excludedSourcePrs]);
+      // A misbehaving shard returns an excluded PR anyway; the pool must never keep it.
+      return {
+        candidates:
+          wave === 0
+            ? [candidate("stale-seven", 7, "easy"), candidate("fresh-eight", 8, "easy")]
+            : [candidate("stale-nine", 9, "medium"), candidate("fresh-ten", 10, "medium")],
+        report: artifact,
+      };
+    };
+    activities.runAuthoringRound = async ({ candidate: value }) => {
+      authored.push(value.candidateId);
+      return {
+        kind: "submitted",
+        task: {
+          candidateId: value.candidateId,
+          taskId: `${value.candidateId}-task`,
+          definition: artifact,
+          sourceBundle: artifact,
+        },
+        session: artifact,
+      };
+    };
+
+    const result = await executeRun(
+      {
+        ...run,
+        candidateCounts: { easy: 1, medium: 1, hard: 0 },
+        excludeRuns: ["earlier-run", "another-run"],
+      },
+      activities,
+    );
+
+    expect(excludedRuns).toEqual([["earlier-run", "another-run"]]);
+    expect(exclusions).toEqual([
+      [7, 9],
+      [7, 9, 8],
+    ]);
+    expect(authored.sort()).toEqual(["fresh-eight", "fresh-ten"]);
+    expect([...result.acceptedTaskIds].sort()).toEqual(["fresh-eight-task", "fresh-ten-task"]);
+  });
+  test("never backfills from an excluded pull request and blocks when only those remain", async () => {
+    let currentStatus: (() => RunStatus) | undefined;
+    const activities = acceptingActivities([]);
+    activities.collectExcludedSourcePrs = async () => [5];
+    activities.discoverCandidateShard = async ({ shardIndex }) => ({
+      candidates: shardIndex === 0 ? [candidate("excluded-five", 5)] : [],
+      report: artifact,
+    });
+
+    await expect(
+      executeRun({ ...run, excludeRuns: ["earlier-run"] }, activities, (status) => {
+        currentStatus = status;
+      }),
+    ).rejects.toThrow("candidate pool exhausted");
+    expect(currentStatus?.().phase).toBe("blocked");
+    expect(currentStatus?.().tasks).toEqual([]);
+  });
 });

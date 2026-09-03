@@ -295,6 +295,36 @@ The worker rebuilds each candidate from the source run's artifacts: the retained
 
 A custom `--run-id` must contain 3–63 lowercase letters, digits, or hyphens and start with a letter or digit.
 
+#### Excluding pull requests earlier runs already processed
+
+Discovery only avoids pull requests found within the same run. A follow-up generation run over the same
+repository therefore proposes PRs an earlier run already authored, wasting agent time and producing duplicate
+tasks. Pass `--exclude-run` (repeatable) with every earlier run whose PRs must not be proposed again:
+
+```bash
+self-bench run --repo ~/code/posthog \
+  --easy-count 10 --medium-count 10 --hard-count 10 \
+  --exclude-run posthog-agent-pipeline-20-v1 \
+  --exclude-run posthog-agent-pipeline-replay-v1 \
+  --run-id posthog-agent-pipeline-30-v2 --output ./posthog-30-v2.tar.gz
+```
+
+Before the first discovery wave the worker runs `collectExcludedSourcePrs`, which reads each listed run's
+candidate records from the artifact store: the discovery checkpoints and reports under
+`runs/<runId>/discovery/`, a replay run's `runs/<runId>/provenance/replay.jsonl`, and, when present, an archived
+run status at `runs/<runId>/status.json` (a saved `GET /v1/runs/<runId>` body; each listed candidate resolves
+through its `provenance/<candidateId>.json` or authored `definition.json`). Every PR the run processed counts,
+whatever its outcome there: accepted, rejected, infrastructure-failed, or still pending. A rejected PR was
+judged on the same material, so retrying it belongs to `replay`, not to a fresh discovery. The set is sent with
+every wave and a candidate whose PR is excluded never enters the pool, even if a shard returns it. A listed run
+with no candidate records at all fails the run non-retryably (`ExcludedRunMissing`) so a mistyped ID cannot
+silently exclude nothing. `POST /v1/runs` accepts the same list as `excludeRuns`.
+
+Export dedupe rule: `buildExport` keeps the first accepted task per source pull request, in the order candidates
+were accepted, and drops later ones. The manifest's `acceptedCount` and `tasks` cover only kept tasks;
+`droppedDuplicates` lists each dropped task with its `sourcePr` and the `keptTaskId` it duplicates. Run status and
+`acceptedTaskIds` still report every accepted candidate; the export is the deduplicated deliverable.
+
 ### Round artifacts
 
 Each authoring or verification round stores its decision directly under
@@ -318,7 +348,7 @@ The CLI is the recommended client. The API exposes:
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check |
 | `POST` | `/v1/provenance?runId=...` | Store sanitized provenance JSONL |
-| `POST` | `/v1/runs` | Start a tiered candidate workflow, or a replay of known candidates |
+| `POST` | `/v1/runs` | Start a tiered candidate workflow (optionally with `excludeRuns`), or a replay of known candidates |
 | `GET` | `/v1/runs` | List workflows |
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |

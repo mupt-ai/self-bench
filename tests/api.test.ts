@@ -37,6 +37,24 @@ describe("API run metadata", () => {
     ).toThrow();
   });
 
+  test("carries excluded runs into the request and omits an empty list", () => {
+    const built = buildRunRequest(loadConfig(), {
+      ...submission,
+      excludeRuns: ["posthog-agent-pipeline-20-v1", "posthog-agent-pipeline-replay-v1"],
+    });
+
+    expect("excludeRuns" in built ? built.excludeRuns : undefined).toEqual([
+      "posthog-agent-pipeline-20-v1",
+      "posthog-agent-pipeline-replay-v1",
+    ]);
+    expect(buildRunRequest(loadConfig(), { ...submission, excludeRuns: [] })).not.toHaveProperty(
+      "excludeRuns",
+    );
+    expect(() =>
+      buildRunRequest(loadConfig(), { ...submission, excludeRuns: ["Not A Run Id"] }),
+    ).toThrow();
+  });
+
   test("builds a replay request that skips discovery inputs", () => {
     const built = buildRunRequest(loadConfig(), {
       runId: "replay-run",

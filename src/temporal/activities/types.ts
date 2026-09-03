@@ -63,6 +63,8 @@ export interface ExportInput {
 
 export interface SelfBenchActivities {
   collectRunProvenance(run: RunRequest): Promise<ArtifactRef>;
+  /** Source PRs processed by the listed earlier runs, for cross-run discovery exclusion. */
+  collectExcludedSourcePrs(runIds: readonly string[]): Promise<number[]>;
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
   rebuildReplayCandidates(input: ReplayRunRequest): Promise<ReplayMaterial>;
   runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;

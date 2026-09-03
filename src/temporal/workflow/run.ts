@@ -89,12 +89,18 @@ export async function executeRun(
         discovered: candidates.length,
       };
     } else {
-      const provenance = await activitySet.collectRunProvenance(input);
+      const [provenance, excludedSourcePrs] = await Promise.all([
+        activitySet.collectRunProvenance(input),
+        input.excludeRuns && input.excludeRuns.length > 0
+          ? activitySet.collectExcludedSourcePrs(input.excludeRuns)
+          : Promise.resolve([]),
+      ]);
       run = { ...input, provenance };
       candidates = await discoverUntilFilled(
         activitySet,
         run,
         input,
+        excludedSourcePrs,
         (progress) => {
           status = { ...status, discovery: progress };
         },
@@ -142,15 +148,21 @@ export async function executeRun(
   }
 }
 
+/**
+ * Discovers in waves until every tier is filled. `excludedSourcePrs` (PRs earlier runs processed)
+ * is sent to every wave and never enters the pool, even if a shard returns one anyway.
+ */
 async function discoverUntilFilled(
   activitySet: SelfBenchActivities,
   run: RunRequest,
   input: RunRequest,
+  excludedSourcePrs: readonly number[],
   updateDiscovery: (progress: DiscoveryProgress) => void,
   setDiscovered: (discovered: number) => void,
   setPhase: (phase: RunStatus["phase"]) => void,
 ): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
+  const excluded = new Set(excludedSourcePrs);
   let discoveryWave = 0;
   while (true) {
     const selected = selectCandidates(candidates, input.candidateCounts);
@@ -166,11 +178,13 @@ async function discoverUntilFilled(
     const additions = await discoverWave(activitySet, run, {
       wave: discoveryWave,
       targetCounts: missing,
-      excludedSourcePrs: candidates.map((candidate) => candidate.sourcePr),
+      excludedSourcePrs: [...excluded, ...candidates.map((candidate) => candidate.sourcePr)],
       onProgress: updateDiscovery,
     });
     const knownPrs = new Set(candidates.map((candidate) => candidate.sourcePr));
-    const uniqueAdditions = additions.filter((candidate) => !knownPrs.has(candidate.sourcePr));
+    const uniqueAdditions = additions.filter(
+      (candidate) => !knownPrs.has(candidate.sourcePr) && !excluded.has(candidate.sourcePr),
+    );
     if (uniqueAdditions.length === 0) {
       setPhase("blocked");
       throw candidatePoolExhausted(selected, input.candidateCounts);
