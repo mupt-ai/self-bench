@@ -43,11 +43,12 @@ ${mailboxSetup()}
 clone_source
 mkdir -p /work/tasks /work/task ${PI_SESSION_DIRECTORY}
 cd /work/repo
+${promptArguments()}
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
   --skill /work/selfbench-skill --extension /work/authoring.js \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,verify,submit_task "$(cat /work/prompt.txt)" || agent_status=$?
+  --tools read,bash,grep,find,ls,verify,submit_task "\${prompt_args[@]}" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"
 [ "$agent_status" -eq 0 ] || { wrapper_status=$agent_status; exit "$agent_status"; }
@@ -67,10 +68,11 @@ ${mailboxSetup()}
 mkdir -p /work/verdict /work/fix ${PI_SESSION_DIRECTORY}
 node /work/sandbox-verifier.js /work/task.tar.gz
 cd /work/repo
+${promptArguments()}
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
   --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "$(cat /work/prompt.txt)" || agent_status=$?
+  --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "\${prompt_args[@]}" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"
 [ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
@@ -93,6 +95,19 @@ echo "[selfbench] outputs:$outputs_report"`;
  * Mailbox directories for the in-session verify tool; the done marker tells the worker's
  * supervisor that the agent command is over even if the provider exit signal lags.
  */
+/**
+ * The prompt is normally the last pi argument. Linux caps a single argument at 128 KiB, and a
+ * verifier prompt embedding both patches of a large PR has exceeded it ("Argument list too
+ * long"), so larger prompts go in as an @file attachment with a one-line instruction instead.
+ */
+function promptArguments(): string {
+  return `if [ "$(wc -c < /work/prompt.txt | tr -d ' ')" -lt 100000 ]; then
+  prompt_args=("$(cat /work/prompt.txt)")
+else
+  prompt_args=(@/work/prompt.txt "Your complete task prompt is the attached file above; follow it exactly.")
+fi`;
+}
+
 /**
  * The EXIT trap records the wrapper's status for the worker. The script sets `wrapper_status`
  * to the status it intends right before it ends, because with a real pi session `$?` at trap
