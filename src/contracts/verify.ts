@@ -8,7 +8,7 @@ export type VerifyStage = z.infer<typeof verifyStageSchema>;
 export const MAX_AUTHORING_ROUNDS = 3;
 export const MAX_VERIFIER_ROUNDS = 3;
 /** In-session `verify` calls per agent session (carried across fallback rounds). */
-export const AUTHOR_VERIFY_BUDGET = 3;
+export const AUTHOR_VERIFY_BUDGET = 5;
 export const VERIFIER_VERIFY_BUDGET = 2;
 
 export const harborRewardsSchema = z.record(z.string(), z.number());
