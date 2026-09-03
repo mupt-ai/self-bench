@@ -18,8 +18,10 @@ export function sessionArtifactKey(
   stage: VerifyStage,
   candidateId: string,
   round: number,
+  attempt = 1,
 ): string {
-  return `runs/${runId}/${stage}/${candidateId}/session/round-${round}.jsonl`;
+  const suffix = attempt > 1 ? `-attempt-${attempt}` : "";
+  return `runs/${runId}/${stage}/${candidateId}/session/round-${round}${suffix}.jsonl`;
 }
 
 /**

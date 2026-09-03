@@ -4,13 +4,49 @@ import { boundedTail } from "./harbor.js";
 /** Tool calls that end an agent session with a deliverable the worker must be able to collect. */
 export const TERMINAL_TOOLS = ["submit_task", "submit_fix", "accept_task"] as const;
 const HARD_TIMEOUT_EXIT_CODE = 124;
+/**
+ * The round wrapper's own exit status, written by its EXIT trap. Sandbox providers can lose a
+ * long-running command's stream after the script has finished (E2B reports a gRPC "terminated"
+ * or a stray exit code), so this file, not the provider's code, is what decides the round.
+ */
+export const WRAPPER_STATUS_PATH = "/work/wrapper-status";
 
 export interface SandboxRoundResult {
   readonly sandboxId: string;
   readonly exitCode: number;
+  /** The exit code the sandbox provider reported, when the wrapper status file overrode it. */
+  readonly providerExitCode?: number | undefined;
   readonly stdout: string;
   readonly stderr: string;
   readonly outputs: Readonly<Record<string, Uint8Array>>;
+}
+
+/** The wrapper's recorded exit status, when the sandbox delivered the status file. */
+export function wrapperStatusFrom(
+  outputs: Readonly<Record<string, Uint8Array>>,
+): number | undefined {
+  const bytes = outputs[WRAPPER_STATUS_PATH];
+  if (!bytes) {
+    return undefined;
+  }
+  const text = Buffer.from(bytes).toString("utf8").trim();
+  return /^\d{1,3}$/.test(text) ? Number(text) : undefined;
+}
+
+/**
+ * Replaces the provider-reported exit code with the wrapper's own status when the sandbox
+ * delivered it. A hard timeout is the provider's verdict and stays authoritative: the wrapper's
+ * trap may have recorded the kill signal instead.
+ */
+export function reconcileWrapperStatus<T extends SandboxRoundResult>(result: T): T {
+  const status = wrapperStatusFrom(result.outputs);
+  if (status === undefined || result.exitCode === HARD_TIMEOUT_EXIT_CODE) {
+    return result;
+  }
+  if (status === result.exitCode) {
+    return result;
+  }
+  return { ...result, exitCode: status, providerExitCode: result.exitCode };
 }
 
 /** A delivered submission or verdict could not be collected; retrying the activity is correct. */
@@ -105,6 +141,8 @@ export async function archiveSandboxResult(
   const record = {
     sandboxId: result.sandboxId,
     exitCode: result.exitCode,
+    providerExitCode: result.providerExitCode ?? null,
+    wrapperStatus: wrapperStatusFrom(result.outputs) ?? null,
     piExitCode: piExitCodeFrom(result.stdout) ?? null,
     outputs: declaredOutputs.map((path) => ({
       path,

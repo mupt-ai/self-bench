@@ -4,11 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts.js";
 import { toolCallNames } from "../src/pi-session.js";
+import { SandboxExecutionError } from "../src/sandbox/index.js";
 import {
   archiveSandboxResult,
   classifyRound,
   piExitCodeFrom,
+  reconcileWrapperStatus,
+  type SandboxRoundResult,
+  WRAPPER_STATUS_PATH,
+  wrapperStatusFrom,
 } from "../src/temporal/activities/round-outcome.js";
+import { runSandboxWithFailureLog } from "../src/temporal/activities/runtime.js";
 
 const base = {
   round: 1,
@@ -108,6 +114,70 @@ describe("round classification", () => {
     }
     expect(piExitCodeFrom("x\n[selfbench] pi exited with 3\n")).toBe(3);
     expect(piExitCodeFrom("nothing")).toBeUndefined();
+  });
+
+  test("the wrapper's own status overrides a provider exit code, except for a hard timeout", () => {
+    const finished: SandboxRoundResult = {
+      sandboxId: "sb-2",
+      exitCode: 1,
+      stdout: "[selfbench] pi exited with 0\n",
+      stderr: "",
+      outputs: { [WRAPPER_STATUS_PATH]: Buffer.from("0\n") },
+    };
+    expect(wrapperStatusFrom(finished.outputs)).toBe(0);
+    expect(wrapperStatusFrom({})).toBeUndefined();
+    expect(wrapperStatusFrom({ [WRAPPER_STATUS_PATH]: Buffer.from("garbage") })).toBeUndefined();
+    expect(reconcileWrapperStatus(finished)).toEqual({
+      ...finished,
+      exitCode: 0,
+      providerExitCode: 1,
+    });
+    expect(reconcileWrapperStatus({ ...finished, exitCode: 0 })).toEqual({
+      ...finished,
+      exitCode: 0,
+    });
+    expect(reconcileWrapperStatus({ ...finished, exitCode: 124 })).toEqual({
+      ...finished,
+      exitCode: 124,
+    });
+    expect(reconcileWrapperStatus({ ...finished, outputs: {} })).toEqual({
+      ...finished,
+      outputs: {},
+    });
+  });
+
+  test("a provider failure after the wrapper finished becomes a result instead of a retry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-round-outcome-"));
+    try {
+      const store = new LocalArtifactStore(root);
+      const partial = {
+        sandboxId: "sb-3",
+        exitCode: 1,
+        stdout: "[selfbench] pi exited with 0\n",
+        stderr: "",
+        outputs: {
+          [WRAPPER_STATUS_PATH]: Buffer.from("0\n"),
+          "/work/session.jsonl": Buffer.from("{}"),
+        },
+      };
+      const recovered = await runSandboxWithFailureLog(store, "runs/r/log", async () => {
+        throw new SandboxExecutionError("2: [unknown] terminated; E2B sandbox sb-3", partial);
+      });
+      expect(recovered.exitCode).toBe(0);
+      expect(recovered.outputs["/work/session.jsonl"]).toBeDefined();
+      expect(recovered.stderr).toContain(
+        "provider failed after the wrapper finished with status 0",
+      );
+      expect(await store.getByKey("runs/r/log")).toBeUndefined();
+      await expect(
+        runSandboxWithFailureLog(store, "runs/r/log", async () => {
+          throw new SandboxExecutionError("died", { ...partial, outputs: {} });
+        }),
+      ).rejects.toThrow(/died; partial log:/);
+      expect(await store.getByKey("runs/r/log")).toBeDefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("reads terminal tool calls from a pi session", () => {

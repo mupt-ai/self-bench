@@ -14,7 +14,13 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../sandbox/index.js";
+import { wrapperStatusFrom } from "./round-outcome.js";
 
+/**
+ * Runs a round sandbox. A provider failure after the wrapper already finished (its status file
+ * was collected) is downgraded to a result carrying the wrapper's status, with the provider's
+ * complaint appended to stderr; any other provider failure stores the partial log and rethrows.
+ */
 export async function runSandboxWithFailureLog(
   store: ArtifactStore,
   logKey: string,
@@ -25,6 +31,14 @@ export async function runSandboxWithFailureLog(
   } catch (error) {
     if (!(error instanceof SandboxExecutionError)) {
       throw error;
+    }
+    const status = wrapperStatusFrom(error.result.outputs);
+    if (status !== undefined) {
+      return {
+        ...error.result,
+        exitCode: status,
+        stderr: `${error.result.stderr}\n[selfbench] provider failed after the wrapper finished with status ${status}: ${error.message}\n`,
+      };
     }
     const log = await store.put(
       logKey,

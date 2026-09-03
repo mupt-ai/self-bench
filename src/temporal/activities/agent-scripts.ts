@@ -5,6 +5,7 @@ import {
   piSessionArguments,
 } from "../../pi-session.js";
 import { MAILBOX_DIRECTORY, MAILBOX_DONE } from "../../sandbox/supervisor.js";
+import { WRAPPER_STATUS_PATH } from "./round-outcome.js";
 import type { DiscoveryShardInput } from "./types.js";
 
 export function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
@@ -92,7 +93,7 @@ echo "[selfbench] outputs:$outputs_report"`;
  */
 function mailboxSetup(): string {
   return `mkdir -p ${MAILBOX_DIRECTORY}/requests ${MAILBOX_DIRECTORY}/responses
-finish_round() { cleanup; : > ${MAILBOX_DONE}; }
+finish_round() { local status=$?; cleanup; printf '%s\\n' "$status" > ${WRAPPER_STATUS_PATH}; : > ${MAILBOX_DONE}; }
 trap finish_round EXIT`;
 }
 function sandboxBootstrap(): string {

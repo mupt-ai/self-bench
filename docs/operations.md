@@ -295,6 +295,21 @@ The worker rebuilds each candidate from the source run's artifacts: the retained
 
 A custom `--run-id` must contain 3–63 lowercase letters, digits, or hyphens and start with a letter or digit.
 
+### Round artifacts
+
+Each authoring or verification round stores its decision directly under
+`runs/<runId>/<stage>/<candidateId>/round-<n>/` (`result.json`, `verdict.json`, `fix/`, `prompt.md`) and the pi
+session under `runs/<runId>/<stage>/<candidateId>/session/round-<n>.jsonl`. Everything a single attempt produces
+before the round is decided lives under `round-<n>/attempt-<m>/`: `sandbox.log`, `sandbox-result.json` (the
+provider's exit code, the wrapper's own status, pi's exit code, and which declared outputs were collected), and the
+in-session `verify-<k>/` reports. A Temporal retry of the same round therefore never collides with the immutable
+artifacts of the attempt it replaces; its session is stored as `session/round-<n>-attempt-<m>.jsonl`.
+
+The round wrapper records its own exit status in `/work/wrapper-status` from its EXIT trap, and the worker trusts
+that file over the provider's reported exit code (a provider hard timeout stays authoritative). E2B has been
+observed to lose a long command's stream after the script finished and report a spurious exit code or a gRPC
+"terminated" error; with the status file collected, such a failure becomes a normal round result instead of a retry.
+
 ## HTTP API
 
 The CLI is the recommended client. The API exposes:

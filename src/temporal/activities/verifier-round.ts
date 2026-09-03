@@ -21,6 +21,7 @@ import { verifierRoundScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, VERIFIER_TIMEOUT_MS } from "./constants.js";
 import { readOriginalTask } from "./drafts.js";
 import { verifierPrompt, verifierResumePrompt } from "./prompts-verifier.js";
+import { reconcileWrapperStatus, WRAPPER_STATUS_PATH } from "./round-outcome.js";
 import {
   readAsset,
   runSandboxWithFailureLog,
@@ -98,6 +99,10 @@ export async function runVerifierRound(
     prompt = verifierResumePrompt(round, rendered);
   }
   await store.put(`${prefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
+  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
+  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
+  const attempt = Context.current().info.attempt;
+  const attemptPrefix = `${prefix}/attempt-${attempt}`;
   const verifier = new SessionVerifier({
     store,
     harborEnvironment,
@@ -105,12 +110,12 @@ export async function runVerifierRound(
     candidate,
     stage: "verification",
     round,
-    prefix,
+    prefix: attemptPrefix,
     original,
   });
   const verifyBudget = Math.max(0, VERIFIER_VERIFY_BUDGET - (input.verifyCallsUsed ?? 0));
-  const logKey = `${prefix}/attempt-${Context.current().info.attempt}/sandbox.log`;
-  const result = await runSandboxWithFailureLog(store, logKey, () =>
+  const logKey = `${attemptPrefix}/sandbox.log`;
+  const sandboxResult = await runSandboxWithFailureLog(store, logKey, () =>
     withActivityHeartbeats(
       `running verifier sandbox for ${task.taskId} round ${round}`,
       (options) =>
@@ -133,6 +138,7 @@ export async function runVerifierRound(
               FIX_DEFINITION_PATH,
               FIX_TEST_PATCH_PATH,
               PI_SESSION_OUTPUT_PATH,
+              WRAPPER_STATUS_PATH,
             ],
             secrets: {
               ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
@@ -154,6 +160,7 @@ export async function runVerifierRound(
         ),
     ),
   );
+  const result = reconcileWrapperStatus(sandboxResult);
   const log = await store.put(
     logKey,
     Buffer.from(`${result.stdout}\n${result.stderr}`),
@@ -161,13 +168,14 @@ export async function runVerifierRound(
   );
   const session = await storePiSession(
     store,
-    sessionArtifactKey(run.runId, "verification", candidate.candidateId, round),
+    sessionArtifactKey(run.runId, "verification", candidate.candidateId, round, attempt),
     result.outputs[PI_SESSION_OUTPUT_PATH],
   );
   const outcome = await resolveVerifierOutcome({
     store,
     input,
     prefix,
+    attemptPrefix,
     result,
     session,
     logUri: log.uri,

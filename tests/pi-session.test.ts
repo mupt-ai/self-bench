@@ -25,6 +25,9 @@ describe("pi session helpers", () => {
     expect(sessionArtifactKey("run-1", "verification", "cand", 1)).toBe(
       "runs/run-1/verification/cand/session/round-1.jsonl",
     );
+    expect(sessionArtifactKey("run-1", "verification", "cand", 1, 2)).toBe(
+      "runs/run-1/verification/cand/session/round-1-attempt-2.jsonl",
+    );
   });
 
   test("passes a session directory for fresh rounds and an explicit file when resuming", () => {

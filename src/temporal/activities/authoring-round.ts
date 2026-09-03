@@ -25,7 +25,9 @@ import {
   archiveSandboxResult,
   classifyRound,
   piExitCodeFrom,
+  reconcileWrapperStatus,
   SandboxOutputError,
+  WRAPPER_STATUS_PATH,
 } from "./round-outcome.js";
 import {
   readAsset,
@@ -92,6 +94,10 @@ export async function runAuthoringRound(
       )
     : authoringPrompt(run, candidate);
   await store.put(`${prefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
+  // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
+  // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
+  const attempt = Context.current().info.attempt;
+  const attemptPrefix = `${prefix}/attempt-${attempt}`;
   const verifier = new SessionVerifier({
     store,
     harborEnvironment,
@@ -99,11 +105,11 @@ export async function runAuthoringRound(
     candidate,
     stage: "authoring",
     round,
-    prefix,
+    prefix: attemptPrefix,
   });
   const verifyBudget = Math.max(0, AUTHOR_VERIFY_BUDGET - (input.verifyCallsUsed ?? 0));
-  const logKey = `${prefix}/attempt-${Context.current().info.attempt}/sandbox.log`;
-  const result = await runSandboxWithFailureLog(store, logKey, () =>
+  const logKey = `${attemptPrefix}/sandbox.log`;
+  const sandboxResult = await runSandboxWithFailureLog(store, logKey, () =>
     withActivityHeartbeats(
       `running author sandbox for ${candidate.candidateId} round ${round}`,
       (options) =>
@@ -126,6 +132,7 @@ export async function runAuthoringRound(
               "/work/source-task.tar.gz",
               "/work/definition.json",
               PI_SESSION_OUTPUT_PATH,
+              WRAPPER_STATUS_PATH,
             ],
             secrets: {
               ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
@@ -148,6 +155,7 @@ export async function runAuthoringRound(
         ),
     ),
   );
+  const result = reconcileWrapperStatus(sandboxResult);
   const log = await store.put(
     logKey,
     Buffer.from(`${result.stdout}\n${result.stderr}`),
@@ -155,16 +163,17 @@ export async function runAuthoringRound(
   );
   const session = await storePiSession(
     store,
-    sessionArtifactKey(run.runId, "authoring", candidate.candidateId, round),
+    sessionArtifactKey(run.runId, "authoring", candidate.candidateId, round, attempt),
     result.outputs[PI_SESSION_OUTPUT_PATH],
   );
   const bundle = result.outputs["/work/source-task.tar.gz"];
   const definitionBytes = result.outputs["/work/definition.json"];
-  const missing = await archiveSandboxResult(store, `${prefix}/sandbox-result.json`, result, [
-    "/work/source-task.tar.gz",
-    "/work/definition.json",
-    PI_SESSION_OUTPUT_PATH,
-  ]);
+  const missing = await archiveSandboxResult(
+    store,
+    `${attemptPrefix}/sandbox-result.json`,
+    result,
+    ["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION_OUTPUT_PATH],
+  );
   const verdict = classifyRound({
     round,
     exitCode: result.exitCode,

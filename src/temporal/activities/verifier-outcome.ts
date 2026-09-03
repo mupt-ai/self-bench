@@ -33,6 +33,8 @@ export interface VerifierOutcomeInput {
   readonly store: ArtifactStore;
   readonly input: VerifierRoundInput;
   readonly prefix: string;
+  /** `<prefix>/attempt-<n>`: where this attempt's pre-decision artifacts go. */
+  readonly attemptPrefix: string;
   readonly result: SandboxRoundResult;
   readonly session: StoredPiSession | undefined;
   readonly logUri: string;
@@ -44,7 +46,7 @@ export interface VerifierOutcomeInput {
 export async function resolveVerifierOutcome(
   input: VerifierOutcomeInput,
 ): Promise<VerifierRoundResult> {
-  const { store, prefix, result, session, logUri, original, verifier } = input;
+  const { store, prefix, attemptPrefix, result, session, logUri, original, verifier } = input;
   const { candidate, round } = input.input;
   const reject = (reason: string): VerifierRoundResult => ({
     kind: "rejected",
@@ -52,12 +54,12 @@ export async function resolveVerifierOutcome(
     reason: `${reason}; log: ${logUri}`,
   });
   const verdictBytes = result.outputs[VERDICT_PATH];
-  const missing = await archiveSandboxResult(store, `${prefix}/sandbox-result.json`, result, [
-    VERDICT_PATH,
-    FIX_DEFINITION_PATH,
-    FIX_TEST_PATCH_PATH,
-    PI_SESSION_OUTPUT_PATH,
-  ]);
+  const missing = await archiveSandboxResult(
+    store,
+    `${attemptPrefix}/sandbox-result.json`,
+    result,
+    [VERDICT_PATH, FIX_DEFINITION_PATH, FIX_TEST_PATCH_PATH, PI_SESSION_OUTPUT_PATH],
+  );
   const classified = classifyRound({
     round,
     exitCode: result.exitCode,
