@@ -76,7 +76,7 @@ export function agentDockerfile(task: TaskDefinition): string {
   return `${baseDockerfile(task)}
 RUN useradd --create-home --shell /bin/bash agent \\
     && git -C /app add -A \\
-    && git -C /app -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty \\
+    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\
     && mkdir -p /opt/selfbench \\
     && cp -a /app/.git /opt/selfbench/base.git \\
     && chown -R agent:agent /app /home/agent \\
@@ -127,7 +127,7 @@ RUN mkdir -p /app \\
     && git -C /app config user.email selfbench@local \\
     && git -C /app config user.name selfbench \\
     && git -C /app add -A \\
-    && git -C /app commit -qm base \\
+    && git -C /app -c core.hooksPath=/dev/null commit -qm base --no-verify \\
     && chmod 755 /opt/selfbench-environment/setup.sh /opt/selfbench-environment/smoke.sh \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
     && /opt/selfbench-environment/setup.sh`;

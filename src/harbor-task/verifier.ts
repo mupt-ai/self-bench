@@ -29,6 +29,8 @@ export function testScript(task: TaskDefinition, testPatch: string): string {
   return `#!/bin/bash
 set -uo pipefail
 mkdir -p /logs/verifier
+# Root steps after our Dockerfile can leave root-owned files in the verifier's caches.
+chown -R verifier:verifier /home/verifier 2>/dev/null || true
 patch_applied=1
 fail_to_pass=0
 pass_to_pass=0

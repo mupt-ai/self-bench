@@ -242,6 +242,9 @@ export function smokeAndNopScript(): string {
   return `#!/bin/bash
 set -uo pipefail
 mkdir -p /logs/verifier
+# Image post-processing after our Dockerfile (Modal runs as root with HOME=/home/verifier) can leave
+# root-owned files in the verifier's caches; the runtime user must own its home before it runs.
+chown -R verifier:verifier /home/verifier 2>/dev/null || true
 echo '${SMOKE_MARKER}'
 smoke_status=0
 runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier /opt/selfbench-environment/smoke.sh 2>&1 || smoke_status=$?
