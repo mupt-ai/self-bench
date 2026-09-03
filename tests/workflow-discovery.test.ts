@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, CancelledFailure } from "@temporalio/workflow";
 import type { Difficulty, RunStatus } from "../src/contracts.js";
+import { discoveryShardTargets } from "../src/temporal/workflow/discovery.js";
 import { executeRun } from "../src/temporal/workflow.js";
 import {
   acceptingActivities,
@@ -189,9 +190,10 @@ describe("SelfBench workflow discovery", () => {
       activities,
     );
 
+    // 1.5× the request per tier, dealt across shards: shard 0 gets one of each requested tier.
     expect(targetCounts).toEqual([
-      { easy: 4, medium: 4, hard: 0 },
-      { easy: 0, medium: 4, hard: 0 },
+      { easy: 1, medium: 1, hard: 0 },
+      { easy: 0, medium: 1, hard: 0 },
     ]);
     expect([...result.acceptedTaskIds].sort()).toEqual(["easy-task", "medium-task"]);
   });
@@ -265,5 +267,20 @@ describe("SelfBench workflow discovery", () => {
     ).rejects.toThrow("candidate pool exhausted");
     expect(currentStatus?.().phase).toBe("blocked");
     expect(currentStatus?.().tasks).toEqual([]);
+  });
+
+  test("sizes shard targets at 1.5x the request per tier, dealt across shards", () => {
+    const shards = discoveryShardTargets({ easy: 3, medium: 0, hard: 4 }, 8);
+    const totals = shards.reduce(
+      (sum, shard) => ({
+        easy: sum.easy + shard.easy,
+        medium: sum.medium + shard.medium,
+        hard: sum.hard + shard.hard,
+      }),
+      { easy: 0, medium: 0, hard: 0 },
+    );
+    expect(totals).toEqual({ easy: 5, medium: 0, hard: 6 });
+    expect(shards.every((shard) => shard.easy <= 1 && shard.hard <= 1)).toBe(true);
+    expect(shards.filter((shard) => shard.easy + shard.medium + shard.hard === 0)).toHaveLength(2);
   });
 });

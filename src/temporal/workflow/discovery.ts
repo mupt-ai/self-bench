@@ -12,7 +12,12 @@ import type { DiscoveryShardInput, SelfBenchActivities } from "../activities.js"
 import { isExhaustedActivityFailure } from "./failures.js";
 
 const DISCOVERY_SHARD_COUNT = 8;
-const DISCOVERY_SHARD_OVERFETCH = 3;
+/**
+ * Every pool candidate is processed, so the pool is sized to the request: 1.5× per tier covers
+ * the observed rejection rate without multiplying the work. Spread across shards, small tiers
+ * leave most shards with nothing to find for that tier.
+ */
+const DISCOVERY_POOL_MULTIPLIER = 1.5;
 const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
 export const MAX_DISCOVERED_CANDIDATES = MAX_CANDIDATES_PER_RUN * 3;
 export const MAX_CONCURRENT_CANDIDATES = 100;
@@ -29,32 +34,38 @@ export async function discoverWave(
   run: RunRequest,
   options: DiscoveryWaveOptions,
 ): Promise<Candidate[]> {
-  const targetCounts = discoveryShardTargets(options.targetCounts);
+  const shardTargets = discoveryShardTargets(options.targetCounts);
   const progress = discoveryProgress(options);
   progress.report();
 
   const shards = await Promise.all(
-    Array.from({ length: DISCOVERY_SHARD_COUNT }, (_unused, shardIndex) =>
+    shardTargets.map((targetCounts, shardIndex) =>
       discoverShard(activitySet, run, options, targetCounts, shardIndex, progress),
     ),
   );
   return uniqueCandidates(interleave(shards.map((shard) => shard.candidates)));
 }
 
-function discoveryShardTargets(
+/** Per-shard targets: ceil(request × multiplier) per tier, dealt round-robin across the shards. */
+export function discoveryShardTargets(
   targetCounts: RunRequest["candidateCounts"],
-): Record<Difficulty, number> {
-  return Object.fromEntries(
-    (["easy", "medium", "hard"] as const).map((difficulty) => [
-      difficulty,
-      targetCounts[difficulty] === 0
-        ? 0
-        : Math.min(
-            MAX_CANDIDATES_PER_TIER_PER_SHARD,
-            Math.ceil(targetCounts[difficulty] / DISCOVERY_SHARD_COUNT) + DISCOVERY_SHARD_OVERFETCH,
-          ),
-    ]),
-  ) as Record<Difficulty, number>;
+  shardCount = DISCOVERY_SHARD_COUNT,
+): Record<Difficulty, number>[] {
+  const shards: Record<Difficulty, number>[] = Array.from({ length: shardCount }, () => ({
+    easy: 0,
+    medium: 0,
+    hard: 0,
+  }));
+  for (const difficulty of ["easy", "medium", "hard"] as const) {
+    const total = Math.ceil(targetCounts[difficulty] * DISCOVERY_POOL_MULTIPLIER);
+    for (let index = 0; index < total; index += 1) {
+      const shard = shards[index % shardCount] as Record<Difficulty, number>;
+      if (shard[difficulty] < MAX_CANDIDATES_PER_TIER_PER_SHARD) {
+        shard[difficulty] += 1;
+      }
+    }
+  }
+  return shards;
 }
 
 function discoveryProgress(options: DiscoveryWaveOptions) {
@@ -92,6 +103,10 @@ async function discoverShard(
   shardIndex: number,
   progress: ReturnType<typeof discoveryProgress>,
 ): Promise<Pick<DiscoveryResult, "candidates">> {
+  if (targetCounts.easy + targetCounts.medium + targetCounts.hard === 0) {
+    progress.complete(0);
+    return { candidates: [] };
+  }
   try {
     const result = await activitySet.discoverCandidateShard({
       run,
