@@ -40,7 +40,7 @@ export function authoringRoundScript(resume: boolean): string {
 ${collectPiSessionScript()}
 ${mailboxSetup()}
 clone_source
-mkdir -p /work/tasks ${PI_SESSION_DIRECTORY}
+mkdir -p /work/tasks /work/task ${PI_SESSION_DIRECTORY}
 cd /work/repo
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\

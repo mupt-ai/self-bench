@@ -89,30 +89,7 @@ export const taskDefinition = Type.Object(
   { additionalProperties: false },
 );
 
-/** The complete authoring payload shared by submit_task and verify. */
-export const taskSubmission = Type.Object(
-  {
-    definition: taskDefinition,
-    testPatch: Type.String({ minLength: 1 }),
-    goldPatch: Type.String({ minLength: 1 }),
-  },
-  { additionalProperties: false },
-);
-
-/** Definition fields a verification agent may change. */
-export const definitionFix = Type.Object(
-  {
-    environment: Type.Optional(environmentContract),
-    testCommand: Type.Optional(Type.String({ minLength: 1 })),
-    failToPass: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })),
-    passToPass: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-    testPaths: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })),
-    timeouts: Type.Optional(taskTimeouts),
-    resources: Type.Optional(taskResources),
-  },
-  { additionalProperties: false },
-);
-
+/** Definition fields a verification agent may change through /work/fix/definition.json. */
 export const FIX_FIELDS = [
   "environment",
   "testCommand",

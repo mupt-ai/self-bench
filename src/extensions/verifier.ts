@@ -1,10 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { type FixDeliverable, loadFixDeliverable } from "./shared/deliverable.js";
 import { VerifyClient, verifyOutcomeText } from "./shared/mailbox.js";
-import { definitionFix, FIX_FIELDS } from "./shared/schemas.js";
 import {
   requiredEnvironment,
   runStaticCheck,
@@ -14,17 +13,7 @@ import {
   type ToolFailure,
 } from "./shared/static-check.js";
 
-const fixSubmission = Type.Object(
-  { summary: Type.String({ minLength: 1 }), definition: definitionFix },
-  { additionalProperties: false },
-);
-
-interface FixPayload {
-  readonly definition: Record<string, unknown>;
-  readonly testPatch: string;
-  readonly goldPatch: string;
-  readonly original: { definition: string; testPatch: string; goldPatch: string };
-}
+const noArguments = Type.Object({}, { additionalProperties: false });
 
 function writeVerdict(verdict: Record<string, unknown>): void {
   const root = requiredEnvironment("SELFBENCH_VERDICT_OUTPUT");
@@ -36,56 +25,16 @@ function writeVerdict(verdict: Record<string, unknown>): void {
   writeFileSync(path, `${JSON.stringify(verdict, null, 2)}\n`, { flag: "wx" });
 }
 
-function workingTreePatch(repository: string): string {
-  for (const args of [
-    ["add", "-N", "--all"],
-    ["diff", "--binary", "HEAD"],
-  ]) {
-    const result = spawnSync("git", ["-C", repository, ...args], {
-      encoding: "utf8",
-      maxBuffer: 256 * 1024 * 1024,
-    });
-    if (result.status !== 0) {
-      throw new Error(`git ${args[0]} failed: ${result.stderr.slice(-2_000)}`);
-    }
-    if (args[0] === "diff") {
-      return result.stdout;
-    }
-  }
-  return "";
-}
-
-/** Composes the fixed task from the round's original task plus the agent's edits. */
-function composeFix(fix: Record<string, unknown> | undefined): FixPayload {
-  const taskDirectory = requiredEnvironment("SELFBENCH_TASK_DIRECTORY");
-  const repository = requiredEnvironment("SELFBENCH_REPO_DIRECTORY");
-  const originalDefinition = join(taskDirectory, "definition.json");
-  const originalTestPatch = join(taskDirectory, "tests/test.patch");
-  const goldPatchPath = join(taskDirectory, "solution/gold.patch");
-  const definition = JSON.parse(readFileSync(originalDefinition, "utf8")) as Record<
-    string,
-    unknown
-  >;
-  for (const field of FIX_FIELDS) {
-    const value = fix?.[field];
-    if (value !== undefined) {
-      definition[field] = value;
-    }
-  }
-  return {
-    definition,
-    testPatch: workingTreePatch(repository),
-    goldPatch: readFileSync(goldPatchPath, "utf8"),
-    original: {
-      definition: originalDefinition,
-      testPatch: originalTestPatch,
-      goldPatch: goldPatchPath,
-    },
-  };
+function loadFix(): FixDeliverable | ToolFailure {
+  return loadFixDeliverable(
+    requiredEnvironment("SELFBENCH_FIX_OUTPUT"),
+    requiredEnvironment("SELFBENCH_TASK_DIRECTORY"),
+    requiredEnvironment("SELFBENCH_REPO_DIRECTORY"),
+  );
 }
 
 function checkFix(
-  payload: FixPayload,
+  payload: FixDeliverable,
 ): { verdict: ReturnType<typeof runStaticCheck>; staging: StagedSubmission } | ToolFailure {
   const staging = stageSubmission(
     payload.definition,
@@ -150,10 +99,13 @@ export default function verifierExtension(pi: ExtensionAPI): void {
     name: "verify",
     label: "Verify SelfBench fix",
     description:
-      "Run the harness's real verification on your current fix (held-out test edits in the working tree plus any definition changes) without submitting: static check, compile, audit, build, smoke, nop, oracle. Blocks until the report is back. Budget-limited per session.",
-    parameters: Type.Object({ definition: definitionFix }, { additionalProperties: false }),
-    async execute(_toolCallId, input) {
-      const payload = composeFix(input.definition as Record<string, unknown> | undefined);
+      "Takes no arguments. Reads your fix from /work/fix (optional definition.json with changed environment/test-selection fields; test.patch, or the /work/repo working tree diff when absent), runs the static check, then the harness's real verification. Blocks until the report is back. Budget-limited per session.",
+    parameters: noArguments,
+    async execute() {
+      const payload = loadFix();
+      if ("isError" in payload) {
+        return payload;
+      }
       const checked = checkFix(payload);
       if ("isError" in checked) {
         return checked;
@@ -162,7 +114,11 @@ export default function verifierExtension(pi: ExtensionAPI): void {
       const outcome = await client.verify("fix", payload);
       return {
         content: [{ type: "text", text: verifyOutcomeText(outcome, "submit_fix") }],
-        details: { kind: outcome.kind, remaining: client.remaining },
+        details: {
+          kind: outcome.kind,
+          remaining: client.remaining,
+          testPatchSource: payload.testPatchSource,
+        },
         ...(outcome.kind === "exhausted" ? { isError: true } : {}),
       };
     },
@@ -172,11 +128,14 @@ export default function verifierExtension(pi: ExtensionAPI): void {
     name: "submit_fix",
     label: "Submit SelfBench fix",
     description:
-      "Submit a fix: edit held-out test files in the working tree first, then call this once with a summary and any environment contract or test-selection changes. Run verify first; the static check runs again here and a passing fix ends the session. The gold patch, base commit, and instruction cannot change.",
-    parameters: fixSubmission,
-    async execute(_toolCallId, input) {
+      "Takes no arguments. Reads your fix from /work/fix (same files as verify), runs the static check, and records it; a passing fix ends the session. Run verify first. The gold patch, base commit, and instruction cannot change.",
+    parameters: noArguments,
+    async execute() {
       const fixOutput = requiredEnvironment("SELFBENCH_FIX_OUTPUT");
-      const payload = composeFix(input.definition as Record<string, unknown> | undefined);
+      const payload = loadFix();
+      if ("isError" in payload) {
+        return payload;
+      }
       const checked = checkFix(payload);
       if ("isError" in checked) {
         return checked;
@@ -189,7 +148,10 @@ export default function verifierExtension(pi: ExtensionAPI): void {
       cpSync(join(checked.staging.directory, "test.patch"), join(fixOutput, "fixed-test.patch"));
       checked.staging.dispose();
       const verified = client.verifiedGreen(payload);
-      writeVerdict({ kind: "fixed", summary: input.summary, definition: input.definition ?? {} });
+      writeVerdict({
+        kind: "fixed",
+        summary: `fix from ${fixOutput} (test patch from ${payload.testPatchSource})`,
+      });
       return {
         content: [
           {
@@ -197,7 +159,7 @@ export default function verifierExtension(pi: ExtensionAPI): void {
             text: `Recorded the fix; the static check passed and the fixed Harbor tree is dry-rendered under ${checked.verdict.renderedDirectory ?? "/work/rendered"}. ${verified ? "This fix matches your last green verify, so the worker reuses that report." : "This fix was not verified green in this session, so the worker verifies it now."} Stop here and wait.`,
           },
         ],
-        details: { verified },
+        details: { verified, testPatchSource: payload.testPatchSource },
       };
     },
   });
