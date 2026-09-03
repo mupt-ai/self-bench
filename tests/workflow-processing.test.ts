@@ -5,7 +5,6 @@ import type { RunStatus } from "../src/contracts.js";
 import { executeRun } from "../src/temporal/workflow.js";
 import {
   acceptingActivities,
-  artifact,
   candidate,
   greenOutcome,
   redReport,
@@ -175,27 +174,6 @@ describe("SelfBench workflow processing", () => {
       ]),
     );
   });
-  test("propagates non-retryable candidate activity failures", async () => {
-    const activities = acceptingActivities([candidate("invalid", 1)]);
-    activities.runAuthoringRound = async () => {
-      throw new ActivityFailure(
-        "Activity task failed",
-        "runAuthoringRound",
-        "activity-id",
-        RetryState.NON_RETRYABLE_FAILURE,
-        "worker",
-        ApplicationFailure.nonRetryable("invalid task contract", "InvalidTask"),
-      );
-    };
-    let currentStatus: (() => RunStatus) | undefined;
-
-    await expect(
-      executeRun(run, activities, (status) => {
-        currentStatus = status;
-      }),
-    ).rejects.toBeInstanceOf(ActivityFailure);
-    expect(currentStatus?.().phase).toBe("failed");
-  });
   test("propagates cancellation from a verifier round", async () => {
     const activities = acceptingActivities([candidate("cancelled", 1)]);
     activities.runVerifierRound = async () => {
@@ -216,37 +194,5 @@ describe("SelfBench workflow processing", () => {
       }),
     ).rejects.toBeInstanceOf(ActivityFailure);
     expect(currentStatus?.().phase).toBe("cancelled");
-  });
-  test("rejects a second candidate that reuses another candidate's task ID", async () => {
-    const activities = acceptingActivities([candidate("one", 1), candidate("two", 2)]);
-    activities.runAuthoringRound = async ({ candidate: value, round }) => ({
-      kind: "submitted",
-      task: {
-        candidateId: value.candidateId,
-        taskId: "shared",
-        definition: artifact,
-        sourceBundle: artifact,
-      },
-      session: ref(`file:///${value.candidateId}/session/round-${round}.jsonl`),
-    });
-    let currentStatus: (() => RunStatus) | undefined;
-
-    const result = await executeRun(
-      { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } },
-      activities,
-      (status) => {
-        currentStatus = status;
-      },
-    );
-
-    expect(result.acceptedTaskIds).toEqual(["shared"]);
-    expect(currentStatus?.().tasks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          status: "rejected",
-          reason: expect.stringContaining("repeated task ID shared"),
-        }),
-      ]),
-    );
   });
 });

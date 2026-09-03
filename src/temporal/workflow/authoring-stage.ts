@@ -1,13 +1,7 @@
 import { type ArtifactRef, type Candidate, MAX_AUTHORING_ROUNDS } from "../../contracts.js";
 import { verifyReportSummary } from "../../verify-report.js";
 import type { AuthoringRoundInput, CompileAndVerifyInput } from "../activities.js";
-import {
-  claimTaskId,
-  infrastructureCounter,
-  rejected,
-  type StageContext,
-  type StageOutcome,
-} from "./stage.js";
+import { infrastructureCounter, rejected, type StageContext, type StageOutcome } from "./stage.js";
 
 /**
  * Stage 2: one authoring session per candidate, resumed with the verification report until the
@@ -38,10 +32,6 @@ export async function authorWithVerification(
     }
     session = authored.session;
     verifyCallsUsed += authored.verifyCalls ?? 0;
-    const collision = claimTaskId(context, candidate, authored.task.taskId);
-    if (collision) {
-      return rejected(collision);
-    }
     if (authored.verified) {
       // The agent submitted exactly the payload its in-session verify reported green.
       context.update({ taskId: authored.verified.task.taskId, status: "verifying" });

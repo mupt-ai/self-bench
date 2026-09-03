@@ -1,6 +1,5 @@
 import { isCancellation } from "@temporalio/workflow";
 import {
-  type AuthoredTask,
   type Candidate,
   type Difficulty,
   type DiscoveryProgress,
@@ -13,7 +12,11 @@ import {
 } from "../../contracts.js";
 import { parallelMap } from "../../parallel.js";
 import type { ExportInput, SelfBenchActivities } from "../activities.js";
-import { createCandidateProcessor } from "./candidate.js";
+import {
+  type CandidateChildren,
+  createCandidateTracker,
+  inProcessCandidates,
+} from "./candidate-tracker.js";
 import {
   candidatePoolExhausted,
   discoverWave,
@@ -27,6 +30,7 @@ export async function executeRun(
   input: WorkflowRunInput,
   activitySet: SelfBenchActivities,
   installStatusQuery: (status: () => RunStatus) => void = () => undefined,
+  children: CandidateChildren = inProcessCandidates(activitySet),
 ): Promise<RunResult> {
   const requestedCounts = isReplayRunRequest(input)
     ? { easy: 0, medium: 0, hard: 0 }
@@ -60,6 +64,7 @@ export async function executeRun(
       ...(status.discovery ? { discovery: { ...status.discovery, candidates: discovered } } : {}),
     };
   };
+  const tracker = createCandidateTracker(children, setTasks);
 
   try {
     setPhase("discovering");
@@ -97,34 +102,31 @@ export async function executeRun(
         setPhase,
       );
     }
-    const taskProgress: TaskProgress[] = [];
-    const acceptedTasks: AuthoredTask[] = [];
-    const processCandidate = createCandidateProcessor({
-      activitySet,
-      run,
-      taskProgress,
-      acceptedTasks,
-      taskIds: new Map(),
-      setTasks,
-    });
+    const processCandidate = (candidate: Candidate): Promise<void> =>
+      tracker.process(run, candidate);
 
     setPhase("authoring");
     if (isReplayRunRequest(input)) {
       await parallelMap(candidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
     } else {
-      await processWithBackfill(candidates, input.candidateCounts, taskProgress, processCandidate);
+      await processWithBackfill(
+        candidates,
+        input.candidateCounts,
+        tracker.taskProgress,
+        processCandidate,
+      );
     }
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
       run,
-      tasks: acceptedTasks,
+      tasks: tracker.acceptedTasks,
     } satisfies ExportInput);
     status = { ...status, phase: "complete", export: exportRef };
     return {
       runId: input.runId,
       export: exportRef,
-      acceptedTaskIds: acceptedTasks.map((task) => task.taskId),
+      acceptedTaskIds: tracker.acceptedTasks.map((task) => task.taskId),
     };
   } catch (error) {
     if (isCancellation(error)) {

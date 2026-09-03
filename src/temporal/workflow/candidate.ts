@@ -1,5 +1,10 @@
 import { isCancellation } from "@temporalio/workflow";
-import type { AuthoredTask, Candidate, RunRequest, TaskProgress } from "../../contracts.js";
+import type {
+  Candidate,
+  CandidateWorkflowInput,
+  CandidateWorkflowResult,
+  TaskProgress,
+} from "../../contracts.js";
 import type { SelfBenchActivities } from "../activities.js";
 import { authorWithVerification } from "./authoring-stage.js";
 import {
@@ -7,74 +12,67 @@ import {
   isExhaustedActivityFailure,
   isHarborInfrastructureFailure,
 } from "./failures.js";
-import type { StageContext, StageOutcome } from "./stage.js";
+import type { StageContext } from "./stage.js";
 import { verifyWithCleanup } from "./verification-stage.js";
 
-interface CandidateProcessorOptions {
-  readonly activitySet: SelfBenchActivities;
-  readonly run: RunRequest;
-  readonly taskProgress: TaskProgress[];
-  readonly acceptedTasks: AuthoredTask[];
-  readonly taskIds: Map<string, string>;
-  readonly setTasks: (tasks: readonly TaskProgress[]) => void;
+export function initialProgress(candidate: Candidate): TaskProgress {
+  return {
+    candidateId: candidate.candidateId,
+    taskId: candidate.candidateId,
+    difficulty: candidate.difficulty,
+    status: "authoring",
+    stage: "authoring",
+    round: 1,
+  };
 }
 
 /**
- * Runs one candidate through the authoring loop (agent + mechanical verification, ≤3 rounds) and
- * then the independent verification loop (fresh agent, ≤3 rounds). Only exhausted or Harbor
- * infrastructure failures are absorbed per candidate; everything else propagates.
+ * Body of one candidate child workflow: the authoring loop (agent + mechanical verification, ≤3
+ * rounds) and then the independent verification loop (fresh agent, ≤3 rounds). `report` fires with
+ * a snapshot on every progress change; the returned result is authoritative. Only exhausted or
+ * Harbor infrastructure failures are absorbed; everything else propagates and fails the child.
  */
-export function createCandidateProcessor(
-  options: CandidateProcessorOptions,
-): (candidate: Candidate) => Promise<void> {
-  const { activitySet, run, taskProgress, acceptedTasks, taskIds, setTasks } = options;
-  return async (candidate: Candidate): Promise<void> => {
-    const progress: TaskProgress = {
-      candidateId: candidate.candidateId,
-      taskId: candidate.candidateId,
-      difficulty: candidate.difficulty,
-      status: "authoring",
-      stage: "authoring",
-      round: 1,
-    };
-    taskProgress.push(progress);
-    setTasks(taskProgress);
-    const context: StageContext = {
-      activitySet,
-      run,
-      taskIds,
-      update: (patch) => {
-        Object.assign(progress, patch);
-        setTasks(taskProgress);
-      },
-    };
-    const finish = (outcome: StageOutcome): void => {
-      if (outcome.kind === "green") {
-        progress.status = "accepted";
-        acceptedTasks.push(outcome.task);
-      } else {
-        progress.status = outcome.kind;
-        progress.reason = outcome.reason;
-      }
-      setTasks(taskProgress);
-    };
-    try {
-      const authored = await authorWithVerification(context, candidate);
-      if (authored.kind !== "green") {
-        finish(authored);
-        return;
-      }
-      finish(await verifyWithCleanup(context, candidate, authored));
-    } catch (error) {
-      if (isCancellation(error)) {
-        throw error;
-      }
-      if (!isExhaustedActivityFailure(error) && !isHarborInfrastructureFailure(error)) {
-        throw error;
-      }
-      progress.status = "infrastructure_failed";
-      progress.reason = infrastructureFailureMessage(error);
-      setTasks(taskProgress);
-    }
+export async function executeCandidate(
+  input: CandidateWorkflowInput,
+  activitySet: SelfBenchActivities,
+  report: (progress: TaskProgress) => void,
+): Promise<CandidateWorkflowResult> {
+  const { run, candidate } = input;
+  const progress = initialProgress(candidate);
+  const publish = (): TaskProgress => {
+    const snapshot = { ...progress };
+    report(snapshot);
+    return snapshot;
   };
+  publish();
+  const context: StageContext = {
+    activitySet,
+    run,
+    update: (patch) => {
+      Object.assign(progress, patch);
+      publish();
+    },
+  };
+  try {
+    const authored = await authorWithVerification(context, candidate);
+    const outcome =
+      authored.kind === "green" ? await verifyWithCleanup(context, candidate, authored) : authored;
+    if (outcome.kind === "green") {
+      progress.status = "accepted";
+      return { progress: publish(), task: outcome.task, report: outcome.report };
+    }
+    progress.status = outcome.kind;
+    progress.reason = outcome.reason;
+    return { progress: publish() };
+  } catch (error) {
+    if (isCancellation(error)) {
+      throw error;
+    }
+    if (!isExhaustedActivityFailure(error) && !isHarborInfrastructureFailure(error)) {
+      throw error;
+    }
+    progress.status = "infrastructure_failed";
+    progress.reason = infrastructureFailureMessage(error);
+    return { progress: publish() };
+  }
 }

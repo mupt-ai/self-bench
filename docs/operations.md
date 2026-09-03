@@ -330,6 +330,14 @@ Run status includes its phase, accepted/rejected counts, per-candidate status wi
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 
+## Temporal workflow shape
+
+A run is the `selfBenchRunWorkflow` execution whose workflow ID is the run ID. It discovers candidates, then starts one `selfBenchCandidateWorkflow` child per candidate with the workflow ID `<runId>/candidate/<candidateId>` on the same task queue. The child runs that candidate's authoring and verification loops and returns its final progress plus the accepted task; it signals every progress change to the parent (`candidateProgress`), and the parent's `status` query and `GET /v1/runs/<runId>` merge those signals into the run status. The child's returned result is authoritative even if a signal is lost. Task-ID uniqueness across candidates is enforced by the parent when a child completes green.
+
+To inspect one candidate, open the child workflow in the Temporal UI (search for the run ID prefix, or the parent's "Child Workflows" list). Its history shows that candidate's activities, retries, and timeouts alone; the `candidateStatus` query returns its current progress. Cancelling the run cancels every child, and the parent close policy terminates any straggler. A child that fails outright (anything other than an exhausted or Harbor-infrastructure activity failure) is recorded as `infrastructure_failed` for that candidate; the run continues.
+
+Deployment note: this shape replaced a single workflow that drove every candidate through activities directly. Deploy a worker with the child-workflow shape only when no run is in flight. An in-flight run started under the old shape would replay against the new code and hit a non-determinism error; let running runs finish (or cancel and replay them) before restarting the worker on a build across that boundary.
+
 ## Configuration
 
 | Variable | Default | Used by |

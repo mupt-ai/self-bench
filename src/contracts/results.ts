@@ -1,5 +1,6 @@
 import type { ArtifactRef, Difficulty, RepositoryRef } from "./common.js";
-import type { Candidate } from "./task.js";
+import type { RunRequest } from "./run.js";
+import type { AuthoredTask, Candidate } from "./task.js";
 import type { VerifyStage } from "./verify.js";
 
 export type RunPhase =
@@ -59,6 +60,19 @@ export interface RunResult {
   readonly runId: string;
   readonly export: ArtifactRef;
   readonly acceptedTaskIds: readonly string[];
+}
+
+/** Input of one candidate child workflow. */
+export interface CandidateWorkflowInput {
+  readonly run: RunRequest;
+  readonly candidate: Candidate;
+}
+
+/** Authoritative outcome of one candidate child workflow; `task` is present only when accepted. */
+export interface CandidateWorkflowResult {
+  readonly progress: TaskProgress;
+  readonly task?: AuthoredTask;
+  readonly report?: ArtifactRef;
 }
 
 export interface DiscoveryResult {
