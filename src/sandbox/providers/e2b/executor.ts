@@ -36,7 +36,9 @@ const CLEANUP_REQUEST_TIMEOUT_MS = 30_000;
 const CLEANUP_CALL_TIMEOUT_MS = 10_000;
 const CLEANUP_RECOVERY_DELAYS_MS = [0, 250, 750, 1_500, 3_000, 5_000, 7_500, 10_000] as const;
 const COMMAND_KILL_GRACE_MS = 500;
-const CREATE_REQUEST_TIMEOUT_MS = CLEANUP_REQUEST_TIMEOUT_MS;
+// Creating a sandbox from a large template regularly exceeds the 30 s cleanup budget; a short
+// client timeout here leaves E2B with a half-created sandbox and the worker with nothing.
+const CREATE_REQUEST_TIMEOUT_MS = 120_000;
 const DIAGNOSTIC_TIMEOUT_MS = 5_000;
 const HARD_TIMEOUT_EXIT_CODE = 124;
 const DEFAULT_LIFECYCLE_TIMINGS: E2BLifecycleTimings = {
