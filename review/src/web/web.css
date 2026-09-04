@@ -1,0 +1,62 @@
+/* selfbench.dev pages. Tokens live on .sb in styles.css; everything here reads them. */
+.sb {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+.sb a { color: inherit; text-decoration: none; }
+.sb :focus-visible { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
+
+/* ---- lockup: "self-bench" over "by dari.dev", beside the dari mark ------- */
+.sb .lockup { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 28px; text-decoration: none; }
+.sb .lockup svg { width: 36px; height: 36px; flex: none; }
+.sb .lockup .name { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; line-height: 1; }
+.sb .lockup strong { color: var(--ink); font: 500 22px/1 var(--mono); letter-spacing: -0.06em; }
+.sb .lockup .by { color: var(--mint); font: 500 11px var(--mono); letter-spacing: 0.06em; }
+
+/* ---- login ------------------------------------------------------------------ */
+.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.login-page .wrap { width: 100%; max-width: 440px; }
+.login-page .card { border: 1px solid var(--line); background: var(--surface); padding: 40px; }
+.login-page .eyebrow { color: var(--mint); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; }
+.login-page h1 { font: 600 20px/1.25 var(--sans); letter-spacing: -0.01em; }
+.login-page .sub { margin-top: 6px; color: var(--muted); font-size: 14px; }
+.login-page .btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; height: 44px; margin-top: 28px;
+  border: 1px solid #497e66; background: var(--mint); color: #08110e;
+  font: 700 14px var(--sans); cursor: pointer; text-decoration: none;
+}
+.login-page .btn:hover { background: var(--mint-bright); }
+.login-page .btn:focus-visible { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
+.login-page .btn svg { width: 16px; height: 16px; fill: currentColor; }
+.login-page .error { margin-top: 16px; color: var(--red); font: 12px/1.6 var(--mono); }
+.login-page .foot { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--dim); font: 500 11px var(--mono); }
+.login-page .foot a { color: inherit; text-decoration: none; }
+.login-page .foot .dot { color: var(--line-strong); }
+.login-page .foot a:hover { color: var(--ink); }
+
+/* ---- signed-in shell ------------------------------------------------------- */
+.site-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.site-bar {
+  height: 56px; flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.site-bar .lockup { margin: 0; gap: 10px; }
+.site-bar .lockup svg { width: 28px; height: 28px; }
+.site-bar .lockup strong { font-size: 18px; }
+.site-bar .lockup .by { font-size: 10px; }
+.site-user { display: flex; align-items: center; gap: 14px; font: 500 12px var(--mono); color: var(--muted); }
+.site-user .login { color: var(--ink); }
+.btn-ghost {
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--ink);
+  font: 500 12px var(--mono); cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--mint); color: var(--mint-bright); }
+.btn-ghost:disabled { opacity: 0.5; cursor: default; }
+.site-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.site-placeholder { color: var(--muted); font: 14px var(--sans); }

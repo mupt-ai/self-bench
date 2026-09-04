@@ -36,6 +36,28 @@
   --topbar-h: 56px;
 }
 
+/* selfbench.dev: the site's own system (mint on deep green-black, DM Mono for identifiers and
+   labels, Manrope for text, square corners). Scoped to the site root until the Ledger moves
+   over, because the Ledger above already uses --muted as a background. */
+.sb {
+  color-scheme: dark;
+  --bg: #09100f;
+  --surface: #0d1715;
+  --surface-2: #111d1a;
+  --surface-3: #15231f;
+  --ink: #eef4ed;
+  --muted: #91a39b;
+  --dim: #60736b;
+  --line: #263631;
+  --line-strong: #3a5148;
+  --mint: #8ee6bd;
+  --mint-bright: #b7f4d6;
+  --ochre: #d6ad67;
+  --red: #ee897d;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Manrope", system-ui, -apple-system, sans-serif;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {
