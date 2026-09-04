@@ -296,7 +296,7 @@
 .sb .tabs { display: flex; gap: 24px; margin: 0; padding: 0 32px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .sb .tab { padding: 14px 2px 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: 500 12px var(--mono); cursor: pointer; transition: color 120ms ease; }
 .sb .tab:hover { color: var(--ink); }
-.sb .tab[aria-selected="true"] { color: var(--mint); border-bottom-color: var(--mint); }
+.sb .tab[aria-selected="true"], .sb .tab.active { color: var(--mint); border-bottom-color: var(--mint); }
 .sb .sheet-body { overflow: auto; padding: 20px 32px 72px; display: flex; flex-direction: column; gap: 20px; }
 
 /* ---- Ledger components restyled inside the site ---------------------------- */
@@ -371,5 +371,10 @@
 .skeleton-bar.stamp.wide { width: 110px; }
 .task-list.skeleton .task-row { pointer-events: none; }
 .task-list.skeleton .task-row:hover { background: transparent; }
+.skeleton-bar.button { width: 88px; height: 36px; }
+.skeleton-tree { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; }
+.skeleton-tree .skeleton-bar { margin-top: 0; }
+.skeleton-lines { display: flex; flex-direction: column; gap: 10px; padding: 18px 24px; }
+.skeleton-lines .skeleton-bar { margin-top: 0; }
 @keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; } }

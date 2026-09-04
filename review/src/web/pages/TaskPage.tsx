@@ -12,6 +12,7 @@ import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { rowFor, siteTaskSource } from "../task/site-source";
 import { DifficultyStamp, StateStamp } from "../task/state";
+import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 
 export function TaskPage() {
@@ -63,13 +64,7 @@ export function TaskPage() {
       </main>
     );
   }
-  if (task === undefined) {
-    return (
-      <main className="site-main">
-        <p className="repo-note">Loading task…</p>
-      </main>
-    );
-  }
+  if (task === undefined) return <TaskSkeleton fullName={fullName} taskId={taskId} />;
   if (task === null || !source) {
     return (
       <main className="site-main">
