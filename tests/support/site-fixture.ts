@@ -4,6 +4,7 @@ import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth, type SiteAuthOptions } from "../../src/auth/routes.js";
 import { migrate } from "../../src/db/migrations.js";
 import type { SqlClient } from "../../src/db/sql.js";
+import { createRepoRoutes } from "../../src/site/repos.js";
 
 /** The site's SqlClient over an in-process PGlite database, so the real SQL runs in tests. */
 export async function pgliteClient(): Promise<SqlClient> {
@@ -44,6 +45,9 @@ export interface FakeGitHubOptions {
   readonly login?: string;
   readonly orgs?: readonly string[];
   readonly codeAccepted?: boolean;
+  /** Repos returned for every repo listing, and the merged-PR count for every search. */
+  readonly repos?: readonly { full_name: string; private?: boolean; pushed_at?: string }[];
+  readonly mergedPullRequests?: number;
 }
 
 /** A fetch that answers GitHub's OAuth and API endpoints for one signing-in user. */
@@ -64,6 +68,23 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
     }
     if (url.endsWith("/user")) {
       return Response.json({ id: 42, login, name: "Avyay", avatar_url: "https://a/x.png" });
+    }
+    if (url.includes("/repos?") || url.includes("/user/repos")) {
+      return Response.json(
+        (options.repos ?? []).map((repo, index) => ({
+          id: 5000 + index,
+          full_name: repo.full_name,
+          name: repo.full_name.split("/")[1],
+          private: repo.private ?? false,
+          archived: false,
+          default_branch: "main",
+          language: "TypeScript",
+          pushed_at: repo.pushed_at ?? "2026-09-01T00:00:00Z",
+        })),
+      );
+    }
+    if (url.includes("/search/issues")) {
+      return Response.json({ total_count: options.mergedPullRequests ?? 0 });
     }
     if (url.includes("/user/memberships/orgs")) {
       return Response.json(
@@ -86,12 +107,21 @@ export interface AuthServer {
   stop(): Promise<void>;
 }
 
-/** Runs the site's auth routes on a real loopback server; other paths answer 404. */
+/** Runs the site's auth and repo routes on a real loopback server; other paths answer 404. */
 export async function startAuthServer(options: SiteAuthOptions): Promise<AuthServer> {
   const auth = createSiteAuth(options);
+  const repos = createRepoRoutes(options);
   const server: Server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (await auth.handle(request, url, response)) return;
+    if (url.pathname.startsWith("/api/")) {
+      const user = await auth.authenticate(request);
+      if (!user) {
+        response.writeHead(401).end();
+        return;
+      }
+      if (await repos.handle(request, url, response, user)) return;
+    }
     response.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

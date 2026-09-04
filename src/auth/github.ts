@@ -124,7 +124,7 @@ export async function fetchOrgMemberships(
   return memberships;
 }
 
-function apiHeaders(token: string): Record<string, string> {
+export function apiHeaders(token: string): Record<string, string> {
   return {
     accept: "application/vnd.github+json",
     authorization: `Bearer ${token}`,

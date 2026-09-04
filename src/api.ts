@@ -20,6 +20,7 @@ import { createPostgresUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
 import { migrate } from "./db/migrations.js";
 import { postgresClient, type SqlClient } from "./db/sql.js";
+import { createRepoRoutes, type RepoRoutes } from "./site/repos.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -64,14 +65,16 @@ export async function startApi(
         return;
       }
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
+      const user = site ? await site.auth.authenticate(request) : undefined;
       const allowed = site
         ? (config.apiToken !== undefined && bearerMatches(request, config.apiToken)) ||
-          (await site.auth.authenticate(request)) !== undefined
+          user !== undefined
         : authorized(request, config.apiToken);
       if (!allowed) {
         sendJson(response, 401, { error: "unauthorized" });
         return;
       }
+      if (site && user && (await site.repos.handle(request, url, response, user))) return;
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
         const runId = z
           .string()
@@ -181,12 +184,18 @@ export async function startApi(
   };
 }
 
-async function openSite(auth: AuthConfig): Promise<{ auth: SiteAuth; sql: SqlClient }> {
+async function openSite(
+  auth: AuthConfig,
+): Promise<{ auth: SiteAuth; repos: RepoRoutes; sql: SqlClient }> {
   const sql = postgresClient(auth.databaseUrl);
   const applied = await migrate(sql);
   if (applied.length > 0) console.log(`applied database migrations ${applied.join(", ")}`);
   const users = createPostgresUserStore(sql, { secret: auth.sessionSecret });
-  return { auth: createSiteAuth({ config: auth, users }), sql };
+  return {
+    auth: createSiteAuth({ config: auth, users }),
+    repos: createRepoRoutes({ config: auth, users }),
+    sql,
+  };
 }
 
 /**
