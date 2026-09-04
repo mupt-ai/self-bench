@@ -28,8 +28,10 @@
   width: 100%; height: 44px; margin-top: 28px;
   border: 1px solid #497e66; background: var(--mint); color: #08110e;
   font: 700 14px var(--sans); cursor: pointer; text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
-.login-page .btn:hover { background: var(--mint-bright); }
+.login-page .btn:hover { background: var(--mint-bright); border-color: var(--mint-bright); color: #08110e; }
+.login-page .btn:active { background: var(--mint); border-color: #497e66; color: #08110e; transition: none; }
 .login-page .btn:focus-visible { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
 .login-page .btn svg { width: 16px; height: 16px; fill: currentColor; }
 .login-page .error { margin-top: 16px; color: var(--red); font: 12px/1.6 var(--mono); }
