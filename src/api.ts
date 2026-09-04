@@ -23,6 +23,7 @@ import { postgresClient, type SqlClient } from "./db/sql.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
 import { createPostgresRepoStore } from "./site/repo-store.js";
+import { createPostgresRunStore } from "./site/run-store.js";
 import { createPostgresTaskStore } from "./site/task-store.js";
 import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
 import { connectTemporalClient } from "./temporal/connection.js";
@@ -206,12 +207,13 @@ async function openSite(auth: AuthConfig, artifacts: ArtifactStore): Promise<Sit
   if (applied.length > 0) console.log(`applied database migrations ${applied.join(", ")}`);
   const users = createPostgresUserStore(sql, { secret: auth.sessionSecret });
   const repos = createPostgresRepoStore(sql);
+  const runs = createPostgresRunStore(sql);
   const tasks = createPostgresTaskStore(sql);
   return {
     auth: createSiteAuth({ config: auth, users }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
-    tasks: createTaskRoutes({ users, repos, tasks, artifacts }),
+    tasks: createTaskRoutes({ users, repos, runs, tasks, artifacts }),
     sql,
   };
 }

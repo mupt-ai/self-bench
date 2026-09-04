@@ -1,185 +1,223 @@
 import type { SqlClient } from "../db/sql.js";
 
-/** A pipeline run whose candidates count as a repository's tasks. */
-export interface AttachedRun {
-  readonly runId: string;
-  readonly attachedBy: string;
-  readonly attachedAt: string;
-}
-
+export type PipelineStatus = "in_progress" | "accepted" | "rejected" | "infrastructure_failed";
 export type ReviewDecision = "approve" | "reject";
 
-/** A human verdict on one task. */
-export interface TaskReview {
+/** One candidate the pipeline processed, as stored; files and artifacts stay in the bucket. */
+export interface TaskRecord {
+  readonly id: number;
+  readonly repoId: number;
   readonly runId: string;
+  readonly candidateId: string;
   readonly taskId: string;
-  readonly decision: ReviewDecision;
-  readonly note: string;
-  readonly decidedBy: string;
-  readonly decidedAt: string;
+  readonly sourcePr?: number;
+  readonly sourceUrl?: string;
+  readonly difficulty: "easy" | "medium" | "hard";
+  readonly pipelineStatus: PipelineStatus;
+  readonly stage: string;
+  readonly reason?: string;
+  readonly bundleKey?: string;
+  readonly definition?: Record<string, unknown>;
+  readonly review?: {
+    readonly decision: ReviewDecision;
+    readonly note: string;
+    readonly decidedBy: string;
+    readonly decidedAt: string;
+  };
+  readonly syncedAt: string;
+}
+
+/** What a sync writes; identity is (runId, candidateId), reviews are never touched by a sync. */
+export type TaskUpsert = Omit<TaskRecord, "id" | "review" | "syncedAt">;
+
+export interface RepoTaskCounts {
+  readonly repoId: number;
+  readonly total: number;
+  readonly accepted: number;
+  readonly needsReview: number;
+  readonly rejected: number;
+  readonly lastPr?: number;
 }
 
 export interface TaskStore {
-  runsFor(repoId: number): Promise<AttachedRun[]>;
-  attachRun(repoId: number, runId: string, userId: number): Promise<AttachedRun>;
-  /** True when a row was removed. */
-  detachRun(repoId: number, runId: string): Promise<boolean>;
-  reviewsFor(repoId: number): Promise<TaskReview[]>;
+  upsertMany(rows: readonly TaskUpsert[]): Promise<void>;
+  listForRepo(repoId: number): Promise<TaskRecord[]>;
+  /** By the agent's task id or the candidate id, within one run. */
+  find(repoId: number, runId: string, taskOrCandidateId: string): Promise<TaskRecord | undefined>;
+  deleteForRun(repoId: number, runId: string): Promise<number>;
   review(
-    repoId: number,
-    runId: string,
-    taskId: string,
+    taskRowId: number,
     verdict: { decision: ReviewDecision; note: string; userId: number },
-  ): Promise<TaskReview>;
-  clearReview(repoId: number, runId: string, taskId: string): Promise<boolean>;
+  ): Promise<TaskRecord>;
+  clearReview(taskRowId: number): Promise<TaskRecord>;
+  countsForRepos(repoIds: readonly number[]): Promise<RepoTaskCounts[]>;
 }
 
-interface RunRow {
+interface TaskRow {
+  id: string | number;
+  repo_id: string | number;
   run_id: string;
-  attached_by_login: string;
-  attached_at: string | Date;
-}
-
-interface ReviewRow {
-  run_id: string;
+  candidate_id: string;
   task_id: string;
-  decision: ReviewDecision;
-  note: string;
-  decided_by_login: string;
-  decided_at: string | Date;
+  source_pr: number | null;
+  source_url: string | null;
+  difficulty: TaskRecord["difficulty"];
+  pipeline_status: PipelineStatus;
+  stage: string;
+  reason: string | null;
+  bundle_key: string | null;
+  definition: Record<string, unknown> | null;
+  review_decision: ReviewDecision | null;
+  review_note: string | null;
+  reviewed_by_login: string | null;
+  reviewed_at: string | Date | null;
+  synced_at: string | Date;
 }
 
-const RUN_SELECT = `select r.run_id, u.login as attached_by_login, r.attached_at
-  from repo_runs r join users u on u.id = r.attached_by`;
-const REVIEW_SELECT = `select v.run_id, v.task_id, v.decision, v.note, u.login as decided_by_login, v.decided_at
-  from task_reviews v join users u on u.id = v.decided_by`;
+const SELECT = `select t.id, t.repo_id, t.run_id, t.candidate_id, t.task_id, t.source_pr, t.source_url,
+  t.difficulty, t.pipeline_status, t.stage, t.reason, t.bundle_key, t.definition,
+  t.review_decision, t.review_note, u.login as reviewed_by_login, t.reviewed_at, t.synced_at
+  from tasks t left join users u on u.id = t.reviewed_by`;
 
 export function createPostgresTaskStore(
   sql: SqlClient,
   options: { now?: () => Date } = {},
 ): TaskStore {
   const now = options.now ?? (() => new Date());
+  const byId = async (id: number): Promise<TaskRecord> => {
+    const [row] = await sql.query<TaskRow>(`${SELECT} where t.id = $1`, [id]);
+    if (!row) throw new Error(`task ${id} vanished`);
+    return taskFrom(row);
+  };
   return {
-    async runsFor(repoId) {
-      const rows = await sql.query<RunRow>(
-        `${RUN_SELECT} where r.repo_id = $1 order by r.attached_at desc, r.run_id`,
+    async upsertMany(rows) {
+      if (rows.length === 0) return;
+      await sql.transaction(async (tx) => {
+        for (const row of rows) {
+          await tx.query(
+            `insert into tasks (repo_id, run_id, candidate_id, task_id, source_pr, source_url, difficulty,
+               pipeline_status, stage, reason, bundle_key, definition, synced_at)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             on conflict (run_id, candidate_id) do update
+               set task_id = excluded.task_id, source_pr = excluded.source_pr,
+                   source_url = excluded.source_url, difficulty = excluded.difficulty,
+                   pipeline_status = excluded.pipeline_status, stage = excluded.stage,
+                   reason = excluded.reason, bundle_key = excluded.bundle_key,
+                   definition = excluded.definition, synced_at = excluded.synced_at`,
+            [
+              row.repoId,
+              row.runId,
+              row.candidateId,
+              row.taskId,
+              row.sourcePr ?? null,
+              row.sourceUrl ?? null,
+              row.difficulty,
+              row.pipelineStatus,
+              row.stage,
+              row.reason ?? null,
+              row.bundleKey ?? null,
+              row.definition ? JSON.stringify(row.definition) : null,
+              now(),
+            ],
+          );
+        }
+      });
+    },
+    async listForRepo(repoId) {
+      const rows = await sql.query<TaskRow>(
+        `${SELECT} where t.repo_id = $1 order by t.run_id, t.task_id`,
         [repoId],
       );
-      return rows.map(runFrom);
+      return rows.map(taskFrom);
     },
-    async attachRun(repoId, runId, userId) {
-      await sql.query(
-        `insert into repo_runs (repo_id, run_id, attached_by, attached_at) values ($1, $2, $3, $4)
-         on conflict (repo_id, run_id) do nothing`,
-        [repoId, runId, userId, now()],
+    async find(repoId, runId, taskOrCandidateId) {
+      const rows = await sql.query<TaskRow>(
+        `${SELECT} where t.repo_id = $1 and t.run_id = $2 and (t.task_id = $3 or t.candidate_id = $3)
+         order by (t.task_id = $3) desc limit 1`,
+        [repoId, runId, taskOrCandidateId],
       );
-      const [row] = await sql.query<RunRow>(
-        `${RUN_SELECT} where r.repo_id = $1 and r.run_id = $2`,
+      return rows[0] ? taskFrom(rows[0]) : undefined;
+    },
+    async deleteForRun(repoId, runId) {
+      const rows = await sql.query(
+        "delete from tasks where repo_id = $1 and run_id = $2 returning id",
         [repoId, runId],
       );
-      if (!row) throw new Error("run attach returned no row");
-      return runFrom(row);
+      return rows.length;
     },
-    async detachRun(repoId, runId) {
-      const rows = await sql.query(
-        "delete from repo_runs where repo_id = $1 and run_id = $2 returning run_id",
-        [repoId, runId],
-      );
-      return rows.length > 0;
-    },
-    async reviewsFor(repoId) {
-      const rows = await sql.query<ReviewRow>(`${REVIEW_SELECT} where v.repo_id = $1`, [repoId]);
-      return rows.map(reviewFrom);
-    },
-    async review(repoId, runId, taskId, verdict) {
+    async review(taskRowId, verdict) {
       await sql.query(
-        `insert into task_reviews (repo_id, run_id, task_id, decision, note, decided_by, decided_at)
-         values ($1, $2, $3, $4, $5, $6, $7)
-         on conflict (repo_id, run_id, task_id) do update
-           set decision = excluded.decision, note = excluded.note,
-               decided_by = excluded.decided_by, decided_at = excluded.decided_at`,
-        [repoId, runId, taskId, verdict.decision, verdict.note, verdict.userId, now()],
+        `update tasks set review_decision = $2, review_note = $3, reviewed_by = $4, reviewed_at = $5
+         where id = $1`,
+        [taskRowId, verdict.decision, verdict.note, verdict.userId, now()],
       );
-      const [row] = await sql.query<ReviewRow>(
-        `${REVIEW_SELECT} where v.repo_id = $1 and v.run_id = $2 and v.task_id = $3`,
-        [repoId, runId, taskId],
-      );
-      if (!row) throw new Error("review upsert returned no row");
-      return reviewFrom(row);
+      return byId(taskRowId);
     },
-    async clearReview(repoId, runId, taskId) {
-      const rows = await sql.query(
-        "delete from task_reviews where repo_id = $1 and run_id = $2 and task_id = $3 returning task_id",
-        [repoId, runId, taskId],
+    async clearReview(taskRowId) {
+      await sql.query(
+        `update tasks set review_decision = null, review_note = null, reviewed_by = null,
+           reviewed_at = null where id = $1`,
+        [taskRowId],
       );
-      return rows.length > 0;
+      return byId(taskRowId);
+    },
+    async countsForRepos(repoIds) {
+      if (repoIds.length === 0) return [];
+      const rows = await sql.query<{
+        repo_id: string | number;
+        total: string | number;
+        accepted: string | number;
+        needs_review: string | number;
+        rejected: string | number;
+        last_pr: number | null;
+      }>(
+        `select repo_id,
+           count(*) as total,
+           count(*) filter (where review_decision = 'approve') as accepted,
+           count(*) filter (where review_decision is null and pipeline_status = 'accepted') as needs_review,
+           count(*) filter (where review_decision = 'reject'
+             or (review_decision is null and pipeline_status in ('rejected', 'infrastructure_failed'))) as rejected,
+           max(source_pr) as last_pr
+         from tasks where repo_id = any($1::bigint[]) group by repo_id`,
+        [repoIds],
+      );
+      return rows.map((row) => ({
+        repoId: Number(row.repo_id),
+        total: Number(row.total),
+        accepted: Number(row.accepted),
+        needsReview: Number(row.needs_review),
+        rejected: Number(row.rejected),
+        ...(row.last_pr !== null ? { lastPr: Number(row.last_pr) } : {}),
+      }));
     },
   };
 }
 
-/** Test double with the same contract. */
-export function createMemoryTaskStore(logins: Map<number, string>): TaskStore {
-  const runs = new Map<string, AttachedRun & { repoId: number }>();
-  const reviews = new Map<string, TaskReview & { repoId: number }>();
-  const runKey = (repoId: number, runId: string) => `${repoId}:${runId}`;
-  const reviewKey = (repoId: number, runId: string, taskId: string) =>
-    `${repoId}:${runId}:${taskId}`;
+function taskFrom(row: TaskRow): TaskRecord {
   return {
-    async runsFor(repoId) {
-      return [...runs.values()].filter((run) => run.repoId === repoId).reverse();
-    },
-    async attachRun(repoId, runId, userId) {
-      const existing = runs.get(runKey(repoId, runId));
-      if (existing) return existing;
-      const run = {
-        repoId,
-        runId,
-        attachedBy: logins.get(userId) ?? "",
-        attachedAt: new Date().toISOString(),
-      };
-      runs.set(runKey(repoId, runId), run);
-      return run;
-    },
-    async detachRun(repoId, runId) {
-      return runs.delete(runKey(repoId, runId));
-    },
-    async reviewsFor(repoId) {
-      return [...reviews.values()].filter((review) => review.repoId === repoId);
-    },
-    async review(repoId, runId, taskId, verdict) {
-      const review = {
-        repoId,
-        runId,
-        taskId,
-        decision: verdict.decision,
-        note: verdict.note,
-        decidedBy: logins.get(verdict.userId) ?? "",
-        decidedAt: new Date().toISOString(),
-      };
-      reviews.set(reviewKey(repoId, runId, taskId), review);
-      return review;
-    },
-    async clearReview(repoId, runId, taskId) {
-      return reviews.delete(reviewKey(repoId, runId, taskId));
-    },
-  };
-}
-
-function runFrom(row: RunRow): AttachedRun {
-  return {
+    id: Number(row.id),
+    repoId: Number(row.repo_id),
     runId: row.run_id,
-    attachedBy: row.attached_by_login,
-    attachedAt: new Date(row.attached_at).toISOString(),
-  };
-}
-
-function reviewFrom(row: ReviewRow): TaskReview {
-  return {
-    runId: row.run_id,
+    candidateId: row.candidate_id,
     taskId: row.task_id,
-    decision: row.decision,
-    note: row.note,
-    decidedBy: row.decided_by_login,
-    decidedAt: new Date(row.decided_at).toISOString(),
+    ...(row.source_pr !== null ? { sourcePr: Number(row.source_pr) } : {}),
+    ...(row.source_url ? { sourceUrl: row.source_url } : {}),
+    difficulty: row.difficulty,
+    pipelineStatus: row.pipeline_status,
+    stage: row.stage,
+    ...(row.reason ? { reason: row.reason } : {}),
+    ...(row.bundle_key ? { bundleKey: row.bundle_key } : {}),
+    ...(row.definition ? { definition: row.definition } : {}),
+    ...(row.review_decision
+      ? {
+          review: {
+            decision: row.review_decision,
+            note: row.review_note ?? "",
+            decidedBy: row.reviewed_by_login ?? "",
+            decidedAt: new Date(row.reviewed_at ?? 0).toISOString(),
+          },
+        }
+      : {}),
+    syncedAt: new Date(row.synced_at).toISOString(),
   };
 }

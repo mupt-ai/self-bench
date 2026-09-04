@@ -64,6 +64,9 @@ export interface CandidateSummary extends Omit<TaskProgress, "status" | "stage">
   readonly stage: CandidateStage;
   readonly reasonSummary?: string;
   readonly definition?: CandidateDefinitionSummary;
+  /** Archived runs only: where the newest definition.json and final compiled bundle live. */
+  readonly definitionKey?: string;
+  readonly bundleKey?: string;
 }
 
 export interface CandidateList {

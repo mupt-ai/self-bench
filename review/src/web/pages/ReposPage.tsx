@@ -4,10 +4,10 @@ import {
   type ConnectedRepo,
   disconnectRepo,
   fetchConnectedRepos,
-  fetchTasks,
+  fetchTaskCounts,
   formatAgo,
+  type RepoTaskCounts,
   setRepoContinuous,
-  type TaskItem,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
@@ -21,16 +21,13 @@ interface RepoStats {
   lastPr?: number;
 }
 
-function statsOf(tasks: TaskItem[]): RepoStats {
-  let needsReview = 0;
-  let lastPr: number | undefined;
-  let kept = 0;
-  for (const task of tasks) {
-    if (task.state === "needs_review") needsReview += 1;
-    if (task.state !== "rejected") kept += 1;
-    if (task.sourcePr && (lastPr === undefined || task.sourcePr > lastPr)) lastPr = task.sourcePr;
-  }
-  return { tasks: kept, needsReview, ...(lastPr !== undefined ? { lastPr } : {}) };
+function statsOf(counts: RepoTaskCounts | undefined): RepoStats {
+  if (!counts) return { tasks: 0, needsReview: 0 };
+  return {
+    tasks: counts.total - counts.rejected,
+    needsReview: counts.needsReview,
+    ...(counts.lastPr !== undefined ? { lastPr: counts.lastPr } : {}),
+  };
 }
 
 export function ReposPage() {
@@ -54,15 +51,16 @@ export function ReposPage() {
       (found) => {
         if (cancelled) return;
         setRepos({ status: "ok", repos: found });
-        // Counts come from the artifact store and can take a moment; fill cards as they arrive.
-        for (const repo of found) {
-          fetchTasks(org.login, repo.fullName).then(
-            (tasks) =>
-              !cancelled &&
-              setStats((current) => ({ ...current, [repo.fullName]: statsOf(tasks) })),
-            () => undefined,
-          );
-        }
+        fetchTaskCounts(org.login).then(
+          (counts) =>
+            !cancelled &&
+            setStats(
+              Object.fromEntries(
+                found.map((repo) => [repo.fullName, statsOf(counts[repo.fullName])]),
+              ),
+            ),
+          () => undefined,
+        );
       },
       (cause: Error) => !cancelled && setError(cause.message),
     );

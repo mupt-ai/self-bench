@@ -143,9 +143,33 @@ export interface TaskItem {
   pipelineStatus: string;
   state: TaskState;
   reasonSummary?: string;
+  reason?: string;
   sourcePr?: number;
   sourceUrl?: string;
   review?: TaskReview;
+  syncedAt: string;
+}
+
+export interface RepoTaskCounts {
+  total: number;
+  accepted: number;
+  needsReview: number;
+  rejected: number;
+  lastPr?: number;
+}
+
+export async function fetchTaskCounts(org: string): Promise<Record<string, RepoTaskCounts>> {
+  const body = await requestJson<{ counts: Record<string, RepoTaskCounts> }>(
+    `/api/orgs/${encodeURIComponent(org)}/task-counts`,
+  );
+  return body.counts;
+}
+
+export async function syncRepo(org: string, fullName: string): Promise<number> {
+  const body = await requestJson<{ synced: number }>(`${repoPath(org, fullName)}/sync`, {
+    method: "POST",
+  });
+  return body.synced;
 }
 
 const repoPath = (org: string, fullName: string) =>
@@ -188,8 +212,8 @@ export async function putReview(
   runId: string,
   taskId: string,
   verdict: { decision: "approve" | "reject"; note: string },
-): Promise<TaskReview> {
-  const body = await requestJson<{ review: TaskReview }>(
+): Promise<TaskItem> {
+  const body = await requestJson<{ task: TaskItem }>(
     `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/review`,
     {
       method: "PUT",
@@ -197,7 +221,7 @@ export async function putReview(
       body: JSON.stringify(verdict),
     },
   );
-  return body.review;
+  return body.task;
 }
 
 export async function clearReview(
@@ -205,11 +229,12 @@ export async function clearReview(
   fullName: string,
   runId: string,
   taskId: string,
-): Promise<void> {
-  await requestJson<{ ok: true }>(
+): Promise<TaskItem> {
+  const body = await requestJson<{ task: TaskItem }>(
     `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/review`,
     { method: "DELETE" },
   );
+  return body.task;
 }
 
 export function taskArtifactsPath(org: string, fullName: string, runId: string, taskId: string) {

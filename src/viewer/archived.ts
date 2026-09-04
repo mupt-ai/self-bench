@@ -1,6 +1,7 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { Difficulty } from "../contracts.js";
 import { parallelMap } from "../parallel.js";
+import { latestBundleKey, latestDefinitionKey } from "./archived-keys.js";
 import { reasonSummary, summarizeDefinition } from "./candidates.js";
 import type { ArtifactEntry, CandidateList, CandidateStage, CandidateSummary } from "./types.js";
 
@@ -102,6 +103,7 @@ export async function archivedCandidates(
         (await latestRoundDecision(store, entries, prefix, candidateId)) ??
         (await latestReviewDecision(store, entries, prefix, taskId));
       const stage = decision?.stage ?? furthestStage(groups);
+      const bundleKey = latestBundleKey(entries, prefix, candidateId);
       const candidate: CandidateSummary = {
         taskId,
         candidateId,
@@ -110,7 +112,10 @@ export async function archivedCandidates(
         stage,
         reasonSummary:
           decision?.reasonSummary ?? `no verdict on record; last artifact written by ${stage}`,
+        ...(decision?.reason ? { reason: decision.reason } : {}),
         ...(definition ? { definition } : {}),
+        ...(definitionKey ? { definitionKey } : {}),
+        ...(bundleKey ? { bundleKey } : {}),
       };
       return candidate;
     },
@@ -122,33 +127,10 @@ export async function archivedCandidates(
   };
 }
 
-/**
- * The candidate's newest definition. Legacy runs wrote one at `authoring/<id>/definition.json`;
- * the agent pipeline rewrites it per round, attempt, and verify pass, so the latest write wins.
- */
-function latestDefinitionKey(
-  entries: readonly ArtifactEntry[],
-  prefix: string,
-  candidateId: string,
-): string | undefined {
-  const head = `${prefix}authoring/${candidateId}/`;
-  let latest: ArtifactEntry | undefined;
-  for (const entry of entries) {
-    if (!entry.key.startsWith(head) || !entry.key.endsWith("/definition.json")) continue;
-    if (
-      !latest ||
-      (entry.updatedAt ?? "") > (latest.updatedAt ?? "") ||
-      ((entry.updatedAt ?? "") === (latest.updatedAt ?? "") && entry.key > latest.key)
-    ) {
-      latest = entry;
-    }
-  }
-  return latest?.key;
-}
-
 interface ArchivedDecision {
   readonly stage: CandidateStage;
   readonly reasonSummary: string;
+  readonly reason?: string;
 }
 
 const ROUND_RESULT = /^(authoring|verification)\/[^/]+\/round-(\d+)\/result\.json$/;
@@ -188,12 +170,14 @@ async function latestRoundDecision(
       reasonSummary: summary
         ? `verification agent accepted: ${summary}`
         : "verification agent accepted",
+      ...(reason ? { reason } : {}),
     };
   }
   if (value.kind === "rejected") {
     return {
       stage: latest.loop === "verification" ? "review" : "authoring",
       reasonSummary: summary ?? `${latest.loop} round ${latest.round} rejected`,
+      ...(reason ? { reason } : {}),
     };
   }
   return undefined;

@@ -8,7 +8,9 @@ import type { SqlClient } from "../../src/db/sql.js";
 import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
 import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
 import { createMemoryRepoStore, type RepoStore } from "../../src/site/repo-store.js";
-import { createMemoryTaskStore, type TaskStore } from "../../src/site/task-store.js";
+import { createMemoryRunStore, type RunStore } from "../../src/site/run-store.js";
+import { createMemoryTaskStore } from "../../src/site/task-memory.js";
+import type { TaskStore } from "../../src/site/task-store.js";
 import { createTaskRoutes } from "../../src/site/tasks.js";
 
 /** The site's SqlClient over an in-process PGlite database, so the real SQL runs in tests. */
@@ -131,6 +133,7 @@ export interface AuthServer {
 export async function startAuthServer(
   options: SiteAuthOptions & {
     repos?: RepoStore;
+    runs?: RunStore;
     tasks?: TaskStore;
     artifacts?: ArtifactStore;
   },
@@ -143,6 +146,7 @@ export async function startAuthServer(
     ? createTaskRoutes({
         users: options.users,
         repos,
+        runs: options.runs ?? createMemoryRunStore(new Map()),
         tasks: options.tasks ?? createMemoryTaskStore(new Map()),
         artifacts: options.artifacts,
       })

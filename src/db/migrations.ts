@@ -113,6 +113,46 @@ create table if not exists task_reviews (
 );
 `,
   },
+  {
+    version: 6,
+    name: "tasks",
+    sql: `
+-- One row per candidate the pipeline processed; files and artifacts stay in the bucket.
+create table if not exists tasks (
+  id bigserial primary key,
+  repo_id bigint not null references repos(id) on delete cascade,
+  run_id text not null,
+  candidate_id text not null,
+  task_id text not null,
+  source_pr integer,
+  source_url text,
+  difficulty text not null check (difficulty in ('easy', 'medium', 'hard')),
+  pipeline_status text not null check (pipeline_status in ('in_progress', 'accepted', 'rejected', 'infrastructure_failed')),
+  stage text not null,
+  reason text,
+  bundle_key text,
+  definition jsonb,
+  review_decision text check (review_decision in ('approve', 'reject')),
+  review_note text,
+  reviewed_by bigint references users(id),
+  reviewed_at timestamptz,
+  synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (run_id, candidate_id)
+);
+create index if not exists tasks_repo_id on tasks(repo_id);
+create index if not exists tasks_repo_pr on tasks(repo_id, source_pr);
+
+-- Reviews recorded before tasks had rows move onto the task; none exist outside dev.
+insert into tasks (repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status, stage,
+  review_decision, review_note, reviewed_by, reviewed_at)
+select v.repo_id, v.run_id, v.task_id, v.task_id, 'easy', 'accepted', 'accepted',
+  v.decision, v.note, v.decided_by, v.decided_at
+from task_reviews v
+on conflict (run_id, candidate_id) do nothing;
+drop table if exists task_reviews;
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */

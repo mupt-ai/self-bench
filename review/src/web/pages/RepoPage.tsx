@@ -8,6 +8,8 @@ import {
   fetchAttachedRuns,
   fetchConnectedRepos,
   fetchTasks,
+  formatAgo,
+  syncRepo,
   type TaskItem,
   type TaskState,
 } from "../api";
@@ -30,6 +32,7 @@ export function RepoPage() {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
   const [attaching, setAttaching] = React.useState(false);
+  const [syncing, setSyncing] = React.useState(false);
 
   const loadTasks = React.useCallback(() => {
     setTasks(null);
@@ -65,6 +68,19 @@ export function RepoPage() {
     },
     [loadTasks],
   );
+  const refresh = () => {
+    setSyncing(true);
+    syncRepo(org.login, fullName).then(
+      () => {
+        setSyncing(false);
+        loadTasks();
+      },
+      (cause: Error) => {
+        setSyncing(false);
+        setError(cause.message);
+      },
+    );
+  };
   const detach = (run: AttachedRun) => {
     if (!window.confirm(`Detach ${run.runId}? Its tasks leave this repository.`)) return;
     detachRun(org.login, fullName, run.runId).then(
@@ -140,9 +156,22 @@ export function RepoPage() {
             <span>
               {runs.length} attached run{runs.length === 1 ? "" : "s"}
             </span>
+            {tasks?.[0] && (
+              <>
+                <span className="repo-detail-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span>synced {formatAgo(tasks[0].syncedAt)}</span>
+              </>
+            )}
           </div>
         </div>
         <div className="page-actions">
+          {runs.length > 0 && (
+            <button type="button" className="btn-ghost" disabled={syncing} onClick={refresh}>
+              {syncing ? "Refreshing…" : "Refresh"}
+            </button>
+          )}
           <button type="button" className="btn-secondary" onClick={() => setAttaching(true)}>
             + Attach Run
           </button>

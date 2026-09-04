@@ -1,13 +1,6 @@
 import React from "react";
 import { Link, useParams } from "react-router";
-import {
-  clearReview,
-  fetchTasks,
-  formatAgo,
-  putReview,
-  type TaskItem,
-  type TaskReview,
-} from "../api";
+import { clearReview, fetchTasks, formatAgo, putReview, type TaskItem } from "../api";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { rowFor, siteTaskSource } from "../task/site-source";
@@ -42,20 +35,7 @@ export function TaskPage() {
     [org.login, fullName, task],
   );
 
-  const onReview = (review: TaskReview | null) =>
-    setTask((current) => {
-      if (!current) return current;
-      const { review: _dropped, ...rest } = current;
-      const pipelineState =
-        current.pipelineStatus === "accepted" || current.stage === "accepted"
-          ? "needs_review"
-          : "rejected";
-      return {
-        ...rest,
-        ...(review ? { review } : {}),
-        state: review ? (review.decision === "approve" ? "accepted" : "rejected") : pipelineState,
-      };
-    });
+  const onReview = (updated: TaskItem) => setTask(updated);
 
   if (error) {
     return (
@@ -118,7 +98,7 @@ function ReviewBar({
   org: string;
   fullName: string;
   task: TaskItem;
-  onReview: (review: TaskReview | null) => void;
+  onReview: (updated: TaskItem) => void;
 }) {
   const [pending, setPending] = React.useState<"approve" | "reject" | null>(null);
   const [note, setNote] = React.useState("");
@@ -132,11 +112,11 @@ function ReviewBar({
       decision: pending,
       note: note.trim(),
     }).then(
-      (review) => {
+      (updated) => {
         setBusy(false);
         setPending(null);
         setNote("");
-        onReview(review);
+        onReview(updated);
       },
       (cause: Error) => {
         setBusy(false);
@@ -147,9 +127,9 @@ function ReviewBar({
   const clear = () => {
     setBusy(true);
     clearReview(org, fullName, task.runId, task.taskId).then(
-      () => {
+      (updated) => {
         setBusy(false);
-        onReview(null);
+        onReview(updated);
       },
       (cause: Error) => {
         setBusy(false);
