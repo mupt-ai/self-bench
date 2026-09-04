@@ -66,9 +66,16 @@ export function createConnectedRepoRoutes(
           sendJson(response, 404, { error: "repository not found or not readable" });
           return true;
         }
+        // An org may connect anything public, but only its own private repositories.
         const owner = found.fullName.split("/")[0] ?? "";
-        if (tenant.kind === "org" && owner.toLowerCase() !== tenant.login.toLowerCase()) {
-          sendJson(response, 400, { error: `repository is not owned by ${tenant.login}` });
+        if (
+          tenant.kind === "org" &&
+          found.private &&
+          owner.toLowerCase() !== tenant.login.toLowerCase()
+        ) {
+          sendJson(response, 400, {
+            error: `private repository is not owned by ${tenant.login}`,
+          });
           return true;
         }
         const existing = await repos.find(tenant.id, found.fullName);

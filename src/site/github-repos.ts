@@ -18,9 +18,9 @@ export interface RepoSummary {
   readonly pushedAt?: string;
 }
 
-/** What the picker shows once a repo is chosen: the honest eligibility signal. */
+/** What the picker shows once a repo is chosen: the repo itself plus the eligibility signal. */
 export interface RepoDetail {
-  readonly fullName: string;
+  readonly repo: RepoSummary;
   readonly mergedPullRequests: number;
   readonly since: string;
 }
@@ -70,9 +70,11 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
     return repos;
   };
 
-  const repoDetail = async (user: User, fullName: string): Promise<RepoDetail> => {
+  const repoDetail = async (user: User, fullName: string): Promise<RepoDetail | undefined> => {
     const token = await users.gitHubToken(user.githubId);
     if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+    const repo = await lookupRepo(config, token, fullName, fetchImpl);
+    if (!repo) return undefined;
     const since = new Date(now().getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const query = `repo:${fullName} is:pr is:merged merged:>=${since}`;
     const response = await fetchImpl(
@@ -81,7 +83,7 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
     );
     if (!response.ok) throw new GitHubOAuthError(`GitHub search failed (${response.status})`);
     const body = (await response.json()) as { total_count?: number };
-    return { fullName, mergedPullRequests: body.total_count ?? 0, since };
+    return { repo, mergedPullRequests: body.total_count ?? 0, since };
   };
 
   return {
@@ -103,7 +105,12 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
           sendJson(response, 400, { error: "invalid repository name" });
           return true;
         }
-        sendJson(response, 200, await repoDetail(user, `${detail[1]}/${detail[2]}`));
+        const found = await repoDetail(user, `${detail[1]}/${detail[2]}`);
+        if (!found) {
+          sendJson(response, 404, { error: "repository not found or not readable" });
+          return true;
+        }
+        sendJson(response, 200, found);
         return true;
       }
       return false;

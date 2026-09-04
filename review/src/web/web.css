@@ -143,6 +143,8 @@
 .repo-meta { display: flex; gap: 10px; flex: none; color: var(--dim); font: 400 11px var(--mono); }
 .repo-badge { color: var(--ochre); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
 .repo-badge.connected { color: var(--mint); }
+.repo-row-lookup { border-style: dashed; border-color: var(--line-strong); margin-top: 8px; }
+.repo-row-lookup .repo-meta { color: var(--mint); }
 .repo-row:disabled { cursor: default; opacity: 0.55; }
 .repo-row:disabled:hover { background: transparent; }
 .repo-detail-error { margin-top: 6px; color: var(--red); font: 12px var(--mono); }

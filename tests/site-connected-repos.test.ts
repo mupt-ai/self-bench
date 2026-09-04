@@ -73,10 +73,10 @@ describe("connected repos routes", () => {
     expect(list.repos.map((repo) => repo.fullName)).toEqual(["Mupt-AI/self-bench"]);
   });
 
-  test("refuses unreadable repos, repos outside the org, bad names, and foreign orgs", async () => {
+  test("allows public repos from anywhere, refuses foreign private ones, bad names, and foreign orgs", async () => {
     const { site, headers } = await signedIn({
       orgs: ["Mupt-AI"],
-      repos: [{ full_name: "someone/else" }],
+      repos: [{ full_name: "someone/else", private: true }, { full_name: "posthog/posthog" }],
     });
     const post = (org: string, fullName: string) =>
       site.request(`/api/orgs/${org}/repos`, {
@@ -86,6 +86,7 @@ describe("connected repos routes", () => {
       });
     expect((await post("mupt-ai", "Mupt-AI/missing")).status).toBe(404);
     expect((await post("mupt-ai", "someone/else")).status).toBe(400);
+    expect((await post("mupt-ai", "posthog/posthog")).status).toBe(201);
     expect((await post("mupt-ai", "not a repo")).status).toBe(400);
     expect((await post("other-org", "someone/else")).status).toBe(404);
     expect((await post("avyay", "someone/else")).status).toBe(201);

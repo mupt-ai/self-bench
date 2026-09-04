@@ -11,7 +11,7 @@ export interface Repo {
 }
 
 export interface RepoDetail {
-  fullName: string;
+  repo: Repo;
   mergedPullRequests: number;
   since: string;
 }

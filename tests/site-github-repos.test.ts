@@ -78,11 +78,19 @@ describe("GitHub repo listing", () => {
     expect((await site.request("/api/orgs/avyay/github-repos")).status).toBe(401);
   });
 
-  test("reports merged pull requests over the last year for one repo", async () => {
-    const { site, hub, headers } = await signedIn({ orgs: [], mergedPullRequests: 37 });
+  test("reports the repo and its merged pull requests over the last year", async () => {
+    const { site, hub, headers } = await signedIn({
+      orgs: [],
+      repos: [{ full_name: "avyay/x" }],
+      mergedPullRequests: 37,
+    });
     const response = await site.request("/api/github-repos/avyay/x", { headers });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ fullName: "avyay/x", mergedPullRequests: 37 });
+    expect(await response.json()).toMatchObject({
+      repo: { fullName: "avyay/x", defaultBranch: "main" },
+      mergedPullRequests: 37,
+    });
+    expect((await site.request("/api/github-repos/avyay/missing", { headers })).status).toBe(404);
     const search = hub.calls.find((call) => call.includes("/search/issues")) ?? "";
     expect(decodeURIComponent(search)).toContain("repo:avyay/x is:pr is:merged merged:>=");
     expect((await site.request("/api/github-repos/bad%20name/x", { headers })).status).toBe(400);

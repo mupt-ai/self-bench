@@ -63,6 +63,21 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
     );
   };
 
+  /** A typed owner/name that is not in the org's list can be looked up on GitHub directly. */
+  const typedName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(query.trim()) ? query.trim() : null;
+  const lookup = () => {
+    if (!typedName) return;
+    setSelected(null);
+    setDetail({ status: "loading" });
+    fetchGitHubRepoDetail(typedName).then(
+      (value) => {
+        setSelected(value.repo);
+        setDetail({ status: "ok", value });
+      },
+      (error: Error) => setDetail({ status: "error", message: error.message }),
+    );
+  };
+
   const connect = () => {
     if (!selected) return;
     setSubmit({ busy: true });
@@ -97,8 +112,8 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
             <div className="eyebrow">Connect Repo</div>
             <h2 id="new-run-title">Choose a Repository</h2>
             <p className="sheet-sub">
-              Repositories in <span className="mono">{org.login}</span> that your GitHub account can
-              read.
+              Repositories in <span className="mono">{org.login}</span>, or type{" "}
+              <span className="mono">owner/name</span> for any public repository.
             </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onClose}>
@@ -117,10 +132,22 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
         <div className="repo-list" role="listbox" aria-label="Repositories">
           {repos.status === "loading" && <p className="repo-note">Loading repositories…</p>}
           {repos.status === "error" && <p className="repo-note error">{repos.message}</p>}
-          {repos.status === "ok" && visible.length === 0 && (
+          {repos.status === "ok" && visible.length === 0 && !typedName && (
             <p className="repo-note">
               {needle ? "No repositories match." : "No repositories here."}
             </p>
+          )}
+          {typedName &&
+            !visible.some((repo) => repo.fullName.toLowerCase() === typedName.toLowerCase()) && (
+              <button type="button" className="repo-row repo-row-lookup" onClick={lookup}>
+                <span className="repo-name">{typedName}</span>
+                <span className="repo-meta">
+                  <span>look up on GitHub</span>
+                </span>
+              </button>
+            )}
+          {detail?.status === "error" && !selected && (
+            <p className="repo-note error">{detail.message}</p>
           )}
           {visible.map((repo) => (
             <button
