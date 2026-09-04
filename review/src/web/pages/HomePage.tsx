@@ -41,7 +41,7 @@ type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
 function ReposPage({ org }: { org: SiteOrg }) {
   const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
   const [error, setError] = React.useState<string | null>(null);
-  const [connecting, setConnecting] = React.useState(false);
+  const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -54,12 +54,12 @@ function ReposPage({ org }: { org: SiteOrg }) {
     };
   }, [org.login]);
 
-  const closeSheet = React.useCallback(() => setConnecting(false), []);
+  const closeSheet = React.useCallback(() => setConnecting(null), []);
   const onConnected = React.useCallback((repo: ConnectedRepo) => {
     setRepos((current) =>
       current.status === "ok" ? { status: "ok", repos: [repo, ...current.repos] } : current,
     );
-    setConnecting(false);
+    setConnecting(null);
   }, []);
   const disconnect = (repo: ConnectedRepo) => {
     if (!window.confirm(`Disconnect ${repo.fullName}?`)) return;
@@ -84,9 +84,14 @@ function ReposPage({ org }: { org: SiteOrg }) {
           <div className="eyebrow">Repositories</div>
           <h1>Connected Repositories</h1>
         </div>
-        <button type="button" className="btn-primary" onClick={() => setConnecting(true)}>
-          + Connect Repo
-        </button>
+        <div className="page-actions">
+          <button type="button" className="btn-secondary" onClick={() => setConnecting("public")}>
+            + Connect Public Repo
+          </button>
+          <button type="button" className="btn-primary" onClick={() => setConnecting("mine")}>
+            + Connect My Repo
+          </button>
+        </div>
       </div>
       {error && <p className="page-error">{error}</p>}
       {repos.status === "ok" && repos.repos.length === 0 && (
@@ -132,6 +137,7 @@ function ReposPage({ org }: { org: SiteOrg }) {
       {connecting && (
         <ConnectRepoSheet
           org={org}
+          mode={connecting}
           connected={connected}
           onClose={closeSheet}
           onConnected={onConnected}

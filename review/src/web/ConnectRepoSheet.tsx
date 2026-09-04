@@ -12,6 +12,8 @@ import type { SiteOrg } from "./session";
 
 export interface ConnectRepoSheetProps {
   org: SiteOrg;
+  /** "mine" lists the org's repositories; "public" takes an owner/name for any public repo. */
+  mode: "mine" | "public";
   /** Already connected; shown as such and not offered again. */
   connected: ReadonlySet<string>;
   onClose: () => void;
@@ -24,7 +26,13 @@ type Loaded<T> =
   | { status: "ok"; value: T };
 
 /** Connect a repository: pick it from GitHub, see its merged-PR count, confirm. */
-export function ConnectRepoSheet({ org, connected, onClose, onConnected }: ConnectRepoSheetProps) {
+export function ConnectRepoSheet({
+  org,
+  mode,
+  connected,
+  onClose,
+  onConnected,
+}: ConnectRepoSheetProps) {
   const [repos, setRepos] = React.useState<Loaded<Repo[]>>({ status: "loading" });
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<Repo | null>(null);
@@ -33,6 +41,7 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
   const search = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
+    if (mode !== "mine") return;
     let cancelled = false;
     setRepos({ status: "loading" });
     fetchGitHubRepos(org.login).then(
@@ -42,7 +51,7 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
     return () => {
       cancelled = true;
     };
-  }, [org.login]);
+  }, [org.login, mode]);
 
   React.useEffect(() => {
     search.current?.focus();
@@ -63,7 +72,6 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
     );
   };
 
-  /** A typed owner/name that is not in the org's list can be looked up on GitHub directly. */
   const typedName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(query.trim()) ? query.trim() : null;
   const lookup = () => {
     if (!typedName) return;
@@ -92,7 +100,7 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
 
   const needle = query.trim().toLowerCase();
   const visible =
-    repos.status === "ok"
+    mode === "mine" && repos.status === "ok"
       ? repos.value.filter((repo) => !needle || repo.fullName.toLowerCase().includes(needle))
       : [];
 
@@ -109,45 +117,86 @@ export function ConnectRepoSheet({ org, connected, onClose, onConnected }: Conne
       >
         <header className="sheet-head">
           <div>
-            <div className="eyebrow">Connect Repo</div>
-            <h2 id="new-run-title">Choose a Repository</h2>
+            <div className="eyebrow">
+              {mode === "mine" ? "Connect My Repo" : "Connect Public Repo"}
+            </div>
+            <h2 id="new-run-title">
+              {mode === "mine" ? "Choose a Repository" : "Enter a Public Repository"}
+            </h2>
             <p className="sheet-sub">
-              Repositories in <span className="mono">{org.login}</span>, or type{" "}
-              <span className="mono">owner/name</span> for any public repository.
+              {mode === "mine" ? (
+                <>
+                  Repositories in <span className="mono">{org.login}</span> that your GitHub account
+                  can read.
+                </>
+              ) : (
+                <>
+                  Any public repository on GitHub, as <span className="mono">owner/name</span>.
+                </>
+              )}
             </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onClose}>
             Close
           </button>
         </header>
-        <input
-          ref={search}
-          className="sheet-search"
-          type="search"
-          placeholder="Search repositories"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search repositories"
-        />
+        {mode === "public" ? (
+          <form
+            className="sheet-lookup"
+            onSubmit={(event) => {
+              event.preventDefault();
+              lookup();
+            }}
+          >
+            <input
+              ref={search}
+              className="sheet-search"
+              type="text"
+              placeholder="owner/name"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Repository owner and name"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <button type="submit" className="btn-ghost" disabled={!typedName}>
+              Look Up
+            </button>
+          </form>
+        ) : (
+          <input
+            ref={search}
+            className="sheet-search"
+            type="search"
+            placeholder="Search repositories"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search repositories"
+          />
+        )}
         <div className="repo-list" role="listbox" aria-label="Repositories">
-          {repos.status === "loading" && <p className="repo-note">Loading repositories…</p>}
-          {repos.status === "error" && <p className="repo-note error">{repos.message}</p>}
-          {repos.status === "ok" && visible.length === 0 && !typedName && (
+          {mode === "mine" && repos.status === "loading" && (
+            <p className="repo-note">Loading repositories…</p>
+          )}
+          {mode === "mine" && repos.status === "error" && (
+            <p className="repo-note error">{repos.message}</p>
+          )}
+          {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
             <p className="repo-note">
               {needle ? "No repositories match." : "No repositories here."}
             </p>
           )}
-          {typedName &&
-            !visible.some((repo) => repo.fullName.toLowerCase() === typedName.toLowerCase()) && (
-              <button type="button" className="repo-row repo-row-lookup" onClick={lookup}>
-                <span className="repo-name">{typedName}</span>
-                <span className="repo-meta">
-                  <span>look up on GitHub</span>
-                </span>
-              </button>
-            )}
-          {detail?.status === "error" && !selected && (
+          {mode === "public" && detail?.status === "loading" && (
+            <p className="repo-note">Looking up {typedName}…</p>
+          )}
+          {mode === "public" && detail?.status === "error" && (
             <p className="repo-note error">{detail.message}</p>
+          )}
+          {mode === "public" && !detail && (
+            <p className="repo-note">
+              Type the repository as it appears on GitHub, then look it up.
+            </p>
           )}
           {visible.map((repo) => (
             <button
