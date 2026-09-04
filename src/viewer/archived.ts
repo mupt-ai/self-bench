@@ -89,9 +89,10 @@ export async function archivedCandidates(
     [...candidateIds],
     DEFINITION_CONCURRENCY,
     async (candidateId) => {
-      const bytes = await store
-        .getByKey(`runs/${runId}/authoring/${candidateId}/definition.json`)
-        .catch(() => undefined);
+      const definitionKey = latestDefinitionKey(entries, prefix, candidateId);
+      const bytes = definitionKey
+        ? await store.getByKey(definitionKey).catch(() => undefined)
+        : undefined;
       const text = bytes ? Buffer.from(bytes).toString("utf8") : undefined;
       const definition = text ? summarizeDefinition(text) : undefined;
       const parsed = text ? parseIdentity(text) : undefined;
@@ -119,6 +120,30 @@ export async function archivedCandidates(
     phase: "archived",
     candidates: candidates.sort((left, right) => left.taskId.localeCompare(right.taskId)),
   };
+}
+
+/**
+ * The candidate's newest definition. Legacy runs wrote one at `authoring/<id>/definition.json`;
+ * the agent pipeline rewrites it per round, attempt, and verify pass, so the latest write wins.
+ */
+function latestDefinitionKey(
+  entries: readonly ArtifactEntry[],
+  prefix: string,
+  candidateId: string,
+): string | undefined {
+  const head = `${prefix}authoring/${candidateId}/`;
+  let latest: ArtifactEntry | undefined;
+  for (const entry of entries) {
+    if (!entry.key.startsWith(head) || !entry.key.endsWith("/definition.json")) continue;
+    if (
+      !latest ||
+      (entry.updatedAt ?? "") > (latest.updatedAt ?? "") ||
+      ((entry.updatedAt ?? "") === (latest.updatedAt ?? "") && entry.key > latest.key)
+    ) {
+      latest = entry;
+    }
+  }
+  return latest?.key;
 }
 
 interface ArchivedDecision {

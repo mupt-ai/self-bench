@@ -52,6 +52,16 @@ async function seededStore(): Promise<LocalArtifactStore> {
     reason: "authoring failed: tests never fail without the solution",
   });
   await put("runs/run-two/authoring/c9/definition.json", definition("task-other", 13));
+  // The agent pipeline nests definitions per round; the newest one carries the real difficulty.
+  await put("runs/run-three/authoring/c3/round-1/definition.json", {
+    ...definition("task-nested", 14),
+    difficulty: "easy",
+  });
+  await put("runs/run-three/authoring/c3/round-2/attempt-1/verify-1/definition.json", {
+    ...definition("task-nested", 14),
+    difficulty: "hard",
+  });
+  await put("runs/run-three/verification/c3/round-1/result.json", { kind: "accepted" });
   return store;
 }
 
@@ -90,7 +100,7 @@ describe("task routes", () => {
     const known = (await (await site.request("/api/runs", { headers })).json()) as {
       runs: { runId: string }[];
     };
-    expect(known.runs.map((run) => run.runId).sort()).toEqual(["run-one", "run-two"]);
+    expect(known.runs.map((run) => run.runId).sort()).toEqual(["run-one", "run-three", "run-two"]);
 
     const attach = (runId: string) =>
       site.request(`${REPO}/runs`, { method: "POST", headers, body: JSON.stringify({ runId }) });
@@ -129,6 +139,26 @@ describe("task routes", () => {
       200,
     );
     expect(await (await site.request(`${REPO}/tasks`, { headers })).json()).toEqual({ tasks: [] });
+  });
+
+  test("reads the newest nested definition for agent-pipeline runs", async () => {
+    const { site, headers } = await signedIn(await seededStore());
+    await site.request(`${REPO}/runs`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ runId: "run-three" }),
+    });
+    const tasks = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
+      tasks: { taskId: string; difficulty: string; state: string; sourcePr?: number }[];
+    };
+    expect(tasks.tasks).toEqual([
+      expect.objectContaining({
+        taskId: "task-nested",
+        difficulty: "hard",
+        state: "needs_review",
+        sourcePr: 14,
+      }),
+    ]);
   });
 
   test("a human review overrides the pipeline verdict and can be cleared", async () => {
