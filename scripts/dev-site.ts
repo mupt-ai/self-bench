@@ -16,6 +16,8 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
 const VITE_PORT = Number(process.env.SELFBENCH_SITE_PORT ?? 5173);
+/** Bind address for Vite; 0.0.0.0 exposes the loop on the tailnet (set SELFBENCH_PUBLIC_URL too). */
+const VITE_HOST = process.env.SELFBENCH_SITE_HOST ?? "127.0.0.1";
 const API_PORT = Number(process.env.SELFBENCH_SITE_API_PORT ?? 8087);
 const PG_PORT = Number(process.env.SELFBENCH_SITE_PG_PORT ?? 5433);
 const PG_CONTAINER = "selfbench-site-postgres";
@@ -57,7 +59,7 @@ const vite = spawn(
     "--config",
     "review/vite.config.ts",
     "--host",
-    "127.0.0.1",
+    VITE_HOST,
     "--port",
     String(VITE_PORT),
     "--strictPort",
