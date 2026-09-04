@@ -2,6 +2,7 @@ import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { SelfBenchConfig } from "../../config.js";
+import { MAX_VERIFIER_ROUNDS } from "../../contracts/verify.js";
 import type { ArtifactRef } from "../../contracts.js";
 import {
   VERIFIER_VERIFY_BUDGET,
@@ -155,6 +156,7 @@ export async function runVerifierRound(
               SELFBENCH_VERDICT_OUTPUT: "/work/verdict",
               SELFBENCH_MAILBOX: MAILBOX_DIRECTORY,
               SELFBENCH_VERIFY_BUDGET: String(verifyBudget),
+              SELFBENCH_FINAL_ROUND: round >= MAX_VERIFIER_ROUNDS ? "1" : "0",
             },
             command: ["bash", "-lc", verifierRoundScript(round > 1)],
           },

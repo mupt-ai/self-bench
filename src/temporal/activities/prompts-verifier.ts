@@ -76,7 +76,11 @@ ${input.goldPatch}
 
 /** Prompt appended as the next user turn when a verifier session is resumed after a fix. */
 export function verifierResumePrompt(round: number, renderedReport: string): string {
-  return `Round ${round} of ${MAX_VERIFIER_ROUNDS}. The worker rebuilt and re-verified the task with your fix. This is a fresh sandbox: /work/task/harbor-task and /work/repo now reflect the latest compiled task, and only this conversation carries over. Read the report. If it is GREEN and the task is fair, call accept_task; if it needs another fix within your limits, edit the held-out tests in /work/repo (and /work/fix/definition.json if fields must change), call verify until green (the result states how many verify calls remain), then call submit_fix; otherwise explain the blocker in your final message.
+  return `Round ${round} of ${MAX_VERIFIER_ROUNDS}. The worker rebuilt and re-verified the task with your fix. This is a fresh sandbox: /work/task/harbor-task and /work/repo now reflect the latest compiled task, and only this conversation carries over. Read the report. If it is GREEN and the task is fair, call accept_task; if it needs another fix within your limits, edit the held-out tests in /work/repo (and /work/fix/definition.json if fields must change), call verify until green (the result states how many verify calls remain), then call submit_fix; otherwise explain the blocker in your final message.${
+    round >= MAX_VERIFIER_ROUNDS
+      ? " This is the final round: submit_fix is no longer available. Decide now: call accept_task if the report is GREEN and the task is fair, or explain in your final message why it must be rejected."
+      : ""
+  }
 
 ${renderedReport.trim()}`;
 }

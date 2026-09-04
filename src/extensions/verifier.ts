@@ -5,6 +5,7 @@ import { Type } from "@sinclair/typebox";
 import { type FixDeliverable, loadFixDeliverable } from "./shared/deliverable.js";
 import { VerifyClient, verifyOutcomeText } from "./shared/mailbox.js";
 import {
+  failure,
   requiredEnvironment,
   runStaticCheck,
   type StagedSubmission,
@@ -133,6 +134,11 @@ export default function verifierExtension(pi: ExtensionAPI): void {
       "Takes no arguments. Reads your fix from /work/fix (same files as verify), runs the static check, and records it; a passing fix ends the session. Run verify first. The gold patch, base commit, and instruction cannot change.",
     parameters: noArguments,
     async execute() {
+      if (process.env.SELFBENCH_FINAL_ROUND === "1") {
+        return failure(
+          "No fix rounds remain: this is the final verification round. Call accept_task if the report is GREEN and the task is fair, or explain in your final message why the task must be rejected.",
+        );
+      }
       const fixOutput = requiredEnvironment("SELFBENCH_FIX_OUTPUT");
       const payload = loadFix();
       if ("isError" in payload) {
