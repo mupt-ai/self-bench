@@ -12,6 +12,7 @@ import type {
 } from "../../contracts.js";
 import { type LiveSandboxBacking, LiveSandboxRegistry } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { materializeRemoteFiles } from "../../remote-files.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 
 export class DockerSandboxExecutor implements SandboxExecutor {
@@ -28,7 +29,7 @@ export class DockerSandboxExecutor implements SandboxExecutor {
     const root = await mkdtemp(join(tmpdir(), "selfbench-docker-"));
     const sandboxId = sandboxName(request.runId, request.stage);
     try {
-      for (const file of request.files ?? []) {
+      for (const file of await materializeRemoteFiles(request.files ?? [], options.signal)) {
         const destination = hostPath(root, file.path);
         await mkdir(dirname(destination), { recursive: true });
         await writeFile(destination, file.contents);

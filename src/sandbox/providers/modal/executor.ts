@@ -12,6 +12,7 @@ import {
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { materializeRemoteFiles } from "../../remote-files.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 import { modalBacking } from "./live.js";
 
@@ -60,7 +61,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
       options.signal?.throwIfAborted();
-      for (const file of request.files ?? []) {
+      for (const file of await materializeRemoteFiles(request.files ?? [], options.signal)) {
         if (typeof file.contents === "string") {
           await sandbox.filesystem.writeText(file.contents, file.path);
         } else {

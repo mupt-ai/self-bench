@@ -2,6 +2,7 @@ import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { SelfBenchConfig } from "../../config.js";
+import type { ArtifactRef } from "../../contracts.js";
 import {
   VERIFIER_VERIFY_BUDGET,
   type VerifierRoundResult,
@@ -13,7 +14,7 @@ import {
   PI_SESSION_OUTPUT_PATH,
   sessionArtifactKey,
 } from "../../pi-session.js";
-import type { SandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
 import { loadPiModelAuth } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
@@ -125,9 +126,9 @@ export async function runVerifierRound(
             timeoutMs: VERIFIER_TIMEOUT_MS,
             inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
             files: [
-              // Loaded inline: nothing in this activity's scope may keep the repository snapshot
-              // (hundreds of MB) alive after the executor has uploaded it.
-              { path: "/work/task.tar.gz", contents: await store.get(task.bundle) },
+              // The bundle (hundreds of MB) is pulled by the sandbox from a signed URL when the
+              // store can issue one; otherwise it is loaded inline, never held in a local.
+              await bundleFile(store, task.bundle),
               { path: "/work/sandbox-verifier.js", contents: program },
               { path: "/work/sandbox-check.js", contents: checker },
               { path: "/work/verifier.js", contents: extension },
@@ -189,4 +190,13 @@ export async function runVerifierRound(
     "application/json",
   );
   return outcome;
+}
+
+const BUNDLE_URL_TTL_MS = 2 * 60 * 60_000;
+
+async function bundleFile(store: ArtifactStore, bundle: ArtifactRef): Promise<SandboxFile> {
+  const url = await store.signedReadUrl?.(bundle, BUNDLE_URL_TTL_MS);
+  return url
+    ? { path: "/work/task.tar.gz", url, sha256: bundle.sha256 }
+    : { path: "/work/task.tar.gz", contents: await store.get(bundle) };
 }

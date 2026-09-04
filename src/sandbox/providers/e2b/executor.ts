@@ -8,7 +8,6 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
-import { arrayBufferOf } from "./bytes.js";
 import { E2BCleanup } from "./cleanup.js";
 import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
@@ -22,6 +21,7 @@ import {
   sanitizeCleanupError,
   waitForCommandKill,
 } from "./outcome.js";
+import { stageRequestFiles } from "./stage-files.js";
 import type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
 import {
   validateAllocatedSandbox,
@@ -169,24 +169,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       );
       validateAllocatedSandbox(sandbox.sandboxId, info, resources, metadata);
 
-      if (request.files && request.files.length > 0) {
-        await raceWithTermination(
-          sandbox.files.writeFiles(
-            request.files.map((file) => ({
-              path: file.path,
-              data:
-                typeof file.contents === "string" ? file.contents : arrayBufferOf(file.contents),
-            })),
-            { signal: controller.signal },
-          ),
-          termination.promise,
-        );
-        // The request lives as long as the command runs (hours). Drop the uploaded bytes now so a
-        // repository snapshot of hundreds of MB is not pinned per running round.
-        for (const file of request.files) {
-          (file as { contents: string | Uint8Array }).contents = "";
-        }
-      }
+      await stageRequestFiles(sandbox, request, controller.signal, termination.promise);
       throwIfTerminated(terminationError);
 
       const execution = await executeE2BCommand({

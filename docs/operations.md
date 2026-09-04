@@ -335,6 +335,8 @@ round is decided lives under `round-<n>/attempt-<m>/`: `prompt.md`, `coupling-ev
 declared outputs were collected), and the in-session `verify-<k>/` reports. A Temporal retry of the same round therefore never collides with the immutable
 artifacts of the attempt it replaces; its session is stored as `session/round-<n>-attempt-<m>.jsonl`.
 
+Large request files reach the sandbox by URL rather than upload: the verifier round asks the artifact store for a V4 signed read URL of the compiled task bundle (two-hour TTL) and the E2B executor has the sandbox `curl` it and verify the SHA-256 in place. Pushing hundreds of MB per sandbox through `files.write` hit the SDK's client-side request timeout once a couple of dozen rounds started together; E2B recommends the pull pattern. Providers without an in-sandbox download step fetch remote files on the worker and upload them inline.
+
 The round wrapper records its own exit status in `/work/wrapper-status` from its EXIT trap, and the worker trusts
 that file over the provider's reported exit code (a provider hard timeout stays authoritative). E2B has been
 observed to lose a long command's stream after the script finished and report a spurious exit code or a gRPC

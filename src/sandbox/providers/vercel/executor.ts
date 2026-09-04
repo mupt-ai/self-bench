@@ -8,6 +8,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { materializeRemoteFiles } from "../../remote-files.js";
 import { executeVercelCommand, VERCEL_WORK_DIRECTORY, vercelBacking } from "./command.js";
 import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
 import {
@@ -129,9 +130,10 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         );
       }
 
-      if (request.files && request.files.length > 0) {
+      const files = await materializeRemoteFiles(request.files ?? [], controller.signal);
+      if (files.length > 0) {
         await session.writeFiles(
-          request.files.map((file) => ({ path: file.path, content: file.contents })),
+          files.map((file) => ({ path: file.path, content: file.contents })),
           { signal: controller.signal },
         );
       }

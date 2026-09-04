@@ -1,6 +1,23 @@
-export interface SandboxFile {
+export interface InlineSandboxFile {
   readonly path: string;
   readonly contents: Uint8Array | string;
+}
+
+/**
+ * A file the sandbox fetches itself from a URL (a signed artifact URL) and verifies by SHA-256,
+ * so the worker never buffers or uploads large bundles: E2B's client-side request timeout made
+ * concurrent 300 MB `files.write` calls fail, and E2B recommends pulling from a URL in-sandbox.
+ */
+export interface RemoteSandboxFile {
+  readonly path: string;
+  readonly url: string;
+  readonly sha256: string;
+}
+
+export type SandboxFile = InlineSandboxFile | RemoteSandboxFile;
+
+export function isRemoteSandboxFile(file: SandboxFile): file is RemoteSandboxFile {
+  return "url" in file;
 }
 
 export interface SandboxRequest {
