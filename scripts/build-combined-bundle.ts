@@ -93,7 +93,9 @@ async function packageOne([pr, entry]: [
     baseCommit: (definition as { baseCommit?: string }).baseCommit,
   });
   byDifficulty[definition.difficulty] = (byDifficulty[definition.difficulty] ?? 0) + 1;
-  (sources[entry.run] ??= []).push(task.taskId);
+  const runTasks = sources[entry.run] ?? [];
+  runTasks.push(task.taskId);
+  sources[entry.run] = runTasks;
   await rm(expanded, { recursive: true, force: true });
   console.log(`packaged ${task.taskId} (${definition.difficulty}, PR ${pr}, ${entry.run})`);
 }
