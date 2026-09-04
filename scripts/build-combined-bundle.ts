@@ -10,11 +10,31 @@ import { extractRegularArchive } from "../src/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
 import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts.js";
 import { runCommand } from "../src/process.js";
+import type { TaskCompilerServices } from "../src/temporal/activities/task-compiler.js";
 import { compileSubmittedTask } from "../src/temporal/activities/task-compiler.js";
 
-const [listPath, outDir, name] = process.argv.slice(2);
+const [listPath, outDir, name, mirror] = process.argv.slice(2);
 if (!listPath || !outDir || !name)
   throw new Error("usage: build-combined.ts unique.json OUT_DIR NAME");
+// With a local full mirror (git clone --bare), each task's repository is a shared no-checkout
+// clone that takes a second; the compiler only needs cat-file, ls-tree and archive.
+const MIRROR = mirror;
+const services: TaskCompilerServices | undefined = MIRROR
+  ? {
+      async cloneRepository(_url, commit, destination) {
+        await runCommand("git", [
+          "clone",
+          "--quiet",
+          "--shared",
+          "--no-checkout",
+          MIRROR,
+          destination,
+        ]);
+        await runCommand("git", ["-C", destination, "cat-file", "-e", `${commit}^{commit}`]);
+      },
+    }
+  : undefined;
+const LANES = MIRROR ? 8 : 4;
 const token = execSync("gh auth token", { encoding: "utf8" }).trim();
 const store = new GcsArtifactStore("dari-agent-host-prod-selfbench-artifacts", "selfbench/posthog");
 const unique = JSON.parse(await readFile(listPath, "utf8")) as Record<
@@ -65,13 +85,16 @@ async function packageOne([pr, entry]: [
   const definition = taskDefinitionSchema.parse(
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
-  const compiled = await compileSubmittedTask({
-    taskId: task.taskId,
-    repositoryUrl: "https://github.com/PostHog/posthog.git",
-    definitionBytes,
-    sourceBundle: await store.get(task.sourceBundle),
-    token,
-  });
+  const compiled = await compileSubmittedTask(
+    {
+      taskId: task.taskId,
+      repositoryUrl: "https://github.com/PostHog/posthog.git",
+      definitionBytes,
+      sourceBundle: await store.get(task.sourceBundle),
+      token,
+    },
+    services,
+  );
   const expanded = join(scratch, task.taskId);
   await mkdir(expanded, { recursive: true });
   const archive = join(expanded, "harbor-task.tar.gz");
@@ -101,7 +124,7 @@ async function packageOne([pr, entry]: [
 }
 const queue = Object.entries(unique);
 await Promise.all(
-  Array.from({ length: 4 }, async () => {
+  Array.from({ length: LANES }, async () => {
     for (;;) {
       const next = queue.shift();
       if (!next) return;
