@@ -3,7 +3,6 @@ import { loadAuthConfig } from "../src/auth/config.js";
 import { authorizeUrl } from "../src/auth/github.js";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
-import { createMemoryUserStore } from "../src/auth/users.js";
 import {
   type AuthServer,
   cookieAttributes,
@@ -21,10 +20,9 @@ afterEach(async () => {
 });
 
 async function boot(github: FakeGitHubOptions = {}, config = testAuthConfig) {
-  const users = createMemoryUserStore();
   const hub = fakeGitHub(github);
-  server = await startAuthServer({ config, users, fetchImpl: hub.fetch });
-  return { server, users, hub };
+  server = await startAuthServer({ config, fetchImpl: hub.fetch });
+  return { server, users: server.users, hub };
 }
 
 /** Walks /auth/github then the callback with the state GitHub would echo back. */
@@ -79,30 +77,28 @@ describe("OAuth callback state check", () => {
     expect(cookieAttributes(response, SESSION_COOKIE)).not.toContain("Secure");
     expect(cookieAttributes(response, OAUTH_STATE_COOKIE)).toContain("Max-Age=0");
     expect(await users.findByGitHubId(42)).toMatchObject({ login: "avyay", name: "Avyay" });
-    expect(users.tokens.get(42)).toBe("gho_test_token");
+    expect(await users.gitHubToken(42)).toBe("gho_test_token");
     expect(hub.calls[0]).toBe("POST https://github.example/login/oauth/access_token");
     expect(hub.calls[1]).toBe("GET https://api.github.example/user");
     expect(hub.calls[2]).toBe(
       "GET https://api.github.example/user/memberships/orgs?state=active&per_page=100&page=1",
     );
     expect(await users.orgsFor(1)).toEqual([
-      {
-        id: 42,
+      expect.objectContaining({
         githubId: 42,
         login: "avyay",
         kind: "user",
         name: "Avyay",
         avatarUrl: "https://a/x.png",
         role: "admin",
-      },
-      {
-        id: 1000,
+      }),
+      expect.objectContaining({
         githubId: 1000,
         login: "Mupt-AI",
         kind: "org",
         avatarUrl: "https://a/Mupt-AI.png",
         role: "admin",
-      },
+      }),
     ]);
   });
 

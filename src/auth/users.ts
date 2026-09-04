@@ -1,4 +1,6 @@
-import type { SqlClient } from "../db/sql.js";
+import { and, asc, eq, sql } from "drizzle-orm";
+import type { Database } from "../db/client.js";
+import { orgMembers, orgs, users } from "../db/schema.js";
 import { createSecretBox, deriveKey } from "./crypto.js";
 import type { GitHubProfile, OrgMembership } from "./github.js";
 
@@ -40,21 +42,6 @@ export interface UserStore {
   gitHubToken(githubId: number): Promise<string | undefined>;
 }
 
-interface UserRow {
-  id: string | number;
-  github_id: string | number;
-  login: string;
-  name: string | null;
-  avatar_url: string | null;
-}
-
-interface OrgRow extends UserRow {
-  kind: "org" | "user";
-  role: "admin" | "member";
-}
-
-const USER_COLUMNS = "id, github_id, login, name, avatar_url";
-
 /** The tenants a profile implies: the personal account (as admin) plus every org membership. */
 function tenantsOf(profile: SignedInProfile): Omit<Org, "id">[] {
   return [
@@ -70,140 +57,111 @@ function tenantsOf(profile: SignedInProfile): Omit<Org, "id">[] {
   ];
 }
 
-export function createPostgresUserStore(
-  sql: SqlClient,
+export function createUserStore(
+  db: Database,
   options: { secret: string; now?: () => Date },
 ): UserStore {
   const box = createSecretBox(deriveKey(options.secret, "token-sealing"));
   const now = options.now ?? (() => new Date());
   return {
     async upsert(profile) {
-      return sql.transaction(async (tx) => {
-        const [row] = await tx.query<UserRow>(
-          `insert into users (github_id, login, name, avatar_url, github_token, github_scopes, last_seen_at)
-           values ($1, $2, $3, $4, $5, $6, $7)
-           on conflict (github_id) do update
-             set login = excluded.login, name = excluded.name, avatar_url = excluded.avatar_url,
-                 github_token = excluded.github_token, github_scopes = excluded.github_scopes,
-                 last_seen_at = excluded.last_seen_at
-           returning ${USER_COLUMNS}`,
-          [
-            profile.githubId,
-            profile.login,
-            profile.name ?? null,
-            profile.avatarUrl ?? null,
-            box.seal(profile.token),
-            profile.scopes,
-            now(),
-          ],
-        );
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(users)
+          .values({
+            githubId: profile.githubId,
+            login: profile.login,
+            name: profile.name ?? null,
+            avatarUrl: profile.avatarUrl ?? null,
+            githubToken: Buffer.from(box.seal(profile.token)).toString("base64"),
+            githubScopes: profile.scopes,
+            lastSeenAt: now(),
+          })
+          .onConflictDoUpdate({
+            target: users.githubId,
+            set: {
+              login: profile.login,
+              name: profile.name ?? null,
+              avatarUrl: profile.avatarUrl ?? null,
+              githubToken: Buffer.from(box.seal(profile.token)).toString("base64"),
+              githubScopes: profile.scopes,
+              lastSeenAt: now(),
+            },
+          })
+          .returning();
         if (!row) throw new Error("user upsert returned no row");
-        const user = userFrom(row);
-        await tx.query("delete from org_members where user_id = $1", [user.id]);
+        await tx.delete(orgMembers).where(eq(orgMembers.userId, row.id));
         for (const tenant of tenantsOf(profile)) {
-          const [org] = await tx.query<{ id: string | number }>(
-            `insert into orgs (github_id, login, kind, name, avatar_url, updated_at)
-             values ($1, $2, $3, $4, $5, $6)
-             on conflict (github_id) do update
-               set login = excluded.login, kind = excluded.kind, name = excluded.name,
-                   avatar_url = excluded.avatar_url, updated_at = excluded.updated_at
-             returning id`,
-            [
-              tenant.githubId,
-              tenant.login,
-              tenant.kind,
-              tenant.name ?? null,
-              tenant.avatarUrl ?? null,
-              now(),
-            ],
-          );
+          const [org] = await tx
+            .insert(orgs)
+            .values({
+              githubId: tenant.githubId,
+              login: tenant.login,
+              kind: tenant.kind,
+              name: tenant.name ?? null,
+              avatarUrl: tenant.avatarUrl ?? null,
+              updatedAt: now(),
+            })
+            .onConflictDoUpdate({
+              target: orgs.githubId,
+              set: {
+                login: tenant.login,
+                kind: tenant.kind,
+                name: tenant.name ?? null,
+                avatarUrl: tenant.avatarUrl ?? null,
+                updatedAt: now(),
+              },
+            })
+            .returning({ id: orgs.id });
           if (!org) throw new Error("org upsert returned no row");
-          await tx.query(
-            "insert into org_members (org_id, user_id, role, synced_at) values ($1, $2, $3, $4)",
-            [org.id, user.id, tenant.role, now()],
-          );
+          await tx
+            .insert(orgMembers)
+            .values({ orgId: org.id, userId: row.id, role: tenant.role, syncedAt: now() });
         }
-        return user;
+        return userFrom(row);
       });
     },
     async findByGitHubId(githubId) {
-      const [row] = await sql.query<UserRow>(
-        `update users set last_seen_at = $2 where github_id = $1 returning ${USER_COLUMNS}`,
-        [githubId, now()],
-      );
+      const [row] = await db
+        .update(users)
+        .set({ lastSeenAt: now() })
+        .where(eq(users.githubId, githubId))
+        .returning();
       return row ? userFrom(row) : undefined;
     },
     async orgsFor(userId) {
-      const rows = await sql.query<OrgRow>(
-        `select o.id, o.github_id, o.login, o.kind, o.name, o.avatar_url, m.role
-         from org_members m join orgs o on o.id = m.org_id
-         where m.user_id = $1
-         order by (o.kind = 'user') desc, lower(o.login)`,
-        [userId],
-      );
-      return rows.map(orgFrom);
+      const rows = await db
+        .select({ org: orgs, role: orgMembers.role })
+        .from(orgMembers)
+        .innerJoin(orgs, eq(orgs.id, orgMembers.orgId))
+        .where(eq(orgMembers.userId, userId))
+        .orderBy(sql`(${orgs.kind} = 'user') desc`, asc(sql`lower(${orgs.login})`));
+      return rows.map(({ org, role }) => ({
+        id: org.id,
+        githubId: org.githubId,
+        login: org.login,
+        kind: org.kind,
+        ...(org.name ? { name: org.name } : {}),
+        ...(org.avatarUrl ? { avatarUrl: org.avatarUrl } : {}),
+        role,
+      }));
     },
     async gitHubToken(githubId) {
-      const [row] = await sql.query<{ github_token: Uint8Array }>(
-        "select github_token from users where github_id = $1",
-        [githubId],
-      );
-      return row ? box.open(row.github_token) : undefined;
+      const [row] = await db
+        .select({ token: users.githubToken })
+        .from(users)
+        .where(and(eq(users.githubId, githubId)));
+      return row ? box.open(Buffer.from(row.token, "base64")) : undefined;
     },
   };
 }
 
-/** Test double with the same contract, so route tests need no database. */
-export function createMemoryUserStore(): UserStore & { tokens: Map<number, string> } {
-  const users = new Map<number, User>();
-  const orgs = new Map<number, Org[]>();
-  const tokens = new Map<number, string>();
-  let nextId = 1;
+function userFrom(row: typeof users.$inferSelect): User {
   return {
-    tokens,
-    async upsert(profile) {
-      const existing = users.get(profile.githubId);
-      const user: User = {
-        id: existing?.id ?? nextId++,
-        githubId: profile.githubId,
-        login: profile.login,
-        ...(profile.name ? { name: profile.name } : {}),
-        ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
-      };
-      users.set(profile.githubId, user);
-      tokens.set(profile.githubId, profile.token);
-      orgs.set(
-        user.id,
-        tenantsOf(profile).map((tenant) => ({ ...tenant, id: tenant.githubId })),
-      );
-      return user;
-    },
-    async findByGitHubId(githubId) {
-      return users.get(githubId);
-    },
-    async orgsFor(userId) {
-      return orgs.get(userId) ?? [];
-    },
-    async gitHubToken(githubId) {
-      return tokens.get(githubId);
-    },
-  };
-}
-
-function userFrom(row: UserRow): User {
-  return {
-    id: Number(row.id),
-    githubId: Number(row.github_id),
+    id: row.id,
+    githubId: row.githubId,
     login: row.login,
     ...(row.name ? { name: row.name } : {}),
-    ...(row.avatar_url ? { avatarUrl: row.avatar_url } : {}),
-  };
-}
-
-function orgFrom(row: OrgRow): Org {
-  return {
-    ...userFrom(row),
-    kind: row.kind,
-    role: row.role,
+    ...(row.avatarUrl ? { avatarUrl: row.avatarUrl } : {}),
   };
 }

@@ -16,16 +16,15 @@ import { handleViewerRoute } from "./api/viewer-routes.js";
 import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
 import type { AuthConfig } from "./auth/config.js";
 import { createSiteAuth, type SiteAuth } from "./auth/routes.js";
-import { createPostgresUserStore } from "./auth/users.js";
+import { createUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
-import { migrate } from "./db/migrations.js";
-import { postgresClient, type SqlClient } from "./db/sql.js";
+import { type OpenDatabase, openDatabase } from "./db/client.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
-import { createPostgresRepoStore } from "./site/repo-store.js";
-import { createPostgresRunStore } from "./site/run-store.js";
-import { createPostgresTaskStore } from "./site/task-store.js";
+import { createRepoStore } from "./site/repo-store.js";
+import { createRunStore } from "./site/run-store.js";
+import { createTaskStore } from "./site/task-store.js";
 import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
 import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
 import { connectTemporalClient } from "./temporal/connection.js";
@@ -192,7 +191,7 @@ export async function startApi(
       server.close((error) => (error ? reject(error) : resolve())),
     );
     await connection.close();
-    await site?.sql.close();
+    await site?.database.close();
   };
 }
 
@@ -202,7 +201,7 @@ interface Site {
   readonly repos: ConnectedRepoRoutes;
   readonly tasks: TaskRoutes;
   readonly pullRequests: PullRequestRoutes;
-  readonly sql: SqlClient;
+  readonly database: OpenDatabase;
 }
 
 async function openSite(
@@ -211,13 +210,11 @@ async function openSite(
   client: Client,
   artifacts: ArtifactStore,
 ): Promise<Site> {
-  const sql = postgresClient(auth.databaseUrl);
-  const applied = await migrate(sql);
-  if (applied.length > 0) console.log(`applied database migrations ${applied.join(", ")}`);
-  const users = createPostgresUserStore(sql, { secret: auth.sessionSecret });
-  const repos = createPostgresRepoStore(sql);
-  const runs = createPostgresRunStore(sql);
-  const tasks = createPostgresTaskStore(sql);
+  const database = await openDatabase(auth.databaseUrl);
+  const users = createUserStore(database.db, { secret: auth.sessionSecret });
+  const repos = createRepoStore(database.db);
+  const runs = createRunStore(database.db);
+  const tasks = createTaskStore(database.db);
   return {
     auth: createSiteAuth({ config: auth, users }),
     github: createGitHubRepoRoutes({ config: auth, users }),
@@ -239,7 +236,7 @@ async function openSite(
       artifacts,
       start: temporalStarter(client, config.temporal.taskQueue),
     }),
-    sql,
+    database,
   };
 }
 

@@ -1,4 +1,6 @@
-import type { SqlClient } from "../db/sql.js";
+import { and, desc, eq } from "drizzle-orm";
+import type { Database } from "../db/client.js";
+import { repoRuns, users } from "../db/schema.js";
 
 /** A pipeline run whose candidates count as a repository's tasks. */
 export interface AttachedRun {
@@ -14,81 +16,45 @@ export interface RunStore {
   detachRun(repoId: number, runId: string): Promise<boolean>;
 }
 
-interface RunRow {
-  run_id: string;
-  attached_by_login: string;
-  attached_at: string | Date;
-}
-
-const SELECT = `select r.run_id, u.login as attached_by_login, r.attached_at
-  from repo_runs r join users u on u.id = r.attached_by`;
-
-export function createPostgresRunStore(
-  sql: SqlClient,
-  options: { now?: () => Date } = {},
-): RunStore {
+export function createRunStore(db: Database, options: { now?: () => Date } = {}): RunStore {
   const now = options.now ?? (() => new Date());
+  const select = () =>
+    db
+      .select({ run: repoRuns, login: users.login })
+      .from(repoRuns)
+      .innerJoin(users, eq(users.id, repoRuns.attachedBy));
   return {
     async runsFor(repoId) {
-      const rows = await sql.query<RunRow>(
-        `${SELECT} where r.repo_id = $1 order by r.attached_at desc, r.run_id`,
-        [repoId],
-      );
+      const rows = await select()
+        .where(eq(repoRuns.repoId, repoId))
+        .orderBy(desc(repoRuns.attachedAt), repoRuns.runId);
       return rows.map(runFrom);
     },
     async attachRun(repoId, runId, userId) {
-      await sql.query(
-        `insert into repo_runs (repo_id, run_id, attached_by, attached_at) values ($1, $2, $3, $4)
-         on conflict (repo_id, run_id) do nothing`,
-        [repoId, runId, userId, now()],
+      await db
+        .insert(repoRuns)
+        .values({ repoId, runId, attachedBy: userId, attachedAt: now() })
+        .onConflictDoNothing();
+      const [row] = await select().where(
+        and(eq(repoRuns.repoId, repoId), eq(repoRuns.runId, runId)),
       );
-      const [row] = await sql.query<RunRow>(`${SELECT} where r.repo_id = $1 and r.run_id = $2`, [
-        repoId,
-        runId,
-      ]);
       if (!row) throw new Error("run attach returned no row");
       return runFrom(row);
     },
     async detachRun(repoId, runId) {
-      const rows = await sql.query(
-        "delete from repo_runs where repo_id = $1 and run_id = $2 returning run_id",
-        [repoId, runId],
-      );
+      const rows = await db
+        .delete(repoRuns)
+        .where(and(eq(repoRuns.repoId, repoId), eq(repoRuns.runId, runId)))
+        .returning({ runId: repoRuns.runId });
       return rows.length > 0;
     },
   };
 }
 
-/** Test double with the same contract. */
-export function createMemoryRunStore(logins: Map<number, string>): RunStore {
-  const runs = new Map<string, AttachedRun & { repoId: number }>();
-  const key = (repoId: number, runId: string) => `${repoId}:${runId}`;
+function runFrom(row: { run: typeof repoRuns.$inferSelect; login: string }): AttachedRun {
   return {
-    async runsFor(repoId) {
-      return [...runs.values()].filter((run) => run.repoId === repoId).reverse();
-    },
-    async attachRun(repoId, runId, userId) {
-      const existing = runs.get(key(repoId, runId));
-      if (existing) return existing;
-      const run = {
-        repoId,
-        runId,
-        attachedBy: logins.get(userId) ?? "",
-        attachedAt: new Date().toISOString(),
-      };
-      runs.set(key(repoId, runId), run);
-      return run;
-    },
-    async detachRun(repoId, runId) {
-      return runs.delete(key(repoId, runId));
-    },
-  };
-}
-
-function runFrom(row: RunRow): AttachedRun {
-  return {
-    runId: row.run_id,
-    attachedBy: row.attached_by_login,
-    attachedAt: new Date(row.attached_at).toISOString(),
+    runId: row.run.runId,
+    attachedBy: row.login,
+    attachedAt: row.run.attachedAt.toISOString(),
   };
 }

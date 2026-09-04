@@ -1,17 +1,17 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
-import { createMemoryUserStore, createPostgresUserStore } from "../src/auth/users.js";
-import type { SqlClient } from "../src/db/sql.js";
-import { createMemoryRepoStore, createPostgresRepoStore } from "../src/site/repo-store.js";
+import { createUserStore } from "../src/auth/users.js";
+import { createRepoStore } from "../src/site/repo-store.js";
 import {
   type AuthServer,
   cookieValue,
   type FakeGitHubOptions,
   fakeGitHub,
-  migratedClient,
   startAuthServer,
+  type TestDatabase,
   testAuthConfig,
+  testDatabase,
 } from "./support/site-fixture.js";
 
 let server: AuthServer | undefined;
@@ -22,13 +22,7 @@ afterEach(async () => {
 
 async function signedIn(github: FakeGitHubOptions) {
   const hub = fakeGitHub(github);
-  const users = createMemoryUserStore();
-  server = await startAuthServer({
-    config: testAuthConfig,
-    users,
-    repos: createMemoryRepoStore(new Map([[1, "avyay"]])),
-    fetchImpl: hub.fetch,
-  });
+  server = await startAuthServer({ config: testAuthConfig, fetchImpl: hub.fetch });
   const start = await server.request("/auth/github");
   const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
   const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {
@@ -140,16 +134,16 @@ describe("connected repos routes", () => {
 });
 
 describe("postgres repo store", () => {
-  let sql: SqlClient;
+  let database: TestDatabase;
   beforeAll(async () => {
-    sql = await migratedClient();
+    database = await testDatabase();
   });
   afterAll(async () => {
-    await sql.close();
+    await database.close();
   });
 
   test("connects, lists newest first, dedupes by GitHub id, and disconnects", async () => {
-    const users = createPostgresUserStore(sql, { secret: testAuthConfig.sessionSecret });
+    const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
     const user = await users.upsert({
       githubId: 1,
       login: "avyay",
@@ -160,7 +154,7 @@ describe("postgres repo store", () => {
     const org = (await users.orgsFor(user.id)).find((candidate) => candidate.kind === "org");
     if (!org) throw new Error("org missing");
     let clock = new Date("2026-09-04T10:00:00Z");
-    const store = createPostgresRepoStore(sql, { now: () => clock });
+    const store = createRepoStore(database.db, { now: () => clock });
     const base = { orgId: org.id, defaultBranch: "main", private: false, connectedBy: user.id };
     await store.connect({ ...base, githubId: 100, fullName: "Mupt-AI/a" });
     clock = new Date("2026-09-04T11:00:00Z");

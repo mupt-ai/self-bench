@@ -1,45 +1,36 @@
 import { createServer, type Server } from "node:http";
-import { PGlite, type Transaction } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
 import type { ArtifactStore } from "../../src/artifacts.js";
 import type { AuthConfig } from "../../src/auth/config.js";
-import { createSiteAuth, type SiteAuthOptions } from "../../src/auth/routes.js";
+import { createSiteAuth } from "../../src/auth/routes.js";
+import { createUserStore, type UserStore } from "../../src/auth/users.js";
 import { loadConfig } from "../../src/config.js";
-import { migrate } from "../../src/db/migrations.js";
-import type { SqlClient } from "../../src/db/sql.js";
+import { type Database, migrationsFolder } from "../../src/db/client.js";
+import * as schema from "../../src/db/schema.js";
 import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
 import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
 import { createPullRequestRoutes } from "../../src/site/pr-routes.js";
-import { createMemoryRepoStore, type RepoStore } from "../../src/site/repo-store.js";
-import { createMemoryRunStore, type RunStore } from "../../src/site/run-store.js";
-import { createMemoryTaskStore } from "../../src/site/task-memory.js";
+import { createRepoStore } from "../../src/site/repo-store.js";
+import { createRunStore } from "../../src/site/run-store.js";
 import type { WorkflowStarter } from "../../src/site/task-start.js";
 import type { TaskStatusSource } from "../../src/site/task-status.js";
-import type { TaskStore } from "../../src/site/task-store.js";
+import { createTaskStore } from "../../src/site/task-store.js";
 import { createTaskRoutes } from "../../src/site/tasks.js";
 
-/** The site's SqlClient over an in-process PGlite database, so the real SQL runs in tests. */
-export async function pgliteClient(): Promise<SqlClient> {
-  const db = new PGlite();
-  await db.waitReady;
-  const bind = (executor: PGlite | Transaction): SqlClient => ({
-    async query<Row>(text: string, params: readonly unknown[] = []): Promise<Row[]> {
-      const result = await executor.query<Row>(text, [...params]);
-      return result.rows;
-    },
-    async exec(text) {
-      await executor.exec(text);
-    },
-    transaction: (work) =>
-      (executor as PGlite).transaction((tx) => work(bind(tx))) as Promise<never>,
-    close: () => db.close(),
-  });
-  return bind(db);
+export interface TestDatabase {
+  readonly db: Database;
+  close(): Promise<void>;
 }
 
-export async function migratedClient(): Promise<SqlClient> {
-  const sql = await pgliteClient();
-  await migrate(sql);
-  return sql;
+/** The site's schema over an in-process PGlite database, so the real SQL runs in tests. */
+export async function testDatabase(): Promise<TestDatabase> {
+  const client = new PGlite();
+  await client.waitReady;
+  const db = drizzle(client, { schema });
+  await migrate(db, { migrationsFolder: migrationsFolder() });
+  return { db, close: () => client.close() };
 }
 
 export const testAuthConfig: AuthConfig = {
@@ -138,32 +129,37 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
 
 export interface AuthServer {
   readonly origin: string;
+  readonly users: UserStore;
   /** fetch without following redirects, so Location and Set-Cookie can be asserted. */
   request(path: string, init?: RequestInit): Promise<Response>;
   stop(): Promise<void>;
 }
 
-/** Runs the site's auth and repo routes on a real loopback server; other paths answer 404. */
-export async function startAuthServer(
-  options: SiteAuthOptions & {
-    repos?: RepoStore;
-    runs?: RunStore;
-    tasks?: TaskStore;
-    artifacts?: ArtifactStore;
-    start?: WorkflowStarter;
-    status?: TaskStatusSource;
-  },
-): Promise<AuthServer> {
-  const auth = createSiteAuth(options);
-  const github = createGitHubRepoRoutes(options);
-  const repos = options.repos ?? createMemoryRepoStore(new Map());
-  const connected = createConnectedRepoRoutes({ ...options, repos });
-  const tasks = options.tasks ?? createMemoryTaskStore(new Map());
+export interface AuthServerOptions {
+  readonly config?: AuthConfig;
+  readonly fetchImpl?: typeof fetch;
+  readonly artifacts?: ArtifactStore;
+  readonly start?: WorkflowStarter;
+  readonly status?: TaskStatusSource;
+}
+
+/** The site's routes over a fresh PGlite database on a real loopback server; other paths 404. */
+export async function startAuthServer(options: AuthServerOptions = {}): Promise<AuthServer> {
+  const config = options.config ?? testAuthConfig;
+  const database = await testDatabase();
+  const users = createUserStore(database.db, { secret: config.sessionSecret });
+  const repos = createRepoStore(database.db);
+  const runs = createRunStore(database.db);
+  const tasks = createTaskStore(database.db);
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const auth = createSiteAuth({ config, users, fetchImpl });
+  const github = createGitHubRepoRoutes({ config, users, fetchImpl });
+  const connected = createConnectedRepoRoutes({ config, users, repos, fetchImpl });
   const taskRoutes = options.artifacts
     ? createTaskRoutes({
-        users: options.users,
+        users,
         repos,
-        runs: options.runs ?? createMemoryRunStore(new Map()),
+        runs,
         tasks,
         artifacts: options.artifacts,
         ...(options.status ? { status: options.status } : {}),
@@ -173,13 +169,13 @@ export async function startAuthServer(
     options.artifacts && options.start
       ? createPullRequestRoutes({
           config: loadConfig({}),
-          auth: options.config,
-          users: options.users,
+          auth: config,
+          users,
           repos,
           tasks,
           artifacts: options.artifacts,
           start: options.start,
-          fetchImpl: options.fetchImpl ?? fetch,
+          fetchImpl,
         })
       : undefined;
   const server: Server = createServer(async (request, response) => {
@@ -206,11 +202,14 @@ export async function startAuthServer(
   const origin = `http://127.0.0.1:${port}`;
   return {
     origin,
+    users,
     request: (path, init) => fetch(`${origin}${path}`, { redirect: "manual", ...init }),
-    stop: () =>
-      new Promise((resolve, reject) =>
+    stop: async () => {
+      await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
-      ),
+      );
+      await database.close();
+    },
   };
 }
 

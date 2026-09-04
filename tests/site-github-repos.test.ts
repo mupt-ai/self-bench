@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
-import { createMemoryUserStore } from "../src/auth/users.js";
 import {
   type AuthServer,
   cookieValue,
@@ -20,11 +19,7 @@ afterEach(async () => {
 /** Boots the server, signs in through the fake GitHub, and returns a cookie header. */
 async function signedIn(github: FakeGitHubOptions) {
   const hub = fakeGitHub(github);
-  server = await startAuthServer({
-    config: testAuthConfig,
-    users: createMemoryUserStore(),
-    fetchImpl: hub.fetch,
-  });
+  server = await startAuthServer({ config: testAuthConfig, fetchImpl: hub.fetch });
   const start = await server.request("/auth/github");
   const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
   const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {

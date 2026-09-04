@@ -1,21 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createPostgresUserStore } from "../src/auth/users.js";
-import type { SqlClient } from "../src/db/sql.js";
-import { createPostgresRepoStore } from "../src/site/repo-store.js";
-import { createPostgresTaskStore } from "../src/site/task-store.js";
-import { migratedClient, testAuthConfig } from "./support/site-fixture.js";
+import { createUserStore } from "../src/auth/users.js";
+import { createRepoStore } from "../src/site/repo-store.js";
+import { createTaskStore } from "../src/site/task-store.js";
+import { type TestDatabase, testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 describe("postgres task store", () => {
-  let sql: SqlClient;
+  let database: TestDatabase;
   beforeAll(async () => {
-    sql = await migratedClient();
+    database = await testDatabase();
   });
   afterAll(async () => {
-    await sql.close();
+    await database.close();
   });
 
   test("upserts keep reviews, find matches either id, counts group by state", async () => {
-    const users = createPostgresUserStore(sql, { secret: testAuthConfig.sessionSecret });
+    const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
     const user = await users.upsert({
       githubId: 1,
       login: "avyay",
@@ -25,7 +24,7 @@ describe("postgres task store", () => {
     });
     const [org] = await users.orgsFor(user.id);
     if (!org) throw new Error("org missing");
-    const repos = createPostgresRepoStore(sql);
+    const repos = createRepoStore(database.db);
     const repo = await repos.connect({
       orgId: org.id,
       githubId: 1,
@@ -34,7 +33,7 @@ describe("postgres task store", () => {
       private: false,
       connectedBy: user.id,
     });
-    const store = createPostgresTaskStore(sql);
+    const store = createTaskStore(database.db);
     const base = {
       repoId: repo.id,
       runId: "run-a",

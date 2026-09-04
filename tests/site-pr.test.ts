@@ -5,11 +5,8 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts.js";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
-import { createMemoryUserStore } from "../src/auth/users.js";
 import type { CandidateWorkflowInput } from "../src/contracts.js";
 import { difficultyFor, parsePullRequestRef } from "../src/site/pr-candidate.js";
-import { createMemoryRepoStore } from "../src/site/repo-store.js";
-import { createMemoryTaskStore } from "../src/site/task-memory.js";
 import { taskRunId } from "../src/site/task-start.js";
 import type { WorkflowSnapshot } from "../src/site/task-status.js";
 import {
@@ -50,14 +47,10 @@ async function boot(options: {
     repos: [{ full_name: "Mupt-AI/self-bench" }],
     ...(options.pullRequests ? { pullRequests: options.pullRequests } : {}),
   });
-  const logins = new Map([[1, "avyay"]]);
   const started: { workflowId: string; input: CandidateWorkflowInput }[] = [];
   const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "site-pr-")));
   server = await startAuthServer({
     config: testAuthConfig,
-    users: createMemoryUserStore(),
-    repos: createMemoryRepoStore(logins),
-    tasks: createMemoryTaskStore(logins),
     artifacts,
     fetchImpl: hub.fetch,
     start: async (workflowId, input) => {

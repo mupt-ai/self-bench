@@ -5,10 +5,6 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts.js";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
-import { createMemoryUserStore } from "../src/auth/users.js";
-import { createMemoryRepoStore } from "../src/site/repo-store.js";
-import { createMemoryRunStore } from "../src/site/run-store.js";
-import { createMemoryTaskStore } from "../src/site/task-memory.js";
 import { sourcePullRequest } from "../src/site/task-sync.js";
 import { taskState } from "../src/site/tasks.js";
 import { clearArchivedListingCache } from "../src/viewer/archived.js";
@@ -70,13 +66,8 @@ async function seededStore(): Promise<LocalArtifactStore> {
 
 async function signedIn(artifacts: LocalArtifactStore) {
   const hub = fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] });
-  const logins = new Map([[1, "avyay"]]);
   server = await startAuthServer({
     config: testAuthConfig,
-    users: createMemoryUserStore(),
-    repos: createMemoryRepoStore(logins),
-    runs: createMemoryRunStore(logins),
-    tasks: createMemoryTaskStore(logins),
     artifacts,
     fetchImpl: hub.fetch,
   });
