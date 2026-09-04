@@ -158,5 +158,9 @@ Difficulty mix: ${Object.entries(byDifficulty)
 Each \`tasks/<taskId>.tar.gz\` expands to \`harbor-task/\` with task.toml, instruction.md, environment/, tests/, and solution/. \`manifest.json\` lists every task with its SHA-256, source PR, difficulty, base commit, and the run and candidate it came from. Base commits vary per task, so \`repository.commit\` is \`mixed\`.
 `,
 );
-await runCommand("tar", ["-czf", join(outDir, `${name}.tar.gz`), "-C", outDir, name]);
+// SELFBENCH_BUNDLE_TARBALL=0 skips the single tarball: the per-task tarballs plus manifest are the
+// upload unit, and the tarball would need as much disk again.
+if (process.env.SELFBENCH_BUNDLE_TARBALL !== "0") {
+  await runCommand("tar", ["-czf", join(outDir, `${name}.tar.gz`), "-C", outDir, name]);
+}
 console.log(JSON.stringify({ tasks: manifestTasks.length, byDifficulty, out: outDir }));
