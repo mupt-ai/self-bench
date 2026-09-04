@@ -143,7 +143,8 @@
 .repo-meta { display: flex; gap: 10px; flex: none; color: var(--dim); font: 400 11px var(--mono); }
 .repo-badge { color: var(--ochre); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
 .repo-badge.connected { color: var(--mint); }
-.page-actions { display: flex; gap: 10px; }
+.page-actions { display: flex; gap: 10px; align-items: center; }
+.page-actions .btn-ghost { height: 36px; padding: 0 14px; font: 500 13px var(--sans); }
 .btn-secondary {
   display: inline-flex; align-items: center; justify-content: center;
   height: 36px; padding: 0 16px;
