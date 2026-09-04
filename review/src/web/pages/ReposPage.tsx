@@ -4,8 +4,10 @@ import {
   type ConnectedRepo,
   disconnectRepo,
   fetchConnectedRepos,
+  fetchTasks,
   formatAgo,
   setRepoContinuous,
+  type TaskItem,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
@@ -13,17 +15,48 @@ import { useDocumentTitle } from "../session";
 
 type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
 
+interface RepoStats {
+  tasks: number;
+  needsReview: number;
+  lastPr?: number;
+}
+
+function statsOf(tasks: TaskItem[]): RepoStats {
+  let needsReview = 0;
+  let lastPr: number | undefined;
+  let kept = 0;
+  for (const task of tasks) {
+    if (task.state === "needs_review") needsReview += 1;
+    if (task.state !== "rejected") kept += 1;
+    if (task.sourcePr && (lastPr === undefined || task.sourcePr > lastPr)) lastPr = task.sourcePr;
+  }
+  return { tasks: kept, needsReview, ...(lastPr !== undefined ? { lastPr } : {}) };
+}
+
 export function ReposPage() {
   const { org } = useOrg();
   useDocumentTitle(`${org.login} · self-bench`);
   const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
   const [error, setError] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
+  const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
 
   React.useEffect(() => {
     let cancelled = false;
     fetchConnectedRepos(org.login).then(
-      (found) => !cancelled && setRepos({ status: "ok", repos: found }),
+      (found) => {
+        if (cancelled) return;
+        setRepos({ status: "ok", repos: found });
+        // Counts come from the artifact store and can take a moment; fill cards as they arrive.
+        for (const repo of found) {
+          fetchTasks(org.login, repo.fullName).then(
+            (tasks) =>
+              !cancelled &&
+              setStats((current) => ({ ...current, [repo.fullName]: statsOf(tasks) })),
+            () => undefined,
+          );
+        }
+      },
       (cause: Error) => !cancelled && setError(cause.message),
     );
     return () => {
@@ -124,20 +157,7 @@ export function ReposPage() {
                   </span>
                 </div>
               </div>
-              <dl className="repo-card-stats">
-                <div>
-                  <dt>Tasks</dt>
-                  <dd className="dim">none yet</dd>
-                </div>
-                <div>
-                  <dt>Awaiting Review</dt>
-                  <dd className="dim">0</dd>
-                </div>
-                <div>
-                  <dt>Last PR</dt>
-                  <dd className="dim">not yet scanned</dd>
-                </div>
-              </dl>
+              <RepoCardStats stats={stats[repo.fullName]} />
               <div className="repo-card-actions">
                 <label className="switch">
                   <input
@@ -172,5 +192,46 @@ export function ReposPage() {
         />
       )}
     </main>
+  );
+}
+
+function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
+  if (!stats) {
+    return (
+      <dl className="repo-card-stats">
+        <div>
+          <dt>Tasks</dt>
+          <dd className="dim">…</dd>
+        </div>
+        <div>
+          <dt>Awaiting Review</dt>
+          <dd className="dim">…</dd>
+        </div>
+        <div>
+          <dt>Last PR</dt>
+          <dd className="dim">…</dd>
+        </div>
+      </dl>
+    );
+  }
+  return (
+    <dl className="repo-card-stats">
+      <div>
+        <dt>Tasks</dt>
+        <dd className={stats.tasks === 0 ? "dim" : ""}>
+          {stats.tasks === 0 ? "none yet" : stats.tasks}
+        </dd>
+      </div>
+      <div>
+        <dt>Awaiting Review</dt>
+        <dd className={stats.needsReview === 0 ? "dim" : "attention"}>{stats.needsReview}</dd>
+      </div>
+      <div>
+        <dt>Last PR</dt>
+        <dd className={stats.lastPr === undefined ? "dim" : "mono"}>
+          {stats.lastPr === undefined ? "not yet scanned" : `#${stats.lastPr}`}
+        </dd>
+      </div>
+    </dl>
   );
 }

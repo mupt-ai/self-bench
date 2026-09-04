@@ -177,6 +177,8 @@
 .repo-card-stats dt { color: var(--dim); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .repo-card-stats dd { margin: 6px 0 0; color: var(--ink); font: 500 14px var(--sans); }
 .repo-card-stats dd.dim { color: var(--dim); font-weight: 400; }
+.repo-card-stats dd.attention { color: var(--ochre); }
+.repo-card-stats dd.mono { font-family: var(--mono); font-size: 13px; }
 .repo-card-actions { justify-self: end; display: flex; align-items: center; gap: 20px; }
 .btn-icon {
   display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
