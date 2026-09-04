@@ -1,0 +1,170 @@
+import type { ArtifactStore } from "../artifacts.js";
+import type { Difficulty } from "../contracts.js";
+import { parallelMap } from "../parallel.js";
+import { summarizeDefinition } from "./candidates.js";
+import type { ArtifactEntry, CandidateList, CandidateStage, CandidateSummary } from "./types.js";
+
+const DEFINITION_CONCURRENCY = 16;
+const RUN_ID = /^runs\/([a-z0-9][a-z0-9-]{2,62})\//;
+const LISTING_TTL_MS = 60_000;
+const listingCache = new Map<string, { at: number; entries: Promise<ArtifactEntry[]> }>();
+
+/** Listing a whole run is thousands of objects on GCS, so reuse it briefly across requests. */
+function listRun(store: ArtifactStore, runId: string): Promise<ArtifactEntry[]> {
+  const cached = listingCache.get(runId);
+  if (cached && Date.now() - cached.at < LISTING_TTL_MS) return cached.entries;
+  const entries = store.list(`runs/${runId}`);
+  listingCache.set(runId, { at: Date.now(), entries });
+  entries.catch(() => listingCache.delete(runId));
+  return entries;
+}
+
+export function clearArchivedListingCache(): void {
+  listingCache.clear();
+}
+
+export interface ArchivedRun {
+  readonly runId: string;
+  readonly status: "ARCHIVED";
+  readonly startedAt?: string;
+}
+
+/** Runs that exist in the artifact store, whether or not Temporal still remembers them. */
+export async function listArchivedRuns(store: ArtifactStore): Promise<ArchivedRun[]> {
+  const entries = await store.list("runs").catch(() => [] as ArtifactEntry[]);
+  const runs = new Map<string, string | undefined>();
+  for (const entry of entries) {
+    const runId = RUN_ID.exec(entry.key)?.[1];
+    if (!runId) continue;
+    const seen = runs.get(runId);
+    if (!runs.has(runId) || (entry.updatedAt && (!seen || entry.updatedAt < seen))) {
+      runs.set(runId, entry.updatedAt);
+    }
+  }
+  return [...runs.entries()]
+    .map(([runId, startedAt]) => ({
+      runId,
+      status: "ARCHIVED" as const,
+      ...(startedAt ? { startedAt } : {}),
+    }))
+    .sort((left, right) => (right.startedAt ?? "").localeCompare(left.startedAt ?? ""));
+}
+
+/**
+ * Reconstruct a candidate table from the artifact tree alone. Stage is the furthest
+ * pipeline group that wrote anything; status stays "archived" because the workflow's
+ * final verdicts live only in Temporal.
+ */
+export async function archivedCandidates(
+  store: ArtifactStore,
+  runId: string,
+): Promise<CandidateList> {
+  const entries = await listRun(store, runId);
+  const byCandidate = new Map<string, { taskId?: string; groups: Set<string> }>();
+  const prefix = `runs/${runId}/`;
+  for (const entry of entries) {
+    const [group, second] = entry.key.slice(prefix.length).split("/");
+    if (!group || !second) continue;
+    if (group === "authoring") {
+      const record = byCandidate.get(second) ?? { groups: new Set<string>() };
+      record.groups.add(group);
+      byCandidate.set(second, record);
+    }
+  }
+  const candidates = await parallelMap(
+    [...byCandidate.keys()],
+    DEFINITION_CONCURRENCY,
+    async (candidateId) => {
+      const bytes = await store
+        .getByKey(`runs/${runId}/authoring/${candidateId}/definition.json`)
+        .catch(() => undefined);
+      const text = bytes ? Buffer.from(bytes).toString("utf8") : undefined;
+      const definition = text ? summarizeDefinition(text) : undefined;
+      const parsed = text ? parseIdentity(text) : undefined;
+      const taskId = parsed?.taskId ?? candidateId;
+      const groups = groupsFor(entries, prefix, taskId);
+      const verdict = await latestReviewVerdict(store, entries, prefix, taskId);
+      const stage =
+        verdict === "clean" ? "accepted" : furthestStage(groups, definition !== undefined);
+      const candidate: CandidateSummary = {
+        taskId,
+        candidateId,
+        difficulty: parsed?.difficulty ?? "easy",
+        status: verdict === "clean" ? "accepted" : "archived",
+        stage,
+        reasonSummary:
+          verdict === "clean"
+            ? "final coupling review was clean"
+            : verdict
+              ? `final coupling review: ${verdict}`
+              : `no verdict on record; last artifact written by ${stage}`,
+        ...(definition ? { definition } : {}),
+      };
+      return candidate;
+    },
+  );
+  return {
+    runId,
+    phase: "archived",
+    candidates: candidates.sort((left, right) => left.taskId.localeCompare(right.taskId)),
+  };
+}
+
+/** The workflow accepts a task exactly when its last coupling review is clean. */
+async function latestReviewVerdict(
+  store: ArtifactStore,
+  entries: readonly ArtifactEntry[],
+  prefix: string,
+  taskId: string,
+): Promise<string | undefined> {
+  const reviews = entries
+    .filter(
+      (entry) => entry.key.startsWith(`${prefix}reviews/${taskId}/`) && entry.key.endsWith(".json"),
+    )
+    .sort((left, right) =>
+      (left.updatedAt ?? left.key).localeCompare(right.updatedAt ?? right.key),
+    );
+  const latest = reviews[reviews.length - 1];
+  if (!latest) return undefined;
+  const bytes = await store.getByKey(latest.key).catch(() => undefined);
+  if (!bytes) return undefined;
+  try {
+    const value = JSON.parse(Buffer.from(bytes).toString("utf8")) as { verdict?: unknown };
+    return typeof value.verdict === "string" ? value.verdict : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function groupsFor(entries: readonly ArtifactEntry[], prefix: string, taskId: string): Set<string> {
+  const groups = new Set<string>();
+  for (const entry of entries) {
+    const [group, second] = entry.key.slice(prefix.length).split("/");
+    if (group && second === taskId) groups.add(group);
+  }
+  return groups;
+}
+
+function furthestStage(groups: Set<string>, authored: boolean): CandidateStage {
+  if (groups.has("repairs") || groups.has("reviews")) return "review";
+  if (groups.has("validation-repairs") || groups.has("validation")) return "validation";
+  if (groups.has("environment-preflights")) return "preflight";
+  if (groups.has("audits")) return "audit";
+  if (groups.has("environments")) return "environment";
+  return authored ? "environment" : "authoring";
+}
+
+function parseIdentity(text: string): { taskId?: string; difficulty?: Difficulty } | undefined {
+  try {
+    const value = JSON.parse(text) as Record<string, unknown>;
+    const difficulty = value.difficulty;
+    return {
+      ...(typeof value.taskId === "string" ? { taskId: value.taskId } : {}),
+      ...(difficulty === "easy" || difficulty === "medium" || difficulty === "hard"
+        ? { difficulty }
+        : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
