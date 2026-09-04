@@ -1,10 +1,21 @@
 import React from "react";
-import { fetchRepoDetail, fetchRepos, formatAgo, type Repo, type RepoDetail } from "./api";
+import {
+  type ConnectedRepo,
+  connectRepo,
+  fetchGitHubRepoDetail,
+  fetchGitHubRepos,
+  formatAgo,
+  type Repo,
+  type RepoDetail,
+} from "./api";
 import type { SiteOrg } from "./session";
 
-export interface NewRunSheetProps {
+export interface ConnectRepoSheetProps {
   org: SiteOrg;
+  /** Already connected; shown as such and not offered again. */
+  connected: ReadonlySet<string>;
   onClose: () => void;
+  onConnected: (repo: ConnectedRepo) => void;
 }
 
 type Loaded<T> =
@@ -12,18 +23,19 @@ type Loaded<T> =
   | { status: "error"; message: string }
   | { status: "ok"; value: T };
 
-/** Step one of a new run: choose the repository. Slides in from the right over the runs table. */
-export function NewRunSheet({ org, onClose }: NewRunSheetProps) {
+/** Connect a repository: pick it from GitHub, see its merged-PR count, confirm. */
+export function ConnectRepoSheet({ org, connected, onClose, onConnected }: ConnectRepoSheetProps) {
   const [repos, setRepos] = React.useState<Loaded<Repo[]>>({ status: "loading" });
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<Repo | null>(null);
   const [detail, setDetail] = React.useState<Loaded<RepoDetail> | null>(null);
+  const [submit, setSubmit] = React.useState<{ busy: boolean; error?: string }>({ busy: false });
   const search = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     let cancelled = false;
     setRepos({ status: "loading" });
-    fetchRepos(org.login).then(
+    fetchGitHubRepos(org.login).then(
       (value) => !cancelled && setRepos({ status: "ok", value }),
       (error: Error) => !cancelled && setRepos({ status: "error", message: error.message }),
     );
@@ -44,10 +56,22 @@ export function NewRunSheet({ org, onClose }: NewRunSheetProps) {
   const choose = (repo: Repo) => {
     setSelected(repo);
     setDetail({ status: "loading" });
-    fetchRepoDetail(repo.fullName).then(
+    fetchGitHubRepoDetail(repo.fullName).then(
       (value) =>
         setDetail((current) => (current?.status === "loading" ? { status: "ok", value } : current)),
       (error: Error) => setDetail({ status: "error", message: error.message }),
+    );
+  };
+
+  const connect = () => {
+    if (!selected) return;
+    setSubmit({ busy: true });
+    connectRepo(org.login, selected.fullName).then(
+      (repo) => {
+        setSubmit({ busy: false });
+        onConnected(repo);
+      },
+      (error: Error) => setSubmit({ busy: false, error: error.message }),
     );
   };
 
@@ -70,8 +94,8 @@ export function NewRunSheet({ org, onClose }: NewRunSheetProps) {
       >
         <header className="sheet-head">
           <div>
-            <div className="eyebrow">New run</div>
-            <h2 id="new-run-title">Choose a repository</h2>
+            <div className="eyebrow">Connect Repo</div>
+            <h2 id="new-run-title">Choose a Repository</h2>
             <p className="sheet-sub">
               Repositories in <span className="mono">{org.login}</span> that your GitHub account can
               read.
@@ -104,11 +128,15 @@ export function NewRunSheet({ org, onClose }: NewRunSheetProps) {
               key={repo.githubId}
               role="option"
               aria-selected={selected?.githubId === repo.githubId}
+              disabled={connected.has(repo.fullName.toLowerCase())}
               className={`repo-row ${selected?.githubId === repo.githubId ? "selected" : ""}`}
               onClick={() => choose(repo)}
             >
               <span className="repo-name">{repo.name}</span>
               <span className="repo-meta">
+                {connected.has(repo.fullName.toLowerCase()) && (
+                  <span className="repo-badge connected">connected</span>
+                )}
                 {repo.private && <span className="repo-badge">private</span>}
                 {repo.archived && <span className="repo-badge">archived</span>}
                 {repo.language && <span>{repo.language}</span>}
@@ -128,14 +156,10 @@ export function NewRunSheet({ org, onClose }: NewRunSheetProps) {
                 </span>
                 <span>{detailText(detail)}</span>
               </div>
+              {submit.error && <div className="repo-detail-error">{submit.error}</div>}
             </div>
-            <button
-              type="button"
-              className="btn-primary"
-              disabled
-              title="Counts and backend come next"
-            >
-              Continue
+            <button type="button" className="btn-primary" disabled={submit.busy} onClick={connect}>
+              {submit.busy ? "Connecting…" : "Connect"}
             </button>
           </footer>
         )}

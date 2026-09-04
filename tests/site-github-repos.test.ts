@@ -34,7 +34,7 @@ async function signedIn(github: FakeGitHubOptions) {
   return { site: server, hub, headers: { cookie } };
 }
 
-describe("/api/repos", () => {
+describe("GitHub repo listing", () => {
   test("lists an org's repos with the user's token and caches the page", async () => {
     const { site, hub, headers } = await signedIn({
       orgs: ["Mupt-AI"],
@@ -43,7 +43,7 @@ describe("/api/repos", () => {
         { full_name: "Mupt-AI/site" },
       ],
     });
-    const response = await site.request("/api/repos?org=mupt-ai", { headers });
+    const response = await site.request("/api/orgs/mupt-ai/github-repos", { headers });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { repos: { fullName: string; private: boolean }[] };
     expect(body.repos.map((repo) => [repo.fullName, repo.private])).toEqual([
@@ -61,29 +61,30 @@ describe("/api/repos", () => {
     expect(listCalls()).toEqual([
       "GET https://api.github.example/orgs/Mupt-AI/repos?type=all&sort=pushed&per_page=100&page=1",
     ]);
-    await site.request("/api/repos?org=Mupt-AI", { headers });
+    await site.request("/api/orgs/Mupt-AI/github-repos", { headers });
     expect(listCalls()).toHaveLength(1);
   });
 
   test("lists the personal tenant from /user/repos and refuses foreign orgs", async () => {
     const { site, hub, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
-    const mine = await site.request("/api/repos?org=avyay", { headers });
+    const mine = await site.request("/api/orgs/avyay/github-repos", { headers });
     expect(mine.status).toBe(200);
     expect(hub.calls.at(-1)).toBe(
       "GET https://api.github.example/user/repos?affiliation=owner,collaborator&sort=pushed&per_page=100&page=1",
     );
-    expect((await site.request("/api/repos?org=someone-else", { headers })).status).toBe(404);
-    expect((await site.request("/api/repos", { headers })).status).toBe(404);
-    expect((await site.request("/api/repos?org=avyay")).status).toBe(401);
+    expect((await site.request("/api/orgs/someone-else/github-repos", { headers })).status).toBe(
+      404,
+    );
+    expect((await site.request("/api/orgs/avyay/github-repos")).status).toBe(401);
   });
 
   test("reports merged pull requests over the last year for one repo", async () => {
     const { site, hub, headers } = await signedIn({ orgs: [], mergedPullRequests: 37 });
-    const response = await site.request("/api/repos/avyay/x", { headers });
+    const response = await site.request("/api/github-repos/avyay/x", { headers });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ fullName: "avyay/x", mergedPullRequests: 37 });
     const search = hub.calls.find((call) => call.includes("/search/issues")) ?? "";
     expect(decodeURIComponent(search)).toContain("repo:avyay/x is:pr is:merged merged:>=");
-    expect((await site.request("/api/repos/bad%20name/x", { headers })).status).toBe(400);
+    expect((await site.request("/api/github-repos/bad%20name/x", { headers })).status).toBe(400);
   });
 });

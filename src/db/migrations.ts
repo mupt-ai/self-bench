@@ -61,6 +61,24 @@ create table if not exists org_members (
 create index if not exists org_members_user_id on org_members(user_id);
 `,
   },
+  {
+    version: 3,
+    name: "repos",
+    sql: `
+-- A repository connected to a tenant; tasks accumulate under it as pull requests merge.
+create table if not exists repos (
+  id bigserial primary key,
+  org_id bigint not null references orgs(id) on delete cascade,
+  github_id bigint not null unique,
+  full_name text not null,
+  default_branch text not null,
+  private boolean not null default false,
+  connected_by bigint not null references users(id),
+  connected_at timestamptz not null default now()
+);
+create index if not exists repos_org_id on repos(org_id);
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */

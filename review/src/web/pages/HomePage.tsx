@@ -1,6 +1,7 @@
 import React from "react";
+import { type ConnectedRepo, disconnectRepo, fetchConnectedRepos, formatAgo } from "../api";
+import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { Lockup } from "../Lockup";
-import { NewRunSheet } from "../NewRunSheet";
 import { OrgSwitcher } from "../OrgSwitcher";
 import {
   defaultOrg,
@@ -12,18 +13,15 @@ import {
 } from "../session";
 import { UserMenu } from "../UserMenu";
 
-/** The signed-in shell: lockup, org switcher, account menu, and the org's runs. */
+/** The signed-in shell: lockup, org switcher, account menu, and the org's connected repos. */
 export function HomePage({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) {
   const { signOut } = useSession();
   const [org, setOrg] = React.useState(() => defaultOrg(orgs));
-  const [creating, setCreating] = React.useState(false);
   useDocumentTitle(`${org.login} · self-bench`);
   const choose = (next: SiteOrg) => {
     rememberOrg(next.login);
     setOrg(next);
-    setCreating(false);
   };
-  const closeSheet = React.useCallback(() => setCreating(false), []);
   return (
     <div className="site-shell">
       <header className="site-bar">
@@ -33,21 +31,112 @@ export function HomePage({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) {
         </div>
         <UserMenu user={user} onSignOut={signOut} />
       </header>
-      <main className="site-main">
-        <div className="page-head">
-          <div>
-            <div className="eyebrow">Runs</div>
-            <h1>Benchmark runs</h1>
-          </div>
-          <button type="button" className="btn-primary" onClick={() => setCreating(true)}>
-            New run
-          </button>
-        </div>
-        <div className="empty-state">
-          <p>No runs yet. Start one from a repository in {org.login}.</p>
-        </div>
-      </main>
-      {creating && <NewRunSheet org={org} onClose={closeSheet} />}
+      <ReposPage key={org.login} org={org} />
     </div>
+  );
+}
+
+type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
+
+function ReposPage({ org }: { org: SiteOrg }) {
+  const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
+  const [error, setError] = React.useState<string | null>(null);
+  const [connecting, setConnecting] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchConnectedRepos(org.login).then(
+      (found) => !cancelled && setRepos({ status: "ok", repos: found }),
+      (cause: Error) => !cancelled && setError(cause.message),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [org.login]);
+
+  const closeSheet = React.useCallback(() => setConnecting(false), []);
+  const onConnected = React.useCallback((repo: ConnectedRepo) => {
+    setRepos((current) =>
+      current.status === "ok" ? { status: "ok", repos: [repo, ...current.repos] } : current,
+    );
+    setConnecting(false);
+  }, []);
+  const disconnect = (repo: ConnectedRepo) => {
+    if (!window.confirm(`Disconnect ${repo.fullName}?`)) return;
+    disconnectRepo(org.login, repo.fullName).then(
+      () =>
+        setRepos((current) =>
+          current.status === "ok"
+            ? { status: "ok", repos: current.repos.filter((r) => r.fullName !== repo.fullName) }
+            : current,
+        ),
+      (cause: Error) => setError(cause.message),
+    );
+  };
+  const connected = new Set(
+    repos.status === "ok" ? repos.repos.map((r) => r.fullName.toLowerCase()) : [],
+  );
+
+  return (
+    <main className="site-main">
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Repositories</div>
+          <h1>Connected Repositories</h1>
+        </div>
+        <button type="button" className="btn-primary" onClick={() => setConnecting(true)}>
+          + Connect Repo
+        </button>
+      </div>
+      {error && <p className="page-error">{error}</p>}
+      {repos.status === "ok" && repos.repos.length === 0 && (
+        <div className="empty-state">
+          <p>Nothing connected yet. Connect a repository in {org.login} to start building tasks.</p>
+        </div>
+      )}
+      {repos.status === "ok" && repos.repos.length > 0 && (
+        <table className="repo-table">
+          <thead>
+            <tr>
+              <th>Repository</th>
+              <th>Branch</th>
+              <th>Tasks</th>
+              <th>Connected</th>
+              <th aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {repos.repos.map((repo) => (
+              <tr key={repo.fullName}>
+                <td>
+                  <span className="repo-cell-name">
+                    {repo.fullName}
+                    {repo.private && <span className="repo-badge">private</span>}
+                  </span>
+                </td>
+                <td className="repo-cell-muted">{repo.defaultBranch}</td>
+                <td className="repo-cell-dim">none yet</td>
+                <td className="repo-cell-muted">
+                  {formatAgo(repo.connectedAt)} by {repo.connectedBy}
+                </td>
+                <td className="repo-cell-actions">
+                  <button type="button" className="btn-text" onClick={() => disconnect(repo)}>
+                    Disconnect
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {connecting && (
+        <ConnectRepoSheet
+          org={org}
+          connected={connected}
+          onClose={closeSheet}
+          onConnected={onConnected}
+        />
+      )}
+    </main>
   );
 }

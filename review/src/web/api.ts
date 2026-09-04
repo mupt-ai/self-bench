@@ -16,8 +16,20 @@ export interface RepoDetail {
   since: string;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { accept: "application/json" } });
+/** A repository connected to the org; tasks accumulate under it. */
+export interface ConnectedRepo {
+  fullName: string;
+  defaultBranch: string;
+  private: boolean;
+  connectedBy: string;
+  connectedAt: string;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { accept: "application/json", ...init?.headers },
+  });
   if (!response.ok) {
     let detail = String(response.status);
     try {
@@ -31,13 +43,40 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchRepos(org: string): Promise<Repo[]> {
-  const body = await getJson<{ repos: Repo[] }>(`/api/repos?org=${encodeURIComponent(org)}`);
+export async function fetchGitHubRepos(org: string): Promise<Repo[]> {
+  const body = await requestJson<{ repos: Repo[] }>(
+    `/api/orgs/${encodeURIComponent(org)}/github-repos`,
+  );
   return body.repos;
 }
 
-export function fetchRepoDetail(fullName: string): Promise<RepoDetail> {
-  return getJson<RepoDetail>(`/api/repos/${fullName}`);
+export function fetchGitHubRepoDetail(fullName: string): Promise<RepoDetail> {
+  return requestJson<RepoDetail>(`/api/github-repos/${fullName}`);
+}
+
+export async function fetchConnectedRepos(org: string): Promise<ConnectedRepo[]> {
+  const body = await requestJson<{ repos: ConnectedRepo[] }>(
+    `/api/orgs/${encodeURIComponent(org)}/repos`,
+  );
+  return body.repos;
+}
+
+export async function connectRepo(org: string, fullName: string): Promise<ConnectedRepo> {
+  const body = await requestJson<{ repo: ConnectedRepo }>(
+    `/api/orgs/${encodeURIComponent(org)}/repos`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fullName }),
+    },
+  );
+  return body.repo;
+}
+
+export async function disconnectRepo(org: string, fullName: string): Promise<void> {
+  await requestJson<{ ok: true }>(`/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`, {
+    method: "DELETE",
+  });
 }
 
 /** "3d ago" style, for last-push columns; falls back to the date when older than a month. */

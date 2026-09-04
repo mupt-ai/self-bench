@@ -20,7 +20,9 @@ import { createPostgresUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
 import { migrate } from "./db/migrations.js";
 import { postgresClient, type SqlClient } from "./db/sql.js";
-import { createRepoRoutes, type RepoRoutes } from "./site/repos.js";
+import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
+import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
+import { createPostgresRepoStore } from "./site/repo-store.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -74,7 +76,10 @@ export async function startApi(
         sendJson(response, 401, { error: "unauthorized" });
         return;
       }
-      if (site && user && (await site.repos.handle(request, url, response, user))) return;
+      if (site && user && url.pathname.startsWith("/api/")) {
+        if (await site.github.handle(request, url, response, user)) return;
+        if (await site.repos.handle(request, url, response, user)) return;
+      }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
         const runId = z
           .string()
@@ -184,16 +189,23 @@ export async function startApi(
   };
 }
 
-async function openSite(
-  auth: AuthConfig,
-): Promise<{ auth: SiteAuth; repos: RepoRoutes; sql: SqlClient }> {
+interface Site {
+  readonly auth: SiteAuth;
+  readonly github: GitHubRepoRoutes;
+  readonly repos: ConnectedRepoRoutes;
+  readonly sql: SqlClient;
+}
+
+async function openSite(auth: AuthConfig): Promise<Site> {
   const sql = postgresClient(auth.databaseUrl);
   const applied = await migrate(sql);
   if (applied.length > 0) console.log(`applied database migrations ${applied.join(", ")}`);
   const users = createPostgresUserStore(sql, { secret: auth.sessionSecret });
+  const repos = createPostgresRepoStore(sql);
   return {
     auth: createSiteAuth({ config: auth, users }),
-    repos: createRepoRoutes({ config: auth, users }),
+    github: createGitHubRepoRoutes({ config: auth, users }),
+    repos: createConnectedRepoRoutes({ config: auth, users, repos }),
     sql,
   };
 }

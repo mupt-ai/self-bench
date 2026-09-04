@@ -4,7 +4,9 @@ import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth, type SiteAuthOptions } from "../../src/auth/routes.js";
 import { migrate } from "../../src/db/migrations.js";
 import type { SqlClient } from "../../src/db/sql.js";
-import { createRepoRoutes } from "../../src/site/repos.js";
+import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
+import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
+import { createMemoryRepoStore, type RepoStore } from "../../src/site/repo-store.js";
 
 /** The site's SqlClient over an in-process PGlite database, so the real SQL runs in tests. */
 export async function pgliteClient(): Promise<SqlClient> {
@@ -69,6 +71,21 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
     if (url.endsWith("/user")) {
       return Response.json({ id: 42, login, name: "Avyay", avatar_url: "https://a/x.png" });
     }
+    const one = /\/repos\/([^/?]+\/[^/?]+)$/.exec(url);
+    if (one?.[1]) {
+      const index = (options.repos ?? []).findIndex(
+        (repo) => repo.full_name.toLowerCase() === one[1]?.toLowerCase(),
+      );
+      const repo = options.repos?.[index];
+      if (!repo) return new Response("", { status: 404 });
+      return Response.json({
+        id: 5000 + index,
+        full_name: repo.full_name,
+        name: repo.full_name.split("/")[1],
+        private: repo.private ?? false,
+        default_branch: "main",
+      });
+    }
     if (url.includes("/repos?") || url.includes("/user/repos")) {
       return Response.json(
         (options.repos ?? []).map((repo, index) => ({
@@ -108,9 +125,15 @@ export interface AuthServer {
 }
 
 /** Runs the site's auth and repo routes on a real loopback server; other paths answer 404. */
-export async function startAuthServer(options: SiteAuthOptions): Promise<AuthServer> {
+export async function startAuthServer(
+  options: SiteAuthOptions & { repos?: RepoStore },
+): Promise<AuthServer> {
   const auth = createSiteAuth(options);
-  const repos = createRepoRoutes(options);
+  const github = createGitHubRepoRoutes(options);
+  const connected = createConnectedRepoRoutes({
+    ...options,
+    repos: options.repos ?? createMemoryRepoStore(new Map()),
+  });
   const server: Server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (await auth.handle(request, url, response)) return;
@@ -120,7 +143,8 @@ export async function startAuthServer(options: SiteAuthOptions): Promise<AuthSer
         response.writeHead(401).end();
         return;
       }
-      if (await repos.handle(request, url, response, user)) return;
+      if (await github.handle(request, url, response, user)) return;
+      if (await connected.handle(request, url, response, user)) return;
     }
     response.writeHead(404).end();
   });

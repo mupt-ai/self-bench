@@ -142,6 +142,28 @@
 .repo-name { font: 500 13px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repo-meta { display: flex; gap: 10px; flex: none; color: var(--dim); font: 400 11px var(--mono); }
 .repo-badge { color: var(--ochre); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
+.repo-badge.connected { color: var(--mint); }
+.repo-row:disabled { cursor: default; opacity: 0.55; }
+.repo-row:disabled:hover { background: transparent; }
+.repo-detail-error { margin-top: 6px; color: var(--red); font: 12px var(--mono); }
+
+/* ---- repos page ------------------------------------------------------------ */
+.repo-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); }
+.repo-table th {
+  text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface);
+  color: var(--dim); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.repo-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.repo-table tr:last-child td { border-bottom: 0; }
+.repo-table tbody tr:hover td { background: var(--surface); }
+.repo-cell-name { font: 500 13px var(--mono); color: var(--ink); }
+.repo-cell-name .repo-badge { margin-left: 10px; }
+.repo-cell-muted { color: var(--muted); font: 400 12px var(--mono); }
+.repo-cell-dim { color: var(--dim); font-size: 13px; }
+.repo-cell-actions { text-align: right; }
+.btn-text { border: 0; background: transparent; color: var(--dim); font: 500 12px var(--mono); cursor: pointer; padding: 4px 6px; }
+.btn-text:hover { color: var(--red); }
+.page-error { margin-bottom: 16px; color: var(--red); font: 12px var(--mono); }
 .sheet-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 16px 24px; border-top: 1px solid var(--line); background: var(--surface-2);
