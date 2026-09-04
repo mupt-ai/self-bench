@@ -60,7 +60,7 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
               void onSignOut().finally(() => setBusy(false));
             }}
           >
-            Sign out
+            Sign Out
           </button>
         </div>
       )}
