@@ -87,6 +87,32 @@ create index if not exists repos_org_id on repos(org_id);
 alter table repos add column if not exists continuous boolean not null default false;
 `,
   },
+  {
+    version: 5,
+    name: "repo-runs-and-reviews",
+    sql: `
+-- Pipeline runs whose candidates count as this repository's tasks.
+create table if not exists repo_runs (
+  repo_id bigint not null references repos(id) on delete cascade,
+  run_id text not null,
+  attached_by bigint not null references users(id),
+  attached_at timestamptz not null default now(),
+  primary key (repo_id, run_id)
+);
+
+-- A human verdict on one task; absent means the task still needs review.
+create table if not exists task_reviews (
+  repo_id bigint not null references repos(id) on delete cascade,
+  run_id text not null,
+  task_id text not null,
+  decision text not null check (decision in ('approve', 'reject')),
+  note text not null default '',
+  decided_by bigint not null references users(id),
+  decided_at timestamptz not null default now(),
+  primary key (repo_id, run_id, task_id)
+);
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */

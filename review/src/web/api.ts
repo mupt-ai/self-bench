@@ -111,3 +111,107 @@ export function formatAgo(iso: string | undefined, now = Date.now()): string {
   if (days < 31) return `${days}d ago`;
   return iso.slice(0, 10);
 }
+
+/** A pipeline run whose candidates count as the repo's tasks. */
+export interface AttachedRun {
+  runId: string;
+  attachedBy: string;
+  attachedAt: string;
+}
+
+export interface ArchivedRun {
+  runId: string;
+  status: string;
+  startedAt?: string;
+}
+
+export type TaskState = "needs_review" | "accepted" | "rejected" | "in_progress";
+
+export interface TaskReview {
+  decision: "approve" | "reject";
+  note: string;
+  decidedBy: string;
+  decidedAt: string;
+}
+
+export interface TaskItem {
+  runId: string;
+  taskId: string;
+  candidateId: string;
+  difficulty: string;
+  stage: string;
+  pipelineStatus: string;
+  state: TaskState;
+  reasonSummary?: string;
+  sourcePr?: number;
+  sourceUrl?: string;
+  review?: TaskReview;
+}
+
+const repoPath = (org: string, fullName: string) =>
+  `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`;
+
+export async function fetchArchivedRuns(): Promise<ArchivedRun[]> {
+  return (await requestJson<{ runs: ArchivedRun[] }>("/api/runs")).runs;
+}
+
+export async function fetchAttachedRuns(org: string, fullName: string): Promise<AttachedRun[]> {
+  return (await requestJson<{ runs: AttachedRun[] }>(`${repoPath(org, fullName)}/runs`)).runs;
+}
+
+export async function attachRun(
+  org: string,
+  fullName: string,
+  runId: string,
+): Promise<AttachedRun> {
+  const body = await requestJson<{ run: AttachedRun }>(`${repoPath(org, fullName)}/runs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runId }),
+  });
+  return body.run;
+}
+
+export async function detachRun(org: string, fullName: string, runId: string): Promise<void> {
+  await requestJson<{ ok: true }>(`${repoPath(org, fullName)}/runs/${runId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchTasks(org: string, fullName: string): Promise<TaskItem[]> {
+  return (await requestJson<{ tasks: TaskItem[] }>(`${repoPath(org, fullName)}/tasks`)).tasks;
+}
+
+export async function putReview(
+  org: string,
+  fullName: string,
+  runId: string,
+  taskId: string,
+  verdict: { decision: "approve" | "reject"; note: string },
+): Promise<TaskReview> {
+  const body = await requestJson<{ review: TaskReview }>(
+    `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/review`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(verdict),
+    },
+  );
+  return body.review;
+}
+
+export async function clearReview(
+  org: string,
+  fullName: string,
+  runId: string,
+  taskId: string,
+): Promise<void> {
+  await requestJson<{ ok: true }>(
+    `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/review`,
+    { method: "DELETE" },
+  );
+}
+
+export function taskArtifactsPath(org: string, fullName: string, runId: string, taskId: string) {
+  return `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/artifacts`;
+}

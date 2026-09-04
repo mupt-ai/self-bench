@@ -1,7 +1,10 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
-import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { RepoPage } from "./pages/RepoPage";
+import { ReposPage } from "./pages/ReposPage";
+import { TaskPage } from "./pages/TaskPage";
+import { SiteLayout } from "./SiteLayout";
 import {
   fetchSession,
   requestSignOut,
@@ -38,7 +41,12 @@ export function WebApp() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="*" element={<RequireUser />} />
+              <Route element={<RequireUser />}>
+                <Route index element={<ReposPage />} />
+                <Route path="repos/:owner/:name" element={<RepoPage />} />
+                <Route path="repos/:owner/:name/tasks/:runId/:taskId" element={<TaskPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
             </Routes>
           </BrowserRouter>
         )}
@@ -50,5 +58,5 @@ export function WebApp() {
 function RequireUser() {
   const { session } = useSession();
   if (session.status !== "signed-in") return <Navigate to="/login" replace />;
-  return <HomePage user={session.user} orgs={session.orgs} />;
+  return <SiteLayout user={session.user} orgs={session.orgs} />;
 }

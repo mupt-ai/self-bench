@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { PGlite, type Transaction } from "@electric-sql/pglite";
+import type { ArtifactStore } from "../../src/artifacts.js";
 import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth, type SiteAuthOptions } from "../../src/auth/routes.js";
 import { migrate } from "../../src/db/migrations.js";
@@ -7,6 +8,8 @@ import type { SqlClient } from "../../src/db/sql.js";
 import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
 import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
 import { createMemoryRepoStore, type RepoStore } from "../../src/site/repo-store.js";
+import { createMemoryTaskStore, type TaskStore } from "../../src/site/task-store.js";
+import { createTaskRoutes } from "../../src/site/tasks.js";
 
 /** The site's SqlClient over an in-process PGlite database, so the real SQL runs in tests. */
 export async function pgliteClient(): Promise<SqlClient> {
@@ -126,14 +129,24 @@ export interface AuthServer {
 
 /** Runs the site's auth and repo routes on a real loopback server; other paths answer 404. */
 export async function startAuthServer(
-  options: SiteAuthOptions & { repos?: RepoStore },
+  options: SiteAuthOptions & {
+    repos?: RepoStore;
+    tasks?: TaskStore;
+    artifacts?: ArtifactStore;
+  },
 ): Promise<AuthServer> {
   const auth = createSiteAuth(options);
   const github = createGitHubRepoRoutes(options);
-  const connected = createConnectedRepoRoutes({
-    ...options,
-    repos: options.repos ?? createMemoryRepoStore(new Map()),
-  });
+  const repos = options.repos ?? createMemoryRepoStore(new Map());
+  const connected = createConnectedRepoRoutes({ ...options, repos });
+  const taskRoutes = options.artifacts
+    ? createTaskRoutes({
+        users: options.users,
+        repos,
+        tasks: options.tasks ?? createMemoryTaskStore(new Map()),
+        artifacts: options.artifacts,
+      })
+    : undefined;
   const server: Server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (await auth.handle(request, url, response)) return;
@@ -145,6 +158,7 @@ export async function startAuthServer(
       }
       if (await github.handle(request, url, response, user)) return;
       if (await connected.handle(request, url, response, user)) return;
+      if (taskRoutes && (await taskRoutes.handle(request, url, response, user))) return;
     }
     response.writeHead(404).end();
   });
