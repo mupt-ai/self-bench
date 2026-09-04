@@ -6,6 +6,8 @@ export type ViewerMode = (typeof VIEWER_MODES)[number];
 export interface ViewerInfo {
   readonly modes: readonly ViewerMode[];
   readonly root?: string;
+  /** Present when the server requires GitHub sign-in; the bundle then renders the site shell. */
+  readonly auth?: "github";
 }
 
 export interface TaskFileEntry {

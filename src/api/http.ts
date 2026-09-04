@@ -21,7 +21,11 @@ export async function readBody(
 }
 
 export function authorized(request: IncomingMessage, token: string | undefined): boolean {
-  if (!token) return true;
+  return !token || bearerMatches(request, token);
+}
+
+/** True only when a token is configured and the request presents exactly that token. */
+export function bearerMatches(request: IncomingMessage, token: string): boolean {
   const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, "");
   if (!supplied) return false;
   const expectedBuffer = Buffer.from(token);
