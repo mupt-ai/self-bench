@@ -1,7 +1,8 @@
 /**
  * Local loop for selfbench.dev: Postgres in Docker, the API with GitHub sign-in on one port,
  * Vite on another proxying /v1, /api and /auth to it. GitHub's callback lands on the Vite
- * origin, so the OAuth app's callback URL is http://localhost:<vite port>/auth/github/callback.
+ * origin; register the OAuth app's callback as http://127.0.0.1/auth/github/callback (no
+ * port: GitHub lets loopback redirects use any port) and browse to http://127.0.0.1:<port>.
  *
  *   bun run dev:site
  *
@@ -42,17 +43,25 @@ const apiEnv: NodeJS.ProcessEnv = {
   ...env,
   SELFBENCH_API_HOST: "127.0.0.1",
   SELFBENCH_API_PORT: String(API_PORT),
-  SELFBENCH_PUBLIC_URL: env.SELFBENCH_PUBLIC_URL ?? `http://localhost:${VITE_PORT}`,
+  SELFBENCH_PUBLIC_URL: env.SELFBENCH_PUBLIC_URL ?? `http://127.0.0.1:${VITE_PORT}`,
   SELFBENCH_DATABASE_URL:
-    env.SELFBENCH_DATABASE_URL ??
-    `postgres://selfbench:selfbench@127.0.0.1:${PG_PORT}/selfbench`,
+    env.SELFBENCH_DATABASE_URL ?? `postgres://selfbench:selfbench@127.0.0.1:${PG_PORT}/selfbench`,
   // The login loop does not need Temporal; connect only if a run route is ever hit.
   SELFBENCH_TEMPORAL_CONNECT: env.SELFBENCH_TEMPORAL_CONNECT ?? "lazy",
 };
 const api = spawn("bunx", ["tsx", "src/api-main.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
 const vite = spawn(
   "bunx",
-  ["vite", "--config", "review/vite.config.ts", "--port", String(VITE_PORT), "--strictPort"],
+  [
+    "vite",
+    "--config",
+    "review/vite.config.ts",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(VITE_PORT),
+    "--strictPort",
+  ],
   {
     cwd: root,
     env: { ...env, SELFBENCH_VIEW_PROXY: `http://127.0.0.1:${API_PORT}` },
@@ -62,7 +71,7 @@ const vite = spawn(
 
 console.log(`
 selfbench.dev dev loop
-  site        http://localhost:${VITE_PORT}
+  site        http://127.0.0.1:${VITE_PORT}
   api         http://127.0.0.1:${API_PORT}
   postgres    ${apiEnv.SELFBENCH_DATABASE_URL}
   callback    ${apiEnv.SELFBENCH_PUBLIC_URL}/auth/github/callback
@@ -142,7 +151,10 @@ function readEnvFile(path: string): Record<string, string> {
     const separator = trimmed.indexOf("=");
     if (separator === -1) continue;
     const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
+    const value = trimmed
+      .slice(separator + 1)
+      .trim()
+      .replace(/^(["'])(.*)\1$/, "$2");
     if (key) values[key] = value;
   }
   return values;
