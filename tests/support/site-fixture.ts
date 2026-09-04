@@ -34,7 +34,6 @@ export const testAuthConfig: AuthConfig = {
   clientId: "client-id",
   clientSecret: "client-secret",
   sessionSecret: "test-session-secret-that-is-long-enough-0123456789",
-  allowedOrgs: ["mupt-ai"],
   publicUrl: "http://127.0.0.1:0",
   databaseUrl: "postgres://unused",
   githubUrl: "https://github.example",

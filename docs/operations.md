@@ -382,7 +382,7 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/auth/github` | Redirect to GitHub with a state cookie (scopes `read:user read:org repo`) |
-| `GET` | `/auth/github/callback` | Exchange the code, check the org allowlist, set the session cookie |
+| `GET` | `/auth/github/callback` | Exchange the code, record the user and their org memberships, set the session cookie |
 | `POST` | `/auth/logout` | Clear the session cookie |
 | `GET` | `/api/me` | The signed-in user's login, name, and avatar |
 
@@ -440,7 +440,6 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
-| `SELFBENCH_ALLOWED_GITHUB_ORGS` | empty (any GitHub user) | API; comma-separated org logins |
 | `SELFBENCH_PUBLIC_URL` | — | API; public origin, forms the OAuth callback URL |
 | `SELFBENCH_DATABASE_URL` | — | API; Postgres holding the `users` table |
 | `OPENAI_API_KEY` | — | Worker sandboxes |

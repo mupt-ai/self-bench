@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadAuthConfig, parseOrgList } from "../src/auth/config.js";
-import { authorizeUrl, orgAllowed } from "../src/auth/github.js";
+import { loadAuthConfig } from "../src/auth/config.js";
+import { authorizeUrl } from "../src/auth/github.js";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
 import { createMemoryUserStore } from "../src/auth/users.js";
@@ -139,27 +139,9 @@ describe("OAuth callback state check", () => {
   });
 });
 
-describe("org allowlist", () => {
-  test("compares org logins case-insensitively and admits everyone when empty", () => {
-    expect(orgAllowed(["mupt-ai"], ["Mupt-AI", "other"])).toBe(true);
-    expect(orgAllowed(["mupt-ai", "dari"], ["other"])).toBe(false);
-    expect(orgAllowed([], [])).toBe(true);
-    expect(parseOrgList(" Mupt-AI, dari ,,mupt-ai ")).toEqual(["mupt-ai", "dari"]);
-  });
-
-  test("refuses a user outside every allowed org without storing them", async () => {
-    const { server: site, users } = await boot({ login: "someone", orgs: ["elsewhere"] });
-    const response = await signIn(site);
-    expect(response.headers.get("location")).toBe("/login?error=not_member");
-    expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
-    expect(await users.findByGitHubId(42)).toBeUndefined();
-  });
-
-  test("admits a user with no orgs when the allowlist is empty", async () => {
-    const { server: site, users } = await boot(
-      { orgs: [] },
-      { ...testAuthConfig, allowedOrgs: [] },
-    );
+describe("org memberships", () => {
+  test("a user with no orgs still signs in with only a personal tenant", async () => {
+    const { server: site, users } = await boot({ orgs: [] });
     const response = await signIn(site);
     expect(response.headers.get("location")).toBe("/");
     expect((await users.orgsFor(1)).map((org) => org.kind)).toEqual(["user"]);
@@ -213,11 +195,9 @@ describe("auth config", () => {
       SELFBENCH_SESSION_SECRET: "x".repeat(32),
       SELFBENCH_PUBLIC_URL: "https://selfbench.dev/",
       SELFBENCH_DATABASE_URL: "postgres://localhost/selfbench",
-      SELFBENCH_ALLOWED_GITHUB_ORGS: "Mupt-AI",
     };
     expect(loadAuthConfig(base)).toMatchObject({
       publicUrl: "https://selfbench.dev",
-      allowedOrgs: ["mupt-ai"],
       githubUrl: "https://github.com",
     });
     expect(() => loadAuthConfig({ ...base, SELFBENCH_SESSION_SECRET: "short" })).toThrow(

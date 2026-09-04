@@ -6,7 +6,6 @@ const ERRORS: Record<string, string> = {
   state: "That sign-in attempt expired. Try again.",
   denied: "GitHub sign-in was cancelled.",
   github: "GitHub sign-in failed. Try again.",
-  not_member: "Your GitHub account is not in an allowed organization.",
 };
 
 export function LoginPage() {

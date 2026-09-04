@@ -7,7 +7,6 @@ const environmentSchema = z.object({
   GITHUB_OAUTH_CLIENT_ID: z.preprocess(emptyStringAsUndefined, z.string().min(1).optional()),
   GITHUB_OAUTH_CLIENT_SECRET: z.preprocess(emptyStringAsUndefined, z.string().min(1).optional()),
   SELFBENCH_SESSION_SECRET: z.preprocess(emptyStringAsUndefined, z.string().optional()),
-  SELFBENCH_ALLOWED_GITHUB_ORGS: z.string().default(""),
   SELFBENCH_PUBLIC_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
   SELFBENCH_DATABASE_URL: z.preprocess(emptyStringAsUndefined, z.string().min(1).optional()),
   GITHUB_URL: z.string().url().default("https://github.com"),
@@ -19,8 +18,6 @@ export interface AuthConfig {
   readonly clientSecret: string;
   /** At least 32 characters; derives the cookie-signing and token-sealing keys. */
   readonly sessionSecret: string;
-  /** Lowercased org logins; empty admits any GitHub user. */
-  readonly allowedOrgs: readonly string[];
   /** Public origin of the site (no trailing slash); drives the callback URL and Secure cookies. */
   readonly publicUrl: string;
   readonly databaseUrl: string;
@@ -47,7 +44,6 @@ export function loadAuthConfig(
       value.GITHUB_OAUTH_CLIENT_SECRET ??
       fail("GITHUB_OAUTH_CLIENT_SECRET is required for GitHub sign-in"),
     sessionSecret,
-    allowedOrgs: parseOrgList(value.SELFBENCH_ALLOWED_GITHUB_ORGS),
     publicUrl: (
       value.SELFBENCH_PUBLIC_URL ?? fail("SELFBENCH_PUBLIC_URL is required for GitHub sign-in")
     ).replace(/\/+$/, ""),
@@ -56,17 +52,6 @@ export function loadAuthConfig(
     githubUrl: value.GITHUB_URL.replace(/\/+$/, ""),
     githubApiUrl: value.GITHUB_API_URL.replace(/\/+$/, ""),
   };
-}
-
-export function parseOrgList(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .split(",")
-        .map((org) => org.trim().toLowerCase())
-        .filter((org) => org.length > 0),
-    ),
-  ];
 }
 
 function fail(message: string): never {

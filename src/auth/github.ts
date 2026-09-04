@@ -1,6 +1,6 @@
 import type { AuthConfig } from "./config.js";
 
-/** read:user for the profile, read:org for the allowlist, repo so discovery can read private PRs. */
+/** read:user for the profile, read:org for org memberships, repo so discovery can read private PRs. */
 export const OAUTH_SCOPES = ["read:user", "read:org", "repo"] as const;
 
 export interface GitHubProfile {
@@ -122,13 +122,6 @@ export async function fetchOrgMemberships(
     if (rows.length < 100) break;
   }
   return memberships;
-}
-
-/** Empty allowlist admits everyone; otherwise one shared org (case-insensitive) is enough. */
-export function orgAllowed(allowedOrgs: readonly string[], memberOf: readonly string[]): boolean {
-  if (allowedOrgs.length === 0) return true;
-  const allowed = new Set(allowedOrgs.map((org) => org.toLowerCase()));
-  return memberOf.some((org) => allowed.has(org.toLowerCase()));
 }
 
 function apiHeaders(token: string): Record<string, string> {

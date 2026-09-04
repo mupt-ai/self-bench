@@ -9,7 +9,6 @@ import {
   fetchOrgMemberships,
   fetchProfile,
   GitHubOAuthError,
-  orgAllowed,
 } from "./github.js";
 import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "./session.js";
 import type { Org, User, UserStore } from "./users.js";
@@ -18,7 +17,7 @@ export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
 const STATE_TTL_SECONDS = 10 * 60;
 
 /** Why a sign-in attempt bounced back to /login; the page renders one line per code. */
-export type LoginError = "state" | "denied" | "github" | "not_member";
+export type LoginError = "state" | "denied" | "github";
 
 export interface SiteAuthOptions {
   readonly config: AuthConfig;
@@ -78,12 +77,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
       const { token, scopes } = await exchangeCode(config, code, fetchImpl);
       const profile = await fetchProfile(config, token, fetchImpl);
       const orgs = await fetchOrgMemberships(config, token, fetchImpl);
-      signedIn = orgAllowed(
-        config.allowedOrgs,
-        orgs.map((org) => org.login),
-      )
-        ? { user: await users.upsert({ ...profile, token, scopes, orgs }) }
-        : { error: "not_member" };
+      signedIn = { user: await users.upsert({ ...profile, token, scopes, orgs }) };
     } catch (error) {
       if (!(error instanceof GitHubOAuthError)) throw error;
       console.error(`GitHub sign-in failed: ${error.message}`);

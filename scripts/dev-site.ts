@@ -7,8 +7,7 @@
  *   bun run dev:site
  *
  * Secrets come from .env.site next to package.json (gitignored):
- *   GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, SELFBENCH_SESSION_SECRET,
- *   optional SELFBENCH_ALLOWED_GITHUB_ORGS.
+ *   GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, SELFBENCH_SESSION_SECRET.
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
