@@ -41,11 +41,11 @@
 .login-page .foot a:hover { color: var(--ink); }
 
 /* ---- signed-in shell ------------------------------------------------------- */
-.site-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.site-shell { min-height: 100vh; display: flex; flex-direction: column; --site-max: 1440px; --site-gutter: max(32px, calc((100% - var(--site-max)) / 2)); }
 .site-bar {
   height: 56px; flex: none;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--surface);
+  padding: 0 var(--site-gutter); border-bottom: 1px solid var(--line); background: var(--surface);
 }
 .site-bar .lockup { margin: 0; gap: 10px; }
 .site-bar .lockup svg { width: 28px; height: 28px; }
@@ -94,7 +94,7 @@
 .org-item-login { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .org-item-role { color: var(--dim); font: 400 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .dropdown-item.current .org-item-role { margin-right: 8px; }
-.site-main { flex: 1; padding: 32px 32px 48px; width: 100%; }
+.site-main { flex: 1; padding: 32px var(--site-gutter) 48px; width: 100%; }
 .sb .eyebrow { color: var(--mint); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
 .page-head h1 { margin-top: 6px; font: 600 20px/1.25 var(--sans); letter-spacing: -0.01em; }
