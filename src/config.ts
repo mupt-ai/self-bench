@@ -55,6 +55,7 @@ const environmentSchema = z.object({
   SELFBENCH_TEMPORAL_ADDRESS: z.string().default("127.0.0.1:7233"),
   SELFBENCH_TEMPORAL_NAMESPACE: z.string().default("default"),
   SELFBENCH_TEMPORAL_API_KEY: z.string().optional(),
+  SELFBENCH_TEMPORAL_CONNECT: z.enum(["eager", "lazy"]).default("eager"),
   SELFBENCH_TEMPORAL_TLS: z
     .enum(["true", "false"])
     .transform((value) => value === "true")
@@ -122,6 +123,8 @@ export interface SelfBenchConfig {
     readonly apiKey?: string;
     readonly tls: boolean;
     readonly taskQueue: string;
+    /** "lazy" defers the API's client connection to first use (login-only dev loops). */
+    readonly connect: "eager" | "lazy";
   };
 }
 
@@ -222,6 +225,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       namespace: value.SELFBENCH_TEMPORAL_NAMESPACE,
       tls: value.SELFBENCH_TEMPORAL_TLS,
       taskQueue: value.SELFBENCH_TASK_QUEUE,
+      connect: value.SELFBENCH_TEMPORAL_CONNECT,
       ...(value.SELFBENCH_TEMPORAL_API_KEY ? { apiKey: value.SELFBENCH_TEMPORAL_API_KEY } : {}),
     },
   };

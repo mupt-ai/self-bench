@@ -8,6 +8,7 @@ export interface RunSummary {
 export interface ViewerInfo {
   modes: ("runs" | "local")[];
   root?: string;
+  auth?: "github";
 }
 
 export interface TaskFileEntry {

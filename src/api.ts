@@ -2,26 +2,66 @@ import { createServer } from "node:http";
 import { pipeline } from "node:stream/promises";
 import { Client } from "@temporalio/client";
 import { z } from "zod";
-import { authorized, readBody, sendApiError, sendJson, sendReviewAsset } from "./api/http.js";
+import {
+  authorized,
+  bearerMatches,
+  readBody,
+  sendApiError,
+  sendJson,
+  sendReviewAsset,
+} from "./api/http.js";
 import { buildRunRequest } from "./api/run-request.js";
 import { queryStatus } from "./api/status.js";
 import { handleViewerRoute } from "./api/viewer-routes.js";
-import { createArtifactStore } from "./artifacts.js";
+import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
+import type { AuthConfig } from "./auth/config.js";
+import { createSiteAuth, type SiteAuth } from "./auth/routes.js";
+import { createUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
+import { type OpenDatabase, openDatabase } from "./db/client.js";
+import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
+import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
+import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
+import { createRepoStore } from "./site/repo-store.js";
+import { createRunStore } from "./site/run-store.js";
+import { createTaskStore } from "./site/task-store.js";
+import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
+import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
+import type { ViewerInfo } from "./viewer/types.js";
 
-export async function startApi(config: SelfBenchConfig): Promise<() => Promise<void>> {
+export interface ApiOptions {
+  /** When set, the API also serves the selfbench.dev site: GitHub sign-in and session cookies. */
+  readonly auth?: AuthConfig;
+}
+
+export async function startApi(
+  config: SelfBenchConfig,
+  options: ApiOptions = {},
+): Promise<() => Promise<void>> {
   const connection = await connectTemporalClient(config.temporal);
   const client = new Client({ connection, namespace: config.temporal.namespace });
   const artifacts = createArtifactStore(config.artifact);
+  const site = options.auth ? await openSite(options.auth, config, client, artifacts) : undefined;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       if (request.method === "GET" && url.pathname === "/healthz") {
         sendJson(response, 200, { ok: true });
         return;
+      }
+      if (site) {
+        if (await site.auth.handle(request, url, response)) return;
+        if (request.method === "GET" && url.pathname === "/v1/viewer") {
+          sendJson(response, 200, { modes: ["runs"], auth: "github" } satisfies ViewerInfo);
+          return;
+        }
+        if (request.method === "GET" && isSitePage(url.pathname)) {
+          await sendReviewAsset(response, "/");
+          return;
+        }
       }
       if (
         request.method === "GET" &&
@@ -30,9 +70,21 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
         await sendReviewAsset(response, url.pathname);
         return;
       }
-      if (!authorized(request, config.apiToken)) {
+      // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
+      const user = site ? await site.auth.authenticate(request) : undefined;
+      const allowed = site
+        ? (config.apiToken !== undefined && bearerMatches(request, config.apiToken)) ||
+          user !== undefined
+        : authorized(request, config.apiToken);
+      if (!allowed) {
         sendJson(response, 401, { error: "unauthorized" });
         return;
+      }
+      if (site && user && url.pathname.startsWith("/api/")) {
+        if (await site.github.handle(request, url, response, user)) return;
+        if (await site.repos.handle(request, url, response, user)) return;
+        if (await site.pullRequests.handle(request, url, response, user)) return;
+        if (await site.tasks.handle(request, url, response, user)) return;
       }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
         const runId = z
@@ -139,7 +191,63 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
       server.close((error) => (error ? reject(error) : resolve())),
     );
     await connection.close();
+    await site?.database.close();
   };
+}
+
+interface Site {
+  readonly auth: SiteAuth;
+  readonly github: GitHubRepoRoutes;
+  readonly repos: ConnectedRepoRoutes;
+  readonly tasks: TaskRoutes;
+  readonly pullRequests: PullRequestRoutes;
+  readonly database: OpenDatabase;
+}
+
+async function openSite(
+  auth: AuthConfig,
+  config: SelfBenchConfig,
+  client: Client,
+  artifacts: ArtifactStore,
+): Promise<Site> {
+  const database = await openDatabase(auth.databaseUrl);
+  const users = createUserStore(database.db, { secret: auth.sessionSecret });
+  const repos = createRepoStore(database.db);
+  const runs = createRunStore(database.db);
+  const tasks = createTaskStore(database.db);
+  return {
+    auth: createSiteAuth({ config: auth, users }),
+    github: createGitHubRepoRoutes({ config: auth, users }),
+    repos: createConnectedRepoRoutes({ config: auth, users, repos }),
+    tasks: createTaskRoutes({
+      users,
+      repos,
+      runs,
+      tasks,
+      artifacts,
+      status: temporalStatus(client),
+    }),
+    pullRequests: createPullRequestRoutes({
+      config,
+      auth,
+      users,
+      repos,
+      tasks,
+      artifacts,
+      start: temporalStarter(client, config.temporal.taskQueue),
+    }),
+    database,
+  };
+}
+
+/**
+ * Page paths load the SPA shell and let the router decide; API prefixes and anything that
+ * looks like a file (assets, favicons) are left to the handlers below.
+ */
+function isSitePage(pathname: string): boolean {
+  if (/^\/(v1|api|auth)(\/|$)/.test(pathname)) return false;
+  const last = pathname.split("/").pop() ?? "";
+  return !last.includes(".");
 }
 
 export { buildRunRequest } from "./api/run-request.js";

@@ -3,5 +3,6 @@ __pycache__/
 .selfbench/
 dist/
 .env
+.env.*
 jobs/
 .pi-subagents/

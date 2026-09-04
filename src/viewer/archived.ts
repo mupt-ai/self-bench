@@ -1,6 +1,7 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { Difficulty } from "../contracts.js";
 import { parallelMap } from "../parallel.js";
+import { latestBundleKey, latestDefinitionKey } from "./archived-keys.js";
 import { reasonSummary, summarizeDefinition } from "./candidates.js";
 import type { ArtifactEntry, CandidateList, CandidateStage, CandidateSummary } from "./types.js";
 
@@ -89,9 +90,10 @@ export async function archivedCandidates(
     [...candidateIds],
     DEFINITION_CONCURRENCY,
     async (candidateId) => {
-      const bytes = await store
-        .getByKey(`runs/${runId}/authoring/${candidateId}/definition.json`)
-        .catch(() => undefined);
+      const definitionKey = latestDefinitionKey(entries, prefix, candidateId);
+      const bytes = definitionKey
+        ? await store.getByKey(definitionKey).catch(() => undefined)
+        : undefined;
       const text = bytes ? Buffer.from(bytes).toString("utf8") : undefined;
       const definition = text ? summarizeDefinition(text) : undefined;
       const parsed = text ? parseIdentity(text) : undefined;
@@ -101,6 +103,7 @@ export async function archivedCandidates(
         (await latestRoundDecision(store, entries, prefix, candidateId)) ??
         (await latestReviewDecision(store, entries, prefix, taskId));
       const stage = decision?.stage ?? furthestStage(groups);
+      const bundleKey = latestBundleKey(entries, prefix, candidateId);
       const candidate: CandidateSummary = {
         taskId,
         candidateId,
@@ -109,7 +112,10 @@ export async function archivedCandidates(
         stage,
         reasonSummary:
           decision?.reasonSummary ?? `no verdict on record; last artifact written by ${stage}`,
+        ...(decision?.reason ? { reason: decision.reason } : {}),
         ...(definition ? { definition } : {}),
+        ...(definitionKey ? { definitionKey } : {}),
+        ...(bundleKey ? { bundleKey } : {}),
       };
       return candidate;
     },
@@ -124,6 +130,7 @@ export async function archivedCandidates(
 interface ArchivedDecision {
   readonly stage: CandidateStage;
   readonly reasonSummary: string;
+  readonly reason?: string;
 }
 
 const ROUND_RESULT = /^(authoring|verification)\/[^/]+\/round-(\d+)\/result\.json$/;
@@ -163,12 +170,14 @@ async function latestRoundDecision(
       reasonSummary: summary
         ? `verification agent accepted: ${summary}`
         : "verification agent accepted",
+      ...(reason ? { reason } : {}),
     };
   }
   if (value.kind === "rejected") {
     return {
       stage: latest.loop === "verification" ? "review" : "authoring",
       reasonSummary: summary ?? `${latest.loop} round ${latest.round} rejected`,
+      ...(reason ? { reason } : {}),
     };
   }
   return undefined;

@@ -6,6 +6,8 @@ export type ViewerMode = (typeof VIEWER_MODES)[number];
 export interface ViewerInfo {
   readonly modes: readonly ViewerMode[];
   readonly root?: string;
+  /** Present when the server requires GitHub sign-in; the bundle then renders the site shell. */
+  readonly auth?: "github";
 }
 
 export interface TaskFileEntry {
@@ -62,6 +64,9 @@ export interface CandidateSummary extends Omit<TaskProgress, "status" | "stage">
   readonly stage: CandidateStage;
   readonly reasonSummary?: string;
   readonly definition?: CandidateDefinitionSummary;
+  /** Archived runs only: where the newest definition.json and final compiled bundle live. */
+  readonly definitionKey?: string;
+  readonly bundleKey?: string;
 }
 
 export interface CandidateList {
