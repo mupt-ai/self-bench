@@ -1,6 +1,6 @@
 import React from "react";
 import { FileTree } from "../../components/FileTree";
-import { formatTime, keyTail } from "../../lib/format";
+import { keyTail } from "../../lib/format";
 import { buildTaskModel } from "../../lib/task-model";
 import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
 import { FileSheet, type OpenFile } from "../../sheets/FileSheet";
@@ -17,7 +17,6 @@ const DEFAULT_FILES = ["instruction.md", "task.toml", "definition.json"];
 export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) {
   const [files, setFiles] = React.useState<TaskFiles | null>(null);
   const [artifacts, setArtifacts] = React.useState<CandidateArtifacts | null>(null);
-  const [bundleKey, setBundleKey] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("file");
   const [openFile, setOpenFile] = React.useState<OpenFile | null>(null);
@@ -31,7 +30,6 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         if (found) setArtifacts(found);
         const first = found?.bundles[0];
         if (first && source.loadBundle) {
-          setBundleKey(first.key);
           const loaded = await source.loadBundle(first.key);
           if (!cancelled) setFiles(loaded);
         } else {
@@ -48,9 +46,9 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
     };
   }, [source, row.id]);
 
+  /** The tree shows the final bundle; the pipeline tab can still open an earlier pass explicitly. */
   const switchBundle = async (key: string) => {
     if (!source.loadBundle) return;
-    setBundleKey(key);
     setFiles(null);
     setError(null);
     try {
@@ -132,21 +130,6 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           <span className="eyebrow">Files</span>
           {files && <span className="task-files-count">{files.files.length}</span>}
         </div>
-        {artifacts && artifacts.bundles.length > 1 && (
-          <select
-            className="task-bundle"
-            value={bundleKey ?? ""}
-            onChange={(event) => void switchBundle(event.target.value)}
-            aria-label="Bundle"
-          >
-            {artifacts.bundles.map((bundle) => (
-              <option key={bundle.key} value={bundle.key}>
-                {bundle.stage} · {keyTail(bundle.key, 3)}
-                {bundle.updatedAt ? ` · ${formatTime(bundle.updatedAt)}` : ""}
-              </option>
-            ))}
-          </select>
-        )}
         <div className="task-files-body">
           {files ? (
             files.files.length === 0 ? (
