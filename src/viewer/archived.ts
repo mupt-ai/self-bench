@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { Difficulty } from "../contracts.js";
 import { parallelMap } from "../parallel.js";
-import { summarizeDefinition } from "./candidates.js";
+import { reasonSummary, summarizeDefinition } from "./candidates.js";
 import type { ArtifactEntry, CandidateList, CandidateStage, CandidateSummary } from "./types.js";
 
 const DEFINITION_CONCURRENCY = 16;
@@ -97,20 +97,18 @@ export async function archivedCandidates(
       const parsed = text ? parseIdentity(text) : undefined;
       const taskId = parsed?.taskId ?? candidateId;
       const groups = groupsFor(entries, prefix, { taskId, candidateId });
-      const verdict = await latestReviewVerdict(store, entries, prefix, taskId);
-      const stage = verdict === "clean" ? "accepted" : furthestStage(groups);
+      const decision =
+        (await latestRoundDecision(store, entries, prefix, candidateId)) ??
+        (await latestReviewDecision(store, entries, prefix, taskId));
+      const stage = decision?.stage ?? furthestStage(groups);
       const candidate: CandidateSummary = {
         taskId,
         candidateId,
         difficulty: parsed?.difficulty ?? "easy",
-        status: verdict === "clean" ? "accepted" : "archived",
+        status: decision?.stage === "accepted" ? "accepted" : "archived",
         stage,
         reasonSummary:
-          verdict === "clean"
-            ? "final coupling review was clean"
-            : verdict
-              ? `final coupling review: ${verdict}`
-              : `no verdict on record; last artifact written by ${stage}`,
+          decision?.reasonSummary ?? `no verdict on record; last artifact written by ${stage}`,
         ...(definition ? { definition } : {}),
       };
       return candidate;
@@ -123,13 +121,66 @@ export async function archivedCandidates(
   };
 }
 
-/** The workflow accepts a task exactly when its last coupling review is clean. */
-async function latestReviewVerdict(
+interface ArchivedDecision {
+  readonly stage: CandidateStage;
+  readonly reasonSummary: string;
+}
+
+const ROUND_RESULT = /^(authoring|verification)\/[^/]+\/round-(\d+)\/result\.json$/;
+
+/**
+ * The agent pipeline decides a candidate in its round results: the workflow accepts exactly when
+ * a verification round's `result.json` is `accepted`, and a `rejected` round result in either loop
+ * ends the candidate. The latest round of the later loop is the verdict on record.
+ */
+async function latestRoundDecision(
+  store: ArtifactStore,
+  entries: readonly ArtifactEntry[],
+  prefix: string,
+  candidateId: string,
+): Promise<ArchivedDecision | undefined> {
+  let latest: { key: string; loop: string; round: number } | undefined;
+  for (const entry of entries) {
+    const match = ROUND_RESULT.exec(entry.key.slice(prefix.length));
+    if (!match || !match[1] || !match[2]) continue;
+    if (entry.key.slice(prefix.length).split("/")[1] !== candidateId) continue;
+    const loop = match[1];
+    const round = Number(match[2]);
+    const later =
+      !latest ||
+      (loop === "verification" && latest.loop === "authoring") ||
+      (loop === latest.loop && round > latest.round);
+    if (later) latest = { key: entry.key, loop, round };
+  }
+  if (!latest) return undefined;
+  const value = await readJson(store, latest.key);
+  if (!value) return undefined;
+  const reason = typeof value.reason === "string" ? value.reason : undefined;
+  const summary = reasonSummary(reason);
+  if (latest.loop === "verification" && value.kind === "accepted") {
+    return {
+      stage: "accepted",
+      reasonSummary: summary
+        ? `verification agent accepted: ${summary}`
+        : "verification agent accepted",
+    };
+  }
+  if (value.kind === "rejected") {
+    return {
+      stage: latest.loop === "verification" ? "review" : "authoring",
+      reasonSummary: summary ?? `${latest.loop} round ${latest.round} rejected`,
+    };
+  }
+  return undefined;
+}
+
+/** Legacy runs accepted a task exactly when its last coupling review was clean. */
+async function latestReviewDecision(
   store: ArtifactStore,
   entries: readonly ArtifactEntry[],
   prefix: string,
   taskId: string,
-): Promise<string | undefined> {
+): Promise<ArchivedDecision | undefined> {
   const reviews = entries
     .filter(
       (entry) => entry.key.startsWith(`${prefix}reviews/${taskId}/`) && entry.key.endsWith(".json"),
@@ -139,11 +190,25 @@ async function latestReviewVerdict(
     );
   const latest = reviews[reviews.length - 1];
   if (!latest) return undefined;
-  const bytes = await store.getByKey(latest.key).catch(() => undefined);
+  const value = await readJson(store, latest.key);
+  const verdict = typeof value?.verdict === "string" ? value.verdict : undefined;
+  if (!verdict) return undefined;
+  return verdict === "clean"
+    ? { stage: "accepted", reasonSummary: "final coupling review was clean" }
+    : { stage: "review", reasonSummary: `final coupling review: ${verdict}` };
+}
+
+async function readJson(
+  store: ArtifactStore,
+  key: string,
+): Promise<Record<string, unknown> | undefined> {
+  const bytes = await store.getByKey(key).catch(() => undefined);
   if (!bytes) return undefined;
   try {
-    const value = JSON.parse(Buffer.from(bytes).toString("utf8")) as { verdict?: unknown };
-    return typeof value.verdict === "string" ? value.verdict : undefined;
+    const value = JSON.parse(Buffer.from(bytes).toString("utf8")) as unknown;
+    return typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : undefined;
   } catch {
     return undefined;
   }

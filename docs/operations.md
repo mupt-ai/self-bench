@@ -377,7 +377,7 @@ The CLI is the recommended client. The API exposes:
 
 Run status includes its phase, accepted/rejected counts, per-candidate status with the current stage (`authoring` or `verification`) and round, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
 
-`/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest coupling review is `clean`. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
+`/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest verification round wrote an `accepted` `result.json` (a `rejected` round result in either loop marks the stage that ended it). Legacy runs without round results count as accepted when their latest coupling review is `clean`. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 
