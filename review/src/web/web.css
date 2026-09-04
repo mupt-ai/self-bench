@@ -49,14 +49,32 @@
 .site-bar .lockup svg { width: 28px; height: 28px; }
 .site-bar .lockup strong { font-size: 18px; }
 .site-bar .lockup .by { font-size: 10px; }
-.site-user { display: flex; align-items: center; gap: 14px; font: 500 12px var(--mono); color: var(--muted); }
-.site-user .login { color: var(--ink); }
-.btn-ghost {
-  height: 32px; padding: 0 12px;
-  border: 1px solid var(--line-strong); background: transparent; color: var(--ink);
+.user-menu { position: relative; }
+.user-trigger {
+  display: flex; align-items: center; gap: 10px;
+  height: 36px; padding: 0 10px 0 6px;
+  border: 1px solid transparent; background: transparent; color: var(--ink);
   font: 500 12px var(--mono); cursor: pointer;
 }
-.btn-ghost:hover { border-color: var(--mint); color: var(--mint-bright); }
-.btn-ghost:disabled { opacity: 0.5; cursor: default; }
+.user-trigger:hover, .user-menu.open .user-trigger { border-color: var(--line-strong); background: var(--surface-2); }
+.user-avatar { width: 24px; height: 24px; display: block; flex: none; background: var(--surface-3); }
+.user-avatar-fallback { display: grid; place-items: center; color: var(--mint); font: 500 11px var(--mono); border: 1px solid var(--line-strong); }
+.user-caret { width: 10px; height: 6px; color: var(--dim); transition: transform 120ms ease; }
+.user-menu.open .user-caret { transform: rotate(180deg); color: var(--mint); }
+.user-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+  min-width: 220px; border: 1px solid var(--line-strong); background: var(--surface-2);
+}
+.user-head { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.user-head .eyebrow { color: var(--mint); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
+.user-name { color: var(--ink); font: 600 14px/1.3 var(--sans); }
+.user-handle { color: var(--muted); font: 400 12px/1.5 var(--mono); }
+.user-item {
+  display: block; width: 100%; padding: 10px 14px; text-align: left;
+  border: 0; background: transparent; color: var(--ink);
+  font: 500 12px var(--mono); cursor: pointer;
+}
+.user-item:hover { background: var(--surface-3); color: var(--mint-bright); }
+.user-item:disabled { opacity: 0.5; cursor: default; }
 .site-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
 .site-placeholder { color: var(--muted); font: 14px var(--sans); }
