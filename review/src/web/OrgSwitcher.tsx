@@ -1,16 +1,19 @@
-import { useNavigate } from "react-router";
 import { Avatar, Dropdown } from "./Dropdown";
-import { rememberOrg, type SiteOrg } from "./session";
+import type { SiteOrg } from "./session";
+
+export interface OrgSwitcherProps {
+  orgs: SiteOrg[];
+  current: SiteOrg;
+  onSelect: (org: SiteOrg) => void;
+}
 
 /** The current tenant beside the lockup; the menu lists every org the user belongs to. */
-export function OrgSwitcher({ orgs, current }: { orgs: SiteOrg[]; current: SiteOrg }) {
-  const navigate = useNavigate();
+export function OrgSwitcher({ orgs, current, onSelect }: OrgSwitcherProps) {
   const personal = orgs.filter((org) => org.kind === "user");
   const organizations = orgs.filter((org) => org.kind === "org");
   const choose = (org: SiteOrg, close: () => void) => {
     close();
-    rememberOrg(org.login);
-    void navigate(`/${encodeURIComponent(org.login)}`);
+    onSelect(org);
   };
   const item = (org: SiteOrg, close: () => void) => (
     <button

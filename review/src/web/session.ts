@@ -52,7 +52,7 @@ export async function requestSignOut(): Promise<void> {
 
 const LAST_ORG_KEY = "selfbench.org";
 
-/** The org a bare "/" should open: the last one chosen here, else the personal account. */
+/** The org to open: the last one chosen in this browser, else the personal account. */
 export function defaultOrg(orgs: SiteOrg[]): SiteOrg {
   let remembered: string | null = null;
   try {
@@ -71,13 +71,8 @@ export function rememberOrg(login: string): void {
   try {
     window.localStorage.setItem(LAST_ORG_KEY, login);
   } catch {
-    // storage unavailable; the choice lives in the URL only
+    // storage unavailable; the choice lasts for this page only
   }
-}
-
-export function findOrg(orgs: SiteOrg[], login: string | undefined): SiteOrg | undefined {
-  if (!login) return undefined;
-  return orgs.find((org) => org.login.toLowerCase() === login.toLowerCase());
 }
 
 export function useDocumentTitle(title: string): void {
