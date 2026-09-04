@@ -363,3 +363,13 @@
 .sb .kbd { color: var(--dim); font: 400 11px var(--mono); }
 .sb .fullscreen .btn, .sb .sheet-body .btn { height: 32px; padding: 0 12px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); font: 500 12px var(--mono); cursor: pointer; }
 .sb .fullscreen .btn:hover { border-color: var(--mint); color: var(--mint-bright); }
+
+/* ---- skeletons -------------------------------------------------------------- */
+.skeleton-bar { display: block; height: 13px; background: var(--surface-3); animation: skeleton-pulse 1.4s ease-in-out infinite; }
+.skeleton-bar.thin { height: 10px; margin-top: 6px; opacity: 0.7; }
+.skeleton-bar.stamp { width: 44px; height: 20px; }
+.skeleton-bar.stamp.wide { width: 110px; }
+.task-list.skeleton .task-row { pointer-events: none; }
+.task-list.skeleton .task-row:hover { background: transparent; }
+@keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; } }
