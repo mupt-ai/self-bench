@@ -21,7 +21,7 @@ if (!listPath || !outDir || !name)
 const MIRROR = mirror;
 const services: TaskCompilerServices | undefined = MIRROR
   ? {
-      async cloneRepository(_url, commit, destination) {
+      async cloneRepository(url, commit, destination) {
         await runCommand("git", [
           "clone",
           "--quiet",
@@ -30,7 +30,15 @@ const services: TaskCompilerServices | undefined = MIRROR
           MIRROR,
           destination,
         ]);
-        await runCommand("git", ["-C", destination, "cat-file", "-e", `${commit}^{commit}`]);
+        const present = await runCommand(
+          "git",
+          ["-C", destination, "cat-file", "-e", `${commit}^{commit}`],
+          { allowFailure: true },
+        );
+        if (present.exitCode !== 0) {
+          // Squash-merged PRs base on branch commits the mirror never had; fetch that one by SHA.
+          await runCommand("git", ["-C", destination, "fetch", "--quiet", url, commit]);
+        }
       },
     }
   : undefined;
@@ -66,7 +74,10 @@ async function finalTask(run: string, candidateId: string) {
   return authoredTaskSchema.omit({ bundle: true }).parse(task);
 }
 
-await rm(outDir, { recursive: true, force: true });
+const RESUME = process.env.SELFBENCH_BUNDLE_RESUME === "1";
+if (!RESUME) {
+  await rm(outDir, { recursive: true, force: true });
+}
 const bundleDir = join(outDir, name);
 const tasksDir = join(bundleDir, "tasks");
 const treeDir = join(outDir, `${name}-harbor-tasks`);
@@ -85,6 +96,28 @@ async function packageOne([pr, entry]: [
   const definition = taskDefinitionSchema.parse(
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
+
+  const existing = join(tasksDir, `${task.taskId}.tar.gz`);
+  if (RESUME && (await readFile(existing).catch(() => undefined))) {
+    const sha256 = createHash("sha256")
+      .update(await readFile(existing))
+      .digest("hex");
+    manifestTasks.push({
+      taskId: task.taskId,
+      sha256,
+      sourcePr: definition.sourcePr,
+      difficulty: definition.difficulty,
+      run: entry.run,
+      candidateId: entry.candidateId,
+      baseCommit: (definition as { baseCommit?: string }).baseCommit,
+    });
+    byDifficulty[definition.difficulty] = (byDifficulty[definition.difficulty] ?? 0) + 1;
+    const runTasks = sources[entry.run] ?? [];
+    runTasks.push(task.taskId);
+    sources[entry.run] = runTasks;
+    console.log(`kept ${task.taskId} (already packaged)`);
+    return;
+  }
   const compiled = await compileSubmittedTask(
     {
       taskId: task.taskId,
