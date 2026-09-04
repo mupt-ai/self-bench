@@ -13,11 +13,9 @@ import {
 } from "../session";
 import { UserMenu } from "../UserMenu";
 
-/** Bare "/" opens the remembered org, else the personal account. */
+/** Bare "/" opens the remembered org, else the personal account (the store always records one). */
 export function OrgRedirect({ orgs }: { orgs: SiteOrg[] }) {
-  const org = defaultOrg(orgs);
-  if (!org) return <EmptyShell />;
-  return <Navigate to={`/${encodeURIComponent(org.login)}`} replace />;
+  return <Navigate to={`/${encodeURIComponent(defaultOrg(orgs).login)}`} replace />;
 }
 
 /** The signed-in shell for one org: lockup, org switcher, account menu, and a placeholder body. */
@@ -58,23 +56,6 @@ function Shell({
         <UserMenu user={user} onSignOut={signOut} />
       </header>
       <main className="site-body">{children}</main>
-    </div>
-  );
-}
-
-/** Only reachable if /api/me returned no tenants at all, which the server never does. */
-function EmptyShell() {
-  const { session, signOut } = useSession();
-  const user = session.status === "signed-in" ? session.user : { login: "" };
-  return (
-    <div className="site-shell">
-      <header className="site-bar">
-        <Lockup />
-        <UserMenu user={user} onSignOut={signOut} />
-      </header>
-      <main className="site-body">
-        <p className="site-placeholder">No organizations found for this account.</p>
-      </main>
     </div>
   );
 }

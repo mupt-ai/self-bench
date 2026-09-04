@@ -53,7 +53,7 @@ export async function requestSignOut(): Promise<void> {
 const LAST_ORG_KEY = "selfbench.org";
 
 /** The org a bare "/" should open: the last one chosen here, else the personal account. */
-export function defaultOrg(orgs: SiteOrg[]): SiteOrg | undefined {
+export function defaultOrg(orgs: SiteOrg[]): SiteOrg {
   let remembered: string | null = null;
   try {
     remembered = window.localStorage.getItem(LAST_ORG_KEY);

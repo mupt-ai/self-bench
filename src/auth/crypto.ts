@@ -43,7 +43,6 @@ export interface SecretBox {
  * database read alone must not yield a usable credential.
  */
 export function createSecretBox(key: Buffer): SecretBox {
-  if (key.length !== 32) throw new Error("secret box needs a 32-byte key");
   return {
     seal(plaintext) {
       const iv = randomBytes(IV_BYTES);

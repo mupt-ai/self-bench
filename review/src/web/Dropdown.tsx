@@ -64,16 +64,7 @@ export function Dropdown({ trigger, children, label, className, align = "right" 
 /** A 24px square avatar with a lettered fallback. */
 export function Avatar({ login, url, size = 24 }: { login: string; url?: string; size?: number }) {
   if (url) {
-    return (
-      <img
-        className="avatar"
-        src={url}
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
-      />
-    );
+    return <img className="avatar" src={url} alt="" width={size} height={size} />;
   }
   return (
     <span

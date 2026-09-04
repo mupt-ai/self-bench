@@ -18,7 +18,7 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
     >
       {() => (
         <>
-          <div className="dropdown-head">
+          <div className="dropdown-head dropdown-head-account">
             <div className="eyebrow">Account</div>
             {user.name && <div className="dropdown-title">{user.name}</div>}
             <div className="dropdown-sub">@{user.login}</div>
