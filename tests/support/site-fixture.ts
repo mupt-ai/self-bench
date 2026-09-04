@@ -66,8 +66,14 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
     if (url.endsWith("/user")) {
       return Response.json({ id: 42, login, name: "Avyay", avatar_url: "https://a/x.png" });
     }
-    if (url.includes("/user/orgs")) {
-      return Response.json(orgs.map((org) => ({ login: org })));
+    if (url.includes("/user/memberships/orgs")) {
+      return Response.json(
+        orgs.map((org, index) => ({
+          role: index === 0 ? "admin" : "member",
+          state: "active",
+          organization: { id: 1000 + index, login: org, avatar_url: `https://a/${org}.png` },
+        })),
+      );
     }
     return new Response("", { status: 404 });
   }) as typeof fetch;

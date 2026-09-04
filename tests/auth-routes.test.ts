@@ -82,7 +82,28 @@ describe("OAuth callback state check", () => {
     expect(users.tokens.get(42)).toBe("gho_test_token");
     expect(hub.calls[0]).toBe("POST https://github.example/login/oauth/access_token");
     expect(hub.calls[1]).toBe("GET https://api.github.example/user");
-    expect(hub.calls[2]).toBe("GET https://api.github.example/user/orgs?per_page=100&page=1");
+    expect(hub.calls[2]).toBe(
+      "GET https://api.github.example/user/memberships/orgs?state=active&per_page=100&page=1",
+    );
+    expect(await users.orgsFor(1)).toEqual([
+      {
+        id: 42,
+        githubId: 42,
+        login: "avyay",
+        kind: "user",
+        name: "Avyay",
+        avatarUrl: "https://a/x.png",
+        role: "admin",
+      },
+      {
+        id: 1000,
+        githubId: 1000,
+        login: "Mupt-AI",
+        kind: "org",
+        avatarUrl: "https://a/Mupt-AI.png",
+        role: "admin",
+      },
+    ]);
   });
 
   test("a mismatched or missing state never reaches GitHub", async () => {
@@ -134,11 +155,14 @@ describe("org allowlist", () => {
     expect(await users.findByGitHubId(42)).toBeUndefined();
   });
 
-  test("skips the org lookup entirely when the allowlist is empty", async () => {
-    const { server: site, hub } = await boot({ orgs: [] }, { ...testAuthConfig, allowedOrgs: [] });
+  test("admits a user with no orgs when the allowlist is empty", async () => {
+    const { server: site, users } = await boot(
+      { orgs: [] },
+      { ...testAuthConfig, allowedOrgs: [] },
+    );
     const response = await signIn(site);
     expect(response.headers.get("location")).toBe("/");
-    expect(hub.calls.some((call) => call.includes("/user/orgs"))).toBe(false);
+    expect((await users.orgsFor(1)).map((org) => org.kind)).toEqual(["user"]);
   });
 });
 
@@ -154,6 +178,16 @@ describe("/api/me and logout", () => {
     expect(me.status).toBe(200);
     expect(await me.json()).toEqual({
       user: { login: "avyay", name: "Avyay", avatarUrl: "https://a/x.png" },
+      orgs: [
+        {
+          login: "avyay",
+          kind: "user",
+          role: "admin",
+          name: "Avyay",
+          avatarUrl: "https://a/x.png",
+        },
+        { login: "Mupt-AI", kind: "org", role: "admin", avatarUrl: "https://a/Mupt-AI.png" },
+      ],
     });
     const tampered = await site.request("/api/me", {
       headers: { cookie: `${SESSION_COOKIE}=${session.slice(0, -2)}xx` },

@@ -83,25 +83,45 @@ export async function fetchProfile(
   };
 }
 
-/** Lowercased logins of every org the user belongs to, private memberships included (read:org). */
-export async function fetchOrgLogins(
+export interface OrgMembership {
+  readonly githubId: number;
+  readonly login: string;
+  readonly avatarUrl?: string;
+  readonly role: "admin" | "member";
+}
+
+/** Every org the user is an active member of, private memberships included (read:org). */
+export async function fetchOrgMemberships(
   config: Pick<AuthConfig, "githubApiUrl">,
   token: string,
   fetchImpl: FetchLike,
-): Promise<string[]> {
-  const logins: string[] = [];
+): Promise<OrgMembership[]> {
+  const memberships: OrgMembership[] = [];
   for (let page = 1; page <= 10; page += 1) {
-    const response = await fetchImpl(`${config.githubApiUrl}/user/orgs?per_page=100&page=${page}`, {
-      headers: apiHeaders(token),
-    });
-    if (!response.ok) throw new GitHubOAuthError(`GitHub /user/orgs failed (${response.status})`);
-    const orgs = (await response.json()) as { login?: string }[];
-    for (const org of orgs) {
-      if (typeof org.login === "string") logins.push(org.login.toLowerCase());
+    const response = await fetchImpl(
+      `${config.githubApiUrl}/user/memberships/orgs?state=active&per_page=100&page=${page}`,
+      { headers: apiHeaders(token) },
+    );
+    if (!response.ok) {
+      throw new GitHubOAuthError(`GitHub /user/memberships/orgs failed (${response.status})`);
     }
-    if (orgs.length < 100) break;
+    const rows = (await response.json()) as {
+      role?: string;
+      organization?: { id?: number; login?: string; avatar_url?: string | null };
+    }[];
+    for (const row of rows) {
+      const org = row.organization;
+      if (typeof org?.id !== "number" || typeof org.login !== "string") continue;
+      memberships.push({
+        githubId: org.id,
+        login: org.login,
+        ...(org.avatar_url ? { avatarUrl: org.avatar_url } : {}),
+        role: row.role === "admin" ? "admin" : "member",
+      });
+    }
+    if (rows.length < 100) break;
   }
-  return logins;
+  return memberships;
 }
 
 /** Empty allowlist admits everyone; otherwise one shared org (case-insensitive) is enough. */

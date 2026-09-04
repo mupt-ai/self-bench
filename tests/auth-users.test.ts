@@ -32,6 +32,7 @@ describe("postgres user store", () => {
       login: "old-login",
       token: "gho_first",
       scopes: "repo",
+      orgs: [{ githubId: 500, login: "Old-Org", role: "member" }],
     });
     expect(created).toEqual({ id: created.id, githubId: 7, login: "old-login" });
     expect(await store.gitHubToken(7)).toBe("gho_first");
@@ -44,6 +45,10 @@ describe("postgres user store", () => {
       avatarUrl: "https://a/x.png",
       token: "gho_second",
       scopes: "read:user,read:org,repo",
+      orgs: [
+        { githubId: 501, login: "Zeta", avatarUrl: "https://a/z.png", role: "admin" },
+        { githubId: 502, login: "alpha", role: "member" },
+      ],
     });
     expect(renamed).toEqual({
       id: created.id,
@@ -77,9 +82,32 @@ describe("postgres user store", () => {
     expect(await store.gitHubToken(8)).toBeUndefined();
   });
 
+  test("memberships are replaced on each sign-in, personal account first", async () => {
+    const store = createPostgresUserStore(sql, { secret: testAuthConfig.sessionSecret });
+    const user = await store.findByGitHubId(7);
+    if (!user) throw new Error("user 7 missing");
+    const orgs = await store.orgsFor(user.id);
+    expect(orgs.map((org) => [org.login, org.kind, org.role])).toEqual([
+      ["new-login", "user", "admin"],
+      ["alpha", "org", "member"],
+      ["Zeta", "org", "admin"],
+    ]);
+    expect(orgs[0]).toMatchObject({ githubId: 7, name: "N", avatarUrl: "https://a/x.png" });
+    expect(orgs[2]?.avatarUrl).toBe("https://a/z.png");
+    const [stale] = await sql.query<{ count: string | number }>(
+      "select count(*) as count from orgs where github_id = 500",
+    );
+    expect(Number(stale?.count)).toBe(1);
+    const [members] = await sql.query<{ count: string | number }>(
+      "select count(*) as count from org_members where user_id = $1",
+      [user.id],
+    );
+    expect(Number(members?.count)).toBe(3);
+  });
+
   test("a different secret cannot open the stored token", async () => {
     const store = createPostgresUserStore(sql, { secret: testAuthConfig.sessionSecret });
-    await store.upsert({ githubId: 9, login: "nine", token: "gho_nine", scopes: "" });
+    await store.upsert({ githubId: 9, login: "nine", token: "gho_nine", scopes: "", orgs: [] });
     const other = createPostgresUserStore(sql, {
       secret: "another-secret-that-is-long-enough-for-the-check",
     });

@@ -6,13 +6,13 @@ import { constantTimeEqual, randomToken } from "./crypto.js";
 import {
   authorizeUrl,
   exchangeCode,
-  fetchOrgLogins,
+  fetchOrgMemberships,
   fetchProfile,
   GitHubOAuthError,
   orgAllowed,
 } from "./github.js";
 import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "./session.js";
-import type { User, UserStore } from "./users.js";
+import type { Org, User, UserStore } from "./users.js";
 
 export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
 const STATE_TTL_SECONDS = 10 * 60;
@@ -77,10 +77,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     try {
       const { token, scopes } = await exchangeCode(config, code, fetchImpl);
       const profile = await fetchProfile(config, token, fetchImpl);
-      const memberOf =
-        config.allowedOrgs.length > 0 ? await fetchOrgLogins(config, token, fetchImpl) : [];
-      signedIn = orgAllowed(config.allowedOrgs, memberOf)
-        ? { user: await users.upsert({ ...profile, token, scopes }) }
+      const orgs = await fetchOrgMemberships(config, token, fetchImpl);
+      signedIn = orgAllowed(
+        config.allowedOrgs,
+        orgs.map((org) => org.login),
+      )
+        ? { user: await users.upsert({ ...profile, token, scopes, orgs }) }
         : { error: "not_member" };
     } catch (error) {
       if (!(error instanceof GitHubOAuthError)) throw error;
@@ -121,7 +123,8 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
           sendJson(response, 401, { error: "sign in required" });
           return true;
         }
-        sendJson(response, 200, { user: publicUser(user) });
+        const orgs = await users.orgsFor(user.id);
+        sendJson(response, 200, { user: publicUser(user), orgs: orgs.map(publicOrg) });
         return true;
       }
       return false;
@@ -139,6 +142,23 @@ export function publicUser(user: User): {
     login: user.login,
     ...(user.name ? { name: user.name } : {}),
     ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+  };
+}
+
+/** The browser-facing shape of a tenant. */
+export function publicOrg(org: Org): {
+  login: string;
+  kind: "org" | "user";
+  role: "admin" | "member";
+  name?: string;
+  avatarUrl?: string;
+} {
+  return {
+    login: org.login,
+    kind: org.kind,
+    role: org.role,
+    ...(org.name ? { name: org.name } : {}),
+    ...(org.avatarUrl ? { avatarUrl: org.avatarUrl } : {}),
   };
 }
 

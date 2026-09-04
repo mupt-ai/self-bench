@@ -33,6 +33,34 @@ create table if not exists users (
 create index if not exists users_login on users(login);
 `,
   },
+  {
+    version: 2,
+    name: "orgs",
+    sql: `
+-- A tenant: a GitHub organization, or a user's personal account (kind = 'user').
+create table if not exists orgs (
+  id bigserial primary key,
+  github_id bigint not null unique,
+  login text not null,
+  kind text not null check (kind in ('org', 'user')),
+  name text,
+  avatar_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists orgs_login on orgs(login);
+
+-- Refreshed from GitHub on every sign-in; the site trusts this, not a live call.
+create table if not exists org_members (
+  org_id bigint not null references orgs(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  role text not null check (role in ('admin', 'member')),
+  synced_at timestamptz not null default now(),
+  primary key (org_id, user_id)
+);
+create index if not exists org_members_user_id on org_members(user_id);
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */

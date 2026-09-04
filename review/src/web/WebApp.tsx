@@ -1,6 +1,6 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
-import { HomePage } from "./pages/HomePage";
+import { HomePage, OrgRedirect } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import {
   fetchSession,
@@ -38,7 +38,8 @@ export function WebApp() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="*" element={<RequireUser />} />
+              <Route path="/" element={<RequireUser page="home" />} />
+              <Route path="/:org/*" element={<RequireUser page="org" />} />
             </Routes>
           </BrowserRouter>
         )}
@@ -47,8 +48,9 @@ export function WebApp() {
   );
 }
 
-function RequireUser() {
+function RequireUser({ page }: { page: "home" | "org" }) {
   const { session } = useSession();
   if (session.status !== "signed-in") return <Navigate to="/login" replace />;
-  return <HomePage user={session.user} />;
+  if (page === "home") return <OrgRedirect orgs={session.orgs} />;
+  return <HomePage user={session.user} orgs={session.orgs} />;
 }
