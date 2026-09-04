@@ -375,6 +375,21 @@ The CLI is the recommended client. The API exposes:
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
 
+### Site sign-in (selfbench.dev)
+
+Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site: the bundle in `dist/review` renders the login page and signed-in shell instead of the Harbor Ledger, and these routes appear:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/auth/github` | Redirect to GitHub with a state cookie (scopes `read:user read:org repo`) |
+| `GET` | `/auth/github/callback` | Exchange the code, check the org allowlist, set the session cookie |
+| `POST` | `/auth/logout` | Clear the session cookie |
+| `GET` | `/api/me` | The signed-in user's login, name, and avatar |
+
+The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session or the bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. `self-bench view <dir>` never requires sign-in.
+
+Local loop: `bun run dev:site` starts a Postgres container (`selfbench-site-postgres`, 127.0.0.1:5433), the API on 8087 with `SELFBENCH_TEMPORAL_CONNECT=lazy`, and Vite on 5173 proxying `/v1`, `/api`, and `/auth`. Register a GitHub OAuth app with callback `http://localhost:5173/auth/github/callback` and put `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` in `.env.site`.
+
 Run status includes its phase, accepted/rejected counts, per-candidate status with the current stage (`authoring` or `verification`) and round, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
 
 `/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest verification round wrote an `accepted` `result.json` (a `rejected` round result in either loop marks the stage that ended it). Legacy runs without round results count as accepted when their latest coupling review is `clean`. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
@@ -421,6 +436,13 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_TEMPORAL_ADDRESS` | `127.0.0.1:7233` | API and worker |
 | `SELFBENCH_TEMPORAL_NAMESPACE` | `default` | API and worker |
 | `SELFBENCH_TASK_QUEUE` | `selfbench-dev` | API and worker |
+| `SELFBENCH_TEMPORAL_CONNECT` | `eager` | API; `lazy` defers the Temporal connection to first use |
+| `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
+| `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
+| `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
+| `SELFBENCH_ALLOWED_GITHUB_ORGS` | empty (any GitHub user) | API; comma-separated org logins |
+| `SELFBENCH_PUBLIC_URL` | — | API; public origin, forms the OAuth callback URL |
+| `SELFBENCH_DATABASE_URL` | — | API; Postgres holding the `users` table |
 | `OPENAI_API_KEY` | — | Worker sandboxes |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
 | `GH_TOKEN` | — | Worker GitHub reads |
