@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   type ConnectedRepo,
   disconnectRepo,
@@ -40,6 +40,13 @@ export function ReposPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
   const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
+  const navigate = useNavigate();
+  /** The card is one target; its own controls (link, switch, disconnect) keep their behaviour. */
+  const openRepo = (event: React.MouseEvent | React.KeyboardEvent, repo: ConnectedRepo) => {
+    if ((event.target as HTMLElement).closest("a, button, label, input")) return;
+    if ("key" in event && event.key !== "Enter") return;
+    void navigate(`/repos/${repo.fullName}`);
+  };
 
   React.useEffect(() => {
     let cancelled = false;
@@ -128,7 +135,12 @@ export function ReposPage() {
       {repos.status === "ok" && repos.repos.length > 0 && (
         <div className="repo-cards">
           {repos.repos.map((repo) => (
-            <article className="repo-card" key={repo.fullName}>
+            <article
+              className="repo-card"
+              key={repo.fullName}
+              onClick={(event) => openRepo(event, repo)}
+              onKeyDown={(event) => openRepo(event, repo)}
+            >
               <div className="repo-card-main">
                 <div className="repo-card-name">
                   <a

@@ -166,7 +166,9 @@
   padding: 18px 20px; border: 1px solid var(--line); background: var(--surface);
   transition: border-color 120ms ease;
 }
-.repo-card:hover { border-color: var(--line-strong); }
+.repo-card { cursor: pointer; }
+.repo-card:hover { border-color: var(--mint); background: var(--surface-2); }
+.repo-card:focus-visible { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
 .repo-card-name { display: flex; align-items: center; gap: 10px; font: 500 14px var(--mono); color: var(--ink); min-width: 0; }
 .repo-card-name > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repo-card-github { display: inline-flex; color: var(--muted); flex: none; }
