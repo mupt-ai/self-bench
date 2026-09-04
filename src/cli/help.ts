@@ -19,6 +19,7 @@ Usage:
   self-bench cancel RUN_ID
   self-bench download RUN_ID OUTPUT.tar.gz
   self-bench list
+  self-bench view TASKS_DIR [--port N] [--host HOST]
 
 The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
 and E2B require --harbor-environment because Harbor supports neither. Modal generation or Harbor uses
@@ -40,5 +41,9 @@ earlier runs whose source pull requests discovery must skip, whatever their outc
 drops accepted tasks that repeat a source pull request and lists them in its manifest.
 
 The replay command skips discovery: the worker rebuilds the named candidates from the source run's stored
-provenance, discovery reports, and authored definitions, then runs authoring and verification fresh.`);
+provenance, discovery reports, and authored definitions, then runs authoring and verification fresh.
+
+The view command serves the Harbor viewer over any directory of Harbor tasks (directories containing
+task.toml, searched four levels deep) without Temporal or an API token. The same viewer is served by the
+self-bench API at / and adds a run mode that shows every candidate, its stage, artifacts, and logs.`);
 }

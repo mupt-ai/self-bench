@@ -5,6 +5,7 @@ import { replay } from "./replay.js";
 import { run } from "./run.js";
 import { down, setup, up } from "./stack.js";
 import { fail, requiredArgument } from "./values.js";
+import { view } from "./view.js";
 
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
@@ -35,6 +36,9 @@ export async function runCli(args: string[]): Promise<void> {
       break;
     case "list":
       await passthrough("GET", "/v1/runs");
+      break;
+    case "view":
+      await view(rest);
       break;
     case "download":
       await download(requiredArgument(rest, "run ID"), rest[1] ?? fail("output path is required"));

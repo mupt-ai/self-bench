@@ -5,10 +5,12 @@ import { z } from "zod";
 import { authorized, readBody, sendApiError, sendJson, sendReviewAsset } from "./api/http.js";
 import { buildRunRequest } from "./api/run-request.js";
 import { queryStatus } from "./api/status.js";
+import { handleViewerRoute } from "./api/viewer-routes.js";
 import { createArtifactStore } from "./artifacts.js";
 import type { SelfBenchConfig } from "./config.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
+import { listArchivedRuns } from "./viewer/archived.js";
 
 export async function startApi(config: SelfBenchConfig): Promise<() => Promise<void>> {
   const connection = await connectTemporalClient(config.temporal);
@@ -60,6 +62,14 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
         sendJson(response, 202, { runId: workflowInput.runId });
         return;
       }
+      if (
+        await handleViewerRoute(request, url, response, {
+          store: artifacts,
+          statusFor: (runId) => queryStatus(client.workflow.getHandle(runId)),
+        })
+      ) {
+        return;
+      }
       const runMatch = /^\/v1\/runs\/([a-z0-9][a-z0-9-]{2,62})(?:\/(cancel|export))?$/.exec(
         url.pathname,
       );
@@ -102,6 +112,10 @@ export async function startApi(config: SelfBenchConfig): Promise<() => Promise<v
             closedAt: execution.closeTime?.toISOString(),
           });
           if (runs.length >= 1_000) break;
+        }
+        const known = new Set(runs.map((run) => (run as { runId: string }).runId));
+        for (const archived of await listArchivedRuns(artifacts)) {
+          if (!known.has(archived.runId)) runs.push(archived);
         }
         sendJson(response, 200, runs);
         return;

@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { chmod, link, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream, type Dirent } from "node:fs";
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
@@ -14,7 +24,7 @@ import {
   verifiedArtifactReadStream,
   verifyArtifact,
 } from "./common.js";
-import type { ArtifactStore } from "./types.js";
+import type { ArtifactEntry, ArtifactStore } from "./types.js";
 
 export class LocalArtifactStore implements ArtifactStore {
   readonly #root: string;
@@ -113,6 +123,49 @@ export class LocalArtifactStore implements ArtifactStore {
       }
       throw error;
     }
+  }
+
+  async openReadByKey(
+    key: string,
+    options: { readonly start?: number } = {},
+  ): Promise<Readable | undefined> {
+    const path = this.#pathFor(key);
+    try {
+      await this.#assertRegularFile(path);
+    } catch (error) {
+      if (isNotFound(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+    return createReadStream(path, options.start ? { start: options.start } : {});
+  }
+
+  async list(prefix: string): Promise<ArtifactEntry[]> {
+    const root = this.#pathFor(prefix);
+    const entries: ArtifactEntry[] = [];
+    const visit = async (directory: string, relativePrefix: string): Promise<void> => {
+      let names: Dirent[];
+      try {
+        names = await readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if (isNotFound(error)) return;
+        throw error;
+      }
+      for (const entry of names) {
+        if (entry.isSymbolicLink()) continue;
+        const path = resolve(directory, entry.name);
+        const key = `${relativePrefix}/${entry.name}`;
+        if (entry.isDirectory()) {
+          await visit(path, key);
+        } else if (entry.isFile()) {
+          const stats = await stat(path);
+          entries.push({ key, sizeBytes: stats.size, updatedAt: stats.mtime.toISOString() });
+        }
+      }
+    };
+    await visit(root, prefix);
+    return entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 
   #pathForReference(reference: ArtifactRef): string {
