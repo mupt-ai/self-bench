@@ -100,39 +100,47 @@ function ReposPage({ org }: { org: SiteOrg }) {
         </div>
       )}
       {repos.status === "ok" && repos.repos.length > 0 && (
-        <table className="repo-table">
-          <thead>
-            <tr>
-              <th>Repository</th>
-              <th>Branch</th>
-              <th>Tasks</th>
-              <th>Connected</th>
-              <th aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-            {repos.repos.map((repo) => (
-              <tr key={repo.fullName}>
-                <td>
-                  <span className="repo-cell-name">
-                    {repo.fullName}
-                    {repo.private && <span className="repo-badge">private</span>}
+        <div className="repo-cards">
+          {repos.repos.map((repo) => (
+            <article className="repo-card" key={repo.fullName}>
+              <div className="repo-card-main">
+                <div className="repo-card-name">
+                  {repo.fullName}
+                  {repo.private && <span className="repo-badge">private</span>}
+                </div>
+                <div className="repo-card-sub">
+                  <span className="mono">{repo.defaultBranch}</span>
+                  <span className="repo-detail-sep" aria-hidden="true">
+                    ·
                   </span>
-                </td>
-                <td className="repo-cell-muted">{repo.defaultBranch}</td>
-                <td className="repo-cell-dim">none yet</td>
-                <td className="repo-cell-muted">
-                  {formatAgo(repo.connectedAt)} by {repo.connectedBy}
-                </td>
-                <td className="repo-cell-actions">
-                  <button type="button" className="btn-text" onClick={() => disconnect(repo)}>
-                    Disconnect
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span>
+                    connected {formatAgo(repo.connectedAt)} by{" "}
+                    <span className="mono">{repo.connectedBy}</span>
+                  </span>
+                </div>
+              </div>
+              <dl className="repo-card-stats">
+                <div>
+                  <dt>Tasks</dt>
+                  <dd className="dim">none yet</dd>
+                </div>
+                <div>
+                  <dt>Awaiting Review</dt>
+                  <dd className="dim">0</dd>
+                </div>
+                <div>
+                  <dt>Last PR</dt>
+                  <dd className="dim">not yet scanned</dd>
+                </div>
+              </dl>
+              <div className="repo-card-actions">
+                <button type="button" className="btn-text" onClick={() => disconnect(repo)}>
+                  Disconnect
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
       )}
       {connecting && (
         <ConnectRepoSheet
