@@ -17,6 +17,7 @@ Usage:
   self-bench cancel RUN_ID
   self-bench download RUN_ID OUTPUT.tar.gz
   self-bench list
+  self-bench view TASKS_DIR [--port N] [--host HOST]
 
 The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
 and E2B require --harbor-environment because Harbor supports neither. Modal generation or Harbor uses
@@ -32,5 +33,9 @@ starts a run. Pass the manifest to run with --association (repeatable). No LLM p
 The tier counts are candidate authoring budgets, not accepted-task targets. Rejected candidates are not
 replaced, and the export contains only accepted tasks. The run command performs only repository metadata
 and sanitized provenance upload locally; discovery, authoring, validation, review, and audit run remotely.
---output implies --wait, blocks until completion, and downloads the SHA-256-verified export.`);
+--output implies --wait, blocks until completion, and downloads the SHA-256-verified export.
+
+The view command serves the Harbor viewer over any directory of Harbor tasks (directories containing
+task.toml, searched four levels deep) without Temporal or an API token. The same viewer is served by the
+self-bench API at / and adds a run mode that shows every candidate, its stage, artifacts, and logs.`);
 }

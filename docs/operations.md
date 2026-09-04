@@ -282,6 +282,18 @@ The three tier counts total 1–10,000. Each is a fixed candidate authoring budg
 
 A custom `--run-id` must contain 3–63 lowercase letters, digits, or hyphens and start with a letter or digit.
 
+## Harbor viewer
+
+The API serves a browser viewer at `/`. It has two sources, chosen by the server that serves it: a self-bench run (every candidate, including rejected and infrastructure-failed ones, with the artifacts and logs each stage wrote) when served by the API, and a local directory of Harbor tasks when served by `self-bench view`. Each task shows the compiled environment (task.toml, Dockerfiles, services, resources), the setup, smoke, and test commands with the selected tests, the instruction beside the gold and held-out test patches, and a file tree of everything in the bundle. In run mode the pipeline sheet lists each stage's artifacts with a one-line summary of what it concluded.
+
+The same viewer runs without Temporal or a token over any directory of Harbor tasks:
+
+```bash
+self-bench view ./self-bench-tasks --port 8090
+```
+
+Directories are recognized by a `task.toml` up to four levels deep, so an extracted self-bench export, a single task, or a Harbor tasks directory all work. Deep links carry `#run=`, `#task=`, and `#tab=`.
+
 ## HTTP API
 
 The CLI is the recommended client. The API exposes:
@@ -295,10 +307,17 @@ The CLI is the recommended client. The API exposes:
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download a completed export |
+| `GET` | `/v1/viewer` | Viewer capabilities (`modes`) |
+| `GET` | `/v1/runs/:runId/candidates` | Every candidate with stage, reason, and definition summary |
+| `GET` | `/v1/runs/:runId/candidates/:taskId/artifacts` | Artifact keys grouped by pipeline stage, plus bundles |
+| `GET` | `/v1/runs/:runId/artifacts?key=...` | Stream one artifact under `runs/:runId/` |
+| `GET` | `/v1/runs/:runId/bundle?key=...` | Expand a Harbor task bundle into its text files |
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
 
 Run status includes its phase, accepted/rejected counts, per-candidate stage, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
+
+`/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest coupling review is `clean`. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 

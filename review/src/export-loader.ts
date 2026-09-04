@@ -1,14 +1,7 @@
 import type { ExportManifest, ExportTask, LoadedExport } from "./types";
 
-const textNames = new Set([
-  "definition.json",
-  "instruction.md",
-  "task.toml",
-  ".selfbench-manifest.json",
-  "solution/gold.patch",
-  "tests/test.patch",
-  "tests/dependency-setup.patch",
-]);
+const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024;
+const BINARY_SUFFIXES = [".gz", ".tgz", ".tar", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".pdf"];
 
 interface TarEntry {
   name: string;
@@ -38,7 +31,7 @@ export async function loadExport(input: Blob | Uint8Array): Promise<LoadedExport
       const relative = entry.name.replace(/^harbor-task\//, "");
       if (!relative || entry.name.endsWith("/")) continue;
       files.set(relative, entry.data);
-      if (textNames.has(relative) || relative.endsWith(".json")) {
+      if (looksLikeText(relative, entry.data)) {
         textFiles.set(relative, new TextDecoder().decode(entry.data));
       }
     }
@@ -73,6 +66,17 @@ export async function buildCleanExport(
     }
   }
   return gzip(tar(entries));
+}
+
+export function looksLikeText(path: string, bytes: Uint8Array): boolean {
+  const lower = path.toLowerCase();
+  if (bytes.byteLength > MAX_INLINE_TEXT_BYTES) return false;
+  if (BINARY_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return false;
+  const sample = bytes.subarray(0, 8192);
+  for (const byte of sample) {
+    if (byte === 0) return false;
+  }
+  return true;
 }
 
 async function gunzip(value: Uint8Array): Promise<Uint8Array> {

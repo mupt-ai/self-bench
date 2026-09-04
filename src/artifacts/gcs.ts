@@ -6,7 +6,7 @@ import { Storage } from "@google-cloud/storage";
 import type { ArtifactRef } from "../contracts.js";
 import { sha256 } from "../hash.js";
 import { copyWithDigest, verifiedArtifactReadStream, verifyArtifact } from "./common.js";
-import type { ArtifactStore } from "./types.js";
+import type { ArtifactEntry, ArtifactStore } from "./types.js";
 
 export class GcsArtifactStore implements ArtifactStore {
   readonly #storage = new Storage();
@@ -131,6 +131,35 @@ export class GcsArtifactStore implements ArtifactStore {
     }
     const [value] = await file.download();
     return value;
+  }
+
+  async openReadByKey(
+    key: string,
+    options: { readonly start?: number } = {},
+  ): Promise<Readable | undefined> {
+    const file = this.#storage.bucket(this.#bucket).file(this.#objectFor(key));
+    const [exists] = await file.exists();
+    if (!exists) {
+      return undefined;
+    }
+    return file.createReadStream(options.start ? { start: options.start } : {});
+  }
+
+  async list(prefix: string): Promise<ArtifactEntry[]> {
+    const object = this.#objectFor(prefix);
+    const [files] = await this.#storage.bucket(this.#bucket).getFiles({ prefix: `${object}/` });
+    const base = this.#prefix ? `${this.#prefix}/` : "";
+    const entries: ArtifactEntry[] = [];
+    for (const file of files) {
+      if (!file.name.startsWith(base) || file.name.endsWith("/")) continue;
+      const updated = file.metadata.updated;
+      entries.push({
+        key: file.name.slice(base.length),
+        sizeBytes: Number(file.metadata.size ?? 0),
+        ...(updated ? { updatedAt: String(updated) } : {}),
+      });
+    }
+    return entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 
   #fileForReference(reference: ArtifactRef) {
