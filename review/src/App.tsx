@@ -74,8 +74,12 @@ export function App() {
     }
   }, [mode, info, needsToken, token, refreshRuns]);
 
+  // Only the most recent run request may install its rows: a slow load that resolves
+  // after the picker was cleared or switched would otherwise refill the register.
+  const runRequest = React.useRef(0);
   const openRun = React.useCallback(
     (nextRunId: string) => {
+      const request = ++runRequest.current;
       setRunId(nextRunId);
       setSelectedId(null);
       if (!nextRunId) {
@@ -89,7 +93,8 @@ export function App() {
         return;
       }
       void guard(async () => {
-        setSource(await openRunSource(api, nextRunId));
+        const opened = await openRunSource(api, nextRunId);
+        if (runRequest.current === request) setSource(opened);
       });
     },
     [api, guard],
