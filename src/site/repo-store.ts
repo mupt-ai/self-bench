@@ -8,6 +8,8 @@ export interface ConnectedRepo {
   readonly fullName: string;
   readonly defaultBranch: string;
   readonly private: boolean;
+  /** Keep building tasks as pull requests merge; off means on demand only. */
+  readonly continuous: boolean;
   readonly connectedBy: { readonly id: number; readonly login: string };
   readonly connectedAt: string;
 }
@@ -29,6 +31,12 @@ export interface RepoStore {
   connect(input: ConnectRepoInput): Promise<ConnectedRepo>;
   /** True when a row was removed. */
   disconnect(orgId: number, fullName: string): Promise<boolean>;
+  /** Undefined when the repo is not connected to this tenant. */
+  setContinuous(
+    orgId: number,
+    fullName: string,
+    value: boolean,
+  ): Promise<ConnectedRepo | undefined>;
 }
 
 interface RepoRow {
@@ -38,13 +46,14 @@ interface RepoRow {
   full_name: string;
   default_branch: string;
   private: boolean;
+  continuous: boolean;
   connected_by: string | number;
   connected_by_login: string;
   connected_at: string | Date;
 }
 
 const SELECT = `select r.id, r.org_id, r.github_id, r.full_name, r.default_branch, r.private,
-  r.connected_by, u.login as connected_by_login, r.connected_at
+  r.continuous, r.connected_by, u.login as connected_by_login, r.connected_at
   from repos r join users u on u.id = r.connected_by`;
 
 export function createPostgresRepoStore(
@@ -96,6 +105,15 @@ export function createPostgresRepoStore(
       );
       return rows.length > 0;
     },
+    async setContinuous(orgId, fullName, value) {
+      const [updated] = await sql.query<{ id: string | number }>(
+        "update repos set continuous = $3 where org_id = $1 and lower(full_name) = lower($2) returning id",
+        [orgId, fullName, value],
+      );
+      if (!updated) return undefined;
+      const [row] = await sql.query<RepoRow>(`${SELECT} where r.id = $1`, [updated.id]);
+      return row ? repoFrom(row) : undefined;
+    },
   };
 }
 
@@ -121,6 +139,7 @@ export function createMemoryRepoStore(logins: Map<number, string>): RepoStore {
         fullName: input.fullName,
         defaultBranch: input.defaultBranch,
         private: input.private,
+        continuous: existing?.continuous ?? false,
         connectedBy: existing?.connectedBy ?? {
           id: input.connectedBy,
           login: logins.get(input.connectedBy) ?? "",
@@ -136,6 +155,13 @@ export function createMemoryRepoStore(logins: Map<number, string>): RepoStore {
       repos.delete(found.githubId);
       return true;
     },
+    async setContinuous(orgId, fullName, value) {
+      const found = await this.find(orgId, fullName);
+      if (!found) return undefined;
+      const updated = { ...found, continuous: value };
+      repos.set(found.githubId, updated);
+      return updated;
+    },
   };
 }
 
@@ -147,6 +173,7 @@ function repoFrom(row: RepoRow): ConnectedRepo {
     fullName: row.full_name,
     defaultBranch: row.default_branch,
     private: row.private,
+    continuous: row.continuous,
     connectedBy: { id: Number(row.connected_by), login: row.connected_by_login },
     connectedAt: new Date(row.connected_at).toISOString(),
   };

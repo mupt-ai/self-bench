@@ -21,6 +21,7 @@ export interface ConnectedRepo {
   fullName: string;
   defaultBranch: string;
   private: boolean;
+  continuous: boolean;
   connectedBy: string;
   connectedAt: string;
 }
@@ -68,6 +69,22 @@ export async function connectRepo(org: string, fullName: string): Promise<Connec
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ fullName }),
+    },
+  );
+  return body.repo;
+}
+
+export async function setRepoContinuous(
+  org: string,
+  fullName: string,
+  continuous: boolean,
+): Promise<ConnectedRepo> {
+  const body = await requestJson<{ repo: ConnectedRepo }>(
+    `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ continuous }),
     },
   );
   return body.repo;

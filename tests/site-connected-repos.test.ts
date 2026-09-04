@@ -92,6 +92,35 @@ describe("connected repos routes", () => {
     expect((await post("avyay", "someone/else")).status).toBe(201);
   });
 
+  test("toggles continuous per repo", async () => {
+    const { site, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
+    const created = await site.request("/api/orgs/avyay/repos", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ fullName: "avyay/x" }),
+    });
+    expect(await created.json()).toMatchObject({ repo: { continuous: false } });
+    const on = await site.request("/api/orgs/avyay/repos/avyay/x", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ continuous: true }),
+    });
+    expect(on.status).toBe(200);
+    expect(await on.json()).toMatchObject({ repo: { continuous: true } });
+    const bad = await site.request("/api/orgs/avyay/repos/avyay/x", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ continuous: "yes" }),
+    });
+    expect(bad.status).toBe(400);
+    const missing = await site.request("/api/orgs/avyay/repos/avyay/none", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ continuous: true }),
+    });
+    expect(missing.status).toBe(404);
+  });
+
   test("disconnects by name", async () => {
     const { site, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
     await site.request("/api/orgs/avyay/repos", {
@@ -147,6 +176,9 @@ describe("postgres repo store", () => {
       "Mupt-AI/b",
       "Mupt-AI/a-renamed",
     ]);
+    expect((await store.setContinuous(org.id, "mupt-ai/b", true))?.continuous).toBe(true);
+    expect((await store.find(org.id, "Mupt-AI/b"))?.continuous).toBe(true);
+    expect(await store.setContinuous(org.id, "mupt-ai/nope", true)).toBeUndefined();
     expect(await store.disconnect(org.id, "MUPT-AI/B")).toBe(true);
     expect(await store.disconnect(org.id, "MUPT-AI/B")).toBe(false);
     expect((await store.list(org.id)).map((repo) => repo.fullName)).toEqual(["Mupt-AI/a-renamed"]);

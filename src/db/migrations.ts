@@ -79,6 +79,14 @@ create table if not exists repos (
 create index if not exists repos_org_id on repos(org_id);
 `,
   },
+  {
+    version: 4,
+    name: "repo-continuous",
+    sql: `
+-- Opt-in: keep building tasks as pull requests merge, rather than only on demand.
+alter table repos add column if not exists continuous boolean not null default false;
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */

@@ -167,14 +167,34 @@
   transition: border-color 120ms ease;
 }
 .repo-card:hover { border-color: var(--line-strong); }
-.repo-card-name { font: 500 14px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repo-card-name .repo-badge { margin-left: 10px; }
+.repo-card-name { display: flex; align-items: center; gap: 10px; font: 500 14px var(--mono); color: var(--ink); min-width: 0; }
+.repo-card-name > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repo-card-github { display: inline-flex; color: var(--muted); flex: none; }
+.repo-card-github svg { width: 16px; height: 16px; fill: currentColor; }
+.repo-card-github:hover { color: var(--mint-bright); }
 .repo-card-sub { margin-top: 6px; display: flex; gap: 8px; color: var(--muted); font-size: 12px; }
 .repo-card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; }
 .repo-card-stats dt { color: var(--dim); font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
 .repo-card-stats dd { margin: 6px 0 0; color: var(--ink); font: 500 14px var(--sans); }
 .repo-card-stats dd.dim { color: var(--dim); font-weight: 400; }
-.repo-card-actions { justify-self: end; }
+.repo-card-actions { justify-self: end; display: flex; align-items: center; gap: 20px; }
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border: 1px solid transparent; background: transparent; color: var(--dim); cursor: pointer;
+}
+.btn-icon svg { width: 16px; height: 16px; }
+.btn-icon:hover { color: var(--red); border-color: var(--line-strong); }
+
+/* ---- switch ------------------------------------------------------------------ */
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track { position: relative; width: 30px; height: 16px; border: 1px solid var(--line-strong); background: var(--surface-3); transition: background-color 120ms ease, border-color 120ms ease; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: var(--dim); transition: transform 120ms ease, background-color 120ms ease; }
+.switch input:checked + .switch-track { background: var(--mint); border-color: var(--mint); }
+.switch input:checked + .switch-track::after { transform: translateX(14px); background: #08110e; }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
+.switch-label { color: var(--muted); font: 500 12px var(--mono); }
+.switch input:checked ~ .switch-label { color: var(--ink); }
 .btn-text { border: 0; background: transparent; color: var(--dim); font: 500 12px var(--mono); cursor: pointer; padding: 4px 6px; }
 .btn-text:hover { color: var(--red); }
 .page-error { margin-bottom: 16px; color: var(--red); font: 12px var(--mono); }

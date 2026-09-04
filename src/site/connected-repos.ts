@@ -92,6 +92,22 @@ export function createConnectedRepoRoutes(
         sendJson(response, existing ? 200 : 201, { repo: publicRepo(repo) });
         return true;
       }
+      if (item?.[2] && item[3] && request.method === "PATCH") {
+        const body = JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}") as {
+          continuous?: unknown;
+        };
+        if (typeof body.continuous !== "boolean") {
+          sendJson(response, 400, { error: "continuous must be a boolean" });
+          return true;
+        }
+        const repo = await repos.setContinuous(tenant.id, `${item[2]}/${item[3]}`, body.continuous);
+        if (!repo) {
+          sendJson(response, 404, { error: "not connected" });
+          return true;
+        }
+        sendJson(response, 200, { repo: publicRepo(repo) });
+        return true;
+      }
       if (item?.[2] && item[3] && request.method === "DELETE") {
         const removed = await repos.disconnect(tenant.id, `${item[2]}/${item[3]}`);
         sendJson(
@@ -111,6 +127,7 @@ export function publicRepo(repo: ConnectedRepo): {
   fullName: string;
   defaultBranch: string;
   private: boolean;
+  continuous: boolean;
   connectedBy: string;
   connectedAt: string;
 } {
@@ -118,6 +135,7 @@ export function publicRepo(repo: ConnectedRepo): {
     fullName: repo.fullName,
     defaultBranch: repo.defaultBranch,
     private: repo.private,
+    continuous: repo.continuous,
     connectedBy: repo.connectedBy.login,
     connectedAt: repo.connectedAt,
   };
