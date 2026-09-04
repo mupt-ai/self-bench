@@ -153,6 +153,40 @@ describe("artifact store listing", () => {
     expect(reviewed.candidates[0]?.status).toBe("accepted");
     expect(reviewed.candidates[0]?.stage).toBe("accepted");
     expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-1"]);
+
+    // Stage is the furthest group that wrote anything: a lone definition is still "authoring",
+    // and legacy verify checkpoints (keyed by candidate ID) count as authored too.
+    await store.put(
+      "runs/run-1/authoring/cand-b/definition.json",
+      Buffer.from(JSON.stringify({ ...definition, taskId: "task-b" })),
+      "application/json",
+    );
+    await store.put(
+      "runs/run-1/verify/cand-c/attempt-1/modal.log",
+      Buffer.from("log"),
+      "text/plain",
+    );
+    await store.put(
+      "runs/run-2/authoring/cand-d/attempt-1/modal.log",
+      Buffer.from("log"),
+      "text/plain",
+    );
+    // The run index is cached alongside the per-run listings until it is cleared.
+    expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-1"]);
+    clearArchivedListingCache();
+    // Newest run first: run-2 was written after every run-1 object.
+    expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-2", "run-1"]);
+    const stages = new Map(
+      (await archivedCandidates(store, "run-1")).candidates.map((candidate) => [
+        candidate.candidateId,
+        candidate,
+      ]),
+    );
+    expect(stages.get("cand-a")?.stage).toBe("accepted");
+    expect(stages.get("cand-b")?.stage).toBe("authoring");
+    expect(stages.get("cand-b")?.taskId).toBe("task-b");
+    expect(stages.get("cand-c")?.stage).toBe("authoring");
+    expect(stages.get("cand-c")?.taskId).toBe("cand-c");
   });
 });
 

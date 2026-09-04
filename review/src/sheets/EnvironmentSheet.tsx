@@ -17,6 +17,7 @@ export function EnvironmentSheet({
   const resources = model.definition?.resources;
   const timeouts = model.definition?.timeouts;
   const emptyEnvironment = model.toml.length === 0 && model.images.length === 0 && !environment;
+  const composePath = model.composePath;
   return (
     <div className="sheet-body">
       {emptyEnvironment && (
@@ -162,15 +163,12 @@ export function EnvironmentSheet({
           </table>
         </Block>
       )}
-      {model.compose && (
+      {model.compose && composePath && (
         <Block
           title="docker-compose.yaml"
+          detail={composePath}
           right={
-            <button
-              type="button"
-              className="link"
-              onClick={() => onOpenFile("tests/docker-compose.yaml")}
-            >
+            <button type="button" className="link" onClick={() => onOpenFile(composePath)}>
               Open Raw
             </button>
           }

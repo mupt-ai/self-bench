@@ -8,6 +8,10 @@ const DEFINITION_CONCURRENCY = 16;
 const RUN_ID = /^runs\/([a-z0-9][a-z0-9-]{2,62})\//;
 const LISTING_TTL_MS = 60_000;
 const listingCache = new Map<string, { at: number; entries: Promise<ArtifactEntry[]> }>();
+let runIndexCache: { at: number; runs: Promise<ArchivedRun[]> } | undefined;
+
+/** Groups the pipeline keys by candidate ID; every other group is keyed by task ID. */
+const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "verification", "verify"]);
 
 /** Listing a whole run is thousands of objects on GCS, so reuse it briefly across requests. */
 function listRun(store: ArtifactStore, runId: string): Promise<ArtifactEntry[]> {
@@ -21,6 +25,7 @@ function listRun(store: ArtifactStore, runId: string): Promise<ArtifactEntry[]> 
 
 export function clearArchivedListingCache(): void {
   listingCache.clear();
+  runIndexCache = undefined;
 }
 
 export interface ArchivedRun {
@@ -29,8 +34,22 @@ export interface ArchivedRun {
   readonly startedAt?: string;
 }
 
-/** Runs that exist in the artifact store, whether or not Temporal still remembers them. */
-export async function listArchivedRuns(store: ArtifactStore): Promise<ArchivedRun[]> {
+/**
+ * Runs that exist in the artifact store, whether or not Temporal still remembers them.
+ * The index walks every run in the store, so it is cached like the per-run listings.
+ */
+export function listArchivedRuns(store: ArtifactStore): Promise<ArchivedRun[]> {
+  if (runIndexCache && Date.now() - runIndexCache.at < LISTING_TTL_MS) return runIndexCache.runs;
+  const runs = scanArchivedRuns(store);
+  const cached = { at: Date.now(), runs };
+  runIndexCache = cached;
+  runs.catch(() => {
+    if (runIndexCache === cached) runIndexCache = undefined;
+  });
+  return runs;
+}
+
+async function scanArchivedRuns(store: ArtifactStore): Promise<ArchivedRun[]> {
   const entries = await store.list("runs").catch(() => [] as ArtifactEntry[]);
   const runs = new Map<string, string | undefined>();
   for (const entry of entries) {
@@ -60,19 +79,14 @@ export async function archivedCandidates(
   runId: string,
 ): Promise<CandidateList> {
   const entries = await listRun(store, runId);
-  const byCandidate = new Map<string, { taskId?: string; groups: Set<string> }>();
   const prefix = `runs/${runId}/`;
+  const candidateIds = new Set<string>();
   for (const entry of entries) {
     const [group, second] = entry.key.slice(prefix.length).split("/");
-    if (!group || !second) continue;
-    if (group === "authoring") {
-      const record = byCandidate.get(second) ?? { groups: new Set<string>() };
-      record.groups.add(group);
-      byCandidate.set(second, record);
-    }
+    if (group && second && CANDIDATE_KEYED_GROUPS.has(group)) candidateIds.add(second);
   }
   const candidates = await parallelMap(
-    [...byCandidate.keys()],
+    [...candidateIds],
     DEFINITION_CONCURRENCY,
     async (candidateId) => {
       const bytes = await store
@@ -82,10 +96,9 @@ export async function archivedCandidates(
       const definition = text ? summarizeDefinition(text) : undefined;
       const parsed = text ? parseIdentity(text) : undefined;
       const taskId = parsed?.taskId ?? candidateId;
-      const groups = groupsFor(entries, prefix, taskId);
+      const groups = groupsFor(entries, prefix, { taskId, candidateId });
       const verdict = await latestReviewVerdict(store, entries, prefix, taskId);
-      const stage =
-        verdict === "clean" ? "accepted" : furthestStage(groups, definition !== undefined);
+      const stage = verdict === "clean" ? "accepted" : furthestStage(groups);
       const candidate: CandidateSummary = {
         taskId,
         candidateId,
@@ -136,22 +149,32 @@ async function latestReviewVerdict(
   }
 }
 
-function groupsFor(entries: readonly ArtifactEntry[], prefix: string, taskId: string): Set<string> {
+/** Every pipeline group that wrote under this candidate, whichever ID the group keys by. */
+function groupsFor(
+  entries: readonly ArtifactEntry[],
+  prefix: string,
+  ids: { taskId: string; candidateId: string },
+): Set<string> {
   const groups = new Set<string>();
   for (const entry of entries) {
     const [group, second] = entry.key.slice(prefix.length).split("/");
-    if (group && second === taskId) groups.add(group);
+    if (!group || !second) continue;
+    const owner = CANDIDATE_KEYED_GROUPS.has(group) ? ids.candidateId : ids.taskId;
+    if (second === owner) groups.add(group);
   }
   return groups;
 }
 
-function furthestStage(groups: Set<string>, authored: boolean): CandidateStage {
+function furthestStage(groups: Set<string>): CandidateStage {
   if (groups.has("repairs") || groups.has("reviews")) return "review";
   if (groups.has("validation-repairs") || groups.has("validation")) return "validation";
   if (groups.has("environment-preflights")) return "preflight";
   if (groups.has("audits")) return "audit";
   if (groups.has("environments")) return "environment";
-  return authored ? "environment" : "authoring";
+  if (groups.has("authoring") || groups.has("verification") || groups.has("verify")) {
+    return "authoring";
+  }
+  return "discovery";
 }
 
 function parseIdentity(text: string): { taskId?: string; difficulty?: Difficulty } | undefined {

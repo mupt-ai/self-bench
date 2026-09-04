@@ -69,7 +69,11 @@ export interface TaskModel {
   images: DockerImage[];
   scripts: ScriptFile[];
   compose?: string;
+  /** Path of the file `compose` was read from, so Open Raw shows the same copy. */
+  composePath?: string;
 }
+
+const COMPOSE_PATHS = ["tests/docker-compose.yaml", "environment/docker-compose.yaml"];
 
 const SCRIPT_LABELS: [string, string][] = [
   ["environment/root-setup.sh", "root setup (agent image)"],
@@ -114,7 +118,8 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
   const goldPatch = text("solution/gold.patch") ?? text("gold.patch");
   const testPatch = text("tests/test.patch") ?? text("test.patch");
   const dependencyPatch = text("tests/dependency-setup.patch");
-  const compose = text("tests/docker-compose.yaml") ?? text("environment/docker-compose.yaml");
+  const composePath = COMPOSE_PATHS.find((path) => text(path) !== undefined);
+  const compose = composePath ? text(composePath) : undefined;
   return {
     taskId: files.taskId,
     files: files.files,
@@ -127,7 +132,7 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
     ...(dependencyPatch !== undefined ? { dependencyPatch } : {}),
     images,
     scripts,
-    ...(compose !== undefined ? { compose } : {}),
+    ...(compose !== undefined && composePath ? { compose, composePath } : {}),
   };
 }
 

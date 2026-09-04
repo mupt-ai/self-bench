@@ -74,20 +74,33 @@ export function App() {
     }
   }, [mode, info, needsToken, token, refreshRuns]);
 
-  const openRun = (nextRunId: string) => {
-    setRunId(nextRunId);
-    setSelectedId(null);
-    if (!nextRunId) return;
-    void guard(async () => {
-      setSource(await openRunSource(api, nextRunId));
-    });
-  };
+  const openRun = React.useCallback(
+    (nextRunId: string) => {
+      setRunId(nextRunId);
+      setSelectedId(null);
+      if (!nextRunId) {
+        // Clearing the picker drops the run's rows and its deep link, so the
+        // run-from-hash effect below cannot reopen the run we just closed.
+        setSource(null);
+        writeHash((params) => {
+          params.delete("run");
+          params.delete("task");
+        });
+        return;
+      }
+      void guard(async () => {
+        setSource(await openRunSource(api, nextRunId));
+      });
+    },
+    [api, guard],
+  );
 
+  // Deep links: #run=<id> opens a run once the run list is known.
   React.useEffect(() => {
     if (mode !== "runs" || runId || runs.length === 0) return;
     const wanted = new URLSearchParams(window.location.hash.slice(1)).get("run");
     if (wanted && runs.some((run) => run.runId === wanted)) openRun(wanted);
-  });
+  }, [mode, runId, runs, openRun]);
 
   const rows = source?.rows ?? [];
   const selected = rows.find((row) => row.id === selectedId) ?? null;
@@ -100,14 +113,12 @@ export function App() {
   }, [source, selectedId]);
   React.useEffect(() => {
     if (!source) return;
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    if (selectedId) params.set("task", selectedId);
-    else params.delete("task");
-    if (runId) params.set("run", runId);
-    const next = params.toString();
-    if (next !== window.location.hash.slice(1)) {
-      window.history.replaceState(null, "", next ? `#${next}` : window.location.pathname);
-    }
+    writeHash((params) => {
+      if (selectedId) params.set("task", selectedId);
+      else params.delete("task");
+      if (runId) params.set("run", runId);
+      else params.delete("run");
+    });
   }, [selectedId, runId, source]);
 
   return (
@@ -164,6 +175,16 @@ export function App() {
       </div>
     </div>
   );
+}
+
+/** Rewrite the location hash in place, leaving history untouched. */
+function writeHash(update: (params: URLSearchParams) => void): void {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  update(params);
+  const next = params.toString();
+  if (next !== window.location.hash.slice(1)) {
+    window.history.replaceState(null, "", next ? `#${next}` : window.location.pathname);
+  }
 }
 
 function usePersistedFlag(key: string): [boolean, (value: boolean) => void] {
