@@ -4,7 +4,7 @@
 
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { extractRegularArchive } from "../src/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
@@ -16,32 +16,7 @@ import { compileSubmittedTask } from "../src/temporal/activities/task-compiler.j
 const [listPath, outDir, name, mirror] = process.argv.slice(2);
 if (!listPath || !outDir || !name)
   throw new Error("usage: build-combined.ts unique.json OUT_DIR NAME");
-// With a local full mirror (git clone --bare), each task's repository is a shared no-checkout
-// clone that takes a second; the compiler only needs cat-file, ls-tree and archive.
 const MIRROR = mirror;
-const services: TaskCompilerServices | undefined = MIRROR
-  ? {
-      async cloneRepository(url, commit, destination) {
-        await runCommand("git", [
-          "clone",
-          "--quiet",
-          "--shared",
-          "--no-checkout",
-          MIRROR,
-          destination,
-        ]);
-        const present = await runCommand(
-          "git",
-          ["-C", destination, "cat-file", "-e", `${commit}^{commit}`],
-          { allowFailure: true },
-        );
-        if (present.exitCode !== 0) {
-          // Squash-merged PRs base on branch commits the mirror never had; fetch that one by SHA.
-          await runCommand("git", ["-C", destination, "fetch", "--quiet", url, commit]);
-        }
-      },
-    }
-  : undefined;
 const LANES = MIRROR ? 8 : 4;
 const token = execSync("gh auth token", { encoding: "utf8" }).trim();
 const store = new GcsArtifactStore("dari-agent-host-prod-selfbench-artifacts", "selfbench/posthog");
@@ -84,6 +59,50 @@ const treeDir = join(outDir, `${name}-harbor-tasks`);
 await mkdir(tasksDir, { recursive: true });
 await mkdir(treeDir, { recursive: true });
 const scratch = join(outDir, "scratch");
+await mkdir(scratch, { recursive: true });
+// With a local full mirror (git clone --bare), each task's repository is a shared no-checkout
+// clone that takes a second; the compiler only needs cat-file, ls-tree and archive.
+// The GitHub fetch authenticates the same way the default compiler does: the token stays out of
+// argv and the URL and reaches git only through an askpass helper.
+const askpass = join(scratch, "git-askpass.sh");
+await writeFile(
+  askpass,
+  '#!/bin/sh\ncase "$1" in *Username*) printf x-access-token;; *) printf %s "$GH_TOKEN";; esac\n',
+  { mode: 0o700 },
+);
+const services: TaskCompilerServices | undefined = MIRROR
+  ? {
+      async cloneRepository(url, commit, destination, fetchToken) {
+        await runCommand("git", [
+          "clone",
+          "--quiet",
+          "--shared",
+          "--no-checkout",
+          MIRROR,
+          destination,
+        ]);
+        const present = await runCommand(
+          "git",
+          ["-C", destination, "cat-file", "-e", `${commit}^{commit}`],
+          { allowFailure: true },
+        );
+        if (present.exitCode !== 0) {
+          // Squash-merged PRs base on branch commits the mirror never had; fetch that one by SHA.
+          const environment: NodeJS.ProcessEnv = fetchToken
+            ? {
+                ...process.env,
+                GH_TOKEN: fetchToken,
+                GIT_ASKPASS: askpass,
+                GIT_TERMINAL_PROMPT: "0",
+              }
+            : process.env;
+          await runCommand("git", ["-C", destination, "fetch", "--quiet", url, commit], {
+            env: environment,
+          });
+        }
+      },
+    }
+  : undefined;
 const manifestTasks: Record<string, unknown>[] = [];
 const byDifficulty: Record<string, number> = {};
 const sources: Record<string, string[]> = {};
@@ -97,11 +116,11 @@ async function packageOne([pr, entry]: [
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
 
-  const existing = join(tasksDir, `${task.taskId}.tar.gz`);
-  if (RESUME && (await readFile(existing).catch(() => undefined))) {
-    const sha256 = createHash("sha256")
-      .update(await readFile(existing))
-      .digest("hex");
+  const existing = RESUME
+    ? await readFile(join(tasksDir, `${task.taskId}.tar.gz`)).catch(() => undefined)
+    : undefined;
+  if (existing) {
+    const sha256 = createHash("sha256").update(existing).digest("hex");
     manifestTasks.push({
       taskId: task.taskId,
       sha256,
@@ -133,9 +152,14 @@ async function packageOne([pr, entry]: [
   const archive = join(expanded, "harbor-task.tar.gz");
   await writeFile(archive, compiled);
   await extractRegularArchive(archive, expanded);
+  // The tarball lands at its final name only once it and the tree copy are complete, so a resume
+  // that finds tasks/<taskId>.tar.gz can trust it; a kill mid-write leaves only a .partial file.
   const tarPath = join(tasksDir, `${task.taskId}.tar.gz`);
-  await runCommand("tar", ["-czf", tarPath, "-C", expanded, "harbor-task"]);
+  const partial = `${tarPath}.partial`;
+  await runCommand("tar", ["-czf", partial, "-C", expanded, "harbor-task"]);
+  await rm(join(treeDir, task.taskId), { recursive: true, force: true });
   await cp(join(expanded, "harbor-task"), join(treeDir, task.taskId), { recursive: true });
+  await rename(partial, tarPath);
   const sha256 = createHash("sha256")
     .update(await readFile(tarPath))
     .digest("hex");
