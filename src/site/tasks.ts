@@ -6,6 +6,7 @@ import { listArchivedRuns } from "../viewer/archived.js";
 import { candidateArtifacts } from "../viewer/artifacts.js";
 import type { ConnectedRepo, RepoStore } from "./repo-store.js";
 import type { RunStore } from "./run-store.js";
+import { refreshInProgress, type TaskStatusSource } from "./task-status.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
 import { tenantFor } from "./tenant.js";
@@ -40,6 +41,10 @@ export interface TaskListItem {
   readonly sourceUrl?: string;
   readonly review?: TaskRecord["review"];
   readonly syncedAt: string;
+  readonly round?: number;
+  readonly workflowId?: string;
+  readonly startedBy?: string;
+  readonly startedAt?: string;
 }
 
 export interface TaskRoutesOptions {
@@ -48,6 +53,8 @@ export interface TaskRoutesOptions {
   readonly runs: RunStore;
   readonly tasks: TaskStore;
   readonly artifacts: ArtifactStore;
+  /** When present, in-progress rows are brought up to date with their workflows on each list. */
+  readonly status?: TaskStatusSource;
 }
 
 export interface TaskRoutes {
@@ -60,7 +67,7 @@ export interface TaskRoutes {
 }
 
 export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
-  const { users, repos, runs, tasks, artifacts } = options;
+  const { users, repos, runs, tasks, artifacts, status } = options;
 
   const syncAll = async (repo: ConnectedRepo): Promise<number> => {
     let synced = 0;
@@ -134,6 +141,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         return true;
       }
       if (tasksRoute.test(url.pathname) && request.method === "GET") {
+        if (status) await refreshInProgress({ tasks, artifacts, status, repo });
         sendJson(response, 200, { tasks: (await tasks.listForRepo(repo.id)).map(taskItem) });
         return true;
       }
@@ -205,6 +213,10 @@ export function taskItem(task: TaskRecord): TaskListItem {
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
     ...(task.review ? { review: task.review } : {}),
     syncedAt: task.syncedAt,
+    ...(task.round !== undefined ? { round: task.round } : {}),
+    ...(task.workflowId ? { workflowId: task.workflowId } : {}),
+    ...(task.startedBy ? { startedBy: task.startedBy } : {}),
+    ...(task.startedAt ? { startedAt: task.startedAt } : {}),
   };
 }
 

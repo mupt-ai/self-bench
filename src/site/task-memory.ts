@@ -1,4 +1,4 @@
-import type { RepoTaskCounts, TaskRecord, TaskStore, TaskUpsert } from "./task-store.js";
+import type { RepoTaskCounts, TaskRecord, TaskStart, TaskStore, TaskUpsert } from "./task-store.js";
 
 /** In-memory TaskStore with the Postgres contract, for route tests. */
 export function createMemoryTaskStore(logins: Map<number, string>): TaskStore {
@@ -22,6 +22,42 @@ export function createMemoryTaskStore(logins: Map<number, string>): TaskStore {
           syncedAt: new Date().toISOString(),
         });
       }
+    },
+    async insertStarted(row: TaskStart) {
+      if ([...tasks.values()].some((task) => task.workflowId === row.workflowId)) {
+        throw new Error("workflow already known");
+      }
+      const { startedBy, ...rest } = row;
+      const task: TaskRecord = {
+        ...rest,
+        id: nextId++,
+        startedBy: logins.get(startedBy) ?? "",
+        startedAt: new Date().toISOString(),
+        syncedAt: new Date().toISOString(),
+      };
+      put(task);
+      return task;
+    },
+    async inProgress(repoId) {
+      return [...tasks.values()].filter(
+        (task) =>
+          task.repoId === repoId && task.pipelineStatus === "in_progress" && task.workflowId,
+      );
+    },
+    async progress(taskRowId, patch) {
+      const task = byId(taskRowId);
+      const { round: _round, reason: _reason, ...rest } = task;
+      const updated: TaskRecord = {
+        ...rest,
+        stage: patch.stage,
+        pipelineStatus: patch.pipelineStatus,
+        ...(patch.round !== undefined ? { round: patch.round } : {}),
+        ...(patch.reason ? { reason: patch.reason } : {}),
+        ...(patch.taskId ? { taskId: patch.taskId } : {}),
+        syncedAt: new Date().toISOString(),
+      };
+      put(updated);
+      return updated;
     },
     async listForRepo(repoId) {
       return [...tasks.values()]

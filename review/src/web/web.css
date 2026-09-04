@@ -256,7 +256,9 @@
 .state-stamp.needs_review { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 50%, transparent); }
 .state-stamp.accepted { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 50%, transparent); }
 .state-stamp.rejected { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, transparent); }
-.state-stamp.in_progress { color: var(--ink); }
+.state-stamp.in_progress { color: var(--mint-bright); border-color: color-mix(in srgb, var(--mint) 40%, transparent); }
+.state-stamp.in_progress::before { animation: skeleton-pulse 1.4s ease-in-out infinite; }
+.task-row-live { color: var(--mint); white-space: nowrap; }
 .state-stamp.big { padding: 5px 10px; font-size: 11px; }
 
 /* ---- task page: header and review ------------------------------------------ */

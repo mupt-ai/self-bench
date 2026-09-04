@@ -1,4 +1,5 @@
 import type { SqlClient } from "../db/sql.js";
+import { type TaskRow, taskFrom } from "./task-row.js";
 
 export type PipelineStatus = "in_progress" | "accepted" | "rejected" | "infrastructure_failed";
 export type ReviewDecision = "approve" | "reject";
@@ -15,6 +16,7 @@ export interface TaskRecord {
   readonly difficulty: "easy" | "medium" | "hard";
   readonly pipelineStatus: PipelineStatus;
   readonly stage: string;
+  readonly round?: number;
   readonly reason?: string;
   readonly bundleKey?: string;
   readonly definition?: Record<string, unknown>;
@@ -25,10 +27,31 @@ export interface TaskRecord {
     readonly decidedAt: string;
   };
   readonly syncedAt: string;
+  /** Set when the site started this task itself. */
+  readonly workflowId?: string;
+  readonly startedBy?: string;
+  readonly startedAt?: string;
 }
 
 /** What a sync writes; identity is (runId, candidateId), reviews are never touched by a sync. */
-export type TaskUpsert = Omit<TaskRecord, "id" | "review" | "syncedAt">;
+export type TaskUpsert = Omit<
+  TaskRecord,
+  "id" | "review" | "syncedAt" | "workflowId" | "startedBy" | "startedAt"
+>;
+
+/** A task the site just started: no verdict yet, a workflow to watch. */
+export interface TaskStart extends TaskUpsert {
+  readonly workflowId: string;
+  readonly startedBy: number;
+}
+
+export interface TaskProgressPatch {
+  readonly stage: string;
+  readonly round?: number;
+  readonly pipelineStatus: PipelineStatus;
+  readonly reason?: string;
+  readonly taskId?: string;
+}
 
 export interface RepoTaskCounts {
   readonly repoId: number;
@@ -41,6 +64,10 @@ export interface RepoTaskCounts {
 
 export interface TaskStore {
   upsertMany(rows: readonly TaskUpsert[]): Promise<void>;
+  /** Inserts a site-started task; rejects when the workflow id is already known. */
+  insertStarted(row: TaskStart): Promise<TaskRecord>;
+  inProgress(repoId: number): Promise<TaskRecord[]>;
+  progress(taskRowId: number, patch: TaskProgressPatch): Promise<TaskRecord>;
   listForRepo(repoId: number): Promise<TaskRecord[]>;
   /** By the agent's task id or the candidate id, within one run. */
   find(repoId: number, runId: string, taskOrCandidateId: string): Promise<TaskRecord | undefined>;
@@ -53,31 +80,11 @@ export interface TaskStore {
   countsForRepos(repoIds: readonly number[]): Promise<RepoTaskCounts[]>;
 }
 
-interface TaskRow {
-  id: string | number;
-  repo_id: string | number;
-  run_id: string;
-  candidate_id: string;
-  task_id: string;
-  source_pr: number | null;
-  source_url: string | null;
-  difficulty: TaskRecord["difficulty"];
-  pipeline_status: PipelineStatus;
-  stage: string;
-  reason: string | null;
-  bundle_key: string | null;
-  definition: Record<string, unknown> | null;
-  review_decision: ReviewDecision | null;
-  review_note: string | null;
-  reviewed_by_login: string | null;
-  reviewed_at: string | Date | null;
-  synced_at: string | Date;
-}
-
 const SELECT = `select t.id, t.repo_id, t.run_id, t.candidate_id, t.task_id, t.source_pr, t.source_url,
-  t.difficulty, t.pipeline_status, t.stage, t.reason, t.bundle_key, t.definition,
-  t.review_decision, t.review_note, u.login as reviewed_by_login, t.reviewed_at, t.synced_at
-  from tasks t left join users u on u.id = t.reviewed_by`;
+  t.difficulty, t.pipeline_status, t.stage, t.round, t.reason, t.bundle_key, t.definition,
+  t.review_decision, t.review_note, u.login as reviewed_by_login, t.reviewed_at, t.synced_at,
+  t.workflow_id, s.login as started_by_login, t.started_at
+  from tasks t left join users u on u.id = t.reviewed_by left join users s on s.id = t.started_by`;
 
 export function createPostgresTaskStore(
   sql: SqlClient,
@@ -122,6 +129,53 @@ export function createPostgresTaskStore(
           );
         }
       });
+    },
+    async insertStarted(row) {
+      const [inserted] = await sql.query<{ id: string | number }>(
+        `insert into tasks (repo_id, run_id, candidate_id, task_id, source_pr, source_url, difficulty,
+           pipeline_status, stage, reason, workflow_id, started_by, started_at, synced_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13) returning id`,
+        [
+          row.repoId,
+          row.runId,
+          row.candidateId,
+          row.taskId,
+          row.sourcePr ?? null,
+          row.sourceUrl ?? null,
+          row.difficulty,
+          row.pipelineStatus,
+          row.stage,
+          row.reason ?? null,
+          row.workflowId,
+          row.startedBy,
+          now(),
+        ],
+      );
+      if (!inserted) throw new Error("task insert returned no row");
+      return byId(Number(inserted.id));
+    },
+    async inProgress(repoId) {
+      const rows = await sql.query<TaskRow>(
+        `${SELECT} where t.repo_id = $1 and t.pipeline_status = 'in_progress' and t.workflow_id is not null`,
+        [repoId],
+      );
+      return rows.map(taskFrom);
+    },
+    async progress(taskRowId, patch) {
+      await sql.query(
+        `update tasks set stage = $2, round = $3, pipeline_status = $4, reason = $5,
+           task_id = coalesce($6, task_id), synced_at = $7 where id = $1`,
+        [
+          taskRowId,
+          patch.stage,
+          patch.round ?? null,
+          patch.pipelineStatus,
+          patch.reason ?? null,
+          patch.taskId ?? null,
+          now(),
+        ],
+      );
+      return byId(taskRowId);
     },
     async listForRepo(repoId) {
       const rows = await sql.query<TaskRow>(
@@ -190,34 +244,5 @@ export function createPostgresTaskStore(
         ...(row.last_pr !== null ? { lastPr: Number(row.last_pr) } : {}),
       }));
     },
-  };
-}
-
-function taskFrom(row: TaskRow): TaskRecord {
-  return {
-    id: Number(row.id),
-    repoId: Number(row.repo_id),
-    runId: row.run_id,
-    candidateId: row.candidate_id,
-    taskId: row.task_id,
-    ...(row.source_pr !== null ? { sourcePr: Number(row.source_pr) } : {}),
-    ...(row.source_url ? { sourceUrl: row.source_url } : {}),
-    difficulty: row.difficulty,
-    pipelineStatus: row.pipeline_status,
-    stage: row.stage,
-    ...(row.reason ? { reason: row.reason } : {}),
-    ...(row.bundle_key ? { bundleKey: row.bundle_key } : {}),
-    ...(row.definition ? { definition: row.definition } : {}),
-    ...(row.review_decision
-      ? {
-          review: {
-            decision: row.review_decision,
-            note: row.review_note ?? "",
-            decidedBy: row.reviewed_by_login ?? "",
-            decidedAt: new Date(row.reviewed_at ?? 0).toISOString(),
-          },
-        }
-      : {}),
-    syncedAt: new Date(row.synced_at).toISOString(),
   };
 }

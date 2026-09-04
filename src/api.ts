@@ -22,10 +22,12 @@ import { migrate } from "./db/migrations.js";
 import { postgresClient, type SqlClient } from "./db/sql.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
+import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
 import { createPostgresRepoStore } from "./site/repo-store.js";
 import { createPostgresRunStore } from "./site/run-store.js";
 import { createPostgresTaskStore } from "./site/task-store.js";
 import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
+import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -43,7 +45,7 @@ export async function startApi(
   const connection = await connectTemporalClient(config.temporal);
   const client = new Client({ connection, namespace: config.temporal.namespace });
   const artifacts = createArtifactStore(config.artifact);
-  const site = options.auth ? await openSite(options.auth, artifacts) : undefined;
+  const site = options.auth ? await openSite(options.auth, config, client, artifacts) : undefined;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -82,6 +84,7 @@ export async function startApi(
       if (site && user && url.pathname.startsWith("/api/")) {
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
+        if (await site.pullRequests.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
@@ -198,10 +201,16 @@ interface Site {
   readonly github: GitHubRepoRoutes;
   readonly repos: ConnectedRepoRoutes;
   readonly tasks: TaskRoutes;
+  readonly pullRequests: PullRequestRoutes;
   readonly sql: SqlClient;
 }
 
-async function openSite(auth: AuthConfig, artifacts: ArtifactStore): Promise<Site> {
+async function openSite(
+  auth: AuthConfig,
+  config: SelfBenchConfig,
+  client: Client,
+  artifacts: ArtifactStore,
+): Promise<Site> {
   const sql = postgresClient(auth.databaseUrl);
   const applied = await migrate(sql);
   if (applied.length > 0) console.log(`applied database migrations ${applied.join(", ")}`);
@@ -213,7 +222,23 @@ async function openSite(auth: AuthConfig, artifacts: ArtifactStore): Promise<Sit
     auth: createSiteAuth({ config: auth, users }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
-    tasks: createTaskRoutes({ users, repos, runs, tasks, artifacts }),
+    tasks: createTaskRoutes({
+      users,
+      repos,
+      runs,
+      tasks,
+      artifacts,
+      status: temporalStatus(client),
+    }),
+    pullRequests: createPullRequestRoutes({
+      config,
+      auth,
+      users,
+      repos,
+      tasks,
+      artifacts,
+      start: temporalStarter(client, config.temporal.taskQueue),
+    }),
     sql,
   };
 }

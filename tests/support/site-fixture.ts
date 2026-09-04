@@ -3,13 +3,17 @@ import { PGlite, type Transaction } from "@electric-sql/pglite";
 import type { ArtifactStore } from "../../src/artifacts.js";
 import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth, type SiteAuthOptions } from "../../src/auth/routes.js";
+import { loadConfig } from "../../src/config.js";
 import { migrate } from "../../src/db/migrations.js";
 import type { SqlClient } from "../../src/db/sql.js";
 import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
 import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
+import { createPullRequestRoutes } from "../../src/site/pr-routes.js";
 import { createMemoryRepoStore, type RepoStore } from "../../src/site/repo-store.js";
 import { createMemoryRunStore, type RunStore } from "../../src/site/run-store.js";
 import { createMemoryTaskStore } from "../../src/site/task-memory.js";
+import type { WorkflowStarter } from "../../src/site/task-start.js";
+import type { TaskStatusSource } from "../../src/site/task-status.js";
 import type { TaskStore } from "../../src/site/task-store.js";
 import { createTaskRoutes } from "../../src/site/tasks.js";
 
@@ -55,6 +59,8 @@ export interface FakeGitHubOptions {
   /** Repos returned for every repo listing, and the merged-PR count for every search. */
   readonly repos?: readonly { full_name: string; private?: boolean; pushed_at?: string }[];
   readonly mergedPullRequests?: number;
+  /** Answers /repos/:owner/:name/pulls/:number; the merge commit's parent is "b" × 40. */
+  readonly pullRequests?: Record<number, Record<string, unknown>>;
 }
 
 /** A fetch that answers GitHub's OAuth and API endpoints for one signing-in user. */
@@ -75,6 +81,14 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
     }
     if (url.endsWith("/user")) {
       return Response.json({ id: 42, login, name: "Avyay", avatar_url: "https://a/x.png" });
+    }
+    const pull = /\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)$/.exec(url);
+    if (pull?.[1]) {
+      const found = options.pullRequests?.[Number(pull[1])];
+      return found ? Response.json(found) : new Response("", { status: 404 });
+    }
+    if (/\/repos\/[^/]+\/[^/]+\/commits\/[0-9a-f]{40}$/.test(url)) {
+      return Response.json({ parents: [{ sha: "b".repeat(40) }] });
     }
     const one = /\/repos\/([^/?]+\/[^/?]+)$/.exec(url);
     if (one?.[1]) {
@@ -136,21 +150,38 @@ export async function startAuthServer(
     runs?: RunStore;
     tasks?: TaskStore;
     artifacts?: ArtifactStore;
+    start?: WorkflowStarter;
+    status?: TaskStatusSource;
   },
 ): Promise<AuthServer> {
   const auth = createSiteAuth(options);
   const github = createGitHubRepoRoutes(options);
   const repos = options.repos ?? createMemoryRepoStore(new Map());
   const connected = createConnectedRepoRoutes({ ...options, repos });
+  const tasks = options.tasks ?? createMemoryTaskStore(new Map());
   const taskRoutes = options.artifacts
     ? createTaskRoutes({
         users: options.users,
         repos,
         runs: options.runs ?? createMemoryRunStore(new Map()),
-        tasks: options.tasks ?? createMemoryTaskStore(new Map()),
+        tasks,
         artifacts: options.artifacts,
+        ...(options.status ? { status: options.status } : {}),
       })
     : undefined;
+  const pullRequestRoutes =
+    options.artifacts && options.start
+      ? createPullRequestRoutes({
+          config: loadConfig({}),
+          auth: options.config,
+          users: options.users,
+          repos,
+          tasks,
+          artifacts: options.artifacts,
+          start: options.start,
+          fetchImpl: options.fetchImpl ?? fetch,
+        })
+      : undefined;
   const server: Server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (await auth.handle(request, url, response)) return;
@@ -162,6 +193,9 @@ export async function startAuthServer(
       }
       if (await github.handle(request, url, response, user)) return;
       if (await connected.handle(request, url, response, user)) return;
+      if (pullRequestRoutes && (await pullRequestRoutes.handle(request, url, response, user))) {
+        return;
+      }
       if (taskRoutes && (await taskRoutes.handle(request, url, response, user))) return;
     }
     response.writeHead(404).end();

@@ -82,7 +82,16 @@ export function TaskPage() {
             </p>
           )}
         </div>
-        <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
+        {task.state === "in_progress" ? (
+          <div className="review-bar">
+            <span className="review-by">
+              {task.stage}
+              {task.round ? ` · round ${task.round}` : ""}
+            </span>
+          </div>
+        ) : (
+          <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
+        )}
       </header>
       <TaskView source={source} row={rowFor(task)} />
     </div>

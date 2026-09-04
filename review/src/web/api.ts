@@ -148,6 +148,19 @@ export interface TaskItem {
   sourceUrl?: string;
   review?: TaskReview;
   syncedAt: string;
+  round?: number;
+  workflowId?: string;
+  startedBy?: string;
+  startedAt?: string;
+}
+
+export async function addPullRequest(org: string, fullName: string, pr: string): Promise<TaskItem> {
+  const body = await requestJson<{ task: TaskItem }>(`${repoPath(org, fullName)}/tasks/from-pr`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pr }),
+  });
+  return body.task;
 }
 
 export interface RepoTaskCounts {

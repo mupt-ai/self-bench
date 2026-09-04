@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useParams } from "react-router";
+import { AddPrSheet } from "../AddPrSheet";
 import { AttachRunSheet } from "../AttachRunSheet";
 import {
   type AttachedRun,
@@ -15,10 +16,11 @@ import {
 } from "../api";
 import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { DifficultyStamp, STATE_LABEL, StateStamp } from "../task/state";
+import { STATE_LABEL } from "../task/state";
+import { TaskList } from "../task/TaskList";
 
 type Filter = "all" | TaskState;
-const FILTERS: Filter[] = ["all", "needs_review", "accepted", "rejected"];
+const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected"];
 
 export function RepoPage() {
   const { org } = useOrg();
@@ -33,6 +35,7 @@ export function RepoPage() {
   const [query, setQuery] = React.useState("");
   const [attaching, setAttaching] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
 
   const loadTasks = React.useCallback(() => {
     setTasks(null);
@@ -60,6 +63,21 @@ export function RepoPage() {
   }, [org.login, fullName, loadTasks]);
 
   const closeSheet = React.useCallback(() => setAttaching(false), []);
+  const closeAdd = React.useCallback(() => setAdding(false), []);
+  const onStarted = React.useCallback((task: TaskItem) => {
+    setTasks((current) => [task, ...(current ?? [])]);
+    setAdding(false);
+  }, []);
+
+  // While anything is being built, re-read the list so stage and round move on their own.
+  const building = (tasks ?? []).some((task) => task.state === "in_progress");
+  React.useEffect(() => {
+    if (!building) return;
+    const timer = window.setInterval(() => {
+      fetchTasks(org.login, fullName).then(setTasks, () => undefined);
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [building, org.login, fullName]);
   const onAttached = React.useCallback(
     (run: AttachedRun) => {
       setRuns((current) => [run, ...current.filter((r) => r.runId !== run.runId)]);
@@ -175,6 +193,9 @@ export function RepoPage() {
           <button type="button" className="btn-secondary" onClick={() => setAttaching(true)}>
             + Attach Run
           </button>
+          <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
+            + Add PR
+          </button>
         </div>
       </div>
       {error && <p className="page-error">{error}</p>}
@@ -230,34 +251,9 @@ export function RepoPage() {
       {tasks !== null && tasks.length > 0 && visible.length === 0 && (
         <p className="repo-note">No tasks match.</p>
       )}
-      {visible.length > 0 && (
-        <ul className="task-list">
-          {visible.map((task) => (
-            <li key={`${task.runId}:${task.taskId}`}>
-              <Link
-                className="task-row"
-                to={`/repos/${fullName}/tasks/${task.runId}/${encodeURIComponent(task.taskId)}`}
-              >
-                <span className="task-row-main">
-                  <span className="task-row-id">{task.taskId}</span>
-                  <span className="task-row-sub">
-                    {task.sourcePr ? <span>PR #{task.sourcePr}</span> : null}
-                    <span className="mono">{task.runId}</span>
-                    {task.reasonSummary && task.state !== "accepted" && (
-                      <span className="task-row-reason" title={task.reasonSummary}>
-                        {task.reasonSummary}
-                      </span>
-                    )}
-                  </span>
-                </span>
-                <span className="task-row-side">
-                  <DifficultyStamp difficulty={task.difficulty} />
-                  <StateStamp state={task.state} />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {visible.length > 0 && <TaskList fullName={fullName} tasks={visible} />}
+      {adding && (
+        <AddPrSheet org={org} fullName={fullName} onClose={closeAdd} onStarted={onStarted} />
       )}
       {attaching && (
         <AttachRunSheet

@@ -153,6 +153,18 @@ on conflict (run_id, candidate_id) do nothing;
 drop table if exists task_reviews;
 `,
   },
+  {
+    version: 7,
+    name: "tasks-started-here",
+    sql: `
+-- Tasks the site started itself: the Temporal workflow that is (or was) building them.
+alter table tasks add column if not exists workflow_id text;
+alter table tasks add column if not exists started_by bigint references users(id);
+alter table tasks add column if not exists started_at timestamptz;
+alter table tasks add column if not exists round integer;
+create unique index if not exists tasks_workflow_id on tasks(workflow_id) where workflow_id is not null;
+`,
+  },
 ];
 
 /** Applies every migration the database has not seen yet; returns the versions applied. */
