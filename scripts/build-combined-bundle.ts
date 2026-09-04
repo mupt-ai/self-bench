@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { extractRegularArchive } from "../src/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
 import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts.js";
@@ -63,8 +63,9 @@ await mkdir(scratch, { recursive: true });
 // With a local full mirror (git clone --bare), each task's repository is a shared no-checkout
 // clone that takes a second; the compiler only needs cat-file, ls-tree and archive.
 // The GitHub fetch authenticates the same way the default compiler does: the token stays out of
-// argv and the URL and reaches git only through an askpass helper.
-const askpass = join(scratch, "git-askpass.sh");
+// argv and the URL and reaches git only through an askpass helper, addressed absolutely because
+// git -C changes directory before running it.
+const askpass = resolve(scratch, "git-askpass.sh");
 await writeFile(
   askpass,
   '#!/bin/sh\ncase "$1" in *Username*) printf x-access-token;; *) printf %s "$GH_TOKEN";; esac\n',
