@@ -1,74 +1,97 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { loadTaskDeliverable } from "./shared/deliverable.js";
+import { VerifyClient, verifyOutcomeText } from "./shared/mailbox.js";
+import {
+  requiredEnvironment,
+  runStaticCheck,
+  stageSubmission,
+  staticCheckFailure,
+} from "./shared/static-check.js";
 
-const taskDefinition = Type.Object(
-  {
-    schemaVersion: Type.Literal(2),
-    difficulty: Type.Union([Type.Literal("easy"), Type.Literal("medium"), Type.Literal("hard")]),
-    taskId: Type.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }),
-    repo: Type.String({ minLength: 1 }),
-    baseCommit: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
-    workdir: Type.String({ minLength: 1 }),
-    testCommand: Type.String({ minLength: 1 }),
-    failToPass: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-    passToPass: Type.Array(Type.String({ minLength: 1 })),
-    testPaths: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-    sourcePr: Type.Integer({ minimum: 1 }),
-    sourceUrl: Type.String({ minLength: 1 }),
-    prompt: Type.String({ minLength: 1 }),
-    timeouts: Type.Object({
-      setupSeconds: Type.Integer({ minimum: 1 }),
-      agentSeconds: Type.Integer({ minimum: 1 }),
-      testsSeconds: Type.Integer({ minimum: 1 }),
-    }),
-    resources: Type.Object({
-      cpus: Type.Number({ exclusiveMinimum: 0 }),
-      memoryMb: Type.Integer({ minimum: 1 }),
-      storageMb: Type.Integer({ minimum: 1 }),
-    }),
-  },
-  { additionalProperties: false },
-);
+const noArguments = Type.Object({}, { additionalProperties: false });
+
+/** The clean base tree the patches must apply to: /work/repo at the definition's base commit. */
+function applyTarget(definition: Record<string, unknown>): { base: string } {
+  return { base: typeof definition.baseCommit === "string" ? definition.baseCommit : "HEAD" };
+}
 
 export default function authoringExtension(pi: ExtensionAPI): void {
+  const client = new VerifyClient();
+  const deliverable = (): string => process.env.SELFBENCH_DELIVERABLE ?? "/work/task";
+
+  pi.registerTool({
+    name: "verify",
+    label: "Verify SelfBench task",
+    description:
+      "Takes no arguments. Reads the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch), runs the static check, then the harness's real verification: trusted compile, audit, image build, smoke, nop, and oracle. Blocks until the report is back (can take up to an hour). Budget-limited per session; the result says how many calls remain.",
+    parameters: noArguments,
+    async execute() {
+      const loaded = loadTaskDeliverable(deliverable());
+      if ("isError" in loaded) {
+        return loaded;
+      }
+      const staging = stageSubmission(
+        loaded.definition,
+        loaded.testPatch,
+        loaded.goldPatch,
+        "selfbench-verify-",
+      );
+      try {
+        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
+        if (!verdict.ok) {
+          return staticCheckFailure(verdict, "task");
+        }
+      } finally {
+        staging.dispose();
+      }
+      const outcome = await client.verify("task", loaded);
+      return {
+        content: [{ type: "text", text: verifyOutcomeText(outcome, "submit_task") }],
+        details: { kind: outcome.kind, remaining: client.remaining },
+        ...(outcome.kind === "exhausted" ? { isError: true } : {}),
+      };
+    },
+  });
+
   pi.registerTool({
     name: "submit_task",
     label: "Submit SelfBench task",
-    description: "Submit exactly one complete task at the assigned difficulty.",
-    parameters: Type.Object(
-      {
-        definition: taskDefinition,
-        testPatch: Type.String({ minLength: 1 }),
-        goldPatch: Type.String({ minLength: 1 }),
-      },
-      { additionalProperties: false },
-    ),
-    async execute(_toolCallId, input) {
-      const root = process.env.SELFBENCH_TASK_OUTPUT;
-      if (!root) {
-        throw new Error("SELFBENCH_TASK_OUTPUT is not configured");
+    description:
+      "Takes no arguments. Reads the deliverable in /work/task, runs the static check, and records the task; a passing submission ends the session. Run verify first and submit only what verify reported green.",
+    parameters: noArguments,
+    async execute() {
+      const root = requiredEnvironment("SELFBENCH_TASK_OUTPUT");
+      const loaded = loadTaskDeliverable(deliverable());
+      if ("isError" in loaded) {
+        return loaded;
       }
-      const { definition, testPatch, goldPatch } = input;
-      if (!definition?.taskId || typeof testPatch !== "string" || typeof goldPatch !== "string") {
-        throw new Error("submit_task received an incomplete task");
+      const taskId = String(loaded.definition.taskId ?? "");
+      const staging = stageSubmission(loaded.definition, loaded.testPatch, loaded.goldPatch);
+      try {
+        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
+        if (!verdict.ok) {
+          return staticCheckFailure(verdict, "submission");
+        }
+        const directory = join(root, taskId);
+        mkdirSync(root, { recursive: true });
+        mkdirSync(directory, { recursive: false });
+        cpSync(staging.directory, directory, { recursive: true });
+        const verified = client.verifiedGreen(loaded);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Submitted ${taskId}; the static check passed and the Harbor tree is dry-rendered under ${verdict.renderedDirectory ?? "/work/rendered"}. ${verified ? "This deliverable matches your last green verify, so the worker reuses that report." : "This deliverable was not verified green in this session, so the worker verifies it now and a round is spent if it fails."} Stop here and wait.`,
+            },
+          ],
+          details: { taskId, verified },
+        };
+      } finally {
+        staging.dispose();
       }
-      const directory = join(root, definition.taskId);
-      mkdirSync(directory, { recursive: false });
-      writeFileSync(
-        join(directory, "definition.json"),
-        `${JSON.stringify(definition, null, 2)}\n`,
-        {
-          flag: "wx",
-        },
-      );
-      writeFileSync(join(directory, "test.patch"), testPatch, { flag: "wx" });
-      writeFileSync(join(directory, "gold.patch"), goldPatch, { flag: "wx" });
-      return {
-        content: [{ type: "text", text: `Submitted ${definition.taskId}.` }],
-        details: { taskId: definition.taskId },
-      };
     },
   });
 }

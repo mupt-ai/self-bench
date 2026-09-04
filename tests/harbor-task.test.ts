@@ -102,15 +102,23 @@ describe("Harbor task compiler", () => {
     expect(taskToml).toContain(
       'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     );
-    expect(await readFile(join(output, "environment/Dockerfile"), "utf8")).not.toContain(
-      "gold.patch",
+    const agentDockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
+    expect(agentDockerfile).not.toContain("gold.patch");
+    // agent.patch is diffed against the post-setup snapshot, so non-ignored setup outputs never
+    // land in the agent's patch and never collide with the verifier image's own setup.
+    expect(agentDockerfile).toContain(
+      "&& git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
     );
+    expect(agentDockerfile).not.toContain("reset --hard");
+    expect(agentDockerfile).not.toContain("clean -fdq");
     const verifierDockerfile = await readFile(join(output, "tests/Dockerfile"), "utf8");
     expect(verifierDockerfile).toContain("COPY dependency-setup.patch");
     expect(verifierDockerfile).toContain("FROM node:22-bookworm@sha256:");
     expect(verifierDockerfile).toContain("COPY root-setup.sh");
     expect(verifierDockerfile).not.toContain("npm ci --ignore-scripts");
     expect(verifierDockerfile).toContain("git -C /app reset --hard -q HEAD");
+    expect(verifierDockerfile).toContain("git -C /app clean -fdq -- 'project/package.json'");
+    expect(verifierDockerfile).not.toMatch(/clean -fdq \\/);
     expect(verifierDockerfile).toContain("COPY test.patch test.sh task-test.sh /tests/");
     const dependencyPatch = await readFile(join(output, "tests/dependency-setup.patch"), "utf8");
     expect(dependencyPatch).toContain('left-pad":"1.1.0');
@@ -128,7 +136,12 @@ describe("Harbor task compiler", () => {
     );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
-    expect(verifier).toContain("runuser -u verifier --preserve-environment");
+    expect(verifier).toContain(
+      'runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$1"',
+    );
+    expect(verifier).not.toMatch(/runuser[^\n]*--preserve-environment -- bash/);
+    expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
+    expect(verifierDockerfile).toContain("chown -R verifier:verifier /app /home/verifier");
     const dockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
     expect(dockerfile).toContain('ENV PLAYWRIGHT_BROWSERS_PATH="/opt/playwright"');
     expect(await readFile(join(output, "environment/setup.sh"), "utf8")).toContain(
@@ -141,7 +154,7 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(26);
+    ).toBe(27);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),

@@ -1,6 +1,8 @@
 import type { Command, Session } from "@vercel/sandbox";
 import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
+import type { LiveSandboxBacking, Supervision } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { VercelCommandStartError } from "./fetch.js";
 
 export const VERCEL_WORK_DIRECTORY = "/work";
@@ -15,6 +17,9 @@ export async function executeVercelCommand(input: {
   readonly terminate: (error: unknown) => void;
   readonly stdout: RollingOutput;
   readonly stderr: RollingOutput;
+  readonly startSupervision?: () => Supervision;
+  /** Backoff between output-read retries; injectable so tests stay fast. */
+  readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<Omit<SandboxResult, "sandboxId">> {
   const { session, request, options, signal, terminate, stdout, stderr } = input;
   let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
@@ -48,26 +53,40 @@ export async function executeVercelCommand(input: {
     const command = await startCommand(session, commandName, commandArguments, request, signal);
 
     armInactivityTimer();
-    await consumeLogs(command, stdout, stderr, options, armInactivityTimer, signal);
-    // The log stream closes when remote execution ends. From here on, the
-    // bounded completion request is provider settlement rather than command
-    // output inactivity.
-    clearInactivityTimer();
-    const completed = await command.wait({
-      signal: AbortSignal.any([signal, AbortSignal.timeout(COMPLETION_REQUEST_TIMEOUT_MS)]),
-    });
+    const supervision = input.startSupervision?.();
+    let completed: Awaited<ReturnType<Command["wait"]>>;
+    try {
+      await consumeLogs(command, stdout, stderr, options, armInactivityTimer, signal);
+      // The log stream closes when remote execution ends. From here on, the
+      // bounded completion request is provider settlement rather than command
+      // output inactivity.
+      clearInactivityTimer();
+      completed = await command.wait({
+        signal: AbortSignal.any([signal, AbortSignal.timeout(COMPLETION_REQUEST_TIMEOUT_MS)]),
+      });
+    } catch (error) {
+      await supervision?.finish().catch(() => undefined);
+      throw error;
+    }
+    await supervision?.finish();
 
     const outputs: Record<string, Uint8Array> = {};
     for (const path of request.outputPaths ?? []) {
-      const output = await session.readFileToBuffer({ path }, { signal });
-      if (output === null) {
+      const { value } = await readOutputWithRetry(
+        async () => (await session.readFileToBuffer({ path }, { signal })) ?? undefined,
+        {
+          signal,
+          ...(input.sleep ? { sleep: (ms) => input.sleep?.(ms, signal) ?? Promise.resolve() } : {}),
+        },
+      );
+      if (value === undefined) {
         if (completed.exitCode === 0) {
           throw new Error(
             `sandbox ${session.sessionId} exited successfully without output ${path}`,
           );
         }
       } else {
-        outputs[path] = output;
+        outputs[path] = value;
       }
     }
     return {
@@ -79,6 +98,26 @@ export async function executeVercelCommand(input: {
   } finally {
     clearInactivityTimer();
   }
+}
+
+/** execute/readFile/writeFile over a running Vercel sandbox session. */
+export function vercelBacking(session: Session): LiveSandboxBacking {
+  return {
+    execute: async (command) => {
+      const [commandName, ...commandArguments] = command;
+      const finished = await session.runCommand({
+        cmd: commandName ?? "true",
+        args: [...commandArguments],
+        cwd: VERCEL_WORK_DIRECTORY,
+      });
+      const [stdout, stderr] = await Promise.all([finished.stdout(), finished.stderr()]);
+      return { exitCode: finished.exitCode, stdout, stderr };
+    },
+    readFile: async (path) => (await session.readFileToBuffer({ path })) ?? undefined,
+    writeFile: async (path, contents) => {
+      await session.writeFiles([{ path, content: contents }]);
+    },
+  };
 }
 
 async function startCommand(

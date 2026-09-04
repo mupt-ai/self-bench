@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, CancelledFailure } from "@temporalio/workflow";
 import type { Difficulty, RunStatus } from "../src/contracts.js";
+import { discoveryShardTargets } from "../src/temporal/workflow/discovery.js";
 import { executeRun } from "../src/temporal/workflow.js";
 import {
   acceptingActivities,
@@ -82,7 +83,7 @@ describe("SelfBench workflow discovery", () => {
     ).rejects.toThrow("invalid discovery implementation");
     expect(currentStatus?.().phase).toBe("failed");
   });
-  test("authors the exact mixed tier budgets and exports accepted tasks", async () => {
+  test("authors every discovered candidate and exports every accept", async () => {
     const candidates = [
       candidate("easy-1", 1, "easy"),
       candidate("medium-1", 2, "medium"),
@@ -92,19 +93,20 @@ describe("SelfBench workflow discovery", () => {
     const authored: string[] = [];
     let exported: string[] = [];
     const activities = acceptingActivities(candidates);
-    activities.authorCandidate = async ({ candidate: value }) => {
+    activities.runAuthoringRound = async ({ candidate: value }) => {
       authored.push(`${value.difficulty}:${value.candidateId}`);
-      if (value.candidateId === "medium-1") {
+      if (value.candidateId.startsWith("medium")) {
         return { kind: "rejected", candidateId: value.candidateId, reason: "not reproducible" };
       }
       return {
-        kind: "authored",
+        kind: "submitted",
         task: {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
           sourceBundle: artifact,
         },
+        session: artifact,
       };
     };
     activities.buildExport = async ({ tasks }) => {
@@ -121,11 +123,17 @@ describe("SelfBench workflow discovery", () => {
       },
     );
 
-    expect(authored.sort()).toEqual(["easy:easy-1", "hard:hard-1", "medium:medium-1"]);
-    expect(exported.sort()).toEqual(["easy-1-task", "hard-1-task"]);
+    // Every discovered candidate is authored; the requested counts only size the pool.
+    expect(authored.sort()).toEqual([
+      "easy:easy-1",
+      "easy:easy-extra",
+      "hard:hard-1",
+      "medium:medium-1",
+    ]);
+    expect(exported.sort()).toEqual(["easy-1-task", "easy-extra-task", "hard-1-task"]);
     expect([...result.acceptedTaskIds].sort()).toEqual(exported);
     expect(currentStatus?.().requestedByDifficulty).toEqual({ easy: 1, medium: 1, hard: 1 });
-    expect(currentStatus?.().accepted).toBe(2);
+    expect(currentStatus?.().accepted).toBe(3);
     expect(currentStatus?.().rejected).toBe(1);
   });
   test("bounds candidate activity fanout for large runs", async () => {
@@ -135,19 +143,20 @@ describe("SelfBench workflow discovery", () => {
     const activities = acceptingActivities(candidates);
     let active = 0;
     let peak = 0;
-    activities.authorCandidate = async ({ candidate: value }) => {
+    activities.runAuthoringRound = async ({ candidate: value }) => {
       active += 1;
       peak = Math.max(peak, active);
       await new Promise((resolve) => setTimeout(resolve, 1));
       active -= 1;
       return {
-        kind: "authored",
+        kind: "submitted",
         task: {
           candidateId: value.candidateId,
           taskId: `${value.candidateId}-task`,
           definition: artifact,
           sourceBundle: artifact,
         },
+        session: artifact,
       };
     };
 
@@ -181,10 +190,97 @@ describe("SelfBench workflow discovery", () => {
       activities,
     );
 
+    // 1.5× the request per tier, dealt across shards: shard 0 gets one of each requested tier.
     expect(targetCounts).toEqual([
-      { easy: 4, medium: 4, hard: 0 },
-      { easy: 0, medium: 4, hard: 0 },
+      { easy: 1, medium: 1, hard: 0 },
+      { easy: 0, medium: 1, hard: 0 },
     ]);
     expect([...result.acceptedTaskIds].sort()).toEqual(["easy-task", "medium-task"]);
+  });
+  test("seeds every discovery wave with pull requests from excluded runs", async () => {
+    const excludedRuns: string[][] = [];
+    const exclusions: number[][] = [];
+    const authored: string[] = [];
+    const activities = acceptingActivities([]);
+    activities.collectExcludedSourcePrs = async (runIds) => {
+      excludedRuns.push([...runIds]);
+      return [7, 9];
+    };
+    activities.discoverCandidateShard = async ({ wave, shardIndex, excludedSourcePrs }) => {
+      if (shardIndex !== 0) {
+        return { candidates: [], report: artifact };
+      }
+      exclusions.push([...excludedSourcePrs]);
+      // A misbehaving shard returns an excluded PR anyway; the pool must never keep it.
+      return {
+        candidates:
+          wave === 0
+            ? [candidate("stale-seven", 7, "easy"), candidate("fresh-eight", 8, "easy")]
+            : [candidate("stale-nine", 9, "medium"), candidate("fresh-ten", 10, "medium")],
+        report: artifact,
+      };
+    };
+    activities.runAuthoringRound = async ({ candidate: value }) => {
+      authored.push(value.candidateId);
+      return {
+        kind: "submitted",
+        task: {
+          candidateId: value.candidateId,
+          taskId: `${value.candidateId}-task`,
+          definition: artifact,
+          sourceBundle: artifact,
+        },
+        session: artifact,
+      };
+    };
+
+    const result = await executeRun(
+      {
+        ...run,
+        candidateCounts: { easy: 1, medium: 1, hard: 0 },
+        excludeRuns: ["earlier-run", "another-run"],
+      },
+      activities,
+    );
+
+    expect(excludedRuns).toEqual([["earlier-run", "another-run"]]);
+    expect(exclusions).toEqual([
+      [7, 9],
+      [7, 9, 8],
+    ]);
+    expect(authored.sort()).toEqual(["fresh-eight", "fresh-ten"]);
+    expect([...result.acceptedTaskIds].sort()).toEqual(["fresh-eight-task", "fresh-ten-task"]);
+  });
+  test("never backfills from an excluded pull request and blocks when only those remain", async () => {
+    let currentStatus: (() => RunStatus) | undefined;
+    const activities = acceptingActivities([]);
+    activities.collectExcludedSourcePrs = async () => [5];
+    activities.discoverCandidateShard = async ({ shardIndex }) => ({
+      candidates: shardIndex === 0 ? [candidate("excluded-five", 5)] : [],
+      report: artifact,
+    });
+
+    await expect(
+      executeRun({ ...run, excludeRuns: ["earlier-run"] }, activities, (status) => {
+        currentStatus = status;
+      }),
+    ).rejects.toThrow("candidate pool exhausted");
+    expect(currentStatus?.().phase).toBe("blocked");
+    expect(currentStatus?.().tasks).toEqual([]);
+  });
+
+  test("sizes shard targets at 1.5x the request per tier, dealt across shards", () => {
+    const shards = discoveryShardTargets({ easy: 3, medium: 0, hard: 4 }, 8);
+    const totals = shards.reduce(
+      (sum, shard) => ({
+        easy: sum.easy + shard.easy,
+        medium: sum.medium + shard.medium,
+        hard: sum.hard + shard.hard,
+      }),
+      { easy: 0, medium: 0, hard: 0 },
+    );
+    expect(totals).toEqual({ easy: 5, medium: 0, hard: 6 });
+    expect(shards.every((shard) => shard.easy <= 1 && shard.hard <= 1)).toBe(true);
+    expect(shards.filter((shard) => shard.easy + shard.medium + shard.hard === 0)).toHaveLength(2);
   });
 });

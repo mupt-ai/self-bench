@@ -119,6 +119,8 @@ export interface ExportManifest {
   version: Record<string, unknown>;
   acceptedCount: number;
   tasks: { taskId: string; sha256: string }[];
+  /** Accepted tasks left out because an earlier task in the run shares their source PR. */
+  droppedDuplicates?: { taskId: string; sourcePr: number; keptTaskId: string }[];
 }
 
 export interface ExportTask {

@@ -1,0 +1,204 @@
+import type { VerifyStage } from "./contracts.js";
+
+/** Directory pi writes session files into inside the sandbox. */
+export const PI_SESSION_DIRECTORY = "/work/session";
+/** Single file the sandbox script copies the session to so providers can collect it. */
+export const PI_SESSION_OUTPUT_PATH = "/work/session.jsonl";
+/** Where a previous round's session is restored before resuming. */
+export const PI_RESUMED_SESSION_PATH = `${PI_SESSION_DIRECTORY}/resume.jsonl`;
+
+export interface PiSessionSummary {
+  readonly id: string;
+  readonly cwd?: string;
+  readonly entries: number;
+}
+
+export function sessionArtifactKey(
+  runId: string,
+  stage: VerifyStage,
+  candidateId: string,
+  round: number,
+  attempt = 1,
+): string {
+  const suffix = attempt > 1 ? `-attempt-${attempt}` : "";
+  return `runs/${runId}/${stage}/${candidateId}/session/round-${round}${suffix}.jsonl`;
+}
+
+/**
+ * pi CLI flags for session continuity. A fresh round lets pi create a new session file under the
+ * session directory; a resumed round opens the restored file explicitly so pi appends to it.
+ */
+export function piSessionArguments(resume: boolean): readonly string[] {
+  return [
+    "--session-dir",
+    PI_SESSION_DIRECTORY,
+    ...(resume ? ["--session", PI_RESUMED_SESSION_PATH] : []),
+  ];
+}
+
+/** Validates a pi JSONL session file: a `session` header followed by JSON entries. */
+export function assertPiSessionFile(bytes: Uint8Array): PiSessionSummary {
+  const text = Buffer.from(bytes).toString("utf8");
+  const lines = text.split("\n").filter((line) => line.trim().length > 0);
+  const first = lines[0];
+  if (!first) {
+    throw new Error("pi session file is empty");
+  }
+  const header = parseEntry(first, 1);
+  if (header.type !== "session" || typeof header.id !== "string" || header.id.length === 0) {
+    throw new Error("pi session file does not start with a session header");
+  }
+  for (const [index, line] of lines.slice(1).entries()) {
+    parseEntry(line, index + 2);
+  }
+  return {
+    id: header.id,
+    ...(typeof header.cwd === "string" ? { cwd: header.cwd } : {}),
+    entries: lines.length,
+  };
+}
+
+/** Bash snippet that copies the single pi session file to the collectable output path. */
+export function collectPiSessionScript(): string {
+  return [
+    "collect_session() {",
+    `  local session_file`,
+    `  if [ -f ${PI_RESUMED_SESSION_PATH} ]; then session_file=${PI_RESUMED_SESSION_PATH}; else session_file="$(ls -1 ${PI_SESSION_DIRECTORY}/*.jsonl 2>/dev/null | head -n 1)"; fi`,
+    `  if [ -n "$session_file" ] && [ -f "$session_file" ]; then cp "$session_file" ${PI_SESSION_OUTPUT_PATH}; fi`,
+    "}",
+  ].join("\n");
+}
+
+function parseEntry(line: string, lineNumber: number): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    throw new Error(`pi session line ${lineNumber} is not JSON`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`pi session line ${lineNumber} is not an object`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/** Last assistant text in a pi session, for surfacing an agent's explanation when it submits nothing. */
+export function finalAssistantMessage(bytes: Uint8Array): string | undefined {
+  const lines = Buffer.from(bytes)
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => line.trim().length > 0);
+  for (const line of lines.reverse()) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const message = (entry as { type?: unknown; message?: unknown }).message;
+    if (
+      (entry as { type?: unknown }).type !== "message" ||
+      typeof message !== "object" ||
+      message === null ||
+      (message as { role?: unknown }).role !== "assistant"
+    ) {
+      continue;
+    }
+    const content = (message as { content?: unknown }).content;
+    const text =
+      typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .map((part) =>
+                typeof part === "object" &&
+                part !== null &&
+                typeof (part as { text?: unknown }).text === "string"
+                  ? (part as { text: string }).text
+                  : "",
+              )
+              .join("")
+          : "";
+    if (text.trim()) {
+      return text.trim();
+    }
+  }
+  return undefined;
+}
+
+/** Names of tool calls the assistant made in a pi session, in order (e.g. verify, submit_task). */
+/**
+ * The provider error that ended the session, when pi's last assistant message stopped with
+ * `stopReason: "error"` (pi still exits 0 in print mode, so the wrapper cannot tell).
+ */
+export function sessionProviderError(bytes: Uint8Array): string | undefined {
+  const lines = Buffer.from(bytes)
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => line.trim().length > 0);
+  for (const line of lines.reverse()) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const message = (entry as { type?: unknown; message?: unknown }).message;
+    if (
+      (entry as { type?: unknown }).type !== "message" ||
+      typeof message !== "object" ||
+      message === null ||
+      (message as { role?: unknown }).role !== "assistant"
+    ) {
+      continue;
+    }
+    const { stopReason, errorMessage } = message as {
+      stopReason?: unknown;
+      errorMessage?: unknown;
+    };
+    if (stopReason !== "error") {
+      return undefined;
+    }
+    return typeof errorMessage === "string" && errorMessage.trim()
+      ? errorMessage.trim()
+      : "provider error";
+  }
+  return undefined;
+}
+
+export function toolCallNames(bytes: Uint8Array): string[] {
+  const names: string[] = [];
+  for (const line of Buffer.from(bytes).toString("utf8").split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const message = (entry as { type?: unknown; message?: { role?: unknown; content?: unknown } })
+      ?.message;
+    if (
+      (entry as { type?: unknown })?.type !== "message" ||
+      message?.role !== "assistant" ||
+      !Array.isArray(message.content)
+    ) {
+      continue;
+    }
+    for (const part of message.content) {
+      const call = part as { type?: unknown; name?: unknown };
+      if (call?.type === "toolCall" && typeof call.name === "string") {
+        names.push(call.name);
+      }
+    }
+  }
+  return names;
+}

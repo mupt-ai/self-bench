@@ -53,6 +53,8 @@ export class E2BSdkFixture {
   listState: "running" | "paused" = "running";
   listOptions: Record<string, unknown> = {};
   createOptions: Record<string, unknown> = {};
+  commands: string[] = [];
+  foregroundExitCode = 0;
   #releaseCommand: ((value: never) => void) | undefined;
   #releaseCreate: (() => void) | undefined;
 
@@ -62,10 +64,19 @@ export class E2BSdkFixture {
       commands: {
         run: async (command: string, options: Record<string, unknown>) => {
           this.calls.push("command.run");
+          this.commands.push(command);
           this.command = command;
           this.commandOptions = options;
           if (this.commandRunError) {
             throw this.commandRunError;
+          }
+          if (!options.background) {
+            // Foreground runs (remote-file fetches) resolve with a result like the real SDK.
+            return {
+              exitCode: this.foregroundExitCode,
+              stdout: "",
+              stderr: "",
+            } as unknown as CommandHandle;
           }
           const onStdout = options.onStdout as ((data: string) => void | Promise<void>) | undefined;
           const onStderr = options.onStderr as ((data: string) => void | Promise<void>) | undefined;

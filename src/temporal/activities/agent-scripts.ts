@@ -1,10 +1,19 @@
-import type { Candidate, RunRequest } from "../../contracts.js";
+import {
+  collectPiSessionScript,
+  PI_SESSION_DIRECTORY,
+  PI_SESSION_OUTPUT_PATH,
+  piSessionArguments,
+} from "../../pi-session.js";
+import { MAILBOX_DIRECTORY, MAILBOX_DONE } from "../../sandbox/supervisor.js";
+import { WRAPPER_STATUS_PATH } from "./round-outcome.js";
 import type { DiscoveryShardInput } from "./types.js";
 
 export function discoveryShardPrompt(input: DiscoveryShardInput, provenanceCount: number): string {
   return `Discover and rank SelfBench candidates from this assigned provenance shard. Return at most easy=${input.targetCounts.easy}, medium=${input.targetCounts.medium}, hard=${input.targetCounts.hard}. Before selecting a pull request, query its number against /work/excluded-source-prs.json with jq; do not print or read the full exclusion list into context. The submit_discovery tool also removes any already-considered pull requests as a final safeguard.
 
-Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, and unrelated cleanup:
+Before proposing a pull request, list its changed files and check them against the repository's .gitattributes: any path marked export-ignore (for PostHog, everything under .github/) is absent from the task snapshot the solver receives, so it can carry neither gold changes nor tests. Never propose a pull request whose implementation lives in such paths.
+
+Assign each candidate exactly one difficulty using the separable implementation core, excluding tests, generated code, formatting churn, unrelated cleanup, and files under export-ignored paths:
 - easy: at least 20 changed implementation lines across at least 1 implementation file, with at least 1 viable fail-to-pass test;
 - medium: at least 50 changed implementation lines across at least 2 implementation files, with at least 1 fail-to-pass and 1 pass-to-pass test;
 - hard: at least 100 changed implementation lines across at least 3 implementation files, with at least 1 fail-to-pass and 2 pass-to-pass tests.
@@ -16,37 +25,6 @@ The sanitized corpus at /work/provenance.jsonl contains ${provenanceCount} human
 
 Return fewer candidates when the shard does not contain enough valid requests; an empty candidate list is valid. Call submit_discovery exactly once. Do not return prose after the tool call.`;
 }
-export function authoringPrompt(run: RunRequest, candidate: Candidate): string {
-  const tierRequirements = {
-    easy: "at least 20 changed implementation lines across at least 1 implementation file, at least 1 fail-to-pass test, and no pass-to-pass minimum",
-    medium:
-      "at least 50 changed implementation lines across at least 2 implementation files, at least 1 fail-to-pass test, and at least 1 pass-to-pass test",
-    hard: "at least 100 changed implementation lines across at least 3 implementation files, at least 1 fail-to-pass test, and at least 2 pass-to-pass tests",
-  } as const;
-  return `Author exactly one ${candidate.difficulty} SelfBench task for this assigned candidate:
-
-${JSON.stringify(
-  {
-    sourcePr: candidate.sourcePr,
-    sourceUrl: candidate.sourceUrl,
-    baseCommit: candidate.baseCommit,
-    completedCommit: candidate.completedCommit,
-    request: candidate.request,
-  },
-  null,
-  2,
-)}
-
-Use only this candidate. Do not discover alternatives and do not run Harbor. Read /work/provenance.json only to verify the supplied authentic request. Inspect the base and completed commits. Split the completed change into a non-test gold patch and a held-out test patch. The task must meet ${candidate.difficulty} mode: ${tierRequirements[candidate.difficulty]}.
-
-Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
-
-Call submit_task exactly once. Its definition must use schemaVersion 2 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Inspect repository test scripts and CI only to select the correct test command. Do not submit runtimes, setup commands, system dependencies, services, or any other environment configuration; a separate environment agent owns that contract.
-
-Before submission, verify from repository scripts and the pinned diff that the selected test identifiers belong to one repository-native test command and form the required nop/oracle split. Do not invent a test command when no stable test seam exists. A separate environment agent and backend preflight own dependency setup and executable proof. Default resources are 4 CPU, 8192 MB memory, 20480 MB storage; default timeouts are 900 setup, 2400 agent, 900 tests. Do not return prose after the tool call.
-
-Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
-}
 export function modalAgentScript(extension: string, tool: string): string {
   return `${sandboxBootstrap()}
 clone_source
@@ -55,52 +33,99 @@ run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills 
   --extension /work/${extension} --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
   --tools read,bash,grep,find,ls,${tool} "$(cat /work/prompt.txt)"`;
 }
-export function authoringScript(): string {
+/**
+ * One authoring round. Round 1 starts a new pi session; later rounds resume the restored session
+ * with the verification report as the next user message. The session file is always collected,
+ * even when the agent submits nothing, so the conversation survives a rejected round's diagnosis.
+ */
+export function authoringRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
+${collectPiSessionScript()}
+${mailboxSetup()}
 clone_source
-mkdir -p /work/tasks
+mkdir -p /work/tasks /work/task ${PI_SESSION_DIRECTORY}
 cd /work/repo
-run_with_heartbeat pi --print --mode json --no-session --no-approve --no-prompt-templates --no-context-files --no-extensions \\
-  --skill /work/selfbench-skill --extension /work/authoring.ts \\
+${promptArguments()}
+agent_status=0
+run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
+  --skill /work/selfbench-skill --extension /work/authoring.js \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,submit_task "$(cat /work/prompt.txt)"
-node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json`;
+  --tools read,bash,grep,find,ls,verify,submit_task "\${prompt_args[@]}" || agent_status=$?
+collect_session
+echo "[selfbench] pi exited with $agent_status"
+[ "$agent_status" -eq 0 ] || { wrapper_status=$agent_status; exit "$agent_status"; }
+node /work/sandbox-author.js /work/tasks /work/source-task.tar.gz /work/definition.json
+${reportOutputs(["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION_OUTPUT_PATH])}
+wrapper_status=0`;
 }
-export function environmentScript(): string {
+/**
+ * One verification round. The sandbox program unpacks the compiled task and materializes the
+ * base snapshot with the held-out patch applied; pi then accepts or fixes. Outputs are always
+ * written so providers that require every declared output on success stay satisfied.
+ */
+export function verifierRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
-clone_source
-mkdir -p /work/environment-output
+${collectPiSessionScript()}
+${mailboxSetup()}
+mkdir -p /work/verdict /work/fix ${PI_SESSION_DIRECTORY}
+node /work/sandbox-verifier.js /work/task.tar.gz
 cd /work/repo
-run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
-  --extension /work/environment.ts --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,grep,find,ls,submit_environment "$(cat /work/prompt.txt)"
-node /work/sandbox-environment.js /work/draft-definition.json \\
-  /work/environment-output/environment.json /work/definition.json`;
+${promptArguments()}
+agent_status=0
+run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
+  --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "\${prompt_args[@]}" || agent_status=$?
+collect_session
+echo "[selfbench] pi exited with $agent_status"
+[ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
+[ -f /work/fix/fixed-definition.json ] || printf '{}\\n' > /work/fix/fixed-definition.json
+[ -f /work/fix/fixed-test.patch ] || : > /work/fix/fixed-test.patch
+[ -f ${PI_SESSION_OUTPUT_PATH} ] || : > ${PI_SESSION_OUTPUT_PATH}
+${reportOutputs(["/work/verdict/verdict.json", "/work/fix/fixed-definition.json", "/work/fix/fixed-test.patch", PI_SESSION_OUTPUT_PATH])}
+wrapper_status=$agent_status
+exit "$agent_status"`;
 }
-export function environmentPreflightScript(): string {
-  return `#!/bin/bash
-set -uo pipefail
-mkdir -p /logs/verifier
-smoke_status=0
-nop_status=1
-output="$(mktemp /tmp/selfbench-environment-smoke-XXXXXX.log)"
-runuser -u verifier --preserve-environment -- /opt/selfbench-environment/smoke.sh >"$output" 2>&1 || smoke_status=$?
-cat "$output"
-rm -f "$output"
-if [ "$smoke_status" -eq 0 ]; then
-  /tests/task-test.sh
-  if grep -q '"patch_applied": 1' /logs/verifier/reward.json \\
-    && grep -q '"fail_to_pass": 0' /logs/verifier/reward.json \\
-    && grep -q '"pass_to_pass": 1' /logs/verifier/reward.json \\
-    && grep -q '"setup_completed": 1' /logs/verifier/reward.json; then
-    nop_status=0
-  fi
-fi
-reward=0
-if [ "$smoke_status" -eq 0 ] && [ "$nop_status" -eq 0 ]; then reward=1; fi
-printf '{"reward": %s, "smoke_exit_code": %s, "nop_exit_code": %s}\n' "$reward" "$smoke_status" "$nop_status" > /logs/verifier/reward.json
-exit 0
-`;
+/** Prints which declared outputs exist so the archived sandbox result explains a missing read. */
+function reportOutputs(paths: readonly string[]): string {
+  return `outputs_report=""
+for output_path in ${paths.join(" ")}; do
+  if [ -f "$output_path" ]; then outputs_report="$outputs_report $output_path:present($(wc -c < "$output_path" | tr -d ' ')B)"; else outputs_report="$outputs_report $output_path:missing"; fi
+done
+echo "[selfbench] outputs:$outputs_report"`;
+}
+/**
+ * Mailbox directories for the in-session verify tool; the done marker tells the worker's
+ * supervisor that the agent command is over even if the provider exit signal lags.
+ */
+/**
+ * The prompt is normally the last pi argument. Linux caps a single argument at 128 KiB, and a
+ * verifier prompt embedding both patches of a large PR has exceeded it ("Argument list too
+ * long"), so larger prompts go in as an @file attachment with a one-line instruction instead.
+ */
+function promptArguments(): string {
+  return `if [ "$(wc -c < /work/prompt.txt | tr -d ' ')" -lt 100000 ]; then
+  prompt_args=("$(cat /work/prompt.txt)")
+else
+  prompt_args=(@/work/prompt.txt "Your complete task prompt is the attached file above; follow it exactly.")
+fi`;
+}
+
+/**
+ * The EXIT trap records the wrapper's status for the worker. The script sets `wrapper_status`
+ * to the status it intends right before it ends, because with a real pi session `$?` at trap
+ * entry has been observed as 1 after `exit 0`; the trap also logs the command it fired on.
+ */
+function mailboxSetup(): string {
+  return `mkdir -p ${MAILBOX_DIRECTORY}/requests ${MAILBOX_DIRECTORY}/responses
+finish_round() {
+  local status=$?
+  printf '[selfbench] exit trap: status=%s command=[%s] line=%s\\n' "$status" "$BASH_COMMAND" "$LINENO" >&2
+  if [ -n "\${wrapper_status:-}" ]; then status=$wrapper_status; fi
+  cleanup
+  printf '%s\\n' "$status" > ${WRAPPER_STATUS_PATH}
+  : > ${MAILBOX_DONE}
+}
+trap finish_round EXIT`;
 }
 function sandboxBootstrap(): string {
   return `set -euo pipefail

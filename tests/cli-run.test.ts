@@ -133,6 +133,10 @@ describe("SelfBench CLI run", () => {
           "3",
           "--association",
           association,
+          "--exclude-run",
+          "earlier-run",
+          "--exclude-run",
+          "another-run",
           "--output",
           output,
         ],
@@ -164,6 +168,7 @@ describe("SelfBench CLI run", () => {
         sourceUrl: "https://github.com/example/project/pull/42",
       });
       expect(submittedRun?.candidateCounts).toEqual({ easy: 1, medium: 2, hard: 3 });
+      expect(submittedRun?.excludeRuns).toEqual(["earlier-run", "another-run"]);
       expect(stdout).toContain(`"output": "${output}"`);
       expect(stderr).toContain('"phase":"complete"');
     } finally {

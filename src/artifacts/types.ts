@@ -10,6 +10,8 @@ export interface ArtifactStore {
   get(reference: ArtifactRef): Promise<Uint8Array>;
   openRead(reference: ArtifactRef): Promise<Readable>;
   getByKey(key: string): Promise<Uint8Array | undefined>;
+  /** A time-limited URL a sandbox can GET the artifact from, when the backend supports it. */
+  signedReadUrl?(reference: ArtifactRef, ttlMs: number): Promise<string | undefined>;
   openReadByKey(key: string, options?: { readonly start?: number }): Promise<Readable | undefined>;
   list(prefix: string): Promise<ArtifactEntry[]>;
 }

@@ -1,6 +1,8 @@
 import type { CommandHandle, CommandResult } from "e2b";
 import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
+import type { LiveSandboxBacking, Supervision } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
 import { raceWithTermination } from "./lifecycle.js";
 import type { E2BSandboxHandle } from "./types.js";
 
@@ -16,6 +18,9 @@ export async function executeE2BCommand(input: {
   readonly stderr: RollingOutput;
   readonly termination: Promise<never>;
   readonly setCommand: (command: CommandHandle) => void;
+  readonly startSupervision?: (sandbox: E2BSandboxHandle) => Supervision;
+  /** Backoff between output-read retries; injectable so tests stay fast. */
+  readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<SandboxResult> {
   const { sandbox, request, options, signal, terminate, stdout, stderr, termination, setCommand } =
     input;
@@ -70,21 +75,26 @@ export async function executeE2BCommand(input: {
       termination,
     );
     armInactivityTimer();
+    const supervision = input.startSupervision?.(sandbox);
 
     let completed: CommandResult;
     try {
       completed = await raceWithTermination(command.wait(), termination);
     } catch (error) {
       if (!isCommandResult(error)) {
+        await supervision?.finish().catch(() => undefined);
         throw error;
       }
       completed = error;
     }
     clearInactivityTimer();
+    if (supervision) {
+      await raceWithTermination(supervision.finish(), termination);
+    }
     captureUnstreamedCommandOutput(completed, stdout, stderr);
 
     const outputs = await raceWithTermination(
-      collectOutputs(sandbox, request, completed.exitCode, signal),
+      collectOutputs(sandbox, request, completed.exitCode, signal, input.sleep),
       termination,
     );
     return {
@@ -97,6 +107,40 @@ export async function executeE2BCommand(input: {
   } finally {
     clearInactivityTimer();
   }
+}
+
+/** execute/readFile/writeFile over a running E2B sandbox. */
+export function e2bBacking(sandbox: E2BSandboxHandle): LiveSandboxBacking {
+  return {
+    execute: async (command) => {
+      try {
+        const result = await sandbox.commands.run(shellCommand(command), {
+          cwd: E2B_WORK_DIRECTORY,
+        });
+        return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+      } catch (error) {
+        if (isCommandResult(error)) {
+          return { exitCode: error.exitCode, stdout: error.stdout, stderr: error.stderr };
+        }
+        throw error;
+      }
+    },
+    readFile: async (path) => {
+      try {
+        return await sandbox.files.read(path, { format: "bytes" });
+      } catch {
+        return undefined;
+      }
+    },
+    writeFile: async (path, contents) => {
+      await sandbox.files.writeFiles([
+        {
+          path,
+          data: typeof contents === "string" ? contents : Uint8Array.from(contents).buffer,
+        },
+      ]);
+    },
+  };
 }
 
 function shellCommand(command: readonly string[]): string {
@@ -122,17 +166,20 @@ async function collectOutputs(
   request: SandboxRequest,
   exitCode: number,
   signal: AbortSignal,
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>,
 ): Promise<Record<string, Uint8Array>> {
   const outputs: Record<string, Uint8Array> = {};
   for (const path of request.outputPaths ?? []) {
-    try {
-      outputs[path] = await sandbox.files.read(path, { format: "bytes", signal });
-    } catch (error) {
-      if (exitCode === 0) {
-        throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
-          cause: error,
-        });
-      }
+    const { value, lastError } = await readOutputWithRetry(
+      () => sandbox.files.read(path, { format: "bytes", signal }),
+      { signal, ...(sleep ? { sleep: (ms) => sleep(ms, signal) } : {}) },
+    );
+    if (value !== undefined) {
+      outputs[path] = value;
+    } else if (exitCode === 0) {
+      throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
+        cause: lastError,
+      });
     }
   }
   return outputs;

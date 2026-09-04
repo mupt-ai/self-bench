@@ -28,6 +28,10 @@ export function candidateStage(task: Pick<TaskProgress, "status" | "reason">): C
 
 function rejectedStage(reason: string): CandidateStage {
   const head = reason.slice(0, 400);
+  // Agent-pipeline runs prefix the reason with the loop that rejected: "authoring ..." for an
+  // authoring-agent verdict, "verifier ..." for a verification-agent verdict.
+  if (/^authoring\b/.test(head)) return "authoring";
+  if (/^verifier\b/.test(head)) return "review";
   if (/environment authoring/i.test(head)) return "environment";
   if (
     /repeated task ID|authoring did not produce|authoring checkpoint|authoring failed/i.test(head)

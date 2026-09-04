@@ -1,12 +1,10 @@
 export { selectCandidateProvenance } from "./activities/discovery.js";
 export { createActivities } from "./activities/factory.js";
 export type {
-  AuthorCandidateInput,
+  AuthoringRoundInput,
+  CompileAndVerifyInput,
   DiscoveryShardInput,
-  EnvironmentAuthoringInput,
   ExportInput,
-  RepairTaskInput,
   SelfBenchActivities,
-  TaskStageInput,
-  ValidationRepairTaskInput,
+  VerifierRoundInput,
 } from "./activities/types.js";

@@ -111,6 +111,15 @@ export class GcsArtifactStore implements ArtifactStore {
     return value;
   }
 
+  async signedReadUrl(reference: ArtifactRef, ttlMs: number): Promise<string> {
+    const [url] = await this.#fileForReference(reference).getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: Date.now() + ttlMs,
+    });
+    return url;
+  }
+
   async openRead(reference: ArtifactRef): Promise<Readable> {
     const file = this.#fileForReference(reference);
     const [metadata] = await file.getMetadata();

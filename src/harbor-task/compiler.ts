@@ -103,10 +103,7 @@ export async function compileHarborTask(
     writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(tests, "task-test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(task.definition)),
-    writeFile(
-      join(tests, "Dockerfile"),
-      verifierDockerfile(task.definition, preinstallGoldDependencies),
-    ),
+    writeFile(join(tests, "Dockerfile"), verifierDockerfile(task.definition, dependencySetupPatch)),
     ...environmentContextFiles(environment, task.definition),
     ...environmentContextFiles(tests, task.definition),
     ...serviceComposeFiles(tests, task.definition),
@@ -175,10 +172,7 @@ export async function refreshHarborTask(
     writeFile(join(outputDirectory, "definition.json"), `${JSON.stringify(definition, null, 2)}\n`),
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(definition)),
-    writeFile(
-      join(tests, "Dockerfile"),
-      verifierDockerfile(definition, preinstallGoldDependencies),
-    ),
+    writeFile(join(tests, "Dockerfile"), verifierDockerfile(definition, dependencySetupPatch)),
     ...environmentContextFiles(environment, definition),
     ...environmentContextFiles(tests, definition),
     rm(join(environment, "docker-compose.yaml"), { force: true }),

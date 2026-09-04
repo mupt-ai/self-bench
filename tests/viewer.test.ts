@@ -54,7 +54,13 @@ describe("candidate classification", () => {
   test("derives the pipeline stage from status and reason", () => {
     expect(candidateStage({ status: "accepted" })).toBe("accepted");
     expect(candidateStage({ status: "infrastructure_failed" })).toBe("infrastructure");
-    expect(candidateStage({ status: "validating" })).toBe("in_progress");
+    expect(candidateStage({ status: "verifying" })).toBe("in_progress");
+    expect(
+      candidateStage({ status: "rejected", reason: "authoring tests never fail; log: gs://x" }),
+    ).toBe("authoring");
+    expect(
+      candidateStage({ status: "rejected", reason: "verifier tests are coupled; log: gs://x" }),
+    ).toBe("review");
     expect(
       candidateStage({ status: "rejected", reason: "hard mode requires at least 3 files" }),
     ).toBe("audit");
@@ -187,6 +193,40 @@ describe("artifact store listing", () => {
     expect(stages.get("cand-b")?.taskId).toBe("task-b");
     expect(stages.get("cand-c")?.stage).toBe("authoring");
     expect(stages.get("cand-c")?.taskId).toBe("cand-c");
+
+    // Agent-pipeline runs decide candidates in round results, not coupling reviews: the latest
+    // verification round's accepted result.json is the accept signal, and a rejected round result
+    // names the loop that ended the candidate.
+    await store.put(
+      "runs/run-1/verification/cand-b/round-1/result.json",
+      Buffer.from(JSON.stringify({ kind: "fixed", candidateId: "cand-b" })),
+      "application/json",
+    );
+    await store.put(
+      "runs/run-1/verification/cand-b/round-2/result.json",
+      Buffer.from(JSON.stringify({ kind: "accepted", reason: "held-out tests pin the fix" })),
+      "application/json",
+    );
+    await store.put(
+      "runs/run-1/authoring/cand-c/round-3/result.json",
+      Buffer.from(
+        JSON.stringify({ kind: "rejected", reason: "authoring tests never fail; log: gs://x" }),
+      ),
+      "application/json",
+    );
+    clearArchivedListingCache();
+    const decided = new Map(
+      (await archivedCandidates(store, "run-1")).candidates.map((candidate) => [
+        candidate.candidateId,
+        candidate,
+      ]),
+    );
+    expect(decided.get("cand-b")?.status).toBe("accepted");
+    expect(decided.get("cand-b")?.stage).toBe("accepted");
+    expect(decided.get("cand-b")?.reasonSummary).toContain("held-out tests pin the fix");
+    expect(decided.get("cand-c")?.status).toBe("archived");
+    expect(decided.get("cand-c")?.stage).toBe("authoring");
+    expect(decided.get("cand-c")?.reasonSummary).toContain("authoring tests never fail");
   });
 });
 

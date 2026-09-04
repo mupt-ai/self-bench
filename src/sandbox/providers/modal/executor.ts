@@ -3,19 +3,25 @@ import { type Image, ModalClient, type Secret } from "modal";
 import type { SelfBenchConfig } from "../../../config.js";
 import { InactivityTimeoutError, RollingOutput } from "../../../process.js";
 import {
+  type SandboxExecResult,
   SandboxExecutionError,
   type SandboxExecutor,
   type SandboxRequest,
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../contracts.js";
+import { LiveSandboxRegistry } from "../../live.js";
+import { readOutputWithRetry } from "../../output-retry.js";
+import { materializeRemoteFiles } from "../../remote-files.js";
 import { validateSandboxRequest } from "../../request-validation.js";
+import { modalBacking } from "./live.js";
 
 const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
 
 export class ModalSandboxExecutor implements SandboxExecutor {
   readonly #client: ModalClient;
   readonly #config: Extract<SelfBenchConfig["execution"], { kind: "modal" }>;
+  readonly #live = new LiveSandboxRegistry();
   #image: Image | undefined;
 
   constructor(
@@ -55,7 +61,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
       options.signal?.throwIfAborted();
-      for (const file of request.files ?? []) {
+      for (const file of await materializeRemoteFiles(request.files ?? [], options.signal)) {
         if (typeof file.contents === "string") {
           await sandbox.filesystem.writeText(file.contents, file.path);
         } else {
@@ -69,6 +75,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
         ...(secrets.length > 0 ? { secrets } : {}),
       });
       await process.closeStdin();
+      const supervision = this.#live.start(sandbox.sandboxId, modalBacking(sandbox), options);
       const stdoutOutput = new RollingOutput();
       const stderrOutput = new RollingOutput();
       const readers = new Set<ReadableStreamDefaultReader<string | Uint8Array>>();
@@ -149,15 +156,23 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       if (readers.size > 0) {
         void Promise.allSettled([...readers].map((reader) => reader.cancel()));
       }
+      let supervisionError: unknown;
+      await supervision.finish().catch((error: unknown) => {
+        supervisionError = error;
+      });
       const executionError =
-        options.signal?.reason ?? inactivityError ?? processError ?? streamError;
+        options.signal?.reason ??
+        inactivityError ??
+        processError ??
+        streamError ??
+        supervisionError;
       const outputs: Record<string, Uint8Array> = {};
       for (const path of request.outputPaths ?? []) {
-        try {
-          outputs[path] = await sandbox.filesystem.readBytes(path);
-        } catch {
-          // Callers validate required outputs after persisting stdout/stderr. Returning an
-          // absent output keeps the model or command failure diagnosable.
+        // Callers validate required outputs after persisting stdout/stderr. Returning an
+        // absent output keeps the model or command failure diagnosable.
+        const { value } = await readOutputWithRetry(() => sandbox.filesystem.readBytes(path));
+        if (value !== undefined) {
+          outputs[path] = value;
         }
       }
       const result = {
@@ -179,6 +194,18 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       options.signal?.removeEventListener("abort", abort);
       await sandbox.terminate().catch(() => undefined);
     }
+  }
+
+  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
+    return this.#live.execute(sandboxId, command);
+  }
+
+  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
+    return this.#live.readFile(sandboxId, path);
+  }
+
+  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
+    return this.#live.writeFile(sandboxId, path, contents);
   }
 
   close(): void {

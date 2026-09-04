@@ -1,12 +1,15 @@
 import type { Sandbox } from "@vercel/sandbox";
 import { RollingOutput } from "../../../process.js";
 import type {
+  SandboxExecResult,
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
 } from "../../contracts.js";
-import { executeVercelCommand, VERCEL_WORK_DIRECTORY } from "./command.js";
+import { LiveSandboxRegistry } from "../../live.js";
+import { materializeRemoteFiles } from "../../remote-files.js";
+import { executeVercelCommand, VERCEL_WORK_DIRECTORY, vercelBacking } from "./command.js";
 import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
 import {
   abortableDelay,
@@ -37,6 +40,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
   readonly #config: VercelExecutionConfig;
   readonly #fetch: typeof globalThis.fetch;
   readonly #sleep: Sleep;
+  readonly #live = new LiveSandboxRegistry();
 
   constructor(
     config: VercelExecutionConfig,
@@ -126,9 +130,10 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         );
       }
 
-      if (request.files && request.files.length > 0) {
+      const files = await materializeRemoteFiles(request.files ?? [], controller.signal);
+      if (files.length > 0) {
         await session.writeFiles(
-          request.files.map((file) => ({ path: file.path, content: file.contents })),
+          files.map((file) => ({ path: file.path, content: file.contents })),
           { signal: controller.signal },
         );
       }
@@ -142,6 +147,8 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         terminate,
         stdout,
         stderr,
+        startSupervision: () => this.#live.start(name, vercelBacking(session), options),
+        sleep: this.#sleep,
       });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: { sandboxId: sandbox.name, ...outputs } };
@@ -184,6 +191,18 @@ export class VercelSandboxExecutor implements SandboxExecutor {
       throw outcome.error;
     }
     return outcome.result;
+  }
+
+  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
+    return this.#live.execute(sandboxId, command);
+  }
+
+  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
+    return this.#live.readFile(sandboxId, path);
+  }
+
+  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
+    return this.#live.writeFile(sandboxId, path, contents);
   }
 
   close(): void {}

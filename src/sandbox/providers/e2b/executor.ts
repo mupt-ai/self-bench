@@ -1,13 +1,15 @@
 import { type CommandHandle, E2B } from "e2b";
 import { RollingOutput } from "../../../process.js";
 import type {
+  SandboxExecResult,
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
 } from "../../contracts.js";
+import { LiveSandboxRegistry } from "../../live.js";
 import { E2BCleanup } from "./cleanup.js";
-import { executeE2BCommand } from "./command.js";
+import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
 import { abortReason, createTerminationGate, raceWithTermination } from "./lifecycle.js";
 import {
@@ -19,6 +21,7 @@ import {
   sanitizeCleanupError,
   waitForCommandKill,
 } from "./outcome.js";
+import { stageRequestFiles } from "./stage-files.js";
 import type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
 import {
   validateAllocatedSandbox,
@@ -34,7 +37,9 @@ const CLEANUP_REQUEST_TIMEOUT_MS = 30_000;
 const CLEANUP_CALL_TIMEOUT_MS = 10_000;
 const CLEANUP_RECOVERY_DELAYS_MS = [0, 250, 750, 1_500, 3_000, 5_000, 7_500, 10_000] as const;
 const COMMAND_KILL_GRACE_MS = 500;
-const CREATE_REQUEST_TIMEOUT_MS = CLEANUP_REQUEST_TIMEOUT_MS;
+// Creating a sandbox from a large template regularly exceeds the 30 s cleanup budget; a short
+// client timeout here leaves E2B with a half-created sandbox and the worker with nothing.
+const CREATE_REQUEST_TIMEOUT_MS = 120_000;
 const DIAGNOSTIC_TIMEOUT_MS = 5_000;
 const HARD_TIMEOUT_EXIT_CODE = 124;
 const DEFAULT_LIFECYCLE_TIMINGS: E2BLifecycleTimings = {
@@ -61,6 +66,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
   readonly #api: E2BSandboxApi;
   readonly #sleep: E2BSleep;
   readonly #timings: E2BLifecycleTimings;
+  readonly #live = new LiveSandboxRegistry();
 
   constructor(
     config: E2BExecutionConfig,
@@ -163,21 +169,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       );
       validateAllocatedSandbox(sandbox.sandboxId, info, resources, metadata);
 
-      if (request.files && request.files.length > 0) {
-        await raceWithTermination(
-          sandbox.files.writeFiles(
-            request.files.map((file) => ({
-              path: file.path,
-              data:
-                typeof file.contents === "string"
-                  ? file.contents
-                  : Uint8Array.from(file.contents).buffer,
-            })),
-            { signal: controller.signal },
-          ),
-          termination.promise,
-        );
-      }
+      await stageRequestFiles(sandbox, request, controller.signal, termination.promise);
       throwIfTerminated(terminationError);
 
       const execution = await executeE2BCommand({
@@ -195,6 +187,8 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             killCommand();
           }
         },
+        startSupervision: (live) => this.#live.start(live.sandboxId, e2bBacking(live), options),
+        sleep: this.#sleep,
       });
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: execution };
@@ -259,6 +253,18 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       throw outcome.error;
     }
     return outcome.result;
+  }
+
+  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
+    return this.#live.execute(sandboxId, command);
+  }
+
+  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
+    return this.#live.readFile(sandboxId, path);
+  }
+
+  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
+    return this.#live.writeFile(sandboxId, path, contents);
   }
 
   close(): void {}

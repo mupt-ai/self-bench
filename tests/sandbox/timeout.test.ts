@@ -19,6 +19,16 @@ class RecordingExecutor implements SandboxExecutor {
     return { sandboxId: "test", exitCode: 0, stdout: "", stderr: "", outputs: {} };
   }
 
+  async execute(): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    return { exitCode: 0, stdout: "", stderr: "" };
+  }
+
+  async readFile(): Promise<Uint8Array | undefined> {
+    return undefined;
+  }
+
+  async writeFile(): Promise<void> {}
+
   close(): void {
     this.closed = true;
   }

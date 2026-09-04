@@ -54,7 +54,9 @@ export interface CandidateDefinitionSummary {
   readonly baseCommit: string;
 }
 
-export interface CandidateSummary extends Omit<TaskProgress, "status"> {
+/** `stage` is the viewer's pipeline position, derived from status and reason; the progress record's
+ * own `stage` (which agent loop is running) is dropped in favor of it. */
+export interface CandidateSummary extends Omit<TaskProgress, "status" | "stage"> {
   /** "archived" when Temporal no longer has the run and the verdict is inferred from artifacts. */
   readonly status: TaskProgress["status"] | "archived";
   readonly stage: CandidateStage;
