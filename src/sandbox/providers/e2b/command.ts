@@ -53,6 +53,7 @@ export async function executeE2BCommand(input: {
     }
     (stream === "stdout" ? stdout : stderr).push(chunk);
     options.onProgress?.({ stream, bytes: chunk.byteLength });
+    options.onOutput?.(stream, chunk);
     armInactivityTimer();
   };
 

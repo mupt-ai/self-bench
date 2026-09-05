@@ -125,7 +125,7 @@ export interface ArchivedRun {
   startedAt?: string;
 }
 
-export type TaskState = "needs_review" | "accepted" | "rejected" | "in_progress";
+export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
 
 export interface TaskReview {
   decision: "approve" | "reject";
@@ -252,4 +252,21 @@ export async function clearReview(
 
 export function taskArtifactsPath(org: string, fullName: string, runId: string, taskId: string) {
   return `${repoPath(org, fullName)}/tasks/${runId}/${encodeURIComponent(taskId)}/artifacts`;
+}
+
+export interface MergedPullRequest {
+  number: number;
+  title: string;
+  author: string;
+  mergedAt: string;
+}
+
+export interface PullRequestPage {
+  pullRequests: MergedPullRequest[];
+  nextPage: number | null;
+  incomplete: boolean;
+}
+
+export function fetchMergedPullRequests(org: string, fullName: string, page = 1) {
+  return requestJson<PullRequestPage>(`${repoPath(org, fullName)}/pull-requests?page=${page}`);
 }

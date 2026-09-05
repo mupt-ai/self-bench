@@ -90,6 +90,13 @@ export type AuthoringRoundResult = z.infer<typeof authoringRoundResultSchema>;
 export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), session: artifactRefSchema, reason: z.string().min(1) }),
   z.object({
+    kind: z.literal("suggestions"),
+    session: artifactRefSchema,
+    summary: z.string().min(1),
+    suggestions: z.string().min(1),
+  }),
+  // Historical compatibility; new verifier sessions cannot produce this variant.
+  z.object({
     kind: z.literal("fixed"),
     task: authoredTaskDraftSchema,
     session: artifactRefSchema,

@@ -20,7 +20,7 @@ import { STATE_LABEL } from "../task/state";
 import { TaskList } from "../task/TaskList";
 
 type Filter = "all" | TaskState;
-const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected"];
+const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
 
 export function RepoPage() {
   const { org } = useOrg();
@@ -116,6 +116,7 @@ export function RepoPage() {
       needs_review: 0,
       accepted: 0,
       rejected: 0,
+      failed: 0,
       in_progress: 0,
     };
     for (const task of tasks ?? []) {

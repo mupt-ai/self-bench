@@ -4,6 +4,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   needs_review: "Needs Review",
   accepted: "Accepted",
   rejected: "Rejected",
+  failed: "Failed",
   in_progress: "In Progress",
 };
 

@@ -76,12 +76,79 @@ async function boot(options: {
     headers,
     body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
   });
-  return { site: server, headers, started, artifacts };
+  return { site: server, headers, started, artifacts, hub };
 }
 
 const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";
 
 describe("add a PR", () => {
+  test("lists merged human PRs with pagination without starting or recording tasks", async () => {
+    const prs = Object.fromEntries(
+      Array.from({ length: 22 }, (_, i) => [i + 1, pullRequest(i + 1)]),
+    );
+    prs[23] = pullRequest(23, { merged: false });
+    prs[24] = pullRequest(24, { user: { login: "bot", type: "Bot" } });
+    const { site, headers, started, hub } = await boot({ pullRequests: prs });
+    const response = await site.request(`${REPO}/pull-requests`, { headers });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      pullRequests: { number: number }[];
+      nextPage: number;
+    };
+    expect(body.pullRequests).toHaveLength(19);
+    expect(body.pullRequests[0]).toMatchObject({
+      number: 22,
+      title: "Fix thing 22",
+      author: "someone",
+      mergedAt: "2026-09-01T00:00:00Z",
+    });
+    expect(body.nextPage).toBe(2);
+    const second = await site.request(`${REPO}/pull-requests?page=2`, { headers });
+    expect(await second.json()).toMatchObject({
+      pullRequests: [{ number: 3 }, { number: 2 }, { number: 1 }],
+      nextPage: null,
+    });
+    expect(started).toHaveLength(0);
+    expect(await (await site.request(`${REPO}/tasks`, { headers })).json()).toEqual({ tasks: [] });
+    expect(hub.calls.some((call) => call.includes("/pulls/") || call.includes("/commits/"))).toBe(
+      false,
+    );
+    expect(
+      hub.calls.some((call) =>
+        decodeURIComponent(call).includes("repo:Mupt-AI/self-bench is:pr is:merged"),
+      ),
+    ).toBe(true);
+  });
+
+  test("listing requires authentication, tenant membership, a connected repo, and valid pagination", async () => {
+    const { site, headers, started, hub } = await boot({});
+    const before = hub.calls.length;
+    expect((await site.request(`${REPO}/pull-requests`)).status).toBe(401);
+    expect(
+      (
+        await site.request(`${REPO.replace("orgs/mupt-ai", "orgs/other")}/pull-requests`, {
+          headers,
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await site.request(`${REPO.replace("self-bench", "unknown")}/pull-requests`, { headers }))
+        .status,
+    ).toBe(404);
+    for (const page of ["0", "-1", "1.5", "abc", "51"]) {
+      expect((await site.request(`${REPO}/pull-requests?page=${page}`, { headers })).status).toBe(
+        400,
+      );
+    }
+    expect(hub.calls).toHaveLength(before);
+    expect(started).toHaveLength(0);
+    expect(await (await site.request(`${REPO}/pull-requests`, { headers })).json()).toEqual({
+      pullRequests: [],
+      nextPage: null,
+      incomplete: false,
+    });
+  });
+
   test("parses PR references and difficulty tiers", () => {
     expect(parsePullRequestRef("46", "a/b")).toBe(46);
     expect(parsePullRequestRef("#46", "a/b")).toBe(46);

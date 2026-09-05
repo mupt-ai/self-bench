@@ -167,8 +167,15 @@ function checkCandidateIdentity(
     ["sourcePr", definition.sourcePr, candidate.sourcePr],
     ["sourceUrl", definition.sourceUrl, candidate.sourceUrl],
     ["baseCommit", definition.baseCommit.toLowerCase(), candidate.baseCommit.toLowerCase()],
-    ["difficulty", definition.difficulty, candidate.difficulty],
   ].filter(([, actual, expected]) => actual !== expected);
+  const tier: Record<import("../../contracts.js").Difficulty, number> = {
+    easy: 1,
+    medium: 2,
+    hard: 3,
+  };
+  if (tier[definition.difficulty] > tier[candidate.difficulty]) {
+    mismatches.push(["difficulty", definition.difficulty, candidate.difficulty]);
+  }
   for (const [field, actual, expected] of mismatches) {
     errors.push(
       `definition ${String(field)} is ${JSON.stringify(actual)} but the assigned candidate requires ${JSON.stringify(expected)}`,

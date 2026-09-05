@@ -6,6 +6,7 @@ import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
 import type { SelfBenchConfig } from "../config.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
+import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
 import type { RepoStore } from "./repo-store.js";
 import { startTaskFromPullRequest, type WorkflowStarter } from "./task-start.js";
 import type { TaskStore } from "./task-store.js";
@@ -13,7 +14,7 @@ import { taskItem } from "./tasks.js";
 import { tenantFor } from "./tenant.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/from-pr$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(tasks\/from-pr|pull-requests)$/;
 
 export interface PullRequestRoutesOptions {
   readonly config: SelfBenchConfig;
@@ -42,11 +43,26 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
   return {
     async handle(request, url, response, user) {
       const match = route.exec(url.pathname);
-      if (!match?.[1] || !match[2] || !match[3] || request.method !== "POST") return false;
+      if (!match?.[1] || !match[2] || !match[3]) return false;
+      const listing = match[4] === "pull-requests";
+      if (request.method !== (listing ? "GET" : "POST")) return false;
       const tenant = await tenantFor(users, user, match[1]);
       const repo = tenant ? await repos.find(tenant.id, `${match[2]}/${match[3]}`) : undefined;
       if (!repo) {
         sendJson(response, 404, { error: "repository is not connected here" });
+        return true;
+      }
+      if (listing) {
+        const rawPage = url.searchParams.get("page") ?? "1";
+        const page = Number(rawPage);
+        if (!/^\d+$/.test(rawPage) || !Number.isInteger(page) || page < 1 || page > MAX_PR_PAGE) {
+          sendJson(response, 400, { error: "invalid pull request page" });
+          return true;
+        }
+        const token = await users.gitHubToken(user.githubId);
+        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+        const result = await listMergedPullRequests(auth, token, repo.fullName, page, fetchImpl);
+        sendJson(response, 200, result);
         return true;
       }
       const body = JSON.parse((await readBody(request, 16 * 1024)).toString("utf8") || "{}") as {
