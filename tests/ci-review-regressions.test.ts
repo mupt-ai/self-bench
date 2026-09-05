@@ -43,3 +43,10 @@ test("workflow failure preserves complete technical details", async () => {
     reason: expect.stringContaining(detail),
   });
 });
+
+test("authoring feedback is cleared when the revised mechanical report is red", async () => {
+  const { authoringResumePrompt } = await import("../src/temporal/activities/prompts-authoring.js");
+  expect(authoringResumePrompt(3, "RED mechanical report")).not.toContain(
+    "read-only reviewer requested revisions",
+  );
+});

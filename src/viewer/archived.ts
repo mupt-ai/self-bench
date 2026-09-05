@@ -146,19 +146,27 @@ async function latestRoundDecision(
   prefix: string,
   candidateId: string,
 ): Promise<ArchivedDecision | undefined> {
-  let latest: { key: string; loop: string; round: number } | undefined;
+  const terminal: { key: string; loop: "authoring" | "verification"; round: number }[] = [];
   for (const entry of entries) {
     const match = ROUND_RESULT.exec(entry.key.slice(prefix.length));
     if (!match?.[1] || !match[2]) continue;
     if (entry.key.slice(prefix.length).split("/")[1] !== candidateId) continue;
-    const loop = match[1];
-    const round = Number(match[2]);
-    const later =
-      !latest ||
-      round > latest.round ||
-      (round === latest.round && loop === "verification" && latest.loop === "authoring");
-    if (later) latest = { key: entry.key, loop, round };
+    const loop = match[1] as "authoring" | "verification";
+    const value = await readJson(store, entry.key);
+    if (value?.kind === "accepted" || value?.kind === "rejected") {
+      terminal.push({ key: entry.key, loop, round: Number(match[2]) });
+    }
   }
+  const verification = terminal
+    .filter((item) => item.loop === "verification")
+    .sort((left, right) => right.round - left.round)[0];
+  const authoring = terminal
+    .filter((item) => item.loop === "authoring")
+    .sort((left, right) => right.round - left.round)[0];
+  // In the read-only reviewer flow, a later authoring rejection after suggestions is terminal.
+  // In the legacy flow, verification follows all authoring rounds and therefore wins.
+  const latest =
+    authoring && (!verification || authoring.round > verification.round) ? authoring : verification;
   if (!latest) return undefined;
   const value = await readJson(store, latest.key);
   if (!value) return undefined;
