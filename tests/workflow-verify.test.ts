@@ -47,7 +47,7 @@ describe("SelfBench in-session verify", () => {
       { report: "file:///verified/report.json", bundle: "file:///verified/harbor-task.tar.gz" },
     ]);
   });
-  test("carries spent verify calls into the fallback round and reuses a verified fix", async () => {
+  test("carries the author verify budget across red checks and reviewer suggestions", async () => {
     const activities = acceptingActivities([candidate("budget", 1)]);
     const authorBudgets: number[] = [];
     activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
@@ -59,24 +59,19 @@ describe("SelfBench in-session verify", () => {
         verifyCalls: round === 1 ? 2 : 1,
       };
     };
-    const verifierBudgets: number[] = [];
-    activities.runVerifierRound = async ({ candidate: value, round, verifyCallsUsed }) => {
-      verifierBudgets.push(verifyCallsUsed ?? -1);
-      if (round === 1) {
-        const task = draft(value.candidateId, "-fixed");
+    const verifierRounds: number[] = [];
+    activities.runVerifierRound = async ({ round, session, verifyCallsUsed }) => {
+      verifierRounds.push(round);
+      expect(session).toBeUndefined();
+      expect(verifyCallsUsed).toBeUndefined();
+      if (round === 2)
         return {
-          kind: "fixed",
-          task,
-          session: ref("file:///v1"),
-          summary: "fixed",
-          verifyCalls: 1,
-          verified: {
-            report: ref("file:///fix-report"),
-            task: { ...task, bundle: ref("file:///fix-bundle") },
-          },
+          kind: "suggestions",
+          session: ref("file:///v2"),
+          summary: "Fix coupling",
+          suggestions: "Exercise public behavior",
         };
-      }
-      return { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
+      return { kind: "accepted", session: ref("file:///v3"), reason: "fair" };
     };
     const verified: string[] = [];
     const original = activities.compileAndVerify;
@@ -93,8 +88,8 @@ describe("SelfBench in-session verify", () => {
     const result = await executeRun(run, activities);
 
     expect(result.acceptedTaskIds).toEqual(["budget-task"]);
-    expect(authorBudgets).toEqual([0, 2]);
-    expect(verifierBudgets).toEqual([0, 1]);
-    expect(verified).toEqual(["authoring:1", "authoring:2"]);
+    expect(authorBudgets).toEqual([0, 2, 3]);
+    expect(verifierRounds).toEqual([2, 3]);
+    expect(verified).toEqual(["authoring:1", "authoring:2", "authoring:3"]);
   });
 });

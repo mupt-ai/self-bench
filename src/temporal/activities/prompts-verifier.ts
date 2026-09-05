@@ -1,8 +1,4 @@
-import {
-  MAX_VERIFIER_ROUNDS,
-  type TaskEnvironment,
-  VERIFIER_VERIFY_BUDGET,
-} from "../../contracts.js";
+import type { TaskEnvironment } from "../../contracts.js";
 import type { CouplingEvidence } from "../../coupling.js";
 
 export interface VerifierPromptInput {
@@ -18,12 +14,12 @@ export interface VerifierPromptInput {
 
 /** Round 1 prompt for the independent verification agent. */
 export function verifierPrompt(input: VerifierPromptInput): string {
-  return `You are the independent SelfBench verification agent for task ${input.taskId}. You have not seen the authoring conversation. Judge whether this Harbor task is a fair, self-contained benchmark and either accept it or fix it.
+  return `You are the independent SelfBench verification agent for task ${input.taskId}. You have not seen the authoring conversation. Judge whether this Harbor task is a fair, self-contained benchmark and either accept it or submit suggestions for the next authoring agent.
 
 # Workspace
 
 - /work/task/harbor-task is the compiled task: instruction.md, task.toml, environment/ (Dockerfile, root-setup.sh, setup.sh, smoke.sh, repo.tar.gz), tests/ (Dockerfile, test.patch, test.sh), solution/gold.patch. Read these rendered files; never edit them.
-- /work/repo is the exact base snapshot with the held-out test patch applied as a Git working tree (HEAD is the base). Edit held-out tests here when fixing.
+- /work/repo is the exact base snapshot with the held-out test patch applied as a Git working tree (HEAD is the base). It is read-only; do not edit it.
 - The verification report, deterministic coupling evidence, environment contract, and both patches are below.
 
 # Judge
@@ -37,10 +33,12 @@ export function verifierPrompt(input: VerifierPromptInput): string {
 # Decide
 
 - accept_task: the task is fair and the report is GREEN. Findings must resolve every blocker; the counterexample must describe a plausible alternative correct implementation and whether the tests accept it.
-- submit_fix: the task is repairable within your limits. Author the fix as files: edit the held-out test files in /work/repo (only these paths: ${input.heldOutPaths.join(", ")}) and, when the environment contract or test selection must change, write /work/fix/definition.json containing only the changed fields among environment, testCommand, failToPass, passToPass, testPaths, timeouts, resources. Optionally write /work/fix/test.patch with git diff; when it is absent the tools regenerate it from the /work/repo working tree. Then call verify (no arguments): it runs the static check and then the worker rebuilds and runs smoke, nop, and oracle on your fix exactly as the harness does and returns the report (wait for it; up to an hour). You have ${VERIFIER_VERIFY_BUDGET} verify calls in this session. Once verify is green, call submit_fix (no arguments) once. Rewrite tests so they verify every material requested behavior through stable public boundaries; preserve negative, authorization, compatibility, and regression coverage; do not delete assertions merely to silence the coupling report. Never edit application code, the instruction, the gold patch, or the base commit; never reset, revert, or commit. The unchanged base must still fail the fail-to-pass tests and the gold implementation must still pass. If your sandbox dies mid-session you may be resumed with the latest report (at most ${MAX_VERIFIER_ROUNDS} rounds in total). accept_task needs no verify call when the current report is GREEN.
-- Neither tool: the task cannot become a fair benchmark within these limits. Explain the blocker in your final message; the candidate is rejected.
+- submit_suggestions: the task needs changes, but you may not edit anything. Submit a concise summary and actionable suggestions for the next authoring agent. Do not prescribe private implementation details; identify fairness, public-seam, coupling, environment, or test issues.
+- reject_task: the task cannot be made fair within the authoring workflow; explain the blocker.
 
-Run focused tests in /work/repo when feasible; inspect solution/gold.patch only to understand the intended behavior and available seams, never to copy its private structure into assertions. Do not return prose after a tool call.
+The verifier has no bash, edit, write, or verify tools. It must not modify the task, tests, definition, patches, or repository.
+
+Use read, grep, find, and ls to inspect the existing test evidence; inspect solution/gold.patch only to understand the intended behavior and available seams, never to copy its private structure into assertions. Do not return prose after a tool call.
 
 # Authentic request (instruction.md)
 
@@ -72,15 +70,4 @@ ${input.testPatch}
 ${input.goldPatch}
 \`\`\`
 `;
-}
-
-/** Prompt appended as the next user turn when a verifier session is resumed after a fix. */
-export function verifierResumePrompt(round: number, renderedReport: string): string {
-  return `Round ${round} of ${MAX_VERIFIER_ROUNDS}. The worker rebuilt and re-verified the task with your fix. This is a fresh sandbox: /work/task/harbor-task and /work/repo now reflect the latest compiled task, and only this conversation carries over. Read the report. If it is GREEN and the task is fair, call accept_task; if it needs another fix within your limits, edit the held-out tests in /work/repo (and /work/fix/definition.json if fields must change), call verify until green (the result states how many verify calls remain), then call submit_fix; otherwise explain the blocker in your final message.${
-    round >= MAX_VERIFIER_ROUNDS
-      ? " This is the final round: submit_fix is no longer available. Decide now: call accept_task if the report is GREEN and the task is fair, or explain in your final message why it must be rejected."
-      : ""
-  }
-
-${renderedReport.trim()}`;
 }

@@ -3,7 +3,6 @@ import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { SelfBenchConfig } from "../../config.js";
 import {
-  type ArtifactRef,
   AUTHOR_VERIFY_BUDGET,
   type AuthoringRoundResult,
   authoringRoundResultSchema,
@@ -18,6 +17,7 @@ import type { SandboxExecutor } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
 import { githubToken, loadPiModelAuth } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
+import { withAgentFeed } from "./agent-feed.js";
 import { authoringRoundScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, AUTHORING_TIMEOUT_MS } from "./constants.js";
 import { authoringPrompt, authoringResumePrompt } from "./prompts-authoring.js";
@@ -95,8 +95,9 @@ export async function runAuthoringRound(
         renderVerifyReport(
           verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8"))),
         ),
+        input.feedback,
       )
-    : authoringPrompt(run, candidate);
+    : authoringPrompt(run, candidate, input.feedback);
   await store.put(`${attemptPrefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
   const verifier = new SessionVerifier({
     store,
@@ -109,51 +110,59 @@ export async function runAuthoringRound(
   });
   const verifyBudget = Math.max(0, AUTHOR_VERIFY_BUDGET - (input.verifyCallsUsed ?? 0));
   const logKey = `${attemptPrefix}/sandbox.log`;
-  const sandboxResult = await runSandboxWithFailureLog(store, logKey, () =>
-    withActivityHeartbeats(
-      `running author sandbox for ${candidate.candidateId} round ${round}`,
-      (options) =>
-        sandbox.run(
-          {
-            runId: run.runId,
-            stage: `author-${candidate.candidateId}-r${round}`,
-            timeoutMs: AUTHORING_TIMEOUT_MS,
-            inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
-            files: [
-              { path: "/work/authoring.js", contents: extension },
-              { path: "/work/selfbench-skill/SKILL.md", contents: skill },
-              { path: "/work/sandbox-author.js", contents: packager },
-              { path: "/work/sandbox-check.js", contents: checker },
-              { path: "/work/provenance.json", contents: provenance },
-              { path: "/work/prompt.txt", contents: prompt },
-              ...(sessionBytes ? [{ path: PI_RESUMED_SESSION_PATH, contents: sessionBytes }] : []),
-            ],
-            outputPaths: [
-              "/work/source-task.tar.gz",
-              "/work/definition.json",
-              PI_SESSION_OUTPUT_PATH,
-              WRAPPER_STATUS_PATH,
-            ],
-            secrets: {
-              ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-              ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
-              ...(ghToken ? { GH_TOKEN: ghToken } : {}),
-            },
-            environment: {
-              SOURCE_REPO_URL: run.repository.url,
-              SOURCE_COMMIT: candidate.baseCommit,
-              AUTHOR_MODEL: run.authoring.model,
-              SELFBENCH_TASK_OUTPUT: "/work/tasks",
-              SELFBENCH_DELIVERABLE: "/work/task",
-              SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
-              SELFBENCH_MAILBOX: MAILBOX_DIRECTORY,
-              SELFBENCH_VERIFY_BUDGET: String(verifyBudget),
-            },
-            command: ["bash", "-lc", authoringRoundScript(round > 1)],
-          },
-          { ...options, onLive: (live, exited) => verifier.supervise(live, exited) },
+  const sandboxResult = await withAgentFeed(
+    store,
+    attemptPrefix,
+    [piAuth.apiKey ?? "", piAuth.authJson ?? "", ghToken ?? ""],
+    (onOutput) =>
+      runSandboxWithFailureLog(store, logKey, () =>
+        withActivityHeartbeats(
+          `running author sandbox for ${candidate.candidateId} round ${round}`,
+          (options) =>
+            sandbox.run(
+              {
+                runId: run.runId,
+                stage: `author-${candidate.candidateId}-r${round}`,
+                timeoutMs: AUTHORING_TIMEOUT_MS,
+                inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
+                files: [
+                  { path: "/work/authoring.js", contents: extension },
+                  { path: "/work/selfbench-skill/SKILL.md", contents: skill },
+                  { path: "/work/sandbox-author.js", contents: packager },
+                  { path: "/work/sandbox-check.js", contents: checker },
+                  { path: "/work/provenance.json", contents: provenance },
+                  { path: "/work/prompt.txt", contents: prompt },
+                  ...(sessionBytes
+                    ? [{ path: PI_RESUMED_SESSION_PATH, contents: sessionBytes }]
+                    : []),
+                ],
+                outputPaths: [
+                  "/work/source-task.tar.gz",
+                  "/work/definition.json",
+                  PI_SESSION_OUTPUT_PATH,
+                  WRAPPER_STATUS_PATH,
+                ],
+                secrets: {
+                  ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
+                  ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
+                  ...(ghToken ? { GH_TOKEN: ghToken } : {}),
+                },
+                environment: {
+                  SOURCE_REPO_URL: run.repository.url,
+                  SOURCE_COMMIT: candidate.baseCommit,
+                  AUTHOR_MODEL: run.authoring.model,
+                  SELFBENCH_TASK_OUTPUT: "/work/tasks",
+                  SELFBENCH_DELIVERABLE: "/work/task",
+                  SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
+                  SELFBENCH_MAILBOX: MAILBOX_DIRECTORY,
+                  SELFBENCH_VERIFY_BUDGET: String(verifyBudget),
+                },
+                command: ["bash", "-lc", authoringRoundScript(round > 1)],
+              },
+              { ...options, onOutput, onLive: (live, exited) => verifier.supervise(live, exited) },
+            ),
         ),
-    ),
+      ),
   );
   const result = reconcileWrapperStatus(sandboxResult);
   const log = await store.put(

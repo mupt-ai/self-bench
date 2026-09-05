@@ -111,6 +111,20 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
       );
     }
     if (url.includes("/search/issues")) {
+      const query = new URL(url);
+      if (query.searchParams.get("per_page") === "20") {
+        const rows = Object.values(options.pullRequests ?? {})
+          .filter((row) => row.merged === true)
+          .sort((a, b) => Number(b.number) - Number(a.number));
+        const offset = (Number(query.searchParams.get("page")) - 1) * 20;
+        return Response.json({
+          total_count: rows.length,
+          items: rows.slice(offset, offset + 20).map((row) => ({
+            ...row,
+            pull_request: { merged_at: "2026-09-01T00:00:00Z" },
+          })),
+        });
+      }
       return Response.json({ total_count: options.mergedPullRequests ?? 0 });
     }
     if (url.includes("/user/memberships/orgs")) {

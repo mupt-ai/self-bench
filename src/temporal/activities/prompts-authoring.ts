@@ -5,16 +5,9 @@ import {
   type RunRequest,
 } from "../../contracts.js";
 
-const tierRequirements = {
-  easy: "at least 20 changed implementation lines across at least 1 implementation file, at least 1 fail-to-pass test, and no pass-to-pass minimum",
-  medium:
-    "at least 50 changed implementation lines across at least 2 implementation files, at least 1 fail-to-pass test, and at least 1 pass-to-pass test",
-  hard: "at least 100 changed implementation lines across at least 3 implementation files, at least 1 fail-to-pass test, and at least 2 pass-to-pass tests",
-} as const;
-
 /** Round 1 prompt: the complete Harbor task (definition, environment contract, patches). */
-export function authoringPrompt(run: RunRequest, candidate: Candidate): string {
-  return `Author exactly one ${candidate.difficulty} SelfBench task for this assigned candidate:
+export function authoringPrompt(run: RunRequest, candidate: Candidate, feedback?: string): string {
+  return `Author exactly one SelfBench task for this assigned candidate. The initial ${candidate.difficulty} difficulty is only a heuristic; choose a lower tier when the actual implementation is smaller:
 
 ${JSON.stringify(
   {
@@ -28,7 +21,17 @@ ${JSON.stringify(
   2,
 )}
 
-Use only this candidate. Do not discover alternatives and do not run Harbor. Read /work/provenance.json only to verify the supplied authentic request. Inspect the base and completed commits. Split the completed change into a non-test gold patch and a held-out test patch. The task must meet ${candidate.difficulty} mode: ${tierRequirements[candidate.difficulty]}.
+Use only this candidate. Do not discover alternatives and do not run Harbor. Read /work/provenance.json only to verify the supplied authentic request. Inspect the base and completed commits. Split the completed change into a non-test gold patch and a held-out test patch. Use the highest honest tier supported by the implementation and tests. Do not pad the change to reach a tier threshold. The initial estimate is ${candidate.difficulty}; downgrading it is expected when appropriate.${
+    feedback
+      ? `
+
+# Read-only verifier suggestions
+
+${feedback}
+
+Address these suggestions in the deliverable, but do not add behavior beyond the authentic request.`
+      : ""
+  }}
 
 # Held-out tests
 
@@ -54,7 +57,7 @@ Use bash/read/grep/find to inspect and, when feasible, execute exploratory setup
 # Deliverable
 
 Your deliverable is the directory /work/task/ with exactly four files, written with read/write/bash and git diff:
-- definition.json: the task definition (schemaVersion 2, difficulty "${candidate.difficulty}") including the environment contract; omit prompt or keep it identical to instruction.md;
+- definition.json: the task definition (schemaVersion 2, difficulty matching the honest tier) including the environment contract; omit prompt or keep it identical to instruction.md;
 - instruction.md: the standalone instruction the evaluated agent reads (it is authoritative for the prompt);
 - test.patch: the held-out test patch (a Git patch starting with diff --git, LF line endings, final newline; produce it with git diff);
 - gold.patch: the non-test reference implementation patch, same format.
@@ -63,7 +66,7 @@ The verify and submit_task tools take no arguments; they read /work/task/ and re
 
 # Submission and rounds
 
-Call submit_task exactly once per round, normally after verify is green. If no verify calls remain, still submit your best deliverable: the worker verifies it itself, and a red result starts the next round with the report instead of ending the task. Never end a round without submitting when /work/task/ holds a deliverable you believe is correct. definition.json must use schemaVersion 2 and difficulty "${candidate.difficulty}". testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Inspect repository test scripts and CI only to select the correct test command. Do not move dependency installation, native builds, fixture generation, or browser installation into testCommand; the environment contract owns those.
+Call submit_task exactly once per round, normally after verify is green. If no verify calls remain, still submit your best deliverable: the worker verifies it itself, and a red result starts the next round with the report instead of ending the task. Never end a round without submitting when /work/task/ holds a deliverable you believe is correct. definition.json must use schemaVersion 2 and its honest difficulty tier. testCommand must contain the literal {tests} exactly once as an unquoted shell argument list, and every selected test path must be supplied only through that placeholder—never quote the whole placeholder, assign it to one scalar, or hard-code a fail-to-pass or pass-to-pass path elsewhere in the command. Use one repository-native test mode and bundler per command rather than chaining equivalent suites or bypassing repository wrappers with a generic runner. The prompt must not mention the PR, commits, patches, test names, or implementation. Inspect repository test scripts and CI only to select the correct test command. Do not move dependency installation, native builds, fixture generation, or browser installation into testCommand; the environment contract owns those.
 
 When the change spans a backend contract and a frontend, the held-out tests must exercise the backend contract through its public boundary (API responses, computed fields, validation, query behaviour); frontend tests that mock that API prove nothing about the change and the verification agent rejects them. Pick frontend-only tests only for changes that are genuinely frontend-only.
 
@@ -77,8 +80,20 @@ Pinned SelfBench version: ${run.version.selfbenchCommit}.`;
 }
 
 /** Prompt appended as the next user turn when an authoring session is resumed. */
-export function authoringResumePrompt(round: number, renderedReport: string): string {
+export function authoringResumePrompt(
+  round: number,
+  renderedReport: string,
+  feedback?: string,
+): string {
   return `Round ${round} of ${MAX_AUTHORING_ROUNDS}. Your previous submission did not pass verification. This is a fresh sandbox: the repository was re-cloned at the pinned base commit, your earlier working-tree edits are gone, and only this conversation carries over. Read the report, rewrite the deliverable in /work/task/ (definition.json with the environment contract, instruction.md, test.patch, gold.patch), call verify until it is green (the result states how many verify calls remain), then call submit_task exactly once. Every rule from the original brief still applies; do not weaken tests or move setup into the test command merely to turn a gate green. If the failure cannot be fixed within those rules, do not submit and explain why in your final message.
 
-${renderedReport.trim()}`;
+${renderedReport.trim()}${
+  feedback
+    ? `
+
+# Read-only verifier suggestions
+
+${feedback}`
+    : ""
+}`;
 }

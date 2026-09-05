@@ -68,7 +68,10 @@ export class DockerSandboxExecutor implements SandboxExecutor {
           ...(request.inactivityTimeoutMs
             ? { inactivityTimeoutMs: request.inactivityTimeoutMs }
             : {}),
-          onOutput: (stream, chunk) => options.onProgress?.({ stream, bytes: chunk.byteLength }),
+          onOutput: (stream, chunk) => {
+            options.onProgress?.({ stream, bytes: chunk.byteLength });
+            options.onOutput?.(stream, chunk);
+          },
         });
       } finally {
         await supervision.finish();

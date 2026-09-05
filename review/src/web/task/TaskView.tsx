@@ -1,22 +1,18 @@
 import React from "react";
 import { FileTree } from "../../components/FileTree";
-import { keyTail } from "../../lib/format";
 import { buildTaskModel } from "../../lib/task-model";
+import { AgentWorkSheet } from "../../sheets/AgentWorkSheet";
 import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
 import { FileSheet, type OpenFile } from "../../sheets/FileSheet";
-import { PipelineSheet } from "../../sheets/PipelineSheet";
 import type { TaskSource } from "../../sources/types";
-import type { CandidateArtifacts, TaskFiles, TaskRow } from "../../types";
+import type { TaskFiles, TaskRow } from "../../types";
 
 type Tab = "file" | "environment" | "pipeline";
-const TAIL_THRESHOLD_BYTES = 256 * 1024;
-const TAIL_BYTES = 64 * 1024;
 const DEFAULT_FILES = ["instruction.md", "task.toml", "definition.json"];
 
 /** The file review: bundle tree on the left, file / environment / pipeline on the right. */
 export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) {
   const [files, setFiles] = React.useState<TaskFiles | null>(null);
-  const [artifacts, setArtifacts] = React.useState<CandidateArtifacts | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("file");
   const [openFile, setOpenFile] = React.useState<OpenFile | null>(null);
@@ -27,7 +23,6 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
       try {
         const found = await source.artifacts?.(row.id);
         if (cancelled) return;
-        if (found) setArtifacts(found);
         const first = found?.bundles[0];
         if (first && source.loadBundle) {
           const loaded = await source.loadBundle(first.key);
@@ -45,20 +40,6 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
       cancelled = true;
     };
   }, [source, row.id]);
-
-  /** The tree shows the final bundle; the pipeline tab can still open an earlier pass explicitly. */
-  const switchBundle = async (key: string) => {
-    if (!source.loadBundle) return;
-    setFiles(null);
-    setError(null);
-    try {
-      setFiles(await source.loadBundle(key));
-      setOpenFile(null);
-      setTab("file");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  };
 
   const model = React.useMemo(() => (files ? buildTaskModel(files) : null), [files]);
 
@@ -90,33 +71,6 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
     setTab("file");
   };
 
-  const openArtifact = async (key: string, sizeBytes: number, full = false) => {
-    if (!source.readArtifact) return;
-    const path = keyTail(key, 4);
-    const partial = !full && key.endsWith(".log") && sizeBytes > TAIL_THRESHOLD_BYTES;
-    setOpenFile({ path, loading: true });
-    setTab("file");
-    try {
-      const start = partial ? sizeBytes - TAIL_BYTES : 0;
-      const text = await source.readArtifact(key, start > 0 ? { start } : undefined);
-      setOpenFile({
-        path,
-        text: partial ? text.slice(text.indexOf("\n") + 1) : text,
-        sizeBytes,
-        ...(partial
-          ? {
-              tail: {
-                shownBytes: TAIL_BYTES,
-                loadFull: () => void openArtifact(key, sizeBytes, true),
-              },
-            }
-          : {}),
-      });
-    } catch (cause) {
-      setOpenFile({ path: key, error: cause instanceof Error ? cause.message : String(cause) });
-    }
-  };
-
   const tabs: [Tab, string][] = [
     ["file", openFile ? `File · ${openFile.path.split("/").pop()}` : "File"],
     ["environment", "Environment"],
@@ -133,16 +87,14 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         <div className="task-files-body">
           {files ? (
             files.files.length === 0 ? (
-              <p className="notice">No bundle files for this task.</p>
+              <p className="notice">No files available yet.</p>
             ) : (
               <FileTree files={files.files} current={openFile?.path ?? null} onOpen={openPath} />
             )
           ) : error ? (
             <p className="notice bad">{error}</p>
           ) : (
-            <p className="loading">
-              Expanding the task bundle. Large bundles take a minute the first time.
-            </p>
+            <p className="loading">Loading files…</p>
           )}
         </div>
       </aside>
@@ -164,17 +116,11 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         {error && tab !== "pipeline" ? (
           <p className="notice bad">{error}</p>
         ) : tab === "pipeline" ? (
-          <PipelineSheet
-            source={source}
-            row={row}
-            artifacts={artifacts}
-            onOpenArtifact={(key, sizeBytes) => void openArtifact(key, sizeBytes)}
-            onOpenBundle={(key) => void switchBundle(key)}
-          />
+          <AgentWorkSheet source={source} row={row} />
         ) : tab === "file" ? (
           <FileSheet key={openFile?.path ?? ""} file={openFile} />
         ) : !model ? (
-          <p className="loading">Loading bundle</p>
+          <p className="loading">Loading files…</p>
         ) : (
           <EnvironmentSheet model={model} onOpenFile={openPath} />
         )}

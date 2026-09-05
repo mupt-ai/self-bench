@@ -22,6 +22,7 @@ describe("VercelSandboxExecutor basics", () => {
     fixture.outputs.set("/work/empty.bin", new Uint8Array());
     const executor = new VercelSandboxExecutor(config, fixture.fetch);
     const progress: Array<{ stream: "stdout" | "stderr"; bytes: number }> = [];
+    const output: string[] = [];
     const backing = Uint8Array.from([9, 0, 1, 2, 8]);
 
     const result = await executor.run(
@@ -44,9 +45,13 @@ describe("VercelSandboxExecutor basics", () => {
         cpu: 4,
         memoryMiB: 8192,
       },
-      { onProgress: (event) => progress.push(event) },
+      {
+        onProgress: (event) => progress.push(event),
+        onOutput: (stream, chunk) => output.push(`${stream}:${Buffer.from(chunk).toString()}`),
+      },
     );
 
+    expect(output).toEqual(["stdout:hello ", "stderr:warning\n", "stdout:world\n"]);
     expect(result.exitCode).toBe(7);
     expect(result.stdout).toBe("hello world\n");
     expect(result.stderr).toBe("warning\n");
