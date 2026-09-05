@@ -161,6 +161,7 @@ async function consumeLogs(
     const output = event.stream === "stdout" ? stdout : stderr;
     output.push(chunk);
     options.onProgress?.({ stream: event.stream, bytes: chunk.byteLength });
+    options.onOutput?.(event.stream, chunk);
     onOutput();
   }
 }

@@ -77,9 +77,21 @@ export function TaskPage() {
             <span className="task-run mono">{task.runId}</span>
           </div>
           {task.reasonSummary && task.state !== "accepted" && (
-            <p className="task-reason" title={task.reasonSummary}>
-              {task.reasonSummary}
-            </p>
+            <div
+              className={
+                task.pipelineStatus === "infrastructure_failed" ? "task-failure" : undefined
+              }
+            >
+              <p className="task-reason" title={task.reasonSummary}>
+                {task.reasonSummary}
+              </p>
+              {task.pipelineStatus === "infrastructure_failed" && task.reason && (
+                <details className="task-…">
+                  <summary>Technical Details</summary>
+                  <pre>{task.reason.replace(`${task.reasonSummary}\n\n`, "")}</pre>
+                </details>
+              )}
+            </div>
           )}
         </div>
         {task.state === "in_progress" ? (
@@ -88,6 +100,10 @@ export function TaskPage() {
               {task.stage}
               {task.round ? ` · round ${task.round}` : ""}
             </span>
+          </div>
+        ) : task.state === "failed" ? (
+          <div className="review-bar">
+            <span className="review-by">SelfBench Failed · No Verdict</span>
           </div>
         ) : (
           <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />

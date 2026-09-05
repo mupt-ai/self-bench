@@ -25,8 +25,7 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
 
-  if (!file)
-    return <p className="notice">Pick a file from the tree or an artifact from the pipeline.</p>;
+  if (!file) return <p className="notice">Select a file to inspect.</p>;
   if (file.loading) return <p className="loading">reading {file.path}</p>;
   if (file.error) return <p className="notice bad">{file.error}</p>;
   const size = file.sizeBytes ?? file.text?.length ?? 0;

@@ -57,6 +57,7 @@ export interface LiveSandbox {
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: SandboxProgress) => void;
+  readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
   /**
    * Runs concurrently with the main command once it has started; `exited` aborts when the command
    * finishes. run() waits for it to settle before collecting outputs and rejects if it throws.

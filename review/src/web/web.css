@@ -381,3 +381,10 @@
 .skeleton-lines .skeleton-bar { margin-top: 0; }
 @keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; } }
+
+.pr-load-more { display: flex; margin: 20px auto 4px; }
+
+.task-failure { border-left: 2px solid var(--red); padding-left: 10px; }
+.task-… { margin-top: 6px; color: var(--dim); font: 11px var(--mono); }
+.task-… summary { cursor: pointer; }
+.task-… pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -34,6 +34,8 @@ export interface AuthoringRoundInput {
   readonly report?: ArtifactRef;
   /** In-session verify calls already spent in earlier rounds of this session. */
   readonly verifyCallsUsed?: number;
+  /** Read-only verifier suggestions for the next authoring round. */
+  readonly feedback?: string;
 }
 
 /** Trusted compile + audit + Harbor build/smoke/nop/oracle for one submission. */

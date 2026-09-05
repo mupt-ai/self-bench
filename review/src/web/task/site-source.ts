@@ -9,16 +9,8 @@ import { type TaskItem, taskArtifactsPath } from "../api";
 export function siteTaskSource(org: string, fullName: string, task: TaskItem): TaskSource {
   const api = createApiClient("");
   const runId = encodeURIComponent(task.runId);
-  let pending: Promise<CandidateArtifacts> | undefined;
-  const artifacts = (): Promise<CandidateArtifacts> => {
-    pending ??= api.json<CandidateArtifacts>(
-      taskArtifactsPath(org, fullName, task.runId, task.taskId),
-    );
-    pending.catch(() => {
-      pending = undefined;
-    });
-    return pending;
-  };
+  const artifacts = (): Promise<CandidateArtifacts> =>
+    api.json<CandidateArtifacts>(taskArtifactsPath(org, fullName, task.runId, task.taskId));
   const loadBundle = (key: string): Promise<TaskFiles> =>
     api.json<TaskFiles>(`/v1/runs/${runId}/bundle?key=${encodeURIComponent(key)}`);
   return {

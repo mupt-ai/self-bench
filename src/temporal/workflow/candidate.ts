@@ -13,7 +13,6 @@ import {
   isHarborInfrastructureFailure,
 } from "./failures.js";
 import type { StageContext } from "./stage.js";
-import { verifyWithCleanup } from "./verification-stage.js";
 
 export function initialProgress(candidate: Candidate): TaskProgress {
   return {
@@ -26,12 +25,7 @@ export function initialProgress(candidate: Candidate): TaskProgress {
   };
 }
 
-/**
- * Body of one candidate child workflow: the authoring loop (agent + mechanical verification, ≤3
- * rounds) and then the independent verification loop (fresh agent, ≤3 rounds). `report` fires with
- * a snapshot on every progress change; the returned result is authoritative. Only exhausted or
- * Harbor infrastructure failures are absorbed; everything else propagates and fails the child.
- */
+/** Up to three authoring revisions, each gated mechanically and reviewed read-only. */
 export async function executeCandidate(
   input: CandidateWorkflowInput,
   activitySet: SelfBenchActivities,
@@ -54,9 +48,7 @@ export async function executeCandidate(
     },
   };
   try {
-    const authored = await authorWithVerification(context, candidate);
-    const outcome =
-      authored.kind === "green" ? await verifyWithCleanup(context, candidate, authored) : authored;
+    const outcome = await authorWithVerification(context, candidate);
     if (outcome.kind === "green") {
       progress.status = "accepted";
       return { progress: publish(), task: outcome.task, report: outcome.report };

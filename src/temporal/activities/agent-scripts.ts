@@ -60,28 +60,26 @@ wrapper_status=0`;
 }
 /**
  * One verification round. The sandbox program unpacks the compiled task and materializes the
- * base snapshot with the held-out patch applied; pi then accepts or fixes. Outputs are always
+ * base snapshot with the held-out patch applied; pi then accepts or submits review suggestions. Outputs are always
  * written so providers that require every declared output on success stay satisfied.
  */
 export function verifierRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
 ${collectPiSessionScript()}
 ${mailboxSetup()}
-mkdir -p /work/verdict /work/fix ${PI_SESSION_DIRECTORY}
+mkdir -p /work/verdict ${PI_SESSION_DIRECTORY}
 node /work/sandbox-verifier.js /work/task.tar.gz
 cd /work/repo
 ${promptArguments()}
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
   --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
-  --tools read,bash,edit,write,grep,find,ls,verify,accept_task,submit_fix "\${prompt_args[@]}" || agent_status=$?
+  --tools read,grep,find,ls,accept_task,submit_suggestions,reject_task "\${prompt_args[@]}" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"
 [ -f /work/verdict/verdict.json ] || printf '{"kind": "none"}\\n' > /work/verdict/verdict.json
-[ -f /work/fix/fixed-definition.json ] || printf '{}\\n' > /work/fix/fixed-definition.json
-[ -f /work/fix/fixed-test.patch ] || : > /work/fix/fixed-test.patch
 [ -f ${PI_SESSION_OUTPUT_PATH} ] || : > ${PI_SESSION_OUTPUT_PATH}
-${reportOutputs(["/work/verdict/verdict.json", "/work/fix/fixed-definition.json", "/work/fix/fixed-test.patch", PI_SESSION_OUTPUT_PATH])}
+${reportOutputs(["/work/verdict/verdict.json", PI_SESSION_OUTPUT_PATH])}
 wrapper_status=$agent_status
 exit "$agent_status"`;
 }

@@ -2,7 +2,13 @@ import type { ArtifactStore } from "../../artifacts.js";
 import { boundedTail } from "./harbor.js";
 
 /** Tool calls that end an agent session with a deliverable the worker must be able to collect. */
-export const TERMINAL_TOOLS = ["submit_task", "submit_fix", "accept_task"] as const;
+export const TERMINAL_TOOLS = [
+  "submit_task",
+  "submit_fix",
+  "accept_task",
+  "submit_suggestions",
+  "reject_task",
+] as const;
 const HARD_TIMEOUT_EXIT_CODE = 124;
 /**
  * The round wrapper's own exit status, written by its EXIT trap. Sandbox providers can lose a

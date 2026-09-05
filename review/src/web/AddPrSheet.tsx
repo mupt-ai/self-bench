@@ -1,5 +1,11 @@
 import React from "react";
-import { addPullRequest, type TaskItem } from "./api";
+import {
+  addPullRequest,
+  fetchMergedPullRequests,
+  formatAgo,
+  type MergedPullRequest,
+  type TaskItem,
+} from "./api";
 import type { SiteOrg } from "./session";
 
 export interface AddPrSheetProps {
@@ -11,13 +17,54 @@ export interface AddPrSheetProps {
 
 /** One merged PR becomes one task: the pipeline authors and verifies it in its own workflow. */
 export function AddPrSheet({ org, fullName, onClose, onStarted }: AddPrSheetProps) {
-  const [value, setValue] = React.useState("");
+  const [search, setSearch] = React.useState("");
+  const [selected, setSelected] = React.useState<number | null>(null);
+  const [rows, setRows] = React.useState<MergedPullRequest[]>([]);
+  const [page, setPage] = React.useState(1);
+  const [nextPage, setNextPage] = React.useState<number | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [listError, setListError] = React.useState<string | null>(null);
+  const [retry, setRetry] = React.useState(0);
+  const [incomplete, setIncomplete] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const input = React.useRef<HTMLInputElement>(null);
+  const closeButton = React.useRef<HTMLButtonElement>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retry explicitly reloads the same page.
+  React.useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setListError(null);
+    fetchMergedPullRequests(org.login, fullName, page).then(
+      (result) => {
+        if (!active) return;
+        setRows((previous) =>
+          page === 1
+            ? result.pullRequests
+            : [
+                ...previous,
+                ...result.pullRequests.filter(
+                  (row) => !previous.some((item) => item.number === row.number),
+                ),
+              ],
+        );
+        setNextPage(result.nextPage);
+        setIncomplete(result.incomplete);
+        setLoading(false);
+      },
+      (cause: Error) => {
+        if (!active) return;
+        setListError(cause.message);
+        setLoading(false);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [org.login, fullName, page, retry]);
 
   React.useEffect(() => {
-    input.current?.focus();
+    closeButton.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -25,11 +72,16 @@ export function AddPrSheet({ org, fullName, onClose, onStarted }: AddPrSheetProp
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  const query = search.trim().toLowerCase();
+  const visible = rows.filter((pr) =>
+    `${pr.title} #${pr.number} ${pr.author}`.toLowerCase().includes(query),
+  );
+
   const submit = () => {
-    if (!value.trim()) return;
+    if (selected === null || busy) return;
     setBusy(true);
     setError(null);
-    addPullRequest(org.login, fullName, value.trim()).then(
+    addPullRequest(org.login, fullName, String(selected)).then(
       (task) => {
         setBusy(false);
         onStarted(task);
@@ -56,43 +108,94 @@ export function AddPrSheet({ org, fullName, onClose, onStarted }: AddPrSheetProp
               authors a task from it, verifies it, and puts it up for review.
             </p>
           </div>
-          <button type="button" className="btn-ghost" onClick={onClose}>
+          <button ref={closeButton} type="button" className="btn-ghost" onClick={onClose}>
             Close
           </button>
         </header>
-        <form
-          className="sheet-lookup"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit();
-          }}
-        >
-          <input
-            ref={input}
-            className="sheet-search"
-            type="text"
-            placeholder="PR number or URL"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            aria-label="Pull request number or URL"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          <button type="submit" className="btn-primary" disabled={busy || !value.trim()}>
-            {busy ? "Starting…" : "Build Task"}
-          </button>
-        </form>
-        <div className="repo-list">
-          {error ? (
-            <p className="repo-note error">{error}</p>
-          ) : (
-            <p className="repo-note">
-              Needs at least 20 changed lines. Easy from 20 lines, medium from 50 across two files,
-              hard from 100 across three.
+        <input
+          className="sheet-search"
+          type="search"
+          placeholder="Search Listed PRs…"
+          aria-label="Search Listed Pull Requests"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="repo-list" aria-busy={loading}>
+          {visible.map((pr) => (
+            <button
+              key={pr.number}
+              type="button"
+              className={`repo-row${selected === pr.number ? " selected" : ""}`}
+              aria-pressed={selected === pr.number}
+              disabled={busy}
+              onClick={() => {
+                setSelected(pr.number);
+                setError(null);
+              }}
+            >
+              <span className="repo-detail">
+                <span className="repo-detail-name">{pr.title}</span>
+                <span className="repo-detail-line">
+                  #{pr.number} · {pr.author} · merged {formatAgo(pr.mergedAt)}
+                </span>
+              </span>
+            </button>
+          ))}
+          {loading && (
+            <p className="repo-note" role="status">
+              Loading merged pull requests…
             </p>
           )}
+          {listError && (
+            <p className="repo-note error" role="alert">
+              {listError}{" "}
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setRetry((value) => value + 1)}
+              >
+                Retry
+              </button>
+            </p>
+          )}
+          {!loading && !listError && visible.length === 0 && (
+            <p className="repo-note">
+              {query ? "No matching pull requests." : "No merged pull requests found on this page."}
+            </p>
+          )}
+          {incomplete && (
+            <p className="repo-note">
+              GitHub returned partial results. Try reopening the picker to refresh.
+            </p>
+          )}
+          {!loading && !listError && nextPage !== null && (
+            <button
+              type="button"
+              className="btn-secondary pr-load-more"
+              onClick={() => setPage(nextPage)}
+            >
+              Load More
+            </button>
+          )}
         </div>
+        {error && (
+          <p className="repo-note error" role="alert">
+            {error}
+          </p>
+        )}
+        <footer className="sheet-foot">
+          <span className="repo-detail-name">
+            {selected === null ? "Choose a Pull Request" : `PR #${selected}`}
+          </span>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={busy || selected === null}
+            onClick={submit}
+          >
+            {busy ? "Starting…" : "Build Task"}
+          </button>
+        </footer>
       </aside>
     </div>
   );

@@ -121,6 +121,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
               const chunk = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
               output.push(chunk);
               options.onProgress?.({ stream: streamName, bytes: chunk.byteLength });
+              options.onOutput?.(streamName, chunk);
               armInactivityTimer();
             }
           }

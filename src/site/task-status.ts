@@ -3,6 +3,23 @@ import type { CandidateWorkflowResult, TaskProgress } from "../contracts.js";
 import type { TaskRecord, TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
 
+export function infrastructureFailureSummary(reason: string): string {
+  if (/client_email|GoogleAuth|sign data/i.test(reason)) {
+    return "Run Failed: artifact storage credentials are incomplete. Ask an administrator to configure the worker's Google Cloud service account.";
+  }
+  if (/could not find package\.json above/i.test(reason)) {
+    return "Run Failed: the worker was running from an unavailable checkout. Restart the worker from the active SelfBench checkout.";
+  }
+  if (/timed out|timeout/i.test(reason)) {
+    return "Run Failed: the agent or worker timed out before this stage completed.";
+  }
+  const first = reason
+    .split("\n")
+    .find((line) => line.trim())
+    ?.trim();
+  return `Run Failed: ${first?.slice(0, 240) ?? "the worker encountered an infrastructure error."}`;
+}
+
 /** What the site can learn about a task's workflow without owning it. */
 export type WorkflowSnapshot =
   | { readonly kind: "running"; readonly progress?: TaskProgress }
@@ -34,10 +51,13 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
     const snapshot = await status
       .snapshot(task.workflowId)
       .catch((): WorkflowSnapshot => ({ kind: "unknown" }));
-    if (await applySnapshot(task, snapshot, tasks)) changed += 1;
-    if (snapshot.kind === "completed") {
+    if (
+      snapshot.kind === "completed" &&
+      snapshot.result.progress.status !== "infrastructure_failed"
+    ) {
       await syncRun({ tasks, artifacts, repo, runId: task.runId }).catch(() => undefined);
     }
+    if (await applySnapshot(task, snapshot, tasks)) changed += 1;
   }
   return changed;
 }
@@ -73,19 +93,28 @@ async function applySnapshot(
             : progress.status === "infrastructure_failed"
               ? "infrastructure_failed"
               : "rejected",
-        ...(progress.reason ? { reason: progress.reason } : {}),
+        ...(progress.reason
+          ? {
+              reason:
+                progress.status === "infrastructure_failed"
+                  ? `${infrastructureFailureSummary(progress.reason)}\n\nTechnical details: ${progress.reason}`
+                  : progress.reason,
+            }
+          : {}),
         ...(snapshot.result.task?.taskId ? { taskId: snapshot.result.task.taskId } : {}),
       });
       return true;
     }
-    case "failed":
+    case "failed": {
+      const detail = `workflow ${snapshot.status.toLowerCase()}${snapshot.detail ? `: ${snapshot.detail}` : ""}`;
       await tasks.progress(task.id, {
         stage: task.stage,
         ...(task.round !== undefined ? { round: task.round } : {}),
         pipelineStatus: "infrastructure_failed",
-        reason: `workflow ${snapshot.status.toLowerCase()}${snapshot.detail ? `: ${snapshot.detail}` : ""}`,
+        reason: `${infrastructureFailureSummary(detail)}\n\nTechnical details: ${detail}`,
       });
       return true;
+    }
     default:
       return false;
   }

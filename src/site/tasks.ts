@@ -25,7 +25,7 @@ const taskRoute = new RegExp(
 );
 
 /** How a task stands after the pipeline and, when present, a human. */
-export type TaskState = "needs_review" | "accepted" | "rejected" | "in_progress";
+export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
 
 export interface TaskListItem {
   readonly runId: string;
@@ -191,8 +191,9 @@ export function taskState(
     case "accepted":
       return "needs_review";
     case "rejected":
-    case "infrastructure_failed":
       return "rejected";
+    case "infrastructure_failed":
+      return "failed";
     default:
       return "in_progress";
   }
