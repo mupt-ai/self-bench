@@ -17,17 +17,18 @@ export async function syncBatchProgress(options: {
   status: BatchStatus;
 }): Promise<void> {
   const { repo, tasks, artifacts, status } = options;
-  await syncRun({ repo, tasks, artifacts, runId: status.runId });
+  await syncRun({ repo, tasks, artifacts, runId: status.runId, preserveUnfinished: true });
   const existing = await tasks.listForRepo(repo.id);
   for (const progress of status.tasks ?? []) {
     const previous = existing.find(
       (row) => row.runId === status.runId && row.candidateId === progress.candidateId,
     );
+    const { reason: _previousReason, ...metadata } = previous ?? {};
     const settled = ["accepted", "rejected", "infrastructure_failed"].includes(progress.status);
     const interrupted = !settled && terminalBatch(status.phase);
     await tasks.upsertMany([
       {
-        ...(previous ?? {}),
+        ...metadata,
         repoId: repo.id,
         runId: status.runId,
         candidateId: progress.candidateId,
