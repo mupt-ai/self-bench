@@ -1,6 +1,7 @@
 import type { TaskState } from "../api";
 
 export const STATE_LABEL: Record<TaskState, string> = {
+  uploaded: "Uploaded / unverified",
   needs_review: "Needs Review",
   accepted: "Accepted",
   rejected: "Rejected",

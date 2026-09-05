@@ -15,7 +15,7 @@ export interface TaskRecord {
   readonly taskId: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
-  readonly difficulty: "easy" | "medium" | "hard";
+  readonly difficulty: "easy" | "medium" | "hard" | "unknown";
   readonly pipelineStatus: PipelineStatus;
   readonly stage: string;
   readonly round?: number;
@@ -219,7 +219,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           total: sql<number>`count(*)`.mapWith(Number),
           accepted: count(sql`${tasks.reviewDecision} = 'approve'`),
           needsReview: count(
-            sql`${tasks.reviewDecision} is null and ${tasks.pipelineStatus} = 'accepted'`,
+            sql`${tasks.reviewDecision} is null and ${tasks.pipelineStatus} in ('accepted', 'uploaded')`,
           ),
           rejected: count(
             sql`${tasks.reviewDecision} = 'reject' or (${tasks.reviewDecision} is null and ${tasks.pipelineStatus} in ('rejected', 'infrastructure_failed'))`,

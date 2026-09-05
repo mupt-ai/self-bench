@@ -125,7 +125,13 @@ export interface ArchivedRun {
   startedAt?: string;
 }
 
-export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
+export type TaskState =
+  | "needs_review"
+  | "accepted"
+  | "rejected"
+  | "failed"
+  | "in_progress"
+  | "uploaded";
 
 export interface TaskReview {
   decision: "approve" | "reject";

@@ -18,6 +18,8 @@
         "e2b": "2.46.0",
         "modal": "^0.9.0",
         "postgres": "3.4.7",
+        "smol-toml": "1.7.1",
+        "tar-stream": "3.1.7",
         "zod": "^4.5.4",
       },
       "devDependencies": {
@@ -29,6 +31,7 @@
         "@types/node": "24.10.13",
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
+        "@types/tar-stream": "^3.1.4",
         "@vitejs/plugin-react": "4.7.0",
         "drizzle-kit": "^0.31.10",
         "react": "19.2.7",
@@ -532,6 +535,8 @@
     "@types/request": ["@types/request@2.48.13", "", { "dependencies": { "@types/caseless": "*", "@types/node": "*", "@types/tough-cookie": "*", "form-data": "^2.5.5" } }, "sha512-FGJ6udDNUCjd19pp0Q3iTiDkwhYup7J8hpMW9c4k53NrccQFFWKRho6hvtPPEhnXWKvukfwAlB6DbDz4yhH5Gg=="],
 
     "@types/retry": ["@types/retry@0.12.0", "", {}, "sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA=="],
+
+    "@types/tar-stream": ["@types/tar-stream@3.1.4", "", { "dependencies": { "@types/node": "*" } }, "sha512-921gW0+g29mCJX0fRvqeHzBlE/XclDaAG0Ousy1LCghsOhvaKacDeRGEVzQP9IPfKn8Vysy7FEXAIxycpc/CMg=="],
 
     "@types/tough-cookie": ["@types/tough-cookie@4.0.5", "", {}, "sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA=="],
 

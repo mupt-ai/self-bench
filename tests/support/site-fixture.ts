@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { sendApiError } from "../../src/api/http.js";
 import type { ArtifactStore } from "../../src/artifacts.js";
 import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
@@ -18,6 +19,7 @@ import type { WorkflowStarter } from "../../src/site/task-start.js";
 import type { TaskStatusSource } from "../../src/site/task-status.js";
 import { createTaskStore } from "../../src/site/task-store.js";
 import { createTaskRoutes } from "../../src/site/tasks.js";
+import { createUploadRoutes } from "../../src/site/upload-routes.js";
 
 export interface TestDatabase {
   readonly db: Database;
@@ -179,6 +181,16 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
         ...(options.status ? { status: options.status } : {}),
       })
     : undefined;
+  const uploads = options.artifacts
+    ? createUploadRoutes({
+        users,
+        repos,
+        tasks,
+        artifacts: options.artifacts,
+        db: database.db,
+        secret: config.sessionSecret,
+      })
+    : undefined;
   const pullRequestRoutes =
     options.artifacts && options.start
       ? createPullRequestRoutes({
@@ -204,6 +216,12 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
       if (await github.handle(request, url, response, user)) return;
       if (await connected.handle(request, url, response, user)) return;
       if (pullRequestRoutes && (await pullRequestRoutes.handle(request, url, response, user))) {
+        return;
+      }
+      try {
+        if (uploads && (await uploads.handle(request, url, response, user))) return;
+      } catch (error) {
+        sendApiError(response, error);
         return;
       }
       if (taskRoutes && (await taskRoutes.handle(request, url, response, user))) return;

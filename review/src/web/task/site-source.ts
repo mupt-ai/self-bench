@@ -8,6 +8,7 @@ import { type TaskItem, taskArtifactsPath } from "../api";
  */
 export function siteTaskSource(org: string, fullName: string, task: TaskItem): TaskSource {
   const api = createApiClient("");
+  if (task.pipelineStatus === "uploaded") return uploadedSource(org, fullName, task);
   const runId = encodeURIComponent(task.runId);
   const artifacts = (): Promise<CandidateArtifacts> =>
     api.json<CandidateArtifacts>(taskArtifactsPath(org, fullName, task.runId, task.taskId));
@@ -45,5 +46,16 @@ export function rowFor(task: TaskItem): TaskRow {
     ...(task.sourcePr ? { sourcePr: task.sourcePr } : {}),
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
     ...(task.reasonSummary ? { reasonSummary: task.reasonSummary } : {}),
+  };
+}
+
+function uploadedSource(org: string, fullName: string, task: TaskItem): TaskSource {
+  const api = createApiClient("");
+  const path = `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}/uploads/${task.runId}/${encodeURIComponent(task.taskId)}/bundle`;
+  return {
+    kind: "run",
+    label: "Uploaded / unverified",
+    rows: [rowFor(task)],
+    loadFiles: () => api.json<TaskFiles>(path),
   };
 }

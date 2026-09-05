@@ -34,6 +34,9 @@ export function TaskList({ fullName, tasks }: { fullName: string; tasks: TaskIte
               </span>
             </span>
             <span className="task-row-side">
+              {task.pipelineStatus === "uploaded" && task.review && (
+                <span className="repo-badge">Uploaded / unverified</span>
+              )}
               <DifficultyStamp difficulty={task.difficulty} />
               <StateStamp state={task.state} />
             </span>

@@ -118,9 +118,9 @@ export const tasks = pgTable(
     /** (repo_id, source_pr) is the identity across runs. */
     sourcePr: integer("source_pr"),
     sourceUrl: text("source_url"),
-    difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
+    difficulty: text("difficulty", { enum: ["easy", "medium", "hard", "unknown"] }).notNull(),
     pipelineStatus: text("pipeline_status", {
-      enum: ["in_progress", "accepted", "rejected", "infrastructure_failed"],
+      enum: ["in_progress", "accepted", "rejected", "infrastructure_failed", "uploaded"],
     }).notNull(),
     stage: text("stage").notNull(),
     round: integer("round"),

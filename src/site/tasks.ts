@@ -25,7 +25,13 @@ const taskRoute = new RegExp(
 );
 
 /** How a task stands after the pipeline and, when present, a human. */
-export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
+export type TaskState =
+  | "needs_review"
+  | "accepted"
+  | "rejected"
+  | "failed"
+  | "in_progress"
+  | "uploaded";
 
 export interface TaskListItem {
   readonly runId: string;
@@ -188,6 +194,8 @@ export function taskState(
 ): TaskState {
   if (task.review) return task.review.decision === "approve" ? "accepted" : "rejected";
   switch (task.pipelineStatus) {
+    case "uploaded":
+      return "uploaded";
     case "accepted":
       return "needs_review";
     case "rejected":

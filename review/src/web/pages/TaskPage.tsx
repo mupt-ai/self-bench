@@ -69,6 +69,9 @@ export function TaskPage() {
             <h1>{task.taskId}</h1>
             <DifficultyStamp difficulty={task.difficulty} />
             <StateStamp state={task.state} big />
+            {task.pipelineStatus === "uploaded" && task.review && (
+              <span className="repo-badge">Uploaded / unverified</span>
+            )}
             {task.sourcePr && (
               <a className="task-pr" href={task.sourceUrl} target="_blank" rel="noreferrer">
                 PR #{task.sourcePr}

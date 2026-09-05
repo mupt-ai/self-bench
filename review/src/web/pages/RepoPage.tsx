@@ -1,7 +1,6 @@
 import React from "react";
 import { Link, useParams } from "react-router";
 import { AddPrSheet } from "../AddPrSheet";
-import { AttachRunSheet } from "../AttachRunSheet";
 import {
   type AttachedRun,
   type ConnectedRepo,
@@ -14,13 +13,24 @@ import {
   type TaskItem,
   type TaskState,
 } from "../api";
+import { GenerateBatch } from "../GenerateBatch";
 import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { STATE_LABEL } from "../task/state";
 import { TaskList } from "../task/TaskList";
+import { TaskListSkeleton } from "../task/TaskListSkeleton";
+import { UploadSheet } from "../UploadSheet";
 
 type Filter = "all" | TaskState;
-const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
+const FILTERS: Filter[] = [
+  "all",
+  "uploaded",
+  "in_progress",
+  "needs_review",
+  "accepted",
+  "rejected",
+  "failed",
+];
 
 export function RepoPage() {
   const { org } = useOrg();
@@ -33,7 +43,7 @@ export function RepoPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
-  const [attaching, setAttaching] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [adding, setAdding] = React.useState(false);
 
@@ -62,7 +72,7 @@ export function RepoPage() {
     };
   }, [org.login, fullName, loadTasks]);
 
-  const closeSheet = React.useCallback(() => setAttaching(false), []);
+  const closeSheet = React.useCallback(() => setUploading(false), []);
   const closeAdd = React.useCallback(() => setAdding(false), []);
   const onStarted = React.useCallback((task: TaskItem) => {
     setTasks((current) => [task, ...(current ?? [])]);
@@ -78,14 +88,10 @@ export function RepoPage() {
     }, 15_000);
     return () => window.clearInterval(timer);
   }, [building, org.login, fullName]);
-  const onAttached = React.useCallback(
-    (run: AttachedRun) => {
-      setRuns((current) => [run, ...current.filter((r) => r.runId !== run.runId)]);
-      setAttaching(false);
-      loadTasks();
-    },
-    [loadTasks],
-  );
+  const onImported = React.useCallback(() => {
+    setUploading(false);
+    loadTasks();
+  }, [loadTasks]);
   const refresh = () => {
     setSyncing(true);
     syncRepo(org.login, fullName).then(
@@ -113,6 +119,7 @@ export function RepoPage() {
   const counts = React.useMemo(() => {
     const result: Record<Filter, number> = {
       all: 0,
+      uploaded: 0,
       needs_review: 0,
       accepted: 0,
       rejected: 0,
@@ -191,11 +198,16 @@ export function RepoPage() {
               {syncing ? "Refreshing…" : "Refresh"}
             </button>
           )}
-          <button type="button" className="btn-secondary" onClick={() => setAttaching(true)}>
-            + Attach Run
-          </button>
           <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
             + Add PR
+          </button>
+          <GenerateBatch
+            key={`${org.login}/${fullName}`}
+            repoId={{ org: org.login, fullName }}
+            onStarted={loadTasks}
+          />
+          <button type="button" className="btn-secondary" onClick={() => setUploading(true)}>
+            Upload
           </button>
         </div>
       </div>
@@ -246,7 +258,7 @@ export function RepoPage() {
       {tasks === null && !error && <TaskListSkeleton />}
       {tasks !== null && tasks.length === 0 && (
         <div className="empty-state">
-          <p>No tasks yet. Attach a pipeline run to see its candidates here.</p>
+          <p>No tasks yet. Add a PR, generate a batch, or upload Harbor tasks.</p>
         </div>
       )}
       {tasks !== null && tasks.length > 0 && visible.length === 0 && (
@@ -256,40 +268,14 @@ export function RepoPage() {
       {adding && (
         <AddPrSheet org={org} fullName={fullName} onClose={closeAdd} onStarted={onStarted} />
       )}
-      {attaching && (
-        <AttachRunSheet
-          org={org}
+      {uploading && (
+        <UploadSheet
+          org={org.login}
           fullName={fullName}
-          attached={new Set(runs.map((run) => run.runId))}
           onClose={closeSheet}
-          onAttached={onAttached}
+          onImported={onImported}
         />
       )}
     </main>
-  );
-}
-
-/** Placeholder rows while the artifact store is listed; same shape as real rows so nothing jumps. */
-function TaskListSkeleton() {
-  return (
-    <ul className="task-list skeleton" aria-busy="true" aria-label="Loading tasks">
-      {[0, 1, 2, 3, 4, 5].map((index) => (
-        <li key={index}>
-          <div className="task-row">
-            <span className="task-row-main">
-              <span className="skeleton-bar" style={{ width: `${220 + (index % 3) * 60}px` }} />
-              <span
-                className="skeleton-bar thin"
-                style={{ width: `${380 + (index % 2) * 120}px` }}
-              />
-            </span>
-            <span className="task-row-side">
-              <span className="skeleton-bar stamp" />
-              <span className="skeleton-bar stamp wide" />
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }

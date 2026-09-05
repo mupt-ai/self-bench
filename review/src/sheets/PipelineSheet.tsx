@@ -75,6 +75,12 @@ export function PipelineSheet({
     };
   }, [artifacts, source]);
 
+  if (row.status === "uploaded")
+    return (
+      <p className="notice">
+        Uploaded / unverified. No pipeline was run. Human review is independent.
+      </p>
+    );
   if (!artifacts) return <p className="loading">listing pipeline artifacts</p>;
   const total = Object.values(artifacts.groups).reduce((sum, list) => sum + list.length, 0);
   return (

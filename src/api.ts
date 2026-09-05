@@ -29,6 +29,7 @@ import { createRunStore } from "./site/run-store.js";
 import { createTaskStore } from "./site/task-store.js";
 import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
 import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
+import { createUploadRoutes, type UploadRoutes } from "./site/upload-routes.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -87,6 +88,7 @@ export async function startApi(
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
         if (await site.batches.handle(request, url, response, user)) return;
+        if (await site.uploads.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
@@ -203,6 +205,7 @@ interface Site {
   readonly github: GitHubRepoRoutes;
   readonly repos: ConnectedRepoRoutes;
   readonly tasks: TaskRoutes;
+  readonly uploads: UploadRoutes;
   readonly batches: BatchRoutes;
   readonly pullRequests: PullRequestRoutes;
   readonly database: OpenDatabase;
@@ -243,6 +246,14 @@ async function openSite(
       cancel: async (runId) => {
         await client.workflow.getHandle(runId).cancel();
       },
+    }),
+    uploads: createUploadRoutes({
+      users,
+      repos,
+      tasks,
+      artifacts,
+      db: database.db,
+      secret: auth.sessionSecret,
     }),
     tasks: createTaskRoutes({
       users,
