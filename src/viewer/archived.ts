@@ -138,7 +138,7 @@ const ROUND_RESULT = /^(authoring|verification)\/[^/]+\/round-(\d+)\/result\.jso
 /**
  * The agent pipeline decides a candidate in its round results: the workflow accepts exactly when
  * a verification round's `result.json` is `accepted`, and a `rejected` round result in either loop
- * ends the candidate. The latest round of the later loop is the verdict on record.
+ * ends the candidate. Rounds alternate authoring/review; the highest round wins, then review within that round.
  */
 async function latestRoundDecision(
   store: ArtifactStore,
@@ -149,14 +149,14 @@ async function latestRoundDecision(
   let latest: { key: string; loop: string; round: number } | undefined;
   for (const entry of entries) {
     const match = ROUND_RESULT.exec(entry.key.slice(prefix.length));
-    if (!match || !match[1] || !match[2]) continue;
+    if (!match?.[1] || !match[2]) continue;
     if (entry.key.slice(prefix.length).split("/")[1] !== candidateId) continue;
     const loop = match[1];
     const round = Number(match[2]);
     const later =
       !latest ||
-      (loop === "verification" && latest.loop === "authoring") ||
-      (loop === latest.loop && round > latest.round);
+      round > latest.round ||
+      (round === latest.round && loop === "verification" && latest.loop === "authoring");
     if (later) latest = { key: entry.key, loop, round };
   }
   if (!latest) return undefined;

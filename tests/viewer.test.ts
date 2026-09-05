@@ -208,6 +208,17 @@ describe("artifact store listing", () => {
       "application/json",
     );
     await store.put(
+      "runs/run-1/verification/cand-c/round-2/result.json",
+      Buffer.from(
+        JSON.stringify({
+          kind: "suggestions",
+          summary: "Revise tests",
+          suggestions: "Use a public seam",
+        }),
+      ),
+      "application/json",
+    );
+    await store.put(
       "runs/run-1/authoring/cand-c/round-3/result.json",
       Buffer.from(
         JSON.stringify({ kind: "rejected", reason: "authoring tests never fail; log: gs://x" }),
