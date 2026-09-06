@@ -224,6 +224,7 @@ test("discovery, individual stages, failures, cancellation and Needs Review with
   f.setStatus({ runId, phase: "cancelled" });
   await f.request(`${ROOT}/${runId}`);
   const after = await f.tasks.listForRepo(f.repo.id);
+  expect(after.find((row) => row.candidateId === "c2")?.round).toBe(2);
   expect(after.find((row) => row.candidateId === "c2")?.pipelineStatus).toBe(
     "infrastructure_failed",
   );

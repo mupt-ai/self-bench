@@ -58,6 +58,7 @@ export async function syncBatchProgress(options: {
       if (task.runId !== status.runId || task.pipelineStatus !== "in_progress") continue;
       await tasks.progress(task.id, {
         stage: task.stage,
+        ...(task.round !== undefined ? { round: task.round } : {}),
         pipelineStatus: "infrastructure_failed",
         reason: status.error ?? `Batch ${status.phase} without a task verdict`,
       });

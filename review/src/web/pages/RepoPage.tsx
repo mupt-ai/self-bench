@@ -43,6 +43,9 @@ export function RepoPage() {
     setTasks(null);
     fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
   }, [org.login, fullName]);
+  const refreshTasks = React.useCallback(() => {
+    fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
+  }, [org.login, fullName]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -191,7 +194,7 @@ export function RepoPage() {
           <GenerateBatch
             key={`${org.login}/${fullName}`}
             repoId={{ org: org.login, fullName }}
-            onStarted={loadTasks}
+            onStarted={refreshTasks}
           />
           {runs.length > 0 && (
             <button type="button" className="btn-ghost" disabled={syncing} onClick={refresh}>
