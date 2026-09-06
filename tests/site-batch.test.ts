@@ -14,7 +14,7 @@ import { batchSubmissionSchema } from "../src/site/batch-start.js";
 import { createRepoStore } from "../src/site/repo-store.js";
 import { createRunStore } from "../src/site/run-store.js";
 import { createTaskStore } from "../src/site/task-store.js";
-import { taskState } from "../src/site/tasks.js";
+import { createTaskRoutes, taskState } from "../src/site/tasks.js";
 import { testDatabase } from "./support/site-fixture.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -88,6 +88,7 @@ async function fixture(options: { failStart?: boolean; failAttach?: boolean; sha
       cancelled.push(runId);
     },
   });
+  const taskRoutes = createTaskRoutes({ users, repos, runs, tasks, artifacts });
   const server = createServer(async (request, response) => {
     try {
       // Auth boundary equivalent to startApi: no user, no site route invocation.
@@ -96,7 +97,18 @@ async function fixture(options: { failStart?: boolean; failAttach?: boolean; sha
         return;
       }
       if (
-        !(await routes.handle(request, new URL(request.url ?? "/", "http://test"), response, user))
+        !(await routes.handle(
+          request,
+          new URL(request.url ?? "/", "http://test"),
+          response,
+          user,
+        )) &&
+        !(await taskRoutes.handle(
+          request,
+          new URL(request.url ?? "/", "http://test"),
+          response,
+          user,
+        ))
       )
         sendJson(response, 404, {});
     } catch (error) {
@@ -212,6 +224,7 @@ test("discovery, individual stages, failures, cancellation and Needs Review with
   f.setStatus({ runId, phase: "cancelled" });
   await f.request(`${ROOT}/${runId}`);
   const after = await f.tasks.listForRepo(f.repo.id);
+  expect(after.find((row) => row.candidateId === "c2")?.round).toBe(2);
   expect(after.find((row) => row.candidateId === "c2")?.pipelineStatus).toBe(
     "infrastructure_failed",
   );
@@ -235,4 +248,52 @@ test("invalid revision and failed association never launch work", async () => {
   const failed = await fixture({ failAttach: true });
   expect((await failed.start()).status).toBe(500);
   expect(failed.started).toHaveLength(0);
+});
+
+test("partial artifacts never invent a rejection or overwrite a known verdict when queries disappear", async () => {
+  const f = await fixture();
+  const { runId } = await (await f.start()).json();
+  for (const candidate of ["pending", "passed", "failed"]) {
+    await f.artifacts.put(
+      `runs/${runId}/authoring/${candidate}/definition.json`,
+      Buffer.from(JSON.stringify({ taskId: candidate, difficulty: "medium" })),
+      "application/json",
+    );
+  }
+  await f.artifacts.put(
+    `runs/${runId}/authoring/failed/round-1/result.json`,
+    Buffer.from(JSON.stringify({ kind: "rejected", reason: "explicit rejection" })),
+    "application/json",
+  );
+  f.setStatus({
+    runId,
+    phase: "authoring",
+    tasks: [
+      { candidateId: "passed", taskId: "passed", difficulty: "medium", status: "accepted" },
+      { candidateId: "pending", taskId: "pending", difficulty: "medium", status: "verifying" },
+    ],
+  });
+  await f.request(`${ROOT}/${runId}`);
+  let rows = await f.tasks.listForRepo(f.repo.id);
+  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
+  expect(rows.find((row) => row.candidateId === "pending")?.reason).toBeUndefined();
+  expect(rows.find((row) => row.candidateId === "failed")?.pipelineStatus).toBe("rejected");
+  expect((await f.request(ROOT.replace("/batches", "/sync"), { method: "POST" })).status).toBe(200);
+  rows = await f.tasks.listForRepo(f.repo.id);
+  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
+  expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");
+  f.setStatus({ runId, phase: "cancelled" });
+  await f.request(`${ROOT}/${runId}`);
+  rows = await f.tasks.listForRepo(f.repo.id);
+  expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");
+  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe(
+    "infrastructure_failed",
+  );
+  expect(rows.find((row) => row.candidateId === "pending")?.reason).toContain("cancelled");
+  expect(rows.find((row) => row.candidateId === "failed")?.reason).toBe("explicit rejection");
+  await f.request(`${ROOT}/${runId}`);
+  expect(
+    (await f.tasks.listForRepo(f.repo.id)).find((row) => row.candidateId === "passed")
+      ?.pipelineStatus,
+  ).toBe("accepted");
 });

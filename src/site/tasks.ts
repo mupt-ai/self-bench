@@ -78,7 +78,9 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
   const syncAll = async (repo: ConnectedRepo): Promise<number> => {
     let synced = 0;
     for (const run of await runs.runsFor(repo.id)) {
-      synced += (await syncRun({ tasks, artifacts, repo, runId: run.runId })).synced;
+      synced += (
+        await syncRun({ tasks, artifacts, repo, runId: run.runId, preserveUnfinished: true })
+      ).synced;
     }
     return synced;
   };

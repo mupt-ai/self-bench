@@ -51,6 +51,9 @@ export function RepoPage() {
     setTasks(null);
     fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
   }, [org.login, fullName]);
+  const refreshTasks = React.useCallback(() => {
+    fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
+  }, [org.login, fullName]);
 
   React.useEffect(() => {
     let cancelled = false;

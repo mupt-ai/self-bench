@@ -28,6 +28,8 @@ describe("user store", () => {
     });
     expect(created).toEqual({ id: created.id, githubId: 7, login: "old-login" });
     expect(await store.gitHubToken(7)).toBe("gho_first");
+    const [initial] = await database.db.select().from(users).where(eq(users.githubId, 7));
+    if (!initial) throw new Error("created user missing");
 
     clock = new Date("2026-09-05T10:00:00Z");
     const renamed = await store.upsert({
@@ -55,7 +57,7 @@ describe("user store", () => {
     expect(row?.githubToken).not.toContain("gho_second");
     expect(row?.githubScopes).toBe("read:user,read:org,repo");
     expect(row?.lastSeenAt.toISOString()).toBe("2026-09-05T10:00:00.000Z");
-    expect(row?.createdAt.getTime()).toBeLessThan(clock.getTime());
+    expect(row?.createdAt.getTime()).toBe(initial.createdAt.getTime());
 
     clock = new Date("2026-09-06T10:00:00Z");
     expect(await store.findByGitHubId(7)).toEqual(renamed);

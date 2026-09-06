@@ -14,14 +14,36 @@ export async function syncRun(options: {
   readonly artifacts: ArtifactStore;
   readonly repo: { readonly id: number; readonly fullName: string };
   readonly runId: string;
+  /** Live batches must not infer rejection from unfinished artifacts. */
+  readonly preserveUnfinished?: boolean;
 }): Promise<{ synced: number }> {
   const { tasks, artifacts, repo, runId } = options;
   const list = await archivedCandidates(artifacts, runId);
+  const previous = options.preserveUnfinished ? await tasks.listForRepo(repo.id) : [];
   const rows: TaskUpsert[] = [];
   const queue = [...list.candidates];
   const workers = Array.from({ length: DEFINITION_CONCURRENCY }, async () => {
     for (let next = queue.shift(); next; next = queue.shift()) {
-      rows.push(await taskRow(artifacts, repo, runId, next));
+      const row = await taskRow(artifacts, repo, runId, next);
+      if (options.preserveUnfinished && next.hasVerdict === false) {
+        const known = previous.find(
+          (task) => task.runId === runId && task.candidateId === next.candidateId,
+        );
+        const { reason: _inferredReason, ...metadata } = row;
+        rows.push({
+          ...metadata,
+          pipelineStatus: known?.pipelineStatus ?? "in_progress",
+          stage: known?.stage ?? row.stage,
+          ...(known?.reason ? { reason: known.reason } : {}),
+          ...(known
+            ? {
+                taskId: known.taskId,
+                difficulty: known.difficulty,
+                ...(known.round !== undefined ? { round: known.round } : {}),
+              }
+            : {}),
+        });
+      } else rows.push(row);
     }
   });
   await Promise.all(workers);
