@@ -109,6 +109,7 @@ export async function archivedCandidates(
         candidateId,
         difficulty: parsed?.difficulty ?? "easy",
         status: decision?.stage === "accepted" ? "accepted" : "archived",
+        hasVerdict: decision !== undefined,
         stage,
         reasonSummary:
           decision?.reasonSummary ?? `no verdict on record; last artifact written by ${stage}`,

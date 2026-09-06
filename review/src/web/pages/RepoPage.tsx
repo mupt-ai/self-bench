@@ -14,10 +14,12 @@ import {
   type TaskItem,
   type TaskState,
 } from "../api";
+import { GenerateBatch } from "../GenerateBatch";
 import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { STATE_LABEL } from "../task/state";
 import { TaskList } from "../task/TaskList";
+import { TaskListSkeleton } from "../task/TaskListSkeleton";
 
 type Filter = "all" | TaskState;
 const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
@@ -39,6 +41,9 @@ export function RepoPage() {
 
   const loadTasks = React.useCallback(() => {
     setTasks(null);
+    fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
+  }, [org.login, fullName]);
+  const refreshTasks = React.useCallback(() => {
     fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
   }, [org.login, fullName]);
 
@@ -186,6 +191,11 @@ export function RepoPage() {
           </div>
         </div>
         <div className="page-actions">
+          <GenerateBatch
+            key={`${org.login}/${fullName}`}
+            repoId={{ org: org.login, fullName }}
+            onStarted={refreshTasks}
+          />
           {runs.length > 0 && (
             <button type="button" className="btn-ghost" disabled={syncing} onClick={refresh}>
               {syncing ? "Refreshing…" : "Refresh"}
@@ -266,30 +276,5 @@ export function RepoPage() {
         />
       )}
     </main>
-  );
-}
-
-/** Placeholder rows while the artifact store is listed; same shape as real rows so nothing jumps. */
-function TaskListSkeleton() {
-  return (
-    <ul className="task-list skeleton" aria-busy="true" aria-label="Loading tasks">
-      {[0, 1, 2, 3, 4, 5].map((index) => (
-        <li key={index}>
-          <div className="task-row">
-            <span className="task-row-main">
-              <span className="skeleton-bar" style={{ width: `${220 + (index % 3) * 60}px` }} />
-              <span
-                className="skeleton-bar thin"
-                style={{ width: `${380 + (index % 2) * 120}px` }}
-              />
-            </span>
-            <span className="task-row-side">
-              <span className="skeleton-bar stamp" />
-              <span className="skeleton-bar stamp wide" />
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }

@@ -19,6 +19,8 @@ import { createSiteAuth, type SiteAuth } from "./auth/routes.js";
 import { createUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
 import { type OpenDatabase, openDatabase } from "./db/client.js";
+import type { BatchStatus } from "./site/batch-progress.js";
+import { type BatchRoutes, createBatchRoutes } from "./site/batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
@@ -84,6 +86,7 @@ export async function startApi(
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
+        if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
@@ -200,6 +203,7 @@ interface Site {
   readonly github: GitHubRepoRoutes;
   readonly repos: ConnectedRepoRoutes;
   readonly tasks: TaskRoutes;
+  readonly batches: BatchRoutes;
   readonly pullRequests: PullRequestRoutes;
   readonly database: OpenDatabase;
 }
@@ -219,6 +223,27 @@ async function openSite(
     auth: createSiteAuth({ config: auth, users }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
+    batches: createBatchRoutes({
+      config,
+      auth,
+      users,
+      repos,
+      runs,
+      tasks,
+      artifacts,
+      start: async (input) => {
+        await client.workflow.start(selfBenchRunWorkflow, {
+          workflowId: input.runId,
+          taskQueue: config.temporal.taskQueue,
+          args: [input],
+          workflowExecutionTimeout: "14 days",
+        });
+      },
+      status: async (runId) => (await queryStatus(client.workflow.getHandle(runId))) as BatchStatus,
+      cancel: async (runId) => {
+        await client.workflow.getHandle(runId).cancel();
+      },
+    }),
     tasks: createTaskRoutes({
       users,
       repos,

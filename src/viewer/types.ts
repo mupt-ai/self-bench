@@ -65,6 +65,8 @@ export interface CandidateSummary extends Omit<TaskProgress, "status" | "stage">
   readonly reasonSummary?: string;
   readonly definition?: CandidateDefinitionSummary;
   /** Archived runs only: where the newest definition.json and final compiled bundle live. */
+  /** Artifact reconstruction found an explicit terminal decision, not just partial files. */
+  readonly hasVerdict?: boolean;
   readonly definitionKey?: string;
   readonly bundleKey?: string;
 }
