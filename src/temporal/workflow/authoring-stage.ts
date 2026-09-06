@@ -47,6 +47,7 @@ export async function authorWithVerification(
         };
       }
       if (outcome.report.green && outcome.task) green = { task: outcome.task, report };
+      else feedback = undefined;
     } else infrastructure.observe(false);
     if (!green) continue;
     report = green.report;
