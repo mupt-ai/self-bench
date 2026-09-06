@@ -18,6 +18,8 @@ import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { STATE_LABEL } from "../task/state";
 import { TaskList } from "../task/TaskList";
+import { TaskListSkeleton } from "../task/TaskListSkeleton";
+import { Button } from "../ui";
 
 type Filter = "all" | TaskState;
 const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
@@ -137,26 +139,21 @@ export function RepoPage() {
 
   if (repo === null) {
     return (
-      <main className="site-main">
-        <p className="page-error">
+      <section>
+        <p className="mb-4 font-mono text-xs text-danger">
           {fullName} is not connected in {org.login}. <Link to="/">Back to repositories</Link>
         </p>
-      </main>
+      </section>
     );
   }
 
   return (
-    <main className="site-main">
-      <nav className="crumbs">
-        <Link to="/">Repositories</Link>
-        <span aria-hidden="true">/</span>
-        <span>{fullName}</span>
-      </nav>
-      <div className="page-head">
+    <section>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-6 [&_h1]:mt-1.5 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
         <div>
-          <div className="repo-title">
+          <div className="flex min-w-0 items-center gap-2.5 [&_h1]:font-mono [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold [&_h1]:tracking-tight">
             <a
-              className="repo-card-github"
+              className="inline-flex shrink-0 text-muted hover:text-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
               href={`https://github.com/${fullName}`}
               target="_blank"
               rel="noreferrer"
@@ -165,11 +162,13 @@ export function RepoPage() {
               <GitHubMark />
             </a>
             <h1>{fullName}</h1>
-            {repo?.private && <span className="repo-badge">private</span>}
+            {repo?.private && (
+              <span className="text-[10px] tracking-widest text-warning uppercase">private</span>
+            )}
           </div>
-          <div className="repo-card-sub">
-            {repo && <span className="mono">{repo.defaultBranch}</span>}
-            <span className="repo-detail-sep" aria-hidden="true">
+          <div className="mt-1.5 flex gap-2 text-xs text-muted">
+            {repo && <span className="font-mono">{repo.defaultBranch}</span>}
+            <span className="text-line-strong" aria-hidden="true">
               ·
             </span>
             <span>
@@ -177,7 +176,7 @@ export function RepoPage() {
             </span>
             {tasks?.[0] && (
               <>
-                <span className="repo-detail-sep" aria-hidden="true">
+                <span className="text-line-strong" aria-hidden="true">
                   ·
                 </span>
                 <span>synced {formatAgo(tasks[0].syncedAt)}</span>
@@ -185,29 +184,32 @@ export function RepoPage() {
             )}
           </div>
         </div>
-        <div className="page-actions">
+        <div className="flex flex-wrap items-center gap-2.5">
           {runs.length > 0 && (
-            <button type="button" className="btn-ghost" disabled={syncing} onClick={refresh}>
+            <Button type="button" variant="ghost" disabled={syncing} onClick={refresh}>
               {syncing ? "Refreshing…" : "Refresh"}
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn-secondary" onClick={() => setAttaching(true)}>
+          <Button type="button" onClick={() => setAttaching(true)}>
             + Attach Run
-          </button>
-          <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
+          </Button>
+          <Button type="button" variant="primary" onClick={() => setAdding(true)}>
             + Add PR
-          </button>
+          </Button>
         </div>
       </div>
-      {error && <p className="page-error">{error}</p>}
+      {error && <p className="mb-4 font-mono text-xs text-danger">{error}</p>}
       {runs.length > 0 && (
-        <div className="run-chips">
+        <div className="-mt-2 mb-5 flex flex-wrap gap-2">
           {runs.map((run) => (
-            <span className="run-chip" key={run.runId}>
-              <span className="mono">{run.runId}</span>
+            <span
+              className="inline-flex items-center gap-2 border border-line bg-surface py-1 pr-1.5 pl-2.5 text-xs text-muted"
+              key={run.runId}
+            >
+              <span className="font-mono">{run.runId}</span>
               <button
                 type="button"
-                className="run-chip-x"
+                className="px-1 font-mono text-sm leading-none text-dim hover:text-danger"
                 onClick={() => detach(run)}
                 aria-label={`Detach ${run.runId}`}
                 title="Detach"
@@ -218,15 +220,19 @@ export function RepoPage() {
           ))}
         </div>
       )}
-      <div className="task-toolbar">
-        <div className="filter-chips" role="tablist" aria-label="Task state">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
+        <div
+          className="flex max-w-full gap-1.5 overflow-x-auto"
+          role="tablist"
+          aria-label="Task state"
+        >
           {FILTERS.map((key) => (
             <button
               type="button"
               key={key}
               role="tab"
               aria-selected={filter === key}
-              className="filter-chip"
+              className="inline-flex h-8 shrink-0 items-center gap-2 border border-line px-3 font-mono text-xs font-medium text-muted hover:border-line-strong hover:text-ink aria-selected:border-mint aria-selected:bg-surface-2 aria-selected:text-mint [&_b]:font-medium [&_b]:text-dim [&[aria-selected=true]_b]:text-mint-bright"
               onClick={() => setFilter(key)}
             >
               {key === "all" ? "All" : STATE_LABEL[key]}
@@ -235,7 +241,7 @@ export function RepoPage() {
           ))}
         </div>
         <input
-          className="task-search"
+          className="h-8 w-[260px] max-w-full border border-line-strong bg-bg px-2.5 font-mono text-xs text-ink placeholder:text-dim focus:border-mint"
           type="search"
           placeholder="Search task, PR, or run"
           value={query}
@@ -245,12 +251,12 @@ export function RepoPage() {
       </div>
       {tasks === null && !error && <TaskListSkeleton />}
       {tasks !== null && tasks.length === 0 && (
-        <div className="empty-state">
+        <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
           <p>No tasks yet. Attach a pipeline run to see its candidates here.</p>
         </div>
       )}
       {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-        <p className="repo-note">No tasks match.</p>
+        <p className="py-4 text-muted">No tasks match.</p>
       )}
       {visible.length > 0 && <TaskList fullName={fullName} tasks={visible} />}
       {adding && (
@@ -265,31 +271,6 @@ export function RepoPage() {
           onAttached={onAttached}
         />
       )}
-    </main>
-  );
-}
-
-/** Placeholder rows while the artifact store is listed; same shape as real rows so nothing jumps. */
-function TaskListSkeleton() {
-  return (
-    <ul className="task-list skeleton" aria-busy="true" aria-label="Loading tasks">
-      {[0, 1, 2, 3, 4, 5].map((index) => (
-        <li key={index}>
-          <div className="task-row">
-            <span className="task-row-main">
-              <span className="skeleton-bar" style={{ width: `${220 + (index % 3) * 60}px` }} />
-              <span
-                className="skeleton-bar thin"
-                style={{ width: `${380 + (index % 2) * 120}px` }}
-              />
-            </span>
-            <span className="task-row-side">
-              <span className="skeleton-bar stamp" />
-              <span className="skeleton-bar stamp wide" />
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    </section>
   );
 }

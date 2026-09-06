@@ -113,6 +113,8 @@ The evaluated agent receives the base repository and task instruction, but not t
 
 See [Running self-bench evaluations](docs/evaluations.md) for running tasks directly with Harbor.
 
+The signed-in site also supports repository-scoped solver runs with live output and completed results. See [Run tasks from the site](docs/solver-evaluations.md) for worker configuration and supported choices.
+
 ## Run management
 
 Closing the waiting CLI does not cancel a submitted workflow. If the local worker or Docker stack stops, work pauses until the worker is restarted.

@@ -15,25 +15,34 @@ export function LoginPage() {
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
   return (
-    <div className="page login-page">
-      <div className="wrap">
+    <div className=" flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="w-full max-w-[440px]">
         <Lockup />
-        <div className="card">
-          <div className="eyebrow">Sign in</div>
+        <div className="border border-line bg-surface p-6 sm:p-10 [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
+          <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+            Sign in
+          </div>
           <h1>Continue to self-bench</h1>
-          <p className="sub">
+          <p className="mt-1.5 text-sm text-muted">
             Build verified coding tasks from your repository’s pull requests, review them, and run
             evals across harness, model, and thinking levels.
           </p>
-          <a className="btn" href="/auth/github">
+          <a
+            className="mt-7 flex h-11 w-full items-center justify-center gap-2.5 border border-mint bg-mint font-sans text-sm font-bold text-bg hover:bg-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
+            href="/auth/github"
+          >
             <GitHubMark />
             Continue with GitHub
           </a>
-          {error && <p className="error">{ERRORS[error] ?? ERRORS.github}</p>}
+          {error && (
+            <p className="mt-4 font-mono text-xs leading-relaxed text-danger">
+              {ERRORS[error] ?? ERRORS.github}
+            </p>
+          )}
         </div>
-        <div className="foot">
+        <div className="mt-6 flex items-center justify-center gap-3 font-mono text-[11px] font-medium text-dim [&_a:hover]:text-ink">
           <a href="https://dari.dev">dari.dev</a>
-          <span className="dot" aria-hidden="true">
+          <span className="text-line-strong" aria-hidden="true">
             ·
           </span>
           <a href="https://github.com/mupt-ai/self-bench">GitHub</a>

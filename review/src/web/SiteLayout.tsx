@@ -27,9 +27,9 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
     if (location.pathname !== "/") void navigate("/");
   };
   return (
-    <div className="site-shell">
-      <header className="site-bar">
-        <div className="site-bar-left">
+    <div className="flex min-h-screen flex-col [--site-max:1440px] [--site-gutter:max(32px,calc((100%_-_var(--site-max))/2))]">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line bg-surface px-4 sm:px-[var(--site-gutter)] [&_a]:mb-0 [&_a]:shrink-0 [&_a]:gap-2.5 [&_a_svg]:size-7 [&_a_svg]:shrink-0 [&_strong]:text-lg [&_strong]:whitespace-nowrap">
+        <div className="flex min-w-0 items-center gap-1">
           <Lockup />
           <OrgSwitcher orgs={orgs} current={org} onSelect={choose} />
         </div>

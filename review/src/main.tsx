@@ -1,7 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-// The global stylesheet must load before the site's, which overrides a few Ledger selectors.
-import "./styles.css";
+import "./theme.css";
 import { App } from "./App";
 import type { ViewerInfo } from "./types";
 import { WebApp } from "./web/WebApp";

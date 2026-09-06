@@ -13,6 +13,12 @@ import {
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
+export const evaluationRecords = pgTable("evaluation_records", {
+  path: text("path").primaryKey(),
+  version: integer("version").notNull(),
+  sealed: text("sealed").notNull(),
+});
+
 /** GitHub accounts that have signed in. The token is sealed; a database read alone is useless. */
 export const users = pgTable(
   "users",

@@ -109,40 +109,50 @@ export function ReposPage() {
   );
 
   return (
-    <main className="site-main">
-      <div className="page-head">
+    <main className="w-full min-w-0 flex-1 px-4 pt-8 pb-12 sm:px-[var(--site-gutter)]">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-6 [&_h1]:mt-1.5 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
         <div>
-          <div className="eyebrow">Repositories</div>
+          <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+            Repositories
+          </div>
           <h1>Connected Repositories</h1>
         </div>
-        <div className="page-actions">
-          <button type="button" className="btn-secondary" onClick={() => setConnecting("public")}>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center justify-center border border-line-strong bg-transparent px-4 font-sans text-[13px] font-bold text-ink hover:border-mint hover:text-mint-bright"
+            onClick={() => setConnecting("public")}
+          >
             + Connect Public Repo
           </button>
-          <button type="button" className="btn-primary" onClick={() => setConnecting("mine")}>
+          <button
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => setConnecting("mine")}
+          >
             + Connect My Repo
           </button>
         </div>
       </div>
-      {error && <p className="page-error">{error}</p>}
+      {error && <p className="mb-4 font-mono text-xs text-danger">{error}</p>}
       {repos.status === "ok" && repos.repos.length === 0 && (
-        <div className="empty-state">
+        <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
           <p>Nothing connected yet. Connect a repository in {org.login} to start building tasks.</p>
         </div>
       )}
       {repos.status === "ok" && repos.repos.length > 0 && (
-        <div className="repo-cards">
+        <div className="flex flex-col gap-3">
           {repos.repos.map((repo) => (
             <article
-              className="repo-card"
+              className="grid cursor-pointer grid-cols-1 items-center gap-5 border border-line bg-surface px-5 py-4.5 hover:border-mint hover:bg-surface-2 lg:grid-cols-[minmax(240px,1.2fr)_minmax(0,2fr)_auto] lg:gap-8"
               key={repo.fullName}
               onClick={(event) => openRepo(event, repo)}
               onKeyDown={(event) => openRepo(event, repo)}
             >
               <div className="repo-card-main">
-                <div className="repo-card-name">
+                <div className="flex min-w-0 items-center gap-2.5 font-mono text-sm font-medium text-ink [&>span:first-of-type]:truncate">
                   <a
-                    className="repo-card-github"
+                    className="inline-flex shrink-0 text-muted hover:text-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
                     href={`https://github.com/${repo.fullName}`}
                     target="_blank"
                     rel="noreferrer"
@@ -151,36 +161,45 @@ export function ReposPage() {
                   >
                     <GitHubMark />
                   </a>
-                  <Link className="repo-card-link" to={`/repos/${repo.fullName}`}>
+                  <Link className="hover:text-mint-bright" to={`/repos/${repo.fullName}`}>
                     {repo.fullName}
                   </Link>
-                  {repo.private && <span className="repo-badge">private</span>}
+                  {repo.private && (
+                    <span className="text-[10px] tracking-widest text-warning uppercase">
+                      private
+                    </span>
+                  )}
                 </div>
-                <div className="repo-card-sub">
-                  <span className="mono">{repo.defaultBranch}</span>
-                  <span className="repo-detail-sep" aria-hidden="true">
+                <div className="mt-1.5 flex gap-2 text-xs text-muted">
+                  <span className="font-mono">{repo.defaultBranch}</span>
+                  <span className="text-line-strong" aria-hidden="true">
                     ·
                   </span>
                   <span>
                     connected {formatAgo(repo.connectedAt)} by{" "}
-                    <span className="mono">{repo.connectedBy}</span>
+                    <span className="font-mono">{repo.connectedBy}</span>
                   </span>
                 </div>
               </div>
               <RepoCardStats stats={stats[repo.fullName]} />
-              <div className="repo-card-actions">
-                <label className="switch">
+              <div className="flex items-center gap-5 justify-self-end">
+                <label className="inline-flex cursor-pointer items-center gap-2.5 select-none [&_input]:absolute [&_input]:size-0 [&_input]:opacity-0">
                   <input
                     type="checkbox"
                     checked={repo.continuous}
                     onChange={() => toggleContinuous(repo)}
                   />
-                  <span className="switch-track" aria-hidden="true" />
-                  <span className="switch-label">Continuous</span>
+                  <span
+                    className="relative h-4 w-[30px] border border-line-strong bg-surface-3 after:absolute after:top-0.5 after:left-0.5 after:size-2.5 after:bg-dim after:content-[''] [input:checked+&]:border-mint [input:checked+&]:bg-mint [input:checked+&]:after:translate-x-3.5 [input:checked+&]:after:bg-bg [input:focus-visible+&]:outline-2 [input:focus-visible+&]:outline-mint-bright"
+                    aria-hidden="true"
+                  />
+                  <span className="font-mono text-xs font-medium text-muted [input:checked~&]:text-ink">
+                    Continuous
+                  </span>
                 </label>
                 <button
                   type="button"
-                  className="btn-icon"
+                  className="inline-flex size-8 items-center justify-center border border-transparent text-dim hover:border-line-strong hover:text-danger [&_svg]:size-4"
                   onClick={() => disconnect(repo)}
                   aria-label={`Disconnect ${repo.fullName}`}
                   title="Disconnect"
@@ -208,37 +227,39 @@ export function ReposPage() {
 function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
   if (!stats) {
     return (
-      <dl className="repo-card-stats">
+      <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-[10px] [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-sm [&_dd]:font-medium [&_dd]:text-ink">
         <div>
           <dt>Tasks</dt>
-          <dd className="dim">…</dd>
+          <dd className="text-dim">…</dd>
         </div>
         <div>
           <dt>Awaiting Review</dt>
-          <dd className="dim">…</dd>
+          <dd className="text-dim">…</dd>
         </div>
         <div>
           <dt>Last PR</dt>
-          <dd className="dim">…</dd>
+          <dd className="text-dim">…</dd>
         </div>
       </dl>
     );
   }
   return (
-    <dl className="repo-card-stats">
+    <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-[10px] [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-sm [&_dd]:font-medium [&_dd]:text-ink">
       <div>
         <dt>Tasks</dt>
-        <dd className={stats.tasks === 0 ? "dim" : ""}>
+        <dd className={stats.tasks === 0 ? "text-dim" : ""}>
           {stats.tasks === 0 ? "none yet" : stats.tasks}
         </dd>
       </div>
       <div>
         <dt>Awaiting Review</dt>
-        <dd className={stats.needsReview === 0 ? "dim" : "attention"}>{stats.needsReview}</dd>
+        <dd className={stats.needsReview === 0 ? "text-dim" : "text-warning"}>
+          {stats.needsReview}
+        </dd>
       </div>
       <div>
         <dt>Last PR</dt>
-        <dd className={stats.lastPr === undefined ? "dim" : "mono"}>
+        <dd className={stats.lastPr === undefined ? "text-dim" : "font-mono"}>
           {stats.lastPr === undefined ? "not yet scanned" : `#${stats.lastPr}`}
         </dd>
       </div>

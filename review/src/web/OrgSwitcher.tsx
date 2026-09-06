@@ -21,12 +21,14 @@ export function OrgSwitcher({ orgs, current, onSelect }: OrgSwitcherProps) {
       role="menuitemradio"
       aria-checked={org.login === current.login}
       key={org.login}
-      className={`dropdown-item org-item ${org.login === current.login ? "current" : ""}`}
+      className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left font-mono text-xs font-medium text-ink hover:bg-surface-3 hover:text-mint-bright disabled:cursor-default disabled:opacity-50  ${org.login === current.login ? "text-mint after:ml-auto after:text-mint after:content-['✓']" : ""}`}
       onClick={() => choose(org, close)}
     >
       <Avatar login={org.login} url={org.avatarUrl} size={20} />
-      <span className="org-item-login">{org.login}</span>
-      {org.role === "admin" && org.kind === "org" && <span className="org-item-role">admin</span>}
+      <span className="min-w-0 flex-1 truncate">{org.login}</span>
+      {org.role === "admin" && org.kind === "org" && (
+        <span className="font-mono text-[10px] tracking-widest text-dim uppercase">admin</span>
+      )}
     </button>
   );
   return (
@@ -36,24 +38,31 @@ export function OrgSwitcher({ orgs, current, onSelect }: OrgSwitcherProps) {
       align="left"
       trigger={
         <>
-          <span className="org-slash" aria-hidden="true">
+          <span
+            className="mr-0.5 font-mono text-lg leading-none text-line-strong"
+            aria-hidden="true"
+          >
             /
           </span>
           <Avatar login={current.login} url={current.avatarUrl} size={20} />
-          <span className="dropdown-text">{current.login}</span>
+          <span className="max-w-24 truncate sm:max-w-40">{current.login}</span>
         </>
       }
     >
       {(close) => (
         <>
-          <div className="dropdown-head">
-            <div className="eyebrow">Personal</div>
+          <div className="px-3.5 pt-3 pb-2">
+            <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+              Personal
+            </div>
           </div>
           {personal.map((org) => item(org, close))}
           {organizations.length > 0 && (
             <>
-              <div className="dropdown-head">
-                <div className="eyebrow">Organizations</div>
+              <div className="px-3.5 pt-3 pb-2">
+                <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+                  Organizations
+                </div>
               </div>
               {organizations.map((org) => item(org, close))}
             </>

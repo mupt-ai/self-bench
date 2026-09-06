@@ -78,13 +78,20 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
   ];
 
   return (
-    <div className="task-body">
-      <aside className="task-files" aria-label="Files">
-        <div className="task-files-head">
-          <span className="eyebrow">Files</span>
-          {files && <span className="task-files-count">{files.files.length}</span>}
+    <div className="grid min-h-0 min-w-0 grid-cols-1 grid-rows-[140px_minmax(0,1fr)] md:grid-cols-[300px_minmax(0,1fr)] md:grid-rows-1">
+      <aside
+        className="flex min-h-0 flex-col border-r border-b border-line bg-bg md:border-b-0"
+        aria-label="Files"
+      >
+        <div className="flex h-11 items-center gap-2.5 border-b border-line px-4">
+          <span className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+            Files
+          </span>
+          {files && (
+            <span className="font-mono text-xs font-medium text-dim">{files.files.length}</span>
+          )}
         </div>
-        <div className="task-files-body">
+        <div className="min-h-0 flex-1 overflow-auto">
           {files ? (
             files.files.length === 0 ? (
               <p className="notice">No files available yet.</p>
@@ -98,8 +105,11 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           )}
         </div>
       </aside>
-      <section className="task-pane">
-        <div className="tabs" role="tablist">
+      <section className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] [&_.sheet-body]:min-w-0 [&_.sheet-body]:px-4 md:[&_.sheet-body]:px-8 [&_.block-head]:h-auto [&_.block-head]:min-h-9 [&_.block-head]:flex-wrap [&_.block-head]:gap-y-2 [&_.block-head]:py-2 [&_.fullscreen]:grid-rows-[auto_minmax(0,1fr)] [&_.fullscreen-head]:h-auto [&_.fullscreen-head]:min-h-12 [&_.fullscreen-head]:flex-wrap [&_.fullscreen-head]:py-3 [&_.fullscreen-head]:break-all [&_.fullscreen-head_.kbd]:hidden sm:[&_.fullscreen-head_.kbd]:inline">
+        <div
+          className="tabs min-w-0 overflow-x-auto whitespace-nowrap [&_button]:shrink-0"
+          role="tablist"
+        >
           {tabs.map(([key, label]) => (
             <button
               key={key}

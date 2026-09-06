@@ -55,7 +55,7 @@ export function Block({
   pad?: boolean;
 }) {
   return (
-    <section className="block">
+    <section className="ledger-block">
       <div className="block-head">
         <span>{title}</span>
         {detail && <b>{detail}</b>}

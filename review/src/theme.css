@@ -1,0 +1,23 @@
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./styles.css" layer(legacy);
+@import "./web/ledger-compat.css" layer(legacy);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-mint: var(--mint);
+  --color-mint-bright: var(--mint-bright);
+  --color-danger: var(--red);
+  --color-warning: var(--ochre);
+  --font-mono: var(--mono);
+  --font-sans: var(--sans);
+}
