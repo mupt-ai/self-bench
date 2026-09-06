@@ -14,7 +14,7 @@ import { batchSubmissionSchema } from "../src/site/batch-start.js";
 import { createRepoStore } from "../src/site/repo-store.js";
 import { createRunStore } from "../src/site/run-store.js";
 import { createTaskStore } from "../src/site/task-store.js";
-import { taskState } from "../src/site/tasks.js";
+import { createTaskRoutes, taskState } from "../src/site/tasks.js";
 import { testDatabase } from "./support/site-fixture.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -88,6 +88,7 @@ async function fixture(options: { failStart?: boolean; failAttach?: boolean; sha
       cancelled.push(runId);
     },
   });
+  const taskRoutes = createTaskRoutes({ users, repos, runs, tasks, artifacts });
   const server = createServer(async (request, response) => {
     try {
       // Auth boundary equivalent to startApi: no user, no site route invocation.
@@ -96,7 +97,18 @@ async function fixture(options: { failStart?: boolean; failAttach?: boolean; sha
         return;
       }
       if (
-        !(await routes.handle(request, new URL(request.url ?? "/", "http://test"), response, user))
+        !(await routes.handle(
+          request,
+          new URL(request.url ?? "/", "http://test"),
+          response,
+          user,
+        )) &&
+        !(await taskRoutes.handle(
+          request,
+          new URL(request.url ?? "/", "http://test"),
+          response,
+          user,
+        ))
       )
         sendJson(response, 404, {});
     } catch (error) {
@@ -265,6 +277,10 @@ test("partial artifacts never invent a rejection or overwrite a known verdict wh
   expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
   expect(rows.find((row) => row.candidateId === "pending")?.reason).toBeUndefined();
   expect(rows.find((row) => row.candidateId === "failed")?.pipelineStatus).toBe("rejected");
+  expect((await f.request(ROOT.replace("/batches", "/sync"), { method: "POST" })).status).toBe(200);
+  rows = await f.tasks.listForRepo(f.repo.id);
+  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
+  expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");
   f.setStatus({ runId, phase: "cancelled" });
   await f.request(`${ROOT}/${runId}`);
   rows = await f.tasks.listForRepo(f.repo.id);
