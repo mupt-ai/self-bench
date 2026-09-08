@@ -217,3 +217,52 @@ describe("static submission check", () => {
     }
   });
 });
+
+describe("reuse-first contracts", () => {
+  const selection = {
+    mode: "base-only" as const,
+    reused: ["tests/feature.test.ts: existing behavior"],
+    added: [],
+    excluded: [],
+    coverage: "Existing regression exercises the request.",
+  };
+  test("empty patches require explicit base-only provenance", () => {
+    expect(check({}, { testPatch: "", goldPatch }).ok).toBe(false);
+    expect(check({ testSelection: selection }, { testPatch: "", goldPatch }).ok).toBe(true);
+    expect(check({ testSelection: selection }).ok).toBe(false);
+    expect(
+      check({ testSelection: { ...selection, reused: [] } }, { testPatch: "", goldPatch }).ok,
+    ).toBe(false);
+  });
+  test("structured identities are disjoint and regression declarations align", () => {
+    expect(
+      check({ testResults: { format: "junit", failToPass: ["a", "a"], passToPass: [] } }).ok,
+    ).toBe(false);
+    expect(
+      check({ testResults: { format: "junit", failToPass: ["a"], passToPass: ["a"] } }).ok,
+    ).toBe(false);
+    expect(check({ testResults: { format: "junit", failToPass: ["a"], passToPass: [] } }).ok).toBe(
+      true,
+    );
+  });
+  test("renders structured verifier and valid shell for both modes", async () => {
+    for (const overrides of [
+      {},
+      { testResults: { format: "junit" as const, failToPass: ["suite::feature"], passToPass: [] } },
+    ]) {
+      const result = check(overrides);
+      const script = result.rendered?.["tests/test.sh"] ?? "";
+      const root = await mkdtemp(join(tmpdir(), "selfbench-script-syntax-"));
+      try {
+        await writeFile(join(root, "test.sh"), script);
+        expect((await runCommand("bash", ["-n", join(root, "test.sh")])).exitCode).toBe(0);
+        if ("testResults" in overrides) {
+          expect(script).toContain("SELFBENCH_JUNIT_REPORT");
+          expect(result.rendered?.["tests/Dockerfile"]).toContain("command -v python3");
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  });
+});

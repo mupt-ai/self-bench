@@ -1,8 +1,10 @@
-import type { TaskEnvironment } from "../../contracts.js";
+import type { TaskDefinition, TaskEnvironment } from "../../contracts.js";
 import type { CouplingEvidence } from "../../coupling.js";
 
 export interface VerifierPromptInput {
   readonly taskId: string;
+  readonly testSelection?: TaskDefinition["testSelection"];
+  readonly testResults?: TaskDefinition["testResults"];
   readonly instruction: string;
   readonly renderedReport: string;
   readonly couplingEvidence: CouplingEvidence;
@@ -24,6 +26,8 @@ export function verifierPrompt(input: VerifierPromptInput): string {
 
 # Judge
 
+Read definition.json for testSelection and testResults. Assess reused tests as critically as authored tests; base-only tests are visible to the solver. Check the selection record against the test files and request, including omitted coverage. Command-level results do not establish individual test transitions. JUnit mode fails closed on collection/runtime errors. Repeatability is two target runs in one environment, not clean-run determinism. Review reference dependency preinstallation and ensure setup does not implement the solution.
+
 1. Instruction: it must preserve the human request without adding behavior inferred only from the implementation or tests, and must not leak PRs, commits, test names, or the solution.
 2. Public behavior: held-out tests must exercise an existing public API, command, persistence boundary, or extension seam. They may not import gold-specific private helpers or prescribe exact internal SQL, query counts, private schemas, object identity, telemetry layout, incidental error wording, endpoint/response shapes, or UI copy/order unless the request explicitly makes that artifact public. A coherent implementation with different names, file boundaries, payload presentation, or internal structure must pass.
 3. Coupling: for every exact endpoint path, response/request field, header, media type, helper/module, error string, schema/index name, UI copy/order, or other implementation artifact asserted by the held-out tests, cite either the authentic request text that requires it or deterministic evidence that the base repository already establishes it. A name merely appearing in the gold patch is not evidence. Resolve every artifact in couplingEvidence.blockers with a finding whose artifact exactly matches it. Use external_contract only when the request names a standard protocol that fixes the exact artifact independently of the gold patch, and cite that protocol. Use not_contract only for incidental test-language or framework syntax that is not an asserted product contract. Acceptance with a missing blocker finding is rejected automatically.
@@ -39,6 +43,10 @@ export function verifierPrompt(input: VerifierPromptInput): string {
 The verifier has no bash, edit, write, or verify tools. It must not modify the task, tests, definition, patches, or repository.
 
 Use read, grep, find, and ls to inspect the existing test evidence; inspect solution/gold.patch only to understand the intended behavior and available seams, never to copy its private structure into assertions. Do not return prose after a tool call.
+
+# Selection and evidence contract
+
+${JSON.stringify({ testSelection: input.testSelection ?? null, testResults: input.testResults ?? "command-level", protectedTestPaths: input.heldOutPaths }, null, 2)}
 
 # Authentic request (instruction.md)
 

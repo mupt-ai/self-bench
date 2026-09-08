@@ -29,6 +29,7 @@ describe("Harbor task compiler", () => {
     await runCommand("git", ["-C", repo, "config", "user.name", "Test"]);
     await mkdir(join(repo, "project"));
     await writeFile(join(repo, "value.txt"), "base\n");
+    await writeFile(join(repo, "project/base.test"), "existing test\n");
     await writeFile(join(repo, "project/package.json"), '{"dependencies":{"left-pad":"1.0.0"}}\n');
     await runCommand("git", ["-C", repo, "add", "."]);
     await runCommand("git", ["-C", repo, "commit", "-qm", "base"]);
@@ -154,11 +155,45 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(27);
+    ).toBe(28);
+
+    const baseOnlyDefinition = {
+      ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
+      testPaths: ["base.test"],
+      testSelection: {
+        mode: "base-only",
+        reused: ["base regression"],
+        added: [],
+        excluded: [],
+        coverage: "Existing tests cover the request.",
+      },
+      testResults: {
+        format: "junit",
+        failToPass: ["suite::target"],
+        passToPass: ["suite::a", "suite::b"],
+      },
+    };
+    const originalPatch = await readFile(join(authored, "test.patch"), "utf8");
+    await writeFile(join(authored, "definition.json"), JSON.stringify(baseOnlyDefinition));
+    await writeFile(join(authored, "test.patch"), "");
+    const baseOutput = join(root, "base-only");
+    await compileHarborTask(authored, repo, baseOutput);
+    await refreshHarborTask(baseOutput, baseOnlyDefinition);
+    expect(await readFile(join(baseOutput, "tests/test.patch"), "utf8")).toBe("");
+    expect(await readFile(join(baseOutput, "tests/test.sh"), "utf8")).toContain(
+      "SELFBENCH_JUNIT_REPORT",
+    );
+    const baseManifest = JSON.parse(
+      await readFile(join(baseOutput, ".selfbench-manifest.json"), "utf8"),
+    );
+    expect(baseManifest.testEvidence).toBe("junit");
+    expect(baseManifest.referenceDependencyProvisioning).toBe(true);
+    await writeFile(join(authored, "test.patch"), originalPatch);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
       testCommand: "test --repaired {tests}",
+      testSelection: undefined,
     };
     const repairedPatch =
       "diff --git a/tests/new b/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new\n@@ -0,0 +1 @@\n+repaired\n";

@@ -69,6 +69,8 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
     [input.testPatch, "test patch"],
     [input.goldPatch, "gold patch"],
   ] as const) {
+    if (label === "test patch" && patch === "" && definition.testSelection?.mode === "base-only")
+      continue;
     const problems = malformedPatchProblems(patch, label);
     errors.push(...problems.map((message) => ({ gate: "patches" as const, message })));
     if (problems.length === 0) {

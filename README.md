@@ -216,3 +216,15 @@ bun run dev:review
 ## License
 
 [MIT](LICENSE) © 2026 Mupt AI.
+
+## Test reuse and verification
+
+SelfBench keeps test selection and complete environment setup in one authoring loop. The author is instructed to reuse suitable tests from the completed change, add missing behavioral coverage, and record reused, added, and excluded tests with a coverage explanation. Reused tests still undergo independent fairness review.
+
+Tasks can opt into JUnit XML evidence: the verifier checks declared test identities rather than only a command exit code. Every declared fail-to-pass test must assertion-fail without the solution and pass with the reference; declared regression tests must pass. Missing, skipped, duplicate, errored, malformed, or exit-inconsistent reports fail closed. Named outcomes and failure reasons appear in verifier logs. Older tasks and unsupported runners retain explicitly labeled command-level verification, which does not prove individual test transitions.
+
+Base-test-only tasks may explicitly use an empty test patch. These base tests remain visible to the evaluated agent; they are protected during verification, not hidden. Environment setup still belongs to the authoring session. The verifier may preinstall dependencies from reference manifest changes before restoring tracked source to base. The repeat check is two consecutive target runs in the same verifier environment, not independent clean-environment reproducibility.
+
+### Acknowledgment: Repo2RLEnv
+
+We used ideas from Hugging Face's [Repo2RLEnv](https://github.com/huggingface/Repo2RLEnv), particularly reusing developer-written PR tests and measuring named fail-to-pass/pass-to-pass outcomes. These informed SelfBench's reuse-first authoring guidance and optional structured test evidence. Our implementation retains SelfBench's joint task/setup authoring loop, trusted compiler, separate verifier environment, and independent fairness review; it does not integrate Repo2RLEnv as a dependency or adopt its separate bootstrap pipeline.

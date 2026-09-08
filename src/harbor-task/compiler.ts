@@ -32,10 +32,14 @@ export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskF
     readFile(join(directory, "test.patch"), "utf8"),
     readFile(join(directory, "gold.patch"), "utf8"),
   ]);
-  if (!testPatch.startsWith("diff --git ")) {
+  if (
+    !testPatch.startsWith("diff --git ") &&
+    !(testPatch === "" && definition.testSelection?.mode === "base-only")
+  ) {
     throw new Error("test.patch is not a Git patch");
   }
-  assertSafePatchPaths(testPatch);
+  if (testPatch !== "" || definition.testSelection?.mode !== "base-only")
+    assertSafePatchPaths(testPatch);
   if (!goldPatch.startsWith("diff --git ")) {
     throw new Error("gold.patch is not a Git patch");
   }
@@ -66,6 +70,16 @@ export async function compileHarborTask(
     "--name-only",
     task.definition.baseCommit,
   ]);
+  if (task.definition.testSelection?.mode === "base-only") {
+    const files = repositoryFiles.stdout.split("\n");
+    for (const path of task.definition.testPaths) {
+      const full = [task.definition.workdir === "." ? "" : task.definition.workdir, path]
+        .filter(Boolean)
+        .join("/");
+      if (!files.some((file) => file === full || file.startsWith(`${full}/`)))
+        throw new Error(`base-only test path is absent from base: ${full}`);
+    }
+  }
   assertEnvironmentEvidence(
     task.definition.environment,
     new Set(repositoryFiles.stdout.split("\n").filter(Boolean)),
@@ -136,6 +150,8 @@ export async function compileHarborTask(
         definitionSha256: sha256(JSON.stringify(task.definition)),
         testPatchSha256: sha256(task.testPatch),
         goldPatchSha256: sha256(task.goldPatch),
+        testEvidence: task.definition.testResults?.format ?? "command-level",
+        referenceDependencyProvisioning: preinstallGoldDependencies,
         environmentSha256: sha256(JSON.stringify(task.definition.environment)),
       },
       null,
@@ -158,7 +174,8 @@ export async function refreshHarborTask(
     readFile(join(outputDirectory, "solution/gold.patch"), "utf8"),
     readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
   ]);
-  assertSafePatchPaths(testPatch);
+  if (testPatch !== "" || definition.testSelection?.mode !== "base-only")
+    assertSafePatchPaths(testPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
   const verifierScript = testScript(definition, testPatch);
@@ -193,6 +210,8 @@ export async function refreshHarborTask(
         definitionSha256: sha256(JSON.stringify(definition)),
         testPatchSha256: sha256(testPatch),
         goldPatchSha256: sha256(goldPatch),
+        testEvidence: definition.testResults?.format ?? "command-level",
+        referenceDependencyProvisioning: preinstallGoldDependencies,
         environmentSha256: sha256(JSON.stringify(definition.environment)),
       },
       null,

@@ -165,3 +165,16 @@ new file mode 100644
     ]);
   });
 });
+
+test("empty test patch still checks the reference against a clean base", async () => {
+  const { repo, base } = await repository();
+  expect(await patchApplyCheck({ repository: repo, base, testPatch: "", goldPatch })).toEqual([]);
+  expect(
+    await patchApplyCheck({
+      repository: repo,
+      base,
+      testPatch: "",
+      goldPatch: goldPatch.replace("-two", "-missing"),
+    }),
+  ).not.toEqual([]);
+});
