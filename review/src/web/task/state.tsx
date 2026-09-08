@@ -9,7 +9,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
 };
 
 /** A square state marker in the site's palette. */
-export function StateStamp({ state, big = false }: { state: TaskState; big?: boolean }) {
+export function StateStamp({ state }: { state: TaskState }) {
   const colors: Record<TaskState, string> = {
     needs_review: "border-warning/50 text-warning",
     accepted: "border-mint/50 text-mint",
@@ -19,7 +19,7 @@ export function StateStamp({ state, big = false }: { state: TaskState; big?: boo
   };
   return (
     <span
-      className={`inline-flex items-center gap-1.5 border font-mono text-[10px] font-medium tracking-widest whitespace-nowrap uppercase before:size-1.5 before:bg-current before:content-[''] ${colors[state]} ${big ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5"}`}
+      className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-mono text-xs font-medium tracking-widest whitespace-nowrap uppercase before:size-1.5 before:bg-current before:content-[''] ${colors[state]}`}
     >
       {STATE_LABEL[state]}
     </span>
@@ -28,7 +28,7 @@ export function StateStamp({ state, big = false }: { state: TaskState; big?: boo
 
 export function DifficultyStamp({ difficulty }: { difficulty: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 border border-line-strong px-2 py-0.5 font-mono text-[10px] font-medium tracking-widest whitespace-nowrap text-muted uppercase">
+    <span className="inline-flex items-center gap-1.5 border border-line-strong px-1.5 py-0.5 font-mono text-xs font-medium tracking-widest whitespace-nowrap text-muted uppercase">
       {difficulty}
     </span>
   );

@@ -13,14 +13,26 @@ export function toneFor(stage?: string, status?: string): Tone {
 
 export function Stamp({
   tone = "",
-  big = false,
   children,
 }: {
   tone?: Tone;
   big?: boolean;
   children: React.ReactNode;
 }) {
-  return <span className={`stamp ${tone} ${big ? "big" : ""}`.trim()}>{children}</span>;
+  const colors: Record<Tone, string> = {
+    "": "border-(--border) text-(--muted-fg)",
+    ok: "border-(--ok-45) bg-(--ok-10) text-(--ok)",
+    bad: "border-(--bad-50) bg-(--bad-10) text-(--bad-fg)",
+    warn: "border-(--brand-40) bg-(--brand-10) text-(--warn-fg)",
+    live: "border-(--brand-40) bg-(--brand-10) text-(--brand)",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] tracking-[0.14em] uppercase ${colors[tone]} ${tone ? "before:size-1.5 before:bg-current before:content-['']" : ""}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function stageLabel(stage?: string, status?: string): string {

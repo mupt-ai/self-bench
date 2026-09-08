@@ -8,7 +8,7 @@ export function scores(trial: EvaluationTrial): string {
   const entries = Object.entries(trial.rewards);
   return entries.length
     ? entries.map(([name, value]) => `${name}: ${Number(value.toFixed(4))}`).join(" · ")
-    : "Not scored";
+    : "Not Scored";
 }
 export function EvaluationResults({
   run,
@@ -28,11 +28,11 @@ export function EvaluationResults({
     .filter((step) => (step.role === "agent" || step.role === "assistant") && step.text)
     .at(-1)?.text;
   return (
-    <section className="border border-line bg-surface p-4 sm:p-6" aria-label="Evaluation results">
-      <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center [&_h2]:my-2 [&_p]:font-mono [&_p]:text-[11px] [&_p]:leading-relaxed [&_p]:text-dim">
+    <section className="border border-line bg-surface p-4 sm:p-6" aria-label="Evaluation Results">
+      <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center [&_h2]:my-2 [&_p]:font-mono [&_p]:text-base [&_p]:leading-relaxed [&_p]:text-dim">
         <div>
-          <span className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
-            {active ? "Live evaluation" : "Evaluation results"}
+          <span className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
+            {active ? "Live Evaluation" : "Evaluation Results"}
           </span>
           <h2>
             {run.modelLabel} <RunStatus value={run.status} />
@@ -42,16 +42,16 @@ export function EvaluationResults({
             {new Date(run.createdAt).toLocaleString()}
           </p>
           <p>
-            Thinking: {run.thinking ?? "Not recorded"} · Route:{" "}
+            Thinking: {run.thinking ?? "Not Recorded"} · Route:{" "}
             {run.credentials?.provider ?? run.modelName.split("/")[0]}
           </p>
         </div>
-        <span className="font-mono text-xs whitespace-nowrap text-mint" role="status">
+        <span className="font-mono text-sm whitespace-nowrap text-mint" role="status">
           {done}/{run.trials.length} completed{failed ? ` · ${failed} failed` : ""}
         </span>
       </div>
-      {run.error && <p className="my-4 font-mono text-xs text-danger">{run.error}</p>}
-      <p className="mt-2 text-[13px] text-muted">
+      {run.error && <p className="my-4 font-mono text-base text-danger">{run.error}</p>}
+      <p className="mt-2 text-base text-muted">
         {run.status === "queued"
           ? "Waiting for an evaluation worker. You can leave this page and return later."
           : active
@@ -67,7 +67,7 @@ export function EvaluationResults({
               <th>Task</th>
               <th>Harness</th>
               <th>Status</th>
-              <th>Verifier scores</th>
+              <th>Verifier Scores</th>
             </tr>
           </thead>
           <tbody>
@@ -97,7 +97,7 @@ export function EvaluationResults({
       </div>
       {trial && (
         <div>
-          <div className="mt-7 mb-3 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center [&_h3]:wrap-anywhere [&_h3_span]:ml-2 [&_h3_span]:font-mono [&_h3_span]:text-[11px] [&_h3_span]:text-dim">
+          <div className="mt-7 mb-3 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center [&_h3]:wrap-anywhere [&_h3_span]:ml-2 [&_h3_span]:font-mono [&_h3_span]:text-sm [&_h3_span]:text-dim">
             <h3>
               {trial.taskId} <span> / {trial.harness}</span>
             </h3>
@@ -105,29 +105,29 @@ export function EvaluationResults({
               className={buttonStyles.ghost}
               to={`/repos/${repo}/tasks/${encodeURIComponent(trial.runId)}/${encodeURIComponent(trial.taskId)}`}
             >
-              View task ↗
+              View Task ↗
             </Link>
           </div>
-          {trial.error && <p className="my-4 font-mono text-xs text-danger">{trial.error}</p>}
+          {trial.error && <p className="my-4 font-mono text-base text-danger">{trial.error}</p>}
           <TokenCosts trial={trial} />
           {!active && finalMessage && (
-            <div className="my-5 border-l-2 border-mint bg-surface-2 px-5 pt-px pb-5 [&_p]:text-[13px] [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
-              <h4>Solver’s final response</h4>
+            <div className="my-5 border-l-2 border-mint bg-surface-2 px-5 pt-px pb-5 [&_p]:text-base [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
+              <h4>Solver’s Final Response</h4>
               <p>{finalMessage}</p>
             </div>
           )}
-          <h4>Solver transcript</h4>
+          <h4>Solver Transcript</h4>
           {!trial.steps.length && (
-            <p className="mt-2 text-[13px] text-muted">
+            <p className="mt-2 text-base text-muted">
               {active
                 ? "Waiting for transcript events. Available raw solver and tool output is shown below."
                 : "This harness did not produce a readable structured transcript. Inspect the raw output and artifacts below."}
             </p>
           )}
-          <ol className="m-0 list-none p-0 [&>li]:border-t [&>li]:border-line [&>li]:py-4.5 [&_p]:text-[13px] [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
+          <ol className="m-0 list-none p-0 [&>li]:border-t [&>li]:border-line [&>li]:py-4.5 [&_p]:text-base [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
             {trial.steps.map((step, stepIndex) => (
               <li key={step.id}>
-                <span className="mb-2.5 block font-mono text-[10px] text-dim uppercase">
+                <span className="mb-2.5 block font-mono text-sm text-dim uppercase">
                   {stepIndex + 1} · {step.role}
                 </span>
                 {step.text && <p>{step.text}</p>}
@@ -144,11 +144,11 @@ export function EvaluationResults({
             ))}
           </ol>
           <details open={!trial.steps.length}>
-            <summary>Harbor and solver output</summary>
+            <summary>Harbor and Solver Output</summary>
             <pre>{trial.log || "No output yet."}</pre>
           </details>
           {trial.artifacts.length > 0 && (
-            <details className="[&_p]:mt-3 [&_p]:text-xs [&_p]:text-dim [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-[11px] [&_a]:text-mint [&_a]:wrap-anywhere">
+            <details className="[&_p]:mt-3 [&_p]:text-base [&_p]:text-dim [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-mint [&_a]:wrap-anywhere">
               <summary>Artifacts · {trial.artifacts.length}</summary>
               <p>Sanitized text exports; large files may be capped at 1 MiB.</p>
               <ul>

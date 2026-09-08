@@ -1,7 +1,9 @@
-import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
 import { tasks, users } from "../db/schema.js";
+import { tombstoneTask } from "./task-deletion.js";
+import { reserveTaskStart } from "./task-start-reservation.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
 export type ReviewDecision = "approve" | "reject";
@@ -68,12 +70,18 @@ export interface TaskStore {
   upsertMany(rows: readonly TaskUpsert[]): Promise<void>;
   /** Inserts a site-started task; rejects when the workflow id is already known. */
   insertStarted(row: TaskStart): Promise<TaskRecord>;
+  reserveStarted(row: TaskStart): Promise<TaskRecord>;
   inProgress(repoId: number): Promise<TaskRecord[]>;
   progress(taskRowId: number, patch: TaskProgressPatch): Promise<TaskRecord>;
   listForRepo(repoId: number): Promise<TaskRecord[]>;
   /** By the agent's task id or the candidate id, within one run. */
   find(repoId: number, runId: string, taskOrCandidateId: string): Promise<TaskRecord | undefined>;
-  deleteForRun(repoId: number, runId: string): Promise<number>;
+  /** Atomically tombstones a terminal task. Repeating a deletion succeeds. */
+  deleteTask(
+    repoId: number,
+    runId: string,
+    taskId: string,
+  ): Promise<"deleted" | "active" | "missing">;
   review(
     taskRowId: number,
     verdict: { decision: ReviewDecision; note: string; userId: number },
@@ -123,7 +131,13 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           await tx
             .insert(tasks)
             .values(values(row))
-            .onConflictDoUpdate({ target: [tasks.runId, tasks.candidateId], set });
+            .onConflictDoUpdate({
+              target: [tasks.runId, tasks.candidateId],
+              set,
+              setWhere: sql`${tasks.repoId} = ${row.repoId}
+                and ${tasks.deletedAt} is null
+                and (${tasks.workflowId} is null or ${tasks.pipelineStatus} <> 'in_progress')`,
+            });
         }
       });
     },
@@ -140,10 +154,16 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
       if (!inserted) throw new Error("task insert returned no row");
       return byId(inserted.id);
     },
+    async reserveStarted(row) {
+      return byId(
+        await reserveTaskStart(db, { ...values(row), startedBy: row.startedBy, startedAt: now() }),
+      );
+    },
     async inProgress(repoId) {
       const rows = await select().where(
         and(
           eq(tasks.repoId, repoId),
+          isNull(tasks.deletedAt),
           eq(tasks.pipelineStatus, "in_progress"),
           isNotNull(tasks.workflowId),
         ),
@@ -161,12 +181,12 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           ...(patch.taskId ? { taskId: patch.taskId } : {}),
           syncedAt: now(),
         })
-        .where(eq(tasks.id, taskRowId));
+        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
       return byId(taskRowId);
     },
     async listForRepo(repoId) {
       const rows = await select()
-        .where(eq(tasks.repoId, repoId))
+        .where(and(eq(tasks.repoId, repoId), isNull(tasks.deletedAt)))
         .orderBy(tasks.runId, tasks.taskId);
       return rows.map(taskFrom);
     },
@@ -175,6 +195,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         .where(
           and(
             eq(tasks.repoId, repoId),
+            isNull(tasks.deletedAt),
             eq(tasks.runId, runId),
             or(eq(tasks.taskId, taskOrCandidateId), eq(tasks.candidateId, taskOrCandidateId)),
           ),
@@ -183,13 +204,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         .limit(1);
       return rows[0] ? taskFrom(rows[0]) : undefined;
     },
-    async deleteForRun(repoId, runId) {
-      const rows = await db
-        .delete(tasks)
-        .where(and(eq(tasks.repoId, repoId), eq(tasks.runId, runId)))
-        .returning({ id: tasks.id });
-      return rows.length;
-    },
+    deleteTask: (repoId, runId, taskId) => tombstoneTask(db, repoId, runId, taskId, now),
     async review(taskRowId, verdict) {
       await db
         .update(tasks)
@@ -227,7 +242,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           lastPr: sql<number | null>`max(${tasks.sourcePr})`,
         })
         .from(tasks)
-        .where(inArray(tasks.repoId, [...repoIds]))
+        .where(and(inArray(tasks.repoId, [...repoIds]), isNull(tasks.deletedAt)))
         .groupBy(tasks.repoId);
       return rows.map((row) => ({
         repoId: row.repoId,

@@ -8,10 +8,18 @@ export interface DropdownProps {
   label: string;
   className?: string;
   align?: "left" | "right";
+  above?: boolean;
 }
 
 /** A square-cornered menu anchored under its trigger. Closes on outside click and Escape. */
-export function Dropdown({ trigger, children, label, className, align = "right" }: DropdownProps) {
+export function Dropdown({
+  trigger,
+  children,
+  label,
+  className,
+  align = "right",
+  above = false,
+}: DropdownProps) {
   const [open, setOpen] = React.useState(false);
   const root = React.useRef<HTMLDivElement>(null);
   const button = React.useRef<HTMLButtonElement>(null);
@@ -40,7 +48,7 @@ export function Dropdown({ trigger, children, label, className, align = "right" 
     <div className={`relative ${className ?? ""}`} ref={root}>
       <button
         type="button"
-        className="group/trigger flex h-9 items-center gap-2 border border-transparent bg-transparent pr-2.5 pl-2 font-mono text-xs font-medium text-ink hover:border-line-strong hover:bg-surface-2 aria-expanded:border-line-strong aria-expanded:bg-surface-2"
+        className="group/trigger flex h-9 items-center gap-2 border border-transparent bg-transparent pr-2.5 pl-2 font-mono text-sm font-medium text-ink hover:border-line-strong hover:bg-surface-2 aria-expanded:border-line-strong aria-expanded:bg-surface-2"
         ref={button}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -58,7 +66,7 @@ export function Dropdown({ trigger, children, label, className, align = "right" 
       </button>
       {open && (
         <div
-          className={`absolute top-[calc(100%+6px)] z-10 min-w-[220px] border border-line-strong bg-surface-2 ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
+          className={`absolute ${above ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} z-10 min-w-[220px] border border-line-strong bg-surface-2 ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
           role="menu"
           aria-label={label}
         >
@@ -78,7 +86,7 @@ export function Avatar({ login, url, size = 24 }: { login: string; url?: string;
   }
   return (
     <span
-      className="grid shrink-0 place-items-center border border-line-strong bg-surface-3 font-mono text-[11px] font-medium text-mint"
+      className="grid shrink-0 place-items-center border border-line-strong bg-surface-3 font-mono text-xs font-medium text-mint"
       style={{ width: size, height: size }}
       aria-hidden="true"
     >

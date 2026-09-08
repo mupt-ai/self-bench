@@ -62,7 +62,7 @@ export function RunModelRow({
         </small>
         {model.id === "custom" && (
           <Input
-            aria-label="Custom model ID"
+            aria-label="Custom Model ID"
             placeholder="Model ID"
             value={selected.customModel ?? ""}
             onChange={(event) => onChange({ ...selected, customModel: event.target.value })}
@@ -77,11 +77,11 @@ export function RunModelRow({
       </td>
       <td>
         <Select
-          aria-label={`${model.label} credential`}
+          aria-label={`${model.label} Credential`}
           value={selected.credentialId}
           onChange={(event) => selectCredential(event.target.value)}
         >
-          <option value="">Select credential</option>
+          <option value="">Select Credential</option>
           {credentials.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name} · {entry.kind}
@@ -91,7 +91,7 @@ export function RunModelRow({
       </td>
       <td>
         <Select
-          aria-label={`${model.label} thinking level`}
+          aria-label={`${model.label} Thinking Level`}
           value={thinking}
           onChange={(event) => {
             const level = thinkingLevels.find((value) => value === event.target.value);
@@ -106,7 +106,7 @@ export function RunModelRow({
           {levels.map((level) => (
             <option key={level} value={level}>
               {level === "default"
-                ? "Model default"
+                ? "Model Default"
                 : level === "xhigh"
                   ? "XHigh"
                   : level[0]?.toUpperCase() + level.slice(1)}
@@ -115,7 +115,7 @@ export function RunModelRow({
         </Select>
       </td>
       <td>
-        <div className="flex gap-1.5 [&_button]:whitespace-nowrap [&_button]:border [&_button]:border-line-strong [&_button]:bg-transparent [&_button]:p-2 [&_button]:text-[11px] [&_button]:text-muted [&_button[aria-pressed=true]]:border-mint [&_button[aria-pressed=true]]:bg-surface [&_button[aria-pressed=true]]:text-mint [&_button:disabled]:opacity-25">
+        <div className="flex gap-1.5 [&_button]:whitespace-nowrap [&_button]:border [&_button]:border-line-strong [&_button]:bg-transparent [&_button]:p-2 [&_button]:text-sm [&_button]:text-muted [&_button[aria-pressed=true]]:border-mint [&_button[aria-pressed=true]]:bg-surface [&_button[aria-pressed=true]]:text-mint [&_button:disabled]:opacity-25">
           {harnessOptions.map((harness) => (
             <button
               type="button"

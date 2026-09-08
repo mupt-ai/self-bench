@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { executionEnvironment } from "./execution-environment.js";
 import { runCommand } from "./process.js";
 
 export interface PiModelAuth {
@@ -10,7 +11,7 @@ export interface PiModelAuth {
 }
 
 export function openAiApiKey(): string | undefined {
-  const key = process.env.OPENAI_API_KEY?.trim();
+  const key = executionEnvironment().OPENAI_API_KEY?.trim();
   return key || undefined;
 }
 
@@ -23,7 +24,7 @@ export async function loadPiModelAuth(): Promise<PiModelAuth> {
 
 export async function loadPiSubscriptionAuth(): Promise<string> {
   const raw =
-    process.env.SELFBENCH_PI_AUTH_JSON ??
+    executionEnvironment().SELFBENCH_PI_AUTH_JSON ??
     (await readFile(join(homedir(), ".pi/agent/auth.json"), "utf8"));
   const parsed = JSON.parse(raw) as unknown;
   const credential = isRecord(parsed) ? parsed["openai-codex"] : undefined;

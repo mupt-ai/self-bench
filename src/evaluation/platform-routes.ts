@@ -11,14 +11,9 @@ import {
   createComparison,
   dispatchComparison,
 } from "./comparisons.js";
-import {
-  credentialSchema,
-  deleteCredential,
-  listCredentials,
-  saveCredential,
-} from "./credentials.js";
-import { type EncryptedRecordStore, RecordStoreError } from "./encrypted-records.js";
-import { listSetups, readSetup } from "./profiles.js";
+import { RecordStoreError } from "./encrypted-records.js";
+import { orgCredentialRoutes } from "./org-credential-routes.js";
+import { orgRecords } from "./org-records.js";
 import type { EvaluationRoutesOptions } from "./routes.js";
 
 const pattern =
@@ -43,6 +38,18 @@ export async function platformRoutes(
   const section = match[4],
     id = match[5],
     action = match[6];
+  if (section === "credentials") {
+    if (id === "migrate") {
+      sendJson(response, 410, {
+        error:
+          "Add organization credentials in organization settings. Personal setups remain private.",
+      });
+      return true;
+    }
+    const target = new URL(url);
+    target.pathname = `/api/orgs/${tenant.login}/credentials${id ? `/${id}/${action ?? ""}` : ""}`;
+    return orgCredentialRoutes(options, request, target, response, user);
+  }
   if (request.method === "GET" && section === "catalog" && !id) {
     sendJson(response, 200, {
       version: catalogVersion,
@@ -62,25 +69,9 @@ export async function platformRoutes(
     return true;
   }
   try {
-    const records = options.records;
-    if (!records) throw new RecordStoreError(503);
-    if (section === "credentials") {
-      if (request.method === "GET" && !id)
-        sendJson(response, 200, { credentials: await listCredentials(records, user.githubId) });
-      else if (request.method === "POST" && id === "migrate")
-        sendJson(response, 200, {
-          migrated: await migrate(records, options, repo.id, user.githubId, env),
-        });
-      else if (request.method === "POST" && id && action === "delete") {
-        await deleteCredential(records, options.artifacts, user.githubId, id);
-        sendJson(response, 200, { deleted: true });
-      } else if (request.method === "POST" && !id) {
-        const draft = credentialSchema.parse(
-          JSON.parse((await readBody(request, 40_000)).toString()),
-        );
-        sendJson(response, 201, await saveCredential(records, user.githubId, draft, env));
-      } else sendJson(response, 405, { error: "Method not allowed" });
-    } else if (section === "comparisons") {
+    if (!options.records) throw new RecordStoreError(503);
+    const records = orgRecords(options.records, tenant.id);
+    if (section === "comparisons") {
       if (request.method === "POST" && !id) {
         const draft = comparisonSchema.parse(
           JSON.parse((await readBody(request, 30_000)).toString()),
@@ -88,7 +79,13 @@ export async function platformRoutes(
         const record = await createComparison(
           records,
           options.tasks,
-          { repoId: repo.id, ownerId: user.githubId, tenant: tenant.login, login: user.login },
+          {
+            repoId: repo.id,
+            ownerId: tenant.id,
+            credentialOrgId: tenant.id,
+            tenant: tenant.login,
+            login: user.login,
+          },
           draft,
         );
         let submissionError: string | undefined;
@@ -103,9 +100,10 @@ export async function platformRoutes(
           submissionError,
         });
       } else {
-        const comparisons = (await readAccount(records, user.githubId)).comparisons.filter(
-          (record) => record.repoId === repo.id,
-        );
+        const comparisons = [
+          ...(await readAccount(records, tenant.id)).comparisons,
+          ...(await readAccount(options.records, user.githubId)).comparisons,
+        ].filter((record) => record.repoId === repo.id);
         const record = comparisons.find((entry) => entry.id === id);
         if (!id && request.method === "GET")
           sendJson(response, 200, {
@@ -143,47 +141,4 @@ export async function platformRoutes(
   }
   request.resume();
   return true;
-}
-async function migrate(
-  records: EncryptedRecordStore,
-  options: EvaluationRoutesOptions,
-  repoId: number,
-  ownerId: number,
-  env: NodeJS.ProcessEnv,
-) {
-  const ids: string[] = [];
-  for (const profile of await listSetups(options.artifacts, repoId, ownerId, env)) {
-    const setup = await readSetup(options.artifacts, repoId, ownerId, profile.id, env);
-    if (
-      !setup ||
-      !["openai", "anthropic", "openrouter"].includes(setup.provider) ||
-      setup.sandbox === "docker"
-    )
-      continue;
-    const model = await saveCredential(
-      records,
-      ownerId,
-      credentialSchema.parse({
-        name: `${setup.provider} · imported`,
-        kind: setup.provider,
-        value: setup.modelApiKey,
-      }),
-      env,
-      `${repoId}/${profile.id}/model`,
-    );
-    const sandbox = await saveCredential(
-      records,
-      ownerId,
-      credentialSchema.parse({
-        name: `${setup.sandbox} · imported`,
-        kind: setup.sandbox,
-        value: setup.sandboxApiKey ?? setup.modalTokenSecret,
-        tokenId: setup.modalTokenId,
-      }),
-      env,
-      `${repoId}/${profile.id}/sandbox`,
-    );
-    ids.push(model.id, sandbox.id);
-  }
-  return ids;
 }

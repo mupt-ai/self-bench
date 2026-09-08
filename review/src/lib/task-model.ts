@@ -76,15 +76,15 @@ export interface TaskModel {
 const COMPOSE_PATHS = ["tests/docker-compose.yaml", "environment/docker-compose.yaml"];
 
 const SCRIPT_LABELS: [string, string][] = [
-  ["environment/root-setup.sh", "root setup (agent image)"],
-  ["environment/setup.sh", "setup (agent image)"],
-  ["environment/smoke.sh", "smoke (agent image)"],
-  ["tests/root-setup.sh", "root setup (verifier image)"],
-  ["tests/setup.sh", "setup (verifier image)"],
-  ["tests/smoke.sh", "smoke (verifier image)"],
-  ["tests/test.sh", "verifier test.sh"],
-  ["tests/task-test.sh", "verifier task-test.sh"],
-  ["solution/solve.sh", "oracle solve.sh"],
+  ["environment/root-setup.sh", "Root Setup (Agent Image)"],
+  ["environment/setup.sh", "Setup (Agent Image)"],
+  ["environment/smoke.sh", "Smoke (Agent Image)"],
+  ["tests/root-setup.sh", "Root Setup (Verifier Image)"],
+  ["tests/setup.sh", "Setup (Verifier Image)"],
+  ["tests/smoke.sh", "Smoke (Verifier Image)"],
+  ["tests/test.sh", "Verifier test.sh"],
+  ["tests/task-test.sh", "Verifier task-test.sh"],
+  ["solution/solve.sh", "Oracle solve.sh"],
 ];
 
 export function buildTaskModel(files: TaskFiles): TaskModel {
@@ -98,9 +98,9 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
     if (!/^Dockerfile(\..+)?$/.test(name) || file.text === undefined) continue;
     const label =
       file.path === "environment/Dockerfile"
-        ? "agent image"
+        ? "Agent Image"
         : file.path === "tests/Dockerfile"
-          ? "verifier image"
+          ? "Verifier Image"
           : file.path;
     images.push({
       label,

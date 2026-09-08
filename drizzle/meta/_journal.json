@@ -15,6 +15,20 @@
       "when": 1788659606426,
       "tag": "0001_evaluation_records",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788716380068,
+      "tag": "0002_task_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788717620218,
+      "tag": "0003_drop_repo_runs",
+      "breakpoints": true
     }
   ]
 }

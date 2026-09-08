@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { sheetBody, tab, tabList } from "../../components/viewer-ui";
 
 const TREE_ROWS = [
   { id: "env", width: 160, indent: 20 },
@@ -28,7 +29,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
     >
       <header className="flex flex-wrap items-start justify-between gap-6 border-b border-line bg-surface px-4 pt-4.5 pb-4 sm:px-[var(--site-gutter)]">
         <div className="min-w-0">
-          <nav className="mb-3.5 flex flex-wrap gap-2 font-mono text-xs font-medium text-dim [&_a]:text-muted [&_a:hover]:text-mint-bright">
+          <nav className="mb-3.5 flex flex-wrap gap-2 font-mono text-sm font-medium text-dim [&_a]:text-muted [&_a:hover]:text-mint-bright">
             <Link to="/">Repositories</Link>
             <span aria-hidden="true">/</span>
             <Link to={`/repos/${fullName}`}>{fullName}</Link>
@@ -52,8 +53,8 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
       </header>
       <div className="grid min-h-0 grid-cols-[160px_minmax(0,1fr)] md:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-r border-line bg-bg">
-          <div className="flex h-11 items-center gap-2.5 border-b border-line px-4">
-            <span className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+          <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-4">
+            <span className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
               Files
             </span>
           </div>
@@ -68,14 +69,14 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
           </div>
         </aside>
         <section className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
-          <div className="tabs">
-            <span className="tab active">File</span>
-            <span className="tab">Environment</span>
-            <span className="tab">Pipeline</span>
+          <div className={tabList}>
+            <span className={`${tab} border-mint text-mint`}>File</span>
+            <span className={tab}>Environment</span>
+            <span className={tab}>Pipeline</span>
           </div>
-          <div className="sheet-body">
-            <div className="ledger-block">
-              <div className="block-head">
+          <div className={sheetBody}>
+            <div className="shrink-0 border border-line bg-surface">
+              <div className="flex min-h-9 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-line bg-surface px-3.5 py-2">
                 <span
                   className="block h-[13px] animate-pulse bg-surface-3 motion-reduce:animate-none mt-1.5 h-2.5 opacity-70"
                   style={{ width: 180, marginTop: 0 }}

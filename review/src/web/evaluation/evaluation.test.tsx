@@ -19,7 +19,7 @@ test("results distinguish zero rewards from missing scores and escape solver tex
   const run = initialEvaluation(evaluationInput(), "Test model");
   const trial = run.trials[0];
   if (!trial) throw new Error("Missing trial");
-  expect(scores(trial)).toBe("Not scored");
+  expect(scores(trial)).toBe("Not Scored");
   trial.rewards = { reward: 0 };
   expect(scores(trial)).toBe("reward: 0");
   trial.steps = [{ id: "one", role: "agent", text: "<script>steal()</script>", tools: [] }];
@@ -31,5 +31,7 @@ test("results distinguish zero rewards from missing scores and escape solver tex
   );
   expect(html).not.toContain("<script>");
   expect(html).toContain("&lt;script&gt;");
-  expect(html).toContain("Solver’s final response");
+  expect(html).toContain("Solver’s Final Response");
+  expect(html).toContain("Verifier Scores");
+  expect(html).toContain("Harbor and Solver Output");
 });

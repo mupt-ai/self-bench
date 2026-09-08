@@ -93,22 +93,6 @@ export const repos = pgTable(
   (table) => [index("repos_org_id").on(table.orgId)],
 );
 
-/** Pipeline runs whose candidates count as this repository's tasks (historical attachments). */
-export const repoRuns = pgTable(
-  "repo_runs",
-  {
-    repoId: bigint("repo_id", { mode: "number" })
-      .notNull()
-      .references(() => repos.id, { onDelete: "cascade" }),
-    runId: text("run_id").notNull(),
-    attachedBy: bigint("attached_by", { mode: "number" })
-      .notNull()
-      .references(() => users.id),
-    attachedAt: timestamptz("attached_at").notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("repo_runs_pk").on(table.repoId, table.runId)],
-);
-
 /** One row per candidate the pipeline processed; files and artifacts stay in the bucket. */
 export const tasks = pgTable(
   "tasks",
@@ -141,6 +125,8 @@ export const tasks = pgTable(
     workflowId: text("workflow_id"),
     startedBy: bigint("started_by", { mode: "number" }).references(() => users.id),
     startedAt: timestamptz("started_at"),
+    /** Retained across sync and run detachment; artifacts and historical results stay intact. */
+    deletedAt: timestamptz("deleted_at"),
     syncedAt: timestamptz("synced_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },

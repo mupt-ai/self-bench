@@ -13,6 +13,8 @@ export default defineConfig({
   server: {
     allowedHosts: ["avyays-mac-mini.tailf3cee5.ts.net"],
     proxy: {
+      "^/api/orgs/[^/]+/repos/[^/]+/[^/]+/evaluations/(comparisons|credentials)(?:/|$)":
+        process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",
       ...(process.env.SELFBENCH_EVALUATION_PROXY
         ? {
             "^/api/orgs/[^/]+/repos/[^/]+/[^/]+/evaluations(?:/|$)":

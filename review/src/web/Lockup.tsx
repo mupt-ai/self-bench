@@ -27,7 +27,7 @@ export function Lockup() {
       <DariMark />
       <span className="flex flex-col items-start gap-[3px] leading-none">
         <strong>self-bench</strong>
-        <span className="font-mono text-[11px] font-medium tracking-[0.06em] text-mint">
+        <span className="font-mono text-xs font-medium tracking-[0.06em] text-mint">
           by dari.dev
         </span>
       </span>

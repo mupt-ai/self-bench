@@ -34,10 +34,10 @@ export function CredentialEditor({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   return (
-    <section className="my-6 max-w-2xl border border-line bg-surface p-5 [&_h2]:mb-4">
-      <h2>{previous ? "Replace credential" : "Add credential"}</h2>
+    <section className="my-6 max-w-2xl border border-line bg-surface p-5 [&_h2]:mb-4 [&_small]:text-sm">
+      <h2>{previous ? "Replace Credential" : "Add Credential"}</h2>
       {previous && (
-        <p className="mt-2 text-[13px] text-muted">
+        <p className="mt-2 text-base text-muted">
           Creates a new credential. Existing runs keep their original reference; delete the old
           credential when no longer needed.
         </p>
@@ -62,7 +62,7 @@ export function CredentialEditor({
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
             <label
               htmlFor="credentialeditor-field-0"
-              className="grid gap-2 font-mono text-xs text-muted"
+              className="grid gap-2 font-mono text-sm text-muted"
             >
               Name
               <Input
@@ -75,12 +75,12 @@ export function CredentialEditor({
             </label>
             <label
               htmlFor="credentialeditor-field-1"
-              className="grid gap-2 font-mono text-xs text-muted"
+              className="grid gap-2 font-mono text-sm text-muted"
             >
-              Provider or sandbox
+              Provider or Sandbox
               <Select
                 id="credentialeditor-field-1"
-                aria-label="Provider or sandbox"
+                aria-label="Provider or Sandbox"
                 value={draft.kind}
                 onChange={(event) =>
                   setDraft({
@@ -91,7 +91,7 @@ export function CredentialEditor({
                   })
                 }
               >
-                <optgroup label="Model providers">
+                <optgroup label="Model Providers">
                   {providerOptions.map((provider) => (
                     <option key={provider.id} value={provider.id}>
                       {provider.label}
@@ -110,7 +110,7 @@ export function CredentialEditor({
             {draft.kind === "openai" && (
               <label
                 htmlFor="credentialeditor-field-2"
-                className="col-span-full grid gap-2 font-mono text-xs text-muted"
+                className="col-span-full grid gap-2 font-mono text-sm text-muted"
               >
                 Authentication
                 <Select
@@ -124,15 +124,15 @@ export function CredentialEditor({
                     })
                   }
                 >
-                  <option value="api-key">OpenAI API key (usage billed)</option>
-                  <option value="codex-login">Codex / ChatGPT sign-in (Codex only)</option>
+                  <option value="api-key">OpenAI API Key (Usage Billed)</option>
+                  <option value="codex-login">Codex / ChatGPT Sign-In (Codex Only)</option>
                 </Select>
               </label>
             )}
             {draft.kind === "custom" && (
               <label
                 htmlFor="credentialeditor-field-3"
-                className="col-span-full grid gap-2 font-mono text-xs text-muted"
+                className="col-span-full grid gap-2 font-mono text-sm text-muted"
               >
                 Endpoint
                 <Input
@@ -149,9 +149,9 @@ export function CredentialEditor({
             {draft.kind === "modal" && (
               <label
                 htmlFor="credentialeditor-field-4"
-                className="col-span-full grid gap-2 font-mono text-xs text-muted"
+                className="col-span-full grid gap-2 font-mono text-sm text-muted"
               >
-                Modal token ID
+                Modal Token ID
                 <Input
                   id="credentialeditor-field-4"
                   required
@@ -165,7 +165,7 @@ export function CredentialEditor({
             {draft.auth === "codex-login" ? (
               <label
                 htmlFor="credentialeditor-field-5"
-                className="col-span-full grid gap-2 font-mono text-xs text-muted"
+                className="col-span-full grid gap-2 font-mono text-sm text-muted"
               >
                 Codex auth.json
                 <Input
@@ -191,12 +191,12 @@ export function CredentialEditor({
             ) : (
               <label
                 htmlFor="credentialeditor-field-6"
-                className="col-span-full grid gap-2 font-mono text-xs text-muted"
+                className="col-span-full grid gap-2 font-mono text-sm text-muted"
               >
                 {["e2b", "daytona"].includes(draft.kind)
                   ? "Sandbox API Key"
                   : draft.kind === "modal"
-                    ? "Modal token secret"
+                    ? "Modal Token Secret"
                     : "Model API Key"}
                 <Input
                   id="credentialeditor-field-6"
@@ -211,11 +211,11 @@ export function CredentialEditor({
             )}
           </div>
           {error && (
-            <p className="my-4 font-mono text-xs text-danger" role="alert">
+            <p className="my-4 font-mono text-base text-danger" role="alert">
               {error}
             </p>
           )}
-          <p className="mt-2 text-[13px] text-muted">
+          <p className="mt-2 text-base text-muted">
             Saved secrets are never shown again. Saving does not run a model or validate account
             access.
           </p>
@@ -224,7 +224,7 @@ export function CredentialEditor({
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={!draft.value}>
-              {busy ? "Saving…" : "Save credential"}
+              {busy ? "Saving…" : "Save Credential"}
             </Button>
           </div>
         </fieldset>

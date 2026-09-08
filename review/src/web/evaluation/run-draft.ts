@@ -2,9 +2,9 @@ import { z } from "zod";
 import { thinkingLevels } from "../../../../src/evaluation/model-options";
 import { evaluationRequestId } from "./api";
 
-const tasksSchema = z
-  .array(z.object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) }))
-  .max(10);
+const tasksSchema = z.array(
+  z.object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) }),
+);
 const draftStateSchema = z.object({
   submitted: z.boolean(),
   draft: z.object({

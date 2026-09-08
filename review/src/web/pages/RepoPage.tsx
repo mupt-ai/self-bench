@@ -1,47 +1,44 @@
 import React from "react";
-import { Link, useParams } from "react-router";
-import { AddPrSheet } from "../AddPrSheet";
-import { AttachRunSheet } from "../AttachRunSheet";
-import {
-  type AttachedRun,
-  type ConnectedRepo,
-  detachRun,
-  fetchAttachedRuns,
-  fetchConnectedRepos,
-  fetchTasks,
-  formatAgo,
-  syncRepo,
-  type TaskItem,
-  type TaskState,
-} from "../api";
+import { Link, useParams, useSearchParams } from "react-router";
+import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
 import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { STATE_LABEL } from "../task/state";
-import { TaskList } from "../task/TaskList";
+import { ReviewTaskList } from "../task/ReviewTaskList";
+import { type Filter, TaskFilters } from "../task/TaskFilters";
 import { TaskListSkeleton } from "../task/TaskListSkeleton";
-import { Button } from "../ui";
-
-type Filter = "all" | TaskState;
-const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
+import { taskKey } from "../task/task-deletion";
+import { buttonStyles } from "../ui";
 
 export function RepoPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
+  return <RepoTasksPage key={`${org.login}/${owner}/${name}`} />;
+}
+
+function RepoTasksPage() {
+  const { org } = useOrg();
+  const { owner = "", name = "" } = useParams();
   const fullName = `${owner}/${name}`;
-  useDocumentTitle(`${fullName} · self-bench`);
+  useDocumentTitle(`Dataset · ${fullName} · self-bench`);
   const [repo, setRepo] = React.useState<ConnectedRepo | null | undefined>(undefined);
-  const [runs, setRuns] = React.useState<AttachedRun[]>([]);
   const [tasks, setTasks] = React.useState<TaskItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [filter, setFilter] = React.useState<Filter>("all");
+  const [params] = useSearchParams();
+  const [filter, setFilter] = React.useState<Filter>(
+    params.get("state") === "in_progress" ? "in_progress" : "accepted",
+  );
   const [query, setQuery] = React.useState("");
-  const [attaching, setAttaching] = React.useState(false);
-  const [syncing, setSyncing] = React.useState(false);
-  const [adding, setAdding] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [actionsTarget, setActionsTarget] = React.useState<HTMLDivElement | null>(null);
+  const requestVersion = React.useRef(0);
 
   const loadTasks = React.useCallback(() => {
+    const version = ++requestVersion.current;
     setTasks(null);
-    fetchTasks(org.login, fullName).then(setTasks, (cause: Error) => setError(cause.message));
+    fetchTasks(org.login, fullName).then(
+      (found) => version === requestVersion.current && setTasks(found),
+      (cause: Error) => version === requestVersion.current && setError(cause.message),
+    );
   }, [org.login, fullName]);
 
   React.useEffect(() => {
@@ -54,64 +51,25 @@ export function RepoPage() {
       },
       (cause: Error) => !cancelled && setError(cause.message),
     );
-    fetchAttachedRuns(org.login, fullName).then(
-      (found) => !cancelled && setRuns(found),
-      () => undefined,
-    );
     loadTasks();
     return () => {
       cancelled = true;
     };
   }, [org.login, fullName, loadTasks]);
 
-  const closeSheet = React.useCallback(() => setAttaching(false), []);
-  const closeAdd = React.useCallback(() => setAdding(false), []);
-  const onStarted = React.useCallback((task: TaskItem) => {
-    setTasks((current) => [task, ...(current ?? [])]);
-    setAdding(false);
-  }, []);
-
   // While anything is being built, re-read the list so stage and round move on their own.
   const building = (tasks ?? []).some((task) => task.state === "in_progress");
   React.useEffect(() => {
-    if (!building) return;
+    if (!building || deleting) return;
     const timer = window.setInterval(() => {
-      fetchTasks(org.login, fullName).then(setTasks, () => undefined);
+      const version = requestVersion.current;
+      fetchTasks(org.login, fullName).then(
+        (found) => version === requestVersion.current && setTasks(found),
+        () => undefined,
+      );
     }, 15_000);
     return () => window.clearInterval(timer);
-  }, [building, org.login, fullName]);
-  const onAttached = React.useCallback(
-    (run: AttachedRun) => {
-      setRuns((current) => [run, ...current.filter((r) => r.runId !== run.runId)]);
-      setAttaching(false);
-      loadTasks();
-    },
-    [loadTasks],
-  );
-  const refresh = () => {
-    setSyncing(true);
-    syncRepo(org.login, fullName).then(
-      () => {
-        setSyncing(false);
-        loadTasks();
-      },
-      (cause: Error) => {
-        setSyncing(false);
-        setError(cause.message);
-      },
-    );
-  };
-  const detach = (run: AttachedRun) => {
-    if (!window.confirm(`Detach ${run.runId}? Its tasks leave this repository.`)) return;
-    detachRun(org.login, fullName, run.runId).then(
-      () => {
-        setRuns((current) => current.filter((r) => r.runId !== run.runId));
-        loadTasks();
-      },
-      (cause: Error) => setError(cause.message),
-    );
-  };
-
+  }, [building, deleting, org.login, fullName]);
   const counts = React.useMemo(() => {
     const result: Record<Filter, number> = {
       all: 0,
@@ -140,8 +98,8 @@ export function RepoPage() {
   if (repo === null) {
     return (
       <section>
-        <p className="mb-4 font-mono text-xs text-danger">
-          {fullName} is not connected in {org.login}. <Link to="/">Back to repositories</Link>
+        <p className="mb-4 font-mono text-base text-danger">
+          {fullName} is not connected in {org.login}. <Link to="/">Back to Repositories</Link>
         </p>
       </section>
     );
@@ -149,7 +107,7 @@ export function RepoPage() {
 
   return (
     <section>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-6 [&_h1]:mt-1.5 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
         <div>
           <div className="flex min-w-0 items-center gap-2.5 [&_h1]:font-mono [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold [&_h1]:tracking-tight">
             <a
@@ -161,116 +119,66 @@ export function RepoPage() {
             >
               <GitHubMark />
             </a>
-            <h1>{fullName}</h1>
+            <h1 className="m-0">Dataset</h1>
             {repo?.private && (
-              <span className="text-[10px] tracking-widest text-warning uppercase">private</span>
+              <span className="inline-flex items-center border border-warning/30 bg-warning/10 px-2 py-0.5 font-mono text-sm leading-none text-warning">
+                Private
+              </span>
             )}
           </div>
-          <div className="mt-1.5 flex gap-2 text-xs text-muted">
+          <div className="mt-1.5 flex gap-2 text-sm text-muted">
+            <span className="font-mono">{fullName}</span>
             {repo && <span className="font-mono">{repo.defaultBranch}</span>}
-            <span className="text-line-strong" aria-hidden="true">
-              ·
-            </span>
-            <span>
-              {runs.length} attached run{runs.length === 1 ? "" : "s"}
-            </span>
-            {tasks?.[0] && (
-              <>
-                <span className="text-line-strong" aria-hidden="true">
-                  ·
-                </span>
-                <span>synced {formatAgo(tasks[0].syncedAt)}</span>
-              </>
-            )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          {runs.length > 0 && (
-            <Button type="button" variant="ghost" disabled={syncing} onClick={refresh}>
-              {syncing ? "Refreshing…" : "Refresh"}
-            </Button>
-          )}
-          <Button type="button" onClick={() => setAttaching(true)}>
-            + Attach Run
-          </Button>
-          <Button type="button" variant="primary" onClick={() => setAdding(true)}>
-            + Add PR
-          </Button>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2.5 sm:w-auto">
+          <div ref={setActionsTarget} className="contents" />
+          <Link
+            className={buttonStyles.primary}
+            to={`/repos/${fullName}/add-prs`}
+            onClick={(event) => {
+              if (deleting) event.preventDefault();
+            }}
+            aria-disabled={deleting}
+          >
+            + Add PRs
+          </Link>
         </div>
       </div>
-      {error && <p className="mb-4 font-mono text-xs text-danger">{error}</p>}
-      {runs.length > 0 && (
-        <div className="-mt-2 mb-5 flex flex-wrap gap-2">
-          {runs.map((run) => (
-            <span
-              className="inline-flex items-center gap-2 border border-line bg-surface py-1 pr-1.5 pl-2.5 text-xs text-muted"
-              key={run.runId}
-            >
-              <span className="font-mono">{run.runId}</span>
-              <button
-                type="button"
-                className="px-1 font-mono text-sm leading-none text-dim hover:text-danger"
-                onClick={() => detach(run)}
-                aria-label={`Detach ${run.runId}`}
-                title="Detach"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
-        <div
-          className="flex max-w-full gap-1.5 overflow-x-auto"
-          role="tablist"
-          aria-label="Task state"
-        >
-          {FILTERS.map((key) => (
-            <button
-              type="button"
-              key={key}
-              role="tab"
-              aria-selected={filter === key}
-              className="inline-flex h-8 shrink-0 items-center gap-2 border border-line px-3 font-mono text-xs font-medium text-muted hover:border-line-strong hover:text-ink aria-selected:border-mint aria-selected:bg-surface-2 aria-selected:text-mint [&_b]:font-medium [&_b]:text-dim [&[aria-selected=true]_b]:text-mint-bright"
-              onClick={() => setFilter(key)}
-            >
-              {key === "all" ? "All" : STATE_LABEL[key]}
-              <b>{counts[key]}</b>
-            </button>
-          ))}
-        </div>
-        <input
-          className="h-8 w-[260px] max-w-full border border-line-strong bg-bg px-2.5 font-mono text-xs text-ink placeholder:text-dim focus:border-mint"
-          type="search"
-          placeholder="Search task, PR, or run"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search tasks"
-        />
-      </div>
+      {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
+      <TaskFilters
+        counts={counts}
+        filter={filter}
+        onFilter={setFilter}
+        query={query}
+        onQuery={setQuery}
+        disabled={deleting}
+      />
       {tasks === null && !error && <TaskListSkeleton />}
       {tasks !== null && tasks.length === 0 && (
-        <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
-          <p>No tasks yet. Attach a pipeline run to see its candidates here.</p>
+        <div className="border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
+          <p>No tasks yet. Add a PR to generate a task.</p>
         </div>
       )}
       {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-        <p className="py-4 text-muted">No tasks match.</p>
+        <div className="border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
+          <p>No tasks match.</p>
+        </div>
       )}
-      {visible.length > 0 && <TaskList fullName={fullName} tasks={visible} />}
-      {adding && (
-        <AddPrSheet org={org} fullName={fullName} onClose={closeAdd} onStarted={onStarted} />
-      )}
-      {attaching && (
-        <AttachRunSheet
-          org={org}
-          fullName={fullName}
-          attached={new Set(runs.map((run) => run.runId))}
-          onClose={closeSheet}
-          onAttached={onAttached}
-        />
-      )}
+      <ReviewTaskList
+        actionsTarget={actionsTarget}
+        org={org.login}
+        fullName={fullName}
+        visible={visible}
+        selectionScope={`${filter}/${query}`}
+        onDeleting={(value) => {
+          if (value) ++requestVersion.current;
+          setDeleting(value);
+        }}
+        onDeleted={(deleted) =>
+          setTasks((current) => current?.filter((task) => !deleted.has(taskKey(task))) ?? null)
+        }
+      />
     </section>
   );
 }

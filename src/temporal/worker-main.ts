@@ -28,7 +28,7 @@ const worker = await Worker.create({
   taskQueue: config.temporal.taskQueue,
   workflowsPath,
   activities: {
-    ...createActivities(config),
+    ...createActivities(config, credentials?.records),
     ...createEvaluationActivities(createArtifactStore(config.artifact), credentials?.records),
   },
   maxConcurrentActivityTaskExecutions: config.activityConcurrency,

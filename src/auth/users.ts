@@ -75,6 +75,7 @@ export function createUserStore(
             avatarUrl: profile.avatarUrl ?? null,
             githubToken: Buffer.from(box.seal(profile.token)).toString("base64"),
             githubScopes: profile.scopes,
+            createdAt: now(),
             lastSeenAt: now(),
           })
           .onConflictDoUpdate({

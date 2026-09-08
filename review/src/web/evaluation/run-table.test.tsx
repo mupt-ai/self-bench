@@ -24,7 +24,11 @@ test("model table remains visible without credentials and never embeds secret fi
     />,
   );
   expect(html).toContain("Test model");
-  expect(html).toContain("Select credential");
+  expect(html).toContain("Select Credential");
+  expect(html).toContain("Credential / Route");
+  expect(html).toContain("Model Default");
+  expect(html).toContain('aria-label="Test model Credential"');
+  expect(html).toContain('aria-label="Test model Thinking Level"');
   expect(html).toContain("Harnesses");
   expect(html).not.toContain("Shortlist");
   expect(html).not.toContain('type="password"');
@@ -42,6 +46,9 @@ test("credential editor is separate and offers only supported providers and host
     />,
   );
   expect(html).toContain("Model API Key");
+  expect(html).toContain("Add Credential");
+  expect(html).toContain("Provider or Sandbox");
+  expect(html).toContain("Save Credential");
   expect(html).toContain('type="password"');
   expect(html).toContain("OpenRouter");
   expect(html).not.toContain("Docker");

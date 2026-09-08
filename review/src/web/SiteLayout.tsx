@@ -1,7 +1,7 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { Lockup } from "./Lockup";
-import { OrgSwitcher } from "./OrgSwitcher";
+import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
 import { UserMenu } from "./UserMenu";
 
@@ -10,32 +10,78 @@ export interface OrgContext {
   orgs: SiteOrg[];
 }
 
-/** The org the page is showing, chosen in the top bar and remembered in this browser. */
+/** The org the page is showing, chosen in the sidebar and remembered in this browser. */
 export function useOrg(): OrgContext {
   return useOutletContext<OrgContext>();
 }
 
-/** Top bar plus the current org; every signed-in page renders inside it. */
+/** Navigation plus the current org; every signed-in page renders inside it. */
 export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) {
   const { signOut } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
   const [org, setOrg] = React.useState(() => defaultOrg(orgs));
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  React.useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const changed = () => {
+      if (media.matches) setMenuOpen(false);
+    };
+    media.addEventListener("change", changed);
+    return () => media.removeEventListener("change", changed);
+  }, []);
   const choose = (next: SiteOrg) => {
     rememberOrg(next.login);
     setOrg(next);
-    if (location.pathname !== "/") void navigate("/");
+    setMenuOpen(false);
+    if (location.pathname !== "/" && location.pathname !== "/settings/credentials")
+      void navigate("/");
   };
   return (
-    <div className="flex min-h-screen flex-col [--site-max:1440px] [--site-gutter:max(32px,calc((100%_-_var(--site-max))/2))]">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line bg-surface px-4 sm:px-[var(--site-gutter)] [&_a]:mb-0 [&_a]:shrink-0 [&_a]:gap-2.5 [&_a_svg]:size-7 [&_a_svg]:shrink-0 [&_strong]:text-lg [&_strong]:whitespace-nowrap">
-        <div className="flex min-w-0 items-center gap-1">
+    <div className="min-h-screen [--site-max:1440px] [--site-gutter:32px] lg:pl-60">
+      <div className="fixed inset-y-0 left-0 z-20 hidden w-60 border-r border-line lg:block">
+        <SiteSidebar user={user} org={org} orgs={orgs} onSelect={choose} onSignOut={signOut} />
+      </div>
+      <header className="sticky top-0 z-10 flex h-14 items-center border-b border-line bg-surface px-4 sm:px-6 [&_a]:mb-0 [&_a_svg]:size-8 [&_a_span_span]:text-[10px] [&_strong]:text-xl">
+        <div className="lg:hidden">
           <Lockup />
-          <OrgSwitcher orgs={orgs} current={org} onSelect={choose} />
         </div>
-        <UserMenu user={user} onSignOut={signOut} />
+        <div className="ml-auto flex items-center gap-1.5">
+          <UserMenu user={user} onSignOut={signOut} />
+          <button
+            type="button"
+            aria-label="Open Navigation"
+            aria-haspopup="dialog"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+            className="grid size-10 place-items-center border border-line text-mint lg:hidden"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M3 5h14M3 10h14M3 15h14" />
+            </svg>
+          </button>
+        </div>
       </header>
-      <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
+      <div className="flex min-h-[calc(100dvh_-_3.5rem)] min-w-0 flex-col">
+        <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
+      </div>
+      {menuOpen && (
+        <MobileSidebar
+          user={user}
+          org={org}
+          orgs={orgs}
+          onSelect={choose}
+          onSignOut={signOut}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -30,6 +30,7 @@ export interface EvaluationInput {
   tasks: EvaluationTask[];
   pricing?: EvaluationPricing;
   credentialOwnerId?: number;
+  credentialOrgId?: number;
   comparisonId?: string;
   credentials?: {
     modelCredentialId: string;

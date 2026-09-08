@@ -2,9 +2,11 @@ import { createServer, type Server } from "node:http";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { sendApiError } from "../../src/api/http.js";
 import type { ArtifactStore } from "../../src/artifacts.js";
 import type { AuthConfig } from "../../src/auth/config.js";
-import { createSiteAuth } from "../../src/auth/routes.js";
+import { createSiteAuth, sendIdentityError } from "../../src/auth/routes.js";
+import { sendExpiredSession } from "../../src/auth/session-expired.js";
 import { createUserStore, type UserStore } from "../../src/auth/users.js";
 import { loadConfig } from "../../src/config.js";
 import { type Database, migrationsFolder } from "../../src/db/client.js";
@@ -13,7 +15,6 @@ import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
 import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
 import { createPullRequestRoutes } from "../../src/site/pr-routes.js";
 import { createRepoStore } from "../../src/site/repo-store.js";
-import { createRunStore } from "../../src/site/run-store.js";
 import type { WorkflowStarter } from "../../src/site/task-start.js";
 import type { TaskStatusSource } from "../../src/site/task-status.js";
 import { createTaskStore } from "../../src/site/task-store.js";
@@ -142,6 +143,7 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
 }
 
 export interface AuthServer {
+  readonly db: Database;
   readonly origin: string;
   readonly users: UserStore;
   /** fetch without following redirects, so Location and Set-Cookie can be asserted. */
@@ -150,6 +152,7 @@ export interface AuthServer {
 }
 
 export interface AuthServerOptions {
+  readonly records?: import("../../src/evaluation/encrypted-records.js").EncryptedRecordStore;
   readonly config?: AuthConfig;
   readonly fetchImpl?: typeof fetch;
   readonly artifacts?: ArtifactStore;
@@ -163,7 +166,6 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const database = await testDatabase();
   const users = createUserStore(database.db, { secret: config.sessionSecret });
   const repos = createRepoStore(database.db);
-  const runs = createRunStore(database.db);
   const tasks = createTaskStore(database.db);
   const fetchImpl = options.fetchImpl ?? fetch;
   const auth = createSiteAuth({ config, users, fetchImpl });
@@ -173,7 +175,6 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
     ? createTaskRoutes({
         users,
         repos,
-        runs,
         tasks,
         artifacts: options.artifacts,
         ...(options.status ? { status: options.status } : {}),
@@ -182,6 +183,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const pullRequestRoutes =
     options.artifacts && options.start
       ? createPullRequestRoutes({
+          ...(options.records ? { records: options.records } : {}),
           config: loadConfig({}),
           auth: config,
           users,
@@ -193,22 +195,28 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
         })
       : undefined;
   const server: Server = createServer(async (request, response) => {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    if (await auth.handle(request, url, response)) return;
-    if (url.pathname.startsWith("/api/")) {
-      const user = await auth.authenticate(request);
-      if (!user) {
-        response.writeHead(401).end();
-        return;
+    try {
+      const url = new URL(request.url ?? "/", "http://localhost");
+      if (await auth.handle(request, url, response)) return;
+      if (url.pathname.startsWith("/api/")) {
+        const user = await auth.authenticate(request);
+        if (!user) {
+          response.writeHead(401).end();
+          return;
+        }
+        if (await github.handle(request, url, response, user)) return;
+        if (await connected.handle(request, url, response, user)) return;
+        if (pullRequestRoutes && (await pullRequestRoutes.handle(request, url, response, user))) {
+          return;
+        }
+        if (taskRoutes && (await taskRoutes.handle(request, url, response, user))) return;
       }
-      if (await github.handle(request, url, response, user)) return;
-      if (await connected.handle(request, url, response, user)) return;
-      if (pullRequestRoutes && (await pullRequestRoutes.handle(request, url, response, user))) {
-        return;
-      }
-      if (taskRoutes && (await taskRoutes.handle(request, url, response, user))) return;
+      response.writeHead(404).end();
+    } catch (error) {
+      if (sendIdentityError(response, error, config.publicUrl)) return;
+      if (sendExpiredSession(response, error, config.publicUrl)) return;
+      sendApiError(response, error);
     }
-    response.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -216,6 +224,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const origin = `http://127.0.0.1:${port}`;
   return {
     origin,
+    db: database.db,
     users,
     request: (path, init) => fetch(`${origin}${path}`, { redirect: "manual", ...init }),
     stop: async () => {

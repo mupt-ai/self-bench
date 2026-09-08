@@ -1,4 +1,14 @@
 import { Block, KeyValueTable } from "../components/Script";
+import {
+  notice,
+  prose,
+  sheetBody,
+  sheetTable,
+  tableCode,
+  tableColumn,
+  tableMono,
+  viewerLink,
+} from "../components/viewer-ui";
 import { dockerfileEnvironment } from "../lib/dockerfile";
 import type { TaskModel } from "../lib/task-model";
 import { formatTomlValue } from "../lib/toml";
@@ -19,30 +29,30 @@ export function EnvironmentSheet({
   const emptyEnvironment = model.toml.length === 0 && model.images.length === 0 && !environment;
   const composePath = model.composePath;
   return (
-    <div className="sheet-body">
+    <div className={sheetBody}>
       {emptyEnvironment && (
-        <p className="notice">
+        <p className={`${notice} site:p-0!`}>
           This bundle has no compiled environment yet. Authoring bundles carry only the definition
           and patches; the environment stage produces task.toml and the Dockerfiles.
         </p>
       )}
       {(environment || resources || timeouts) && (
-        <Block title="environment contract" detail={environment?.source ?? ""}>
+        <Block title="Environment Contract" detail={environment?.source ?? ""}>
           <KeyValueTable
             rows={[
-              ["base image", environment?.baseImage ?? "—"],
-              ["workdir", model.definition?.workdir ?? "."],
-              ["cpus", resources ? String(resources.cpus ?? "") : "—"],
-              ["memory", resources?.memoryMb ? `${resources.memoryMb} MB` : "—"],
-              ["storage", resources?.storageMb ? `${resources.storageMb} MB` : "—"],
+              ["Base Image", environment?.baseImage ?? "—"],
+              ["Workdir", model.definition?.workdir ?? "."],
+              ["CPUs", resources ? String(resources.cpus ?? "") : "—"],
+              ["Memory", resources?.memoryMb ? `${resources.memoryMb} MB` : "—"],
+              ["Storage", resources?.storageMb ? `${resources.storageMb} MB` : "—"],
               [
-                "timeouts",
+                "Timeouts",
                 timeouts
                   ? `setup ${timeouts.setupSeconds ?? "?"}s · agent ${timeouts.agentSeconds ?? "?"}s · tests ${timeouts.testsSeconds ?? "?"}s`
                   : "—",
               ],
               [
-                "services",
+                "Services",
                 environment?.services?.length ? `${environment.services.length}` : "none",
               ],
             ]}
@@ -53,12 +63,12 @@ export function EnvironmentSheet({
         <Block
           title="task.toml"
           right={
-            <button type="button" className="link" onClick={() => onOpenFile("task.toml")}>
+            <button type="button" className={viewerLink} onClick={() => onOpenFile("task.toml")}>
               Open Raw
             </button>
           }
         >
-          <table className="sheet-table">
+          <table className={sheetTable}>
             <tbody>
               {uniqueKeys(model.toml, (section) => section.name).map(([key, section]) => (
                 <SectionRows
@@ -73,13 +83,13 @@ export function EnvironmentSheet({
         </Block>
       )}
       {envVars.length > 0 && (
-        <Block title="environment variables" detail={`${envVars.length}`}>
-          <table className="sheet-table">
+        <Block title="Environment Variables" detail={`${envVars.length}`}>
+          <table className={sheetTable}>
             <tbody>
               {envVars.map(([name, value]) => (
                 <tr key={name}>
-                  <th className="mono">{name}</th>
-                  <td className="code">{value}</td>
+                  <th className={tableMono}>{name}</th>
+                  <td className={tableCode}>{value}</td>
                 </tr>
               ))}
             </tbody>
@@ -87,32 +97,32 @@ export function EnvironmentSheet({
         </Block>
       )}
       {environment?.services && environment.services.length > 0 && (
-        <Block title="services" detail={`${environment.services.length}`}>
-          <table className="sheet-table">
+        <Block title="Services" detail={`${environment.services.length}`}>
+          <table className={sheetTable}>
             <thead>
               <tr>
-                <th className="col">name</th>
-                <th className="col">image</th>
-                <th className="col">command</th>
-                <th className="col">healthcheck</th>
-                <th className="col">env</th>
+                <th className={tableColumn}>Name</th>
+                <th className={tableColumn}>Image</th>
+                <th className={tableColumn}>Command</th>
+                <th className={tableColumn}>Healthcheck</th>
+                <th className={tableColumn}>Env</th>
               </tr>
             </thead>
             <tbody>
               {environment.services.map((service) => (
                 <tr key={service.name ?? service.image}>
-                  <td className="nowrap">{service.name}</td>
-                  <td className="code">{service.image}</td>
-                  <td className="code">{service.command?.join(" ") ?? ""}</td>
-                  <td className="code">
+                  <td className="whitespace-nowrap site:!font-mono">{service.name}</td>
+                  <td className={tableCode}>{service.image}</td>
+                  <td className={tableCode}>{service.command?.join(" ") ?? ""}</td>
+                  <td className={tableCode}>
                     {service.healthcheck?.test?.join(" ")}
                     {service.healthcheck && (
-                      <span className="dim">
+                      <span className="text-(--muted-fg) site:text-dim">
                         {` · every ${service.healthcheck.intervalSeconds}s · ${service.healthcheck.retries} retries`}
                       </span>
                     )}
                   </td>
-                  <td className="code">
+                  <td className={tableCode}>
                     {Object.entries(service.environmentVariables ?? {})
                       .map(([key, value]) => `${key}=${value}`)
                       .join("\n")}
@@ -129,17 +139,19 @@ export function EnvironmentSheet({
           title={image.label}
           detail={`${image.instructions.length} instructions`}
           right={
-            <button type="button" className="link" onClick={() => onOpenFile(image.path)}>
+            <button type="button" className={viewerLink} onClick={() => onOpenFile(image.path)}>
               {image.path}
             </button>
           }
         >
-          <table className="sheet-table">
+          <table className={sheetTable}>
             <tbody>
               {image.instructions.map((entry) => (
                 <tr key={`${entry.line}`}>
-                  <th className="kw">{entry.instruction}</th>
-                  <td className="code">{entry.args}</td>
+                  <th className="!font-medium !text-(--brand) site:font-mono site:!text-mint">
+                    {entry.instruction}
+                  </th>
+                  <td className={tableCode}>{entry.args}</td>
                 </tr>
               ))}
             </tbody>
@@ -148,15 +160,15 @@ export function EnvironmentSheet({
       ))}
       {environment?.evidence && environment.evidence.length > 0 && (
         <Block
-          title="evidence the environment agent cited"
+          title="Evidence the Environment Agent Cited"
           detail={`${environment.evidence.length}`}
         >
-          <table className="sheet-table">
+          <table className={sheetTable}>
             <tbody>
               {uniqueKeys(environment.evidence, (item) => item.path ?? "").map(([key, item]) => (
                 <tr key={key}>
-                  <th className="path">{item.path}</th>
-                  <td className="code">{item.reason}</td>
+                  <th className="text-(--foreground) site:font-mono site:text-sm">{item.path}</th>
+                  <td className={tableCode}>{item.reason}</td>
                 </tr>
               ))}
             </tbody>
@@ -168,12 +180,12 @@ export function EnvironmentSheet({
           title="docker-compose.yaml"
           detail={composePath}
           right={
-            <button type="button" className="link" onClick={() => onOpenFile(composePath)}>
+            <button type="button" className={viewerLink} onClick={() => onOpenFile(composePath)}>
               Open Raw
             </button>
           }
         >
-          <pre className="prose">{model.compose}</pre>
+          <pre className={prose}>{model.compose}</pre>
         </Block>
       )}
     </div>
@@ -193,15 +205,15 @@ function SectionRows({
     <>
       {name && (
         <tr>
-          <th className="col" colSpan={2}>
+          <th className={tableColumn} colSpan={2}>
             {repeated ? `[[${name}]]` : `[${name}]`}
           </th>
         </tr>
       )}
       {entries.map(([key, value]) => (
         <tr key={`${name}.${key}`}>
-          <th className="mono">{key}</th>
-          <td className="code">{formatTomlValue(value as never)}</td>
+          <th className={tableMono}>{key}</th>
+          <td className={tableCode}>{formatTomlValue(value as never)}</td>
         </tr>
       ))}
     </>

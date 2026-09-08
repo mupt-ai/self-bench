@@ -19,8 +19,7 @@ export const comparisonSchema = z
           .object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) })
           .strict(),
       )
-      .min(1)
-      .max(10),
+      .min(1),
     models: z
       .array(
         z
@@ -46,6 +45,7 @@ export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 export interface ComparisonScope {
   repoId: number;
   ownerId: number;
+  credentialOrgId?: number;
   tenant: string;
   login: string;
 }
@@ -152,6 +152,7 @@ export async function createComparison(
         createdAt,
         ...(route.pricing ? { pricing: route.pricing } : {}),
         credentialOwnerId: scope.ownerId,
+        ...(scope.credentialOrgId ? { credentialOrgId: scope.credentialOrgId } : {}),
         comparisonId: selection.id,
         credentials: {
           modelCredentialId: credential.id,

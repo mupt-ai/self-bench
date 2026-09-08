@@ -4,5 +4,6 @@ __pycache__/
 dist/
 .env
 .env.*
+!.env.example
 jobs/
 .pi-subagents/

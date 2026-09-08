@@ -28,7 +28,7 @@ export function RunModelTable({
           <tr>
             <th>Model</th>
             <th>Pricing</th>
-            <th>Credential / route</th>
+            <th>Credential / Route</th>
             <th>Thinking</th>
             <th>Harnesses</th>
           </tr>
@@ -45,7 +45,7 @@ export function RunModelTable({
           ))}
         </tbody>
       </DataTable>
-      {!models.length && <p className="px-4 py-7 text-[13px] text-muted">No matching models.</p>}
+      {!models.length && <p className="px-4 py-7 text-base text-muted">No matching models.</p>}
     </div>
   );
 }

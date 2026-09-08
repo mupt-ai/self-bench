@@ -2,11 +2,11 @@ import type { ComponentProps, ReactNode } from "react";
 
 export const buttonStyles = {
   primary:
-    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg transition-colors hover:border-mint-bright hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
+    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg transition-colors hover:border-mint-bright hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
   secondary:
-    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-line-strong bg-transparent px-4 font-sans text-[13px] font-bold text-ink transition-colors hover:border-mint hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
+    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-line-strong bg-transparent px-4 font-sans text-sm font-bold text-ink transition-colors hover:border-mint hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
   ghost:
-    "inline-flex min-h-9 shrink-0 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
+    "inline-flex min-h-9 shrink-0 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
 };
 
 export function Button({
@@ -18,7 +18,7 @@ export function Button({
 }
 
 const control =
-  "w-full min-w-0 rounded-none border border-line-strong bg-bg px-3 py-2.5 font-mono text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mint disabled:cursor-not-allowed disabled:opacity-40";
+  "w-full min-w-0 rounded-none border border-line-strong bg-bg px-3 py-2.5 font-mono text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mint disabled:cursor-not-allowed disabled:opacity-40";
 
 export function Input({ className = "", ...props }: ComponentProps<"input">) {
   return <input {...props} className={`${control} ${className}`} />;
@@ -42,10 +42,10 @@ export function Select({ className = "", ...props }: ComponentProps<"select">) {
 
 export function DataTable({ className = "", ...props }: ComponentProps<"table">) {
   return (
-    <section className="overflow-x-auto border border-line-strong" aria-label="Scrollable table">
+    <section className="overflow-x-auto border border-line-strong" aria-label="Scrollable Table">
       <table
         {...props}
-        className={`w-full border-collapse text-left text-xs [&_th]:px-4 [&_th]:py-4 [&_th]:font-mono [&_th]:text-[10px] [&_th]:font-normal [&_th]:text-muted [&_td]:border-t [&_td]:border-line [&_td]:px-4 [&_td]:py-4 [&_small]:mt-2 [&_small]:block [&_small]:font-mono [&_small]:text-[10px] [&_small]:text-muted ${className}`}
+        className={`w-full border-collapse text-left text-sm [&_th]:px-4 [&_th]:py-4 [&_th]:font-mono [&_th]:text-sm [&_th]:font-normal [&_th]:text-muted [&_td]:border-t [&_td]:border-line [&_td]:px-4 [&_td]:py-4 [&_small]:mt-2 [&_small]:block [&_small]:font-mono [&_small]:text-sm [&_small]:text-muted ${className}`}
       />
     </section>
   );
@@ -66,7 +66,7 @@ export function PageHeader({
         <h1 className="mt-1.5 font-sans text-xl leading-tight font-semibold tracking-[-0.01em]">
           {title}
         </h1>
-        {description && <p className="mt-2 text-[13px] text-muted">{description}</p>}
+        {description && <p className="mt-2 text-base text-muted">{description}</p>}
       </div>
       {children}
     </header>
@@ -77,7 +77,7 @@ export function PageContent({ className = "", ...props }: ComponentProps<"sectio
   return (
     <section
       {...props}
-      className={`mx-auto w-full max-w-[1600px] [&_h2]:text-base [&_h2]:font-medium [&_h3]:text-[15px] [&_h4]:mt-6 [&_h4]:mb-3 [&_h4]:font-mono [&_h4]:text-xs [&_h4]:font-medium [&_h4]:text-muted [&_h5]:mt-3 [&_h5]:mb-1.5 [&_h5]:text-dim [&_details]:my-3 [&_details]:border [&_details]:border-line [&_details]:bg-bg [&_details]:px-3.5 [&_details]:py-3 [&_summary]:cursor-pointer [&_summary]:font-mono [&_summary]:text-xs [&_summary]:text-muted [&_pre]:mt-3 [&_pre]:max-h-[440px] [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-[11px] [&_pre]:leading-relaxed [&_pre]:whitespace-pre-wrap [&_pre]:text-muted [&_pre]:wrap-anywhere ${className}`}
+      className={`mx-auto w-full max-w-[1600px] [&_h2]:text-lg [&_h2]:font-medium [&_h3]:text-base [&_h4]:mt-6 [&_h4]:mb-3 [&_h4]:font-mono [&_h4]:text-sm [&_h4]:font-medium [&_h4]:text-muted [&_h5]:mt-3 [&_h5]:mb-1.5 [&_h5]:text-dim [&_details]:my-3 [&_details]:border [&_details]:border-line [&_details]:bg-bg [&_details]:px-3.5 [&_details]:py-3 [&_summary]:cursor-pointer [&_summary]:font-mono [&_summary]:text-sm [&_summary]:text-muted [&_pre]:mt-3 [&_pre]:max-h-[440px] [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:text-muted [&_pre]:wrap-anywhere ${className}`}
     />
   );
 }
@@ -91,5 +91,5 @@ export function RunStatus({ value }: { value: string }) {
         : value === "running"
           ? "text-warning"
           : "text-muted";
-  return <span className={`font-mono text-[10px] uppercase ${color}`}>{value}</span>;
+  return <span className={`font-mono text-sm uppercase ${color}`}>{value}</span>;
 }

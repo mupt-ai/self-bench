@@ -4,6 +4,7 @@ import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
+import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, buttonStyles, Input, PageContent, PageHeader, Select } from "../ui";
 import { type EvaluationOptions, evaluationRequest } from "./api";
@@ -16,6 +17,7 @@ export function RunPage() {
   return <RunContent key={scope.url} {...scope} />;
 }
 function RunContent({ repo, url }: { repo: string; url: string }) {
+  const { org } = useOrg();
   useDocumentTitle(`Run · ${repo}`);
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
@@ -56,7 +58,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         if (!disposed) setError(cause.message);
       },
     );
-    evaluationRequest<{ credentials: CredentialInfo[] }>(`${url}/credentials`).then(
+    evaluationRequest<{ credentials: CredentialInfo[] }>(
+      `/api/orgs/${encodeURIComponent(org.login)}/credentials`,
+    ).then(
       (result) => {
         if (!disposed) setCredentials(result.credentials);
       },
@@ -69,14 +73,13 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         if (!disposed) {
           const valid =
             draft.tasks.length > 0 &&
-            draft.tasks.length <= 10 &&
             draft.tasks.every((task) =>
               result.tasks.some(
                 (entry) => entry.runId === task.runId && entry.taskId === task.taskId,
               ),
             );
           setTasksReady(valid);
-          if (!valid) setError("Select up to ten human-approved tasks from Dataset.");
+          if (!valid) setError("Select human-approved tasks from Dataset.");
         }
       },
       (cause) => {
@@ -86,14 +89,14 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     return () => {
       disposed = true;
     };
-  }, [url, draft.tasks]);
+  }, [url, draft.tasks, org.login]);
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
   const custom: CatalogModel = {
     id: "custom",
     provider: "custom",
     model: "",
-    label: "Custom model",
+    label: "Custom Model",
     harnesses: ["pi"],
     source: "",
   };
@@ -153,7 +156,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   return (
     <PageContent>
       <PageHeader
-        title="Run dataset"
+        title="Run Dataset"
         description={
           <>
             {draft.tasks.length} human-approved {draft.tasks.length === 1 ? "task" : "tasks"} · same
@@ -163,27 +166,27 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       >
         <Link
           className={buttonStyles.secondary}
-          to={`/repos/${repo}/settings/credentials?return=run`}
+          to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
         >
-          Manage credentials
+          Manage Credentials
         </Link>
       </PageHeader>
       {error && (
-        <p className="my-4 font-mono text-xs text-danger" role="alert">
+        <p className="my-4 font-mono text-base text-danger" role="alert">
           {error}
         </p>
       )}
-      {!draft.tasks.length && <Link to={`/repos/${repo}/dataset`}>Choose tasks in Dataset →</Link>}
+      {!draft.tasks.length && <Link to={`/repos/${repo}`}>Choose Tasks in Dataset →</Link>}
       <fieldset className="mt-6 min-w-0 border-0 p-0" disabled={busy || state.submitted}>
         <div className="flex flex-wrap items-center justify-between gap-4 border border-line-strong p-3 sm:px-4">
           <Input
             type="search"
-            placeholder="Search models or providers…"
-            aria-label="Search models"
+            placeholder="Search Models or Providers…"
+            aria-label="Search Models"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <span className="mt-2 text-[13px] text-muted">
+          <span className="mt-2 text-sm text-muted">
             Predefined catalog · account access depends on your credentials
           </span>
         </div>
@@ -193,7 +196,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           draft={draft}
           onChange={(value) => setState({ draft: value, submitted: false })}
         />
-        <div className="mt-6 flex flex-wrap items-end justify-between gap-4 [&_label]:grid [&_label]:gap-2.5 [&_label]:font-mono [&_label]:text-[11px] [&_label]:text-muted [&_strong]:text-[13px]">
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4 [&_label]:grid [&_label]:gap-2.5 [&_label]:font-mono [&_label]:text-sm [&_label]:text-muted [&_strong]:text-sm">
           <label htmlFor="runpage-field-0">
             Sandbox
             <Select
@@ -219,16 +222,16 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             </Select>
           </label>
           <label htmlFor="runpage-field-1">
-            Sandbox credential
+            Sandbox Credential
             <Select
               id="runpage-field-1"
-              aria-label="Sandbox credential"
+              aria-label="Sandbox Credential"
               value={draft.sandboxCredentialId}
               onChange={(event) =>
                 setState({ ...state, draft: { ...draft, sandboxCredentialId: event.target.value } })
               }
             >
-              <option value="">Select credential</option>
+              <option value="">Select Credential</option>
               {credentials
                 .filter((entry) => entry.kind === draft.sandbox)
                 .map((entry) => (
@@ -242,14 +245,14 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             <strong>
               {selected.length} models · {pairs} combinations · {pairs * draft.tasks.length} trials
             </strong>
-            <p className="mt-2 text-[13px] text-muted">
+            <p className="mt-2 text-base text-muted">
               Model and cloud sandbox usage may incur charges. No automatic paid retries.
             </p>
           </div>
         </div>
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-4 py-3.5">
-        <Link to={`/repos/${repo}/settings/credentials?return=run`}>
+        <Link to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}>
           Missing a credential? Add it in Settings
         </Link>
         <Button
@@ -259,16 +262,16 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           onClick={() => void submit()}
         >
           {busy
-            ? "Saving comparison…"
+            ? "Saving Comparison…"
             : state.submitted
-              ? "Retry same comparison"
-              : "Run comparison"}
+              ? "Retry Same Comparison"
+              : "Run Comparison"}
         </Button>
       </div>
       {state.submitted && (
-        <p className="mt-2 text-[13px] text-muted">
+        <p className="mt-2 text-base text-muted">
           Selection locked after submission.{" "}
-          <Link to={`/repos/${repo}/comparisons/${draft.id}`}>Check saved comparison</Link>.
+          <Link to={`/repos/${repo}/comparisons/${draft.id}`}>Check Saved Comparison</Link>.
           Returning from Settings preserves this request.
         </p>
       )}

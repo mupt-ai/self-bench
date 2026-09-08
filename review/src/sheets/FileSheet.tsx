@@ -1,6 +1,7 @@
 import React from "react";
 import { DiffView } from "../components/DiffView";
 import { Block, Script } from "../components/Script";
+import { loading, notice, sheetBody, viewerButton, viewerLink } from "../components/viewer-ui";
 import { formatBytes } from "../lib/format";
 import { fileKind } from "../lib/task-model";
 
@@ -25,15 +26,16 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
 
-  if (!file) return <p className="notice">Select a file to inspect.</p>;
-  if (file.loading) return <p className="loading">reading {file.path}</p>;
-  if (file.error) return <p className="notice bad">{file.error}</p>;
+  if (!file) return <p className={notice}>Select a file to inspect.</p>;
+  if (file.loading) return <p className={loading}>reading {file.path}</p>;
+  if (file.error)
+    return <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{file.error}</p>;
   const size = file.sizeBytes ?? file.text?.length ?? 0;
   if (file.text === undefined) {
     return (
-      <div className="sheet-body">
-        <Block title="binary file" detail={file.path}>
-          <p className="muted">
+      <div className={sheetBody}>
+        <Block title="Binary File" detail={file.path}>
+          <p className="px-4 py-3 text-(--muted-fg)">
             {formatBytes(size)} · not shown inline. Repository snapshots and archives stay on the
             server.
           </p>
@@ -55,27 +57,35 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
     );
   if (fullscreen) {
     return (
-      <div className="fullscreen" role="dialog" aria-label={`${file.path} full screen`}>
-        <div className="fullscreen-head">
-          <span className="fullscreen-kind">{kind}</span>
-          <b className="mono">{file.path}</b>
-          <span className="fullscreen-stats">{stats}</span>
-          <span className="grow" />
-          <span className="kbd">esc to close</span>
-          <button type="button" className="btn" onClick={() => setFullscreen(false)}>
+      <div
+        className="fixed inset-0 z-50 grid grid-rows-[auto_minmax(0,1fr)] bg-(--background) site:z-30"
+        role="dialog"
+        aria-label={`${file.path} Full Screen`}
+      >
+        <div className="flex h-12 items-center gap-3.5 border-b border-(--border) bg-(--viewer-panel) px-6 site:h-auto site:min-h-12 site:flex-wrap site:gap-3 site:py-3 site:break-all">
+          <span className="text-[11px] tracking-[0.16em] text-(--muted-fg) uppercase site:font-mono site:text-sm site:font-medium site:tracking-[0.14em] site:text-mint">
+            {kind}
+          </span>
+          <b className="font-mono text-[13px]">{file.path}</b>
+          <span className="text-xs text-(--muted-fg) site:font-mono site:text-sm">{stats}</span>
+          <span className="flex-1" />
+          <span className="text-xs text-(--faint) site:hidden site:font-mono site:text-sm site:text-dim site:sm:inline">
+            esc to close
+          </span>
+          <button type="button" className={viewerButton} onClick={() => setFullscreen(false)}>
             Exit Full Screen
           </button>
         </div>
-        <div className="fullscreen-body">{body}</div>
+        <div className="overflow-auto px-6 pt-4 pb-10 [&_pre]:p-0 site:pb-4">{body}</div>
       </div>
     );
   }
   return (
-    <div className="sheet-body" ref={scrollToEndWhenTail(Boolean(file.tail))}>
+    <div className={sheetBody} ref={scrollToEndWhenTail(Boolean(file.tail))}>
       {file.tail && (
-        <p className="notice">
+        <p className={`${notice} site:p-0!`}>
           Showing the end of the log, where sandbox failures are reported.{" "}
-          <button type="button" className="link" onClick={file.tail.loadFull}>
+          <button type="button" className={viewerLink} onClick={file.tail.loadFull}>
             Load Full File
           </button>
         </p>
@@ -84,9 +94,9 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
         title={kind}
         detail={file.path}
         right={
-          <span className="block-actions">
+          <span className="inline-flex items-baseline gap-3.5 site:items-center site:gap-3">
             <span>{stats}</span>
-            <button type="button" className="link" onClick={() => setFullscreen(true)}>
+            <button type="button" className={viewerLink} onClick={() => setFullscreen(true)}>
               Full Screen
             </button>
           </span>

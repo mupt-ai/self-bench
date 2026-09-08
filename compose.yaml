@@ -1,4 +1,27 @@
-name: selfbench
+# The project name, host ports, and image tags are per checkout when started through
+# `self-bench up` (see src/cli/stack-environment.ts), so several worktrees run side by side.
+# Plain `docker compose up` keeps the historical defaults below.
+name: ${COMPOSE_PROJECT_NAME:-selfbench}
+
+# Shared by the API and the worker. Provider control credentials and the GitHub OAuth secret
+# are deliberately not here: they go only to the service that needs them.
+x-selfbench-environment: &selfbench-environment
+  SELFBENCH_API_HOST: 0.0.0.0
+  SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
+  SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
+  SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
+  SELFBENCH_ARTIFACT_BACKEND: local
+  SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
+  SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
+  SELFBENCH_DOCKER_IMAGE: ${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}
+  SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
+  SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
+  SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
+  SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
+  SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+  # The site database: users, connected repos, and evaluation records. Migrations run at startup.
+  SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
+  SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
 
 services:
   postgres:
@@ -15,6 +38,20 @@ services:
       timeout: 5s
       retries: 20
 
+  site-postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: selfbench
+      POSTGRES_USER: selfbench
+      POSTGRES_PASSWORD: selfbench
+    volumes:
+      - site-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selfbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   temporal:
     image: temporalio/auto-setup:1.29.6
     depends_on:
@@ -27,46 +64,48 @@ services:
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: postgres
     ports:
-      - "127.0.0.1:7233:7233"
+      - "127.0.0.1:${SELFBENCH_TEMPORAL_PORT:-7233}:7233"
     restart: on-failure
 
   api:
-    image: selfbench:local
+    image: ${SELFBENCH_IMAGE:-selfbench:local}
     build:
       context: .
       args:
         SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     depends_on:
-      - temporal
-    environment: &selfbench-environment
-      SELFBENCH_API_HOST: 0.0.0.0
-      SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
-      SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
-      SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
-      SELFBENCH_ARTIFACT_BACKEND: local
-      SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
-      SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
-      SELFBENCH_DOCKER_IMAGE: selfbench-sandbox:local
-      SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
-      SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
-      SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
-      SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
-      SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+      temporal:
+        condition: service_started
+      site-postgres:
+        condition: service_healthy
+    environment:
+      <<: *selfbench-environment
+      # selfbench.dev sign-in. Set the GitHub OAuth app in .env to serve the signed-in site;
+      # leave GITHUB_OAUTH_CLIENT_ID unset to keep the bearer-token Ledger.
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      SELFBENCH_SESSION_SECRET: ${SELFBENCH_SESSION_SECRET:-}
+      # The origin browsers use; it forms the OAuth callback URL, so it must match the OAuth app.
+      SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
     ports:
-      - "127.0.0.1:8080:8080"
+      # Bind 0.0.0.0 (SELFBENCH_SITE_BIND) to reach the site from other machines, e.g. a tailnet.
+      - "${SELFBENCH_SITE_BIND:-127.0.0.1}:${SELFBENCH_SITE_PORT:-8080}:8080"
     volumes:
       - artifacts:/var/lib/selfbench/artifacts
     restart: on-failure
 
   worker:
-    image: selfbench:local
+    image: ${SELFBENCH_IMAGE:-selfbench:local}
     build:
       context: .
       args:
         SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     command: ["node", "dist/temporal/worker-main.js"]
     depends_on:
-      - temporal
+      temporal:
+        condition: service_started
+      site-postgres:
+        condition: service_healthy
     environment:
       <<: *selfbench-environment
       GH_TOKEN: ${GH_TOKEN:-}
@@ -91,4 +130,5 @@ services:
 
 volumes:
   artifacts:
+  site-postgres:
   temporal-postgres:

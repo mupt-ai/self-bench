@@ -16,7 +16,8 @@ import { queryStatus } from "./api/status.js";
 import { handleViewerRoute } from "./api/viewer-routes.js";
 import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
 import type { AuthConfig } from "./auth/config.js";
-import { createSiteAuth, type SiteAuth } from "./auth/routes.js";
+import { createSiteAuth, type SiteAuth, sendIdentityError } from "./auth/routes.js";
+import { sendExpiredSession } from "./auth/session-expired.js";
 import { createUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
 import { type OpenDatabase, openDatabase } from "./db/client.js";
@@ -26,7 +27,6 @@ import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/conn
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
 import { createRepoStore } from "./site/repo-store.js";
-import { createRunStore } from "./site/run-store.js";
 import { createTaskStore } from "./site/task-store.js";
 import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
 import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
@@ -74,7 +74,7 @@ export async function startApi(
         return;
       }
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
-      const user = site ? await site.auth.authenticate(request) : undefined;
+      const user = site ? await site.auth.authenticate(request, config.apiToken) : undefined;
       const allowed = site
         ? (config.apiToken !== undefined && bearerMatches(request, config.apiToken)) ||
           user !== undefined
@@ -182,6 +182,8 @@ export async function startApi(
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }
+      if (options.auth && sendIdentityError(response, error, options.auth.publicUrl)) return;
+      if (options.auth && sendExpiredSession(response, error, options.auth.publicUrl)) return;
       sendApiError(response, error);
     }
   });
@@ -218,7 +220,6 @@ async function openSite(
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const repos = createRepoStore(database.db);
-  const runs = createRunStore(database.db);
   const tasks = createTaskStore(database.db);
   return {
     auth: createSiteAuth({ config: auth, users }),
@@ -227,7 +228,7 @@ async function openSite(
       repos,
       tasks,
       artifacts,
-      publicUrl: auth.publicUrl,
+      publicUrl: process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl,
       ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
         ? {
             records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
@@ -237,7 +238,9 @@ async function openSite(
         try {
           await client.workflow.start("selfBenchEvaluationWorkflow", {
             workflowId: `evaluation/${input.repoId}/${input.id}`,
-            taskQueue: process.env.SELFBENCH_EVAL_TASK_QUEUE ?? config.temporal.taskQueue,
+            taskQueue: input.credentialOrgId
+              ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
+              : (process.env.SELFBENCH_EVAL_TASK_QUEUE ?? config.temporal.taskQueue),
             args: [input],
             workflowExecutionTimeout: "73 hours",
             workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
@@ -252,7 +255,6 @@ async function openSite(
     tasks: createTaskRoutes({
       users,
       repos,
-      runs,
       tasks,
       artifacts,
       status: temporalStatus(client),
@@ -260,11 +262,22 @@ async function openSite(
     pullRequests: createPullRequestRoutes({
       config,
       auth,
+      ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_GENERATION_TASK_QUEUE
+        ? {
+            records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
+          }
+        : {}),
       users,
       repos,
       tasks,
       artifacts,
-      start: temporalStarter(client, config.temporal.taskQueue),
+      start: (workflowId, input) =>
+        temporalStarter(
+          client,
+          input.run.generation
+            ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
+            : config.temporal.taskQueue,
+        )(workflowId, input),
     }),
     database,
   };

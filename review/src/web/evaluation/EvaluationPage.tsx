@@ -87,12 +87,12 @@ export function EvaluationPage() {
       <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
         {selectedId && (
           <Button type="button" variant="secondary" onClick={() => setSearch({})}>
-            All results
+            All Results
           </Button>
         )}
       </PageHeader>
       {error && (
-        <p className="my-4 font-mono text-xs text-danger" role="alert">
+        <p className="my-4 font-mono text-base text-danger" role="alert">
           {error}
         </p>
       )}
@@ -107,9 +107,9 @@ export function EvaluationPage() {
           {datasets.length > 1 && (
             <label
               htmlFor="evaluationpage-field-0"
-              className="mb-4 flex flex-wrap items-center gap-3.5 font-mono text-[11px] text-muted"
+              className="mb-4 flex flex-wrap items-center gap-3.5 font-mono text-sm text-muted"
             >
-              Compare dataset
+              Compare Dataset
               <Select
                 id="evaluationpage-field-0"
                 value={selectedDataset}
@@ -130,8 +130,8 @@ export function EvaluationPage() {
             <h2>Runs</h2>
             {loading && <p role="status">Loading runs…</p>}
             {!loading && !runs.length && (
-              <p className="mt-2 text-[13px] text-muted">
-                No runs yet. <Link to={`/repos/${repo}/dataset`}>Run your dataset →</Link>
+              <p className="mt-2 text-base text-muted">
+                No runs yet. <Link to={`/repos/${repo}`}>Run Your Dataset →</Link>
               </p>
             )}
             {runs.length > 0 && (
@@ -142,7 +142,7 @@ export function EvaluationPage() {
                       <th>Model</th>
                       <th>Harness</th>
                       <th>Accuracy</th>
-                      <th>Estimated model cost / task</th>
+                      <th>Estimated Model Cost / Task</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -163,7 +163,7 @@ export function EvaluationPage() {
                             </td>
                             <td>{harness}</td>
                             <td>{accuracy === undefined ? "—" : `${accuracy.toFixed(1)}%`}</td>
-                            <td>{point ? dollars(point.cost) : "Not available"}</td>
+                            <td>{point ? dollars(point.cost) : "Not Available"}</td>
                             <td>
                               <RunStatus value={run.status} />
                             </td>

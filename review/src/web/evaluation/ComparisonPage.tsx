@@ -66,7 +66,7 @@ export function ComparisonPage() {
         </Link>
       </PageHeader>
       {error && (
-        <p role="alert" className="my-4 font-mono text-xs text-danger">
+        <p role="alert" className="my-4 font-mono text-sm text-danger">
           {error}
         </p>
       )}
@@ -89,7 +89,7 @@ export function ComparisonPage() {
                   <tr key={run.id}>
                     <td>
                       {run.model}
-                      <small>Thinking: {run.thinking ?? "Not recorded"}</small>
+                      <small>Thinking: {run.thinking ?? "Not Recorded"}</small>
                     </td>
                     <td>{run.harnesses.join(", ")}</td>
                     <td>
@@ -100,7 +100,7 @@ export function ComparisonPage() {
                     </td>
                     <td>
                       <Link to={`/repos/${repo}/results?run=${run.id}`}>
-                        Transcript, scores & artifacts →
+                        Transcript, Scores & Artifacts →
                       </Link>
                     </td>
                   </tr>
@@ -110,11 +110,11 @@ export function ComparisonPage() {
           </div>
           {status.runs.some((run) => run.status === "pending" || run.status === "queued") && (
             <div className="flex flex-wrap items-center justify-between gap-4 py-3.5">
-              <p className="mt-2 text-[13px] text-muted">
+              <p className="mt-2 text-base text-muted">
                 If submission was interrupted, resume reuses the same run IDs.
               </p>
               <Button type="button" variant="primary" disabled={busy} onClick={() => void resume()}>
-                {busy ? "Resuming…" : "Resume submission"}
+                {busy ? "Resuming…" : "Resume Submission"}
               </Button>
             </div>
           )}

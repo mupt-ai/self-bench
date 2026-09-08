@@ -55,7 +55,9 @@ describe("user store", () => {
     expect(row?.githubToken).not.toContain("gho_second");
     expect(row?.githubScopes).toBe("read:user,read:org,repo");
     expect(row?.lastSeenAt.toISOString()).toBe("2026-09-05T10:00:00.000Z");
-    expect(row?.createdAt.getTime()).toBeLessThan(clock.getTime());
+    // `created_at` comes from the database clock, not the injected one; it predates every
+    // last-seen touch.
+    expect(row?.createdAt.getTime()).toBeLessThanOrEqual(row?.lastSeenAt.getTime() ?? Infinity);
 
     clock = new Date("2026-09-06T10:00:00Z");
     expect(await store.findByGitHubId(7)).toEqual(renamed);

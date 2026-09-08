@@ -60,7 +60,7 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
     const cached = cache.get(key);
     if (cached && now().getTime() - cached.at < CACHE_TTL_MS) return cached.repos;
     const token = await users.gitHubToken(user.githubId);
-    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
     const path =
       tenant.kind === "user"
         ? "/user/repos?affiliation=owner,collaborator&sort=pushed"
@@ -72,7 +72,7 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
 
   const repoDetail = async (user: User, fullName: string): Promise<RepoDetail | undefined> => {
     const token = await users.gitHubToken(user.githubId);
-    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
     const repo = await lookupRepo(config, token, fullName, fetchImpl);
     if (!repo) return undefined;
     const since = new Date(now().getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -81,7 +81,8 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
       `${config.githubApiUrl}/search/issues?q=${encodeURIComponent(query)}&per_page=1`,
       { headers: apiHeaders(token) },
     );
-    if (!response.ok) throw new GitHubOAuthError(`GitHub search failed (${response.status})`);
+    if (!response.ok)
+      throw new GitHubOAuthError(`GitHub search failed (${response.status})`, response.status);
     const body = (await response.json()) as { total_count?: number };
     return { repo, mergedPullRequests: body.total_count ?? 0, since };
   };
@@ -129,7 +130,8 @@ export async function lookupRepo(
     headers: apiHeaders(token),
   });
   if (response.status === 404) return undefined;
-  if (!response.ok) throw new GitHubOAuthError(`GitHub repo lookup failed (${response.status})`);
+  if (!response.ok)
+    throw new GitHubOAuthError(`GitHub repo lookup failed (${response.status})`, response.status);
   return summaryFrom((await response.json()) as RepoRow);
 }
 
@@ -172,7 +174,8 @@ async function fetchRepoPages(
       `${config.githubApiUrl}${path}&per_page=${PAGE_SIZE}&page=${page}`,
       { headers: apiHeaders(token) },
     );
-    if (!response.ok) throw new GitHubOAuthError(`GitHub repos failed (${response.status})`);
+    if (!response.ok)
+      throw new GitHubOAuthError(`GitHub repos failed (${response.status})`, response.status);
     const rows = (await response.json()) as RepoRow[];
     for (const row of rows) {
       const summary = summaryFrom(row);

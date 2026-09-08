@@ -6,6 +6,7 @@ import { readAccount } from "../src/evaluation/account.js";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { credentialExecution } from "../src/evaluation/credential-execution.js";
 import { credentialSchema, validateEndpoint } from "../src/evaluation/credentials.js";
+import { orgRecords } from "../src/evaluation/org-records.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
@@ -65,7 +66,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(saved.status).toBe(202);
     expect((await saved.json()).submissionError).toBeDefined();
-    const account = await readAccount(records, 1);
+    const account = await readAccount(orgRecords(records, 1), 1);
     expect(account.comparisons).toHaveLength(1);
     const comparison = account.comparisons[0];
     if (!comparison) throw new Error("Missing comparison");

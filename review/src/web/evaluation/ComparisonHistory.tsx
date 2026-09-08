@@ -25,15 +25,15 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
   if (!comparisons.length && !error) return null;
   return (
     <section className="mt-8 [&_h2]:mb-4">
-      <h2>Saved comparisons</h2>
-      {error && <p className="mt-2 text-[13px] text-muted">{error}</p>}
+      <h2>Saved Comparisons</h2>
+      {error && <p className="mt-2 text-base text-muted">{error}</p>}
       <div className="mt-3 font-mono [&_a]:text-ink [&_a:hover]:text-mint [&_button]:text-ink [&_button:hover]:text-mint mt-8 [&_h2]:mb-4">
         <DataTable>
           <thead>
             <tr>
               <th>Created</th>
               <th>Models</th>
-              <th>Completed trials</th>
+              <th>Completed Trials</th>
               <th>Open</th>
             </tr>
           </thead>
@@ -48,7 +48,7 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
                 </td>
                 <td>
                   <Link to={`/repos/${repo}/comparisons/${comparison.id}`}>
-                    View status / resume →
+                    View Status / Resume →
                   </Link>
                 </td>
               </tr>

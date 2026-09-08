@@ -18,7 +18,10 @@ export async function listMergedPullRequests(
     { headers: apiHeaders(token) },
   );
   if (!response.ok)
-    throw new GitHubOAuthError(`GitHub pull request listing failed (${response.status})`);
+    throw new GitHubOAuthError(
+      `GitHub pull request listing failed (${response.status})`,
+      response.status,
+    );
   const body = (await response.json()) as {
     total_count: number;
     incomplete_results?: boolean;

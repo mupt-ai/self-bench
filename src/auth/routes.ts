@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../api/http.js";
+import { bearerMatches, sendJson } from "../api/http.js";
 import type { AuthConfig } from "./config.js";
 import { clearCookie, parseCookies, sendRedirect, setCookie } from "./cookies.js";
 import { constantTimeEqual, randomToken } from "./crypto.js";
@@ -8,7 +8,9 @@ import {
   exchangeCode,
   fetchOrgMemberships,
   fetchProfile,
+  GitHubIdentityError,
   GitHubOAuthError,
+  validateGitHubIdentity,
 } from "./github.js";
 import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "./session.js";
 import type { Org, User, UserStore } from "./users.js";
@@ -29,8 +31,8 @@ export interface SiteAuthOptions {
 export interface SiteAuth {
   /** Answers /auth/* and /api/me. True when the response has been sent. */
   handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean>;
-  /** The signed-in user behind the request's session cookie, if any. */
-  authenticate(request: IncomingMessage): Promise<User | undefined>;
+  /** Validates GitHub for site cookies; a matching CLI bearer is authorized separately. */
+  authenticate(request: IncomingMessage, apiToken?: string): Promise<User | undefined>;
 }
 
 export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
@@ -40,9 +42,17 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
   const signer = createSessionSigner(config.sessionSecret, { now });
   const secure = config.publicUrl.startsWith("https://");
 
-  const authenticate = async (request: IncomingMessage): Promise<User | undefined> => {
+  const authenticate = async (
+    request: IncomingMessage,
+    apiToken?: string,
+  ): Promise<User | undefined> => {
+    if (apiToken && bearerMatches(request, apiToken)) return undefined;
     const claims = signer.verify(parseCookies(request)[SESSION_COOKIE]);
-    return claims ? users.findByGitHubId(claims.githubId) : undefined;
+    if (!claims) return undefined;
+    const token = await users.gitHubToken(claims.githubId);
+    if (!token) throw new GitHubIdentityError(401);
+    await validateGitHubIdentity(config, token, claims.githubId, fetchImpl);
+    return users.findByGitHubId(claims.githubId);
   };
 
   const startSignIn = (response: ServerResponse): void => {
@@ -158,4 +168,20 @@ export function publicOrg(org: Org): {
 
 function loginPath(error: LoginError): string {
   return `/login?error=${error}`;
+}
+
+export function sendIdentityError(
+  response: ServerResponse,
+  error: unknown,
+  publicUrl: string,
+): boolean {
+  if (!(error instanceof GitHubIdentityError)) return false;
+  if (error.status === 401)
+    clearCookie(response, SESSION_COOKIE, { secure: publicUrl.startsWith("https://") });
+  response.setHeader("cache-control", "no-store");
+  sendJson(response, error.status, {
+    error: error.message,
+    code: error.status === 401 ? "session_expired" : "github_identity_unavailable",
+  });
+  return true;
 }

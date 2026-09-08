@@ -1,5 +1,5 @@
-import { Navigate, useSearchParams } from "react-router";
-import { Lockup } from "../Lockup";
+import { Link, Navigate, useSearchParams } from "react-router";
+import { DariMark } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
 
 const ERRORS: Record<string, string> = {
@@ -9,38 +9,39 @@ const ERRORS: Record<string, string> = {
 };
 
 export function LoginPage() {
-  useDocumentTitle("Sign in — self-bench by dari.dev");
+  useDocumentTitle("Sign In — self-bench by dari.dev");
   const { session } = useSession();
   const [params] = useSearchParams();
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
   return (
-    <div className=" flex min-h-screen items-center justify-center px-6 py-12">
-      <div className="w-full max-w-[440px]">
-        <Lockup />
-        <div className="border border-line bg-surface p-6 sm:p-10 [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
-          <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
-            Sign in
-          </div>
-          <h1>Continue to self-bench</h1>
-          <p className="mt-1.5 text-sm text-muted">
-            Build verified coding tasks from your repository’s pull requests, review them, and run
-            evals across harness, model, and thinking levels.
-          </p>
+    <div className="flex min-h-svh items-center justify-center px-6 py-12">
+      <div className="w-full max-w-[320px]">
+        <div className="flex flex-col items-center text-center">
+          <Link to="/" aria-label="self-bench Home" className="mb-5 block [&_svg]:size-14">
+            <DariMark />
+          </Link>
+          <h1 className="font-mono text-3xl font-medium leading-tight tracking-[-0.06em] text-ink">
+            self-bench
+          </h1>
+          <p className="mt-2 font-mono text-sm text-muted">by dari.dev</p>
           <a
-            className="mt-7 flex h-11 w-full items-center justify-center gap-2.5 border border-mint bg-mint font-sans text-sm font-bold text-bg hover:bg-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
+            className="mt-10 flex h-12 w-full items-center justify-center gap-3 border border-mint bg-mint font-mono text-sm font-medium text-bg hover:bg-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
             href="/auth/github"
           >
             <GitHubMark />
             Continue with GitHub
           </a>
           {error && (
-            <p className="mt-4 font-mono text-xs leading-relaxed text-danger">
+            <p
+              role="alert"
+              className="mt-5 w-full border border-danger/30 bg-danger/5 px-4 py-3 text-left font-mono text-sm leading-6 text-danger"
+            >
               {ERRORS[error] ?? ERRORS.github}
             </p>
           )}
         </div>
-        <div className="mt-6 flex items-center justify-center gap-3 font-mono text-[11px] font-medium text-dim [&_a:hover]:text-ink">
+        <div className="mt-8 flex items-center justify-center gap-4 font-mono text-sm text-muted [&_a:hover]:text-ink">
           <a href="https://dari.dev">dari.dev</a>
           <span className="text-line-strong" aria-hidden="true">
             ·

@@ -60,7 +60,7 @@ export function createConnectedRepoRoutes(
           return true;
         }
         const token = await users.gitHubToken(user.githubId);
-        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
         const found = await lookupRepo(config, token, fullName, fetchImpl);
         if (!found) {
           sendJson(response, 404, { error: "repository not found or not readable" });

@@ -111,7 +111,19 @@ export async function evaluationServer(records?: EncryptedRecordStore) {
   await tasks.review(approved.id, { decision: "approve", note: "Reviewed", userId: user.id });
   const starts: EvaluationInput[] = [];
   let failStart = false;
-  const auth = createSiteAuth({ config: testAuthConfig, users });
+  const auth = createSiteAuth({
+    config: testAuthConfig,
+    users,
+    fetchImpl: (async (input, init) => {
+      if (String(input) !== `${testAuthConfig.githubApiUrl}/user`) {
+        throw new Error("Unexpected mock GitHub request");
+      }
+      const token = new Headers(init?.headers).get("authorization");
+      if (token === "Bearer github-secret") return Response.json({ id: 1 });
+      if (token === "Bearer other-secret") return Response.json({ id: 2 });
+      return new Response(null, { status: 401 });
+    }) as typeof fetch,
+  });
   let publicUrl = "";
   const server = createServer(async (request, response) => {
     try {
@@ -151,6 +163,7 @@ export async function evaluationServer(records?: EncryptedRecordStore) {
   publicUrl = `http://127.0.0.1:${address.port}`;
   const signer = createSessionSigner(testAuthConfig.sessionSecret);
   return {
+    users,
     artifacts,
     tasks,
     repo,

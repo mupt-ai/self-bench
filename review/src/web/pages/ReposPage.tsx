@@ -7,7 +7,6 @@ import {
   fetchTaskCounts,
   formatAgo,
   type RepoTaskCounts,
-  setRepoContinuous,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
@@ -38,7 +37,7 @@ export function ReposPage() {
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
   const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
   const navigate = useNavigate();
-  /** The card is one target; its own controls (link, switch, disconnect) keep their behaviour. */
+  /** The card is one target; its own controls keep their behaviour. */
   const openRepo = (event: React.MouseEvent | React.KeyboardEvent, repo: ConnectedRepo) => {
     if ((event.target as HTMLElement).closest("a, button, label, input")) return;
     if ("key" in event && event.key !== "Enter") return;
@@ -76,22 +75,6 @@ export function ReposPage() {
     );
     setConnecting(null);
   }, []);
-  const replace = (next: ConnectedRepo) =>
-    setRepos((current) =>
-      current.status === "ok"
-        ? {
-            status: "ok",
-            repos: current.repos.map((r) => (r.fullName === next.fullName ? next : r)),
-          }
-        : current,
-    );
-  const toggleContinuous = (repo: ConnectedRepo) => {
-    replace({ ...repo, continuous: !repo.continuous });
-    setRepoContinuous(org.login, repo.fullName, !repo.continuous).then(replace, (cause: Error) => {
-      replace(repo);
-      setError(cause.message);
-    });
-  };
   const disconnect = (repo: ConnectedRepo) => {
     if (!window.confirm(`Disconnect ${repo.fullName}?`)) return;
     disconnectRepo(org.login, repo.fullName).then(
@@ -112,7 +95,7 @@ export function ReposPage() {
     <main className="w-full min-w-0 flex-1 px-4 pt-8 pb-12 sm:px-[var(--site-gutter)]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-6 [&_h1]:mt-1.5 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
         <div>
-          <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+          <div className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
             Repositories
           </div>
           <h1>Connected Repositories</h1>
@@ -120,21 +103,21 @@ export function ReposPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            className="inline-flex h-9 shrink-0 items-center justify-center border border-line-strong bg-transparent px-4 font-sans text-[13px] font-bold text-ink hover:border-mint hover:text-mint-bright"
+            className="inline-flex h-9 shrink-0 items-center justify-center border border-line-strong bg-transparent px-4 font-sans text-sm font-bold text-ink hover:border-mint hover:text-mint-bright"
             onClick={() => setConnecting("public")}
           >
             + Connect Public Repo
           </button>
           <button
             type="button"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => setConnecting("mine")}
           >
             + Connect My Repo
           </button>
         </div>
       </div>
-      {error && <p className="mb-4 font-mono text-xs text-danger">{error}</p>}
+      {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
       {repos.status === "ok" && repos.repos.length === 0 && (
         <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
           <p>Nothing connected yet. Connect a repository in {org.login} to start building tasks.</p>
@@ -150,7 +133,7 @@ export function ReposPage() {
               onKeyDown={(event) => openRepo(event, repo)}
             >
               <div className="repo-card-main">
-                <div className="flex min-w-0 items-center gap-2.5 font-mono text-sm font-medium text-ink [&>span:first-of-type]:truncate">
+                <div className="flex min-w-0 items-center gap-2.5 font-mono text-base font-medium text-ink [&>span:first-of-type]:truncate">
                   <a
                     className="inline-flex shrink-0 text-muted hover:text-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
                     href={`https://github.com/${repo.fullName}`}
@@ -165,12 +148,10 @@ export function ReposPage() {
                     {repo.fullName}
                   </Link>
                   {repo.private && (
-                    <span className="text-[10px] tracking-widest text-warning uppercase">
-                      private
-                    </span>
+                    <span className="text-sm tracking-widest text-warning uppercase">private</span>
                   )}
                 </div>
-                <div className="mt-1.5 flex gap-2 text-xs text-muted">
+                <div className="mt-1.5 flex gap-2 text-sm text-muted">
                   <span className="font-mono">{repo.defaultBranch}</span>
                   <span className="text-line-strong" aria-hidden="true">
                     ·
@@ -183,20 +164,6 @@ export function ReposPage() {
               </div>
               <RepoCardStats stats={stats[repo.fullName]} />
               <div className="flex items-center gap-5 justify-self-end">
-                <label className="inline-flex cursor-pointer items-center gap-2.5 select-none [&_input]:absolute [&_input]:size-0 [&_input]:opacity-0">
-                  <input
-                    type="checkbox"
-                    checked={repo.continuous}
-                    onChange={() => toggleContinuous(repo)}
-                  />
-                  <span
-                    className="relative h-4 w-[30px] border border-line-strong bg-surface-3 after:absolute after:top-0.5 after:left-0.5 after:size-2.5 after:bg-dim after:content-[''] [input:checked+&]:border-mint [input:checked+&]:bg-mint [input:checked+&]:after:translate-x-3.5 [input:checked+&]:after:bg-bg [input:focus-visible+&]:outline-2 [input:focus-visible+&]:outline-mint-bright"
-                    aria-hidden="true"
-                  />
-                  <span className="font-mono text-xs font-medium text-muted [input:checked~&]:text-ink">
-                    Continuous
-                  </span>
-                </label>
                 <button
                   type="button"
                   className="inline-flex size-8 items-center justify-center border border-transparent text-dim hover:border-line-strong hover:text-danger [&_svg]:size-4"
@@ -227,7 +194,7 @@ export function ReposPage() {
 function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
   if (!stats) {
     return (
-      <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-[10px] [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-sm [&_dd]:font-medium [&_dd]:text-ink">
+      <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-sm [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-base [&_dd]:font-medium [&_dd]:text-ink">
         <div>
           <dt>Tasks</dt>
           <dd className="text-dim">…</dd>
@@ -244,12 +211,10 @@ function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
     );
   }
   return (
-    <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-[10px] [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-sm [&_dd]:font-medium [&_dd]:text-ink">
+    <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-sm [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-base [&_dd]:font-medium [&_dd]:text-ink">
       <div>
         <dt>Tasks</dt>
-        <dd className={stats.tasks === 0 ? "text-dim" : ""}>
-          {stats.tasks === 0 ? "none yet" : stats.tasks}
-        </dd>
+        <dd className={stats.tasks === 0 ? "text-dim" : ""}>{stats.tasks}</dd>
       </div>
       <div>
         <dt>Awaiting Review</dt>

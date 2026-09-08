@@ -35,7 +35,7 @@ describe("SelfBench CLI stack", () => {
     await writeFile(
       docker,
       `#!/bin/sh
-printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" "$SELFBENCH_BUILD_COMMIT" >> "$DOCKER_CALLS"
+printf '%s|%s|%s|%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBOR_ENVIRONMENT" "$SELFBENCH_MODAL_CONFIG_PATH" "$SELFBENCH_BUILD_COMMIT" "$COMPOSE_PROJECT_NAME" "$SELFBENCH_SITE_PORT" "$SELFBENCH_PUBLIC_URL" >> "$DOCKER_CALLS"
 `,
     );
     await chmod(docker, 0o755);
@@ -48,6 +48,13 @@ printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBO
           ...process.env,
           DOCKER_CALLS: calls,
           PATH: `${binaryDirectory}:${process.env.PATH ?? ""}`,
+          COMPOSE_PROJECT_NAME: "stack-test",
+          SELFBENCH_SITE_HOSTNAME: "bench.example.ts.net",
+          SELFBENCH_SITE_PORT: "",
+          SELFBENCH_PUBLIC_URL: "",
+          // The checkout's real .env must not leak into the derivation.
+          SELFBENCH_DEV_DOMAIN: "",
+          GITHUB_OAUTH_CLIENT_ID: "",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -60,13 +67,17 @@ printf '%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBENCH_HARBO
     ]);
 
     expect(exitCode, stderr).toBe(0);
-    expect(stdout).toContain("modal generation and modal Harbor");
+    expect(stdout).toContain("modal generation and modal Harbor at http://bench.example.ts.net:");
+    expect(stdout).toContain("Compose project stack-test");
     const invocations = await readFile(calls, "utf8");
     expect(invocations).not.toContain("Dockerfile.sandbox");
     expect(invocations).toContain("compose --file");
     expect(invocations).toContain(`--file ${join(import.meta.dir, "..", "compose.yaml")}`);
     expect(invocations).toContain(`|modal|modal|${modalConfig}|`);
-    expect(invocations).toMatch(/\|[0-9a-f]{40}\n/);
+    // The stack environment reaches Compose: project, derived port, and the public URL built from it.
+    expect(invocations).toMatch(
+      /\|[0-9a-f]{40}\|stack-test\|(8[1-8]\d\d)\|http:\/\/bench\.example\.ts\.net:\1\n/,
+    );
   });
   test("requires an explicit Docker or Modal Harbor backend for Vercel", async () => {
     const child = Bun.spawn([process.execPath, "src/cli.ts", "up", "--backend", "vercel"], {

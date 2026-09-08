@@ -151,6 +151,7 @@ export async function runAuthoringRound(
                   SOURCE_REPO_URL: run.repository.url,
                   SOURCE_COMMIT: candidate.baseCommit,
                   AUTHOR_MODEL: run.authoring.model,
+                  AUTHOR_THINKING: run.authoring.reasoningEffort,
                   SELFBENCH_TASK_OUTPUT: "/work/tasks",
                   SELFBENCH_DELIVERABLE: "/work/task",
                   SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",

@@ -1,6 +1,7 @@
 import { parsePatchFiles } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import React from "react";
+import { prose } from "./viewer-ui";
 
 export function DiffView({ patch }: { patch: string }) {
   return (
@@ -36,7 +37,7 @@ function RenderedPatch({ patch }: { patch: string }) {
     () => parsePatchFiles(patch).flatMap((parsed) => parsed.files),
     [patch],
   );
-  if (!files.length) return <pre className="prose">{patch}</pre>;
+  if (!files.length) return <pre className={prose}>{patch}</pre>;
   const options = {
     themeType: "dark" as const,
     diffStyle: window.matchMedia("(max-width: 1200px)").matches
@@ -47,7 +48,7 @@ function RenderedPatch({ patch }: { patch: string }) {
     stickyHeader: true,
   };
   return (
-    <div className="patch-files">
+    <div className="flex flex-col gap-3 p-3 site:gap-4 site:px-0">
       {files.map((file) => (
         <FileDiff
           key={`${file.prevName ?? ""}:${file.name}`}
@@ -76,7 +77,7 @@ class DiffErrorBoundary extends React.Component<
 
   render() {
     return this.state.failed ? (
-      <pre className="prose">{this.props.fallback}</pre>
+      <pre className={prose}>{this.props.fallback}</pre>
     ) : (
       this.props.children
     );

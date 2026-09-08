@@ -40,7 +40,7 @@ export function TaskPage() {
   if (error) {
     return (
       <main className="w-full min-w-0 flex-1 px-4 pt-8 pb-12 sm:px-[var(--site-gutter)]">
-        <p className="mb-4 font-mono text-xs text-danger">{error}</p>
+        <p className="mb-4 font-mono text-base text-danger">{error}</p>
       </main>
     );
   }
@@ -48,7 +48,7 @@ export function TaskPage() {
   if (task === null || !source) {
     return (
       <main className="w-full min-w-0 flex-1 px-4 pt-8 pb-12 sm:px-[var(--site-gutter)]">
-        <p className="mb-4 font-mono text-xs text-danger">
+        <p className="mb-4 font-mono text-base text-danger">
           Task not found. <Link to={`/repos/${fullName}`}>Back to {fullName}</Link>
         </p>
       </main>
@@ -60,7 +60,7 @@ export function TaskPage() {
         <div className="min-w-0">
           <nav
             aria-label="Breadcrumb"
-            className="mb-3.5 flex flex-wrap gap-2 font-mono text-xs font-medium text-dim [&_a]:text-muted [&_a:hover]:text-mint-bright"
+            className="mb-3.5 flex flex-wrap gap-2 font-mono text-sm font-medium text-dim [&_a]:text-muted [&_a:hover]:text-mint-bright"
           >
             <Link to="/">Repositories</Link>
             <span aria-hidden="true">/</span>
@@ -71,10 +71,10 @@ export function TaskPage() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 [&_h1]:font-mono [&_h1]:text-lg [&_h1]:leading-tight [&_h1]:font-semibold [&_h1]:wrap-anywhere">
             <h1>{task.taskId}</h1>
             <DifficultyStamp difficulty={task.difficulty} />
-            <StateStamp state={task.state} big />
+            <StateStamp state={task.state} />
             {task.sourcePr && (
               <a
-                className="border-b border-line-strong font-mono text-xs font-medium text-muted hover:border-mint hover:text-mint-bright"
+                className="border-b border-line-strong font-mono text-sm font-medium text-muted hover:border-mint hover:text-mint-bright"
                 href={task.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
@@ -82,41 +82,33 @@ export function TaskPage() {
                 PR #{task.sourcePr}
               </a>
             )}
-            <span className="text-[11px] text-dim font-mono">{task.runId}</span>
+            <span className="text-sm text-dim font-mono">{task.runId}</span>
           </div>
-          {task.reasonSummary && task.state !== "accepted" && (
-            <div
-              className={
-                task.pipelineStatus === "infrastructure_failed"
-                  ? "border-l-2 border-danger pl-2.5"
-                  : undefined
-              }
+          {task.pipelineStatus === "infrastructure_failed" &&
+          (task.reason || task.reasonSummary) ? (
+            <details className="mt-3 font-mono text-sm text-muted [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
+              <summary>Technical Details</summary>
+              <pre>{task.reason || task.reasonSummary}</pre>
+            </details>
+          ) : task.reasonSummary && task.state !== "accepted" ? (
+            <p
+              className="mt-2 max-w-[90ch] font-mono text-sm leading-6 text-muted wrap-anywhere"
+              title={task.reasonSummary}
             >
-              <p
-                className="mt-2 max-w-[90ch] truncate text-[13px] text-muted"
-                title={task.reasonSummary}
-              >
-                {task.reasonSummary}
-              </p>
-              {task.pipelineStatus === "infrastructure_failed" && task.reason && (
-                <details className="mt-3 text-xs text-muted [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
-                  <summary>Technical Details</summary>
-                  <pre>{task.reason.replace(`${task.reasonSummary}\n\n`, "")}</pre>
-                </details>
-              )}
-            </div>
-          )}
+              {task.reasonSummary}
+            </p>
+          ) : null}
         </div>
         {task.state === "in_progress" ? (
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5 pt-2 sm:pt-5.5">
-            <span className="text-xs text-muted">
+            <span className="text-sm text-muted">
               {task.stage}
               {task.round ? ` · round ${task.round}` : ""}
             </span>
           </div>
         ) : task.state === "failed" ? (
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5 pt-2 sm:pt-5.5">
-            <span className="text-xs text-muted">SelfBench Failed · No Verdict</span>
+            <span className="text-sm text-muted">SelfBench Failed · No Verdict</span>
           </div>
         ) : (
           <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
@@ -180,26 +172,26 @@ function ReviewBar({
     return (
       <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5 pt-2 sm:pt-5.5">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+          <span className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
             {task.review.decision === "approve" ? "Approved" : "Rejected"}
           </span>
-          <span className="text-xs text-muted">
+          <span className="text-sm text-muted">
             by <span className="font-mono">{task.review.decidedBy}</span>{" "}
             {formatAgo(task.review.decidedAt)}
           </span>
           {task.review.note && (
-            <span className="max-w-[40ch] truncate text-[13px] text-ink">“{task.review.note}”</span>
+            <span className="max-w-[40ch] truncate text-sm text-ink">“{task.review.note}”</span>
           )}
         </div>
         <button
           type="button"
-          className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:opacity-40"
+          className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
           disabled={busy}
           onClick={clear}
         >
           Clear Decision
         </button>
-        {error && <span className="font-mono text-xs text-danger">{error}</span>}
+        {error && <span className="font-mono text-sm text-danger">{error}</span>}
       </div>
     );
   }
@@ -214,18 +206,18 @@ function ReviewBar({
           }}
         >
           <input
-            className="h-9 w-[320px] max-w-full border border-line-strong bg-bg px-3 font-sans text-[13px] text-ink placeholder:text-dim focus:border-mint"
-            placeholder={pending === "approve" ? "Note (optional)" : "Why reject? (optional)"}
+            className="h-9 w-[320px] max-w-full border border-line-strong bg-bg px-3 font-sans text-base text-ink placeholder:text-dim focus:border-mint"
+            placeholder={pending === "approve" ? "Note (Optional)" : "Why reject? (optional)"}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            aria-label="Review note"
+            aria-label="Review Note"
           />
           <button
             type="submit"
             className={
               pending === "approve"
-                ? "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
-                : "inline-flex h-9 items-center justify-center border border-danger/55 px-4 font-sans text-[13px] font-bold text-danger hover:border-danger hover:bg-danger/10 disabled:opacity-50"
+                ? "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+                : "inline-flex h-9 items-center justify-center border border-danger/55 px-4 font-sans text-sm font-bold text-danger hover:border-danger hover:bg-danger/10 disabled:opacity-50"
             }
             disabled={busy}
           >
@@ -233,7 +225,7 @@ function ReviewBar({
           </button>
           <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:opacity-40"
+            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
             onClick={() => setPending(null)}
           >
             Cancel
@@ -243,21 +235,21 @@ function ReviewBar({
         <>
           <button
             type="button"
-            className="inline-flex h-9 items-center justify-center border border-danger/55 px-4 font-sans text-[13px] font-bold text-danger hover:border-danger hover:bg-danger/10 disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center border border-danger/55 px-4 font-sans text-sm font-bold text-danger hover:border-danger hover:bg-danger/10 disabled:opacity-50"
             onClick={() => setPending("reject")}
           >
             Reject
           </button>
           <button
             type="button"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => setPending("approve")}
           >
             Approve
           </button>
         </>
       )}
-      {error && <span className="font-mono text-xs text-danger">{error}</span>}
+      {error && <span className="font-mono text-sm text-danger">{error}</span>}
     </div>
   );
 }

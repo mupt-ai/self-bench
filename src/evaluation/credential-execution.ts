@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import { readAccount, secretPath } from "./account.js";
 import { validateEndpoint } from "./credentials.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
+import { orgRecords } from "./org-records.js";
 import type { EvaluationInput } from "./types.js";
 
 export async function credentialExecution(
@@ -14,6 +15,7 @@ export async function credentialExecution(
 ) {
   if (!input.credentials || !input.credentialOwnerId || !input.comparisonId)
     throw new Error("Credential references missing");
+  records = orgRecords(records, input.credentialOrgId);
   const account = await readAccount(records, input.credentialOwnerId);
   const saved = account.comparisons
     .find((entry) => entry.id === input.comparisonId && entry.repoId === input.repoId)

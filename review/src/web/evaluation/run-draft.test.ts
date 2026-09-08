@@ -20,3 +20,13 @@ test("restoring a submitted draft keeps its request identity and a new dataset s
   expect(next.submitted).toBe(false);
   expect(next.draft.tasks).toEqual([{ runId: "two", taskId: "two" }]);
 });
+test("large selections round-trip through task links and saved drafts without truncation", () => {
+  const tasks = Array.from({ length: 25 }, (_, index) => ({
+    runId: "run",
+    taskId: `task-${index}`,
+  }));
+  const query = new URLSearchParams({ tasks: JSON.stringify(tasks) });
+  const state = restoreRunDraft(null, query.get("tasks"));
+  expect(state.draft.tasks).toEqual(tasks);
+  expect(restoreRunDraft(JSON.stringify(state), null).draft.tasks).toEqual(tasks);
+});

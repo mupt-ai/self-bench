@@ -8,6 +8,7 @@ import type { TaskStore } from "../site/task-store.js";
 import { tenantFor } from "../site/tenant.js";
 import { evaluationSandboxes } from "./config.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
+import { orgCredentialRoutes } from "./org-credential-routes.js";
 import { platformRoutes } from "./platform-routes.js";
 import { availableChoices, handleSetup } from "./profile-routes.js";
 import {
@@ -36,8 +37,7 @@ const requestSchema = z
           .object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) })
           .strict(),
       )
-      .min(1)
-      .max(10),
+      .min(1),
   })
   .strict();
 export interface EvaluationRoutesOptions {
@@ -59,6 +59,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       response: ServerResponse,
       user: User,
     ): Promise<boolean> {
+      if (await orgCredentialRoutes(options, request, url, response, user)) return true;
       if (await platformRoutes(options, request, url, response, user)) return true;
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;

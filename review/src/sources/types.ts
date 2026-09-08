@@ -1,3 +1,4 @@
+import { checkSessionExpired } from "../session-expired";
 import type { CandidateArtifacts, TaskFiles, TaskRow } from "../types";
 
 export type SourceKind = "run" | "local";
@@ -29,6 +30,7 @@ export function createApiClient(token: string): ApiClient {
       path,
       token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
     );
+    if (!token) checkSessionExpired(response);
     if (!response.ok) {
       let detail = `${response.status}`;
       try {

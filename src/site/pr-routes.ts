@@ -5,16 +5,21 @@ import type { AuthConfig } from "../auth/config.js";
 import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
 import type { SelfBenchConfig } from "../config.js";
+import { listCredentials } from "../evaluation/credentials.js";
+import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { orgRecords } from "../evaluation/org-records.js";
+import { checkGenerationCredentials, generationRecordPath } from "./generation-credentials.js";
+import { generationModels, generationSettingsSchema } from "./generation-settings.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
 import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
 import type { RepoStore } from "./repo-store.js";
-import { startTaskFromPullRequest, type WorkflowStarter } from "./task-start.js";
+import { startTaskFromPullRequest, taskRunId, type WorkflowStarter } from "./task-start.js";
 import type { TaskStore } from "./task-store.js";
 import { taskItem } from "./tasks.js";
 import { tenantFor } from "./tenant.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(tasks\/from-pr|pull-requests)$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(tasks\/from-pr|pull-requests|generation-options)$/;
 
 export interface PullRequestRoutesOptions {
   readonly config: SelfBenchConfig;
@@ -25,6 +30,7 @@ export interface PullRequestRoutesOptions {
   readonly artifacts: ArtifactStore;
   readonly start: WorkflowStarter;
   readonly fetchImpl?: typeof fetch;
+  readonly records?: EncryptedRecordStore;
 }
 
 export interface PullRequestRoutes {
@@ -45,10 +51,11 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;
       const listing = match[4] === "pull-requests";
-      if (request.method !== (listing ? "GET" : "POST")) return false;
+      const configuring = match[4] === "generation-options";
+      if (request.method !== (listing || configuring ? "GET" : "POST")) return false;
       const tenant = await tenantFor(users, user, match[1]);
       const repo = tenant ? await repos.find(tenant.id, `${match[2]}/${match[3]}`) : undefined;
-      if (!repo) {
+      if (!repo || !tenant) {
         sendJson(response, 404, { error: "repository is not connected here" });
         return true;
       }
@@ -60,14 +67,57 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
           return true;
         }
         const token = await users.gitHubToken(user.githubId);
-        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
         const result = await listMergedPullRequests(auth, token, repo.fullName, page, fetchImpl);
         sendJson(response, 200, result);
         return true;
       }
+      if (configuring) {
+        sendJson(response, 200, {
+          models: generationModels,
+          sandboxes: ["modal", "docker"],
+          credentials: options.records
+            ? await listCredentials(orgRecords(options.records, tenant.id), tenant.id)
+            : [],
+          available: !!options.records,
+        });
+        return true;
+      }
       const body = JSON.parse((await readBody(request, 16 * 1024)).toString("utf8") || "{}") as {
         pr?: unknown;
+        generation?: unknown;
       };
+      const parsed =
+        body.generation === undefined
+          ? undefined
+          : generationSettingsSchema.safeParse(body.generation);
+      if (parsed && !parsed.success) {
+        sendJson(response, 400, {
+          error: "Choose valid generation models, reasoning, sandbox, and credentials.",
+        });
+        return true;
+      }
+      const generation = parsed?.success
+        ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
+        : undefined;
+      if (generation) {
+        if (!options.records) {
+          sendJson(response, 503, { error: "Generation credential storage is not configured." });
+          return true;
+        }
+        try {
+          await checkGenerationCredentials(
+            orgRecords(options.records, tenant.id),
+            tenant.id,
+            generation.settings,
+          );
+        } catch (error) {
+          sendJson(response, 400, {
+            error: error instanceof Error ? error.message : "Credential unavailable",
+          });
+          return true;
+        }
+      }
       const number = parsePullRequestRef(String(body.pr ?? ""), repo.fullName);
       if (!number) {
         sendJson(response, 400, {
@@ -76,7 +126,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         return true;
       }
       const token = await users.gitHubToken(user.githubId);
-      if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+      if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
       let pullRequest: Awaited<ReturnType<typeof candidateFromPullRequest>>;
       try {
         pullRequest = await candidateFromPullRequest(auth, token, repo.fullName, number, fetchImpl);
@@ -85,31 +135,33 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         sendJson(response, error.status, { error: error.message });
         return true;
       }
-      const attempt =
-        1 +
-        (await tasks.listForRepo(repo.id)).filter(
-          (task) => task.sourcePr === number && task.workflowId,
-        ).length;
-      const started = await startTaskFromPullRequest({
-        config,
-        artifacts,
-        start,
-        repository: repo,
-        pullRequest,
-        attempt,
-      });
-      const row = await tasks.insertStarted({
+      const runId = taskRunId(repo.fullName, number, 1);
+      const row = await tasks.reserveStarted({
         repoId: repo.id,
-        runId: started.runId,
-        candidateId: started.candidate.candidateId,
-        taskId: started.candidate.candidateId,
+        runId,
+        candidateId: pullRequest.candidate.candidateId,
+        taskId: pullRequest.candidate.candidateId,
         sourcePr: number,
-        sourceUrl: started.candidate.sourceUrl,
-        difficulty: started.candidate.difficulty,
+        sourceUrl: pullRequest.candidate.sourceUrl,
+        difficulty: pullRequest.candidate.difficulty,
         pipelineStatus: "in_progress",
         stage: "authoring",
-        workflowId: started.workflowId,
+        workflowId: `${runId}/candidate/${pullRequest.candidate.candidateId}`,
         startedBy: user.id,
+      });
+      await startTaskFromPullRequest({
+        config,
+        artifacts,
+        start: async (workflowId, input) => {
+          if (generation && options.records)
+            await options.records.write(generationRecordPath(row.runId), generation, 0);
+          await start(workflowId, input);
+        },
+        repository: repo,
+        pullRequest,
+        attempt: 1,
+        runId: row.runId,
+        ...(generation ? { generation } : {}),
       });
       sendJson(response, 201, { task: taskItem(row) });
       return true;

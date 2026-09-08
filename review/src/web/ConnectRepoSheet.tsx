@@ -117,7 +117,7 @@ export function ConnectRepoSheet({
       >
         <header className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 [&_h2]:mt-1.5 [&_h2]:font-sans [&_h2]:text-lg [&_h2]:leading-tight [&_h2]:font-semibold">
           <div>
-            <div className="font-mono text-[10px] font-medium tracking-[0.14em] text-mint uppercase">
+            <div className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
               {mode === "mine" ? "Connect My Repo" : "Connect Public Repo"}
             </div>
             <h2 id="new-run-title">
@@ -138,7 +138,7 @@ export function ConnectRepoSheet({
           </div>
           <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:opacity-40"
+            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
             onClick={onClose}
           >
             Close
@@ -154,19 +154,19 @@ export function ConnectRepoSheet({
           >
             <input
               ref={search}
-              className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-[13px] text-ink placeholder:text-dim focus:border-mint"
+              className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
               type="text"
               placeholder="owner/name"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              aria-label="Repository owner and name"
+              aria-label="Repository Owner and Name"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
             />
             <button
               type="submit"
-              className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:opacity-40"
+              className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
               disabled={!typedName}
             >
               Look Up
@@ -175,12 +175,12 @@ export function ConnectRepoSheet({
         ) : (
           <input
             ref={search}
-            className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-[13px] text-ink placeholder:text-dim focus:border-mint"
+            className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
             type="search"
-            placeholder="Search repositories"
+            placeholder="Search Repositories"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search repositories"
+            aria-label="Search Repositories"
           />
         )}
         <div
@@ -192,7 +192,7 @@ export function ConnectRepoSheet({
             <p className="py-4 text-muted">Loading repositories…</p>
           )}
           {mode === "mine" && repos.status === "error" && (
-            <p className="py-4 text-muted mt-4 font-mono text-xs leading-relaxed text-danger">
+            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
               {repos.message}
             </p>
           )}
@@ -205,7 +205,7 @@ export function ConnectRepoSheet({
             <p className="py-4 text-muted">Looking up {typedName}…</p>
           )}
           {mode === "public" && detail?.status === "error" && (
-            <p className="py-4 text-muted mt-4 font-mono text-xs leading-relaxed text-danger">
+            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
               {detail.message}
             </p>
           )}
@@ -224,22 +224,18 @@ export function ConnectRepoSheet({
               className={`flex w-full items-baseline justify-between gap-4 border border-transparent border-b-line px-3 py-2.5 text-left text-ink hover:bg-surface-2 disabled:cursor-default disabled:opacity-55 ${selected?.githubId === repo.githubId ? "border-mint bg-surface-2" : ""}`}
               onClick={() => choose(repo)}
             >
-              <span className="truncate font-mono text-[13px] font-medium">{repo.name}</span>
-              <span className="flex shrink-0 gap-2.5 font-mono text-[11px] text-dim">
+              <span className="truncate font-mono text-sm font-medium">{repo.name}</span>
+              <span className="flex shrink-0 gap-2.5 font-mono text-sm text-dim">
                 {connected.has(repo.fullName.toLowerCase()) && (
-                  <span className="text-[10px] tracking-widest text-warning uppercase text-mint">
+                  <span className="text-sm tracking-widest text-warning uppercase text-mint">
                     connected
                   </span>
                 )}
                 {repo.private && (
-                  <span className="text-[10px] tracking-widest text-warning uppercase">
-                    private
-                  </span>
+                  <span className="text-sm tracking-widest text-warning uppercase">private</span>
                 )}
                 {repo.archived && (
-                  <span className="text-[10px] tracking-widest text-warning uppercase">
-                    archived
-                  </span>
+                  <span className="text-sm tracking-widest text-warning uppercase">archived</span>
                 )}
                 {repo.language && <span>{repo.language}</span>}
                 <span>{formatAgo(repo.pushedAt)}</span>
@@ -250,8 +246,8 @@ export function ConnectRepoSheet({
         {selected && (
           <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-surface-2 px-6 py-4">
             <div className="min-w-0">
-              <div className="text-[13px] text-ink font-mono">{selected.fullName}</div>
-              <div className="mt-1 flex gap-2 text-xs text-muted">
+              <div className="text-sm text-ink font-mono">{selected.fullName}</div>
+              <div className="mt-1 flex gap-2 text-sm text-muted">
                 <span className="font-mono">{selected.defaultBranch}</span>
                 <span className="text-line-strong" aria-hidden="true">
                   ·
@@ -259,12 +255,12 @@ export function ConnectRepoSheet({
                 <span>{detailText(detail)}</span>
               </div>
               {submit.error && (
-                <div className="mt-1.5 font-mono text-xs text-danger">{submit.error}</div>
+                <div className="mt-1.5 font-mono text-sm text-danger">{submit.error}</div>
               )}
             </div>
             <button
               type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
               disabled={submit.busy}
               onClick={connect}
             >
