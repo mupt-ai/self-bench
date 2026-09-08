@@ -1,5 +1,3 @@
-# Trusted command runner, sourced by test.sh. The caller supplies kill_verifier_processes.
-# Arguments: command, evidence mode (command|junit), expected JUnit identities as JSON.
 run_verifier_command() {
   local command="$1" mode="$2" expected="$3"
   local logfile report_dir status attempt

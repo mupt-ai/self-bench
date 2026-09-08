@@ -1,5 +1,3 @@
-"""Grade named JUnit outcomes. Invoked as the verifier user with Python isolated mode."""
-
 import json
 import pathlib
 import sys
@@ -29,7 +27,6 @@ def read_tests(path: pathlib.Path) -> dict[str, str]:
         identity = case.get("classname", "") + "::" + name
         if not name or identity in tests:
             raise ValueError("missing or duplicate test identity: " + identity)
-        # Highest-priority non-passing outcome wins when a malformed case has several.
         tests[identity] = next(
             (state for tag, state in (("error", "error"), ("skipped", "skipped"), ("failure", "failed"))
              if case.find(tag) is not None),

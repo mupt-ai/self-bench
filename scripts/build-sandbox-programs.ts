@@ -38,7 +38,6 @@ await Promise.all([
   }),
 ]);
 
-// Runtime assets accompany both normal modules and standalone sandbox bundles.
 await Promise.all(
   ["harbor-task/runtime", "runtime"].map((path) =>
     cp(join(root, "src/harbor-task/runtime"), join(outputDirectory, path), { recursive: true }),

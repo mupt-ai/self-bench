@@ -72,7 +72,6 @@ try {
   ]) {
     await readFile(join(installedRoot, asset));
   }
-  // Exercise asset lookup after installation, including the standalone bundle's layout.
   const runtimeModule = join(installedRoot, "dist/harbor-task/runtime-assets.js");
   const assets = await run(
     "node",
