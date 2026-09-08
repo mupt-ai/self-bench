@@ -98,6 +98,8 @@ RUN useradd --create-home --shell /bin/bash verifier \\
     && mkdir -p /opt/selfbench \\
     && chmod 700 /opt/selfbench
 ENV HOME=/home/verifier
+COPY runtime/ /opt/selfbench-runtime/
+RUN chown -R root:root /opt/selfbench-runtime && chmod 755 /opt/selfbench-runtime && chmod 644 /opt/selfbench-runtime/*
 COPY test.patch test.sh task-test.sh /tests/
 RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh /tests/task-test.sh
 WORKDIR /app

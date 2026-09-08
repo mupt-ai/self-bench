@@ -1,6 +1,5 @@
 import type { TaskDefinition } from "../contracts.js";
 import { patchPaths } from "../repair.js";
-import { JUNIT_READER } from "./junit.js";
 import { repositoryRelativePath, shellQuote } from "./paths.js";
 
 export function solutionScript(): string {
@@ -26,35 +25,12 @@ export function testScript(task: TaskDefinition, testPatch: string): string {
   const protectedPaths = repositoryTestPaths.map(shellQuote).join(" ");
   const protectedAbsolute = repositoryTestPaths.map((path) => shellQuote(`/app/${path}`)).join(" ");
   const structured = task.testResults;
-  const junitSetup = structured
-    ? `
-cat > /opt/selfbench/junit-reader.py <<'SELFBENCH_JUNIT_READER'
-${JUNIT_READER}
-SELFBENCH_JUNIT_READER
-chmod 600 /opt/selfbench/junit-reader.py
-`
-    : "";
-  const junitBefore = structured
-    ? `
-    report_dir="$(mktemp -d /tmp/selfbench-junit-XXXXXX)"
-    chown verifier:verifier "$report_dir"
-    export SELFBENCH_JUNIT_REPORT="$report_dir/results.xml"
-`
-    : "";
-  const junitAfter = structured
-    ? `
-  runuser -u verifier --preserve-environment -- env HOME=/home/verifier python3 -I -c "$(cat /opt/selfbench/junit-reader.py)" "$SELFBENCH_JUNIT_REPORT" "$2" "$status"
-  status=$?
-  rm -rf -- "$report_dir"
-  unset SELFBENCH_JUNIT_REPORT
-`
-    : "";
   const f2p = taskCommand(task, task.failToPass);
   const p2p = task.passToPass.length > 0 ? taskCommand(task, task.passToPass) : "true";
   return `#!/bin/bash
 set -uo pipefail
 mkdir -p /logs/verifier
-${junitSetup}
+source /opt/selfbench-runtime/command.sh
 # Root steps after our Dockerfile can leave root-owned files in the verifier's caches.
 chown -R verifier:verifier /home/verifier 2>/dev/null || true
 patch_applied=1
@@ -66,39 +42,6 @@ fail_to_pass_exit_code=-1
 fail_to_pass_repeat_exit_code=-1
 pass_to_pass_exit_code=-1
 kill_verifier_processes() { pkill -KILL -u "$(id -u verifier)" 2>/dev/null || true; }
-# Harbor runs this script as root, so --preserve-environment would leak HOME=/root into the
-# verifier user's shell and break pnpm/corepack/uv caches. HOME is pinned to the verifier's home.
-# Some test runners fetch dependencies at runtime, so a single registry connection
-# reset must not be misread as a dead test. Retry
-# only infrastructure-style failures with backoff; real assertion failures fail fast.
-run_verifier_command() {
-  local logfile
-  logfile="$(mktemp /tmp/selfbench-verifier-command-XXXXXX.log)"
-  local report_dir
-  local attempt=1
-  local status=1
-  while [ "$attempt" -le 3 ]; do
-    : > "$logfile"
-${junitBefore}
-    runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$1" >"$logfile" 2>&1
-    status=$?
-    if [ "$status" -eq 0 ]; then
-      break
-    fi
-    if [ "$attempt" -lt 3 ] && grep -qE 'ECONNRESET|ETIMEDOUT|ESOCKETTIMEDOUT|ENOTFOUND|EAI_AGAIN|META_FETCH_FAIL|FetchError|EPIPE|EPERM|registry\\.npmjs' "$logfile"; then
-      ${structured ? 'rm -rf -- "$report_dir"' : ":"}
-      sleep "$((10 * attempt))"
-      attempt=$((attempt + 1))
-      continue
-    fi
-    break
-  done
-  cat "$logfile"
-  rm -f "$logfile"
-  kill_verifier_processes
-${junitAfter}
-  return "$status"
-}
 protect_held_out_path() {
   local path="$1"
   chown -R root:root -- "$path"
@@ -128,10 +71,10 @@ fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   cd ${shellQuote(`/app/${task.workdir}`)}
-  if run_verifier_command ${shellQuote(f2p)} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
+  if run_verifier_command ${shellQuote(f2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
     fail_to_pass_exit_code=0
     fail_to_pass=1
-    if run_verifier_command ${shellQuote(f2p)} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
+    if run_verifier_command ${shellQuote(f2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
       fail_to_pass_repeat_exit_code=0
       deterministic=1
     else
@@ -143,7 +86,7 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   if [ "${task.passToPass.length}" -eq 0 ]; then
     pass_to_pass_exit_code=0
     pass_to_pass=1
-  elif run_verifier_command ${shellQuote(p2p)} ${shellQuote(JSON.stringify(structured?.passToPass ?? []))}; then
+  elif run_verifier_command ${shellQuote(p2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.passToPass ?? []))}; then
     pass_to_pass_exit_code=0
     pass_to_pass=1
   else

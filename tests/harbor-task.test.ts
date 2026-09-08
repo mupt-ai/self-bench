@@ -126,8 +126,9 @@ describe("Harbor task compiler", () => {
     expect(dependencyPatch).not.toContain("value.txt");
     const verifier = await readFile(join(output, "tests/test.sh"), "utf8");
     expect(verifier).toContain("deterministic");
-    expect(verifier).toContain("selfbench-verifier-command");
-    expect(verifier).toContain("ECONNRESET|ETIMEDOUT");
+    const commandRunner = await readFile(join(output, "tests/runtime/command.sh"), "utf8");
+    expect(commandRunner).toContain("selfbench-verifier-command");
+    expect(commandRunner).toContain("ECONNRESET|ETIMEDOUT");
     expect(verifier).not.toContain("npm ci --ignore-scripts");
     expect(verifier).toContain("/app/project/tests/new");
     expect(verifier).toContain("/app/project/fixture.config.js");
@@ -137,8 +138,8 @@ describe("Harbor task compiler", () => {
     );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
-    expect(verifier).toContain(
-      'runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$1"',
+    expect(commandRunner).toContain(
+      'runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$command"',
     );
     expect(verifier).not.toMatch(/runuser[^\n]*--preserve-environment -- bash/);
     expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
@@ -155,7 +156,7 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(28);
+    ).toBe(29);
 
     const baseOnlyDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
@@ -181,7 +182,7 @@ describe("Harbor task compiler", () => {
     await refreshHarborTask(baseOutput, baseOnlyDefinition);
     expect(await readFile(join(baseOutput, "tests/test.patch"), "utf8")).toBe("");
     expect(await readFile(join(baseOutput, "tests/test.sh"), "utf8")).toContain(
-      "SELFBENCH_JUNIT_REPORT",
+      "source /opt/selfbench-runtime/command.sh",
     );
     const baseManifest = JSON.parse(
       await readFile(join(baseOutput, ".selfbench-manifest.json"), "utf8"),

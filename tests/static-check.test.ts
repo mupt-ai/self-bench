@@ -73,6 +73,8 @@ describe("static submission check", () => {
       "task.toml",
       "tests/Dockerfile",
       "tests/root-setup.sh",
+      "tests/runtime/command.sh",
+      "tests/runtime/junit.py",
       "tests/setup.sh",
       "tests/smoke.sh",
       "tests/task-test.sh",
@@ -257,7 +259,7 @@ describe("reuse-first contracts", () => {
         await writeFile(join(root, "test.sh"), script);
         expect((await runCommand("bash", ["-n", join(root, "test.sh")])).exitCode).toBe(0);
         if ("testResults" in overrides) {
-          expect(script).toContain("SELFBENCH_JUNIT_REPORT");
+          expect(result.rendered?.["tests/runtime/command.sh"]).toContain("SELFBENCH_JUNIT_REPORT");
           expect(result.rendered?.["tests/Dockerfile"]).toContain("command -v python3");
         }
       } finally {

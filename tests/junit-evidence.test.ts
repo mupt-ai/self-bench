@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TaskDefinition } from "../src/contracts.js";
-import { JUNIT_READER } from "../src/harbor-task/junit.js";
+import { fileURLToPath } from "node:url";
 import { shellQuote } from "../src/harbor-task/paths.js";
-import { testScript } from "../src/harbor-task/verifier.js";
 import { runCommand } from "../src/process.js";
 import { nopGatePassed } from "../src/verify-report.js";
 
@@ -18,8 +16,7 @@ async function grade(xml: string | undefined, ids = ["suite::a"], exit = 0, link
     const result = await runCommand(
       "python3",
       [
-        "-c",
-        JUNIT_READER,
+        fileURLToPath(new URL("../src/harbor-task/runtime/junit.py", import.meta.url)),
         link ? join(root, "link.xml") : report,
         JSON.stringify(ids),
         String(exit),
@@ -102,31 +99,21 @@ describe("trusted JUnit evidence", () => {
 test("generated command wrapper measures real reports and discards stale results", async () => {
   const root = await mkdtemp(join(tmpdir(), "selfbench-junit-wrapper-"));
   try {
-    const reader = join(root, "reader.py");
-    await writeFile(reader, JUNIT_READER);
-    const task = {
-      workdir: ".",
-      testPaths: ["test.py"],
-      testCommand: "pytest {tests}",
-      failToPass: ["test.py"],
-      passToPass: [],
-      testResults: { format: "junit", failToPass: ["suite::a"], passToPass: [] },
-    } as unknown as TaskDefinition;
-    const rendered = testScript(task, "");
-    const start = rendered.indexOf("run_verifier_command() {");
-    const end = rendered.indexOf("protect_held_out_path() {");
-    const wrapper = rendered.slice(start, end).replaceAll("/opt/selfbench/junit-reader.py", reader);
+    const reader = fileURLToPath(new URL("../src/harbor-task/runtime/junit.py", import.meta.url));
+    const wrapper = (
+      await readFile(new URL("../src/harbor-task/runtime/command.sh", import.meta.url), "utf8")
+    ).replaceAll("/opt/selfbench-runtime/junit.py", reader);
     // Exercise the generated wrapper without users, root privileges, Docker, or /app.
     const script = `#!/bin/bash
 runuser() { shift 4; "$@"; }
 chown() { :; }
 kill_verifier_processes() { :; }
 ${wrapper}
-run_verifier_command ${shellQuote(`printf %s '${suite(fail)}' > "$SELFBENCH_JUNIT_REPORT"; exit 1`)} '["suite::a"]'
+run_verifier_command ${shellQuote(`printf %s '${suite(fail)}' > "$SELFBENCH_JUNIT_REPORT"; exit 1`)} junit '["suite::a"]'
 printf 'FIRST=%s\n' "$?"
-run_verifier_command ${shellQuote(`printf %s '${suite(pass)}' > "$SELFBENCH_JUNIT_REPORT"`)} '["suite::a"]'
+run_verifier_command ${shellQuote(`printf %s '${suite(pass)}' > "$SELFBENCH_JUNIT_REPORT"`)} junit '["suite::a"]'
 printf 'SECOND=%s\n' "$?"
-run_verifier_command 'true' '["suite::a"]'
+run_verifier_command 'true' junit '["suite::a"]'
 printf 'THIRD=%s\n' "$?"
 `;
     await writeFile(join(root, "run.sh"), script);

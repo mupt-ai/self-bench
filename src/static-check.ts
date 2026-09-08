@@ -12,6 +12,8 @@ import {
   taskToml,
   verifierDockerfile,
 } from "./harbor-task/render.js";
+import { verifierRuntimeFiles } from "./harbor-task/runtime-assets.js";
+import { isBaseOnlyTestPatch } from "./harbor-task/test-patch.js";
 import { solutionScript, testScript } from "./harbor-task/verifier.js";
 import { malformedPatchProblems } from "./patch-check.js";
 import { assertVerifierFix } from "./verifier-fix.js";
@@ -69,8 +71,7 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
     [input.testPatch, "test patch"],
     [input.goldPatch, "gold patch"],
   ] as const) {
-    if (label === "test patch" && patch === "" && definition.testSelection?.mode === "base-only")
-      continue;
+    if (label === "test patch" && isBaseOnlyTestPatch(definition, patch)) continue;
     const problems = malformedPatchProblems(patch, label);
     errors.push(...problems.map((message) => ({ gate: "patches" as const, message })));
     if (problems.length === 0) {
@@ -121,6 +122,9 @@ export function renderTaskFiles(
     "definition.json": `${JSON.stringify(definition, null, 2)}\n`,
     "environment/Dockerfile": agentDockerfile(definition),
     ...environmentScripts("environment", definition),
+    ...Object.fromEntries(
+      Object.entries(verifierRuntimeFiles()).map(([path, content]) => [`tests/${path}`, content]),
+    ),
     "tests/Dockerfile": verifierDockerfile(definition, dependencySetupPatch),
     "tests/test.sh": verifierScript,
     "tests/task-test.sh": verifierScript,
