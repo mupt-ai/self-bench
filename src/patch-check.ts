@@ -76,9 +76,10 @@ export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<Patc
       }
       return true;
     };
-    const testApplies = await check(testPatch, "test.patch", "to the clean base tree");
+    const testApplies =
+      input.testPatch === "" || (await check(testPatch, "test.patch", "to the clean base tree"));
     const goldApplies = await check(goldPatch, "gold.patch", "to the clean base tree");
-    if (testApplies && goldApplies) {
+    if (testApplies && goldApplies && input.testPatch !== "") {
       await runCommand("git", [
         "-C",
         worktree,

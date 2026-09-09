@@ -93,6 +93,22 @@ export const repos = pgTable(
   (table) => [index("repos_org_id").on(table.orgId)],
 );
 
+/** Repository ownership for batch generation, including batches with no candidates yet. */
+export const repoRuns = pgTable(
+  "repo_runs",
+  {
+    repoId: bigint("repo_id", { mode: "number" })
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    attachedBy: bigint("attached_by", { mode: "number" })
+      .notNull()
+      .references(() => users.id),
+    attachedAt: timestamptz("attached_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("repo_runs_pk").on(table.repoId, table.runId)],
+);
+
 /** One row per candidate the pipeline processed; files and artifacts stay in the bucket. */
 export const tasks = pgTable(
   "tasks",

@@ -15,25 +15,7 @@ This document covers SelfBench configuration, persistence, authentication, the H
 
 The worker mounts the host Docker socket for local sandboxes. The API never receives the Docker socket or model credentials; the worker never receives the GitHub OAuth secret or session secret. The local Postgres users and passwords are development defaults (`temporal`/`temporal` and `selfbench`/`selfbench`).
 
-### One stack per checkout
-
-Several checkouts (for example git worktrees) can run at once. `self-bench up` derives a Compose project from the checkout directory name and, from that, stable host ports and image tags, so two worktrees never share containers, volumes, ports, or images. Explicit environment always wins:
-
-| Value | Default for the canonical `self-bench` checkout and packaged installs | Default for any other checkout |
-| --- | --- | --- |
-| `COMPOSE_PROJECT_NAME` | `selfbench` | directory name, lowercased |
-| `SELFBENCH_SITE_PORT` | `8080` | stable hash of the project in 8100-8899 |
-| `SELFBENCH_TEMPORAL_PORT` | `7233` | stable hash of the project in 7300-8099 |
-| `SELFBENCH_IMAGE` | `selfbench:local` | `<project>-selfbench:local` |
-| `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | `<project>-sandbox:local` |
-| `SELFBENCH_PUBLIC_URL` | `http://<SELFBENCH_SITE_HOSTNAME or 127.0.0.1>:<site port>` | same |
-| `SELFBENCH_SITE_BIND` | `127.0.0.1`, or `0.0.0.0` when the hostname is not loopback | same |
-
-`self-bench up` prints the resulting URL, project, and OAuth callback; `self-bench down` resolves the same project. Plain `docker compose up` uses the `selfbench` project on 8080 and 7233 unless those variables are exported, so it suits a single stack only.
-
-Compose and `self-bench up` both read `.env` from the checkout; copy `.env.example` to start. Keep `.env` free of per-stack values (project, ports, public URL) when it is shared between worktrees, and export those in the shell instead. With `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` set, the API serves the signed-in selfbench.dev site (see [Site sign-in](#site-sign-in-selfbenchdev)); without them it serves the bearer-token Harbor Ledger. `SELFBENCH_SITE_HOSTNAME` is the name browsers open: leave it unset to stay on loopback, or set a tailnet or LAN name to reach the site from another machine.
-
-Temporal, site, and artifact state live in the `<project>_temporal-postgres`, `<project>_site-postgres`, and `<project>_artifacts` volumes. Back up those volumes before an upgrade when workflow history, users, or generated artifacts must be retained. Site database migrations (`drizzle/`) run automatically when the API or worker starts.
+Temporal, site, and artifact state live in the `selfbench_temporal-postgres`, `selfbench_site-postgres`, and `selfbench_artifacts` volumes. Back up those volumes before an upgrade when workflow history, users, or generated artifacts must be retained. Site database migrations (`drizzle/`) run automatically when the API or worker starts.
 
 ## Credentials
 
@@ -407,9 +389,7 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 
 The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session or the bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. `self-bench view <dir>` never requires sign-in.
 
-Compose: put the three sign-in variables in `.env` and `self-bench up` serves the site at the public URL it prints, against that stack's `site-postgres`. Register each stack's callback, `<public URL>/auth/github/callback`, on the OAuth app (GitHub OAuth apps accept several). GitHub matches the callback's host and port exactly except for loopback hosts, where any port passes: on loopback one callback, `http://127.0.0.1/auth/github/callback`, covers every worktree, while a tailnet hostname needs one callback per stack port. Behind the dev proxy it is one callback for all of them: register `http://<domain>[:<proxy port>]/auth/github/callback` with wildcard matching on, since every stack is a subdomain of the domain on the same port. The proxy needs split DNS pointing the domain at the machine running it (Tailscale admin, DNS: add a restricted nameserver for the domain whose address is `SELFBENCH_DEV_PROXY_IP`).
-
-For stacks outside SelfBench, the standalone [`tunnel` tool](https://github.com/avyayv/tunnel) puts any compose file behind `<random>.<domain>` the same way: `tunnel up` starts the stack and its door, `tunnel down` tears both down, `tunnel ls` lists what is running.
+Compose: put the three sign-in variables in `.env` and set `SELFBENCH_PUBLIC_URL` to the browser-facing origin. Register that origin with `/auth/github/callback` as the GitHub OAuth callback.
 
 Hot-reload loop: `bun run dev:site` starts a Postgres container (`selfbench-site-postgres`, 127.0.0.1:5433), the API on 8087 with `SELFBENCH_TEMPORAL_CONNECT=lazy`, and Vite on 5173 proxying `/v1`, `/api`, and `/auth`. Register a GitHub OAuth app with callback `http://127.0.0.1/auth/github/callback` (GitHub lets loopback redirects use any port, so browse to `http://127.0.0.1:5173`) and put `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` in `.env.site`.
 
@@ -439,7 +419,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_GCS_BUCKET` | — | GCS artifact store |
 | `SELFBENCH_GCS_PREFIX` | `selfbench` | GCS artifact store |
 | `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; `docker`, `modal`, `vercel`, or `e2b` |
-| `SELFBENCH_DOCKER_IMAGE` | per checkout | Docker worker; sandbox image tag built by `self-bench up` |
+| `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | Docker worker |
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
@@ -463,14 +443,9 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
-| `SELFBENCH_PUBLIC_URL` | `http://<hostname>:<site port>` | API; public origin, forms the OAuth callback URL |
-| `SELFBENCH_SITE_HOSTNAME` | `127.0.0.1` | `self-bench up`; hostname in the public URL, non-loopback binds `0.0.0.0` |
-| `SELFBENCH_DEV_DOMAIN` / `SELFBENCH_DEV_PROXY_IP` / `SELFBENCH_DEV_PROXY_PORT` | unset | Behind the shared dev proxy (`self-bench proxy up`): each stack answers at `http://<project>.<domain>[:<proxy port>]`, resolved by the proxy's DNS at the given IP; the API port stays on loopback |
+| `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` in Compose | API; public origin, forms the OAuth callback URL |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
-| `SELFBENCH_SITE_PORT` / `SELFBENCH_SITE_BIND` | per checkout / `127.0.0.1` | Compose host port and bind address for the API |
-| `SELFBENCH_TEMPORAL_PORT` | per checkout | Compose host port for Temporal |
-| `COMPOSE_PROJECT_NAME` / `SELFBENCH_IMAGE` | per checkout | Compose project and API/worker image tag |
 | `OPENAI_API_KEY` | — | Worker sandboxes |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
 | `GH_TOKEN` | — | Worker GitHub reads |

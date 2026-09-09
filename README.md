@@ -59,7 +59,7 @@ self-bench up --backend docker
 export SELFBENCH_API_URL=http://127.0.0.1:8080
 ```
 
-This starts Postgres, Temporal, the self-bench API, and a worker. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. From a git worktree or any checkout not named `self-bench`, `up` gives the stack its own Compose project and ports and prints the URL, so several checkouts run side by side (see [Operations](docs/operations.md#one-stack-per-checkout)).
+This starts Postgres, Temporal, the self-bench API, and a worker. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API.
 
 ### 2. Build a benchmark
 

@@ -10,8 +10,8 @@
  *   GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, SELFBENCH_SESSION_SECRET.
  */
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { readEnvFile } from "../src/cli/stack-environment.js";
 
 const root = resolve(import.meta.dir, "..");
 const VITE_PORT = Number(process.env.SELFBENCH_SITE_PORT ?? 5173);
@@ -143,3 +143,20 @@ function run(
 }
 
 /** KEY=value lines; quotes stripped, comments and blanks skipped. Never logged. */
+function readEnvFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+  const values: Record<string, string> = {};
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed
+      .slice(separator + 1)
+      .trim()
+      .replace(/^(["'])(.*)\1$/, "$2");
+    if (key) values[key] = value;
+  }
+  return values;
+}
