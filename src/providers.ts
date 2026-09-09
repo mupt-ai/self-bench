@@ -1,5 +1,11 @@
 export const EXECUTION_BACKENDS = ["docker", "modal", "vercel", "e2b"] as const;
 export type ExecutionBackend = (typeof EXECUTION_BACKENDS)[number];
+export const executionBackendLabels = {
+  docker: "Docker",
+  modal: "Modal",
+  vercel: "Vercel",
+  e2b: "E2B",
+} as const satisfies Record<ExecutionBackend, string>;
 
 export const HARBOR_ENVIRONMENTS = ["docker", "modal"] as const;
 export type HarborEnvironment = (typeof HARBOR_ENVIRONMENTS)[number];

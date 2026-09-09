@@ -11,6 +11,7 @@ import {
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { EmptyState } from "../ui";
 
 type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
 
@@ -119,9 +120,7 @@ export function ReposPage() {
       </div>
       {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
       {repos.status === "ok" && repos.repos.length === 0 && (
-        <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
-          <p>Nothing connected yet. Connect a repository in {org.login} to start building tasks.</p>
-        </div>
+        <EmptyState>No repositories connected. Connect a repository to get started.</EmptyState>
       )}
       {repos.status === "ok" && repos.repos.length > 0 && (
         <div className="flex flex-col gap-3">

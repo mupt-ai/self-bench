@@ -9,6 +9,7 @@ import {
   type RepoDetail,
 } from "./api";
 import type { SiteOrg } from "./session";
+import { EmptyState } from "./ui";
 
 export interface ConnectRepoSheetProps {
   org: SiteOrg;
@@ -197,9 +198,7 @@ export function ConnectRepoSheet({
             </p>
           )}
           {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
-            <p className="py-4 text-muted">
-              {needle ? "No repositories match." : "No repositories here."}
-            </p>
+            <EmptyState>{needle ? "No repositories match." : "No repositories here."}</EmptyState>
           )}
           {mode === "public" && detail?.status === "loading" && (
             <p className="py-4 text-muted">Looking up {typedName}…</p>

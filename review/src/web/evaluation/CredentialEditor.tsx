@@ -13,6 +13,7 @@ const sandboxOptions = [
   { id: "e2b", label: "E2B" },
   { id: "modal", label: "Modal" },
   { id: "daytona", label: "Daytona" },
+  { id: "vercel", label: "Vercel" },
 ];
 
 export function CredentialEditor({
@@ -162,6 +163,24 @@ export function CredentialEditor({
                 />
               </label>
             )}
+            {draft.kind === "vercel" &&
+              (["teamId", "projectId"] as const).map((field) => (
+                <label
+                  key={field}
+                  htmlFor={`credentialeditor-${field}`}
+                  className="grid gap-2 font-mono text-sm text-muted"
+                >
+                  {field === "teamId" ? "Vercel Team ID" : "Vercel Project ID"}
+                  <Input
+                    id={`credentialeditor-${field}`}
+                    required
+                    autoComplete="off"
+                    maxLength={256}
+                    value={draft[field] ?? ""}
+                    onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                  />
+                </label>
+              ))}
             {draft.auth === "codex-login" ? (
               <label
                 htmlFor="credentialeditor-field-5"
@@ -197,7 +216,9 @@ export function CredentialEditor({
                   ? "Sandbox API Key"
                   : draft.kind === "modal"
                     ? "Modal Token Secret"
-                    : "Model API Key"}
+                    : draft.kind === "vercel"
+                      ? "Vercel Token"
+                      : "Model API Key"}
                 <Input
                   id="credentialeditor-field-6"
                   required

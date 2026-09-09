@@ -7,7 +7,7 @@ import { ReviewTaskList } from "../task/ReviewTaskList";
 import { type Filter, TaskFilters } from "../task/TaskFilters";
 import { TaskListSkeleton } from "../task/TaskListSkeleton";
 import { taskKey } from "../task/task-deletion";
-import { buttonStyles } from "../ui";
+import { buttonStyles, EmptyState } from "../ui";
 
 export function RepoPage() {
   const { org } = useOrg();
@@ -156,14 +156,10 @@ function RepoTasksPage() {
       />
       {tasks === null && !error && <TaskListSkeleton />}
       {tasks !== null && tasks.length === 0 && (
-        <div className="border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
-          <p>No tasks yet. Add a PR to generate a task.</p>
-        </div>
+        <EmptyState>No tasks yet. Add a PR to generate a task.</EmptyState>
       )}
       {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-        <div className="border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
-          <p>No tasks match.</p>
-        </div>
+        <EmptyState>No tasks match.</EmptyState>
       )}
       <ReviewTaskList
         actionsTarget={actionsTarget}

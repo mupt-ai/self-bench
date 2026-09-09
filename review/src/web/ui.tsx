@@ -51,6 +51,14 @@ export function DataTable({ className = "", ...props }: ComponentProps<"table">)
   );
 }
 
+export function EmptyState({ children }: { children: ReactNode }) {
+  return (
+    <div className="w-full border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
+      <p>{children}</p>
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   description,

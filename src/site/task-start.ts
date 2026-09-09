@@ -1,9 +1,10 @@
 import { buildRunRequest } from "../api/run-request.js";
 import type { ArtifactStore } from "../artifacts.js";
 import { buildCommit } from "../build-metadata.js";
-import type { SelfBenchConfig } from "../config.js";
+import { loadConfig, type SelfBenchConfig } from "../config.js";
 import type { Candidate, CandidateWorkflowInput } from "../contracts.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
+import { generationConfigEnvironment } from "./generation-config.js";
 import type { GenerationReference } from "./generation-settings.js";
 import type { PullRequestCandidate } from "./pr-candidate.js";
 
@@ -78,11 +79,21 @@ export async function startTaskFromPullRequest(options: TaskStartOptions): Promi
       model: options.generation.settings.authorModel,
       reasoningEffort: options.generation.settings.reasoning,
     };
-    run.version.executionBackend = options.generation.settings.sandbox;
-    run.version.harborEnvironment = options.generation.settings.sandbox;
-    run.version.sandboxImage =
-      options.generation.settings.sandbox === "modal" ? "node:22-bookworm" : config.execution.image;
-    delete run.version.sandboxTimeoutCapMs;
+    const settings = options.generation.settings;
+    const selected = loadConfig(
+      generationConfigEnvironment(
+        settings,
+        process.env,
+        settings.sandboxImage ??
+          (settings.sandbox === config.execution.kind ? config.execution.image : undefined),
+      ),
+    );
+    run.version.executionBackend = selected.execution.kind;
+    run.version.harborEnvironment = selected.harborEnvironment;
+    run.version.sandboxImage = selected.execution.image;
+    if ("timeoutCapMs" in selected.execution)
+      run.version.sandboxTimeoutCapMs = selected.execution.timeoutCapMs;
+    else delete run.version.sandboxTimeoutCapMs;
   }
   const candidate: Candidate = { ...pullRequest.candidate, provenance: candidateProvenance };
   const workflowId = `${runId}/candidate/${candidate.candidateId}`;

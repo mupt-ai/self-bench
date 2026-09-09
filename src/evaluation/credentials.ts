@@ -9,10 +9,33 @@ const secret = z.string().min(1).max(24_000);
 export const credentialSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
-    kind: z.enum(["openai", "anthropic", "openrouter", "custom", "e2b", "modal", "daytona"]),
+    kind: z.enum([
+      "openai",
+      "anthropic",
+      "openrouter",
+      "custom",
+      "e2b",
+      "modal",
+      "daytona",
+      "vercel",
+    ]),
     auth: z.enum(["api-key", "codex-login"]).default("api-key"),
     value: secret,
     tokenId: z.string().max(4096).optional(),
+    teamId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(256)
+      .regex(/^[a-zA-Z0-9_-]+$/)
+      .optional(),
+    projectId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(256)
+      .regex(/^[a-zA-Z0-9_-]+$/)
+      .optional(),
     endpoint: z.url().optional(),
   })
   .strict()
@@ -37,6 +60,13 @@ export const credentialSchema = z
       context.addIssue({ code: "custom", message: "API keys must be a single line" });
     if ((value.kind === "modal") !== !!value.tokenId)
       context.addIssue({ code: "custom", message: "Modal requires a token ID and secret" });
+    if (
+      value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Vercel requires a team ID and project ID; other providers do not accept them",
+      });
     if ((value.kind === "custom") !== !!value.endpoint)
       context.addIssue({ code: "custom", message: "Only custom providers require an endpoint" });
   });
@@ -82,7 +112,12 @@ export async function saveCredential(
   };
   await records.write(
     secretPath(ownerId, info.id),
-    { value: parsed.value, ...(parsed.tokenId ? { tokenId: parsed.tokenId } : {}) },
+    {
+      value: parsed.value,
+      ...(parsed.tokenId ? { tokenId: parsed.tokenId } : {}),
+      ...(parsed.teamId ? { teamId: parsed.teamId } : {}),
+      ...(parsed.projectId ? { projectId: parsed.projectId } : {}),
+    },
     0,
   );
   const saved = await updateAccount(records, ownerId, async (account) => {

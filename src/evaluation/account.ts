@@ -5,7 +5,7 @@ import type { EvaluationInput } from "./types.js";
 export interface CredentialInfo {
   id: string;
   name: string;
-  kind: CatalogProvider | HostedSandbox;
+  kind: CatalogProvider | HostedSandbox | "vercel";
   auth: "api-key" | "codex-login";
   createdAt: string;
   endpoint?: string;

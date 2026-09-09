@@ -15,6 +15,7 @@ export function CredentialsPage() {
 function CredentialsContent({ org }: { org: string }) {
   useDocumentTitle(`Credentials · ${org}`);
   const url = `/api/orgs/${encodeURIComponent(org)}`;
+  const [loaded, setLoaded] = React.useState(false);
   const [canManage, setCanManage] = React.useState(false);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
   const [editing, setEditing] = React.useState<CredentialInfo | "new">();
@@ -28,6 +29,7 @@ function CredentialsContent({ org }: { org: string }) {
     const result = await evaluationRequest<{ credentials: CredentialInfo[]; canManage: boolean }>(
       `${url}/credentials`,
     );
+    setLoaded(true);
     setCredentials(result.credentials);
     setCanManage(result.canManage);
   };
@@ -38,12 +40,13 @@ function CredentialsContent({ org }: { org: string }) {
     ).then(
       (result) => {
         if (!disposed) {
+          setLoaded(true);
           setCredentials(result.credentials);
           setCanManage(result.canManage);
         }
       },
       (cause) => {
-        if (!disposed) setError(cause.message);
+        if (!disposed) setError(`Could not load credentials: ${cause.message}`);
       },
     );
     return () => {
@@ -153,7 +156,12 @@ function CredentialsContent({ org }: { org: string }) {
               ))}
             </tbody>
           </DataTable>
-          {!credentials.length && (
+          {!loaded && !error && (
+            <p className="px-4 py-7 text-base text-muted" role="status">
+              Loading credentials…
+            </p>
+          )}
+          {loaded && !error && !credentials.length && (
             <p className="px-4 py-7 text-base text-muted">
               No credentials saved. Add a provider credential and a sandbox credential to run
               evaluations.
