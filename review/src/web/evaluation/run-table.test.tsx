@@ -37,6 +37,10 @@ test("model table remains visible without credentials and never embeds secret fi
 test("credential editor is separate and offers only supported providers and hosted sandboxes", () => {
   const html = renderToStaticMarkup(
     <CredentialEditor
+      org="mupt-ai"
+      onSaved={async () => {
+        throw new Error("Render must not finish sign-in");
+      }}
       onSave={async () => {
         throw new Error("Render must not save a credential");
       }}

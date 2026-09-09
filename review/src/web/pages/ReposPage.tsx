@@ -9,6 +9,7 @@ import {
   type RepoTaskCounts,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
+import { ListSkeleton, Skeleton } from "../LoadingSkeleton";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 
@@ -118,9 +119,17 @@ export function ReposPage() {
         </div>
       </div>
       {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
+      {repos.status === "loading" && !error && <ListSkeleton label="Loading Repositories" />}
       {repos.status === "ok" && repos.repos.length === 0 && (
-        <div className="border border-dashed border-line-strong px-6 py-12 text-center text-muted">
-          <p>Nothing connected yet. Connect a repository in {org.login} to start building tasks.</p>
+        <div className="border border-line-strong border-l-2 border-l-mint bg-surface px-5 py-6 sm:px-7">
+          <div className="max-w-2xl">
+            <h2 className="font-sans text-base leading-6 font-semibold text-ink">
+              Connect a Repository to Get Started
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Choose a repository in {org.login} to turn merged pull requests into reviewable tasks.
+            </p>
+          </div>
         </div>
       )}
       {repos.status === "ok" && repos.repos.length > 0 && (
@@ -197,15 +206,21 @@ function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
       <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-sm [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-base [&_dd]:font-medium [&_dd]:text-ink">
         <div>
           <dt>Tasks</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-10" />
+          </dd>
         </div>
         <div>
           <dt>Awaiting Review</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-10" />
+          </dd>
         </div>
         <div>
           <dt>Last PR</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-16" />
+          </dd>
         </div>
       </dl>
     );

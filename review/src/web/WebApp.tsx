@@ -5,6 +5,7 @@ import { ComparisonPage } from "./evaluation/ComparisonPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
+import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RepoPage } from "./pages/RepoPage";
@@ -49,7 +50,9 @@ export function WebApp() {
   return (
     <SessionContext.Provider value={value}>
       <div className="sb min-h-full bg-bg font-sans text-base leading-normal text-ink antialiased [&_a]:no-underline [&_button:not(:disabled)]:cursor-pointer [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-mint-bright [&_:focus-visible]:outline-offset-2 motion-reduce:[&_*]:transition-none">
-        {session.status === "loading" ? null : (
+        {session.status === "loading" ? (
+          <SiteSkeleton />
+        ) : (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />

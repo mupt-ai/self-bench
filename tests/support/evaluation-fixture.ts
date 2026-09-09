@@ -6,6 +6,7 @@ import { LocalArtifactStore } from "../../src/artifacts.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
 import { createUserStore } from "../../src/auth/users.js";
+import type { CodexLogins } from "../../src/evaluation/codex-login.js";
 import {
   createEncryptedRecords,
   type EncryptedRecordStore,
@@ -45,7 +46,7 @@ export function evaluationInput(): EvaluationInput {
     tasks: [{ runId: "run-one", taskId: "task-one", bundleKey: "tasks/task.tar.gz" }],
   };
 }
-export async function evaluationServer(records?: EncryptedRecordStore) {
+export async function evaluationServer(records?: EncryptedRecordStore, codexLogins?: CodexLogins) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
   const artifacts = new LocalArtifactStore(directory);
   const database = await testDatabase();
@@ -138,6 +139,7 @@ export async function evaluationServer(records?: EncryptedRecordStore) {
         tasks,
         artifacts,
         publicUrl,
+        ...(codexLogins ? { codexLogins } : {}),
         env: evaluationEnv,
         records:
           records ??
