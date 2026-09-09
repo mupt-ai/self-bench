@@ -1,5 +1,4 @@
 import type { Client } from "@temporalio/client";
-import { WorkflowExecutionAlreadyStartedError, WorkflowIdReusePolicy } from "@temporalio/common";
 import { queryStatus } from "../api/status.js";
 import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
@@ -13,6 +12,7 @@ import { selfBenchRunWorkflow } from "../temporal/workflow.js";
 import type { BatchStatus } from "./batch-progress.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
+import { evaluationStarter } from "./evaluation-start.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./github-repos.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./pr-routes.js";
 import { createRepoStore } from "./repo-store.js";
@@ -56,21 +56,7 @@ export async function openSite(
             records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
           }
         : {}),
-      async start(input) {
-        try {
-          await client.workflow.start("selfBenchEvaluationWorkflow", {
-            workflowId: `evaluation/${input.repoId}/${input.id}`,
-            taskQueue: input.credentialOrgId
-              ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
-              : (process.env.SELFBENCH_EVAL_TASK_QUEUE ?? config.temporal.taskQueue),
-            args: [input],
-            workflowExecutionTimeout: "73 hours",
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-          });
-        } catch (error) {
-          if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
-        }
-      },
+      start: evaluationStarter(client, config.temporal.taskQueue),
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),

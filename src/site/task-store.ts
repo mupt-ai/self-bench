@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
 import { tasks, users } from "../db/schema.js";
-import { tombstoneTask } from "./task-deletion.js";
+import { TaskNotFoundError, tombstoneTask } from "./task-deletion.js";
 import { reserveTaskStart } from "./task-start-reservation.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
@@ -101,9 +101,11 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
       .from(tasks)
       .leftJoin(reviewers, eq(reviewers.id, tasks.reviewedBy))
       .leftJoin(starters, eq(starters.id, tasks.startedBy));
-  const byId = async (id: number): Promise<TaskRecord> => {
-    const [row] = await select().where(eq(tasks.id, id));
-    if (!row) throw new Error(`task ${id} vanished`);
+  const byId = async (id: number, visibleOnly = false): Promise<TaskRecord> => {
+    const [row] = await select().where(
+      and(eq(tasks.id, id), visibleOnly ? isNull(tasks.deletedAt) : undefined),
+    );
+    if (!row) throw new TaskNotFoundError();
     return taskFrom(row);
   };
   const values = (row: TaskUpsert) => ({
@@ -214,15 +216,15 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           reviewedBy: verdict.userId,
           reviewedAt: now(),
         })
-        .where(eq(tasks.id, taskRowId));
-      return byId(taskRowId);
+        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
+      return byId(taskRowId, true);
     },
     async clearReview(taskRowId) {
       await db
         .update(tasks)
         .set({ reviewDecision: null, reviewNote: null, reviewedBy: null, reviewedAt: null })
-        .where(eq(tasks.id, taskRowId));
-      return byId(taskRowId);
+        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
+      return byId(taskRowId, true);
     },
     async countsForRepos(repoIds) {
       if (repoIds.length === 0) return [];
