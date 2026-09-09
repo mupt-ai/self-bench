@@ -1,5 +1,6 @@
 import { ApplicationFailure } from "@temporalio/common";
 import type { SelfBenchConfig } from "../../config.js";
+import { executionEnvironment } from "../../execution-environment.js";
 import { harborChildEnvironment } from "../../harbor-environment.js";
 import {
   type HarborJobResult,
@@ -51,7 +52,7 @@ export async function runHarborGate(
     ],
     {
       allowFailure: true,
-      env: harborChildEnvironment(),
+      env: harborChildEnvironment(executionEnvironment()),
       timeoutMs: 3 * 60 * 60 * 1000,
       signal,
     },

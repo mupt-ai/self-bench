@@ -66,7 +66,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           return true;
         }
         const token = await users.gitHubToken(user.githubId);
-        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user");
+        if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
         const input = await prepareBatch({
           ...options,
           ...parsed.data,

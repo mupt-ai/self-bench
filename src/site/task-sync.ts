@@ -7,7 +7,7 @@ const DEFINITION_CONCURRENCY = 8;
 
 /**
  * Walks one run in the artifact store and upserts a task row per candidate. Reviews on
- * existing rows are kept; everything the pipeline decided is refreshed.
+ * existing rows are kept; active workflow status and deleted rows are never replaced by archives.
  */
 export async function syncRun(options: {
   readonly tasks: TaskStore;

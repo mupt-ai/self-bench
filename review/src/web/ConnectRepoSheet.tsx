@@ -8,6 +8,7 @@ import {
   type Repo,
   type RepoDetail,
 } from "./api";
+import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
 
 export interface ConnectRepoSheetProps {
@@ -106,43 +107,47 @@ export function ConnectRepoSheet({
 
   return (
     <div
-      className="sheet-overlay"
+      className="fixed inset-0 z-20 flex justify-end bg-bg/70"
       onPointerDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <aside
-        className="sheet-panel"
+        className="flex h-full w-full max-w-[520px] flex-col border-l border-line-strong bg-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-run-title"
       >
-        <header className="sheet-head">
+        <header className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 [&_h2]:mt-1.5 [&_h2]:font-sans [&_h2]:text-lg [&_h2]:leading-tight [&_h2]:font-semibold">
           <div>
-            <div className="eyebrow">
+            <div className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
               {mode === "mine" ? "Connect My Repo" : "Connect Public Repo"}
             </div>
             <h2 id="new-run-title">
               {mode === "mine" ? "Choose a Repository" : "Enter a Public Repository"}
             </h2>
-            <p className="sheet-sub">
+            <p className="mt-1.5 text-muted">
               {mode === "mine" ? (
                 <>
-                  Repositories in <span className="mono">{org.login}</span> that your GitHub account
-                  can read.
+                  Repositories in <span className="font-mono">{org.login}</span> that your GitHub
+                  account can read.
                 </>
               ) : (
                 <>
-                  Any public repository on GitHub, as <span className="mono">owner/name</span>.
+                  Any public repository on GitHub, as <span className="font-mono">owner/name</span>.
                 </>
               )}
             </p>
           </div>
-          <button type="button" className="btn-ghost" onClick={onClose}>
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
+            onClick={onClose}
+          >
             Close
           </button>
         </header>
         {mode === "public" ? (
           <form
-            className="sheet-lookup"
+            className="mx-6 mb-2 flex gap-2 [&_input]:m-0 [&_input]:flex-1"
             onSubmit={(event) => {
               event.preventDefault();
               lookup();
@@ -150,51 +155,63 @@ export function ConnectRepoSheet({
           >
             <input
               ref={search}
-              className="sheet-search"
+              className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
               type="text"
               placeholder="owner/name"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              aria-label="Repository owner and name"
+              aria-label="Repository Owner and Name"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
             />
-            <button type="submit" className="btn-ghost" disabled={!typedName}>
+            <button
+              type="submit"
+              className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
+              disabled={!typedName}
+            >
               Look Up
             </button>
           </form>
         ) : (
           <input
             ref={search}
-            className="sheet-search"
+            className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
             type="search"
-            placeholder="Search repositories"
+            placeholder="Search Repositories"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Search repositories"
+            aria-label="Search Repositories"
           />
         )}
-        <div className="repo-list" role="listbox" aria-label="Repositories">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-6 pb-4"
+          role="listbox"
+          aria-label="Repositories"
+        >
           {mode === "mine" && repos.status === "loading" && (
-            <p className="repo-note">Loading repositories…</p>
+            <ListSkeleton label="Loading Repositories" />
           )}
           {mode === "mine" && repos.status === "error" && (
-            <p className="repo-note error">{repos.message}</p>
+            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
+              {repos.message}
+            </p>
           )}
           {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
-            <p className="repo-note">
+            <p className="py-4 text-muted">
               {needle ? "No repositories match." : "No repositories here."}
             </p>
           )}
           {mode === "public" && detail?.status === "loading" && (
-            <p className="repo-note">Looking up {typedName}…</p>
+            <ListSkeleton label="Looking Up Repository" rows={1} />
           )}
           {mode === "public" && detail?.status === "error" && (
-            <p className="repo-note error">{detail.message}</p>
+            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
+              {detail.message}
+            </p>
           )}
           {mode === "public" && !detail && (
-            <p className="repo-note">
+            <p className="py-4 text-muted">
               Type the repository as it appears on GitHub, then look it up.
             </p>
           )}
@@ -205,16 +222,22 @@ export function ConnectRepoSheet({
               role="option"
               aria-selected={selected?.githubId === repo.githubId}
               disabled={connected.has(repo.fullName.toLowerCase())}
-              className={`repo-row ${selected?.githubId === repo.githubId ? "selected" : ""}`}
+              className={`flex w-full items-baseline justify-between gap-4 border border-transparent border-b-line px-3 py-2.5 text-left text-ink hover:bg-surface-2 disabled:cursor-default disabled:opacity-55 ${selected?.githubId === repo.githubId ? "border-mint bg-surface-2" : ""}`}
               onClick={() => choose(repo)}
             >
-              <span className="repo-name">{repo.name}</span>
-              <span className="repo-meta">
+              <span className="truncate font-mono text-sm font-medium">{repo.name}</span>
+              <span className="flex shrink-0 gap-2.5 font-mono text-sm text-dim">
                 {connected.has(repo.fullName.toLowerCase()) && (
-                  <span className="repo-badge connected">connected</span>
+                  <span className="text-sm tracking-widest text-warning uppercase text-mint">
+                    connected
+                  </span>
                 )}
-                {repo.private && <span className="repo-badge">private</span>}
-                {repo.archived && <span className="repo-badge">archived</span>}
+                {repo.private && (
+                  <span className="text-sm tracking-widest text-warning uppercase">private</span>
+                )}
+                {repo.archived && (
+                  <span className="text-sm tracking-widest text-warning uppercase">archived</span>
+                )}
                 {repo.language && <span>{repo.language}</span>}
                 <span>{formatAgo(repo.pushedAt)}</span>
               </span>
@@ -222,19 +245,26 @@ export function ConnectRepoSheet({
           ))}
         </div>
         {selected && (
-          <footer className="sheet-foot">
-            <div className="repo-detail">
-              <div className="repo-detail-name mono">{selected.fullName}</div>
-              <div className="repo-detail-line">
-                <span className="mono">{selected.defaultBranch}</span>
-                <span className="repo-detail-sep" aria-hidden="true">
+          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-surface-2 px-6 py-4">
+            <div className="min-w-0">
+              <div className="text-sm text-ink font-mono">{selected.fullName}</div>
+              <div className="mt-1 flex gap-2 text-sm text-muted">
+                <span className="font-mono">{selected.defaultBranch}</span>
+                <span className="text-line-strong" aria-hidden="true">
                   ·
                 </span>
                 <span>{detailText(detail)}</span>
               </div>
-              {submit.error && <div className="repo-detail-error">{submit.error}</div>}
+              {submit.error && (
+                <div className="mt-1.5 font-mono text-sm text-danger">{submit.error}</div>
+              )}
             </div>
-            <button type="button" className="btn-primary" disabled={submit.busy} onClick={connect}>
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={submit.busy}
+              onClick={connect}
+            >
               {submit.busy ? "Connecting…" : "Connect"}
             </button>
           </footer>

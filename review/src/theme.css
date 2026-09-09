@@ -1,0 +1,88 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-mint: var(--mint);
+  --color-mint-bright: var(--mint-bright);
+  --color-danger: var(--red);
+  --color-warning: var(--ochre);
+  --font-mono: var(--mono);
+  --font-sans: var(--sans);
+}
+
+@custom-variant site (&:where(.sb, .sb *));
+
+:root {
+  color-scheme: dark;
+  --background: hsl(30 6% 4%);
+  --foreground: hsl(30 8% 93%);
+  --fg-2: hsl(30 6% 80%);
+  --card: hsl(30 5% 6%);
+  --viewer-panel: hsl(30 5% 8%);
+  --muted: hsl(30 5% 8%);
+  --muted-fg: hsl(30 5% 60%);
+  --faint: hsl(30 5% 40%);
+  --border: hsl(30 5% 14%);
+  --border-soft: hsl(30 5% 10%);
+  --accent: hsl(30 5% 13%);
+  --brand: hsl(38 95% 55%);
+  --brand-dark: hsl(32 70% 38%);
+  --brand-10: hsla(38 95% 55% / 0.1);
+  --brand-40: hsla(38 95% 55% / 0.4);
+  --ok: hsl(150 40% 45%);
+  --ok-10: hsla(150 40% 45% / 0.08);
+  --ok-45: hsla(150 40% 45% / 0.45);
+  --bad: hsl(0 72% 45%);
+  --bad-fg: hsl(0 70% 62%);
+  --bad-10: hsla(0 72% 45% / 0.1);
+  --bad-50: hsla(0 72% 45% / 0.5);
+  --warn: hsl(32 70% 38%);
+  --warn-fg: hsl(38 80% 60%);
+  --live: hsl(38 95% 55%);
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: var(--mono);
+}
+
+/* The site and standalone viewer share primitives with distinct color and font tokens. */
+.sb {
+  color-scheme: dark;
+  --bg: #09100f;
+  --surface: #0d1715;
+  --surface-2: #111d1a;
+  --surface-3: #15231f;
+  --ink: #eef4ed;
+  --muted: #91a39b;
+  --dim: #60736b;
+  --line: #263631;
+  --line-strong: #3a5148;
+  --mint: #8ee6bd;
+  --mint-bright: #b7f4d6;
+  --ochre: #d6ad67;
+  --red: #ee897d;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Manrope", system-ui, -apple-system, sans-serif;
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --fg-2: var(--ink);
+  --card: var(--surface);
+  --viewer-panel: var(--surface);
+  --muted-fg: var(--muted);
+  --faint: var(--dim);
+  --border: var(--line);
+  --border-soft: var(--line);
+  --accent: var(--surface-2);
+  --brand: var(--mint);
+  --brand-dark: var(--mint);
+  --brand-10: color-mix(in srgb, var(--mint) 10%, transparent);
+}

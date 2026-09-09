@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "../providers.js";
+import { generationReferenceSchema } from "../site/generation-settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
 
 export const MAX_CANDIDATES_PER_RUN = 10_000;
@@ -40,9 +41,9 @@ const runVersionSchema = z
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 
 const authoringSchema = z.object({
-  provider: z.literal("openai-codex"),
+  provider: z.enum(["openai-codex", "openai"]),
   model: z.string().min(1),
-  reasoningEffort: z.literal("high"),
+  reasoningEffort: z.enum(["low", "medium", "high"]),
 });
 
 export const MAX_EXCLUDED_RUNS = 100;
@@ -57,6 +58,7 @@ export const runRequestSchema = z.object({
   candidateCounts: candidateCountsSchema,
   excludeRuns: excludeRunsSchema.optional(),
   authoring: authoringSchema,
+  generation: generationReferenceSchema.optional(),
   version: runVersionSchema,
 });
 

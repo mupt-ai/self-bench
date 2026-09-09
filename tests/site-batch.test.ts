@@ -88,7 +88,7 @@ async function fixture(options: { failStart?: boolean; failAttach?: boolean; sha
       cancelled.push(runId);
     },
   });
-  const taskRoutes = createTaskRoutes({ users, repos, runs, tasks, artifacts });
+  const taskRoutes = createTaskRoutes({ users, repos, tasks, artifacts });
   const server = createServer(async (request, response) => {
     try {
       // Auth boundary equivalent to startApi: no user, no site route invocation.
@@ -278,7 +278,8 @@ test("partial artifacts never invent a rejection or overwrite a known verdict wh
   expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
   expect(rows.find((row) => row.candidateId === "pending")?.reason).toBeUndefined();
   expect(rows.find((row) => row.candidateId === "failed")?.pipelineStatus).toBe("rejected");
-  expect((await f.request(ROOT.replace("/batches", "/sync"), { method: "POST" })).status).toBe(200);
+  f.setStatus({ runId, phase: "authoring" });
+  expect((await f.request(`${ROOT}/${runId}`)).status).toBe(200);
   rows = await f.tasks.listForRepo(f.repo.id);
   expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
   expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");

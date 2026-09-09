@@ -1,5 +1,25 @@
 name: selfbench
 
+# Shared by the API and the worker. Provider control credentials and the GitHub OAuth secret
+# are deliberately not here: they go only to the service that needs them.
+x-selfbench-environment: &selfbench-environment
+  SELFBENCH_API_HOST: 0.0.0.0
+  SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
+  SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
+  SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
+  SELFBENCH_ARTIFACT_BACKEND: local
+  SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
+  SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
+  SELFBENCH_DOCKER_IMAGE: selfbench-sandbox:local
+  SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
+  SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
+  SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
+  SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
+  SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+  # The site database: users, connected repos, and evaluation records. Migrations run at startup.
+  SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
+  SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
+
 services:
   postgres:
     image: postgres:17.6-bookworm
@@ -11,6 +31,20 @@ services:
       - temporal-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  site-postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: selfbench
+      POSTGRES_USER: selfbench
+      POSTGRES_PASSWORD: selfbench
+    volumes:
+      - site-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selfbench"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -37,21 +71,19 @@ services:
       args:
         SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     depends_on:
-      - temporal
-    environment: &selfbench-environment
-      SELFBENCH_API_HOST: 0.0.0.0
-      SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
-      SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
-      SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
-      SELFBENCH_ARTIFACT_BACKEND: local
-      SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
-      SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
-      SELFBENCH_DOCKER_IMAGE: selfbench-sandbox:local
-      SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
-      SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
-      SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
-      SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
-      SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+      temporal:
+        condition: service_started
+      site-postgres:
+        condition: service_healthy
+    environment:
+      <<: *selfbench-environment
+      # selfbench.dev sign-in. Set the GitHub OAuth app in .env to serve the signed-in site;
+      # leave GITHUB_OAUTH_CLIENT_ID unset to keep the bearer-token Ledger.
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      SELFBENCH_SESSION_SECRET: ${SELFBENCH_SESSION_SECRET:-}
+      # The origin browsers use; it forms the OAuth callback URL, so it must match the OAuth app.
+      SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -66,7 +98,10 @@ services:
         SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
     command: ["node", "dist/temporal/worker-main.js"]
     depends_on:
-      - temporal
+      temporal:
+        condition: service_started
+      site-postgres:
+        condition: service_healthy
     environment:
       <<: *selfbench-environment
       GH_TOKEN: ${GH_TOKEN:-}
@@ -91,4 +126,5 @@ services:
 
 volumes:
   artifacts:
+  site-postgres:
   temporal-postgres:

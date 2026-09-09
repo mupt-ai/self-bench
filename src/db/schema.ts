@@ -13,6 +13,12 @@ import {
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
+export const evaluationRecords = pgTable("evaluation_records", {
+  path: text("path").primaryKey(),
+  version: integer("version").notNull(),
+  sealed: text("sealed").notNull(),
+});
+
 /** GitHub accounts that have signed in. The token is sealed; a database read alone is useless. */
 export const users = pgTable(
   "users",
@@ -87,7 +93,7 @@ export const repos = pgTable(
   (table) => [index("repos_org_id").on(table.orgId)],
 );
 
-/** Pipeline runs whose candidates count as this repository's tasks (historical attachments). */
+/** Repository ownership for batch generation, including batches with no candidates yet. */
 export const repoRuns = pgTable(
   "repo_runs",
   {
@@ -135,6 +141,8 @@ export const tasks = pgTable(
     workflowId: text("workflow_id"),
     startedBy: bigint("started_by", { mode: "number" }).references(() => users.id),
     startedAt: timestamptz("started_at"),
+    /** Retained across sync and run detachment; artifacts and historical results stay intact. */
+    deletedAt: timestamptz("deleted_at"),
     syncedAt: timestamptz("synced_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },

@@ -1,4 +1,4 @@
-import { cp, mkdir } from "node:fs/promises";
+import { copyFile, cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
@@ -9,6 +9,11 @@ const programs = ["author", "check", "verifier"] as const;
 const extensions = ["authoring", "verifier"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
+await mkdir(join(outputDirectory, "evaluation"), { recursive: true });
+await copyFile(
+  join(root, "src/evaluation/harbor_e2b.py"),
+  join(outputDirectory, "evaluation/harbor_e2b.py"),
+);
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own

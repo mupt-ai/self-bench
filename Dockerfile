@@ -28,6 +28,7 @@ WORKDIR /app
 RUN mkdir -p /var/lib/selfbench/artifacts && chown -R node:node /var/lib/selfbench
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/src/extensions ./src/extensions
 COPY --from=build /app/src/skills ./src/skills
 COPY package.json ./package.json

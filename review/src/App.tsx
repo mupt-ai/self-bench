@@ -1,7 +1,8 @@
 import React from "react";
+import { FilesPanel } from "./components/FilesPanel";
 import { Masthead, type Mode } from "./components/Masthead";
 import { Register } from "./components/Register";
-import { FilesPanel, Workbench } from "./components/Workbench";
+import { Workbench } from "./components/Workbench";
 import { openLocalSource } from "./sources/local";
 import { openRunSource } from "./sources/run";
 import { createApiClient, type TaskSource } from "./sources/types";
@@ -127,7 +128,7 @@ export function App() {
   }, [selectedId, runId, source]);
 
   return (
-    <div className="ledger">
+    <div className="grid h-full grid-rows-[56px_minmax(0,1fr)] [--tasks-w:360px] [--files-w:280px] max-[1100px]:[--tasks-w:280px] max-[1100px]:[--files-w:230px] [&_a]:underline [&_a]:decoration-(--border) [&_a]:underline-offset-3 [&_a:hover]:decoration-(--brand) [&_:focus-visible]:outline [&_:focus-visible]:outline-(--brand) [&_:focus-visible]:-outline-offset-1 motion-reduce:[&_*]:transition-none">
       <Masthead
         info={info}
         needsToken={needsToken}
@@ -143,7 +144,7 @@ export function App() {
         error={error}
       />
       <div
-        className={`deck ${collapsed ? "tasks-collapsed" : ""} ${filesCollapsed ? "files-collapsed" : ""}`}
+        className={`grid min-h-0 grid-cols-[var(--tasks-w)_var(--files-w)_minmax(0,1fr)] ${collapsed ? "[--tasks-w:40px]" : ""} ${filesCollapsed ? "[--files-w:40px]" : ""}`}
       >
         <Register
           rows={rows}
@@ -166,8 +167,8 @@ export function App() {
               collapsed={filesCollapsed}
               onToggle={() => setFilesCollapsed(!filesCollapsed)}
             />
-            <div className="sheet">
-              <p className="workbench-empty">
+            <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)]">
+              <p className="px-8 py-[26px] text-(--muted-fg)">
                 {source
                   ? "Select a task on the left to open its Harbor environment."
                   : needsToken && !token

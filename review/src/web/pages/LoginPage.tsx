@@ -1,5 +1,5 @@
-import { Navigate, useSearchParams } from "react-router";
-import { Lockup } from "../Lockup";
+import { Link, Navigate, useSearchParams } from "react-router";
+import { DariMark } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
 
 const ERRORS: Record<string, string> = {
@@ -9,31 +9,41 @@ const ERRORS: Record<string, string> = {
 };
 
 export function LoginPage() {
-  useDocumentTitle("Sign in — self-bench by dari.dev");
+  useDocumentTitle("Sign In — self-bench by dari.dev");
   const { session } = useSession();
   const [params] = useSearchParams();
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
   return (
-    <div className="page login-page">
-      <div className="wrap">
-        <Lockup />
-        <div className="card">
-          <div className="eyebrow">Sign in</div>
-          <h1>Continue to self-bench</h1>
-          <p className="sub">
-            Build verified coding tasks from your repository’s pull requests, review them, and run
-            evals across harness, model, and thinking levels.
-          </p>
-          <a className="btn" href="/auth/github">
+    <div className="flex min-h-svh items-center justify-center px-6 py-12">
+      <div className="w-full max-w-[320px]">
+        <div className="flex flex-col items-center text-center">
+          <Link to="/" aria-label="self-bench Home" className="mb-5 block [&_svg]:size-14">
+            <DariMark />
+          </Link>
+          <h1 className="font-mono text-3xl font-medium leading-tight tracking-[-0.06em] text-ink">
+            self-bench
+          </h1>
+          <p className="mt-2 font-mono text-sm text-muted">by dari.dev</p>
+          <a
+            className="mt-10 flex h-12 w-full items-center justify-center gap-3 border border-mint bg-mint font-mono text-sm font-medium text-bg hover:bg-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
+            href="/auth/github"
+          >
             <GitHubMark />
             Continue with GitHub
           </a>
-          {error && <p className="error">{ERRORS[error] ?? ERRORS.github}</p>}
+          {error && (
+            <p
+              role="alert"
+              className="mt-5 w-full border border-danger/30 bg-danger/5 px-4 py-3 text-left font-mono text-sm leading-6 text-danger"
+            >
+              {ERRORS[error] ?? ERRORS.github}
+            </p>
+          )}
         </div>
-        <div className="foot">
+        <div className="mt-8 flex items-center justify-center gap-4 font-mono text-sm text-muted [&_a:hover]:text-ink">
           <a href="https://dari.dev">dari.dev</a>
-          <span className="dot" aria-hidden="true">
+          <span className="text-line-strong" aria-hidden="true">
             ·
           </span>
           <a href="https://github.com/mupt-ai/self-bench">GitHub</a>

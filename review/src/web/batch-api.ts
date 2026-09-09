@@ -1,4 +1,5 @@
 import type { BatchStatus } from "../../../src/site/batch-progress";
+import { checkSessionExpired } from "../session-expired";
 
 export type { BatchStatus };
 export interface BatchRepoId {
@@ -19,6 +20,7 @@ const root = ({ org, fullName }: BatchRepoId) =>
   `/api/orgs/${encodeURIComponent(org)}/repos/${fullName.split("/").map(encodeURIComponent).join("/")}/batches`;
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { "content-type": "application/json" } });
+  checkSessionExpired(response);
   const body = await response.json();
   if (!response.ok)
     throw new Error(`${body.error ?? response.status}${body.runId ? ` (${body.runId})` : ""}`);

@@ -70,4 +70,5 @@ export async function selfBenchCandidateWorkflow(
   return result;
 }
 
+export { selfBenchEvaluationWorkflow } from "../evaluation/workflow.js";
 export { executeRun } from "./workflow/run.js";

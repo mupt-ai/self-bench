@@ -10,7 +10,63 @@ export interface GitHubProfile {
   readonly avatarUrl?: string;
 }
 
-export class GitHubOAuthError extends Error {}
+export class GitHubOAuthError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+export class GitHubIdentityError extends Error {
+  constructor(readonly status: 401 | 403 | 429 | 503) {
+    super(
+      status === 401
+        ? "GitHub authorization expired. Sign in again."
+        : status === 403
+          ? "GitHub denied the identity check. Try again later."
+          : status === 429
+            ? "GitHub rate limited the identity check. Try again later."
+            : "GitHub identity could not be verified. Try again later.",
+    );
+  }
+}
+
+export async function validateGitHubIdentity(
+  config: Pick<AuthConfig, "githubApiUrl">,
+  token: string,
+  subject: number,
+  fetchImpl: typeof fetch,
+): Promise<void> {
+  try {
+    const response = await fetchImpl(`${config.githubApiUrl}/user`, {
+      headers: apiHeaders(token),
+      signal: AbortSignal.timeout(5_000),
+      redirect: "error",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new GitHubIdentityError(
+        response.status === 401 || response.status === 403 || response.status === 429
+          ? response.status
+          : 503,
+      );
+    }
+    const profile: unknown = await response.json();
+    if (
+      !profile ||
+      typeof profile !== "object" ||
+      !("id" in profile) ||
+      !Number.isSafeInteger(profile.id)
+    )
+      throw new GitHubIdentityError(503);
+    if (profile.id !== subject) throw new GitHubIdentityError(401);
+  } catch (error) {
+    if (error instanceof GitHubIdentityError) throw error;
+    throw new GitHubIdentityError(503);
+  }
+}
 
 type FetchLike = typeof fetch;
 
@@ -65,7 +121,8 @@ export async function fetchProfile(
   fetchImpl: FetchLike,
 ): Promise<GitHubProfile> {
   const response = await fetchImpl(`${config.githubApiUrl}/user`, { headers: apiHeaders(token) });
-  if (!response.ok) throw new GitHubOAuthError(`GitHub /user failed (${response.status})`);
+  if (!response.ok)
+    throw new GitHubOAuthError(`GitHub /user failed (${response.status})`, response.status);
   const user = (await response.json()) as {
     id?: number;
     login?: string;
@@ -103,7 +160,10 @@ export async function fetchOrgMemberships(
       { headers: apiHeaders(token) },
     );
     if (!response.ok) {
-      throw new GitHubOAuthError(`GitHub /user/memberships/orgs failed (${response.status})`);
+      throw new GitHubOAuthError(
+        `GitHub /user/memberships/orgs failed (${response.status})`,
+        response.status,
+      );
     }
     const rows = (await response.json()) as {
       role?: string;

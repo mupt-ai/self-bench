@@ -13,22 +13,12 @@ import {
 import { buildRunRequest } from "./api/run-request.js";
 import { queryStatus } from "./api/status.js";
 import { handleViewerRoute } from "./api/viewer-routes.js";
-import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
+import { createArtifactStore } from "./artifacts.js";
 import type { AuthConfig } from "./auth/config.js";
-import { createSiteAuth, type SiteAuth } from "./auth/routes.js";
-import { createUserStore } from "./auth/users.js";
+import { sendIdentityError } from "./auth/routes.js";
+import { sendExpiredSession } from "./auth/session-expired.js";
 import type { SelfBenchConfig } from "./config.js";
-import { type OpenDatabase, openDatabase } from "./db/client.js";
-import type { BatchStatus } from "./site/batch-progress.js";
-import { type BatchRoutes, createBatchRoutes } from "./site/batch-routes.js";
-import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
-import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
-import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
-import { createRepoStore } from "./site/repo-store.js";
-import { createRunStore } from "./site/run-store.js";
-import { createTaskStore } from "./site/task-store.js";
-import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
-import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
+import { openSite } from "./site/runtime.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -73,7 +63,7 @@ export async function startApi(
         return;
       }
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
-      const user = site ? await site.auth.authenticate(request) : undefined;
+      const user = site ? await site.auth.authenticate(request, config.apiToken) : undefined;
       const allowed = site
         ? (config.apiToken !== undefined && bearerMatches(request, config.apiToken)) ||
           user !== undefined
@@ -86,6 +76,7 @@ export async function startApi(
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
+        if (await site.evaluations.handle(request, url, response, user)) return;
         if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
@@ -181,6 +172,8 @@ export async function startApi(
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }
+      if (options.auth && sendIdentityError(response, error, options.auth.publicUrl)) return;
+      if (options.auth && sendExpiredSession(response, error, options.auth.publicUrl)) return;
       sendApiError(response, error);
     }
   });
@@ -195,73 +188,6 @@ export async function startApi(
     );
     await connection.close();
     await site?.database.close();
-  };
-}
-
-interface Site {
-  readonly auth: SiteAuth;
-  readonly github: GitHubRepoRoutes;
-  readonly repos: ConnectedRepoRoutes;
-  readonly tasks: TaskRoutes;
-  readonly batches: BatchRoutes;
-  readonly pullRequests: PullRequestRoutes;
-  readonly database: OpenDatabase;
-}
-
-async function openSite(
-  auth: AuthConfig,
-  config: SelfBenchConfig,
-  client: Client,
-  artifacts: ArtifactStore,
-): Promise<Site> {
-  const database = await openDatabase(auth.databaseUrl);
-  const users = createUserStore(database.db, { secret: auth.sessionSecret });
-  const repos = createRepoStore(database.db);
-  const runs = createRunStore(database.db);
-  const tasks = createTaskStore(database.db);
-  return {
-    auth: createSiteAuth({ config: auth, users }),
-    github: createGitHubRepoRoutes({ config: auth, users }),
-    repos: createConnectedRepoRoutes({ config: auth, users, repos }),
-    batches: createBatchRoutes({
-      config,
-      auth,
-      users,
-      repos,
-      runs,
-      tasks,
-      artifacts,
-      start: async (input) => {
-        await client.workflow.start(selfBenchRunWorkflow, {
-          workflowId: input.runId,
-          taskQueue: config.temporal.taskQueue,
-          args: [input],
-          workflowExecutionTimeout: "14 days",
-        });
-      },
-      status: async (runId) => (await queryStatus(client.workflow.getHandle(runId))) as BatchStatus,
-      cancel: async (runId) => {
-        await client.workflow.getHandle(runId).cancel();
-      },
-    }),
-    tasks: createTaskRoutes({
-      users,
-      repos,
-      runs,
-      tasks,
-      artifacts,
-      status: temporalStatus(client),
-    }),
-    pullRequests: createPullRequestRoutes({
-      config,
-      auth,
-      users,
-      repos,
-      tasks,
-      artifacts,
-      start: temporalStarter(client, config.temporal.taskQueue),
-    }),
-    database,
   };
 }
 

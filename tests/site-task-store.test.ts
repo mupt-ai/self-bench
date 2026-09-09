@@ -69,7 +69,6 @@ describe("postgres task store", () => {
       { repoId: repo.id, total: 2, accepted: 1, needsReview: 0, rejected: 1, lastPr: 9 },
     ]);
     expect((await store.clearReview(renamed?.id ?? -1)).review).toBeUndefined();
-    expect(await store.deleteForRun(repo.id, "run-a")).toBe(2);
-    expect(await store.listForRepo(repo.id)).toEqual([]);
+    expect(await store.listForRepo(repo.id)).toHaveLength(2);
   });
 });

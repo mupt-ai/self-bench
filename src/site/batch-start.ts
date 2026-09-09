@@ -32,7 +32,10 @@ export async function prepareBatch(options: {
     { headers: apiHeaders(token), signal: AbortSignal.timeout(15_000) },
   );
   if (!response.ok)
-    throw new GitHubOAuthError(`Cannot resolve repository revision (${response.status})`);
+    throw new GitHubOAuthError(
+      `Cannot resolve repository revision (${response.status})`,
+      response.status,
+    );
   const commit = commitSchema.parse(((await response.json()) as { sha?: unknown }).sha);
   const runId = `batch-${randomUUID()}`;
   // A real, readable empty local-session input. collectRunProvenance augments this with

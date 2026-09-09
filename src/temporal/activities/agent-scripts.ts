@@ -30,7 +30,7 @@ export function modalAgentScript(extension: string, tool: string): string {
 clone_source
 cd /work/repo
 run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
-  --extension /work/${extension} --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --extension /work/${extension} --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking "\${AUTHOR_THINKING:-high}" \\
   --tools read,bash,grep,find,ls,${tool} "$(cat /work/prompt.txt)"`;
 }
 /**
@@ -49,7 +49,7 @@ ${promptArguments()}
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
   --skill /work/selfbench-skill --extension /work/authoring.js \\
-  --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking "\${AUTHOR_THINKING:-high}" \\
   --tools read,bash,grep,find,ls,verify,submit_task "\${prompt_args[@]}" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"
@@ -73,7 +73,7 @@ cd /work/repo
 ${promptArguments()}
 agent_status=0
 run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
-  --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking high \\
+  --extension /work/verifier.js --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking "\${AUTHOR_THINKING:-high}" \\
   --tools read,grep,find,ls,accept_task,submit_suggestions,reject_task "\${prompt_args[@]}" || agent_status=$?
 collect_session
 echo "[selfbench] pi exited with $agent_status"

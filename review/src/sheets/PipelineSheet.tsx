@@ -1,5 +1,15 @@
 import React from "react";
 import { Block } from "../components/Script";
+import {
+  loading,
+  notice,
+  prose,
+  sheetBody,
+  sheetTable,
+  tableCode,
+  tableColumn,
+  viewerLink,
+} from "../components/viewer-ui";
 import { formatBytes, formatTime } from "../lib/format";
 import {
   type ArtifactSummary,
@@ -14,17 +24,17 @@ import type { TaskSource } from "../sources/types";
 import type { ArtifactEntry, ArtifactGroup, CandidateArtifacts, TaskRow } from "../types";
 
 const GROUPS: [ArtifactGroup, string][] = [
-  ["provenance", "provenance · the human request"],
-  ["authoring", "authoring · definition and source bundle"],
-  ["environments", "environment authoring · compiled bundles"],
-  ["audits", "audit · static gates"],
-  ["environment-preflights", "preflight · smoke and nop in the built image"],
-  ["validation", "validation · Harbor nop and oracle"],
-  ["validation-repairs", "validation repair"],
-  ["verification", "verification"],
-  ["verify", "worker verify"],
-  ["reviews", "coupling review"],
-  ["repairs", "review repair"],
+  ["provenance", "Provenance · The Human Request"],
+  ["authoring", "Authoring · Definition and Source Bundle"],
+  ["environments", "Environment Authoring · Compiled Bundles"],
+  ["audits", "Audit · Static Gates"],
+  ["environment-preflights", "Preflight · Smoke and nop in the Built Image"],
+  ["validation", "Validation · Harbor nop and oracle"],
+  ["validation-repairs", "Validation Repair"],
+  ["verification", "Verification"],
+  ["verify", "Worker Verify"],
+  ["reviews", "Coupling Review"],
+  ["repairs", "Review Repair"],
 ];
 
 export function PipelineSheet({
@@ -75,28 +85,30 @@ export function PipelineSheet({
     };
   }, [artifacts, source]);
 
-  if (!artifacts) return <p className="loading">listing pipeline artifacts</p>;
+  if (!artifacts) return <p className={loading}>listing pipeline artifacts</p>;
   const total = Object.values(artifacts.groups).reduce((sum, list) => sum + list.length, 0);
   return (
-    <div className="sheet-body">
+    <div className={sheetBody}>
       {row.reason && (
-        <Block title="final reason" detail={row.stage ?? row.status}>
-          <pre className="prose">{row.reason}</pre>
+        <Block title="Final Reason" detail={row.stage ?? row.status}>
+          <pre className={prose}>{row.reason}</pre>
         </Block>
       )}
-      {total === 0 && <p className="notice">No artifacts recorded for this candidate.</p>}
+      {total === 0 && (
+        <p className={`${notice} site:p-0!`}>No artifacts recorded for this candidate.</p>
+      )}
       {GROUPS.map(([group, title]) => {
         const entries = artifacts.groups[group] ?? [];
         if (entries.length === 0) return null;
         return (
           <Block key={group} title={title} detail={`${entries.length}`}>
-            <table className="sheet-table">
+            <table className={sheetTable}>
               <thead>
                 <tr>
-                  <th className="col">artifact</th>
-                  <th className="col">size</th>
-                  <th className="col">written</th>
-                  <th className="col">what it says</th>
+                  <th className={tableColumn}>Artifact</th>
+                  <th className={tableColumn}>Size</th>
+                  <th className={tableColumn}>Written</th>
+                  <th className={tableColumn}>What It Says</th>
                 </tr>
               </thead>
               <tbody>
@@ -106,10 +118,10 @@ export function PipelineSheet({
                   const tail = entry.key.replace(`runs/${artifacts.runId}/${group}/`, "");
                   return (
                     <tr key={entry.key}>
-                      <td className="code">
+                      <td className={tableCode}>
                         <button
                           type="button"
-                          className="link"
+                          className={viewerLink}
                           onClick={() =>
                             bundle
                               ? onOpenBundle(entry.key)
@@ -119,11 +131,19 @@ export function PipelineSheet({
                           {tail}
                         </button>
                       </td>
-                      <td className="num dim">{formatBytes(entry.sizeBytes)}</td>
-                      <td className="nowrap dim">{formatTime(entry.updatedAt)}</td>
-                      <td className={`code ${summary?.tone ?? ""}`}>
+                      <td className="!text-right whitespace-nowrap tabular-nums site:!font-mono text-(--muted-fg) site:text-dim">
+                        {formatBytes(entry.sizeBytes)}
+                      </td>
+                      <td className="whitespace-nowrap site:!font-mono text-(--muted-fg) site:text-dim">
+                        {formatTime(entry.updatedAt)}
+                      </td>
+                      <td
+                        className={`${tableCode} ${({ ok: "!text-(--ok) site:!text-mint", bad: "!text-(--bad-fg) site:!text-danger", warn: "!text-(--warn-fg) site:!text-warning" })[summary?.tone as "ok" | "bad" | "warn"] ?? ""}`}
+                      >
                         {bundle ? (
-                          <span className="dim">bundle · click to load its files</span>
+                          <span className="text-(--muted-fg) site:text-dim">
+                            bundle · click to load its files
+                          </span>
                         ) : (
                           (summary?.text ?? "")
                         )}

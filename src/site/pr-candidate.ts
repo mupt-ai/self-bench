@@ -58,7 +58,8 @@ export async function candidateFromPullRequest(
       headers: apiHeaders(token),
     });
     if (response.status === 404) throw new PullRequestError("pull request not found", 404);
-    if (!response.ok) throw new GitHubOAuthError(`GitHub ${path} failed (${response.status})`);
+    if (!response.ok)
+      throw new GitHubOAuthError(`GitHub ${path} failed (${response.status})`, response.status);
     return (await response.json()) as Record<string, unknown>;
   };
   const pr = await get(`/repos/${fullName}/pulls/${number}`);

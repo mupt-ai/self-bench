@@ -8,6 +8,34 @@
       "when": 1788564991375,
       "tag": "0000_glossy_johnny_blaze",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788659606426,
+      "tag": "0001_evaluation_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788716380068,
+      "tag": "0002_task_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788717620218,
+      "tag": "0003_drop_repo_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788993718151,
+      "tag": "0004_preserve_batch_runs",
+      "breakpoints": true
     }
   ]
 }

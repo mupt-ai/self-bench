@@ -4,6 +4,7 @@ import { buildCommit } from "../build-metadata.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { Candidate, CandidateWorkflowInput } from "../contracts.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
+import type { GenerationReference } from "./generation-settings.js";
 import type { PullRequestCandidate } from "./pr-candidate.js";
 
 /** Starts one candidate workflow; the Temporal client in production, a recorder in tests. */
@@ -16,6 +17,8 @@ export interface TaskStartOptions {
   readonly repository: { readonly fullName: string; readonly defaultBranch: string };
   readonly pullRequest: PullRequestCandidate;
   readonly attempt: number;
+  readonly runId?: string;
+  readonly generation?: GenerationReference;
 }
 
 export interface StartedTask {
@@ -40,7 +43,9 @@ export function taskRunId(fullName: string, pr: number, attempt: number): string
  */
 export async function startTaskFromPullRequest(options: TaskStartOptions): Promise<StartedTask> {
   const { config, artifacts, pullRequest, repository } = options;
-  const runId = taskRunId(repository.fullName, pullRequest.candidate.sourcePr, options.attempt);
+  const runId =
+    options.runId ??
+    taskRunId(repository.fullName, pullRequest.candidate.sourcePr, options.attempt);
   const runProvenance = await artifacts.put(
     `runs/${runId}/input/provenance.jsonl`,
     Buffer.from(`${JSON.stringify(pullRequest.message)}\n`),
@@ -66,6 +71,19 @@ export async function startTaskFromPullRequest(options: TaskStartOptions): Promi
     selfbenchCommit: buildCommit,
   });
   if ("replay" in run) throw new Error("unexpected replay request");
+  if (options.generation) {
+    run.generation = options.generation;
+    run.authoring = {
+      provider: "openai",
+      model: options.generation.settings.authorModel,
+      reasoningEffort: options.generation.settings.reasoning,
+    };
+    run.version.executionBackend = options.generation.settings.sandbox;
+    run.version.harborEnvironment = options.generation.settings.sandbox;
+    run.version.sandboxImage =
+      options.generation.settings.sandbox === "modal" ? "node:22-bookworm" : config.execution.image;
+    delete run.version.sandboxTimeoutCapMs;
+  }
   const candidate: Candidate = { ...pullRequest.candidate, provenance: candidateProvenance };
   const workflowId = `${runId}/candidate/${candidate.candidateId}`;
   await options.start(workflowId, { run, candidate });

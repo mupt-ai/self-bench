@@ -1,3 +1,5 @@
+import { checkSessionExpired } from "../session-expired";
+
 export interface Repo {
   githubId: number;
   fullName: string;
@@ -31,6 +33,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { accept: "application/json", ...init?.headers },
   });
+  checkSessionExpired(response);
   if (!response.ok) {
     let detail = String(response.status);
     try {
@@ -112,19 +115,6 @@ export function formatAgo(iso: string | undefined, now = Date.now()): string {
   return iso.slice(0, 10);
 }
 
-/** A pipeline run whose candidates count as the repo's tasks. */
-export interface AttachedRun {
-  runId: string;
-  attachedBy: string;
-  attachedAt: string;
-}
-
-export interface ArchivedRun {
-  runId: string;
-  status: string;
-  startedAt?: string;
-}
-
 export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
 
 export interface TaskReview {
@@ -154,13 +144,24 @@ export interface TaskItem {
   startedAt?: string;
 }
 
-export async function addPullRequest(org: string, fullName: string, pr: string): Promise<TaskItem> {
+export async function addPullRequest(
+  org: string,
+  fullName: string,
+  pr: string,
+  generation?: import("../../../src/site/generation-settings").GenerationSettings,
+): Promise<TaskItem> {
   const body = await requestJson<{ task: TaskItem }>(`${repoPath(org, fullName)}/tasks/from-pr`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pr }),
+    body: JSON.stringify({ pr, ...(generation ? { generation } : {}) }),
   });
   return body.task;
+}
+
+export function fetchGenerationOptions(org: string, fullName: string) {
+  return requestJson<import("./GenerationFields").GenerationOptions>(
+    `${repoPath(org, fullName)}/generation-options`,
+  );
 }
 
 export interface RepoTaskCounts {
@@ -178,45 +179,23 @@ export async function fetchTaskCounts(org: string): Promise<Record<string, RepoT
   return body.counts;
 }
 
-export async function syncRepo(org: string, fullName: string): Promise<number> {
-  const body = await requestJson<{ synced: number }>(`${repoPath(org, fullName)}/sync`, {
-    method: "POST",
-  });
-  return body.synced;
-}
-
 const repoPath = (org: string, fullName: string) =>
   `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`;
 
-export async function fetchArchivedRuns(): Promise<ArchivedRun[]> {
-  return (await requestJson<{ runs: ArchivedRun[] }>("/api/runs")).runs;
+export async function fetchTasks(org: string, fullName: string): Promise<TaskItem[]> {
+  return (await requestJson<{ tasks: TaskItem[] }>(`${repoPath(org, fullName)}/tasks`)).tasks;
 }
 
-export async function fetchAttachedRuns(org: string, fullName: string): Promise<AttachedRun[]> {
-  return (await requestJson<{ runs: AttachedRun[] }>(`${repoPath(org, fullName)}/runs`)).runs;
-}
-
-export async function attachRun(
+export async function deleteTask(
   org: string,
   fullName: string,
   runId: string,
-): Promise<AttachedRun> {
-  const body = await requestJson<{ run: AttachedRun }>(`${repoPath(org, fullName)}/runs`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ runId }),
-  });
-  return body.run;
-}
-
-export async function detachRun(org: string, fullName: string, runId: string): Promise<void> {
-  await requestJson<{ ok: true }>(`${repoPath(org, fullName)}/runs/${runId}`, {
-    method: "DELETE",
-  });
-}
-
-export async function fetchTasks(org: string, fullName: string): Promise<TaskItem[]> {
-  return (await requestJson<{ tasks: TaskItem[] }>(`${repoPath(org, fullName)}/tasks`)).tasks;
+  taskId: string,
+): Promise<void> {
+  await requestJson<{ ok: true }>(
+    `${repoPath(org, fullName)}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function putReview(

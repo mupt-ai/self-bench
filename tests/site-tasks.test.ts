@@ -8,6 +8,7 @@ import { SESSION_COOKIE } from "../src/auth/session.js";
 import { sourcePullRequest } from "../src/site/task-sync.js";
 import { taskState } from "../src/site/tasks.js";
 import { clearArchivedListingCache } from "../src/viewer/archived.js";
+import { ingestTasks } from "./support/ingest-tasks.js";
 import {
   type AuthServer,
   cookieValue,
@@ -85,25 +86,17 @@ async function signedIn(artifacts: LocalArtifactStore) {
     headers,
     body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
   });
-  const attach = (runId: string) =>
-    server?.request(`${REPO}/runs`, { method: "POST", headers, body: JSON.stringify({ runId }) });
-  return { site: server, headers, attach };
+  const site = server;
+  const ingest = (runId: string) => ingestTasks(site, artifacts, "Mupt-AI/self-bench", runId);
+  return { site, headers, ingest };
 }
 
 const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";
 
 describe("task routes", () => {
-  test("attaching a run syncs its candidates into task rows", async () => {
-    const { site, headers, attach } = await signedIn(await seededStore());
-    const known = (await (await site.request("/api/runs", { headers })).json()) as {
-      runs: { runId: string }[];
-    };
-    expect(known.runs.map((run) => run.runId).sort()).toEqual(["run-one", "run-three", "run-two"]);
-
-    const attached = await attach("run-one");
-    expect(attached?.status).toBe(201);
-    expect(await attached?.json()).toMatchObject({ run: { runId: "run-one" }, synced: 2 });
-    expect((await attach("run-none"))?.status).toBe(404);
+  test("ingestion stores candidate tasks and scoped counts", async () => {
+    const { site, headers, ingest } = await signedIn(await seededStore());
+    expect(await ingest("run-one")).toEqual({ synced: 2 });
 
     const tasks = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: Record<string, unknown>[];
@@ -134,17 +127,12 @@ describe("task routes", () => {
         "Mupt-AI/self-bench": { total: 2, accepted: 0, needsReview: 1, rejected: 1, lastPr: 12 },
       },
     });
-
-    expect((await site.request(`${REPO}/runs/run-one`, { method: "DELETE", headers })).status).toBe(
-      200,
-    );
-    expect(await (await site.request(`${REPO}/tasks`, { headers })).json()).toEqual({ tasks: [] });
   });
 
   test("reads the newest nested definition and refreshes on sync", async () => {
     const store = await seededStore();
-    const { site, headers, attach } = await signedIn(store);
-    await attach("run-three");
+    const { site, headers, ingest } = await signedIn(store);
+    await ingest("run-three");
     const before = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { taskId: string; difficulty: string; state: string; sourcePr?: number }[];
     };
@@ -162,8 +150,8 @@ describe("task routes", () => {
       "application/json",
     );
     clearArchivedListingCache();
-    const sync = await site.request(`${REPO}/sync`, { method: "POST", headers });
-    expect(await sync.json()).toEqual({ synced: 1 });
+    const sync = await ingest("run-three");
+    expect(sync).toEqual({ synced: 1 });
     const after = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { state: string; reasonSummary?: string }[];
     };
@@ -174,8 +162,8 @@ describe("task routes", () => {
   });
 
   test("a human review overrides the pipeline verdict, survives a sync, and can be cleared", async () => {
-    const { site, headers, attach } = await signedIn(await seededStore());
-    await attach("run-one");
+    const { site, headers, ingest } = await signedIn(await seededStore());
+    await ingest("run-one");
     const review = await site.request(`${REPO}/tasks/run-one/task-good/review`, {
       method: "PUT",
       headers,
@@ -194,7 +182,7 @@ describe("task routes", () => {
       body: JSON.stringify({ decision: "maybe" }),
     });
     expect(bad.status).toBe(400);
-    await site.request(`${REPO}/sync`, { method: "POST", headers });
+    await ingest("run-one");
     const synced = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { taskId: string; state: string }[];
     };
@@ -213,11 +201,11 @@ describe("task routes", () => {
   });
 
   test("serves a task's artifacts only for synced tasks", async () => {
-    const { site, headers, attach } = await signedIn(await seededStore());
+    const { site, headers, ingest } = await signedIn(await seededStore());
     expect(
       (await site.request(`${REPO}/tasks/run-one/task-good/artifacts`, { headers })).status,
     ).toBe(404);
-    await attach("run-one");
+    await ingest("run-one");
     const found = await site.request(`${REPO}/tasks/run-one/task-good/artifacts`, { headers });
     expect(found.status).toBe(200);
     expect(await found.json()).toMatchObject({

@@ -102,6 +102,7 @@ export async function runVerifierRound(
                 },
                 environment: {
                   AUTHOR_MODEL: run.authoring.model,
+                  AUTHOR_THINKING: run.authoring.reasoningEffort,
                   SELFBENCH_TASK_DIRECTORY: "/work/task/harbor-task",
                   SELFBENCH_REPO_DIRECTORY: "/work/repo",
                   SELFBENCH_VERDICT_OUTPUT: "/work/verdict",

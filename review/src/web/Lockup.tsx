@@ -3,12 +3,7 @@ import { Link } from "react-router";
 /** The dari turtle mark, as shipped in the approved login mock. */
 export function DariMark() {
   return (
-    <svg
-      className="selfbench-dari"
-      viewBox="0 0 1024 1024"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <circle cx="512" cy="512" r="461.94" fill="#11241d" />
       <g fill="#eafff4">
         <path d="M227.174 643.267C309.13 501.04 353.3 382.247 461.711 379.747c100.278 6.927 172.975 162.686 217.376 263.52h110.942c-81.304-117.797-196.325-301.555-326.906-303.36-166.044-4.954-236.495 312.426-235.949 303.36" />
@@ -25,11 +20,16 @@ export function DariMark() {
 /** "self-bench" over "by dari.dev", beside the mark. Links home. */
 export function Lockup() {
   return (
-    <Link className="lockup" to="/">
+    <Link
+      className="mb-7 flex items-center justify-center gap-3 [&_svg]:size-9 [&_svg]:shrink-0 [&_strong]:font-mono [&_strong]:text-[22px] [&_strong]:leading-none [&_strong]:font-medium [&_strong]:tracking-[-0.06em] [&_strong]:text-ink"
+      to="/"
+    >
       <DariMark />
-      <span className="name">
+      <span className="flex flex-col items-start gap-[3px] leading-none">
         <strong>self-bench</strong>
-        <span className="by">by dari.dev</span>
+        <span className="font-mono text-xs font-medium tracking-[0.06em] text-mint">
+          by dari.dev
+        </span>
       </span>
     </Link>
   );

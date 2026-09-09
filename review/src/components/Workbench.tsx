@@ -6,8 +6,10 @@ import { FileSheet, type OpenFile } from "../sheets/FileSheet";
 import { PipelineSheet } from "../sheets/PipelineSheet";
 import type { TaskSource } from "../sources/types";
 import type { CandidateArtifacts, TaskFiles, TaskRow } from "../types";
+import { FilesPanel } from "./FilesPanel";
 import { FileTree } from "./FileTree";
 import { Stamp, stageLabel, toneFor } from "./Stamp";
+import { loading, notice, tabList, viewerField, tab as viewerTab } from "./viewer-ui";
 
 type Tab = "environment" | "pipeline" | "file";
 const TAIL_THRESHOLD_BYTES = 256 * 1024;
@@ -157,18 +159,18 @@ export function Workbench({
       <FilesPanel collapsed={filesCollapsed} onToggle={onToggleFiles} count={files?.files.length}>
         {files ? (
           files.files.length === 0 ? (
-            <p className="notice">no bundle files for this candidate</p>
+            <p className={notice}>no bundle files for this candidate</p>
           ) : (
             <FileTree files={files.files} current={openFile?.path ?? null} onOpen={openPath} />
           )
         ) : error ? (
-          <p className="notice bad">{error}</p>
+          <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{error}</p>
         ) : (
-          <p className="loading">loading files</p>
+          <p className={loading}>loading files</p>
         )}
       </FilesPanel>
-      <div className="sheet">
-        <div className="task-head">
+      <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-8 pt-[26px] [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:tracking-[-0.01em]">
           <h1>{row.id}</h1>
           {row.difficulty && <Stamp>{row.difficulty}</Stamp>}
           {(row.stage || row.status) && (
@@ -177,12 +179,15 @@ export function Workbench({
             </Stamp>
           )}
           {row.reasonSummary && (
-            <span className="meta reason" title={row.reason}>
+            <span
+              className="text-[13px] text-(--muted-fg) [&_b]:font-medium [&_b]:text-(--foreground) basis-full truncate"
+              title={row.reason}
+            >
               {row.reasonSummary}
             </span>
           )}
           {row.sourcePr ? (
-            <span className="meta">
+            <span className="text-[13px] text-(--muted-fg) [&_b]:font-medium [&_b]:text-(--foreground)">
               PR{" "}
               <a href={row.sourceUrl} target="_blank" rel="noreferrer">
                 #{row.sourcePr}
@@ -190,8 +195,8 @@ export function Workbench({
             </span>
           ) : null}
           {row.runner && (
-            <span className="meta">
-              runner <b className="mono">{row.runner}</b>
+            <span className="text-[13px] text-(--muted-fg) [&_b]:font-medium [&_b]:text-(--foreground)">
+              Runner <b className="font-mono text-[13px]">{row.runner}</b>
               {row.failToPass !== undefined && (
                 <>
                   {" · "}
@@ -200,12 +205,12 @@ export function Workbench({
               )}
             </span>
           )}
-          <span className="grow" />
+          <span className="flex-1" />
           {artifacts && artifacts.bundles.length > 0 && (
-            <label className="meta">
-              bundle{" "}
+            <label className="text-[13px] text-(--muted-fg) [&_b]:font-medium [&_b]:text-(--foreground)">
+              Bundle{" "}
               <select
-                className="field"
+                className={`${viewerField} h-[30px] min-w-[240px] text-xs`}
                 value={bundleKey ?? ""}
                 onChange={(event) => void switchBundle(event.target.value)}
               >
@@ -219,13 +224,13 @@ export function Workbench({
             </label>
           )}
         </div>
-        <div className="tabs" role="tablist">
+        <div className={tabList} role="tablist">
           {tabs.map(([key, label, enabled]) => (
             <button
               key={key}
               type="button"
               role="tab"
-              className="tab"
+              className={viewerTab}
               aria-selected={tab === key}
               disabled={!enabled}
               onClick={() => setTab(key)}
@@ -235,7 +240,7 @@ export function Workbench({
           ))}
         </div>
         {error && tab !== "pipeline" ? (
-          <p className="notice bad">{error}</p>
+          <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{error}</p>
         ) : tab === "pipeline" ? (
           <PipelineSheet
             source={source}
@@ -247,46 +252,12 @@ export function Workbench({
         ) : tab === "file" ? (
           <FileSheet key={openFile?.path ?? ""} file={openFile} />
         ) : !model ? (
-          <p className="loading">loading bundle</p>
+          <p className={loading}>loading bundle</p>
         ) : (
           <EnvironmentSheet model={model} onOpenFile={openPath} />
         )}
       </div>
     </>
-  );
-}
-
-export function FilesPanel({
-  collapsed,
-  onToggle,
-  count,
-  children,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-  count?: number;
-  children?: React.ReactNode;
-}) {
-  if (collapsed) {
-    return (
-      <aside className="panel rail" aria-label="Files (collapsed)">
-        <button type="button" className="rail-toggle" onClick={onToggle} title="Show files">
-          ▸
-        </button>
-        <span className="rail-label">files{count !== undefined ? ` · ${count}` : ""}</span>
-      </aside>
-    );
-  }
-  return (
-    <aside className="panel files" aria-label="Files">
-      <div className="panel-head">
-        <span className="panel-title">files {count !== undefined && <b>{count}</b>}</span>
-        <button type="button" className="rail-toggle" onClick={onToggle} title="Hide files">
-          ◂
-        </button>
-      </div>
-      <div className="panel-body">{children}</div>
-    </aside>
   );
 }
 
