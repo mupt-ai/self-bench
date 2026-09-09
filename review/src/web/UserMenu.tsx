@@ -8,7 +8,6 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
   return (
     <Dropdown
       label="Account"
-      above
       className="user-menu"
       trigger={
         <>

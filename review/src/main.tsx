@@ -25,7 +25,20 @@ function Boot() {
       cancelled = true;
     };
   }, []);
-  if (site === null) return null;
+  if (site === null)
+    return (
+      <div role="status" aria-label="Loading Application" className="space-y-7 p-8">
+        <span className="sr-only">Loading application…</span>
+        <div
+          aria-hidden="true"
+          className="h-7 w-44 animate-pulse bg-(--border) motion-reduce:animate-none"
+        />
+        <div
+          aria-hidden="true"
+          className="h-48 animate-pulse border border-(--border) bg-(--card) motion-reduce:animate-none"
+        />
+      </div>
+    );
   return site ? <WebApp /> : <App />;
 }
 
