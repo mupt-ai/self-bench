@@ -9,11 +9,13 @@ export function CodexSignIn({
   org,
   name,
   onActiveChange,
+  onSavingChange,
   onDone,
 }: {
   org: string;
   name: string;
   onActiveChange(active: boolean): void;
+  onSavingChange(saving: boolean): void;
   onDone(): Promise<void>;
 }) {
   const url = `/api/orgs/${encodeURIComponent(org)}/credentials/codex-login`;
@@ -23,6 +25,7 @@ export function CodexSignIn({
   const [copied, setCopied] = React.useState(false);
   const [copyHint, setCopyHint] = React.useState("");
   const attempt = React.useRef<string>(undefined);
+  const generation = React.useRef(0);
   const alive = React.useRef(true);
   const completed = React.useRef(onDone);
   completed.current = onDone;
@@ -31,6 +34,7 @@ export function CodexSignIn({
     alive.current = true;
     return () => {
       alive.current = false;
+      generation.current += 1;
       if (attempt.current)
         void evaluationRequest(`${url}/${attempt.current}/cancel`, {}).catch(() => undefined);
     };
@@ -39,19 +43,23 @@ export function CodexSignIn({
   React.useEffect(() => {
     if (!sessionId || error) return;
     let disposed = false;
+    const current = generation.current;
+    const stale = () => disposed || current !== generation.current;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const next = await evaluationRequest<CodexLoginStatus>(`${url}/${sessionId}`);
-        if (disposed) return;
+        if (stale()) return;
         if (next.status === "ready") {
           setSession({ ...next, status: "saving" });
+          onSavingChange(true);
           const credential = await evaluationRequest<NonNullable<CodexLoginStatus["credential"]>>(
             `${url}/${sessionId}/complete`,
             {},
           );
-          if (!disposed) {
+          if (!stale()) {
             setSession({ ...next, status: "saved", credential });
+            onSavingChange(false);
             onActiveChange(false);
             void completed.current();
           }
@@ -65,8 +73,10 @@ export function CodexSignIn({
         }
         timer = setTimeout(poll, 1500);
       } catch (cause) {
-        if (!disposed)
+        if (!stale()) {
+          onSavingChange(false);
           setError(cause instanceof Error ? cause.message : "Could not check sign-in. Try again.");
+        }
       }
     };
     timer = setTimeout(poll, 500);
@@ -74,8 +84,10 @@ export function CodexSignIn({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [sessionId, error, url, onActiveChange]);
+  }, [sessionId, error, url, onActiveChange, onSavingChange]);
   const start = async () => {
+    generation.current += 1;
+    setSession(undefined);
     setStarting(true);
     setError("");
     setCopied(false);
