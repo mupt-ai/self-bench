@@ -22,6 +22,8 @@ export function taskToml(task: TaskDefinition): string {
     workdir: task.workdir,
     source_pr: task.sourcePr,
     compiler_revision: COMPILER_REVISION,
+    test_evidence: task.testResults?.format ?? "command-level",
+    test_selection: task.testSelection?.mode ?? "unspecified",
   };
   return `${[
     `schema_version = ${tomlString(HARBOR_SCHEMA_VERSION)}`,
@@ -90,11 +92,14 @@ WORKDIR /app
 export function verifierDockerfile(task: TaskDefinition, dependencySetupPatch: string): string {
   return `${baseDockerfile(task)}
 ${dependencySetupPatch.length > 0 ? goldDependencySetupLayer(task, dependencySetupPatch) : ""}
+${task.testResults ? "RUN command -v python3 >/dev/null" : ""}
 RUN useradd --create-home --shell /bin/bash verifier \\
     && chown -R verifier:verifier /app /home/verifier \\
     && mkdir -p /opt/selfbench \\
     && chmod 700 /opt/selfbench
 ENV HOME=/home/verifier
+COPY runtime/ /opt/selfbench-runtime/
+RUN chown -R root:root /opt/selfbench-runtime && chmod 755 /opt/selfbench-runtime && chmod 644 /opt/selfbench-runtime/*
 COPY test.patch test.sh task-test.sh /tests/
 RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh /tests/task-test.sh
 WORKDIR /app

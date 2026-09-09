@@ -37,7 +37,7 @@ Every tier also requires one coherent behavioral requirement, held-out tests tha
 2. Inspect the complete diff and repository-native test setup.
 3. Classify changed paths as implementation, test, generated, documentation, or unrelated.
 4. Build `goldPatch` from only the implementation required for the requested behavior. Exclude tests, generated artifacts, formatting churn, and unrelated cleanup.
-5. Build `testPatch` from only held-out behavioral tests and minimal test fixtures. It must not overlap any path in `goldPatch`.
+5. Prefer reusing suitable PR tests. Record `testSelection` (`mode`: reused/augmented/authored/base-only, `reused`, `added`, `excluded` string arrays with test identities/reasons, and `coverage`). Add tests only for missing requested behavior. Base-only requires an empty `test.patch`, nonempty reused tests, and no added tests; unchanged base tests are visible, not secret. Build `testPatch` from only held-out behavioral tests and minimal test fixtures. It must not overlap any path in `goldPatch`.
    - Exercise a public API, command, persisted behavior, or existing extension seam. Do not import a
      private helper or new internal module introduced by the gold patch merely because it is easy to
      test directly.
@@ -67,7 +67,7 @@ Every tier also requires one coherent behavioral requirement, held-out tests tha
 
 ## Deliverable files
 
-`/work/task/instruction.md` holds the standalone instruction; it is authoritative for the prompt, so omit `prompt` from `definition.json` or keep it identical. `/work/task/test.patch` and `/work/task/gold.patch` are Git patches (start with `diff --git`; produce them with `git diff`). `/work/task/definition.json` has this shape (shown with the derived prompt):
+`/work/task/instruction.md` holds the standalone instruction; it is authoritative for the prompt, so omit `prompt` from `definition.json` or keep it identical. `/work/task/test.patch` and `/work/task/gold.patch` are Git patches (start with `diff --git`; produce them with `git diff`), except an explicitly empty base-only `test.patch`. `/work/task/definition.json` has this shape (shown with the derived prompt):
 
 ```json
 {
@@ -160,7 +160,7 @@ Each verify gate maps to those files, so a red gate tells you which field to cha
 
 - When a change spans backend and frontend, anchor the held-out tests on the backend contract through its public boundary; tests that mock the API and check only rendering are rejected as unfair.
 - Never touch paths the repository marks `export-ignore` in `.gitattributes` (for PostHog that includes everything under `.github/`): the snapshot the solver and the verifier receive is a `git archive`, so those files do not exist there and the static check rejects patches that reference them. If a change lives only in such paths, decline the task.
-- Produce binary-safe Git patches beginning with `diff --git`, with LF line endings and a final newline (use `git diff`). Both must apply cleanly to the base commit, and the gold patch must apply on top of the test patch; `verify` checks this with `git apply --check` before any build.
+- Produce binary-safe Git patches beginning with `diff --git`, with LF line endings and a final newline (use `git diff`). Except for an explicitly empty base-only test.patch, both must apply cleanly to the base commit, and the gold patch must apply on top of the test patch; `verify` checks this with `git apply --check` before any build.
 - Keep test and gold paths disjoint.
 - Exclude dependency caches, lockfile churn unrelated to the change, build output, vendored code, and generated files.
 - Do not patch around a broken base repository. Environment reproducibility is proven by the worker's build, smoke, nop, and oracle gates.
@@ -169,3 +169,9 @@ Each verify gate maps to those files, so a red gate tells you which field to cha
 ## Final check
 
 Before submission, re-read the prompt without looking at the completed diff. It must be sufficient to implement the behavior but insufficient to recover the hidden implementation. Confirm the test patch observes public behavior and would fail a plausible wrong implementation, not merely the base commit. Then imagine a second correct implementation with different file boundaries and helper names; the held-out tests must still pass it.
+
+## Structured test evidence
+
+Optional `testResults` contains `format: "junit"` and disjoint `failToPass`/`passToPass` arrays of exact XML `classname::name` identities (not command selectors). Configure the native runner to write JUnit XML to `$SELFBENCH_JUNIT_REPORT` for each invocation and include python3 in root setup. For example, pytest uses `python -m pytest {tests} --junitxml="$SELFBENCH_JUNIT_REPORT"`; verify the actual emitted identities rather than guessing. The verifier reads a fresh bounded report after stopping test processes. Every declared target must assertion-fail on base; all declared targets and regressions must pass with the reference. Missing, duplicate, skipped, errored, malformed, oversized or exit-inconsistent reports fail closed. Results are emitted as JSON in the stored verifier log. Never fabricate reports to get a green gate.
+
+Without `testResults`, legacy command-level gates remain available and cannot prove individual test transitions. Explain this limitation in testSelection.coverage. Repeatability currently means two consecutive target-command successes in the same verifier environment, not fresh-environment determinism. Setup remains part of this same authoring session. Reference dependency manifests are provisioned into the verifier before tracked source is restored; hidden test patches are applied only at runtime, so required test dependencies/fixtures must be covered explicitly by setup.

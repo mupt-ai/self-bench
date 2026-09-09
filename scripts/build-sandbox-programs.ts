@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
@@ -37,3 +37,9 @@ await Promise.all([
     }
   }),
 ]);
+
+await Promise.all(
+  ["harbor-task/runtime", "runtime"].map((path) =>
+    cp(join(root, "src/harbor-task/runtime"), join(outputDirectory, path), { recursive: true }),
+  ),
+);

@@ -21,6 +21,7 @@ import { withActivityHeartbeats, withTaskBundle } from "./runtime.js";
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
 
 const NOP_REWARD_KEYS = [
+  "structured_results",
   "patch_applied",
   "fail_to_pass",
   "pass_to_pass",

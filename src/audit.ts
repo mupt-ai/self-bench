@@ -1,4 +1,5 @@
 import type { Difficulty, TaskDefinition } from "./contracts.js";
+import { repositoryRelativePath } from "./harbor-task/paths.js";
 
 export interface StaticAuditReport {
   readonly accepted: boolean;
@@ -33,7 +34,16 @@ export function auditTaskDefinition(
   const threshold = thresholds[definition.difficulty];
   const testPathSet = new Set(tests.files);
   const blockers: string[] = [];
-  const overlap = gold.files.filter((path) => testPathSet.has(path));
+  const protectedPaths = definition.testPaths.map((path) =>
+    repositoryRelativePath(definition, path),
+  );
+  const overlap = gold.files.filter(
+    (path) =>
+      testPathSet.has(path) ||
+      protectedPaths.some(
+        (protectedPath) => path === protectedPath || path.startsWith(`${protectedPath}/`),
+      ),
+  );
   if (overlap.length > 0) {
     blockers.push(`gold and held-out test patches overlap: ${overlap.join(", ")}`);
   }
@@ -47,8 +57,11 @@ export function auditTaskDefinition(
       `${definition.difficulty} mode requires at least ${threshold.changedLines} changed implementation lines; found ${gold.changedLines}`,
     );
   }
-  if (tests.files.length === 0) {
+  if (tests.files.length === 0 && definition.testSelection?.mode !== "base-only") {
     blockers.push("held-out test patch changes no files");
+  }
+  if (definition.testSelection?.mode === "base-only" && testPatch.length > 0) {
+    blockers.push("base-only requires an empty test.patch");
   }
   if (definition.passToPass.length < threshold.passToPass) {
     blockers.push(

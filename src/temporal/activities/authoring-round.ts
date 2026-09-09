@@ -8,6 +8,7 @@ import {
   authoringRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts.js";
+import { verifierRuntimeFiles } from "../../harbor-task/runtime-assets.js";
 import {
   PI_RESUMED_SESSION_PATH,
   PI_SESSION_OUTPUT_PATH,
@@ -126,6 +127,10 @@ export async function runAuthoringRound(
                 timeoutMs: AUTHORING_TIMEOUT_MS,
                 inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
                 files: [
+                  ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
+                    path: `/work/${path}`,
+                    contents,
+                  })),
                   { path: "/work/authoring.js", contents: extension },
                   { path: "/work/selfbench-skill/SKILL.md", contents: skill },
                   { path: "/work/sandbox-author.js", contents: packager },
