@@ -9,6 +9,7 @@ import {
   discoverContractArtifacts,
   scanBaseContractArtifacts,
 } from "../../coupling.js";
+import { repositoryRelativePath } from "../../harbor-task/paths.js";
 import { patchPaths } from "../../repair.js";
 import { withTaskBundle } from "./runtime.js";
 
@@ -61,7 +62,12 @@ export async function buildVerifierMaterial(
       testPatch,
       goldPatch,
       couplingEvidence,
-      heldOutPaths: patchPaths(testPatch),
+      heldOutPaths: [
+        ...new Set([
+          ...patchPaths(testPatch),
+          ...definition.testPaths.map((path) => repositoryRelativePath(definition, path)),
+        ]),
+      ],
     };
   });
 }

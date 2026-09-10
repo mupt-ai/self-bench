@@ -5,6 +5,7 @@ import type { CredentialInfo } from "../../../src/evaluation/account";
 import { EXECUTION_BACKENDS, executionBackendLabels } from "../../../src/providers";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
+import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";
 
 const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel"].map((kind) => ({
@@ -71,9 +72,23 @@ test("Docker stays credential-free and Modal retains its existing credential sel
 
 test("Vercel credential editor exposes token, team and project fields", () => {
   const html = renderToStaticMarkup(
-    <CredentialEditor previous={credentials[3]} onCancel={() => {}} onSave={async () => {}} />,
+    <CredentialEditor
+      previous={credentials[3]}
+      org="example-org"
+      onCancel={() => {}}
+      onSave={async () => {}}
+      onSaved={async () => {}}
+    />,
   );
   for (const label of ["Vercel Token", "Vercel Team ID", "Vercel Project ID"])
     expect(html).toContain(label);
   expect(html).not.toContain("Model API Key");
+  expect(html).toContain("<dialog");
+  expect(html).toContain('type="password"');
+  expect(html).toContain('required="" autoComplete="off" maxLength="256"');
+});
+
+test("Vercel credentials appear in the sandbox group with the provider label", () => {
+  expect(isSandbox("vercel")).toBe(true);
+  expect(credentialProvider({ kind: "vercel", auth: "api-key" })).toBe("Vercel");
 });

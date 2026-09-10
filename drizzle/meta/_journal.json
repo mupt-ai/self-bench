@@ -29,6 +29,13 @@
       "when": 1788717620218,
       "tag": "0003_drop_repo_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788993718151,
+      "tag": "0004_preserve_batch_runs",
+      "breakpoints": true
     }
   ]
 }

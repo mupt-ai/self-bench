@@ -1,7 +1,6 @@
 import { createServer } from "node:http";
 import { pipeline } from "node:stream/promises";
 import { Client } from "@temporalio/client";
-import { WorkflowExecutionAlreadyStartedError, WorkflowIdReusePolicy } from "@temporalio/common";
 import { z } from "zod";
 import {
   authorized,
@@ -14,22 +13,12 @@ import {
 import { buildRunRequest } from "./api/run-request.js";
 import { queryStatus } from "./api/status.js";
 import { handleViewerRoute } from "./api/viewer-routes.js";
-import { type ArtifactStore, createArtifactStore } from "./artifacts.js";
+import { createArtifactStore } from "./artifacts.js";
 import type { AuthConfig } from "./auth/config.js";
-import { createSiteAuth, type SiteAuth, sendIdentityError } from "./auth/routes.js";
+import { sendIdentityError } from "./auth/routes.js";
 import { sendExpiredSession } from "./auth/session-expired.js";
-import { createUserStore } from "./auth/users.js";
 import type { SelfBenchConfig } from "./config.js";
-import { type OpenDatabase, openDatabase } from "./db/client.js";
-import { createEncryptedRecords } from "./evaluation/encrypted-records.js";
-import { createEvaluationRoutes } from "./evaluation/routes.js";
-import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./site/connected-repos.js";
-import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./site/github-repos.js";
-import { createPullRequestRoutes, type PullRequestRoutes } from "./site/pr-routes.js";
-import { createRepoStore } from "./site/repo-store.js";
-import { createTaskStore } from "./site/task-store.js";
-import { createTaskRoutes, type TaskRoutes } from "./site/tasks.js";
-import { temporalStarter, temporalStatus } from "./site/temporal-status.js";
+import { openSite } from "./site/runtime.js";
 import { connectTemporalClient } from "./temporal/connection.js";
 import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
@@ -88,6 +77,7 @@ export async function startApi(
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
         if (await site.evaluations.handle(request, url, response, user)) return;
+        if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
       if (request.method === "POST" && url.pathname === "/v1/provenance") {
@@ -198,88 +188,6 @@ export async function startApi(
     );
     await connection.close();
     await site?.database.close();
-  };
-}
-
-interface Site {
-  readonly auth: SiteAuth;
-  readonly github: GitHubRepoRoutes;
-  readonly repos: ConnectedRepoRoutes;
-  readonly tasks: TaskRoutes;
-  readonly pullRequests: PullRequestRoutes;
-  readonly evaluations: ReturnType<typeof createEvaluationRoutes>;
-  readonly database: OpenDatabase;
-}
-
-async function openSite(
-  auth: AuthConfig,
-  config: SelfBenchConfig,
-  client: Client,
-  artifacts: ArtifactStore,
-): Promise<Site> {
-  const database = await openDatabase(auth.databaseUrl);
-  const users = createUserStore(database.db, { secret: auth.sessionSecret });
-  const repos = createRepoStore(database.db);
-  const tasks = createTaskStore(database.db);
-  return {
-    auth: createSiteAuth({ config: auth, users }),
-    evaluations: createEvaluationRoutes({
-      users,
-      repos,
-      tasks,
-      artifacts,
-      publicUrl: process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl,
-      ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
-        ? {
-            records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
-          }
-        : {}),
-      async start(input) {
-        try {
-          await client.workflow.start("selfBenchEvaluationWorkflow", {
-            workflowId: `evaluation/${input.repoId}/${input.id}`,
-            taskQueue: input.credentialOrgId
-              ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
-              : (process.env.SELFBENCH_EVAL_TASK_QUEUE ?? config.temporal.taskQueue),
-            args: [input],
-            workflowExecutionTimeout: "73 hours",
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-          });
-        } catch (error) {
-          if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
-        }
-      },
-    }),
-    github: createGitHubRepoRoutes({ config: auth, users }),
-    repos: createConnectedRepoRoutes({ config: auth, users, repos }),
-    tasks: createTaskRoutes({
-      users,
-      repos,
-      tasks,
-      artifacts,
-      status: temporalStatus(client),
-    }),
-    pullRequests: createPullRequestRoutes({
-      config,
-      auth,
-      ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_GENERATION_TASK_QUEUE
-        ? {
-            records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
-          }
-        : {}),
-      users,
-      repos,
-      tasks,
-      artifacts,
-      start: (workflowId, input) =>
-        temporalStarter(
-          client,
-          input.run.generation
-            ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
-            : config.temporal.taskQueue,
-        )(workflowId, input),
-    }),
-    database,
   };
 }
 

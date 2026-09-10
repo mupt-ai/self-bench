@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, DataTable, PageContent, PageHeader, RunStatus, Select } from "../ui";
@@ -100,7 +101,7 @@ export function EvaluationPage() {
         current ? (
           <EvaluationResults key={current.id} run={current} baseUrl={url} repo={repo} />
         ) : (
-          !error && <p role="status">Loading run…</p>
+          !error && <ListSkeleton label="Loading Run" />
         )
       ) : (
         <>
@@ -128,7 +129,7 @@ export function EvaluationPage() {
           <ComparisonHistory key={url} repo={repo} url={url} />
           <section className="mt-8 [&_h2]:mb-4">
             <h2>Runs</h2>
-            {loading && <p role="status">Loading runs…</p>}
+            {loading && !runs.length && !error && <ListSkeleton label="Loading Runs" />}
             {!loading && !runs.length && (
               <p className="mt-2 text-base text-muted">
                 No runs yet. <Link to={`/repos/${repo}`}>Run Your Dataset →</Link>

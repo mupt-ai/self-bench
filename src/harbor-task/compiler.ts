@@ -14,6 +14,8 @@ import {
   taskToml,
   verifierDockerfile,
 } from "./render.js";
+import { verifierRuntimeFiles } from "./runtime-assets.js";
+import { assertTestPatch } from "./test-patch.js";
 import { solutionScript, testScript } from "./verifier.js";
 
 export interface AuthoredTaskFiles {
@@ -32,10 +34,7 @@ export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskF
     readFile(join(directory, "test.patch"), "utf8"),
     readFile(join(directory, "gold.patch"), "utf8"),
   ]);
-  if (!testPatch.startsWith("diff --git ")) {
-    throw new Error("test.patch is not a Git patch");
-  }
-  assertSafePatchPaths(testPatch);
+  assertTestPatch(definition, testPatch);
   if (!goldPatch.startsWith("diff --git ")) {
     throw new Error("gold.patch is not a Git patch");
   }
@@ -66,6 +65,16 @@ export async function compileHarborTask(
     "--name-only",
     task.definition.baseCommit,
   ]);
+  if (task.definition.testSelection?.mode === "base-only") {
+    const files = repositoryFiles.stdout.split("\n");
+    for (const path of task.definition.testPaths) {
+      const full = [task.definition.workdir === "." ? "" : task.definition.workdir, path]
+        .filter(Boolean)
+        .join("/");
+      if (!files.some((file) => file === full || file.startsWith(`${full}/`)))
+        throw new Error(`base-only test path is absent from base: ${full}`);
+    }
+  }
   assertEnvironmentEvidence(
     task.definition.environment,
     new Set(repositoryFiles.stdout.split("\n").filter(Boolean)),
@@ -77,7 +86,7 @@ export async function compileHarborTask(
   await Promise.all([
     mkdir(environment, { recursive: true }),
     mkdir(solution, { recursive: true }),
-    mkdir(tests, { recursive: true }),
+    mkdir(join(tests, "runtime"), { recursive: true }),
   ]);
 
   const snapshot = join(outputDirectory, ".repo.tar.gz");
@@ -99,6 +108,9 @@ export async function compileHarborTask(
     writeFile(join(outputDirectory, "instruction.md"), `${task.definition.prompt.trim()}\n`),
     writeFile(join(solution, "gold.patch"), task.goldPatch),
     writeFile(join(solution, "solve.sh"), solutionScript()),
+    ...Object.entries(verifierRuntimeFiles()).map(([path, content]) =>
+      writeFile(join(tests, path), content),
+    ),
     writeFile(join(tests, "test.patch"), task.testPatch),
     writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(tests, "task-test.sh"), testScript(task.definition, task.testPatch)),
@@ -136,6 +148,8 @@ export async function compileHarborTask(
         definitionSha256: sha256(JSON.stringify(task.definition)),
         testPatchSha256: sha256(task.testPatch),
         goldPatchSha256: sha256(task.goldPatch),
+        testEvidence: task.definition.testResults?.format ?? "command-level",
+        referenceDependencyProvisioning: preinstallGoldDependencies,
         environmentSha256: sha256(JSON.stringify(task.definition.environment)),
       },
       null,
@@ -158,7 +172,7 @@ export async function refreshHarborTask(
     readFile(join(outputDirectory, "solution/gold.patch"), "utf8"),
     readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
   ]);
-  assertSafePatchPaths(testPatch);
+  assertTestPatch(definition, testPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
   const verifierScript = testScript(definition, testPatch);
@@ -168,7 +182,11 @@ export async function refreshHarborTask(
   ]);
   const environment = join(outputDirectory, "environment");
   const tests = join(outputDirectory, "tests");
+  await mkdir(join(tests, "runtime"), { recursive: true });
   await Promise.all([
+    ...Object.entries(verifierRuntimeFiles()).map(([path, content]) =>
+      writeFile(join(tests, path), content),
+    ),
     writeFile(join(outputDirectory, "definition.json"), `${JSON.stringify(definition, null, 2)}\n`),
     writeFile(join(outputDirectory, "task.toml"), taskToml(definition)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(definition)),
@@ -193,6 +211,8 @@ export async function refreshHarborTask(
         definitionSha256: sha256(JSON.stringify(definition)),
         testPatchSha256: sha256(testPatch),
         goldPatchSha256: sha256(goldPatch),
+        testEvidence: definition.testResults?.format ?? "command-level",
+        referenceDependencyProvisioning: preinstallGoldDependencies,
         environmentSha256: sha256(JSON.stringify(definition.environment)),
       },
       null,

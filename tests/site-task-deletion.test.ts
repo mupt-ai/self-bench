@@ -60,6 +60,14 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
     expect(await store.deleteTask(other.id, row.runId, row.taskId)).toBe("missing");
     expect(await store.deleteTask(repo.id, row.runId, row.taskId)).toBe("deleted");
     expect(await store.deleteTask(repo.id, row.runId, row.taskId)).toBe("deleted");
+    await expect(
+      store.review(task.id, {
+        decision: "reject",
+        note: "Stale verdict",
+        userId: user.id,
+      }),
+    ).rejects.toThrow("task not found");
+    await expect(store.clearReview(task.id)).rejects.toThrow("task not found");
     await store.upsertMany([
       { ...row, taskId: "renamed", pipelineStatus: "in_progress", stage: "authoring" },
     ]);

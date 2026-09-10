@@ -2,6 +2,12 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { tasks } from "../db/schema.js";
 
+export class TaskNotFoundError extends Error {
+  constructor() {
+    super("task not found");
+  }
+}
+
 /** Keep status validation and tombstoning under the same row lock as ingestion/progress. */
 export function tombstoneTask(
   db: Database,

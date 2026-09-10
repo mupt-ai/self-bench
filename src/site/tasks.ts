@@ -4,6 +4,7 @@ import type { ArtifactStore } from "../artifacts.js";
 import type { User, UserStore } from "../auth/users.js";
 import { candidateArtifacts } from "../viewer/artifacts.js";
 import type { RepoStore } from "./repo-store.js";
+import { TaskNotFoundError } from "./task-deletion.js";
 import { refreshInProgress, type TaskStatusSource } from "./task-status.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "./task-store.js";
 import { tenantFor } from "./tenant.js";
@@ -122,16 +123,17 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
           return true;
         }
         const note = typeof body.note === "string" ? body.note.slice(0, 4000) : "";
-        const updated = await tasks.review(task.id, {
-          decision: body.decision as ReviewDecision,
-          note,
-          userId: user.id,
-        });
-        sendJson(response, 200, { task: taskItem(updated) });
+        await sendReview(response, () =>
+          tasks.review(task.id, {
+            decision: body.decision as ReviewDecision,
+            note,
+            userId: user.id,
+          }),
+        );
         return true;
       }
       if (leaf === "review" && request.method === "DELETE") {
-        sendJson(response, 200, { task: taskItem(await tasks.clearReview(task.id)) });
+        await sendReview(response, () => tasks.clearReview(task.id));
         return true;
       }
       if (leaf === "artifacts" && request.method === "GET") {
@@ -185,4 +187,13 @@ export function taskItem(task: TaskRecord): TaskListItem {
 async function json(request: IncomingMessage): Promise<Record<string, unknown>> {
   const text = (await readBody(request, 64 * 1024)).toString("utf8");
   return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+}
+
+async function sendReview(response: ServerResponse, update: () => Promise<TaskRecord>) {
+  try {
+    sendJson(response, 200, { task: taskItem(await update()) });
+  } catch (error) {
+    if (!(error instanceof TaskNotFoundError)) throw error;
+    sendJson(response, 404, { error: error.message });
+  }
 }

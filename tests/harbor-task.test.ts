@@ -29,6 +29,7 @@ describe("Harbor task compiler", () => {
     await runCommand("git", ["-C", repo, "config", "user.name", "Test"]);
     await mkdir(join(repo, "project"));
     await writeFile(join(repo, "value.txt"), "base\n");
+    await writeFile(join(repo, "project/base.test"), "existing test\n");
     await writeFile(join(repo, "project/package.json"), '{"dependencies":{"left-pad":"1.0.0"}}\n');
     await runCommand("git", ["-C", repo, "add", "."]);
     await runCommand("git", ["-C", repo, "commit", "-qm", "base"]);
@@ -125,8 +126,7 @@ describe("Harbor task compiler", () => {
     expect(dependencyPatch).not.toContain("value.txt");
     const verifier = await readFile(join(output, "tests/test.sh"), "utf8");
     expect(verifier).toContain("deterministic");
-    expect(verifier).toContain("selfbench-verifier-command");
-    expect(verifier).toContain("ECONNRESET|ETIMEDOUT");
+    const commandRunner = await readFile(join(output, "tests/runtime/command.sh"), "utf8");
     expect(verifier).not.toContain("npm ci --ignore-scripts");
     expect(verifier).toContain("/app/project/tests/new");
     expect(verifier).toContain("/app/project/fixture.config.js");
@@ -136,9 +136,8 @@ describe("Harbor task compiler", () => {
     );
     expect(verifier).not.toContain("{tests}");
     expect(verifier).toContain('"fail_to_pass_exit_code": $fail_to_pass_exit_code');
-    expect(verifier).toContain(
-      'runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier bash -c "$1"',
-    );
+    expect(commandRunner).toContain("runuser -u verifier --preserve-environment -- env");
+    expect(commandRunner).toContain('HOME=/home/verifier bash -c "$command"');
     expect(verifier).not.toMatch(/runuser[^\n]*--preserve-environment -- bash/);
     expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
     expect(verifierDockerfile).toContain("chown -R verifier:verifier /app /home/verifier");
@@ -154,11 +153,45 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(27);
+    ).toBe(29);
+
+    const baseOnlyDefinition = {
+      ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
+      testPaths: ["base.test"],
+      testSelection: {
+        mode: "base-only",
+        reused: ["base regression"],
+        added: [],
+        excluded: [],
+        coverage: "Existing tests cover the request.",
+      },
+      testResults: {
+        format: "junit",
+        failToPass: ["suite::target"],
+        passToPass: ["suite::a", "suite::b"],
+      },
+    };
+    const originalPatch = await readFile(join(authored, "test.patch"), "utf8");
+    await writeFile(join(authored, "definition.json"), JSON.stringify(baseOnlyDefinition));
+    await writeFile(join(authored, "test.patch"), "");
+    const baseOutput = join(root, "base-only");
+    await compileHarborTask(authored, repo, baseOutput);
+    await refreshHarborTask(baseOutput, baseOnlyDefinition);
+    expect(await readFile(join(baseOutput, "tests/test.patch"), "utf8")).toBe("");
+    expect(await readFile(join(baseOutput, "tests/test.sh"), "utf8")).toContain(
+      "source /opt/selfbench-runtime/command.sh",
+    );
+    const baseManifest = JSON.parse(
+      await readFile(join(baseOutput, ".selfbench-manifest.json"), "utf8"),
+    );
+    expect(baseManifest.testEvidence).toBe("junit");
+    expect(baseManifest.referenceDependencyProvisioning).toBe(true);
+    await writeFile(join(authored, "test.patch"), originalPatch);
 
     const repairedDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
       testCommand: "test --repaired {tests}",
+      testSelection: undefined,
     };
     const repairedPatch =
       "diff --git a/tests/new b/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new\n@@ -0,0 +1 @@\n+repaired\n";

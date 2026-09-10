@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
+import { GenerateBatch } from "../GenerateBatch";
 import { GitHubMark, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { ReviewTaskList } from "../task/ReviewTaskList";
@@ -40,6 +41,14 @@ function RepoTasksPage() {
       (cause: Error) => version === requestVersion.current && setError(cause.message),
     );
   }, [org.login, fullName]);
+  const refreshTasks = React.useCallback(() => {
+    if (deleting) return;
+    const version = ++requestVersion.current;
+    fetchTasks(org.login, fullName).then(
+      (found) => version === requestVersion.current && setTasks(found),
+      (cause: Error) => version === requestVersion.current && setError(cause.message),
+    );
+  }, [org.login, fullName, deleting]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -133,6 +142,11 @@ function RepoTasksPage() {
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-2.5 sm:w-auto">
           <div ref={setActionsTarget} className="contents" />
+          <GenerateBatch
+            repoId={{ org: org.login, fullName }}
+            onStarted={refreshTasks}
+            disabled={deleting}
+          />
           <Link
             className={buttonStyles.primary}
             to={`/repos/${fullName}/add-prs`}

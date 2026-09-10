@@ -33,6 +33,12 @@ Address these suggestions in the deliverable, but do not add behavior beyond the
       : ""
   }}
 
+# Test reuse and evidence
+
+Keep ownership of tests and the complete setup in this session; do not create a separate environment stage. First inspect tests added/changed by the PR and existing regression coverage. Reuse suitable public-behavior assertions; author only missing coverage. Record definition.testSelection with mode (reused, augmented, authored, or base-only), reused/added/excluded arrays identifying tests and reasons, and coverage explaining how tests cover the request. Existing tests still require fairness review. Do not invent test edits merely to produce a patch. For base-only mode, test.patch must be an empty file, reused must be nonempty and added empty; base tests remain visible to the solver.
+
+When the runner supports JUnit XML, use definition.testResults = {format: "junit", failToPass: ["classname::name"], passToPass: [...]}. These are exact XML testcase identities, separate from command selectors. Configure testCommand to write a fresh report to "$SELFBENCH_JUNIT_REPORT" on every invocation, including failures, and install python3 in rootSetupCommand. JUnit mode requires every declared target to assertion-fail on the base and pass with the reference; skipped, missing, duplicate and errored results fail closed. If a missing public API makes collection fail, prefer a public-boundary assertion or explicitly retain command-level mode and explain the limitation in coverage. Never rewrite a runner failure into a fake passing report.
+
 # Held-out tests
 
 Held-out tests must verify public behavior through an existing API, command, persistence boundary, or extension seam. When the request is about an endpoint/provider contract, exercise that boundary instead of manually composing internal translators, context/option builders, or model factories. Do not import gold-specific private helpers/modules or assert exact internal SQL, query counts, schema/index names, object identity, telemetry layout, error wording, endpoint/response shapes, or UI copy/order unless the authentic request explicitly makes that artifact public. Assert requested semantic values rather than larger retained/raw payloads that happen to contain them, and preserve valid adjacent input content unless the request says to discard it. Cover every material behavior in the prompt, including central authorization, error, and UI states. A different correct implementation with different helpers, file boundaries, API presentation, and UI composition must be able to pass; reject the candidate when no stable public seam exists.
@@ -61,7 +67,7 @@ Your deliverable is the directory /work/task/ with exactly four files, written w
 - instruction.md: the standalone instruction the evaluated agent reads (it is authoritative for the prompt);
 - test.patch: the held-out test patch (a Git patch starting with diff --git, LF line endings, final newline; produce it with git diff);
 - gold.patch: the non-test reference implementation patch, same format.
-Both patches must apply cleanly to the base commit with git apply, and gold.patch must also apply on top of test.patch (the oracle order); verify proves this against a clean worktree before anything is built.
+Except for an explicitly empty base-only test.patch, both patches must apply cleanly to the base commit with git apply, and gold.patch must also apply on top of test.patch (the oracle order); verify proves this against a clean worktree before anything is built.
 The verify and submit_task tools take no arguments; they read /work/task/ and report missing or malformed files as static-check errors naming the file. The trusted compiler renders task.toml, both Dockerfiles, the scripts, and the repository snapshot; never write those yourself.
 
 # Submission and rounds
@@ -85,7 +91,7 @@ export function authoringResumePrompt(
   renderedReport: string,
   feedback?: string,
 ): string {
-  return `Round ${round} of ${MAX_AUTHORING_ROUNDS}. Your previous submission did not pass verification. This is a fresh sandbox: the repository was re-cloned at the pinned base commit, your earlier working-tree edits are gone, and only this conversation carries over. Read the report, rewrite the deliverable in /work/task/ (definition.json with the environment contract, instruction.md, test.patch, gold.patch), call verify until it is green (the result states how many verify calls remain), then call submit_task exactly once. Every rule from the original brief still applies; do not weaken tests or move setup into the test command merely to turn a gate green. If the failure cannot be fixed within those rules, do not submit and explain why in your final message.
+  return `Round ${round} of ${MAX_AUTHORING_ROUNDS}. ${feedback ? "The read-only reviewer requested revisions. Address its suggestions below; the mechanical report describes the latest tested draft, not necessarily a failed check." : "Your previous submission did not pass mechanical verification. Address the failures in the report."} This is a fresh sandbox: the repository was re-cloned at the pinned base commit, your earlier working-tree edits are gone, and only this conversation carries over. Read the report, rewrite the deliverable in /work/task/ (definition.json with the environment contract, instruction.md, test.patch, gold.patch), call verify until it is green (the result states how many verify calls remain), then call submit_task exactly once. Every rule from the original brief still applies; do not weaken tests or move setup into the test command merely to turn a gate green. If the failure cannot be fixed within those rules, do not submit and explain why in your final message.
 
 ${renderedReport.trim()}${
   feedback

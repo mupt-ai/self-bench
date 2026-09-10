@@ -86,10 +86,15 @@ export function TaskPage() {
           </div>
           {task.pipelineStatus === "infrastructure_failed" &&
           (task.reason || task.reasonSummary) ? (
-            <details className="mt-3 font-mono text-sm text-muted [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
-              <summary>Technical Details</summary>
-              <pre>{task.reason || task.reasonSummary}</pre>
-            </details>
+            <div className="mt-3 font-mono text-sm leading-6 text-muted">
+              <p>{task.reasonSummary}</p>
+              {task.reason && (
+                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
+                  <summary>Technical Details</summary>
+                  <pre>{task.reason.replace(`${task.reasonSummary}\n\n`, "")}</pre>
+                </details>
+              )}
+            </div>
           ) : task.reasonSummary && task.state !== "accepted" ? (
             <p
               className="mt-2 max-w-[90ch] font-mono text-sm leading-6 text-muted wrap-anywhere"

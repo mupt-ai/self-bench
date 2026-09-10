@@ -57,6 +57,10 @@ try {
     await readFile(join(installRoot, "node_modules", ".bin", name));
   }
   for (const asset of [
+    "dist/harbor-task/runtime/junit.py",
+    "dist/harbor-task/runtime/command.sh",
+    "dist/runtime/junit.py",
+    "dist/runtime/command.sh",
     "dist/api-main.js",
     "dist/temporal/worker-main.js",
     "dist/extension-authoring.bundle.js",
@@ -68,6 +72,23 @@ try {
   ]) {
     await readFile(join(installedRoot, asset));
   }
+  const runtimeModule = join(installedRoot, "dist/harbor-task/runtime-assets.js");
+  const assets = await run(
+    "node",
+    [
+      "--input-type=module",
+      "-e",
+      `
+    const {verifierRuntimeFiles} = await import(${JSON.stringify(runtimeModule)});
+    const files = verifierRuntimeFiles();
+    if (!files["runtime/junit.py"].includes("def main")) throw new Error("missing Python runtime");
+    if (!files["runtime/command.sh"].includes("run_verifier_command")) throw new Error("missing shell runtime");
+    console.log("runtime assets verified");
+  `,
+    ],
+    installRoot,
+  );
+  if (!assets.includes("runtime assets verified")) throw new Error("runtime assets not verified");
   for (const asset of [
     ".dockerignore",
     "compose.yaml",

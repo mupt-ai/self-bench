@@ -13,7 +13,7 @@ import { createRepoStore } from "../src/site/repo-store.js";
 import { createTaskStore } from "../src/site/task-store.js";
 import { testAuthConfig } from "./support/site-fixture.js";
 
-test("dropping attachment mappings preserves tasks, reviews, tombstones, evaluations and artifacts", async () => {
+test("review migrations preserve batch ownership, tasks, reviews, tombstones and artifacts", async () => {
   const client = new PGlite();
   const root = await mkdtemp(join(tmpdir(), "drop-repo-runs-"));
   try {
@@ -47,7 +47,7 @@ test("dropping attachment mappings preserves tasks, reviews, tombstones, evaluat
     const tasks = createTaskStore(db);
     const base = {
       repoId: repo.id,
-      runId: "run-before",
+      runId: "batch-before",
       pipelineStatus: "accepted" as const,
       stage: "accepted",
       difficulty: "easy" as const,
@@ -72,10 +72,11 @@ test("dropping attachment mappings preserves tasks, reviews, tombstones, evaluat
     const beforeTasks = await db.select().from(schema.tasks);
     const beforeEvaluations = await db.select().from(schema.evaluationRecords);
     const migration = await readFile(join(migrationsFolder(), "0003_drop_repo_runs.sql"), "utf8");
-    expect(migration.trim()).toBe('DROP TABLE "repo_runs";');
     await client.exec(migration);
-    expect((await client.query("select to_regclass('public.repo_runs') as name")).rows).toEqual([
-      { name: null },
+    const repair = await readFile(join(migrationsFolder(), "0004_preserve_batch_runs.sql"), "utf8");
+    await client.exec(repair);
+    expect((await client.query("select run_id from repo_runs")).rows).toEqual([
+      { run_id: "batch-before" },
     ]);
     expect(await db.select().from(schema.tasks)).toEqual(beforeTasks);
     expect(await db.select().from(schema.evaluationRecords)).toEqual(beforeEvaluations);
@@ -85,6 +86,12 @@ test("dropping attachment mappings preserves tasks, reviews, tombstones, evaluat
     expect(Buffer.from((await artifacts.getByKey("history/bundle")) ?? []).toString()).toBe(
       "retained",
     );
+    await client.exec('DROP TABLE "repo_runs";');
+    await client.exec(repair);
+    await client.exec(repair);
+    expect((await client.query("select to_regclass('public.repo_runs') as name")).rows).toEqual([
+      { name: "repo_runs" },
+    ]);
   } finally {
     await client.close();
     await rm(root, { recursive: true, force: true });

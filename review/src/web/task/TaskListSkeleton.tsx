@@ -3,7 +3,7 @@ export function TaskListSkeleton() {
     <ul
       className="list-none border border-line [&_li+li]:border-t [&_li+li]:border-line pointer-events-none"
       aria-busy="true"
-      aria-label="Loading tasks"
+      aria-label="Loading Tasks"
     >
       {[0, 1, 2, 3, 4, 5].map((index) => (
         <li key={index}>

@@ -60,6 +60,8 @@ export async function runVerifierRound(
   );
   const prompt = verifierPrompt({
     taskId: task.taskId,
+    testSelection: material.definition.testSelection,
+    testResults: material.definition.testResults,
     instruction: material.instruction,
     renderedReport: renderVerifyReport(report),
     couplingEvidence: material.couplingEvidence,

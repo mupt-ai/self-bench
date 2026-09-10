@@ -9,6 +9,7 @@ import {
   type RepoTaskCounts,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
+import { ListSkeleton, Skeleton } from "../LoadingSkeleton";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { EmptyState } from "../ui";
@@ -119,6 +120,7 @@ export function ReposPage() {
         </div>
       </div>
       {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
+      {repos.status === "loading" && !error && <ListSkeleton label="Loading Repositories" />}
       {repos.status === "ok" && repos.repos.length === 0 && (
         <EmptyState>No repositories connected. Connect a repository to get started.</EmptyState>
       )}
@@ -196,15 +198,21 @@ function RepoCardStats({ stats }: { stats: RepoStats | undefined }) {
       <dl className="m-0 grid grid-cols-3 gap-6 [&_dt]:font-mono [&_dt]:text-sm [&_dt]:font-medium [&_dt]:tracking-[0.14em] [&_dt]:text-dim [&_dt]:uppercase [&_dd]:mt-1.5 [&_dd]:font-sans [&_dd]:text-base [&_dd]:font-medium [&_dd]:text-ink">
         <div>
           <dt>Tasks</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-10" />
+          </dd>
         </div>
         <div>
           <dt>Awaiting Review</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-10" />
+          </dd>
         </div>
         <div>
           <dt>Last PR</dt>
-          <dd className="text-dim">…</dd>
+          <dd>
+            <Skeleton className="h-5 w-16" />
+          </dd>
         </div>
       </dl>
     );

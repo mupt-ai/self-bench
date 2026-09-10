@@ -4,8 +4,8 @@ import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
-import { generationEnvironment } from "../../site/generation-credentials.js";
 import { generationConfigEnvironment } from "../../site/generation-config.js";
+import { generationEnvironment } from "../../site/generation-credentials.js";
 
 export async function withGenerationRuntime<T>(
   config: SelfBenchWorkerConfig,
@@ -33,10 +33,14 @@ export async function withGenerationRuntime<T>(
   const settings = run.generation.settings;
   let selected: SelfBenchWorkerConfig;
   try {
-    if (run.version.executionBackend !== settings.sandbox ||
-        (settings.sandboxImage && settings.sandboxImage !== run.version.sandboxImage))
+    if (
+      run.version.executionBackend !== settings.sandbox ||
+      (settings.sandboxImage && settings.sandboxImage !== run.version.sandboxImage)
+    )
       throw new Error("Generation runtime does not match its saved configuration.");
-    selected = loadWorkerConfig(generationConfigEnvironment(settings, env, run.version.sandboxImage));
+    selected = loadWorkerConfig(
+      generationConfigEnvironment(settings, env, run.version.sandboxImage),
+    );
     if (selected.harborEnvironment !== run.version.harborEnvironment)
       throw new Error("Harbor verification does not match its saved configuration.");
   } catch (error) {
@@ -45,9 +49,16 @@ export async function withGenerationRuntime<T>(
       "GenerationConfiguration",
     );
   }
-  const execution = "timeoutCapMs" in selected.execution
-    ? { ...selected.execution, timeoutCapMs: Math.min(selected.execution.timeoutCapMs, run.version.sandboxTimeoutCapMs ?? selected.execution.timeoutCapMs) }
-    : selected.execution;
+  const execution =
+    "timeoutCapMs" in selected.execution
+      ? {
+          ...selected.execution,
+          timeoutCapMs: Math.min(
+            selected.execution.timeoutCapMs,
+            run.version.sandboxTimeoutCapMs ?? selected.execution.timeoutCapMs,
+          ),
+        }
+      : selected.execution;
   const configuredRun = {
     ...run,
     authoring: {

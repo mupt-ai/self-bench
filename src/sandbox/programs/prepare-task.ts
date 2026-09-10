@@ -41,6 +41,7 @@ export async function prepareTaskWorkspace(
     "-C",
     repositoryDirectory,
     "apply",
+    "--allow-empty",
     join(taskDirectory, "tests/test.patch"),
   ]);
   await runCommand("git", ["-C", repositoryDirectory, "add", "-N", "--all"]);

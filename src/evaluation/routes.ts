@@ -6,6 +6,8 @@ import type { User, UserStore } from "../auth/users.js";
 import type { RepoStore } from "../site/repo-store.js";
 import type { TaskStore } from "../site/task-store.js";
 import { tenantFor } from "../site/tenant.js";
+import type { CodexLogins } from "./codex-login.js";
+import { codexLoginRoutes } from "./codex-login-routes.js";
 import { evaluationSandboxes } from "./config.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { orgCredentialRoutes } from "./org-credential-routes.js";
@@ -49,6 +51,7 @@ export interface EvaluationRoutesOptions {
   start(input: EvaluationInput): Promise<void>;
   env?: NodeJS.ProcessEnv;
   records?: EncryptedRecordStore;
+  codexLogins?: CodexLogins;
 }
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
   const { users, repos, tasks, artifacts } = options;
@@ -59,6 +62,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       response: ServerResponse,
       user: User,
     ): Promise<boolean> {
+      if (await codexLoginRoutes(options, request, url, response, user)) return true;
       if (await orgCredentialRoutes(options, request, url, response, user)) return true;
       if (await platformRoutes(options, request, url, response, user)) return true;
       const match = route.exec(url.pathname);

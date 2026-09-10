@@ -8,6 +8,7 @@ import {
   type Repo,
   type RepoDetail,
 } from "./api";
+import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
 import { EmptyState } from "./ui";
 
@@ -190,7 +191,7 @@ export function ConnectRepoSheet({
           aria-label="Repositories"
         >
           {mode === "mine" && repos.status === "loading" && (
-            <p className="py-4 text-muted">Loading repositories…</p>
+            <ListSkeleton label="Loading Repositories" />
           )}
           {mode === "mine" && repos.status === "error" && (
             <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
@@ -201,7 +202,7 @@ export function ConnectRepoSheet({
             <EmptyState>{needle ? "No repositories match." : "No repositories here."}</EmptyState>
           )}
           {mode === "public" && detail?.status === "loading" && (
-            <p className="py-4 text-muted">Looking up {typedName}…</p>
+            <ListSkeleton label="Looking Up Repository" rows={1} />
           )}
           {mode === "public" && detail?.status === "error" && (
             <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
