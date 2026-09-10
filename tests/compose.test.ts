@@ -12,6 +12,17 @@ type ComposeDocument = {
 };
 
 describe("Compose provider credential boundary", () => {
+  test("defines one shared environment and preserves the checkout sandbox image on both services", async () => {
+    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
+    expect(source.match(/^x-selfbench-environment:/gm)).toHaveLength(1);
+    const compose = Bun.YAML.parse(source) as ComposeDocument;
+    for (const service of ["api", "worker"]) {
+      expect(compose.services[service]?.environment).toMatchObject({
+        SELFBENCH_DOCKER_IMAGE: `\${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}`,
+      });
+    }
+  });
+
   test("shares E2B run metadata with the API but gives control credentials only to the worker", async () => {
     const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
     const compose = Bun.YAML.parse(source) as ComposeDocument;

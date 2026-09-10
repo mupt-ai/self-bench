@@ -23,26 +23,6 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
   SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
 
-# Shared by the API and the worker. Provider control credentials and the GitHub OAuth secret
-# are deliberately not here: they go only to the service that needs them.
-x-selfbench-environment: &selfbench-environment
-  SELFBENCH_API_HOST: 0.0.0.0
-  SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
-  SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
-  SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
-  SELFBENCH_ARTIFACT_BACKEND: local
-  SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
-  SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
-  SELFBENCH_DOCKER_IMAGE: selfbench-sandbox:local
-  SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
-  SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
-  SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
-  SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
-  SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
-  # The site database: users, connected repos, and evaluation records. Migrations run at startup.
-  SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
-  SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
-
 services:
   postgres:
     image: postgres:17.6-bookworm
