@@ -12,6 +12,7 @@ import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { ListSkeleton, Skeleton } from "../LoadingSkeleton";
 import { GitHubMark, UnlinkIcon, useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { EmptyState } from "../ui";
 
 type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
 
@@ -121,16 +122,7 @@ export function ReposPage() {
       {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
       {repos.status === "loading" && !error && <ListSkeleton label="Loading Repositories" />}
       {repos.status === "ok" && repos.repos.length === 0 && (
-        <div className="border border-line-strong border-l-2 border-l-mint bg-surface px-5 py-6 sm:px-7">
-          <div className="max-w-2xl">
-            <h2 className="font-sans text-base leading-6 font-semibold text-ink">
-              Connect a Repository to Get Started
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Choose a repository in {org.login} to turn merged pull requests into reviewable tasks.
-            </p>
-          </div>
-        </div>
+        <EmptyState>No repositories connected. Connect a repository to get started.</EmptyState>
       )}
       {repos.status === "ok" && repos.repos.length > 0 && (
         <div className="flex flex-col gap-3">

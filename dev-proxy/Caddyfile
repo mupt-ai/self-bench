@@ -1,0 +1,12 @@
+# The admin API stays on its default loopback address inside the container: `caddy reload` needs it
+# and nothing publishes it.
+{
+	auto_https off
+}
+
+# One file per running stack, written by `self-bench up` and removed by `self-bench down`.
+import /etc/caddy/sites/*.caddy
+
+http:// {
+	respond "selfbench dev proxy: no stack is registered for this host" 404
+}

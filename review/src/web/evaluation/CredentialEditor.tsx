@@ -47,9 +47,11 @@ export function CredentialEditor({
   const keyLabel =
     draft.kind === "modal"
       ? "Modal Token Secret"
-      : sandboxes.some((entry) => entry.id === draft.kind)
-        ? "Sandbox API Key"
-        : "Model API Key";
+      : draft.kind === "vercel"
+        ? "Vercel Token"
+        : sandboxes.some((entry) => entry.id === draft.kind)
+          ? "Sandbox API Key"
+          : "Model API Key";
   return (
     <dialog
       ref={dialog}
@@ -221,6 +223,20 @@ export function CredentialEditor({
                   />
                 </label>
               )}
+              {draft.kind === "vercel" &&
+                (["teamId", "projectId"] as const).map((key) => (
+                  <label key={key} className={field} htmlFor={`credential-${key}`}>
+                    {key === "teamId" ? "Vercel Team ID" : "Vercel Project ID"}
+                    <Input
+                      id={`credential-${key}`}
+                      required
+                      autoComplete="off"
+                      maxLength={256}
+                      value={draft[key] ?? ""}
+                      onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+                    />
+                  </label>
+                ))}
               <CredentialSecret
                 draft={draft}
                 setDraft={setDraft}

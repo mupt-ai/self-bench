@@ -10,6 +10,7 @@ export const sandboxes = [
   { id: "e2b", label: "E2B" },
   { id: "modal", label: "Modal" },
   { id: "daytona", label: "Daytona" },
+  { id: "vercel", label: "Vercel" },
 ] as const;
 export function isSandbox(kind: CredentialInfo["kind"]) {
   return sandboxes.some((entry) => entry.id === kind);

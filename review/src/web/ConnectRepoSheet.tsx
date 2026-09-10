@@ -10,6 +10,7 @@ import {
 } from "./api";
 import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
+import { EmptyState } from "./ui";
 
 export interface ConnectRepoSheetProps {
   org: SiteOrg;
@@ -198,9 +199,7 @@ export function ConnectRepoSheet({
             </p>
           )}
           {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
-            <p className="py-4 text-muted">
-              {needle ? "No repositories match." : "No repositories here."}
-            </p>
+            <EmptyState>{needle ? "No repositories match." : "No repositories here."}</EmptyState>
           )}
           {mode === "public" && detail?.status === "loading" && (
             <ListSkeleton label="Looking Up Repository" rows={1} />

@@ -1,9 +1,10 @@
 import { ApplicationFailure } from "@temporalio/common";
-import { loadConfig, type SelfBenchWorkerConfig } from "../../config.js";
+import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../config.js";
 import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
+import { generationConfigEnvironment } from "../../site/generation-config.js";
 import { generationEnvironment } from "../../site/generation-credentials.js";
 
 export async function withGenerationRuntime<T>(
@@ -30,14 +31,34 @@ export async function withGenerationRuntime<T>(
     );
   }
   const settings = run.generation.settings;
-  const selected = loadConfig({
-    ...env,
-    SELFBENCH_EXECUTION_BACKEND: settings.sandbox,
-    SELFBENCH_HARBOR_ENVIRONMENT: settings.sandbox,
-  });
-  const execution = selected.execution;
-  if (execution.kind !== "docker" && execution.kind !== "modal")
-    throw new Error("Unsupported generation sandbox");
+  let selected: SelfBenchWorkerConfig;
+  try {
+    if (
+      run.version.executionBackend !== settings.sandbox ||
+      (settings.sandboxImage && settings.sandboxImage !== run.version.sandboxImage)
+    )
+      throw new Error("Generation runtime does not match its saved configuration.");
+    selected = loadWorkerConfig(
+      generationConfigEnvironment(settings, env, run.version.sandboxImage),
+    );
+    if (selected.harborEnvironment !== run.version.harborEnvironment)
+      throw new Error("Harbor verification does not match its saved configuration.");
+  } catch (error) {
+    throw ApplicationFailure.nonRetryable(
+      error instanceof Error ? error.message : "Generation runtime unavailable",
+      "GenerationConfiguration",
+    );
+  }
+  const execution =
+    "timeoutCapMs" in selected.execution
+      ? {
+          ...selected.execution,
+          timeoutCapMs: Math.min(
+            selected.execution.timeoutCapMs,
+            run.version.sandboxTimeoutCapMs ?? selected.execution.timeoutCapMs,
+          ),
+        }
+      : selected.execution;
   const configuredRun = {
     ...run,
     authoring: {
@@ -46,11 +67,12 @@ export async function withGenerationRuntime<T>(
       reasoningEffort: settings.reasoning,
     },
   };
-  return withExecutionEnvironment(env, () =>
-    action(
-      createSandboxExecutor({ ...execution, image: run.version.sandboxImage }, env),
-      selected.harborEnvironment,
-      configuredRun,
-    ),
-  );
+  return withExecutionEnvironment(env, async () => {
+    const sandbox = createSandboxExecutor(execution, env);
+    try {
+      return await action(sandbox, selected.harborEnvironment, configuredRun);
+    } finally {
+      sandbox.close();
+    }
+  });
 }

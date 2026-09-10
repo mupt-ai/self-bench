@@ -1,9 +1,11 @@
+import { projectRoot as packageRoot } from "../project-paths.js";
 import { download, passthrough } from "./api-client.js";
 import { associate } from "./associate.js";
+import { proxy } from "./dev-proxy.js";
 import { printHelp } from "./help.js";
 import { replay } from "./replay.js";
 import { run } from "./run.js";
-import { down, setup, up } from "./stack.js";
+import { checkoutEnvironment, down, setup, up } from "./stack.js";
 import { fail, requiredArgument } from "./values.js";
 import { view } from "./view.js";
 
@@ -27,6 +29,9 @@ export async function runCli(args: string[]): Promise<void> {
       break;
     case "down":
       await down();
+      break;
+    case "proxy":
+      await proxy(rest, checkoutEnvironment(packageRoot(import.meta.url)));
       break;
     case "status":
       await passthrough("GET", `/v1/runs/${requiredArgument(rest, "run ID")}`);

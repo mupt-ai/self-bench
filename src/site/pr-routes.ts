@@ -8,6 +8,7 @@ import type { SelfBenchConfig } from "../config.js";
 import { listCredentials } from "../evaluation/credentials.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
+import { EXECUTION_BACKENDS } from "../providers.js";
 import { checkGenerationCredentials, generationRecordPath } from "./generation-credentials.js";
 import { generationModels, generationSettingsSchema } from "./generation-settings.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
@@ -75,7 +76,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
       if (configuring) {
         sendJson(response, 200, {
           models: generationModels,
-          sandboxes: ["modal", "docker"],
+          sandboxes: EXECUTION_BACKENDS,
           credentials: options.records
             ? await listCredentials(orgRecords(options.records, tenant.id), tenant.id)
             : [],

@@ -1,4 +1,7 @@
-name: selfbench
+# The project name, host ports, and image tags are per checkout when started through
+# `self-bench up` (see src/cli/stack-environment.ts), so several worktrees run side by side.
+# Plain `docker compose up` keeps the historical defaults below.
+name: ${COMPOSE_PROJECT_NAME:-selfbench}
 
 # Shared by the API and the worker. Provider control credentials and the GitHub OAuth secret
 # are deliberately not here: they go only to the service that needs them.
@@ -10,7 +13,7 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_ARTIFACT_BACKEND: local
   SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
   SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
-  SELFBENCH_DOCKER_IMAGE: selfbench-sandbox:local
+  SELFBENCH_DOCKER_IMAGE: ${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}
   SELFBENCH_HARBOR_ENVIRONMENT: ${SELFBENCH_HARBOR_ENVIRONMENT:-}
   SELFBENCH_VERCEL_IMAGE: ${SELFBENCH_VERCEL_IMAGE:-}
   SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
@@ -61,11 +64,11 @@ services:
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: postgres
     ports:
-      - "127.0.0.1:7233:7233"
+      - "127.0.0.1:${SELFBENCH_TEMPORAL_PORT:-7233}:7233"
     restart: on-failure
 
   api:
-    image: selfbench:local
+    image: ${SELFBENCH_IMAGE:-selfbench:local}
     build:
       context: .
       args:
@@ -85,13 +88,14 @@ services:
       # The origin browsers use; it forms the OAuth callback URL, so it must match the OAuth app.
       SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
     ports:
-      - "127.0.0.1:8080:8080"
+      # Bind 0.0.0.0 (SELFBENCH_SITE_BIND) to reach the site from other machines, e.g. a tailnet.
+      - "${SELFBENCH_SITE_BIND:-127.0.0.1}:${SELFBENCH_SITE_PORT:-8080}:8080"
     volumes:
       - artifacts:/var/lib/selfbench/artifacts
     restart: on-failure
 
   worker:
-    image: selfbench:local
+    image: ${SELFBENCH_IMAGE:-selfbench:local}
     build:
       context: .
       args:

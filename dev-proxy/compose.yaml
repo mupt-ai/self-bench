@@ -1,0 +1,33 @@
+# One per machine, shared by every SelfBench stack: `self-bench proxy up`.
+#
+# caddy answers http://<project>.<SELFBENCH_DEV_DOMAIN> on SELFBENCH_DEV_PROXY_PORT (80 unless the
+# Docker runtime reserves it, as OrbStack does for its own domains) and forwards each host to that
+# stack's API port on the host (`self-bench up` drops a site file into the sites directory and
+# reloads). dns answers every name under the domain with SELFBENCH_DEV_PROXY_IP so the domain
+# never needs public records: point the tailnet's split DNS for the domain at this machine.
+name: selfbench-dev-proxy
+
+services:
+  caddy:
+    image: caddy:2.10.2
+    ports:
+      - "${SELFBENCH_DEV_PROXY_BIND:-0.0.0.0}:${SELFBENCH_DEV_PROXY_PORT:-80}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${SELFBENCH_DEV_PROXY_SITES}:/etc/caddy/sites:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  dns:
+    image: coredns/coredns:1.13.1
+    command: ["-conf", "/etc/coredns/Corefile"]
+    environment:
+      SELFBENCH_DEV_DOMAIN: ${SELFBENCH_DEV_DOMAIN}
+      SELFBENCH_DEV_PROXY_IP: ${SELFBENCH_DEV_PROXY_IP}
+    ports:
+      - "${SELFBENCH_DEV_PROXY_BIND:-0.0.0.0}:53:53/udp"
+      - "${SELFBENCH_DEV_PROXY_BIND:-0.0.0.0}:53:53/tcp"
+    volumes:
+      - ./Corefile:/etc/coredns/Corefile:ro
+    restart: unless-stopped

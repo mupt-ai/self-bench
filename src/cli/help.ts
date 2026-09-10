@@ -7,6 +7,7 @@ Usage:
   self-bench up [--backend docker|modal|vercel|e2b] [--harbor-environment docker|modal]
                 [--modal-config PATH] [--vercel-profile NAME]
   self-bench down
+  self-bench proxy up|down
   self-bench associate --repo PATH --list-sessions
   self-bench associate --repo PATH --pr NUMBER --session TYPE:SESSION_ID [...]
                        --output ASSOCIATION.json
@@ -21,7 +22,9 @@ Usage:
   self-bench list
   self-bench view TASKS_DIR [--port N] [--host HOST]
 
-The up command starts the local stack. Docker and Modal default Harbor to the matching backend; Vercel
+The up command starts the local stack, one Compose project per checkout so worktrees run side by
+side. With SELFBENCH_DEV_DOMAIN set, self-bench proxy up runs one shared Caddy and DNS pair for the
+machine and each stack answers at http://<project>.<domain>. Docker and Modal default Harbor to the matching backend; Vercel
 and E2B require --harbor-environment because Harbor supports neither. Modal generation or Harbor uses
 ~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
 project, publish the pinned runtime image, verify access, and save an owner-only local profile. E2B setup
