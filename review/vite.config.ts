@@ -2,6 +2,11 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const additionalAllowedHosts = (process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
 export default defineConfig({
   root: "review",
   plugins: [react(), tailwindcss()],
@@ -11,7 +16,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 850,
   },
   server: {
-    allowedHosts: ["avyays-mac-mini.tailf3cee5.ts.net"],
+    ...(additionalAllowedHosts.length > 0 ? { allowedHosts: additionalAllowedHosts } : {}),
     proxy: {
       "^/api/orgs/[^/]+/repos/[^/]+/[^/]+/evaluations/(comparisons|credentials)(?:/|$)":
         process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",
@@ -27,6 +32,6 @@ export default defineConfig({
     },
   },
   preview: {
-    allowedHosts: ["avyays-mac-mini.tailf3cee5.ts.net"],
+    ...(additionalAllowedHosts.length > 0 ? { allowedHosts: additionalAllowedHosts } : {}),
   },
 });
