@@ -8,4 +8,7 @@ machine_type      = "e2-standard-2"
 enable_public_web = false
 # Proposed: ZONAL shared-core dev; REGIONAL dedicated-core prod. Review cost first.
 create_cloud_sql = true
+cloud_sql_tier = "db-f1-micro"
+cloud_sql_availability_type = "ZONAL"
+cloud_sql_retained_backups = 7
 operator_members = ["user:YOUR-GCP-EMAIL"]

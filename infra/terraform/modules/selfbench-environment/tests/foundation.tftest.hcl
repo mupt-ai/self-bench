@@ -45,16 +45,26 @@ run "dev_foundation" {
 run "prod_foundation" {
   command = plan
   variables {
-    project_id  = "selfbench-prod-testing"
-    environment = "prod"
+    project_id                  = "selfbench-prod-testing"
+    environment                 = "prod"
+    cloud_sql_tier              = "db-custom-1-3840"
+    cloud_sql_availability_type = "ZONAL"
   }
   assert {
     condition     = google_compute_instance.app.deletion_protection && google_sql_database_instance.app[0].deletion_protection && google_sql_database_instance.app[0].settings[0].deletion_protection_enabled
     error_message = "Production compute/database must be deletion-protected."
   }
   assert {
-    condition     = google_sql_database_instance.app[0].settings[0].availability_type == "REGIONAL" && google_sql_database_instance.app[0].settings[0].backup_configuration[0].point_in_time_recovery_enabled
-    error_message = "Proposed prod SQL must enable HA and point-in-time recovery."
+    condition     = google_sql_database_instance.app[0].settings[0].tier == "db-custom-1-3840"
+    error_message = "Production pilot SQL must use the reviewed lower-cost tier."
+  }
+  assert {
+    condition     = google_sql_database_instance.app[0].settings[0].availability_type == "ZONAL"
+    error_message = "Production pilot SQL must be zonal until HA is explicitly approved."
+  }
+  assert {
+    condition     = google_sql_database_instance.app[0].settings[0].backup_configuration[0].point_in_time_recovery_enabled
+    error_message = "Proposed prod SQL must enable point-in-time recovery."
   }
   assert {
     condition     = output.deployment.task_queue == "selfbench-prod" && google_storage_bucket.artifacts.name == "selfbench-prod-testing-artifacts"
@@ -92,10 +102,13 @@ run "reject_cross_region_zone" {
   variables { zone = "us-east1-b" }
   expect_failures = [var.zone]
 }
-run "reject_cross_environment_project" {
+run "allow_operator_chosen_project" {
   command = plan
-  variables { project_id = "selfbench-prod-testing" }
-  expect_failures = [var.project_id]
+  variables { project_id = "community-production" }
+  assert {
+    condition     = google_compute_instance.app.project == "community-production"
+    error_message = "The reusable module must accept an operator-chosen project ID."
+  }
 }
 run "scoped_operator_and_signer" {
   command = plan

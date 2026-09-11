@@ -2,8 +2,8 @@ variable "project_id" {
   description = "Existing, billing-linked project dedicated to this environment."
   type        = string
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.project_id)) && startswith(var.project_id, "selfbench-${var.environment}-")
-    error_message = "Use an existing selfbench-<environment>-<suffix> project ID."
+    condition     = can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.project_id))
+    error_message = "Use an existing GCP project ID, not a project name or number."
   }
 }
 variable "environment" {
@@ -45,6 +45,29 @@ variable "create_cloud_sql" {
   description = "Proposed managed DB. False means an external managed database must be configured before release."
   type        = bool
   default     = true
+}
+variable "cloud_sql_tier" {
+  description = "Cloud SQL machine tier; choose a larger tier only after reviewing cost and availability needs."
+  type        = string
+  default     = "db-f1-micro"
+}
+variable "cloud_sql_availability_type" {
+  description = "Cloud SQL availability; REGIONAL materially increases cost."
+  type        = string
+  default     = "ZONAL"
+  validation {
+    condition     = contains(["ZONAL", "REGIONAL"], var.cloud_sql_availability_type)
+    error_message = "Cloud SQL availability must be ZONAL or REGIONAL."
+  }
+}
+variable "cloud_sql_retained_backups" {
+  description = "Number of retained Cloud SQL backups."
+  type        = number
+  default     = 7
+  validation {
+    condition     = var.cloud_sql_retained_backups >= 1 && var.cloud_sql_retained_backups <= 35
+    error_message = "Cloud SQL retained backups must be between 1 and 35."
+  }
 }
 variable "operator_members" {
   description = "Explicit user/group IAM members permitted to administer this environment through IAP."

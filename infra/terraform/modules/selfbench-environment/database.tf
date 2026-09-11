@@ -23,8 +23,8 @@ resource "google_sql_database_instance" "app" {
   deletion_protection = true
   settings {
     edition                     = "ENTERPRISE"
-    tier                        = var.environment == "prod" ? "db-custom-2-7680" : "db-f1-micro"
-    availability_type           = var.environment == "prod" ? "REGIONAL" : "ZONAL"
+    tier                        = var.cloud_sql_tier
+    availability_type           = var.cloud_sql_availability_type
     disk_size                   = 20
     disk_autoresize             = true
     disk_autoresize_limit       = 100
@@ -36,7 +36,7 @@ resource "google_sql_database_instance" "app" {
       point_in_time_recovery_enabled = true
       transaction_log_retention_days = 7
       backup_retention_settings {
-        retained_backups = var.environment == "prod" ? 14 : 7
+        retained_backups = var.cloud_sql_retained_backups
       }
     }
     ip_configuration {

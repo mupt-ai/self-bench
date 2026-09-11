@@ -24,6 +24,18 @@ variable "create_cloud_sql" {
   type    = bool
   default = true
 }
+variable "cloud_sql_tier" {
+  type    = string
+  default = "db-f1-micro"
+}
+variable "cloud_sql_availability_type" {
+  type    = string
+  default = "ZONAL"
+}
+variable "cloud_sql_retained_backups" {
+  type    = number
+  default = 7
+}
 variable "operator_members" {
   description = "Explicit user/group principals approved to administer this environment."
   type        = set(string)

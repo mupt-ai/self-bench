@@ -16,7 +16,7 @@ All names in `*.example` are placeholders. Do not copy production secrets into d
                     |                                         |
           VM: API + combined worker                VM: API + combined worker
           GCS: dev artifacts                       GCS: prod artifacts
-          SQL: private, zonal                       SQL: private, regional HA
+          SQL: private, zonal                       SQL: private, zonal pilot
           Secret Manager: dev                      Secret Manager: prod
                     |                                         |
           Temporal: selfbench-dev.<account>         Temporal: selfbench-prod.<account>
@@ -41,14 +41,16 @@ Temporal Cloud namespaces must be separate; queues alone are not an access bound
 | --- | --- | --- |
 | Region / zone | `us-central1` / `us-central1-a` | Same proposal |
 | Coordinator VM | `e2-standard-2`, 50 GB balanced boot disk | Same starting size |
-| Postgres 17 | Cloud SQL, zonal `db-f1-micro` | Cloud SQL, regional `db-custom-2-7680` |
+| Postgres 17 | Cloud SQL, zonal `db-f1-micro` | Cloud SQL, zonal pilot `db-custom-1-3840` |
 | SQL backups | PITR, 7 retained backups | PITR, 14 retained backups |
 | Artifact bucket | Private, versioned, no destructive cleanup | Same |
 | Public ingress | Disabled | Disabled |
 | SSH | IAP-only with OS Login | Same |
 | App availability | Single VM | Single VM, **not an HA application** |
 
-These are proposals, not measured capacity requirements or cost estimates. Cloud SQL HA, VMs,
+These are proposals, not measured capacity requirements or cost estimates. Regional Cloud SQL HA is
+intentionally not enabled by the pilot defaults; opt into it explicitly after reviewing cost and
+availability needs. Cloud SQL, VMs,
 external IPs, storage versions, flow logs and sandbox/model usage incur separate charges. Set project
 budgets/alerts and sandbox spending controls before provisioning. Budget alerts are not spending caps.
 Set `create_cloud_sql=false` only when a separate managed database is already selected.
