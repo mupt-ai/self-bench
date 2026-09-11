@@ -1,0 +1,14 @@
+{
+  "account": "operator@example.com",
+  "project_id": "your-existing-project",
+  "project_number": "123456789012",
+  "repository": "your-org/your-repository",
+  "repository_id": "12345678",
+  "repository_owner_id": "1234567",
+  "branch": "main",
+  "environment": "dev",
+  "identity_prefix": "selfbench-dev",
+  "state_bucket": "your-existing-state-bucket",
+  "plan_bucket": "your-private-plan-bucket",
+  "region": "us-central1"
+}

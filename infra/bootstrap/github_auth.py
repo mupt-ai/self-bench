@@ -56,8 +56,28 @@ def claims(config):
     }
 
 
-def condition(config):
-    return " && ".join(f"assertion.{key} == '{value}'" for key, value in claims(config).items())
+def condition(config, events=("workflow_dispatch",)):
+    if not events or len(set(events)) != len(events) or not set(events) <= {"push", "workflow_dispatch", "release"}:
+        raise ValueError("Only explicit default-branch push/manual events may be trusted.")
+    if "release" in events:
+        if events != ("release",):
+            raise ValueError("Release trust cannot be mixed with branch events.")
+        base = claims(config)
+        clauses = [f"assertion.{key} == '{base[key]}'" for key in
+                   ("repository_id", "repository_owner_id", "repository", "sub", "runner_environment")]
+        clauses.extend(["assertion.event_name == 'release'", "assertion.ref.startsWith('refs/tags/')",
+                        f"assertion.workflow_ref == '{config['repository']}/{config['workflow_path']}@' + assertion.ref",
+                        f"assertion.job_workflow_ref == '{config['repository']}/.github/workflows/deploy-reusable.yml@' + assertion.ref"])
+        return " && ".join(clauses)
+    clauses = []
+    for key, value in claims(config).items():
+        if key == "event_name" and len(events) > 1:
+            clauses.append("(" + " || ".join(f"assertion.event_name == '{event}'" for event in events) + ")")
+        else:
+            clauses.append(f"assertion.{key} == '{events[0] if key == 'event_name' else value}'")
+    if config["workflow_path"] == ".github/workflows/deploy-dev.yml":
+        clauses.append(f"assertion.job_workflow_ref == '{config['repository']}/.github/workflows/deploy-reusable.yml@refs/heads/{config['branch']}'")
+    return " && ".join(clauses)
 
 
 def coordinates(config):
@@ -95,7 +115,7 @@ def read_after_create(config, *parts, fresh):
                 raise
 
 
-def planned_commands(config):
+def planned_commands(config, events=("workflow_dispatch",)):
     names = coordinates(config)
     pool_args = ["--location=global", f"--workload-identity-pool={config['pool_id']}"]
     return [
@@ -105,7 +125,7 @@ def planned_commands(config):
         command(config, "iam", "workload-identity-pools", "providers", "create-oidc", config["provider_id"],
                 *pool_args, "--issuer-uri=https://token.actions.githubusercontent.com",
                 "--attribute-mapping=" + ",".join(f"{key}={value}" for key, value in MAPPING.items()),
-                f"--attribute-condition={condition(config)}", f"--description={DESCRIPTION}"),
+                f"--attribute-condition={condition(config, events)}", f"--description={DESCRIPTION}"),
         command(config, "iam", "service-accounts", "create", config["service_account_id"],
                 "--display-name=SelfBench CI authentication", f"--description={DESCRIPTION}"),
         command(config, "iam", "service-accounts", "add-iam-policy-binding", names["service_account"],
@@ -113,13 +133,13 @@ def planned_commands(config):
     ]
 
 
-def verify_provider(config, provider):
+def verify_provider(config, provider, events=("workflow_dispatch",)):
     expected = coordinates(config)["provider"]
     oidc = provider.get("oidc", {})
     if (provider.get("name") != expected or provider.get("state") != "ACTIVE" or provider.get("disabled", False)
             or provider.get("description") != DESCRIPTION
             or provider.get("attributeMapping") != MAPPING
-            or provider.get("attributeCondition") != condition(config)
+            or provider.get("attributeCondition") != condition(config, events)
             or oidc.get("issuerUri") != "https://token.actions.githubusercontent.com"
             or oidc.get("allowedAudiences") or oidc.get("jwksJson")):
         raise ValueError("Provider identity/trust differs; refusing to adopt or overwrite it.")
@@ -133,8 +153,8 @@ def verify_bindings(config, policy):
     return bool(bindings)
 
 
-def execute(config):
-    names, commands = coordinates(config), planned_commands(config)
+def execute(config, events=("workflow_dispatch",), allowed_project_roles=()):
+    names, commands = coordinates(config), planned_commands(config, events)
     project = read(config, "projects", "describe", config["project_id"])
     repo = json.loads(subprocess.check_output(["gh", "api", f"repos/{config['repository']}"], text=True))
     if (project.get("projectId") != config["project_id"]
@@ -162,7 +182,7 @@ def execute(config):
     if not providers:
         subprocess.run(commands[2], check=True)
     verify_provider(config, read_after_create(config, "iam", "workload-identity-pools", "providers", "describe",
-                                              config["provider_id"], *scope, fresh=not providers))
+                                              config["provider_id"], *scope, fresh=not providers), events)
     accounts = read(config, "iam", "service-accounts", "list")
     new_account = not any(account.get("email") == names["service_account"] for account in accounts)
     if new_account:
@@ -174,9 +194,10 @@ def execute(config):
         raise ValueError("Service account identity/state differs; refusing adoption.")
     # This step establishes authentication, NOT cloud resource or Terraform state authorization.
     project_policy = read(config, "projects", "get-iam-policy", config["project_id"])
-    if any(f"serviceAccount:{names['service_account']}" in binding.get("members", [])
-           for binding in project_policy.get("bindings", [])):
-        raise ValueError("Authentication-only account already has project roles; review instead of reusing.")
+    existing_roles = {binding["role"] for binding in project_policy.get("bindings", [])
+                      if f"serviceAccount:{names['service_account']}" in binding.get("members", [])}
+    if existing_roles - set(allowed_project_roles):
+        raise ValueError("Service account has unexpected project roles; review instead of reusing.")
     if read(config, "iam", "service-accounts", "keys", "list", f"--iam-account={names['service_account']}", "--managed-by=user"):
         raise ValueError("Authentication-only account has user-managed keys; review instead of reusing.")
     policy = read(config, "iam", "service-accounts", "get-iam-policy", names["service_account"])

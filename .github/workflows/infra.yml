@@ -2,10 +2,10 @@ name: Infrastructure Validation
 
 on:
   pull_request:
-    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', 'Dockerfile', '.dockerignore']
+    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', '.github/workflows/deploy-*.yml', 'Dockerfile', '.dockerignore']
   push:
     branches: [main]
-    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', 'Dockerfile', '.dockerignore']
+    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', '.github/workflows/deploy-*.yml', 'Dockerfile', '.dockerignore']
   workflow_dispatch:
 
 permissions:

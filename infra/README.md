@@ -75,7 +75,10 @@ buckets; Temporal namespaces and scoped API keys; OAuth apps/domains; SQL login 
 secret payloads; TLS proxy installation; authenticated image publishing/promotion; live migration,
 recovery and end-to-end tests. Keyless GitHub authentication is a separate opt-in bootstrap described in
 [`github-auth.md`](github-auth.md). Its manual smoke workflow does not grant planning/apply permissions.
-The validation workflow cannot deploy or obtain cloud credentials; automatic deployment remains unwired.
+The validation workflow cannot deploy or obtain cloud credentials; Terraform CI/CD is opt-in as described below; application deployment remains unwired.
+
+For the opt-in unified dev/prod deployment workflow, see
+[`terraform-cicd.md`](terraform-cicd.md). Public PR validation remains credential-free.
 
 ## 1. Confirm the Target Account and Bootstrap
 

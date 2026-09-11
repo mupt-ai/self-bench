@@ -1,0 +1,15 @@
+name: Deploy Prod
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+  id-token: write
+jobs:
+  deploy:
+    if: vars.GCP_DEPLOY_ENABLED == 'true' && !github.event.release.prerelease && !github.event.release.draft
+    uses: ./.github/workflows/deploy-reusable.yml
+    with:
+      target_environment: prod

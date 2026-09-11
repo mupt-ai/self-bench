@@ -1,0 +1,148 @@
+name: Full Deploy
+
+on:
+  workflow_call:
+    inputs:
+      target_environment:
+        type: string
+        required: true
+
+      infrastructure_only:
+        type: boolean
+        default: false
+
+permissions: {}
+
+# Never cancel a running apply. Terraform additionally locks its own GCS state.
+concurrency:
+  group: terraform-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: vars.GCP_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run validate
+
+  plan:
+    needs: validate
+    if: vars.GCP_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+      manifest_generation: ${{ steps.plan.outputs.manifest_generation }}
+      manifest_sha256: ${{ steps.plan.outputs.manifest_sha256 }}
+    env:
+      TF_ENVIRONMENT: ${{ inputs.target_environment }}
+      INFRASTRUCTURE_ONLY: ${{ inputs.infrastructure_only }}
+      GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_PLAN_BUCKET: ${{ vars.TF_PLAN_BUCKET }}
+      TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
+      RUNTIME_SECRET_VERSIONS: ${{ vars.RUNTIME_SECRET_VERSIONS }}
+      SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+      RELEASE_PRERELEASE: ${{ toJSON(github.event.release.prerelease) }}
+      RELEASE_DRAFT: ${{ toJSON(github.event.release.draft) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify Trusted Deploy Source and Runtime Settings
+        run: |
+          python3 -m infra.ci.source
+          python3 -c 'import os; from infra.ci.deploy import preflight; preflight(os.environ)'
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.14.2
+          terraform_wrapper: false
+      - name: Generate and Store Private Plan
+        id: plan
+        run: python3 -m infra.ci.terraform plan
+
+  deploy:
+    needs: plan
+    if: needs.plan.result == 'success' && vars.GCP_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Production approval belongs to prod; dev follows its own environment policy.
+    environment: ${{ inputs.target_environment }}
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+      id-token: write
+    env:
+      TF_ENVIRONMENT: ${{ inputs.target_environment }}
+      INFRASTRUCTURE_ONLY: ${{ inputs.infrastructure_only }}
+      GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_PLAN_BUCKET: ${{ vars.TF_PLAN_BUCKET }}
+      TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
+      RUNTIME_SECRET_VERSIONS: ${{ vars.RUNTIME_SECRET_VERSIONS }}
+      SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+      RELEASE_PRERELEASE: ${{ toJSON(github.event.release.prerelease) }}
+      RELEASE_DRAFT: ${{ toJSON(github.event.release.draft) }}
+      PLAN_MANIFEST_GENERATION: ${{ needs.plan.outputs.manifest_generation }}
+      PLAN_MANIFEST_SHA256: ${{ needs.plan.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify Trusted Deploy Source and Runtime Settings
+        run: |
+          python3 -m infra.ci.source
+          python3 -c 'import os; from infra.ci.deploy import preflight; preflight(os.environ)'
+      - name: Verify Apply Approval Protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m infra.ci.approval
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.14.2
+          terraform_wrapper: false
+      - name: Apply the Approved Saved Plan
+        if: needs.plan.outputs.has_changes == 'true'
+        run: python3 -m infra.ci.terraform apply
+      - name: Infrastructure Bootstrap Complete
+        if: inputs.infrastructure_only
+        run: echo 'Infrastructure-only run complete. Configure DB login, secrets, Temporal, OAuth, DNS and TLS before a full deployment.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Build, Back Up, Migrate, Deploy, and Verify
+        if: ${{ !inputs.infrastructure_only }}
+        env:
+          RUNTIME_SECRET_VERSIONS: ${{ vars.RUNTIME_SECRET_VERSIONS }}
+          SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+        run: python3 -m infra.ci.deploy
