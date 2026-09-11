@@ -13,5 +13,5 @@ export function nextModelSelection(
     );
     if (harness) return { catalogId: model.id, credentialId: credential.id, harnesses: [harness] };
   }
-  return { catalogId: model.id, credentialId: "", harnesses: [] };
+  return undefined;
 }
