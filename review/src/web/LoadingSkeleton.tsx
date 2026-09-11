@@ -2,7 +2,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`block animate-pulse bg-surface-3 motion-reduce:animate-none ${className}`}
+      className={`block animate-pulse bg-accent motion-reduce:animate-none ${className}`}
     />
   );
 }
@@ -12,7 +12,7 @@ export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number
     <div
       role="status"
       aria-label={label}
-      className="divide-y divide-line border border-line bg-surface"
+      className="divide-y divide-border border border-border bg-card"
     >
       <span className="sr-only">{label}</span>
       {["first", "second", "third", "fourth"].slice(0, rows).map((key) => (
@@ -35,7 +35,7 @@ export function SiteSkeleton() {
       <span className="sr-only">Loading workspace…</span>
       <aside
         aria-hidden="true"
-        className="fixed inset-y-0 left-0 hidden w-60 space-y-6 border-r border-line bg-surface p-6 lg:block"
+        className="fixed inset-y-0 left-0 hidden w-60 space-y-6 border-r border-border bg-card p-6 lg:block"
       >
         <Skeleton className="h-8 w-36" />
         <Skeleton className="h-10 w-full" />
@@ -44,7 +44,7 @@ export function SiteSkeleton() {
       </aside>
       <div
         aria-hidden="true"
-        className="flex h-14 items-center justify-end border-b border-line px-8"
+        className="flex h-14 items-center justify-end border-b border-border px-8"
       >
         <Skeleton className="size-7" />
       </div>

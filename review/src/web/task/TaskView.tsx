@@ -79,17 +79,19 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
   ];
 
   return (
-    <div className="grid min-h-0 min-w-0 grid-cols-1 grid-rows-[140px_minmax(0,1fr)] md:grid-cols-[300px_minmax(0,1fr)] md:grid-rows-1">
+    <div className="grid min-h-0 min-w-0 grid-cols-1 grid-rows-[140px_minmax(0,1fr)] md:grid-cols-[240px_minmax(0,1fr)] md:grid-rows-1">
       <aside
-        className="flex min-h-0 flex-col border-r border-b border-line bg-bg md:border-b-0"
+        className="flex min-h-0 flex-col border-r border-b border-border bg-background md:border-b-0"
         aria-label="Files"
       >
-        <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-4">
-          <span className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
+        <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border px-4">
+          <span className="font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase">
             Files
           </span>
           {files && (
-            <span className="font-mono text-sm font-medium text-dim">{files.files.length}</span>
+            <span className="font-mono text-sm font-medium text-muted-foreground">
+              {files.files.length}
+            </span>
           )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
@@ -100,7 +102,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
               <FileTree files={files.files} current={openFile?.path ?? null} onOpen={openPath} />
             )
           ) : error ? (
-            <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{error}</p>
+            <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{error}</p>
           ) : (
             <p className={loading}>Loading files…</p>
           )}
@@ -125,7 +127,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           ))}
         </div>
         {error && tab !== "pipeline" ? (
-          <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{error}</p>
+          <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{error}</p>
         ) : tab === "pipeline" ? (
           <AgentWorkSheet source={source} row={row} />
         ) : tab === "file" ? (

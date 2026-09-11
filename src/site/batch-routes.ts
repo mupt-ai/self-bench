@@ -5,8 +5,11 @@ import type { AuthConfig } from "../auth/config.js";
 import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
 import type { SelfBenchConfig } from "../config.js";
+import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { orgRecords } from "../evaluation/org-records.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
+import { checkGenerationCredentials, generationRecordPath } from "./generation-credentials.js";
 import type { RepoStore } from "./repo-store.js";
 import type { RunStore } from "./run-store.js";
 import type { TaskStore } from "./task-store.js";
@@ -26,6 +29,7 @@ export interface BatchRoutesOptions {
   status: (runId: string) => Promise<BatchStatus>;
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
+  records?: EncryptedRecordStore;
 }
 export interface BatchRoutes {
   handle(
@@ -44,7 +48,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
       if (!match?.[1] || !match[2] || !match[3]) return false;
       const tenant = await tenantFor(users, user, match[1]);
       const repo = tenant ? await repos.find(tenant.id, `${match[2]}/${match[3]}`) : undefined;
-      if (!repo) {
+      if (!repo || !tenant) {
         sendJson(response, 404, { error: "repository is not connected here" });
         return true;
       }
@@ -60,22 +64,52 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         const parsed = batchSubmissionSchema.safeParse(body);
         if (!parsed.success) {
           sendJson(response, 400, {
-            error:
-              "Request 1–10000 candidates total using nonnegative whole counts for easy, medium and hard.",
+            error: parsed.error.issues.some((issue) => issue.path[0] === "generation")
+              ? "Choose valid generation models, reasoning, sandbox, and credentials."
+              : "Request 1–10000 candidates total using nonnegative whole counts for easy, medium and hard.",
           });
           return true;
+        }
+        const generation = parsed.data.generation
+          ? {
+              ownerId: tenant.id,
+              orgId: tenant.id,
+              repoId: repo.id,
+              settings: parsed.data.generation,
+            }
+          : undefined;
+        if (generation) {
+          if (!options.records) {
+            sendJson(response, 503, { error: "Generation credential storage is not configured." });
+            return true;
+          }
+          try {
+            await checkGenerationCredentials(
+              orgRecords(options.records, tenant.id),
+              tenant.id,
+              generation.settings,
+            );
+          } catch (error) {
+            sendJson(response, 400, {
+              error: error instanceof Error ? error.message : "Credential unavailable",
+            });
+            return true;
+          }
         }
         const token = await users.gitHubToken(user.githubId);
         if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
         const input = await prepareBatch({
           ...options,
-          ...parsed.data,
+          candidateCounts: parsed.data.candidateCounts,
+          ...(generation ? { generation } : {}),
           repo,
           token,
           githubApiUrl: options.auth.githubApiUrl,
         });
         // Persist ownership BEFORE starting paid work. A failed/ambiguous start remains visible
         // and recoverable under this repo rather than leaving an unowned running workflow.
+        if (generation && options.records)
+          await options.records.write(generationRecordPath(input.runId), generation, 0);
         const run = await runs.attachRun(repo.id, input.runId, user.id);
         try {
           await options.start(input);

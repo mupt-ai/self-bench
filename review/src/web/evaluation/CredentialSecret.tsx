@@ -1,21 +1,18 @@
 import { Eye, EyeOff } from "lucide-react";
 import React from "react";
 import type { CredentialDraft } from "../../../../src/evaluation/credentials";
-import { Input } from "../ui";
+import { fieldStyles, Input } from "../ui";
 
-const field = "grid gap-2 text-sm font-medium text-ink";
 export function CredentialSecret({
   draft,
   setDraft,
   importing,
-  org,
   setError,
   keyLabel,
 }: {
   draft: CredentialDraft;
   setDraft: React.Dispatch<React.SetStateAction<CredentialDraft>>;
   importing: boolean;
-  org: string;
   setError(error: string): void;
   keyLabel: string;
 }) {
@@ -30,7 +27,7 @@ export function CredentialSecret({
   return (
     <>
       {importing ? (
-        <label className={field} htmlFor="credential-auth-file">
+        <label className={fieldStyles} htmlFor="credential-auth-file">
           Codex auth.json
           <Input
             id="credential-auth-file"
@@ -64,12 +61,12 @@ export function CredentialSecret({
               }
             }}
           />
-          <span className="text-xs font-normal leading-5 text-muted">
-            Import a sign-in from the Codex CLI. This saves access for Codex runs across {org}.
+          <span className="text-xs font-normal leading-5 text-muted-foreground">
+            From your Codex CLI sign-in.
           </span>
         </label>
       ) : (
-        <div className={field}>
+        <div className={fieldStyles}>
           <label htmlFor="credential-secret">{keyLabel}</label>
           <div className="relative">
             <Input
@@ -85,7 +82,7 @@ export function CredentialSecret({
             <button
               type="button"
               aria-label={visible ? "Hide Secret" : "Show Secret"}
-              className="absolute inset-y-0 right-0 px-3 text-muted hover:text-ink"
+              className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground"
               onClick={() => setVisible((value) => !value)}
             >
               {visible ? (

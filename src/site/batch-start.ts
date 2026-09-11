@@ -6,11 +6,14 @@ import { apiHeaders, GitHubOAuthError } from "../auth/github.js";
 import { buildCommit } from "../build-metadata.js";
 import type { SelfBenchConfig } from "../config.js";
 import { commitSchema, type RunRequest, runRequestSchema } from "../contracts.js";
+import { configureGenerationRun } from "./generation-run.js";
+import { type GenerationReference, generationSettingsSchema } from "./generation-settings.js";
 import type { ConnectedRepo } from "./repo-store.js";
 
 export const batchSubmissionSchema = z
   .object({
     candidateCounts: runRequestSchema.shape.candidateCounts,
+    generation: generationSettingsSchema.optional(),
   })
   .strict();
 
@@ -25,6 +28,7 @@ export async function prepareBatch(options: {
   githubApiUrl: string;
   candidateCounts: RunRequest["candidateCounts"];
   fetchImpl?: typeof fetch;
+  generation?: GenerationReference;
 }): Promise<RunRequest> {
   const { repo, token, config, artifacts, candidateCounts } = options;
   const response = await (options.fetchImpl ?? fetch)(
@@ -53,5 +57,6 @@ export async function prepareBatch(options: {
     selfbenchCommit: buildCommit,
   });
   if ("replay" in run) throw new Error("unexpected replay request");
+  if (options.generation) configureGenerationRun(run, options.generation, config);
   return run;
 }

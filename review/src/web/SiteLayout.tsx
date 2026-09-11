@@ -1,9 +1,12 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { Lockup } from "./Lockup";
+import { pageContainer, pageGutter } from "./layout";
+import { cn } from "./primitives/cn";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
 import { UserMenu } from "./UserMenu";
+import { Button } from "./ui";
 
 export interface OrgContext {
   org: SiteOrg;
@@ -38,35 +41,40 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
       void navigate("/");
   };
   return (
-    <div className="min-h-screen [--site-max:1440px] [--site-gutter:32px] lg:pl-60">
-      <div className="fixed inset-y-0 left-0 z-20 hidden w-60 border-r border-line lg:block">
+    <div className="min-h-screen lg:pl-60">
+      <div className="fixed inset-y-0 left-0 z-20 hidden w-60 border-r border-border lg:block">
         <SiteSidebar user={user} org={org} orgs={orgs} onSelect={choose} onSignOut={signOut} />
       </div>
-      <header className="sticky top-0 z-10 flex h-14 items-center border-b border-line bg-surface px-4 sm:px-6 [&_a]:mb-0 [&_a_svg]:size-8 [&_a_span_span]:text-[10px] [&_strong]:text-xl">
-        <div className="lg:hidden">
-          <Lockup />
-        </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <UserMenu user={user} onSignOut={signOut} />
-          <button
-            type="button"
-            aria-label="Open Navigation"
-            aria-haspopup="dialog"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(true)}
-            className="grid size-10 place-items-center border border-line text-mint lg:hidden"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              aria-hidden="true"
+      <header
+        className={cn("sticky top-0 z-10 h-14 border-b border-border bg-background", pageGutter)}
+      >
+        <div className={cn(pageContainer, "flex h-full items-center justify-between")}>
+          <div className="lg:hidden">
+            <Lockup compact />
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            <UserMenu user={user} onSignOut={signOut} />
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Open Navigation"
+              aria-haspopup="dialog"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+              className="lg:hidden"
             >
-              <path d="M3 5h14M3 10h14M3 15h14" />
-            </svg>
-          </button>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M3 5h14M3 10h14M3 15h14" />
+              </svg>
+            </Button>
+          </div>
         </div>
       </header>
       <div className="flex min-h-[calc(100dvh_-_3.5rem)] min-w-0 flex-col">

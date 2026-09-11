@@ -22,7 +22,15 @@ export function createActivities(
   return {
     collectRunProvenance: (run) => collectRunProvenance(store, run),
     collectExcludedSourcePrs: (runIds) => collectExcludedSourcePrs(store, runIds),
-    discoverCandidateShard: (input) => discoverCandidateShard(store, sandbox, input),
+    discoverCandidateShard: (input) =>
+      withGenerationRuntime(
+        config,
+        records,
+        input.run,
+        "author",
+        sandbox,
+        (executor, _environment, run) => discoverCandidateShard(store, executor, { ...input, run }),
+      ),
     rebuildReplayCandidates: (input) => rebuildReplayCandidates(store, input),
     runAuthoringRound: (input) =>
       withGenerationRuntime(

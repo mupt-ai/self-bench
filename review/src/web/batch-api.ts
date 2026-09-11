@@ -1,4 +1,5 @@
 import type { BatchStatus } from "../../../src/site/batch-progress";
+import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { checkSessionExpired } from "../session-expired";
 
 export type { BatchStatus };
@@ -16,6 +17,16 @@ export interface BatchRun {
   attachedAt: string;
   attachedBy: string;
 }
+export class BatchRequestError extends Error {
+  constructor(
+    message: string,
+    readonly runId?: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "BatchRequestError";
+  }
+}
 const root = ({ org, fullName }: BatchRepoId) =>
   `/api/orgs/${encodeURIComponent(org)}/repos/${fullName.split("/").map(encodeURIComponent).join("/")}/batches`;
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -23,14 +34,22 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   checkSessionExpired(response);
   const body = await response.json();
   if (!response.ok)
-    throw new Error(`${body.error ?? response.status}${body.runId ? ` (${body.runId})` : ""}`);
+    throw new BatchRequestError(
+      String(body.error ?? response.status),
+      typeof body.runId === "string" ? body.runId : undefined,
+      response.status,
+    );
   return body as T;
 }
 export const listBatches = (repo: BatchRepoId) => request<{ batches: BatchRun[] }>(root(repo));
-export const startBatch = (repo: BatchRepoId, candidateCounts: CandidateCounts) =>
+export const startBatch = (
+  repo: BatchRepoId,
+  candidateCounts: CandidateCounts,
+  generation: GenerationSettings,
+) =>
   request<{ runId: string }>(root(repo), {
     method: "POST",
-    body: JSON.stringify({ candidateCounts }),
+    body: JSON.stringify({ candidateCounts, generation }),
   });
 export const fetchBatch = (repo: BatchRepoId, runId: string) =>
   request<BatchStatus>(`${root(repo)}/${runId}`);

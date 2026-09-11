@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { harnessIds } from "../../../../src/evaluation/harnesses";
 import { thinkingLevels } from "../../../../src/evaluation/model-options";
 import { evaluationRequestId } from "./api";
 
@@ -17,7 +18,7 @@ const draftStateSchema = z.object({
           credentialId: z.string().max(36),
           thinking: z.enum(thinkingLevels).optional(),
           customModel: z.string().max(200).optional(),
-          harnesses: z.array(z.enum(["codex", "claude-code", "pi"])).max(3),
+          harnesses: z.array(z.enum(harnessIds)).max(harnessIds.length),
         }),
       )
       .max(12),

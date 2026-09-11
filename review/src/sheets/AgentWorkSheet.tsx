@@ -98,17 +98,17 @@ function AgentPart({
   }, [entry, source, round.live, round.session]);
   const done = Boolean(round.session || round.result);
   return (
-    <details className="group/part border border-line [&+&]:mt-3">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 font-mono text-[13px] font-medium text-ink before:text-dim before:content-['▸'] group-open/part:before:content-['▾'] [&::-webkit-details-marker]:hidden site:text-sm site:leading-normal">
+    <details className="group/part border border-border [&+&]:mt-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 font-mono text-sm font-medium text-foreground before:text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾'] [&::-webkit-details-marker]:hidden site:text-sm site:leading-normal">
         <span>{round.title}</span>
-        <span className="font-mono text-[11px] text-dim site:text-sm site:leading-normal">
+        <span className="font-mono text-xs text-muted-foreground site:text-sm site:leading-normal">
           {round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}
           {done ? "Finished" : active ? "In Progress" : "Stopped"}
         </span>
       </summary>
-      <div className="border-t border-line">
+      <div className="border-t border-border">
         {capturedAt && (
-          <p className="m-0 px-4 py-2.5 font-mono text-[11px] leading-[normal] text-dim site:text-sm site:leading-normal">
+          <p className="m-0 px-4 py-2.5 font-mono text-xs leading-[normal] text-muted-foreground site:text-sm site:leading-normal">
             Last Output · {new Date(capturedAt).toLocaleTimeString()}
           </p>
         )}
@@ -127,10 +127,10 @@ function AgentPart({
             const key = `${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`;
             return event.kind === "message" ? (
               <div
-                className="border-t border-line px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-ink site:[&_pre]:text-base [&_time]:float-right [&_time]:font-mono [&_time]:text-[11px] [&_time]:text-dim site:[&_time]:text-sm site:[&_time]:leading-normal"
+                className="border-t border-border px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-foreground site:[&_pre]:text-base [&_time]:float-right [&_time]:font-mono [&_time]:text-xs [&_time]:text-muted-foreground site:[&_time]:text-sm site:[&_time]:leading-normal"
                 key={key}
               >
-                <span className="mb-2 block font-mono text-[11px] leading-[normal] text-mint site:text-sm site:leading-normal">
+                <span className="mb-2 block font-mono text-xs leading-[normal] text-brand site:text-sm site:leading-normal">
                   Agent Message
                 </span>
                 {event.timestamp && (
@@ -140,17 +140,17 @@ function AgentPart({
               </div>
             ) : (
               <details
-                className="group/event border-t border-line px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-ink site:[&_pre]:text-sm site:[&_pre]:leading-6 [&_time]:float-right [&_time]:font-mono [&_time]:text-[11px] [&_time]:text-dim site:[&_time]:text-sm site:[&_time]:leading-normal"
+                className="group/event border-t border-border px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-foreground site:[&_pre]:text-sm site:[&_pre]:leading-6 [&_time]:float-right [&_time]:font-mono [&_time]:text-xs [&_time]:text-muted-foreground site:[&_time]:text-sm site:[&_time]:leading-normal"
                 key={key}
               >
-                <summary className="cursor-pointer list-none font-mono text-xs leading-[normal] text-muted [&::-webkit-details-marker]:hidden [&>span:first-child]:mr-2.5 [&>span:first-child]:inline site:text-sm site:leading-normal">
-                  <span className="mb-2 block font-mono text-[11px] leading-[normal] text-mint site:text-sm site:leading-normal">
+                <summary className="cursor-pointer list-none font-mono text-xs leading-[normal] text-muted-foreground [&::-webkit-details-marker]:hidden [&>span:first-child]:mr-2.5 [&>span:first-child]:inline site:text-sm site:leading-normal">
+                  <span className="mb-2 block font-mono text-xs leading-[normal] text-brand site:text-sm site:leading-normal">
                     {event.kind === "tool" ? "Tool Call" : "Tool Output"}
                   </span>
                   {event.timestamp && (
                     <time dateTime={event.timestamp}>{formatEventTime(event.timestamp)}</time>
                   )}
-                  <span className="font-mono text-[11px] leading-[normal] text-muted site:text-sm site:leading-normal">
+                  <span className="font-mono text-xs leading-[normal] text-muted-foreground site:text-sm site:leading-normal">
                     {event.text.split("\n")[0] || "(empty)"}
                   </span>
                 </summary>

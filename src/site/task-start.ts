@@ -1,10 +1,10 @@
 import { buildRunRequest } from "../api/run-request.js";
 import type { ArtifactStore } from "../artifacts.js";
 import { buildCommit } from "../build-metadata.js";
-import { loadConfig, type SelfBenchConfig } from "../config.js";
+import type { SelfBenchConfig } from "../config.js";
 import type { Candidate, CandidateWorkflowInput } from "../contracts.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
-import { generationConfigEnvironment } from "./generation-config.js";
+import { configureGenerationRun } from "./generation-run.js";
 import type { GenerationReference } from "./generation-settings.js";
 import type { PullRequestCandidate } from "./pr-candidate.js";
 
@@ -72,29 +72,7 @@ export async function startTaskFromPullRequest(options: TaskStartOptions): Promi
     selfbenchCommit: buildCommit,
   });
   if ("replay" in run) throw new Error("unexpected replay request");
-  if (options.generation) {
-    run.generation = options.generation;
-    run.authoring = {
-      provider: "openai",
-      model: options.generation.settings.authorModel,
-      reasoningEffort: options.generation.settings.reasoning,
-    };
-    const settings = options.generation.settings;
-    const selected = loadConfig(
-      generationConfigEnvironment(
-        settings,
-        process.env,
-        settings.sandboxImage ??
-          (settings.sandbox === config.execution.kind ? config.execution.image : undefined),
-      ),
-    );
-    run.version.executionBackend = selected.execution.kind;
-    run.version.harborEnvironment = selected.harborEnvironment;
-    run.version.sandboxImage = selected.execution.image;
-    if ("timeoutCapMs" in selected.execution)
-      run.version.sandboxTimeoutCapMs = selected.execution.timeoutCapMs;
-    else delete run.version.sandboxTimeoutCapMs;
-  }
+  if (options.generation) configureGenerationRun(run, options.generation, config);
   const candidate: Candidate = { ...pullRequest.candidate, provenance: candidateProvenance };
   const workflowId = `${runId}/candidate/${candidate.candidateId}`;
   await options.start(workflowId, { run, candidate });

@@ -1,89 +1,89 @@
-import React from "react";
-import {
-  type BatchRepoId,
-  type BatchRun,
-  type BatchStatus,
-  batchIsTerminal,
-  cancelBatch,
-} from "./batch-api";
-import { Skeleton } from "./LoadingSkeleton";
-import { buttonStyles } from "./ui";
+import type { BatchStatus } from "./batch-api";
+import { batchMessage } from "./batches/presentation";
+import { cn } from "./primitives/cn";
 
-export function BatchProgress({
-  run,
-  status,
-  repoId,
-}: {
-  run: BatchRun;
-  status?: BatchStatus;
-  repoId: BatchRepoId;
-}) {
-  const [cancelling, setCancelling] = React.useState(false);
-  const [error, setError] = React.useState<string>();
+/** Progress belongs on the batch page; creation only collects the next batch's settings. */
+export function BatchProgress({ status }: { status: BatchStatus }) {
+  const discovery = status.discovery;
+  const stopped = status.phase === "blocked" || status.phase === "failed";
+  const finished = discovery
+    ? Math.min(discovery.totalShards, discovery.completedShards + discovery.failedShards)
+    : 0;
   return (
-    <section
-      className="space-y-2 border border-line bg-bg p-4 text-sm text-muted"
-      aria-label={`Batch ${run.runId}`}
-    >
-      <p className="break-all font-mono text-xs">{run.runId}</p>
-      {!status && (
-        <div role="status" aria-label="Loading Batch Progress">
-          <Skeleton className="h-4 w-48 max-w-full" />
+    <section className="border border-border bg-card" aria-label="Batch Progress">
+      <div className="border-b border-border p-4 sm:p-5">
+        <p
+          className={cn(
+            "max-w-3xl break-words text-sm leading-6",
+            stopped ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {batchMessage(status)}
+        </p>
+      </div>
+      <dl className="grid grid-cols-2 border-b border-border md:grid-cols-4">
+        {(
+          [
+            ["Requested", status.requested],
+            ["Discovered", status.discovered],
+            ["Verified", status.accepted],
+            ["Rejected", status.rejected],
+          ] as const
+        ).map(([label, count], index) => (
+          <div
+            key={label}
+            className={cn(
+              "min-w-0 border-border px-4 py-5 sm:px-5",
+              index % 2 === 0 && "border-r border-border",
+              index < 2 && "max-md:border-b",
+              index === 1 && "md:border-r",
+            )}
+          >
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="mt-2 text-2xl font-medium tabular-nums">{count ?? "—"}</dd>
+          </div>
+        ))}
+      </dl>
+      {discovery && (
+        <div className="p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <h2 className="font-medium">Discovery · Wave {discovery.wave + 1}</h2>
+            <span className="text-muted-foreground">
+              {finished} / {discovery.totalShards} Shards Finished
+            </span>
+          </div>
+          {discovery.totalShards > 0 && (
+            <div
+              role="progressbar"
+              aria-label="Discovery Shards Finished"
+              aria-valuemin={0}
+              aria-valuemax={discovery.totalShards}
+              aria-valuenow={finished}
+              className="flex h-1.5 overflow-hidden bg-muted"
+            >
+              <span
+                className="bg-success"
+                style={{ width: `${(discovery.completedShards / discovery.totalShards) * 100}%` }}
+              />
+              <span
+                className="bg-destructive"
+                style={{ width: `${(discovery.failedShards / discovery.totalShards) * 100}%` }}
+              />
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+            <span>{discovery.completedShards} Complete</span>
+            <span className={discovery.failedShards ? "text-destructive" : undefined}>
+              {discovery.failedShards} Failed
+            </span>
+            <span>{Math.max(0, discovery.totalShards - finished)} Pending</span>
+          </div>
         </div>
       )}
-      {status && (
-        <p role="status">
-          {status.phase}
-          {status?.discovered !== undefined &&
-            ` · ${status.discovered} discovered · ${status.accepted ?? 0} pipeline passed`}
-        </p>
-      )}
-      {status?.discovery && (
-        <p>
-          Discovery wave {status.discovery.wave + 1}: {status.discovery.completedShards}/
-          {status.discovery.totalShards} shards complete · {status.discovery.failedShards} failed
-        </p>
-      )}
-      {status?.error && <p className="text-danger">{status.error}</p>}
-      {status?.phase === "blocked" && !status.error && (
-        <p className="text-danger">Discovery could not fill the requested candidate pool.</p>
-      )}
-      {!!status?.tasks?.length && (
-        <ul>
-          {status.tasks.map((task) => (
-            <li key={task.candidateId}>
-              {task.taskId} · {task.difficulty} ·{" "}
-              {task.status === "accepted"
-                ? "Needs Review"
-                : `${task.status}${task.stage ? ` / ${task.stage}` : ""}`}
-              {task.round !== undefined && ` · round ${task.round}`}
-              {task.reason && <p className="text-danger">{task.reason}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {(!status || !batchIsTerminal(status.phase)) && (
-        <button
-          type="button"
-          className={buttonStyles.ghost}
-          disabled={cancelling}
-          onClick={async () => {
-            setCancelling(true);
-            setError(undefined);
-            try {
-              await cancelBatch(repoId, run.runId);
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : String(cause));
-              setCancelling(false);
-            }
-          }}
-        >
-          {cancelling ? "Cancellation Requested…" : "Cancel Batch"}
-        </button>
-      )}
-      {error && (
-        <p role="alert" className="text-danger">
-          {error}
+      {status.requestedByDifficulty && (
+        <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
+          Requested: {status.requestedByDifficulty.easy} easy ·{" "}
+          {status.requestedByDifficulty.medium} medium · {status.requestedByDifficulty.hard} hard
         </p>
       )}
     </section>

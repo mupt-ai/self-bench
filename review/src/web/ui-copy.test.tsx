@@ -25,21 +25,22 @@ function renderPage(page: ReactNode) {
 test("run actions and field labels use Title Case without changing helper prose", () => {
   const html = renderPage(<RunPage />);
   for (const label of [
-    "Run Dataset",
-    "Manage Credentials",
+    "Models and Harnesses",
+    "Credentials",
     "Sandbox Credential",
-    "Choose Tasks in Dataset",
+    "Review Dataset",
     "Run Comparison",
   ]) {
     expect(html).toContain(label);
   }
-  expect(html).toContain("Model and cloud sandbox usage may incur charges.");
+  expect(html).toContain("Model and sandbox usage is billed by your providers.");
 });
 
 test("settings and results use consistent action, section and table labels", () => {
   const settings = renderPage(<CredentialsPage />);
-  expect(settings).toContain("Add Credential");
-  expect(settings).toContain("Shared across mupt-ai repositories");
+  expect(settings).toContain("Model Providers");
+  expect(settings).toContain("Sandboxes");
+  expect(settings).toContain("Shared with mupt-ai.");
   expect(settings).not.toContain("Import Previous Setups");
   const results = renderPage(<EvaluationPage />);
   expect(results).toContain("Compare your runs. Inspect what the solver did.");

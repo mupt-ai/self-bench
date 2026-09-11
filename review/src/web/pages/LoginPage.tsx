@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { DariMark } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
+import { buttonStyles, Notice } from "../ui";
 
 const ERRORS: Record<string, string> = {
   state: "That sign-in attempt expired. Try again.",
@@ -28,12 +29,12 @@ export function LoginPage() {
           <Link to="/" aria-label="self-bench Home" className="mb-5 block [&_svg]:size-14">
             <DariMark />
           </Link>
-          <h1 className="font-mono text-3xl font-medium leading-tight tracking-[-0.06em] text-ink">
+          <h1 className="font-mono text-3xl font-medium leading-tight tracking-[-0.06em] text-foreground">
             self-bench
           </h1>
-          <p className="mt-2 font-mono text-sm text-muted">by dari.dev</p>
+          <p className="mt-2 font-mono text-sm text-muted-foreground">by dari.dev</p>
           <a
-            className="mt-10 flex h-12 w-full items-center justify-center gap-3 border border-mint bg-mint font-mono text-sm font-medium text-bg hover:bg-mint-bright aria-disabled:cursor-wait aria-disabled:hover:bg-mint [&_svg]:size-4 [&_svg]:fill-current"
+            className={`${buttonStyles.primary} mt-8 w-full [&_svg]:fill-current`}
             href="/auth/github"
             aria-busy={connecting}
             aria-disabled={connecting}
@@ -66,17 +67,12 @@ export function LoginPage() {
             </span>
           </a>
           {error && (
-            <p
-              role="alert"
-              className="mt-5 w-full border border-danger/30 bg-danger/5 px-4 py-3 text-left font-mono text-sm leading-6 text-danger"
-            >
-              {ERRORS[error] ?? ERRORS.github}
-            </p>
+            <Notice className="mt-5 w-full text-left">{ERRORS[error] ?? ERRORS.github}</Notice>
           )}
         </div>
-        <div className="mt-8 flex items-center justify-center gap-4 font-mono text-sm text-muted [&_a:hover]:text-ink">
+        <div className="mt-8 flex items-center justify-center gap-4 font-mono text-sm text-muted-foreground [&_a:hover]:text-foreground">
           <a href="https://dari.dev">dari.dev</a>
-          <span className="text-line-strong" aria-hidden="true">
+          <span className="text-input" aria-hidden="true">
             ·
           </span>
           <a href="https://github.com/mupt-ai/self-bench">GitHub</a>

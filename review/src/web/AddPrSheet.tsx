@@ -1,19 +1,13 @@
 import React from "react";
-import {
-  type GenerationSettings,
-  generationSettingsSchema,
-} from "../../../src/site/generation-settings";
 import { addPrBatch } from "./add-pr-batch";
-import {
-  addPullRequest,
-  fetchGenerationOptions,
-  fetchMergedPullRequests,
-  type MergedPullRequest,
-} from "./api";
-import { GenerationFields, type GenerationOptions } from "./GenerationFields";
+import { addPullRequest, fetchMergedPullRequests, type MergedPullRequest } from "./api";
+import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
+import { GenerationFields } from "./GenerationFields";
+import { GenerationSteps } from "./GenerationSteps";
 import { PrSelectionList } from "./PrSelectionList";
 import type { SiteOrg } from "./session";
-import { useModalDialog } from "./useModalDialog";
+import { Button, Notice } from "./ui";
+import { useGenerationSettings } from "./useGenerationSettings";
 
 export interface AddPrSheetProps {
   org: SiteOrg;
@@ -26,15 +20,14 @@ export interface AddPrSheetProps {
 export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetProps) {
   const [search, setSearch] = React.useState("");
   const [step, setStep] = React.useState<1 | 2>(1);
-  const [options, setOptions] = React.useState<GenerationOptions | null>(null);
-  const [optionsError, setOptionsError] = React.useState<string | null>(null);
-  const [settings, setSettings] = React.useState<GenerationSettings>({
-    authorModel: "gpt-5.6-sol",
-    verifierModel: "gpt-5.6-sol",
-    reasoning: "high",
-    sandbox: "modal",
-    modelCredentialId: "",
-  });
+  const {
+    settings,
+    setSettings,
+    options,
+    error: optionsError,
+    valid,
+    reload,
+  } = useGenerationSettings(org.login, fullName);
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
   const [started, setStarted] = React.useState<Set<number>>(new Set());
   const submitting = React.useRef(false);
@@ -51,29 +44,6 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
     failed: { number: number; message: string }[];
   } | null>(null);
   const closeButton = React.useRef<HTMLButtonElement>(null);
-  const dialog = useModalDialog(closeButton);
-  React.useEffect(() => {
-    let active = true;
-    const refresh = () =>
-      void fetchGenerationOptions(org.login, fullName).then(
-        (result) => {
-          if (active) {
-            setOptions(result);
-            setOptionsError(null);
-          }
-        },
-        (cause) => {
-          if (active) setOptionsError(cause.message);
-        },
-      );
-    refresh();
-    window.addEventListener("focus", refresh);
-    return () => {
-      active = false;
-      window.removeEventListener("focus", refresh);
-    };
-  }, [org.login, fullName]);
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: retry explicitly reloads the same page.
   React.useEffect(() => {
     let active = true;
@@ -113,13 +83,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
   );
 
   const submit = async () => {
-    if (
-      !selected.size ||
-      submitting.current ||
-      !options?.available ||
-      !generationSettingsSchema.safeParse(settings).success
-    )
-      return;
+    if (!selected.size || submitting.current || !valid) return;
     submitting.current = true;
     setBusy(true);
     setError(null);
@@ -138,60 +102,23 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
   };
 
   return (
-    <dialog
-      ref={dialog}
+    <Dialog
+      initialFocus={closeButton}
+      onDismiss={onClose}
+      busy={busy}
+      size={step === 1 ? "wide" : "large"}
       aria-labelledby="add-pr-title"
-      aria-busy={busy}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!submitting.current) onClose();
-      }}
-      className="fixed inset-0 m-auto max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-[920px] overflow-auto border border-line-strong bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70"
     >
-      <section className="flex min-w-0 flex-col bg-surface" aria-labelledby="add-pr-title">
-        <header className="flex items-start justify-between gap-4 px-5 pt-6 pb-5 sm:px-6">
-          <div className="min-w-0">
-            <h1 id="add-pr-title" className="font-mono text-lg font-semibold text-ink">
-              Add PRs
-            </h1>
-            <p className="mt-2 font-mono text-[13px] leading-5 text-muted break-all">{fullName}</p>
-          </div>
-          <button
-            ref={closeButton}
-            type="button"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-transparent text-muted hover:border-line-strong hover:text-ink"
-            aria-label="Close"
-            title="Close"
-            disabled={busy}
-            onClick={onClose}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
-          </button>
-        </header>
-        <ol className="mx-5 mb-6 flex gap-6 border-b border-line pb-4 font-mono text-[13px] sm:mx-6">
-          <li
-            className={step === 1 ? "text-mint" : "text-muted"}
-            aria-current={step === 1 ? "step" : undefined}
-          >
-            1. Select PRs
-          </li>
-          <li
-            className={step === 2 ? "text-mint" : "text-muted"}
-            aria-current={step === 2 ? "step" : undefined}
-          >
-            2. Configure Generation
-          </li>
-        </ol>
+      <section className="flex min-w-0 flex-col" aria-labelledby="add-pr-title">
+        <DialogHeader
+          title="Add PRs"
+          titleId="add-pr-title"
+          description={fullName}
+          onClose={onClose}
+          closeRef={closeButton}
+          busy={busy}
+        />
+        <GenerationSteps step={step} firstStep="Select PRs" />
         {step === 1 ? (
           <PrSelectionList
             search={search}
@@ -220,14 +147,14 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
             }}
           />
         ) : (
-          <div className="px-5 pb-8 sm:px-6">
+          <div className="px-4 pb-6 sm:px-6">
             {optionsError && (
-              <p role="alert" className="mb-4 font-mono text-sm text-danger">
-                {optionsError}
-              </p>
+              <Notice className="mb-4">
+                {optionsError} <Button onClick={reload}>Try Again</Button>
+              </Notice>
             )}
             {!options && !optionsError ? (
-              <p role="status" className="font-mono text-sm text-muted">
+              <p role="status" className="font-mono text-sm text-muted-foreground">
                 Loading generation settings…
               </p>
             ) : (
@@ -241,14 +168,16 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
           </div>
         )}
         {error && (
-          <div className="max-h-40 shrink-0 overflow-auto border-t border-line px-5 py-3 font-mono text-[13px] leading-5 sm:px-6">
-            <p role="status" className="text-muted">
-              {error.started > 0 && <span className="text-mint">{error.started} started · </span>}
-              <span className="text-danger">{error.failed.length} failed</span>
+          <div className="max-h-40 shrink-0 overflow-auto border-t border-border px-4 py-3 font-mono text-sm leading-5 sm:px-6">
+            <p role="status" className="text-muted-foreground">
+              {error.started > 0 && <span className="text-brand">{error.started} started · </span>}
+              <span className="text-destructive">{error.failed.length} failed</span>
               <span> — failed PRs remain selected.</span>
             </p>
-            <details className="mt-2 text-muted">
-              <summary className="w-fit cursor-pointer hover:text-ink">Technical Details</summary>
+            <details className="mt-2 text-muted-foreground">
+              <summary className="w-fit cursor-pointer hover:text-foreground">
+                Technical Details
+              </summary>
               <ul className="mt-2 space-y-1 break-words">
                 {error.failed.map((item) => (
                   <li key={item.number}>
@@ -259,35 +188,24 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
             </details>
           </div>
         )}
-        <footer className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface px-5 py-4 sm:px-6">
-          <span className="font-mono text-[13px] text-muted">{selected.size} Selected</span>
+        <DialogFooter className="sticky bottom-0 justify-between">
+          <span className="font-mono text-sm text-muted-foreground">{selected.size} Selected</span>
           <div className="ml-auto flex gap-3">
             {step === 2 && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setStep(1)}
-                className="px-3 font-mono text-[13px] text-muted hover:text-ink"
-              >
+              <Button variant="ghost" disabled={busy} onClick={() => setStep(1)}>
                 Back
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-[13px] font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={
-                busy ||
-                selected.size === 0 ||
-                (step === 2 &&
-                  (!options?.available || !generationSettingsSchema.safeParse(settings).success))
-              }
+            <Button
+              variant="primary"
+              disabled={busy || selected.size === 0 || (step === 2 && !valid)}
               onClick={() => (step === 1 ? setStep(2) : void submit())}
             >
               {busy ? "Starting…" : step === 1 ? "Continue" : "Generate Tasks"}
-            </button>
+            </Button>
           </div>
-        </footer>
+        </DialogFooter>
       </section>
-    </dialog>
+    </Dialog>
   );
 }

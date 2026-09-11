@@ -63,13 +63,13 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
         aria-label={`${file.path} Full Screen`}
       >
         <div className="flex h-12 items-center gap-3.5 border-b border-(--border) bg-(--viewer-panel) px-6 site:h-auto site:min-h-12 site:flex-wrap site:gap-3 site:py-3 site:break-all">
-          <span className="text-[11px] tracking-[0.16em] text-(--muted-fg) uppercase site:font-mono site:text-sm site:font-medium site:tracking-[0.14em] site:text-mint">
+          <span className="text-xs tracking-[0.16em] text-(--muted-fg) uppercase site:font-mono site:text-sm site:font-medium site:tracking-[0.14em] site:text-brand">
             {kind}
           </span>
-          <b className="font-mono text-[13px]">{file.path}</b>
+          <b className="font-mono text-sm">{file.path}</b>
           <span className="text-xs text-(--muted-fg) site:font-mono site:text-sm">{stats}</span>
           <span className="flex-1" />
-          <span className="text-xs text-(--faint) site:hidden site:font-mono site:text-sm site:text-dim site:sm:inline">
+          <span className="text-xs text-(--faint) site:hidden site:font-mono site:text-sm site:text-muted-foreground site:sm:inline">
             esc to close
           </span>
           <button type="button" className={viewerButton} onClick={() => setFullscreen(false)}>

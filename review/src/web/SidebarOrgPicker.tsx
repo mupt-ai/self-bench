@@ -38,22 +38,22 @@ export function SidebarOrgPicker({
           <button
             type="button"
             aria-label="Organization"
-            className="group flex min-h-14 w-full cursor-pointer items-center gap-3 border border-transparent px-2.5 py-2 text-left transition-colors hover:border-mint/60 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-mint data-[state=open]:border-mint data-[state=open]:bg-surface-2"
+            className="group flex min-h-14 w-full cursor-pointer items-center gap-3 border border-transparent px-2.5 py-2 text-left transition-colors hover:border-brand/60 hover:bg-muted focus-visible:outline-2 focus-visible:outline-brand data-[state=open]:border-brand data-[state=open]:bg-muted"
           >
-            <span className="shrink-0 overflow-hidden border border-line">
+            <span className="shrink-0 overflow-hidden border border-border">
               <Avatar login={org.login} url={org.avatarUrl} size={28} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-sans text-[15px] font-semibold leading-5 text-ink">
+              <span className="block truncate font-mono text-sm font-semibold leading-5 text-foreground">
                 {org.login}
               </span>
-              <span className="block font-sans text-xs leading-5 text-dim">
+              <span className="block font-mono text-xs leading-5 text-muted-foreground">
                 {org.kind === "user" ? "Personal Account" : "Organization"}
               </span>
             </span>
             <ChevronsUpDown
               aria-hidden="true"
-              className="size-3.5 shrink-0 text-dim transition-colors group-hover:text-mint-bright"
+              className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-brand"
             />
           </button>
         </DropdownMenuTrigger>
@@ -77,7 +77,7 @@ export function SidebarOrgPicker({
             {organizations.length > 0 && (
               <>
                 {personal.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 pt-2 pb-1 font-sans text-xs text-dim">
+                <DropdownMenuLabel className="px-2 pt-2 pb-1 font-mono text-xs text-muted-foreground">
                   Organizations
                 </DropdownMenuLabel>
                 {organizations.map((item) => (
@@ -96,15 +96,17 @@ function OrgItem({ org }: { org: SiteOrg }) {
   return (
     <DropdownMenuRadioItem
       value={org.login}
-      className="min-h-9 gap-2.5 py-1.5 data-[state=checked]:bg-mint/5"
+      className="min-h-9 gap-2.5 py-1.5 data-[state=checked]:bg-brand/5"
     >
-      <span className="shrink-0 overflow-hidden border border-line">
+      <span className="shrink-0 overflow-hidden border border-border">
         <Avatar login={org.login} url={org.avatarUrl} size={24} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-sans text-sm leading-5">{org.login}</span>
+        <span className="block truncate font-mono text-sm leading-5">{org.login}</span>
         {org.kind === "user" && (
-          <span className="block font-sans text-xs leading-5 text-dim">Personal Account</span>
+          <span className="block font-mono text-xs leading-5 text-muted-foreground">
+            Personal Account
+          </span>
         )}
       </span>
     </DropdownMenuRadioItem>

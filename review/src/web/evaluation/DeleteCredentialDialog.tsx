@@ -1,7 +1,7 @@
 import React from "react";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button } from "../ui";
-import { useModalDialog } from "../useModalDialog";
 
 export function DeleteCredentialDialog({
   credential,
@@ -13,39 +13,41 @@ export function DeleteCredentialDialog({
   onClose(): void;
 }) {
   const cancel = React.useRef<HTMLButtonElement>(null);
-  const dialog = useModalDialog(cancel);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   return (
-    <dialog
-      ref={dialog}
+    <Dialog
+      initialFocus={cancel}
+      onDismiss={onClose}
+      busy={busy}
+      size="small"
       aria-labelledby="delete-credential-title"
       aria-describedby="delete-credential-description"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
-      className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md border border-line-strong bg-surface p-6 text-ink shadow-2xl backdrop:bg-black/65"
     >
-      <h2 id="delete-credential-title" className="text-lg font-semibold">
-        Delete Credential
-      </h2>
-      <p id="delete-credential-description" className="mt-3 text-sm leading-6 text-muted">
-        Delete <strong className="break-all text-ink">{credential.name}</strong>? You’ll need to add
-        it again to use it in new runs. Credentials used by active comparisons cannot be deleted.
-      </p>
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-danger">
-          {error}
+      <DialogHeader
+        title="Delete Credential"
+        titleId="delete-credential-title"
+        onClose={onClose}
+        busy={busy}
+      />
+      <DialogBody>
+        <p id="delete-credential-description" className="text-sm leading-6 text-muted-foreground">
+          Delete <strong className="break-all text-foreground">{credential.name}</strong>? New runs
+          won’t be able to use it.
         </p>
-      )}
-      <div className="mt-6 flex justify-end gap-2">
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </DialogBody>
+      <DialogFooter>
         <Button ref={cancel} disabled={busy} onClick={onClose}>
           Cancel
         </Button>
         <Button
           disabled={busy}
-          className="border-danger/50 text-danger hover:border-danger hover:text-danger"
+          variant="destructive"
           onClick={async () => {
             setBusy(true);
             try {
@@ -57,9 +59,9 @@ export function DeleteCredentialDialog({
             }
           }}
         >
-          {busy ? "Deleting…" : "Delete Credential"}
+          {busy ? "Deleting…" : "Delete"}
         </Button>
-      </div>
-    </dialog>
+      </DialogFooter>
+    </Dialog>
   );
 }

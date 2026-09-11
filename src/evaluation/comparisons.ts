@@ -5,6 +5,7 @@ import type { TaskStore } from "../site/task-store.js";
 import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
+import { harnessIds } from "./harnesses.js";
 import { routeFor, thinkingLevels, thinkingOptions } from "./model-options.js";
 import { modelIdPattern } from "./providers.js";
 import { getEvaluation } from "./store.js";
@@ -28,10 +29,7 @@ export const comparisonSchema = z
             customModel: z.string().regex(modelIdPattern).optional(),
             credentialId: z.uuid(),
             thinking: z.enum(thinkingLevels).optional(),
-            harnesses: z
-              .array(z.enum(["codex", "claude-code", "pi"]))
-              .min(1)
-              .max(3),
+            harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
           })
           .strict(),
       )
@@ -135,9 +133,15 @@ export async function createComparison(
       const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
       if (!levels.includes(thinking))
         throw new Error("Unsupported thinking level for this model and harness");
-      const identity = `${model.provider}/${model.model}`;
-      if (seen.has(identity)) throw new Error("Select each model once");
-      seen.add(identity);
+      const identity = JSON.stringify([route.provider, route.model, credential.id, thinking]);
+      for (const harness of selected.harnesses) {
+        const pair = `${identity}/${harness}`;
+        if (seen.has(pair))
+          throw new Error(
+            "Select each model, harness, credential, and thinking configuration once",
+          );
+        seen.add(pair);
+      }
       return {
         id: randomUUID(),
         model: selected.catalogId,

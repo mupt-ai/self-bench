@@ -50,11 +50,11 @@ export function SidebarMenuItem({ className, ...props }: ComponentProps<"li">) {
   );
 }
 const menuButton = cva(
-  "flex w-full items-center gap-3 overflow-hidden px-3 text-left font-sans text-[15px] leading-5 font-medium outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-mint disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-[18px] [&>svg]:shrink-0",
+  "flex w-full items-center gap-2.5 overflow-hidden px-3 text-left font-mono text-sm leading-5 font-normal outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
-      active: { true: "bg-surface-2 text-mint", false: "text-muted" },
-      size: { default: "h-11", lg: "h-12" },
+      active: { true: "bg-brand/10 text-brand", false: "text-muted-foreground" },
+      size: { default: "h-9", lg: "h-10" },
     },
     defaultVariants: { active: false, size: "default" },
   },

@@ -1,6 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { deleteTask, type TaskItem } from "../api";
+import { Button } from "../ui";
 import { DeleteTasksDialog } from "./DeleteTasksDialog";
 import { TaskList } from "./TaskList";
 import { deleteSelectedTasks, taskKey } from "./task-deletion";
@@ -67,16 +68,30 @@ export function ReviewTaskList({
       {actionsTarget &&
         selectedVisible > 0 &&
         createPortal(
-          <button
-            type="button"
-            className="inline-flex h-9 shrink-0 items-center justify-center border border-danger bg-transparent px-4 font-sans text-sm font-bold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
-            title="Delete Selected Tasks"
-            aria-busy={deleting}
-            disabled={deleting}
-            onClick={() => requestDelete(selectedTasks)}
-          >
-            {deleting ? "Deleting…" : "Delete Selected"}
-          </button>,
+          <>
+            <span className="mr-auto text-xs tabular-nums text-muted-foreground">
+              {selectedVisible} Selected
+            </span>
+            <Button
+              variant="ghost"
+              size="small"
+              aria-label="Clear Selection"
+              disabled={deleting}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </Button>
+            <Button
+              variant="destructive"
+              size="small"
+              title="Delete Selected Tasks"
+              aria-busy={deleting}
+              disabled={deleting}
+              onClick={() => requestDelete(selectedTasks)}
+            >
+              {deleting ? "Deleting…" : "Delete Selected"}
+            </Button>
+          </>,
           actionsTarget,
         )}
       {pendingDelete && (
@@ -91,14 +106,14 @@ export function ReviewTaskList({
         />
       )}
       {result && (
-        <div className="my-3 border border-line p-3 text-sm" role="status">
+        <div className="border-b border-border px-4 py-3 text-xs leading-5" role="status">
           <p>
             {result.deleted.size} task{result.deleted.size === 1 ? "" : "s"} deleted.
             {result.failures.length > 0 &&
               ` ${result.failures.length} could not be deleted and remain selected.`}
           </p>
           {result.failures.length > 0 && (
-            <ul className="mt-2 list-inside list-disc break-words text-danger">
+            <ul className="mt-2 list-inside list-disc break-words text-destructive">
               {result.failures.map(({ task, error }) => (
                 <li key={taskKey(task)}>
                   {task.taskId} ({task.runId}): {error}

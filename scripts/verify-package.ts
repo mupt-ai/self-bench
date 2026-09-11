@@ -63,6 +63,7 @@ try {
     "dist/runtime/command.sh",
     "dist/api-main.js",
     "dist/temporal/worker-main.js",
+    "dist/evaluation/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-verifier.bundle.js",
     "dist/sandbox-author.bundle.js",

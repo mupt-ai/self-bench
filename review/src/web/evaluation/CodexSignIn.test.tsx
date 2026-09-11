@@ -114,7 +114,7 @@ test("restarting after a polling error does not revive the cancelled attempt", a
     if (path.endsWith("/complete")) return Response.json(saved);
     return Response.json({});
   };
-  await click("Sign in with ChatGPT");
+  await click("Sign In with ChatGPT");
   await waitFor(() => !!container.querySelector('[role="alert"]'));
   await click("Start Again");
   // The server waits for the old Codex process to close before returning the new session.
@@ -133,7 +133,7 @@ test("dismissal waits for the approved credential to save and refresh the list",
     if (path.endsWith("/complete")) return saving.promise;
     return Response.json(session("approved", "ready"));
   };
-  await click("Sign in with ChatGPT");
+  await click("Sign In with ChatGPT");
   await waitFor(() => requests.includes(`POST ${base}/approved/complete`));
   expect(button("Close").disabled).toBe(true);
   expect(button("Cancel Sign-In").disabled).toBe(true);
@@ -162,7 +162,7 @@ test("a failed save unlocks dismissal and can retry the approved session", async
     }
     return Response.json(session("approved", "ready"));
   };
-  await click("Sign in with ChatGPT");
+  await click("Sign In with ChatGPT");
   await waitFor(() => !!container.querySelector('[role="alert"]'));
   expect(button("Close").disabled).toBe(false);
   expect(button("Cancel Sign-In").disabled).toBe(false);

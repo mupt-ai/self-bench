@@ -121,6 +121,7 @@ export async function discoverCandidateShard(
                 SOURCE_REPO_URL: run.repository.url,
                 SOURCE_COMMIT: run.repository.commit,
                 AUTHOR_MODEL: run.authoring.model,
+                AUTHOR_THINKING: run.authoring.reasoningEffort,
                 SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
                 SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
               },

@@ -1,5 +1,6 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
+import { SectionHeader } from "../ui";
 import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({
@@ -23,25 +24,19 @@ export function ParetoChart({
   return (
     <section
       ref={container}
-      className="border border-line bg-bg p-4 sm:p-6 [&_footer]:mt-2.5 [&_footer]:font-mono [&_footer]:text-sm [&_footer]:text-dim"
+      className="border border-border bg-background p-4 sm:p-6 [&_footer]:mt-2.5 [&_footer]:font-mono [&_footer]:text-xs [&_footer]:text-muted-foreground"
       aria-label="Accuracy versus Cost"
     >
-      <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end [&_h2]:mt-2 [&_h2]:font-sans [&_h2]:text-2xl [&_h2]:font-medium [&_h2]:tracking-tight [&_p]:font-mono [&_p]:text-base [&_p]:text-dim">
-        <div>
-          <span className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
-            Benchmark
-          </span>
-          <h2>Accuracy vs. Estimated Cost</h2>
-        </div>
+      <SectionHeader title="Accuracy vs. Estimated Cost">
         {points.length > 0 && (
-          <p>
+          <p className="text-xs text-muted-foreground">
             {points[0]?.tasks} {points[0]?.tasks === 1 ? "task" : "tasks"} · same dataset
             {oneHarness ? ` · ${points[0]?.harness}` : ""}
           </p>
         )}
-      </div>
+      </SectionHeader>
       {!points.length ? (
-        <div className="py-16 text-center text-muted [&_span]:mx-auto [&_span]:mt-3 [&_span]:block [&_span]:max-w-[440px] [&_span]:text-sm [&_span]:text-dim">
+        <div className="py-16 text-center text-muted-foreground [&_span]:mx-auto [&_span]:mt-3 [&_span]:block [&_span]:max-w-[440px] [&_span]:text-sm [&_span]:text-muted-foreground">
           <p>Your completed runs appear here.</p>
           <span>
             Runs need complete scores, verified model usage, and a cost estimate. Missing costs
@@ -49,9 +44,9 @@ export function ParetoChart({
           </span>
         </div>
       ) : (
-        <div className="mt-7 [&_svg]:block [&_svg]:w-full">
+        <div className="mt-4 [&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--bg)] [--pareto-foreground:var(--ink)] [--pareto-muted:var(--dim)] [--pareto-frontier:var(--mint)] [&_text]:text-xs [&_text[font-size='11']]:text-sm [&_text[font-size='14']]:text-sm"
+            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-frontier:var(--brand)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)] [&_text]:text-xs [&_text[font-size='11']]:text-sm [&_text[font-size='14']]:text-sm"
             title={width < 640 ? "Accuracy vs. Cost" : "Accuracy versus Cost per Task"}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}

@@ -36,7 +36,7 @@ test("deletion controls sit outside task links and active generation stays disab
   );
   expect(html).toContain('aria-label="Select terminal from run-one" checked=""');
   expect(html).toMatch(/aria-label="Select active from run-two" disabled=""/);
-  expect(html).toMatch(/aria-label="Delete active from run-two" disabled=""/);
+  expect(html).toMatch(/aria-label="Task Actions for active from run-two" disabled=""/);
   const links = html.match(/<a\b[^>]*>.*?<\/a>/g) ?? [];
   expect(links).toHaveLength(2);
   expect(links.every((link) => !link.includes("<button") && !link.includes("<input"))).toBe(true);

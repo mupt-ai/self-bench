@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, Copy, Terminal } from "lucide-react";
+import { ArrowUpRight, Check, Copy } from "lucide-react";
 import React from "react";
 import type { CodexLoginStatus } from "../../../../src/evaluation/codex-login";
 import { Skeleton } from "../LoadingSkeleton";
@@ -112,13 +112,13 @@ export function CodexSignIn({
   };
   if (session?.status === "saved")
     return (
-      <div className="border border-mint/25 bg-mint/5 p-5" role="status">
-        <Check className="mb-3 text-mint" size={22} aria-hidden="true" />
-        <h3 className="font-semibold">Codex Connected</h3>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          {session.credential?.name} is saved and ready for Codex runs in {org}.
-        </p>
-        <Button type="button" className="mt-5" variant="primary" onClick={() => void onDone()}>
+      <div
+        className="flex flex-wrap items-center gap-3 border border-brand/25 bg-brand/5 p-4"
+        role="status"
+      >
+        <Check className="text-brand" size={18} aria-hidden="true" />
+        <h3 className="flex-1 text-sm font-medium">Codex Connected</h3>
+        <Button type="button" variant="primary" onClick={() => void onDone()}>
           Done
         </Button>
       </div>
@@ -126,21 +126,18 @@ export function CodexSignIn({
   return (
     <div className="space-y-4">
       {!session && !starting ? (
-        <div className="border border-line bg-bg p-5">
-          <Terminal size={24} className="mb-3 text-mint" aria-hidden="true" />
-          <h3 className="text-sm font-semibold">Connect Your ChatGPT Account</h3>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            You’ll receive a one-time code to enter on OpenAI. After you approve, your sign-in is
-            saved for Codex runs across {org}.
+        <div>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Use your ChatGPT plan for Codex runs.
           </p>
           <Button
             type="button"
-            className="mt-5 w-full"
+            className="mt-3 w-full"
             variant="primary"
             disabled={!name.trim()}
             onClick={() => void start()}
           >
-            Sign in with ChatGPT
+            Sign In with ChatGPT
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -148,7 +145,7 @@ export function CodexSignIn({
         <div
           role="status"
           aria-label="Preparing Sign-In"
-          className="space-y-4 border border-line bg-bg p-5"
+          className="space-y-4 border border-border bg-background p-4"
         >
           <Skeleton className="h-4 w-44" />
           <Skeleton className="h-12 w-full" />
@@ -156,91 +153,75 @@ export function CodexSignIn({
           <span className="sr-only">Preparing your sign-in code…</span>
         </div>
       ) : session?.status === "failed" ? (
-        <div role="alert" className="border border-danger/30 p-5">
-          <p className="text-sm leading-6 text-danger">{session.error}</p>
+        <div role="alert" className="border border-destructive/30 p-4">
+          <p className="text-sm leading-6 text-destructive">{session.error}</p>
           <Button type="button" className="mt-4" onClick={() => void start()}>
             Start Again
           </Button>
         </div>
       ) : (
-        <div className="border border-line bg-bg p-5">
-          <ol className="space-y-5 text-sm">
-            <li>
-              <p className="mb-3 font-medium">
-                <span className="mr-2 font-mono text-dim">01</span>Copy Your One-Time Code
-              </p>
-              <div className="flex border border-line-strong bg-surface">
-                <input
-                  ref={code}
-                  aria-label="One-Time Code"
-                  readOnly
-                  value={session?.instructions?.userCode ?? ""}
-                  onFocus={(event) => event.target.select()}
-                  className="min-w-0 flex-1 bg-transparent p-3 text-center font-mono text-xl tracking-[0.15em] text-mint outline-none"
-                />
-                <button
-                  type="button"
-                  aria-label={copied ? "Code Copied" : "Copy Code"}
-                  title={copied ? "Code Copied" : "Copy Code"}
-                  className="border-l border-line px-4 text-muted hover:text-mint"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(session?.instructions?.userCode ?? "");
-                      setCopied(true);
-                    } catch {
-                      code.current?.focus();
-                      code.current?.select();
-                      setCopyHint("Copy the selected code, then open OpenAI to continue.");
-                    }
-                  }}
-                >
-                  {copied ? (
-                    <Check size={16} aria-hidden="true" />
-                  ) : (
-                    <Copy size={16} aria-hidden="true" />
-                  )}
-                </button>
-              </div>
-              {copyHint && (
-                <p role="status" className="mt-2 text-xs text-muted">
-                  {copyHint}
-                </p>
+        <div className="border border-border bg-background p-4">
+          <p className="mb-3 text-sm text-muted-foreground">Enter this code on OpenAI.</p>
+          <div className="flex border border-input bg-card">
+            <input
+              ref={code}
+              aria-label="One-Time Code"
+              readOnly
+              value={session?.instructions?.userCode ?? ""}
+              onFocus={(event) => event.target.select()}
+              className="min-w-0 flex-1 bg-transparent p-3 text-center font-mono text-xl tracking-[0.15em] text-brand outline-none"
+            />
+            <button
+              type="button"
+              aria-label={copied ? "Code Copied" : "Copy Code"}
+              title={copied ? "Code Copied" : "Copy Code"}
+              className="border-l border-border px-4 text-muted-foreground hover:text-brand"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(session?.instructions?.userCode ?? "");
+                  setCopied(true);
+                } catch {
+                  code.current?.focus();
+                  code.current?.select();
+                  setCopyHint("Copy the selected code to continue.");
+                }
+              }}
+            >
+              {copied ? (
+                <Check size={16} aria-hidden="true" />
+              ) : (
+                <Copy size={16} aria-hidden="true" />
               )}
-            </li>
-            <li>
-              <p className="mb-3 font-medium">
-                <span className="mr-2 font-mono text-dim">02</span>Approve on OpenAI
-              </p>
-              <a
-                className={`${buttonStyles.primary} w-full`}
-                href={session?.instructions?.verificationUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open OpenAI
-                <ArrowUpRight size={15} aria-hidden="true" />
-              </a>
-              <p className="mt-2 text-xs leading-5 text-muted">
-                Sign in, enter the code, and approve access. Then return here.
-              </p>
-            </li>
-          </ol>
+            </button>
+          </div>
+          {copyHint && (
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
+              {copyHint}
+            </p>
+          )}
+          <a
+            className={`${buttonStyles.primary} mt-4 w-full`}
+            href={session?.instructions?.verificationUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Continue on OpenAI
+            <ArrowUpRight size={15} aria-hidden="true" />
+          </a>
           <p
-            className="mt-5 flex items-center gap-2 border-t border-line pt-4 text-xs text-muted"
+            className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground"
             role="status"
           >
             <span
-              className="size-1.5 animate-pulse bg-mint motion-reduce:animate-none"
+              className="size-1.5 animate-pulse bg-brand motion-reduce:animate-none"
               aria-hidden="true"
             />
-            {session?.status === "saving"
-              ? "Saving your credential…"
-              : "Waiting for approval on OpenAI…"}
+            {session?.status === "saving" ? "Saving…" : "Waiting for approval…"}
           </p>
         </div>
       )}
       {error && (
-        <div role="alert" className="text-sm leading-6 text-danger">
+        <div role="alert" className="text-sm leading-6 text-destructive">
           <p>{error}</p>
           {session && (
             <div className="mt-2 flex gap-2">
@@ -254,10 +235,13 @@ export function CodexSignIn({
           )}
         </div>
       )}
-      <p className="text-xs leading-5 text-muted">
-        Device code login must be enabled in your ChatGPT security settings. Your ChatGPT
-        subscription limits apply.
-      </p>
+      <details className="text-xs leading-5 text-muted-foreground">
+        <summary className="w-fit cursor-pointer hover:text-foreground">Sign-In Help</summary>
+        <p className="mt-2">
+          Enable device code login in your ChatGPT security settings. Your subscription limits
+          apply.
+        </p>
+      </details>
     </div>
   );
 }

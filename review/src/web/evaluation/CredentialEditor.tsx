@@ -1,14 +1,12 @@
-import { LockKeyhole, X } from "lucide-react";
 import React from "react";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CredentialDraft } from "../../../../src/evaluation/credentials";
-import { Button, Input, Select } from "../ui";
-import { useModalDialog } from "../useModalDialog";
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { Button, fieldStyles, Input, Select } from "../ui";
 import { CodexSignIn } from "./CodexSignIn";
 import { CredentialSecret } from "./CredentialSecret";
-import { providers, sandboxes } from "./credential-presentation";
+import { isSandbox, providers, sandboxes } from "./credential-presentation";
 
-const field = "grid gap-2 text-sm font-medium text-ink";
 export function CredentialEditor({
   previous,
   kind = "openai",
@@ -42,46 +40,31 @@ export function CredentialEditor({
   const [importing, setImporting] = React.useState(false);
   const [error, setError] = React.useState("");
   const name = React.useRef<HTMLInputElement>(null);
-  const dialog = useModalDialog(name);
   const isLogin = draft.auth === "codex-login" && !importing;
+  const sandbox = isSandbox(previous?.kind ?? kind);
+  const choices = sandbox ? sandboxes : providers;
   const keyLabel =
     draft.kind === "modal"
       ? "Modal Token Secret"
       : draft.kind === "vercel"
         ? "Vercel Token"
-        : sandboxes.some((entry) => entry.id === draft.kind)
-          ? "Sandbox API Key"
-          : "Model API Key";
+        : "API Key";
   return (
-    <dialog
-      ref={dialog}
+    <Dialog
+      initialFocus={name}
+      onDismiss={onCancel}
+      busy={busy}
       aria-labelledby="credential-title"
       aria-describedby="credential-description"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onCancel();
-      }}
-      className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto border border-line-strong bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/65"
     >
-      <header className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
-        <div>
-          <h2 id="credential-title" className="text-lg font-semibold">
-            {previous ? "Replace Credential" : "Add Credential"}
-          </h2>
-          <p id="credential-description" className="mt-1 text-sm text-muted">
-            Available to repositories in <span className="font-medium text-ink">{org}</span>.
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          className="-mr-2 px-2"
-          aria-label="Close"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          <X size={18} aria-hidden="true" />
-        </Button>
-      </header>
+      <DialogHeader
+        title={previous ? "Replace Credential" : sandbox ? "Add Sandbox" : "Add Provider"}
+        titleId="credential-title"
+        descriptionId="credential-description"
+        description={<>Shared with {org}.</>}
+        onClose={onCancel}
+        busy={busy}
+      />
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -97,16 +80,15 @@ export function CredentialEditor({
           }
         }}
       >
-        <div className="space-y-5 px-6 py-6">
+        <DialogBody>
           {previous && (
-            <p className="border-l-2 border-line-strong pl-3 text-xs leading-5 text-muted">
-              This creates a new credential. Existing runs keep the original; delete it when it’s no
-              longer needed.
+            <p className="border-l-2 border-input pl-3 text-xs leading-5 text-muted-foreground">
+              Creates a new credential. Existing runs keep the original.
             </p>
           )}
           <fieldset disabled={busy || signingIn} className="space-y-5">
-            <label className={field} htmlFor="credential-provider">
-              Provider or Sandbox
+            <label className={fieldStyles} htmlFor="credential-provider">
+              {sandbox ? "Sandbox" : "Provider"}
               <Select
                 id="credential-provider"
                 value={draft.kind}
@@ -121,26 +103,17 @@ export function CredentialEditor({
                   setError("");
                 }}
               >
-                <optgroup label="Model Providers">
-                  {providers.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Sandboxes">
-                  {sandboxes.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </optgroup>
+                {choices.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
               </Select>
             </label>
             {draft.kind === "openai" && (
               <fieldset>
-                <legend className="mb-2 text-sm font-medium">Authentication</legend>
-                <div className="grid grid-cols-2 border border-line-strong p-1">
+                <legend className="sr-only">Authentication</legend>
+                <div className="grid grid-cols-2 border border-input p-1">
                   {[
                     { id: "api-key", label: "API Key" },
                     { id: "codex-login", label: "ChatGPT Sign-In" },
@@ -149,7 +122,7 @@ export function CredentialEditor({
                       key={option.id}
                       type="button"
                       aria-pressed={draft.auth === option.id}
-                      className={`px-2 py-2 text-sm transition-colors ${draft.auth === option.id ? "bg-surface-3 font-medium text-mint" : "text-muted hover:text-ink"}`}
+                      className={`px-2 py-2 text-sm transition-colors ${draft.auth === option.id ? "bg-accent font-medium text-brand" : "text-muted-foreground hover:text-foreground"}`}
                       onClick={() => {
                         setDraft({
                           ...draft,
@@ -166,22 +139,17 @@ export function CredentialEditor({
                 </div>
               </fieldset>
             )}
-            <label className={field} htmlFor="credential-name">
-              Credential Name
+            <label className={fieldStyles} htmlFor="credential-name">
+              Name
               <Input
                 ref={name}
                 id="credential-name"
                 required
                 maxLength={80}
-                placeholder={
-                  draft.auth === "codex-login" ? "e.g. Team Codex" : "e.g. Evaluation API key"
-                }
+                placeholder={draft.auth === "codex-login" ? "e.g. Team Codex" : "e.g. Team account"}
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               />
-              <span className="text-xs font-normal text-muted">
-                A name your team will recognize when choosing credentials.
-              </span>
             </label>
           </fieldset>
           {isLogin ? (
@@ -195,7 +163,7 @@ export function CredentialEditor({
           ) : (
             <fieldset className="space-y-5" disabled={busy}>
               {draft.kind === "custom" && (
-                <label className={field} htmlFor="credential-endpoint">
+                <label className={fieldStyles} htmlFor="credential-endpoint">
                   Endpoint
                   <Input
                     id="credential-endpoint"
@@ -205,13 +173,13 @@ export function CredentialEditor({
                     value={draft.endpoint ?? ""}
                     onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })}
                   />
-                  <span className="text-xs font-normal leading-5 text-muted">
+                  <span className="text-xs font-normal leading-5 text-muted-foreground">
                     An OpenAI-compatible HTTPS endpoint on an approved host.
                   </span>
                 </label>
               )}
               {draft.kind === "modal" && (
-                <label className={field} htmlFor="credential-token-id">
+                <label className={fieldStyles} htmlFor="credential-token-id">
                   Modal Token ID
                   <Input
                     id="credential-token-id"
@@ -225,7 +193,7 @@ export function CredentialEditor({
               )}
               {draft.kind === "vercel" &&
                 (["teamId", "projectId"] as const).map((key) => (
-                  <label key={key} className={field} htmlFor={`credential-${key}`}>
+                  <label key={key} className={fieldStyles} htmlFor={`credential-${key}`}>
                     {key === "teamId" ? "Vercel Team ID" : "Vercel Project ID"}
                     <Input
                       id={`credential-${key}`}
@@ -241,7 +209,6 @@ export function CredentialEditor({
                 draft={draft}
                 setDraft={setDraft}
                 importing={importing}
-                org={org}
                 setError={setError}
                 keyLabel={keyLabel}
                 key={`${draft.kind}-${draft.auth}`}
@@ -251,27 +218,23 @@ export function CredentialEditor({
           {draft.auth === "codex-login" && !signingIn && (
             <button
               type="button"
-              className="text-xs text-muted underline underline-offset-4 hover:text-mint"
+              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
               onClick={() => {
                 setImporting((value) => !value);
                 setDraft({ ...draft, value: "" });
                 setError("");
               }}
             >
-              {importing ? "Use Browser Sign-In" : "Import an Existing auth.json"}
+              {importing ? "Use Browser Sign-In" : "Import auth.json"}
             </button>
           )}
           {error && (
-            <p role="alert" className="text-sm leading-6 text-danger">
+            <p role="alert" className="text-sm leading-6 text-destructive">
               {error}
             </p>
           )}
-        </div>
-        <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-bg/50 px-6 py-4">
-          <p className="flex items-center gap-2 text-xs text-muted">
-            <LockKeyhole size={13} aria-hidden="true" />
-            Encrypted Storage
-          </p>
+        </DialogBody>
+        <DialogFooter>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
               {signingIn ? "Cancel Sign-In" : "Cancel"}
@@ -282,12 +245,12 @@ export function CredentialEditor({
                 variant="primary"
                 disabled={busy || !draft.value || !draft.name.trim()}
               >
-                {busy ? "Saving…" : "Save Credential"}
+                {busy ? "Saving…" : "Save"}
               </Button>
             )}
           </div>
-        </footer>
+        </DialogFooter>
       </form>
-    </dialog>
+    </Dialog>
   );
 }

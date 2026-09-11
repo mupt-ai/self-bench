@@ -9,6 +9,10 @@ export const generationModels = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
 ] as const;
+export const generationSandboxes = EXECUTION_BACKENDS;
+export function generationSandboxLabel(sandbox: string) {
+  return executionBackendLabels[sandbox as keyof typeof executionBackendLabels] ?? sandbox;
+}
 export const generationSettingsSchema = z
   .object({
     authorModel: z.enum(generationModels),

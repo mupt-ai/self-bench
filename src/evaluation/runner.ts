@@ -9,6 +9,7 @@ import { HARBOR_VERSION, solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
+import { gatewayTrial } from "./gateway-execution.js";
 import { type ThinkingLevel, thinkingArguments } from "./model-options.js";
 import {
   boundedSteps,
@@ -36,7 +37,9 @@ export function solverArguments(
     "--path",
     taskPath,
     "--agent",
-    harness,
+    harness === "codex" && model.startsWith("openai/") && model.slice(7).includes("/")
+      ? "harbor_gateway:GatewayCodex"
+      : harness,
     "--model",
     model,
     "--env",
@@ -103,7 +106,7 @@ export async function executeEvaluation(
         : { ...solverEnvironment(input, home, resolved), secrets: [] };
     secrets.push(...execution.secrets);
     const { profile, child } = execution;
-    if (input.sandbox === "e2b") child.PYTHONPATH = dirname(fileURLToPath(import.meta.url));
+    child.PYTHONPATH = dirname(fileURLToPath(import.meta.url));
     const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
     if (version.stdout.trim() !== HARBOR_VERSION)
       throw new Error("Worker Harbor version does not match the supported version");
@@ -143,8 +146,7 @@ export async function executeEvaluation(
           index,
           taskPath,
           jobs: join(trialRoot, "jobs"),
-          model: profile.model,
-          child,
+          ...gatewayTrial(input, trial.harness, profile.model, child),
           command,
           redact,
           options,

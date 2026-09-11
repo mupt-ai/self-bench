@@ -19,18 +19,14 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
   );
 }
 
-test("sidebar navigation uses larger sans labels and roomy rows", () => {
+test("sidebar exposes labeled navigation and settings", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
   expect(links).toHaveLength(2);
-  for (const link of links) {
-    expect(link).toContain("font-sans");
-    expect(link).toContain("text-[15px]");
-    expect(link).toContain("h-11");
-    expect(link).not.toContain("font-mono");
-  }
   expect(html).toContain('aria-label="Organization Navigation"');
   expect(html).toContain('aria-label="Organization Settings"');
+  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
+  expect(html).toContain("by dari.dev</span>");
 });
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
@@ -53,8 +49,4 @@ test("account picker keeps its menu affordance and readable personal account lab
   expect(html).toContain("cursor-pointer");
   expect(html).toContain("example-account");
   expect(html).toContain("Personal Account");
-  expect(html).toContain("font-sans text-xs leading-5 text-dim");
-  expect(html).toContain(
-    'class="block truncate font-sans text-[15px] font-semibold leading-5 text-ink"',
-  );
 });

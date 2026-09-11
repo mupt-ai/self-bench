@@ -1,5 +1,4 @@
 import type { Client } from "@temporalio/client";
-import { queryStatus } from "../api/status.js";
 import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
 import { createSiteAuth, type SiteAuth } from "../auth/routes.js";
@@ -9,7 +8,7 @@ import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
 import { selfBenchRunWorkflow } from "../temporal/workflow.js";
-import type { BatchStatus } from "./batch-progress.js";
+import { liveBatchStatus } from "./batch-activity.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
 import { evaluationStarter } from "./evaluation-start.js";
@@ -43,6 +42,11 @@ export async function openSite(
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
+  const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
+  const generationRecords =
+    process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && generationQueue
+      ? createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
+      : undefined;
   return {
     auth: createSiteAuth({ config: auth, users }),
     evaluations: createEvaluationRoutes({
@@ -62,6 +66,7 @@ export async function openSite(
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
     batches: createBatchRoutes({
       config,
+      ...(generationRecords ? { records: generationRecords } : {}),
       auth,
       users,
       repos,
@@ -71,12 +76,14 @@ export async function openSite(
       start: async (input) => {
         await client.workflow.start(selfBenchRunWorkflow, {
           workflowId: input.runId,
-          taskQueue: config.temporal.taskQueue,
+          taskQueue: input.generation
+            ? (generationQueue ?? config.temporal.taskQueue)
+            : config.temporal.taskQueue,
           args: [input],
           workflowExecutionTimeout: "14 days",
         });
       },
-      status: async (runId) => (await queryStatus(client.workflow.getHandle(runId))) as BatchStatus,
+      status: (runId) => liveBatchStatus(client, runId),
       cancel: async (runId) => {
         await client.workflow.getHandle(runId).cancel();
       },
@@ -91,11 +98,7 @@ export async function openSite(
     pullRequests: createPullRequestRoutes({
       config,
       auth,
-      ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_GENERATION_TASK_QUEUE
-        ? {
-            records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
-          }
-        : {}),
+      ...(generationRecords ? { records: generationRecords } : {}),
       users,
       repos,
       tasks,
@@ -104,7 +107,7 @@ export async function openSite(
         temporalStarter(
           client,
           input.run.generation
-            ? (process.env.SELFBENCH_GENERATION_TASK_QUEUE ?? config.temporal.taskQueue)
+            ? (generationQueue ?? config.temporal.taskQueue)
             : config.temporal.taskQueue,
         )(workflowId, input),
     }),

@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { batchIsTerminal, validCandidateCounts } from "./batch-api";
+import { BatchRequestError, batchIsTerminal, startBatch, validCandidateCounts } from "./batch-api";
 import { GenerateBatch } from "./GenerateBatch";
 
 test("batch form count validation and terminal states", () => {
@@ -18,4 +18,38 @@ test("renders minimal batch trigger without starting generation", () => {
   );
   expect(html).toContain("Generate Batch");
   expect(html).not.toContain("dialog");
+});
+
+test("unconfirmed batch starts retain the run ID for navigation without resubmitting", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockResolvedValue(
+    Response.json(
+      { runId: "batch-unconfirmed", error: "Start could not be confirmed." },
+      { status: 503 },
+    ),
+  );
+  try {
+    await startBatch(
+      { org: "team", fullName: "owner/repo" },
+      { easy: 1, medium: 0, hard: 0 },
+      {
+        authorModel: "gpt-5.6-sol",
+        verifierModel: "gpt-5.6-sol",
+        reasoning: "high",
+        sandbox: "docker",
+        modelCredentialId: "00000000-0000-4000-8000-000000000001",
+      },
+    ).then(
+      () => {
+        throw new Error("Expected failure");
+      },
+      (error) => {
+        expect(error).toBeInstanceOf(BatchRequestError);
+        expect(error.runId).toBe("batch-unconfirmed");
+        expect(error.message).toBe("Start could not be confirmed.");
+      },
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    fetch.mockRestore();
+  }
 });

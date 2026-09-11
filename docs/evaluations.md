@@ -1,5 +1,20 @@
 # Running self-bench evaluations
 
+## Signed-in workspace
+
+The web workspace keeps each repository's Dataset, Batches, Run, and Results pages together:
+
+- **Dataset** lists tasks by review status, with review and deletion actions. Accepted tasks are selected by default for evaluation.
+- **Batches** contains generation history and individual batch progress. Generate Batch separates candidate counts from model, sandbox, and credential configuration; Add PRs uses the same saved generation settings.
+- **Run** uses **Add Model / Harness** to configure independent model, credential, harness, and thinking selections. Available harnesses depend on the selected connection. Saved ChatGPT credentials require Codex for solver runs; OpenRouter connections support the workspace's cross-provider harness routes.
+- **Results** retains comparisons and individual solver results. A failed submission response is checked against its request ID before the workspace permits another submission, avoiding duplicate runs when the outcome is uncertain.
+
+Manage organization credentials in **Settings**. Generation accepts saved OpenAI API keys or ChatGPT sign-ins. E2B and Vercel generation still require their explicit runtime and Harbor verification settings. Vercel sandbox credentials are not Vercel AI Gateway connections.
+
+Model and sandbox execution is billed by the configured providers. The workspace does not start a run merely because a model or credential is selected.
+
+## Exported tasks
+
 A self-bench export contains a manifest and one archive per accepted Harbor task:
 
 ```text

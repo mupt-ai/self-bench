@@ -1,14 +1,26 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { harnessLabels } from "../../../../src/evaluation/harnesses";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, DataTable, PageContent, PageHeader, RunStatus, Select } from "../ui";
+import {
+  Button,
+  DataTable,
+  Notice,
+  PageContent,
+  PageHeader,
+  RunStatus,
+  SectionHeader,
+  Select,
+} from "../ui";
+import { ActiveEvaluations } from "./ActiveEvaluations";
 import { type EvaluationRun, evaluationRequest, evaluationUrl } from "./api";
 import { benchmarkPoints, dollars, runAccuracy } from "./benchmark";
 import { ComparisonHistory } from "./ComparisonHistory";
 import { EvaluationResults } from "./EvaluationResults";
 import { ParetoChart } from "./ParetoChart";
+import { thinkingLabel } from "./run-presentation";
 
 export function EvaluationPage() {
   const { org } = useOrg();
@@ -92,11 +104,7 @@ export function EvaluationPage() {
           </Button>
         )}
       </PageHeader>
-      {error && (
-        <p className="my-4 font-mono text-base text-danger" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <Notice className="mb-4">{error}</Notice>}
       {selectedId ? (
         current ? (
           <EvaluationResults key={current.id} run={current} baseUrl={url} repo={repo} />
@@ -105,10 +113,11 @@ export function EvaluationPage() {
         )
       ) : (
         <>
+          <ActiveEvaluations runs={runs} repo={repo} />
           {datasets.length > 1 && (
             <label
               htmlFor="evaluationpage-field-0"
-              className="mb-4 flex flex-wrap items-center gap-3.5 font-mono text-sm text-muted"
+              className="mb-4 flex flex-wrap items-center gap-3.5 font-mono text-sm text-muted-foreground"
             >
               Compare Dataset
               <Select
@@ -127,21 +136,22 @@ export function EvaluationPage() {
           )}
           <ParetoChart points={comparable} onSelect={(id) => setSearch({ run: id })} />
           <ComparisonHistory key={url} repo={repo} url={url} />
-          <section className="mt-8 [&_h2]:mb-4">
-            <h2>Runs</h2>
+          <section className="mt-8">
+            <SectionHeader title="Runs" />
             {loading && !runs.length && !error && <ListSkeleton label="Loading Runs" />}
             {!loading && !runs.length && (
-              <p className="mt-2 text-base text-muted">
+              <p className="mt-2 text-sm text-muted-foreground">
                 No runs yet. <Link to={`/repos/${repo}`}>Run Your Dataset →</Link>
               </p>
             )}
             {runs.length > 0 && (
-              <div className="mt-3 font-mono [&_a]:text-ink [&_a:hover]:text-mint [&_button]:text-ink [&_button:hover]:text-mint">
+              <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">
                 <DataTable>
                   <thead>
                     <tr>
                       <th>Model</th>
                       <th>Harness</th>
+                      <th>Thinking</th>
                       <th>Accuracy</th>
                       <th>Estimated Model Cost / Task</th>
                       <th>Status</th>
@@ -162,7 +172,8 @@ export function EvaluationPage() {
                               </button>
                               <small>{new Date(run.createdAt).toLocaleString()}</small>
                             </td>
-                            <td>{harness}</td>
+                            <td>{harnessLabels[harness]}</td>
+                            <td>{thinkingLabel(run.thinking)}</td>
                             <td>{accuracy === undefined ? "—" : `${accuracy.toFixed(1)}%`}</td>
                             <td>{point ? dollars(point.cost) : "Not Available"}</td>
                             <td>

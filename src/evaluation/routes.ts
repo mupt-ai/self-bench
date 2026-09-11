@@ -10,6 +10,7 @@ import type { CodexLogins } from "./codex-login.js";
 import { codexLoginRoutes } from "./codex-login-routes.js";
 import { evaluationSandboxes } from "./config.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
+import { harnessIds } from "./harnesses.js";
 import { orgCredentialRoutes } from "./org-credential-routes.js";
 import { platformRoutes } from "./platform-routes.js";
 import { availableChoices, handleSetup } from "./profile-routes.js";
@@ -28,10 +29,7 @@ const requestSchema = z
   .object({
     id: z.uuid().transform((value) => value.toLowerCase()),
     model: z.string().min(1).max(60),
-    harnesses: z
-      .array(z.enum(["codex", "claude-code", "pi"]))
-      .min(1)
-      .max(3),
+    harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
     sandbox: z.enum(evaluationSandboxes),
     tasks: z
       .array(
