@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { harnessIds } from "./harnesses.js";
 import { modelIdPattern, modelProvider, providers } from "./providers.js";
 import type { EvaluationChoices, EvaluationInput } from "./types.js";
 
@@ -16,10 +17,7 @@ const profileSchema = z
           modelIdPattern.test(value.slice(value.indexOf("/") + 1)) &&
           value.includes("/"),
       ),
-    harnesses: z
-      .array(z.enum(["codex", "claude-code", "pi"]))
-      .min(1)
-      .max(3),
+    harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
     tenants: z.array(z.string().regex(/^[A-Za-z0-9_.-]+$/)).min(1),
     credentialEnv: z.string().regex(/^SELFBENCH_EVAL_SECRET_[A-Z0-9_]+$/),
     pricing: z

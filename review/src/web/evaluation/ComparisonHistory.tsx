@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router";
-import { DataTable } from "../ui";
+import { DataTable, SectionHeader } from "../ui";
 import { evaluationRequest } from "./api";
 import type { ComparisonStatus } from "./ComparisonPage";
 
@@ -24,10 +24,10 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
   }, [url]);
   if (!comparisons.length && !error) return null;
   return (
-    <section className="mt-8 [&_h2]:mb-4">
-      <h2>Saved Comparisons</h2>
-      {error && <p className="mt-2 text-base text-muted">{error}</p>}
-      <div className="mt-3 font-mono [&_a]:text-ink [&_a:hover]:text-mint [&_button]:text-ink [&_button:hover]:text-mint mt-8 [&_h2]:mb-4">
+    <section className="mt-8">
+      <SectionHeader title="Saved Comparisons" />
+      {error && <p className="mt-2 text-sm text-muted-foreground">{error}</p>}
+      <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">
         <DataTable>
           <thead>
             <tr>

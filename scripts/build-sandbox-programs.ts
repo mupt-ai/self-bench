@@ -14,6 +14,10 @@ await copyFile(
   join(root, "src/evaluation/harbor_e2b.py"),
   join(outputDirectory, "evaluation/harbor_e2b.py"),
 );
+await copyFile(
+  join(root, "src/evaluation/harbor_gateway.py"),
+  join(outputDirectory, "evaluation/harbor_gateway.py"),
+);
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own

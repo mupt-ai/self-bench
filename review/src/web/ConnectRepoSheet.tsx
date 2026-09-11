@@ -8,9 +8,10 @@ import {
   type Repo,
   type RepoDetail,
 } from "./api";
+import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
-import { EmptyState } from "./ui";
+import { Button, EmptyState, Input, Notice, SearchInput } from "./ui";
 
 export interface ConnectRepoSheetProps {
   org: SiteOrg;
@@ -55,15 +56,6 @@ export function ConnectRepoSheet({
     };
   }, [org.login, mode]);
 
-  React.useEffect(() => {
-    search.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   const choose = (repo: Repo) => {
     setSelected(repo);
     setDetail({ status: "loading" });
@@ -107,56 +99,37 @@ export function ConnectRepoSheet({
       : [];
 
   return (
-    <div
-      className="fixed inset-0 z-20 flex justify-end bg-bg/70"
-      onPointerDown={(event) => event.target === event.currentTarget && onClose()}
+    <Dialog
+      initialFocus={search}
+      onDismiss={onClose}
+      busy={submit.busy}
+      placement="right"
+      size="large"
+      aria-labelledby="connect-repo-title"
     >
-      <aside
-        className="flex h-full w-full max-w-[520px] flex-col border-l border-line-strong bg-surface"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="new-run-title"
-      >
-        <header className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 [&_h2]:mt-1.5 [&_h2]:font-sans [&_h2]:text-lg [&_h2]:leading-tight [&_h2]:font-semibold">
-          <div>
-            <div className="font-mono text-sm font-medium tracking-[0.14em] text-mint uppercase">
-              {mode === "mine" ? "Connect My Repo" : "Connect Public Repo"}
-            </div>
-            <h2 id="new-run-title">
-              {mode === "mine" ? "Choose a Repository" : "Enter a Public Repository"}
-            </h2>
-            <p className="mt-1.5 text-muted">
-              {mode === "mine" ? (
-                <>
-                  Repositories in <span className="font-mono">{org.login}</span> that your GitHub
-                  account can read.
-                </>
-              ) : (
-                <>
-                  Any public repository on GitHub, as <span className="font-mono">owner/name</span>.
-                </>
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </header>
+      <div className="flex h-full flex-col">
+        <DialogHeader
+          title={mode === "mine" ? "Connect My Repo" : "Connect Public Repo"}
+          titleId="connect-repo-title"
+          description={
+            mode === "mine"
+              ? `Repositories in ${org.login} that your GitHub account can read.`
+              : "Find a public GitHub repository by owner/name."
+          }
+          onClose={onClose}
+          busy={submit.busy}
+        />
         {mode === "public" ? (
           <form
-            className="mx-6 mb-2 flex gap-2 [&_input]:m-0 [&_input]:flex-1"
+            className="flex gap-2 p-4 sm:p-6"
             onSubmit={(event) => {
               event.preventDefault();
               lookup();
             }}
           >
-            <input
+            <Input
               ref={search}
-              className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
+              className="flex-1"
               type="text"
               placeholder="owner/name"
               value={query}
@@ -166,18 +139,14 @@ export function ConnectRepoSheet({
               autoCorrect="off"
               spellCheck={false}
             />
-            <button
-              type="submit"
-              className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:opacity-40"
-              disabled={!typedName}
-            >
+            <Button type="submit" disabled={!typedName}>
               Look Up
-            </button>
+            </Button>
           </form>
         ) : (
-          <input
+          <SearchInput
             ref={search}
-            className="mx-6 mb-2 h-10 min-w-0 border border-line-strong bg-bg px-3 font-mono text-base text-ink placeholder:text-dim focus:border-mint"
+            className="m-4 sm:m-6"
             type="search"
             placeholder="Search Repositories"
             value={query}
@@ -185,32 +154,25 @@ export function ConnectRepoSheet({
             aria-label="Search Repositories"
           />
         )}
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-6 pb-4"
-          role="listbox"
+        <fieldset
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 px-4 pb-4 sm:px-6 sm:pb-6"
           aria-label="Repositories"
         >
           {mode === "mine" && repos.status === "loading" && (
             <ListSkeleton label="Loading Repositories" />
           )}
-          {mode === "mine" && repos.status === "error" && (
-            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
-              {repos.message}
-            </p>
-          )}
+          {mode === "mine" && repos.status === "error" && <Notice>{repos.message}</Notice>}
           {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
-            <EmptyState>{needle ? "No repositories match." : "No repositories here."}</EmptyState>
+            <EmptyState title={needle ? "No Matching Repositories" : "No Repositories"}>
+              Try another search or connect a public repository.
+            </EmptyState>
           )}
           {mode === "public" && detail?.status === "loading" && (
             <ListSkeleton label="Looking Up Repository" rows={1} />
           )}
-          {mode === "public" && detail?.status === "error" && (
-            <p className="py-4 text-muted mt-4 font-mono text-base leading-relaxed text-danger">
-              {detail.message}
-            </p>
-          )}
+          {mode === "public" && detail?.status === "error" && <Notice>{detail.message}</Notice>}
           {mode === "public" && !detail && (
-            <p className="py-4 text-muted">
+            <p className="py-4 text-muted-foreground">
               Type the repository as it appears on GitHub, then look it up.
             </p>
           )}
@@ -218,58 +180,56 @@ export function ConnectRepoSheet({
             <button
               type="button"
               key={repo.githubId}
-              role="option"
-              aria-selected={selected?.githubId === repo.githubId}
+              aria-pressed={selected?.githubId === repo.githubId}
               disabled={connected.has(repo.fullName.toLowerCase())}
-              className={`flex w-full items-baseline justify-between gap-4 border border-transparent border-b-line px-3 py-2.5 text-left text-ink hover:bg-surface-2 disabled:cursor-default disabled:opacity-55 ${selected?.githubId === repo.githubId ? "border-mint bg-surface-2" : ""}`}
+              className={`flex w-full flex-wrap items-center justify-between gap-2 border border-transparent border-b-border px-3 py-2.5 text-left text-foreground hover:bg-muted disabled:cursor-default disabled:opacity-55 ${selected?.githubId === repo.githubId ? "border-brand bg-muted" : ""}`}
               onClick={() => choose(repo)}
             >
               <span className="truncate font-mono text-sm font-medium">{repo.name}</span>
-              <span className="flex shrink-0 gap-2.5 font-mono text-sm text-dim">
+              <span className="flex max-w-full flex-wrap gap-2 text-xs text-muted-foreground">
                 {connected.has(repo.fullName.toLowerCase()) && (
-                  <span className="text-sm tracking-widest text-warning uppercase text-mint">
-                    connected
+                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                    Connected
                   </span>
                 )}
                 {repo.private && (
-                  <span className="text-sm tracking-widest text-warning uppercase">private</span>
+                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                    Private
+                  </span>
                 )}
                 {repo.archived && (
-                  <span className="text-sm tracking-widest text-warning uppercase">archived</span>
+                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                    Archived
+                  </span>
                 )}
                 {repo.language && <span>{repo.language}</span>}
                 <span>{formatAgo(repo.pushedAt)}</span>
               </span>
             </button>
           ))}
-        </div>
+        </fieldset>
         {selected && (
-          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-surface-2 px-6 py-4">
+          <DialogFooter className="justify-between">
             <div className="min-w-0">
-              <div className="text-sm text-ink font-mono">{selected.fullName}</div>
-              <div className="mt-1 flex gap-2 text-sm text-muted">
+              <div className="text-sm text-foreground font-mono">{selected.fullName}</div>
+              <div className="mt-1 flex gap-2 text-sm text-muted-foreground">
                 <span className="font-mono">{selected.defaultBranch}</span>
-                <span className="text-line-strong" aria-hidden="true">
+                <span className="text-input" aria-hidden="true">
                   ·
                 </span>
                 <span>{detailText(detail)}</span>
               </div>
               {submit.error && (
-                <div className="mt-1.5 font-mono text-sm text-danger">{submit.error}</div>
+                <div className="mt-1.5 font-mono text-sm text-destructive">{submit.error}</div>
               )}
             </div>
-            <button
-              type="button"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={submit.busy}
-              onClick={connect}
-            >
+            <Button variant="primary" disabled={submit.busy} onClick={connect}>
               {submit.busy ? "Connecting…" : "Connect"}
-            </button>
-          </footer>
+            </Button>
+          </DialogFooter>
         )}
-      </aside>
-    </div>
+      </div>
+    </Dialog>
   );
 }
 

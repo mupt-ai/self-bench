@@ -1,6 +1,7 @@
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import { harnessOptions } from "../../../../src/evaluation/harnesses";
 import {
   routeFor,
   thinkingLevels,
@@ -9,12 +10,9 @@ import {
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
 
+const mobileLabel = "sr-only";
+
 type ModelSelection = ComparisonDraft["models"][number];
-const harnessOptions: { id: Harness; label: string }[] = [
-  { id: "codex", label: "Codex" },
-  { id: "claude-code", label: "Claude Code" },
-  { id: "pi", label: "Pi" },
-];
 
 export function RunModelRow({
   model,
@@ -30,7 +28,6 @@ export function RunModelRow({
   const selected = selection ?? { catalogId: model.id, credentialId: "", harnesses: [] };
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
   const route = credential ? routeFor(model, credential.kind) : undefined;
-  const pricing = route?.pricing ?? (!credential ? model.pricing : undefined);
   const levels = thinkingOptions(model, selected.harnesses);
   const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
   const selectCredential = (credentialId: string) => {
@@ -41,25 +38,25 @@ export function RunModelRow({
         nextRoute?.harnesses.includes(harness) &&
         (nextCredential?.auth !== "codex-login" || harness === "codex"),
     );
-    onChange({ ...selected, credentialId, harnesses });
-  };
-  const toggleHarness = (harness: Harness) => {
-    const harnesses = selected.harnesses.includes(harness)
-      ? selected.harnesses.filter((entry) => entry !== harness)
-      : [...selected.harnesses, harness];
-    onChange({ ...selected, harnesses });
+    const available = nextRoute?.harnesses.filter(
+      (harness) => nextCredential?.auth !== "codex-login" || harness === "codex",
+    );
+    onChange({
+      ...selected,
+      credentialId,
+      harnesses: harnesses.length ? harnesses : (available?.slice(0, 1) ?? []),
+    });
   };
   const supportsHarness = (harness: Harness) =>
     (route ?? model).harnesses.includes(harness) &&
     (credential?.auth !== "codex-login" || harness === "codex");
 
   return (
-    <tr>
-      <td>
-        <strong>{model.label}</strong>
-        <small>
-          {model.provider} · {model.model}
-        </small>
+    <div className="grid items-center gap-2 px-3 py-2 pr-10 grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_170px_160px]">
+      <div className="min-w-0 self-center">
+        <strong className="block truncate text-sm font-medium" title={model.label}>
+          {model.label}
+        </strong>
         {model.id === "custom" && (
           <Input
             aria-label="Custom Model ID"
@@ -68,15 +65,11 @@ export function RunModelRow({
             onChange={(event) => onChange({ ...selected, customModel: event.target.value })}
           />
         )}
-      </td>
-      <td>
-        {pricing ? `$${pricing.input} / $${pricing.output}` : "Usage-based"}
-        <small>
-          {pricing ? "Input / output per 1M · reference rates" : "Estimated from run records"}
-        </small>
-      </td>
-      <td>
+      </div>
+      <div className="min-w-0">
+        <span className={mobileLabel}>Credential</span>
         <Select
+          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
           aria-label={`${model.label} Credential`}
           value={selected.credentialId}
           onChange={(event) => selectCredential(event.target.value)}
@@ -84,13 +77,15 @@ export function RunModelRow({
           <option value="">Select Credential</option>
           {credentials.map((entry) => (
             <option key={entry.id} value={entry.id}>
-              {entry.name} · {entry.kind}
+              {entry.name}
             </option>
           ))}
         </Select>
-      </td>
-      <td>
+      </div>
+      <div className="min-w-0">
+        <span className={mobileLabel}>Reasoning</span>
         <Select
+          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
           aria-label={`${model.label} Thinking Level`}
           value={thinking}
           onChange={(event) => {
@@ -105,31 +100,47 @@ export function RunModelRow({
           )}
           {levels.map((level) => (
             <option key={level} value={level}>
+              Thinking:{" "}
               {level === "default"
-                ? "Model Default"
+                ? "Default"
                 : level === "xhigh"
                   ? "XHigh"
                   : level[0]?.toUpperCase() + level.slice(1)}
             </option>
           ))}
         </Select>
-      </td>
-      <td>
-        <div className="flex gap-1.5 [&_button]:whitespace-nowrap [&_button]:border [&_button]:border-line-strong [&_button]:bg-transparent [&_button]:p-2 [&_button]:text-sm [&_button]:text-muted [&_button[aria-pressed=true]]:border-mint [&_button[aria-pressed=true]]:bg-surface [&_button[aria-pressed=true]]:text-mint [&_button:disabled]:opacity-25">
-          {harnessOptions.map((harness) => (
-            <button
-              type="button"
-              key={harness.id}
-              aria-label={`${model.label} with ${harness.label}`}
-              aria-pressed={selected.harnesses.includes(harness.id)}
-              disabled={!supportsHarness(harness.id)}
-              onClick={() => toggleHarness(harness.id)}
-            >
-              {harness.label}
-            </button>
-          ))}
-        </div>
-      </td>
-    </tr>
+      </div>
+      <div className="min-w-0">
+        <span className={mobileLabel}>Harness</span>
+        <Select
+          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
+          aria-label={`${model.label} Harness`}
+          value={selected.harnesses.length > 1 ? "multiple" : (selected.harnesses[0] ?? "")}
+          onChange={(event) =>
+            onChange({
+              ...selected,
+              harnesses: [event.target.value as Harness],
+              thinking: "default",
+            })
+          }
+        >
+          <option value="" disabled>
+            Choose Harness
+          </option>
+          {selected.harnesses.length > 1 && (
+            <option value="multiple" disabled>
+              {selected.harnesses.join(" + ")}
+            </option>
+          )}
+          {harnessOptions
+            .filter((harness) => supportsHarness(harness.id))
+            .map((harness) => (
+              <option key={harness.id} value={harness.id}>
+                {harness.label}
+              </option>
+            ))}
+        </Select>
+      </div>
+    </div>
   );
 }

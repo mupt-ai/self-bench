@@ -1,37 +1,86 @@
-import type { ComponentProps, ReactNode } from "react";
+import { Search } from "lucide-react";
+import type { ComponentProps } from "react";
+import { cn } from "./primitives/cn";
 
+export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "./layout";
+export { EmptyState, Notice } from "./states";
+
+const buttonBase =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap border px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-40 [&>svg]:size-4 [&>svg]:shrink-0";
 export const buttonStyles = {
-  primary:
-    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-mint bg-mint px-4 font-sans text-sm font-bold text-bg transition-colors hover:border-mint-bright hover:bg-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
-  secondary:
-    "inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-line-strong bg-transparent px-4 font-sans text-sm font-bold text-ink transition-colors hover:border-mint hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
-  ghost:
-    "inline-flex min-h-9 shrink-0 items-center justify-center gap-2 px-3 font-sans text-sm text-muted hover:text-mint-bright disabled:cursor-not-allowed disabled:opacity-40",
+  primary: cn(buttonBase, "border-primary bg-primary text-primary-foreground hover:bg-primary/90"),
+  secondary: cn(buttonBase, "border-input bg-transparent text-foreground hover:bg-accent"),
+  ghost: cn(
+    buttonBase,
+    "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
+  ),
+  destructive: cn(
+    buttonBase,
+    "border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10",
+  ),
 };
 
 export function Button({
   variant = "secondary",
-  className = "",
+  size = "default",
+  className,
+  type = "button",
   ...props
-}: ComponentProps<"button"> & { variant?: keyof typeof buttonStyles }) {
-  return <button {...props} className={`${buttonStyles[variant]} ${className}`} />;
+}: ComponentProps<"button"> & {
+  variant?: keyof typeof buttonStyles;
+  size?: "default" | "small" | "icon";
+}) {
+  return (
+    <button
+      type={type}
+      {...props}
+      className={cn(
+        buttonStyles[variant],
+        size === "small" && "h-8 px-2 text-xs",
+        size === "icon" && "size-9 p-0",
+        className,
+      )}
+    />
+  );
 }
 
-const control =
-  "w-full min-w-0 rounded-none border border-line-strong bg-bg px-3 py-2.5 font-mono text-base text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mint disabled:cursor-not-allowed disabled:opacity-40";
+export const fieldStyles = "grid min-w-0 gap-2 text-sm font-medium text-foreground";
+export const controlStyles =
+  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
 
-export function Input({ className = "", ...props }: ComponentProps<"input">) {
-  return <input {...props} className={`${control} ${className}`} />;
+export function Input({ className, ...props }: ComponentProps<"input">) {
+  return <input {...props} className={cn(controlStyles, className)} />;
 }
 
-export function Select({ className = "", ...props }: ComponentProps<"select">) {
+export function SearchInput({ className, ...props }: ComponentProps<typeof Input>) {
+  return (
+    <span className={cn("relative block min-w-0", className)}>
+      <Search
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input type="search" {...props} className="pl-9" />
+    </span>
+  );
+}
+
+export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
+  return (
+    <textarea
+      {...props}
+      className={cn(controlStyles, "h-auto min-h-24 resize-y py-2 leading-6", className)}
+    />
+  );
+}
+
+export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <span className="relative block min-w-0">
-      <select {...props} className={`${control} appearance-none pr-10 ${className}`} />
+      <select {...props} className={cn(controlStyles, "appearance-none pr-9", className)} />
       <svg
         aria-hidden="true"
         viewBox="0 0 12 12"
-        className="pointer-events-none absolute top-1/2 right-3.5 size-3 -translate-y-1/2 fill-none stroke-muted"
+        className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 fill-none stroke-muted-foreground"
         strokeWidth="1.25"
       >
         <path d="m3 4.5 3 3 3-3" />
@@ -40,64 +89,42 @@ export function Select({ className = "", ...props }: ComponentProps<"select">) {
   );
 }
 
-export function DataTable({ className = "", ...props }: ComponentProps<"table">) {
-  return (
-    <section className="overflow-x-auto border border-line-strong" aria-label="Scrollable Table">
-      <table
-        {...props}
-        className={`w-full border-collapse text-left text-sm [&_th]:px-4 [&_th]:py-4 [&_th]:font-mono [&_th]:text-sm [&_th]:font-normal [&_th]:text-muted [&_td]:border-t [&_td]:border-line [&_td]:px-4 [&_td]:py-4 [&_small]:mt-2 [&_small]:block [&_small]:font-mono [&_small]:text-sm [&_small]:text-muted ${className}`}
-      />
-    </section>
-  );
-}
-
-export function EmptyState({ children }: { children: ReactNode }) {
-  return (
-    <div className="w-full border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted">
-      <p>{children}</p>
-    </div>
-  );
-}
-
-export function PageHeader({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: ReactNode;
-  children?: ReactNode;
-}) {
-  return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:gap-6">
-      <div>
-        <h1 className="mt-1.5 font-sans text-xl leading-tight font-semibold tracking-[-0.01em]">
-          {title}
-        </h1>
-        {description && <p className="mt-2 text-base text-muted">{description}</p>}
-      </div>
-      {children}
-    </header>
-  );
-}
-
-export function PageContent({ className = "", ...props }: ComponentProps<"section">) {
+export function DataTable({ className, ...props }: ComponentProps<"table">) {
   return (
     <section
-      {...props}
-      className={`mx-auto w-full max-w-[1600px] [&_h2]:text-lg [&_h2]:font-medium [&_h3]:text-base [&_h4]:mt-6 [&_h4]:mb-3 [&_h4]:font-mono [&_h4]:text-sm [&_h4]:font-medium [&_h4]:text-muted [&_h5]:mt-3 [&_h5]:mb-1.5 [&_h5]:text-dim [&_details]:my-3 [&_details]:border [&_details]:border-line [&_details]:bg-bg [&_details]:px-3.5 [&_details]:py-3 [&_summary]:cursor-pointer [&_summary]:font-mono [&_summary]:text-sm [&_summary]:text-muted [&_pre]:mt-3 [&_pre]:max-h-[440px] [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:text-muted [&_pre]:wrap-anywhere ${className}`}
-    />
+      className="min-w-0 overflow-x-auto border border-border bg-card"
+      aria-label="Scrollable Table"
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll wide tables.
+      tabIndex={0}
+    >
+      <table
+        {...props}
+        className={cn(
+          "w-full border-collapse text-left text-sm [&_thead]:bg-muted/50 [&_th]:px-4 [&_th]:py-3 [&_th]:text-xs [&_th]:font-medium [&_th]:tracking-wider [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_th]:uppercase [&_td]:border-t [&_td]:border-border [&_td]:px-4 [&_td]:py-3 [&_td]:align-middle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/50 [&_small]:mt-1 [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground",
+          className,
+        )}
+      />
+    </section>
   );
 }
 
 export function RunStatus({ value }: { value: string }) {
   const color =
     value === "completed"
-      ? "text-mint"
+      ? "text-success"
       : value === "failed"
-        ? "text-danger"
+        ? "text-destructive"
         : value === "running"
-          ? "text-warning"
-          : "text-muted";
-  return <span className={`font-mono text-sm uppercase ${color}`}>{value}</span>;
+          ? "text-brand"
+          : "text-muted-foreground";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs uppercase before:size-1 before:bg-current",
+        color,
+      )}
+    >
+      {value}
+    </span>
+  );
 }

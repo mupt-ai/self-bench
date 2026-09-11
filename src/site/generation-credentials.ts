@@ -4,6 +4,7 @@ import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { executionBackendLabels } from "../providers.js";
 import type { GenerationReference, GenerationSettings } from "./generation-settings.js";
+import { generationSubscriptionAuth } from "./generation-subscription.js";
 
 function sandboxCredentials(settings: GenerationSettings) {
   const credentials: { id: string | undefined; kind: "modal" | "e2b" | "vercel" }[] = [];
@@ -31,13 +32,14 @@ export async function checkGenerationCredentials(
   const model = account.credentials.find(
     (item) => item.id === settings.modelCredentialId && !item.deleted,
   );
-  if (model?.kind !== "openai" || model.auth !== "api-key")
-    throw new Error("Choose an OpenAI API key from your credentials.");
+  if (model?.kind !== "openai" || !["api-key", "codex-login"].includes(model.auth))
+    throw new Error("Choose an OpenAI credential from your credentials.");
   for (const { id, kind } of sandboxCredentials(settings)) {
     const sandbox = account.credentials.find((item) => item.id === id && !item.deleted);
     if (sandbox?.kind !== kind || sandbox.auth !== "api-key")
       throw new Error(`Choose a ${executionBackendLabels[kind]} credential from your account.`);
   }
+  return model;
 }
 
 export async function generationEnvironment(
@@ -50,13 +52,21 @@ export async function generationEnvironment(
   if (!saved || !isDeepStrictEqual(saved.value, reference))
     throw new Error("Generation does not match its saved configuration.");
   records = orgRecords(records, reference.orgId);
-  await checkGenerationCredentials(records, reference.ownerId, reference.settings);
+  const credential = await checkGenerationCredentials(
+    records,
+    reference.ownerId,
+    reference.settings,
+  );
   const model = await records.read<{ value: string }>(
     secretPath(reference.ownerId, reference.settings.modelCredentialId),
   );
   if (!model?.value.value) throw new Error("Model credential is unavailable.");
-  const env: NodeJS.ProcessEnv = { ...base, OPENAI_API_KEY: model.value.value };
+  const env: NodeJS.ProcessEnv = { ...base };
+  delete env.OPENAI_API_KEY;
   delete env.SELFBENCH_PI_AUTH_JSON;
+  if (credential.auth === "codex-login")
+    env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(model.value.value);
+  else env.OPENAI_API_KEY = model.value.value;
   for (const key of [
     "MODAL_TOKEN_ID",
     "MODAL_TOKEN_SECRET",

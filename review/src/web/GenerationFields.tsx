@@ -47,7 +47,7 @@ export function GenerationFields({
   return (
     <fieldset disabled={disabled} className="grid min-w-0 gap-6 border-0 p-0 sm:grid-cols-2">
       {!options?.available && (
-        <p role="alert" className="text-sm text-danger sm:col-span-2">
+        <p role="alert" className="text-sm text-destructive sm:col-span-2">
           Generation credentials are not available. Configure credential storage before generating
           tasks.
         </p>
@@ -56,7 +56,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid gap-2 font-mono text-[13px] text-muted"
+          className="grid gap-2 font-mono text-[13px] text-muted-foreground"
         >
           {field === "authorModel" ? "Author Model" : "Verifier Model"}
           <Select
@@ -73,7 +73,10 @@ export function GenerationFields({
           </Select>
         </label>
       ))}
-      <label htmlFor="generation-reasoning" className="grid gap-2 font-mono text-[13px] text-muted">
+      <label
+        htmlFor="generation-reasoning"
+        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+      >
         Reasoning
         <Select
           id="generation-reasoning"
@@ -88,7 +91,10 @@ export function GenerationFields({
           <option value="high">High</option>
         </Select>
       </label>
-      <label htmlFor="generation-sandbox" className="grid gap-2 font-mono text-[13px] text-muted">
+      <label
+        htmlFor="generation-sandbox"
+        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+      >
         Sandbox
         <Select
           id="generation-sandbox"
@@ -113,7 +119,10 @@ export function GenerationFields({
           ))}
         </Select>
       </label>
-      <label htmlFor="generation-model-key" className="grid gap-2 font-mono text-[13px] text-muted">
+      <label
+        htmlFor="generation-model-key"
+        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+      >
         OpenAI Credential
         <Select
           id="generation-model-key"
@@ -123,7 +132,9 @@ export function GenerationFields({
         >
           <option value="">Choose an API Key</option>
           {options?.credentials
-            .filter((item) => item.kind === "openai" && item.auth === "api-key")
+            .filter(
+              (item) => item.kind === "openai" && ["api-key", "codex-login"].includes(item.auth),
+            )
             .map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -133,7 +144,10 @@ export function GenerationFields({
       </label>
       {hosted && (
         <>
-          <label className="grid gap-2 font-mono text-[13px] text-muted" htmlFor="generation-image">
+          <label
+            className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+            htmlFor="generation-image"
+          >
             {value.sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image"}
             <Input
               id="generation-image"
@@ -151,7 +165,7 @@ export function GenerationFields({
             </span>
           </label>
           <label
-            className="grid gap-2 font-mono text-[13px] text-muted"
+            className="grid gap-2 font-mono text-[13px] text-muted-foreground"
             htmlFor="generation-harbor"
           >
             Harbor Verification
@@ -182,7 +196,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid gap-2 font-mono text-[13px] text-muted"
+          className="grid gap-2 font-mono text-[13px] text-muted-foreground"
         >
           {label}
           <Select
@@ -192,6 +206,10 @@ export function GenerationFields({
             onChange={(event) => onChange({ ...value, [field]: event.target.value })}
           >
             <option value="">Choose a Credential</option>
+            {value[field] &&
+              !options?.credentials.some(
+                (item) => item.id === value[field] && item.kind === kind,
+              ) && <option value={value[field]}>Unavailable Credential</option>}
             {options?.credentials
               .filter((item) => item.kind === kind && item.auth === "api-key")
               .map((item) => (
@@ -202,9 +220,9 @@ export function GenerationFields({
           </Select>
         </label>
       ))}
-      <div className="font-mono text-[13px] leading-6 text-muted sm:col-span-2">
+      <div className="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-2">
         <Link
-          className="text-mint hover:text-mint-bright"
+          className="text-brand hover:text-brand"
           to="/settings/credentials"
           target="_blank"
           rel="noopener noreferrer"

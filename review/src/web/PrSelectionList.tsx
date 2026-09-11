@@ -1,5 +1,6 @@
 import type { MergedPullRequest } from "./api";
 import { formatAgo } from "./api";
+import { Button, SearchInput } from "./ui";
 
 export function PrSelectionList({
   search,
@@ -34,22 +35,21 @@ export function PrSelectionList({
 }) {
   return (
     <>
-      <input
-        className="mx-5 h-11 shrink-0 min-w-0 border border-line-strong bg-bg px-3 font-mono text-sm text-ink placeholder:text-dim focus:border-mint sm:mx-6"
-        type="search"
+      <SearchInput
+        className="mx-4 shrink-0 sm:mx-6"
         placeholder="Search Listed PRs…"
         aria-label="Search Listed Pull Requests"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
       <div
-        className="mt-4 max-h-[55vh] min-h-0 flex-1 overflow-y-auto px-3 pb-4 sm:px-4"
+        className="mt-4 max-h-[55dvh] min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6"
         aria-busy={loading}
       >
         {visible.map((pr) => (
           <label
             key={pr.number}
-            className={`flex w-full cursor-pointer items-start gap-3 border-b border-line px-3 py-3 text-left text-ink hover:bg-surface-2 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[-2px] has-[:focus-visible]:outline-mint has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-mint/5" : ""}`}
+            className={`flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[-2px] has-[:focus-visible]:outline-brand has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-brand/5" : ""}`}
           >
             <input
               className="sr-only"
@@ -60,7 +60,7 @@ export function PrSelectionList({
             />
             <span
               aria-hidden="true"
-              className={`flex size-4 shrink-0 items-center justify-center self-center border ${selected.has(pr.number) ? "border-mint bg-mint text-bg" : "border-line-strong"}`}
+              className={`flex size-4 shrink-0 items-center justify-center self-center border ${selected.has(pr.number) ? "border-brand bg-brand text-background" : "border-input"}`}
             >
               {selected.has(pr.number) && (
                 <svg
@@ -76,13 +76,13 @@ export function PrSelectionList({
               )}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-mono text-sm leading-6 text-ink/80 wrap-anywhere">
+              <span className="block font-mono text-sm leading-6 text-foreground/80 wrap-anywhere">
                 {pr.title}
               </span>
-              <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[13px] leading-5 text-muted">
-                <span className="text-mint/80">#{pr.number}</span>
+              <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
+                <span className="text-brand/80">#{pr.number}</span>
                 <span className="min-w-0 break-all">{pr.author}</span>
-                {started.has(pr.number) && <span className="text-mint">Started</span>}
+                {started.has(pr.number) && <span className="text-brand">Started</span>}
                 <span className="ml-auto whitespace-nowrap">{formatAgo(pr.mergedAt)}</span>
               </span>
             </span>
@@ -93,14 +93,14 @@ export function PrSelectionList({
             <span className="sr-only">Loading merged pull requests…</span>
             <div aria-hidden="true" className="motion-safe:animate-pulse">
               {(visible.length ? [1, 2] : [1, 2, 3, 4, 5, 6]).map((row) => (
-                <div key={row} className="flex gap-3 border-b border-line px-2 py-3">
-                  <div className="size-4 shrink-0 self-center border border-line" />
+                <div key={row} className="flex gap-3 border-b border-border px-2 py-3">
+                  <div className="size-4 shrink-0 self-center border border-border" />
                   <div className="min-w-0 flex-1 py-1">
-                    <div className={`h-3 bg-surface-3 ${row % 2 ? "w-4/5" : "w-3/5"}`} />
+                    <div className={`h-3 bg-accent ${row % 2 ? "w-4/5" : "w-3/5"}`} />
                     <div className="mt-3 flex items-center gap-2">
-                      <div className="h-2.5 w-8 bg-surface-3" />
-                      <div className="h-2.5 w-16 bg-surface-3" />
-                      <div className="ml-auto h-2.5 w-12 bg-surface-3" />
+                      <div className="h-2.5 w-8 bg-accent" />
+                      <div className="h-2.5 w-16 bg-accent" />
+                      <div className="ml-auto h-2.5 w-12 bg-accent" />
                     </div>
                   </div>
                 </div>
@@ -110,38 +110,34 @@ export function PrSelectionList({
         )}
         {listError && (
           <p
-            className="py-4 text-muted mt-4 font-mono text-sm leading-relaxed text-danger"
+            className="py-4 text-muted-foreground mt-4 font-mono text-sm leading-relaxed text-destructive"
             role="alert"
           >
             {listError}{" "}
-            <button
-              type="button"
-              className="inline-flex min-h-9 items-center justify-center gap-2 px-3 font-sans text-[13px] text-muted hover:text-mint-bright disabled:opacity-40"
-              onClick={() => onRetry()}
-            >
+            <Button type="button" variant="ghost" onClick={() => onRetry()}>
               Retry
-            </button>
+            </Button>
           </p>
         )}
         {!loading && !listError && visible.length === 0 && (
-          <p className="py-4 font-mono text-[13px] leading-5 text-muted">
+          <p className="py-4 font-mono text-sm leading-5 text-muted-foreground">
             {query ? "No matching pull requests." : "No merged pull requests found on this page."}
           </p>
         )}
         {incomplete && (
-          <p className="py-4 font-mono text-[13px] leading-5 text-muted">
+          <p className="py-4 font-mono text-sm leading-5 text-muted-foreground">
             GitHub returned partial results. Try reopening the picker to refresh.
           </p>
         )}
         {!loading && !listError && nextPage !== null && (
-          <button
+          <Button
             type="button"
-            className="mx-auto mt-5 mb-1 flex h-9 w-fit shrink-0 items-center justify-center border border-line-strong bg-transparent px-4 font-sans text-[13px] font-bold text-ink hover:border-mint hover:text-mint-bright"
+            className="mx-auto mt-4 flex w-fit"
             disabled={busy}
             onClick={() => onMore()}
           >
             Load More
-          </button>
+          </Button>
         )}
       </div>
     </>

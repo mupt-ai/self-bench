@@ -32,6 +32,14 @@ export function evaluationRequestId(): string {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+export class EvaluationRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 export async function evaluationRequest<Result>(url: string, selection?: object): Promise<Result> {
   const response = await fetch(
     url,
@@ -49,9 +57,10 @@ export async function evaluationRequest<Result>(url: string, selection?: object)
   }
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(
+    throw new EvaluationRequestError(
       body.error ??
         `Request failed (${response.status}). Retry with the same selection to avoid duplicate runs.`,
+      response.status,
     );
   }
   return response.json() as Promise<Result>;

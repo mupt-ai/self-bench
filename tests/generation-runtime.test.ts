@@ -3,12 +3,64 @@ import { saveCredential } from "../src/evaluation/credentials.js";
 import { executionEnvironment, withExecutionEnvironment } from "../src/execution-environment.js";
 import { generationEnvironment, generationRecordPath } from "../src/site/generation-credentials.js";
 import type { GenerationReference } from "../src/site/generation-settings.js";
+import { generationSubscriptionAuth } from "../src/site/generation-subscription.js";
 import { loadPiModelAuth } from "../src/subscription-auth.js";
 import {
   authoringRoundScript,
   verifierRoundScript,
 } from "../src/temporal/activities/agent-scripts.js";
+import { codexAccess, codexAuth } from "./support/codex-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
+
+test("saved ChatGPT logins use subscription authentication without inheriting an API key", async () => {
+  const records = new MemoryRecords();
+  const credential = await saveCredential(
+    records,
+    1,
+    {
+      name: "ChatGPT",
+      kind: "openai",
+      auth: "codex-login",
+      value: codexAuth,
+    },
+    {},
+  );
+  const reference: GenerationReference = {
+    ownerId: 1,
+    repoId: 1,
+    settings: {
+      authorModel: "gpt-5.6-sol",
+      verifierModel: "gpt-5.6-sol",
+      reasoning: "high",
+      sandbox: "docker",
+      modelCredentialId: credential.id,
+    },
+  };
+  await records.write(generationRecordPath("codex-run"), reference, 0);
+  const base = { OPENAI_API_KEY: "host-key", SELFBENCH_PI_AUTH_JSON: "host-subscription" };
+  const env = await generationEnvironment(records, "codex-run", reference, base);
+  expect(env.OPENAI_API_KEY).toBeUndefined();
+  expect(base.OPENAI_API_KEY).toBe("host-key");
+  await withExecutionEnvironment(env, async () => {
+    const auth = await loadPiModelAuth();
+    expect(auth.provider).toBe("openai-codex");
+    expect(JSON.parse(auth.authJson ?? "")).toEqual({
+      "openai-codex": {
+        type: "oauth",
+        access: codexAccess,
+        refresh: "test-refresh",
+        expires: 2000000000000,
+        accountId: "test-account",
+      },
+    });
+  });
+  for (const raw of [
+    "invalid",
+    JSON.stringify({ tokens: { access_token: "bad", refresh_token: "secret" } }),
+  ])
+    expect(() => generationSubscriptionAuth(raw)).toThrow("Reconnect it in Credentials");
+  expect(JSON.stringify(reference)).not.toContain("test-refresh");
+});
 
 test("generation credentials cannot be substituted and concurrent activity environments stay isolated", async () => {
   const records = new MemoryRecords();

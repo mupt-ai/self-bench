@@ -1,226 +1,209 @@
 import React from "react";
-import { BatchProgress } from "./BatchProgress";
+import { Link } from "react-router";
 import {
   type BatchRepoId,
-  type BatchRun,
-  type BatchStatus,
-  batchIsTerminal,
+  BatchRequestError,
   type CandidateCounts,
-  fetchBatch,
-  listBatches,
   startBatch,
   validCandidateCounts,
 } from "./batch-api";
-import { buttonStyles, Input } from "./ui";
-import { useModalDialog } from "./useModalDialog";
+import { batchPath } from "./batches/presentation";
+import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
+import { GenerationFields } from "./GenerationFields";
+import { GenerationSteps } from "./GenerationSteps";
+import { Button, fieldStyles, Input } from "./ui";
+import { useGenerationSettings } from "./useGenerationSettings";
 
 export interface GenerateBatchProps {
   repoId: BatchRepoId;
   disabled?: boolean;
-  /** Refresh the parent task list after a start or progress sync. Keep this callback stable. */
-  onStarted?: () => void;
+  /** Open the submitted batch, including starts whose confirmation was interrupted. */
+  onStarted?: (runId: string, warning?: string) => void;
 }
 
-/** Self-contained header action. Progress survives closing the sheet and reloading the page. */
+/** Two-step creation only; submitted batches are tracked in the repository history. */
 export function GenerateBatch({ repoId, onStarted, disabled }: GenerateBatchProps) {
   const [open, setOpen] = React.useState(false);
+  const [step, setStep] = React.useState<1 | 2>(1);
   const [counts, setCounts] = React.useState<CandidateCounts>({ easy: 1, medium: 1, hard: 1 });
-  const [runs, setRuns] = React.useState<BatchRun[]>([]);
-  const [statuses, setStatuses] = React.useState<Record<string, BatchStatus>>({});
   const [error, setError] = React.useState<string>();
   const [busy, setBusy] = React.useState(false);
+  const [unconfirmed, setUnconfirmed] = React.useState(false);
+  const submitting = React.useRef(false);
   const closeButton = React.useRef<HTMLButtonElement>(null);
-  const callback = React.useRef(onStarted);
-  callback.current = onStarted;
   const { org, fullName } = repoId;
-  const refreshRuns = React.useCallback(async () => {
-    const result = await listBatches({ org, fullName });
-    setRuns(result.batches);
-  }, [org, fullName]);
-  React.useEffect(() => {
-    let disposed = false;
-    listBatches({ org, fullName }).then(
-      (result) => !disposed && setRuns(result.batches),
-      (cause) => !disposed && setError(String(cause.message)),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [org, fullName]);
-
-  React.useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const settled = new Set<string>();
-    const poll = async () => {
-      let changed = false;
-      for (const run of runs) {
-        if (disposed || settled.has(run.runId)) continue;
-        try {
-          const status = await fetchBatch({ org, fullName }, run.runId);
-          if (disposed) return;
-          setStatuses((current) => ({ ...current, [run.runId]: status }));
-          if (batchIsTerminal(status.phase)) settled.add(run.runId);
-          changed = true;
-        } catch (cause) {
-          if (!disposed) setError(cause instanceof Error ? cause.message : String(cause));
-        }
-      }
-      if (!disposed) {
-        if (changed) callback.current?.();
-        if (settled.size < runs.length) timer = setTimeout(poll, 5000);
-      }
-    };
-    void poll();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-    };
-  }, [runs, org, fullName]);
-
+  const {
+    settings,
+    setSettings,
+    options,
+    error: optionsError,
+    valid,
+    reload,
+  } = useGenerationSettings(org, fullName, open);
   const submit = async () => {
-    if (busy || !validCandidateCounts(counts)) return;
+    if (step !== 2 || submitting.current || unconfirmed || !valid || !validCandidateCounts(counts))
+      return;
+    submitting.current = true;
     setBusy(true);
     setError(undefined);
     try {
-      await startBatch({ org, fullName }, counts);
-      await refreshRuns();
-      callback.current?.();
+      const result = await startBatch({ org, fullName }, counts, settings);
+      setOpen(false);
+      onStarted?.(result.runId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      // Ambiguous starts remain associated server-side; show them before allowing a retry.
-      await refreshRuns().catch(() => undefined);
+      if (cause instanceof BatchRequestError && cause.runId) {
+        setOpen(false);
+        onStarted?.(cause.runId, cause.message);
+      } else {
+        const uncertain = !(cause instanceof BatchRequestError) || (cause.status ?? 0) >= 500;
+        setUnconfirmed(uncertain);
+        setError(
+          uncertain
+            ? "Batch start could not be confirmed. Check batch history before starting another."
+            : cause.message,
+        );
+      }
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
-  const active = runs.filter(
-    (run) => !batchIsTerminal(statuses[run.runId]?.phase ?? "queued"),
-  ).length;
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonStyles.secondary}
         disabled={disabled}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setStep(1);
+          setError(undefined);
+          setUnconfirmed(false);
+          setOpen(true);
+        }}
       >
-        Generate Batch{active > 0 ? ` (${active})` : ""}
-      </button>
+        Generate Batch
+      </Button>
       {open && (
-        <BatchDialog initialFocus={closeButton} busy={busy} onClose={() => setOpen(false)}>
-          <header className="flex items-start justify-between gap-4 border-b border-line p-5">
-            <div>
-              <h2 id="generate-batch-title" className="text-lg font-semibold">
-                Generate Candidates
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                For {fullName}. Counts are generation targets, not guaranteed accepted tasks.
-                Successful pipeline tasks enter Needs Review, never human-approved automatically.
-              </p>
-            </div>
-            <button
-              ref={closeButton}
-              type="button"
-              className={buttonStyles.ghost}
-              disabled={busy}
-              onClick={() => setOpen(false)}
-            >
-              Close
-            </button>
-          </header>
+        <Dialog
+          aria-labelledby="generate-batch-title"
+          size="large"
+          initialFocus={closeButton}
+          busy={busy}
+          onDismiss={() => setOpen(false)}
+        >
+          <DialogHeader
+            title="Generate Batch"
+            titleId="generate-batch-title"
+            description={fullName}
+            onClose={() => setOpen(false)}
+            closeRef={closeButton}
+            busy={busy}
+          />
+          <GenerationSteps step={step} firstStep="Set Counts" />
           <form
-            className="grid grid-cols-3 items-end gap-3 p-5"
+            className="min-w-0"
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              if (step === 1) {
+                if (validCandidateCounts(counts)) setStep(2);
+              } else void submit();
             }}
           >
-            {(
-              [
-                { tier: "easy", label: "Easy" },
-                { tier: "medium", label: "Medium" },
-                { tier: "hard", label: "Hard" },
-              ] as const
-            ).map(({ tier, label }) => (
-              <label
-                key={tier}
-                htmlFor={`batch-${tier}`}
-                className="grid gap-2 text-sm font-medium"
-              >
-                {label}
-                <Input
-                  id={`batch-${tier}`}
-                  aria-label={`${label} Candidates`}
-                  type="number"
-                  min="0"
-                  max="10000"
-                  step="1"
-                  required
-                  value={Number.isNaN(counts[tier]) ? "" : counts[tier]}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setCounts((current) => ({ ...current, [tier]: event.target.valueAsNumber }))
+            <div className="px-4 pb-6 sm:px-6">
+              {step === 1 ? (
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className="mb-4 text-sm font-medium">Candidates</legend>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(
+                      [
+                        { tier: "easy", label: "Easy" },
+                        { tier: "medium", label: "Medium" },
+                        { tier: "hard", label: "Hard" },
+                      ] as const
+                    ).map(({ tier, label }) => (
+                      <label key={tier} htmlFor={`batch-${tier}`} className={fieldStyles}>
+                        {label}
+                        <Input
+                          id={`batch-${tier}`}
+                          aria-label={`${label} Candidates`}
+                          type="number"
+                          min="0"
+                          max="10000"
+                          step="1"
+                          required
+                          value={Number.isNaN(counts[tier]) ? "" : counts[tier]}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setCounts((current) => ({
+                              ...current,
+                              [tier]: event.target.valueAsNumber,
+                            }))
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">1–10,000 candidates total.</p>
+                </fieldset>
+              ) : (
+                <div>
+                  {optionsError ? (
+                    <div role="alert" className="space-y-3 text-sm text-destructive">
+                      <p>{optionsError}</p>
+                      <Button type="button" onClick={reload}>
+                        Try Again
+                      </Button>
+                    </div>
+                  ) : !options ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      Loading generation settings…
+                    </p>
+                  ) : (
+                    <GenerationFields
+                      value={settings}
+                      onChange={setSettings}
+                      options={options}
+                      disabled={busy}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="sticky bottom-0 justify-between bg-card">
+              <span className="text-sm text-muted-foreground">
+                {validCandidateCounts(counts)
+                  ? `${counts.easy + counts.medium + counts.hard} Candidates`
+                  : "Set Candidate Counts"}
+              </span>
+              <div className="ml-auto flex gap-3">
+                {step === 2 && (
+                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={
+                    busy || unconfirmed || !validCandidateCounts(counts) || (step === 2 && !valid)
                   }
-                />
-              </label>
-            ))}
-            <button
-              type="submit"
-              className={`${buttonStyles.primary} col-span-3`}
-              disabled={busy || !validCandidateCounts(counts)}
-            >
-              {busy ? "Starting…" : "Generate"}
-            </button>
+                >
+                  {busy ? "Starting…" : step === 1 ? "Continue" : "Generate"}
+                </Button>
+              </div>
+            </DialogFooter>
           </form>
-          <div className="space-y-4 px-5 pb-5">
-            <p className="text-sm leading-6 text-muted">
-              1–10,000 candidates total. Uses the configured generation worker and its repository
-              credentials.
+          {error && (
+            <p className="border-t border-border p-4 text-sm text-destructive sm:px-6" role="alert">
+              {error}
+              {unconfirmed && (
+                <Link to={batchPath(fullName)} className="mt-2 block text-foreground underline">
+                  View Batches
+                </Link>
+              )}
             </p>
-            {error && (
-              <p className="text-sm leading-6 text-danger" role="alert">
-                {error}
-              </p>
-            )}
-            {runs.map((run) => (
-              <BatchProgress
-                key={run.runId}
-                run={run}
-                status={statuses[run.runId]}
-                repoId={{ org, fullName }}
-              />
-            ))}
-          </div>
-        </BatchDialog>
+          )}
+        </Dialog>
       )}
     </>
-  );
-}
-
-function BatchDialog({
-  children,
-  initialFocus,
-  busy,
-  onClose,
-}: {
-  children: React.ReactNode;
-  initialFocus: React.RefObject<HTMLButtonElement | null>;
-  busy: boolean;
-  onClose(): void;
-}) {
-  const dialog = useModalDialog(initialFocus);
-  return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="generate-batch-title"
-      className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-auto border border-line-strong bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/65"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
-    >
-      {children}
-    </dialog>
   );
 }

@@ -131,17 +131,17 @@ export function PipelineSheet({
                           {tail}
                         </button>
                       </td>
-                      <td className="!text-right whitespace-nowrap tabular-nums site:!font-mono text-(--muted-fg) site:text-dim">
+                      <td className="!text-right whitespace-nowrap tabular-nums site:!font-mono text-(--muted-fg) site:text-muted-foreground">
                         {formatBytes(entry.sizeBytes)}
                       </td>
-                      <td className="whitespace-nowrap site:!font-mono text-(--muted-fg) site:text-dim">
+                      <td className="whitespace-nowrap site:!font-mono text-(--muted-fg) site:text-muted-foreground">
                         {formatTime(entry.updatedAt)}
                       </td>
                       <td
-                        className={`${tableCode} ${({ ok: "!text-(--ok) site:!text-mint", bad: "!text-(--bad-fg) site:!text-danger", warn: "!text-(--warn-fg) site:!text-warning" })[summary?.tone as "ok" | "bad" | "warn"] ?? ""}`}
+                        className={`${tableCode} ${({ ok: "!text-(--ok) site:!text-brand", bad: "!text-(--bad-fg) site:!text-destructive", warn: "!text-(--warn-fg) site:!text-warning" })[summary?.tone as "ok" | "bad" | "warn"] ?? ""}`}
                       >
                         {bundle ? (
-                          <span className="text-(--muted-fg) site:text-dim">
+                          <span className="text-(--muted-fg) site:text-muted-foreground">
                             bundle · click to load its files
                           </span>
                         ) : (

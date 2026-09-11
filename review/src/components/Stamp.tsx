@@ -28,7 +28,7 @@ export function Stamp({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11px] tracking-[0.14em] uppercase ${colors[tone]} ${tone ? "before:size-1.5 before:bg-current before:content-['']" : ""}`}
+      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs tracking-[0.14em] uppercase ${colors[tone]} ${tone ? "before:size-1.5 before:bg-current before:content-['']" : ""}`}
     >
       {children}
     </span>

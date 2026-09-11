@@ -5,7 +5,9 @@ import type { TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
 
 export type BatchStatus = Pick<RunStatus, "runId" | "phase"> &
-  Partial<Omit<RunStatus, "runId" | "phase">>;
+  Partial<Omit<RunStatus, "runId" | "phase">> & {
+    activity?: Record<string, "running" | "queued" | "unknown">;
+  };
 export const terminalBatch = (phase: RunPhase): boolean =>
   ["complete", "failed", "blocked", "cancelled"].includes(phase);
 

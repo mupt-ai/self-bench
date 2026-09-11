@@ -1,6 +1,7 @@
+import type { Harness } from "./harnesses.js";
 import type { ThinkingLevel } from "./model-options.js";
 
-export type Harness = "codex" | "claude-code" | "pi";
+export type { Harness } from "./harnesses.js";
 export type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
 export interface EvaluationPricing {
   maxInputTokens?: number;

@@ -1,14 +1,18 @@
+import { GitBranch, LockKeyhole, Plus } from "lucide-react";
 import React from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
+import { BatchActivity } from "../batches/BatchActivity";
+import { useBatches } from "../batches/BatchProvider";
+import { batchPath } from "../batches/presentation";
 import { GenerateBatch } from "../GenerateBatch";
-import { GitHubMark, useOrg } from "../SiteLayout";
+import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { ReviewTaskList } from "../task/ReviewTaskList";
 import { type Filter, TaskFilters } from "../task/TaskFilters";
 import { TaskListSkeleton } from "../task/TaskListSkeleton";
 import { taskKey } from "../task/task-deletion";
-import { buttonStyles, EmptyState } from "../ui";
+import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 
 export function RepoPage() {
   const { org } = useOrg();
@@ -17,6 +21,8 @@ export function RepoPage() {
 }
 
 function RepoTasksPage() {
+  const navigate = useNavigate();
+  const batches = useBatches();
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const fullName = `${owner}/${name}`;
@@ -35,6 +41,7 @@ function RepoTasksPage() {
 
   const loadTasks = React.useCallback(() => {
     const version = ++requestVersion.current;
+    setError(null);
     setTasks(null);
     fetchTasks(org.login, fullName).then(
       (found) => version === requestVersion.current && setTasks(found),
@@ -49,6 +56,10 @@ function RepoTasksPage() {
       (cause: Error) => version === requestVersion.current && setError(cause.message),
     );
   }, [org.login, fullName, deleting]);
+
+  React.useEffect(() => {
+    if (batches.revision > 0) refreshTasks();
+  }, [batches.revision, refreshTasks]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -101,50 +112,48 @@ function RepoTasksPage() {
       (!needle ||
         task.taskId.toLowerCase().includes(needle) ||
         String(task.sourcePr ?? "").includes(needle) ||
-        task.runId.includes(needle)),
+        task.runId.toLowerCase().includes(needle)),
   );
 
   if (repo === null) {
     return (
-      <section>
-        <p className="mb-4 font-mono text-base text-danger">
+      <PageContent>
+        <p className="mb-4 font-mono text-base text-destructive">
           {fullName} is not connected in {org.login}. <Link to="/">Back to Repositories</Link>
         </p>
-      </section>
+      </PageContent>
     );
   }
 
   return (
-    <section>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4 [&_h1]:font-sans [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold">
-        <div>
-          <div className="flex min-w-0 items-center gap-2.5 [&_h1]:font-mono [&_h1]:text-xl [&_h1]:leading-tight [&_h1]:font-semibold [&_h1]:tracking-tight">
-            <a
-              className="inline-flex shrink-0 text-muted hover:text-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
-              href={`https://github.com/${fullName}`}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`${fullName} on GitHub`}
-            >
-              <GitHubMark />
-            </a>
-            <h1 className="m-0">Dataset</h1>
-            {repo?.private && (
-              <span className="inline-flex items-center border border-warning/30 bg-warning/10 px-2 py-0.5 font-mono text-sm leading-none text-warning">
-                Private
+    <PageContent>
+      <PageHeader
+        title="Dataset"
+        className="max-sm:flex-col max-sm:items-start"
+        description={
+          repo && (
+            <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <GitBranch className="size-3.5" aria-hidden="true" />
+                {repo.defaultBranch}
               </span>
-            )}
-          </div>
-          <div className="mt-1.5 flex gap-2 text-sm text-muted">
-            <span className="font-mono">{fullName}</span>
-            {repo && <span className="font-mono">{repo.defaultBranch}</span>}
-          </div>
-        </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-2.5 sm:w-auto">
-          <div ref={setActionsTarget} className="contents" />
+              {repo.private && (
+                <span className="inline-flex items-center gap-1.5">
+                  <LockKeyhole className="size-3.5" aria-hidden="true" />
+                  Private
+                </span>
+              )}
+            </span>
+          )
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <GenerateBatch
             repoId={{ org: org.login, fullName }}
-            onStarted={refreshTasks}
+            onStarted={(runId, warning) => {
+              batches.refresh();
+              void navigate(batchPath(fullName, runId), { state: { batchStartWarning: warning } });
+            }}
             disabled={deleting}
           />
           <Link
@@ -155,40 +164,90 @@ function RepoTasksPage() {
             }}
             aria-disabled={deleting}
           >
-            + Add PRs
+            <Plus aria-hidden="true" />
+            Add PRs
           </Link>
         </div>
-      </div>
-      {error && <p className="mb-4 font-mono text-base text-danger">{error}</p>}
-      <TaskFilters
-        counts={counts}
-        filter={filter}
-        onFilter={setFilter}
-        query={query}
-        onQuery={setQuery}
-        disabled={deleting}
-      />
-      {tasks === null && !error && <TaskListSkeleton />}
-      {tasks !== null && tasks.length === 0 && (
-        <EmptyState>No tasks yet. Add a PR to generate a task.</EmptyState>
-      )}
-      {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-        <EmptyState>No tasks match.</EmptyState>
-      )}
-      <ReviewTaskList
-        actionsTarget={actionsTarget}
-        org={org.login}
-        fullName={fullName}
-        visible={visible}
-        selectionScope={`${filter}/${query}`}
-        onDeleting={(value) => {
-          if (value) ++requestVersion.current;
-          setDeleting(value);
-        }}
-        onDeleted={(deleted) =>
-          setTasks((current) => current?.filter((task) => !deleted.has(taskKey(task))) ?? null)
-        }
-      />
-    </section>
+      </PageHeader>
+      <BatchActivity />
+      {error && tasks !== null && <Notice className="mb-4">{error}</Notice>}
+      <section className="overflow-clip border border-border bg-card" aria-label="Dataset">
+        <TaskFilters
+          counts={tasks === null ? null : counts}
+          filter={filter}
+          onFilter={setFilter}
+          query={query}
+          onQuery={setQuery}
+          disabled={deleting || tasks === null}
+          actions={
+            <div
+              ref={setActionsTarget}
+              className="flex items-center gap-2 border-t border-border px-4 py-3 empty:hidden"
+            />
+          }
+        />
+        {tasks === null && !error && <TaskListSkeleton />}
+        {tasks === null && error && (
+          <div role="alert">
+            <EmptyState
+              title="Could Not Load Tasks"
+              className="min-h-64 border-0 bg-transparent"
+              action={<Button onClick={loadTasks}>Try Again</Button>}
+            >
+              {error}
+            </EmptyState>
+          </div>
+        )}
+        {tasks !== null && tasks.length === 0 && (
+          <EmptyState title="No Tasks Yet" className="min-h-64 border-0 bg-transparent">
+            Add a PR to generate your first task.
+          </EmptyState>
+        )}
+        {tasks !== null && tasks.length > 0 && visible.length === 0 && (
+          <EmptyState
+            title="No Matching Tasks"
+            className="min-h-64 border-0 bg-transparent"
+            action={
+              <Button
+                variant="ghost"
+                disabled={deleting}
+                onClick={() => {
+                  setFilter("all");
+                  setQuery("");
+                }}
+              >
+                Clear Filters
+              </Button>
+            }
+          >
+            Try a different search or task state.
+          </EmptyState>
+        )}
+        <ReviewTaskList
+          actionsTarget={actionsTarget}
+          org={org.login}
+          fullName={fullName}
+          visible={visible}
+          selectionScope={`${filter}/${query}`}
+          onDeleting={(value) => {
+            if (value) ++requestVersion.current;
+            setDeleting(value);
+          }}
+          onDeleted={(deleted) =>
+            setTasks((current) => current?.filter((task) => !deleted.has(taskKey(task))) ?? null)
+          }
+        />
+        {tasks !== null && tasks.length > 0 && (
+          <p
+            className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
+            role="status"
+          >
+            {visible.length === tasks.length
+              ? `${tasks.length} Tasks`
+              : `${visible.length} of ${tasks.length} Tasks`}
+          </p>
+        )}
+      </section>
+    </PageContent>
   );
 }

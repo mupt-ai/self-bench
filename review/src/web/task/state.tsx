@@ -8,18 +8,18 @@ export const STATE_LABEL: Record<TaskState, string> = {
   in_progress: "In Progress",
 };
 
-/** A square state marker in the site's palette. */
+/** Readable status text with a small marker, shared by task lists and review. */
 export function StateStamp({ state }: { state: TaskState }) {
   const colors: Record<TaskState, string> = {
-    needs_review: "border-warning/50 text-warning",
-    accepted: "border-mint/50 text-mint",
-    rejected: "border-danger/50 text-danger",
-    failed: "border-danger/50 text-danger",
-    in_progress: "border-mint/40 text-mint-bright",
+    needs_review: "text-brand",
+    accepted: "text-success",
+    rejected: "text-muted-foreground",
+    failed: "text-destructive",
+    in_progress: "text-brand",
   };
   return (
     <span
-      className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-mono text-xs font-medium tracking-widest whitespace-nowrap uppercase before:size-1.5 before:bg-current before:content-[''] ${colors[state]}`}
+      className={`inline-flex items-center gap-2 whitespace-nowrap text-xs leading-5 before:size-1.5 before:shrink-0 before:bg-current before:content-[''] ${colors[state]}`}
     >
       {STATE_LABEL[state]}
     </span>
@@ -27,9 +27,10 @@ export function StateStamp({ state }: { state: TaskState }) {
 }
 
 export function DifficultyStamp({ difficulty }: { difficulty: string }) {
+  const labels: Record<string, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
   return (
-    <span className="inline-flex items-center gap-1.5 border border-line-strong px-1.5 py-0.5 font-mono text-xs font-medium tracking-widest whitespace-nowrap text-muted uppercase">
-      {difficulty}
+    <span className="whitespace-nowrap text-xs leading-5 text-muted-foreground">
+      {labels[difficulty] ?? difficulty}
     </span>
   );
 }

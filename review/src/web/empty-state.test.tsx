@@ -11,13 +11,16 @@ const messages = [
 ];
 
 test.each(messages)("empty-state styling stays consistent for: %s", (message) => {
-  const html = renderToStaticMarkup(<EmptyState>{message}</EmptyState>);
-  expect(html).toBe(
-    `<div class="w-full border border-dashed border-line-strong px-4 py-6 text-center font-mono text-sm leading-6 text-muted"><p>${message}</p></div>`,
-  );
+  const html = renderToStaticMarkup(<EmptyState title="No Results">{message}</EmptyState>);
+  expect(html).toContain("border-dashed");
+  expect(html).toContain("border-input");
+  expect(html).toContain("No Results");
+  expect(html).toContain(message);
 });
 
 test("empty-state copy is escaped, not interpreted as markup", () => {
-  const html = renderToStaticMarkup(<EmptyState>{"No results for <repo>."}</EmptyState>);
+  const html = renderToStaticMarkup(
+    <EmptyState title="No Results">{"No results for <repo>."}</EmptyState>,
+  );
   expect(html).toContain("No results for &lt;repo&gt;.");
 });

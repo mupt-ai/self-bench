@@ -15,14 +15,12 @@ export function Script({
 }) {
   const lines = React.useMemo(() => text.replace(/\n$/, "").split("\n"), [text]);
   return (
-    <pre
-      className={`overflow-x-auto pt-3 pb-3.5 font-mono text-[13px] [counter-reset:line] site:leading-[normal] ${wrap ? "site:text-base" : "site:text-sm"}`}
-    >
+    <pre className="overflow-x-auto py-3 font-mono text-sm leading-6 [counter-reset:line]">
       {lines.map((line, index) => (
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: lines have no identity beyond position
           key={index}
-          className={`block pr-6 leading-[25px] text-(--fg-2) before:box-content before:mr-4.5 before:inline-block before:w-10 before:pl-3 before:text-right before:text-xs before:leading-[25px] before:text-[hsl(30_5%_32%)] before:select-none before:content-[counter(line)] before:[counter-increment:line] hover:bg-(--viewer-panel) site:leading-6 site:text-ink site:before:text-sm site:before:leading-6 site:before:text-dim site:hover:bg-surface-2 ${wrap ? "max-w-[110ch] pl-[70px] -indent-[70px] whitespace-pre-wrap wrap-anywhere before:indent-0" : "whitespace-pre"} ${highlight?.(line) ? "bg-(--brand-10) site:bg-mint/10" : ""}`}
+          className={`block pr-4 text-foreground before:box-content before:mr-4 before:inline-block before:w-8 before:pl-3 before:text-right before:text-xs before:text-muted-foreground before:select-none before:content-[counter(line)] before:[counter-increment:line] hover:bg-muted ${wrap ? "max-w-[110ch] pl-15 -indent-15 whitespace-pre-wrap wrap-anywhere before:indent-0" : "whitespace-pre"} ${highlight?.(line) ? "bg-brand/10" : ""}`}
         >
           {placeholder ? emphasize(line, placeholder) : line || " "}
         </span>
@@ -39,7 +37,7 @@ function emphasize(line: string, token: string): React.ReactNode {
       ? [part]
       : [
           // biome-ignore lint/suspicious/noArrayIndexKey: split segments are positional
-          <span key={index} className="font-semibold text-(--brand) site:text-mint">
+          <span key={index} className="font-semibold text-(--brand) site:text-brand">
             {token}
           </span>,
           part,
@@ -62,11 +60,11 @@ export function Block({
 }) {
   return (
     <section className="shrink-0 border border-(--border) bg-(--card)">
-      <div className="flex h-10 items-baseline gap-2.5 border-b border-(--border) bg-(--viewer-panel) px-4 text-[11px] leading-10 tracking-[0.16em] text-(--muted-fg) uppercase [&_b]:text-[13px] [&_b]:font-medium [&_b]:tracking-normal [&_b]:text-(--foreground) [&_b]:normal-case site:h-auto site:min-h-9 site:flex-wrap site:items-center site:gap-y-2 site:px-3.5 site:py-2 site:font-mono site:text-sm site:font-medium site:leading-[normal] site:tracking-[0.12em] site:text-dim site:[&_b]:text-sm site:[&_button]:h-6 site:[&_button]:border site:[&_button]:border-line-strong site:[&_button]:px-2 site:[&_button]:text-muted site:[&_button]:leading-[normal] site:[&_button]:hover:border-mint site:[&_button]:hover:text-mint-bright site:[&_button]:hover:no-underline">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted/50 px-4 py-2 text-xs tracking-wider text-muted-foreground uppercase [&_b]:text-sm [&_b]:font-medium [&_b]:tracking-normal [&_b]:text-foreground [&_b]:normal-case [&_button]:h-8 [&_button]:text-xs">
         <span>{title}</span>
         {detail && <b>{detail}</b>}
         {right && (
-          <span className="ml-auto text-xs tracking-normal text-(--muted-fg) normal-case site:inline-flex site:items-center site:gap-3 site:font-mono site:text-sm site:font-normal site:leading-[normal] site:text-dim">
+          <span className="ml-auto inline-flex items-center gap-3 text-xs font-normal tracking-normal text-muted-foreground normal-case">
             {right}
           </span>
         )}
