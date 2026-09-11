@@ -1,0 +1,53 @@
+name: GCP Authentication Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Configured GitHub environment to authenticate
+        type: environment
+        required: true
+
+permissions: {}
+
+jobs:
+  authenticate:
+    # Opt-in: public contributors/forks get no cloud access. Only a manual default-branch run.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && vars.GCP_AUTH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify Environment Configuration
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PROJECT" && test -n "$PROVIDER" && test -n "$ACCOUNT"
+      - name: Authenticate with Short-Lived Credentials
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 300s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Confirm Token Exchange
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ACCESS_TOKEN"
+          echo 'GitHub OIDC authentication succeeded. No Terraform or deployment was run.' >> "$GITHUB_STEP_SUMMARY"

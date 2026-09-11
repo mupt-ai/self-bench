@@ -1,0 +1,11 @@
+# Names, region and sizing are proposals, NOT existing resources.
+project_id = "selfbench-prod-YOUR-SUFFIX"
+region     = "us-central1"
+zone       = "us-central1-a"
+# Select a real, versioned image using the read-only command in infra/README.md.
+boot_image        = "projects/debian-cloud/global/images/debian-12-bookworm-vYYYYMMDD"
+machine_type      = "e2-standard-2"
+enable_public_web = false
+# Proposed: ZONAL shared-core dev; REGIONAL dedicated-core prod. Review cost first.
+create_cloud_sql = true
+operator_members = ["user:YOUR-GCP-EMAIL"]

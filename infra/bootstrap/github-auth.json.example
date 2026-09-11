@@ -1,0 +1,14 @@
+{
+  "account": "operator@example.com",
+  "project_id": "your-existing-project",
+  "project_number": "123456789012",
+  "repository": "your-org/your-repository",
+  "repository_id": "12345678",
+  "repository_owner_id": "1234567",
+  "environment": "dev",
+  "branch": "main",
+  "workflow_path": ".github/workflows/gcp-auth.yml",
+  "pool_id": "github-actions",
+  "provider_id": "github",
+  "service_account_id": "selfbench-ci-plan"
+}

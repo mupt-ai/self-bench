@@ -11,3 +11,9 @@ node_modules
 tests
 *.md
 !src/skills/selfbench/SKILL.md
+infra
+*.tfstate*
+*.tfplan*
+*.tfvars*
+**/.terraform
+gha-creds-*.json
