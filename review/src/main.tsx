@@ -1,8 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "./theme.css";
-import { App } from "./App";
-import type { ViewerInfo } from "./types";
 import { WebApp } from "./web/WebApp";
 
 const root = document.getElementById("root");
@@ -10,51 +8,8 @@ if (!root) {
   throw new Error("review root is missing");
 }
 
-/**
- * One bundle, two hosts. A server that requires GitHub sign-in answers the viewer probe with
- * `auth: "github"` and gets selfbench.dev; `self-bench view` and the token API get the Ledger.
- */
-function Boot() {
-  const [site, setSite] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    let cancelled = false;
-    void requiresSignIn().then((found) => {
-      if (!cancelled) setSite(found);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  if (site === null)
-    return (
-      <div role="status" aria-label="Loading Application" className="space-y-7 p-8">
-        <span className="sr-only">Loading application…</span>
-        <div
-          aria-hidden="true"
-          className="h-7 w-44 animate-pulse bg-(--border) motion-reduce:animate-none"
-        />
-        <div
-          aria-hidden="true"
-          className="h-48 animate-pulse border border-(--border) bg-(--card) motion-reduce:animate-none"
-        />
-      </div>
-    );
-  return site ? <WebApp /> : <App />;
-}
-
-async function requiresSignIn(): Promise<boolean> {
-  try {
-    const response = await fetch("/v1/viewer");
-    if (!response.ok) return false;
-    const info = (await response.json()) as ViewerInfo;
-    return info.auth === "github";
-  } catch {
-    return false;
-  }
-}
-
 createRoot(root).render(
   <React.StrictMode>
-    <Boot />
+    <WebApp />
   </React.StrictMode>,
 );
