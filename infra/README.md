@@ -118,6 +118,17 @@ roots, and runs mocked provider plans. Python tests stub gcloud; Docker only par
 No real Terraform plan, apply, database connection, sandbox run or image build is performed.
 A passing mocked test is **not** proof of permissions, quota, account policy, cost, or live readiness.
 
+The committed provider lockfiles include package checksums for both `darwin_arm64` (local development)
+and `linux_amd64` (GitHub Actions). After changing provider pins, run the following in each initialized
+Terraform root, including the shared module, and commit the resulting lockfiles:
+
+```sh
+terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
+```
+
+Add other platforms explicitly when needed. Keep `-lockfile=readonly` in CI; do not bypass checksum
+verification to fix a missing platform checksum.
+
 ## 3. Review a Real Dev Plan
 
 After approved bootstrap, copy `backend.hcl.example` and `terraform.tfvars.example` in the dev root
