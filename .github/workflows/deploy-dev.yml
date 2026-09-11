@@ -1,0 +1,23 @@
+name: Deploy Dev
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'review/**', 'drizzle/**', 'infra/**', 'scripts/**', 'Dockerfile', 'package.json', 'bun.lock', 'tsconfig*.json', '.dockerignore', '.github/workflows/**']
+  workflow_dispatch:
+    inputs:
+      infrastructure_only:
+        description: Provision dev infrastructure without runtime secrets or app rollout (billed resources)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+  id-token: write
+jobs:
+  deploy:
+    if: vars.GCP_DEPLOY_ENABLED == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    uses: ./.github/workflows/deploy-reusable.yml
+    with:
+      target_environment: dev
+      infrastructure_only: ${{ github.event_name == 'workflow_dispatch' && inputs.infrastructure_only }}
