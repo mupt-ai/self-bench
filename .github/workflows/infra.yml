@@ -1,0 +1,25 @@
+name: Infrastructure Validation
+
+on:
+  pull_request:
+    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', 'Dockerfile', '.dockerignore']
+  push:
+    branches: [main]
+    paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/gcp-auth.yml', 'Dockerfile', '.dockerignore']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.2
+          terraform_wrapper: false
+      # Docker Compose config parses test fixtures only. No containers or GCP credentials.
+      - run: docker compose version
+      - run: bash infra/check.sh

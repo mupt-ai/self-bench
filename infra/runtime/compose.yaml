@@ -1,0 +1,46 @@
+# Standalone cloud runtime. Do NOT merge with the local-development compose.yaml.
+# Supply absolute protected paths; never commit secret payloads.
+name: selfbench-${SELFBENCH_ENVIRONMENT:?Set dev or prod}
+x-app: &app
+  image: ${SELFBENCH_IMAGE:?Set an immutable Artifact Registry image digest}
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 2m
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: '3'
+services:
+  api:
+    <<: *app
+    command: [node, dist/api-main.js]
+    env_file:
+      - path: ${SELFBENCH_SHARED_ENV_FILE:?Set protected shared env-file path}
+        format: raw
+      - path: ${SELFBENCH_API_ENV_FILE:?Set protected API env-file path}
+        format: raw
+    ports:
+      - 127.0.0.1:8080:8080
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+  worker:
+    <<: *app
+    command: [node, dist/temporal/worker-main.js]
+    env_file:
+      - path: ${SELFBENCH_SHARED_ENV_FILE:?Set protected shared env-file path}
+        format: raw
+      - path: ${SELFBENCH_WORKER_ENV_FILE:?Set protected worker env-file path}
+        format: raw
+    # Serializes initial startup/migrations. Does not prove worker registration or DB readiness.
+    depends_on:
+      api:
+        condition: service_healthy
+# No Docker socket, model secrets on the API, local artifacts, or local Postgres/Temporal.
+# Host TLS proxy is configured separately; only its 80/443 listeners may be public.

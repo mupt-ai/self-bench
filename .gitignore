@@ -7,3 +7,21 @@ dist/
 !.env.example
 jobs/
 .pi-subagents/
+
+# Terraform state, saved plans, credentials, and environment-specific configuration.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+*.tfvars
+*.tfvars.json
+**/backend.hcl
+crash.log
+crash.*.log
+# Lockfiles and *.example files are intentionally tracked.
+# Operator/runtime payload files; examples remain tracked.
+/infra/**/*.env
+# Generated OIDC credentials and operator-specific auth bootstrap inputs.
+gha-creds-*.json
+/infra/**/*.local.json

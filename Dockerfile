@@ -17,7 +17,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl gh git jq ripgrep tar \
   && rm -rf /var/lib/apt/lists/* \
   && curl -LsSf https://astral.sh/uv/0.11.3/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh \
-  && env UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 "harbor[modal]==${HARBOR_VERSION}" \
+  && env UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 "harbor[e2b,daytona,modal]==${HARBOR_VERSION}" \
   && chmod -R a+rX /opt/uv-python /opt/uv-tools
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
