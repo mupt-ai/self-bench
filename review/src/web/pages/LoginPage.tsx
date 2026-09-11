@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { DariMark } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
@@ -12,6 +13,12 @@ export function LoginPage() {
   useDocumentTitle("Sign In — self-bench by dari.dev");
   const { session } = useSession();
   const [params] = useSearchParams();
+  const [connecting, setConnecting] = useState(false);
+  useEffect(() => {
+    const reset = () => setConnecting(false);
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
   return (
@@ -26,11 +33,37 @@ export function LoginPage() {
           </h1>
           <p className="mt-2 font-mono text-sm text-muted">by dari.dev</p>
           <a
-            className="mt-10 flex h-12 w-full items-center justify-center gap-3 border border-mint bg-mint font-mono text-sm font-medium text-bg hover:bg-mint-bright [&_svg]:size-4 [&_svg]:fill-current"
+            className="mt-10 flex h-12 w-full items-center justify-center gap-3 border border-mint bg-mint font-mono text-sm font-medium text-bg hover:bg-mint-bright aria-disabled:cursor-wait aria-disabled:hover:bg-mint [&_svg]:size-4 [&_svg]:fill-current"
             href="/auth/github"
+            aria-busy={connecting}
+            aria-disabled={connecting}
+            onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              if (connecting) {
+                event.preventDefault();
+                return;
+              }
+              setConnecting(true);
+            }}
           >
-            <GitHubMark />
-            Continue with GitHub
+            {connecting ? (
+              <span
+                aria-hidden="true"
+                className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+              />
+            ) : (
+              <GitHubMark />
+            )}
+            <span aria-live="polite">
+              {connecting ? "Connecting to GitHub…" : "Continue with GitHub"}
+            </span>
           </a>
           {error && (
             <p
