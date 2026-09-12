@@ -61,8 +61,11 @@ def validate(environment, project, release_path):
         "SELFBENCH_ACTIVITY_CONCURRENCY"}
     required_api = {"SELFBENCH_API_TOKEN", "GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET",
                     "SELFBENCH_SESSION_SECRET", "SELFBENCH_PUBLIC_URL"}
-    required_worker = {"SELFBENCH_API_TOKEN", "GH_TOKEN", "OPENAI_API_KEY",
-                       "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET"}
+    # Model and sandbox credentials are selected per user and loaded from the
+    # encrypted database by generationEnvironment. They must not be global VM
+    # secrets. GH_TOKEN is also resolved from the signed-in user's credential
+    # where generation needs repository access.
+    required_worker = {"SELFBENCH_API_TOKEN"}
     for data, keys in ((shared, required_shared), (api, required_api), (worker, required_worker)):
         if set(data) != keys:
             raise ValueError("Env-file keys differ from this initial Modal deployment contract.")
