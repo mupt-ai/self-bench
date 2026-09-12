@@ -91,3 +91,7 @@ After merging and enabling the opt-in, choose this input only when ready to prov
 configure the database login, exact Secret Manager versions, Temporal, OAuth, DNS/TLS and ingress.
 Run `Deploy Dev` again with the default `infrastructure_only=false` to deploy the app. Normal main
 pushes and stable production releases always use the full deployment path.
+
+## User-Owned Generation Credentials
+
+Generation uses the user-selected encrypted model and sandbox credentials from the application database. The VM worker must not be configured with global `OPENAI_API_KEY`, `SELFBENCH_PI_AUTH_JSON`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `E2B_API_KEY`, `VERCEL_TOKEN`, or `GH_TOKEN` values for generation. `generationEnvironment()` resolves the selected user credential server-side and injects it only into the isolated sandbox. The deploy preflight therefore requires only the worker runtime token, not provider credentials.
