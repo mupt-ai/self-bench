@@ -32,9 +32,7 @@ class ReleaseTests(unittest.TestCase):
             "api": {"SELFBENCH_API_TOKEN": "a" * 40, "GITHUB_OAUTH_CLIENT_ID": "fake-client",
                     "GITHUB_OAUTH_CLIENT_SECRET": "fake-client-secret", "SELFBENCH_SESSION_SECRET": "b" * 40,
                     "SELFBENCH_PUBLIC_URL": "https://dev.example.com"},
-            "worker": {"SELFBENCH_API_TOKEN": "c" * 40, "GH_TOKEN": "fake-github",
-                       "OPENAI_API_KEY": "fake-model$RAW", "MODAL_TOKEN_ID": "fake-modal-id",
-                       "MODAL_TOKEN_SECRET": "fake-modal-secret"},
+            "worker": {"SELFBENCH_API_TOKEN": "c" * 40},
         }
         self.coordinates = {"SELFBENCH_ENVIRONMENT": "dev",
                             "SELFBENCH_IMAGE": "us-central1-docker.pkg.dev/selfbench-dev-test/selfbench/selfbench@sha256:" + "a" * 64}
@@ -112,8 +110,9 @@ class ReleaseTests(unittest.TestCase):
         api, worker = config["services"]["api"], config["services"]["worker"]
         self.assertEqual(api["image"], worker["image"])
         # Compose escapes dollars in its serialized output so round-tripping is safe.
-        self.assertEqual(worker["environment"]["OPENAI_API_KEY"], "fake-model$$RAW")
-        self.assertNotIn("OPENAI_API_KEY", api["environment"])
+        self.assertNotIn("OPENAI_API_KEY", worker["environment"])
+        self.assertNotIn("MODAL_TOKEN_ID", worker["environment"])
+        self.assertNotIn("GH_TOKEN", worker["environment"])
         self.assertNotIn("GITHUB_OAUTH_CLIENT_SECRET", worker["environment"])
         self.assertFalse(worker.get("ports"))
         self.assertFalse(worker.get("volumes"))
