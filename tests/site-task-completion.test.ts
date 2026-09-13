@@ -44,8 +44,32 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
         startedBy: user.id,
       });
       if (pipelineStatus === "accepted")
-        await tasks.progress(row.id, { round: 2, stage: "accepted", pipelineStatus });
+        await tasks.progress(row.id, {
+          round: 2,
+          stage: "accepted",
+          pipelineStatus,
+          reason: "Persisted acceptance",
+        });
       await tasks.review(row.id, { decision: "approve", note: "Preserve review", userId: user.id });
+      const sibling = await tasks.insertStarted({
+        repoId: repo.id,
+        runId,
+        candidateId: "sibling",
+        taskId: "sibling",
+        difficulty: "easy",
+        stage: "accepted",
+        pipelineStatus: "accepted",
+        workflowId: `${runId}/candidate/sibling`,
+        startedBy: user.id,
+      });
+      await tasks.upsertMany([
+        {
+          ...sibling,
+          round: 3,
+          reason: "Sibling acceptance",
+          bundleKey: "existing-sibling-bundle",
+        },
+      ]);
       const prefix = `runs/${runId}/`;
       const bundleKey = `${prefix}authoring/candidate/round-2/attempt-1/verify-1/harbor-task.tar.gz`;
       const files = new Map([
@@ -58,6 +82,7 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
           JSON.stringify({ kind: "accepted" }),
         ],
         [bundleKey, "bundle"],
+        [`${prefix}verification/sibling/round-3/result.json`, JSON.stringify({ kind: "accepted" })],
       ]);
       let unavailable = true;
       const artifacts = {
@@ -108,6 +133,11 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
         bundleKey,
         definition: { prompt: "Fix short help" },
         review: { decision: "approve", note: "Preserve review" },
+        ...(pipelineStatus === "accepted" ? { reason: "Persisted acceptance" } : {}),
+      });
+      expect(await tasks.find(repo.id, runId, "sibling")).toMatchObject({
+        round: 3,
+        reason: "Sibling acceptance",
       });
     }
   } finally {

@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../artifacts.js";
 import { archivedCandidates } from "../viewer/archived.js";
 import type { CandidateSummary } from "../viewer/types.js";
-import type { PipelineStatus, TaskStore, TaskUpsert } from "./task-store.js";
+import type { PipelineStatus, TaskRecord, TaskStore, TaskUpsert } from "./task-store.js";
 
 const DEFINITION_CONCURRENCY = 8;
 
@@ -17,15 +17,34 @@ export async function syncRun(options: {
   /** Live batches must not infer rejection from unfinished artifacts. */
   readonly preserveUnfinished?: boolean;
   readonly completedWorkflowId?: string;
+  readonly repairAcceptedTask?: TaskRecord;
 }): Promise<{ synced: number }> {
   const { tasks, artifacts, repo, runId } = options;
   const list = await archivedCandidates(artifacts, runId);
   const previous = options.preserveUnfinished ? await tasks.listForRepo(repo.id) : [];
   const rows: TaskUpsert[] = [];
-  const queue = [...list.candidates];
+  const repair = options.repairAcceptedTask;
+  if (
+    repair &&
+    (repair.repoId !== repo.id || repair.runId !== runId || repair.pipelineStatus !== "accepted")
+  )
+    throw new Error("Bundle repair requires an accepted task in this repository and run");
+  const queue = list.candidates.filter(
+    (candidate) => !repair || candidate.candidateId === repair.candidateId,
+  );
   const workers = Array.from({ length: DEFINITION_CONCURRENCY }, async () => {
     for (let next = queue.shift(); next; next = queue.shift()) {
       const row = await taskRow(artifacts, repo, runId, next);
+      if (repair) {
+        rows.push({
+          ...row,
+          pipelineStatus: repair.pipelineStatus,
+          stage: repair.stage,
+          ...(repair.round !== undefined ? { round: repair.round } : {}),
+          ...(repair.reason ? { reason: repair.reason } : {}),
+        });
+        continue;
+      }
       if (options.preserveUnfinished && next.hasVerdict === false) {
         const known = previous.find(
           (task) => task.runId === runId && task.candidateId === next.candidateId,

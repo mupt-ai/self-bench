@@ -57,16 +57,9 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
         artifacts,
         repo,
         runId: task.runId,
-        preserveUnfinished: true,
+        repairAcceptedTask: task,
       }).catch(() => undefined);
-      if (result?.synced) {
-        await tasks.progress(task.id, {
-          pipelineStatus: "accepted",
-          stage: "accepted",
-          ...(task.round !== undefined ? { round: task.round } : {}),
-        });
-        changed += 1;
-      }
+      if (result?.synced) changed += 1;
       continue;
     }
     if (!task.workflowId) continue;
