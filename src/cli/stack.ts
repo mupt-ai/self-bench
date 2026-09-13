@@ -12,7 +12,6 @@ import {
 import { setupE2B } from "../setup/e2b/index.js";
 import { applyVercelProfile, setupVercel } from "../setup/vercel/index.js";
 import { SetupCanceledError } from "../terminal-prompts.js";
-import { devProxyFor, registerSite, unregisterSite } from "./dev-proxy.js";
 import { resolveSelfBenchCommit } from "./repository.js";
 import { readEnvFile, stackEnvironment } from "./stack-environment.js";
 import { fail } from "./values.js";
@@ -90,7 +89,6 @@ export async function up(args: string[]): Promise<void> {
     fail("--vercel-profile requires Vercel generation");
   }
   const stack = stackEnvironment(root);
-  const proxy = devProxyFor(checkoutEnvironment(root));
   let environment: NodeJS.ProcessEnv = {
     ...process.env,
     ...stack,
@@ -129,22 +127,13 @@ export async function up(args: string[]): Promise<void> {
   await runCommand("docker", ["compose", "--file", composeFile, "up", "-d", "--build"], {
     env: environment,
   });
-  if (proxy) {
-    await registerSite(
-      proxy,
-      stack.COMPOSE_PROJECT_NAME,
-      stack.SELFBENCH_SITE_HOSTNAME,
-      stack.SELFBENCH_SITE_PORT,
-    );
-  }
   console.log(
     `SelfBench is running with ${backend} generation and ${harborEnvironment} Harbor at ${stack.SELFBENCH_PUBLIC_URL}`,
   );
   console.log(
     `Compose project ${stack.COMPOSE_PROJECT_NAME}; Temporal on 127.0.0.1:${stack.SELFBENCH_TEMPORAL_PORT}`,
   );
-  // Behind the proxy one wildcard callback on the domain covers every stack.
-  if (checkoutEnvironment(root).GITHUB_OAUTH_CLIENT_ID && !proxy) {
+  if (checkoutEnvironment(root).GITHUB_OAUTH_CLIENT_ID) {
     console.log(
       `GitHub sign-in callback: ${stack.SELFBENCH_PUBLIC_URL}/auth/github/callback (register it on the OAuth app)`,
     );
@@ -157,8 +146,6 @@ export async function down(): Promise<void> {
   await runCommand("docker", ["compose", "--file", resolve(root, "compose.yaml"), "down"], {
     env: { ...process.env, ...stack },
   });
-  const proxy = devProxyFor(checkoutEnvironment(root));
-  if (proxy) await unregisterSite(proxy, stack.COMPOSE_PROJECT_NAME);
 }
 
 /** What Compose will see: the checkout's `.env` under the process environment. */

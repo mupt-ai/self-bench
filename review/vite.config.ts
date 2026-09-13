@@ -18,14 +18,6 @@ export default defineConfig({
   server: {
     ...(additionalAllowedHosts.length > 0 ? { allowedHosts: additionalAllowedHosts } : {}),
     proxy: {
-      "^/api/orgs/[^/]+/repos/[^/]+/[^/]+/evaluations/(comparisons|credentials)(?:/|$)":
-        process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",
-      ...(process.env.SELFBENCH_EVALUATION_PROXY
-        ? {
-            "^/api/orgs/[^/]+/repos/[^/]+/[^/]+/evaluations(?:/|$)":
-              process.env.SELFBENCH_EVALUATION_PROXY,
-          }
-        : {}),
       "/v1": process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",
       "/api": process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",
       "/auth": process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080",

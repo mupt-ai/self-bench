@@ -54,8 +54,6 @@ The plot only compares completed runs with binary reward scores, verified model 
 
 ## Local validation
 
-When developing against an older site API, `SELFBENCH_EVALUATION_PROXY` optionally sends only `/api/orgs/:org/repos/:owner/:repo/evaluations` requests to a separately running evaluation API. All other API and GitHub login requests continue through `SELFBENCH_VIEW_PROXY`. Both API processes must use the same session secret, database, public origin, and artifact store; keep these server-side. This split is a development bridge, not a replacement for deploying the integrated API and evaluation worker.
-
 ```sh
 bun test tests/evaluation-routes.test.ts tests/evaluation-runner.test.ts tests/evaluation-lifecycle.test.ts review/src/web/evaluation/evaluation.test.tsx
 bun run check
