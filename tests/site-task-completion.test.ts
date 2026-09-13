@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, mock, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts.js";
 import { createUserStore } from "../src/auth/users.js";
 import { createRepoStore } from "../src/site/repo-store.js";
@@ -38,11 +38,13 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
         candidateId: "candidate",
         taskId: "candidate",
         difficulty: "easy",
-        stage: "verification",
+        stage: pipelineStatus === "accepted" ? "accepted" : "verification",
         pipelineStatus,
         workflowId,
         startedBy: user.id,
       });
+      if (pipelineStatus === "accepted")
+        await tasks.progress(row.id, { round: 2, stage: "accepted", pipelineStatus });
       await tasks.review(row.id, { decision: "approve", note: "Preserve review", userId: user.id });
       const prefix = `runs/${runId}/`;
       const bundleKey = `${prefix}authoring/candidate/round-2/attempt-1/verify-1/harbor-task.tar.gz`;
@@ -68,31 +70,36 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
           return value === undefined ? undefined : Buffer.from(value);
         },
       } as unknown as ArtifactStore;
+      const snapshot = mock(async () => ({
+        kind: "completed" as const,
+        result: {
+          progress: {
+            candidateId: "candidate",
+            taskId: "task",
+            difficulty: "easy" as const,
+            status: "accepted" as const,
+            round: 2,
+          },
+        },
+      }));
       const refresh = () =>
         refreshInProgress({
           tasks,
           artifacts,
           repo,
-          status: {
-            snapshot: async () => ({
-              kind: "completed",
-              result: {
-                progress: {
-                  candidateId: "candidate",
-                  taskId: "task",
-                  difficulty: "easy",
-                  status: "accepted",
-                  round: 2,
-                },
-              },
-            }),
-          },
+          status: { snapshot },
         });
-      expect(await refresh()).toBe(0);
-      expect((await tasks.find(repo.id, runId, "candidate"))?.pipelineStatus).toBe(pipelineStatus);
+      expect(await refresh()).toBe(pipelineStatus === "in_progress" ? 1 : 0);
+      expect((await tasks.find(repo.id, runId, "candidate"))?.pipelineStatus).toBe("accepted");
+      expect(snapshot).toHaveBeenCalledTimes(pipelineStatus === "in_progress" ? 1 : 0);
+      snapshot.mockClear();
+      snapshot.mockImplementation(async () => {
+        throw new Error("Workflow history expired");
+      });
       unavailable = false;
       clearArchivedListingCache();
       expect(await refresh()).toBe(1);
+      expect(snapshot).not.toHaveBeenCalled();
       expect(await tasks.find(repo.id, runId, "candidate")).toMatchObject({
         taskId: "task",
         pipelineStatus: "accepted",

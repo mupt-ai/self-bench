@@ -51,6 +51,24 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
   );
   let changed = 0;
   for (const task of running) {
+    if (task.pipelineStatus === "accepted") {
+      const result = await syncRun({
+        tasks,
+        artifacts,
+        repo,
+        runId: task.runId,
+        preserveUnfinished: true,
+      }).catch(() => undefined);
+      if (result?.synced) {
+        await tasks.progress(task.id, {
+          pipelineStatus: "accepted",
+          stage: "accepted",
+          ...(task.round !== undefined ? { round: task.round } : {}),
+        });
+        changed += 1;
+      }
+      continue;
+    }
     if (!task.workflowId) continue;
     const snapshot = await status
       .snapshot(task.workflowId)
@@ -59,17 +77,13 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
       snapshot.kind === "completed" &&
       snapshot.result.progress.status !== "infrastructure_failed"
     ) {
-      try {
-        await syncRun({
-          tasks,
-          artifacts,
-          repo,
-          runId: task.runId,
-          completedWorkflowId: task.workflowId,
-        });
-      } catch {
-        continue;
-      }
+      await syncRun({
+        tasks,
+        artifacts,
+        repo,
+        runId: task.runId,
+        completedWorkflowId: task.workflowId,
+      }).catch(() => undefined);
     }
     if (await applySnapshot(task, snapshot, tasks)) changed += 1;
   }
