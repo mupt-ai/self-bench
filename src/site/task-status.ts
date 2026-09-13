@@ -44,9 +44,24 @@ export interface RefreshOptions {
  */
 export async function refreshInProgress(options: RefreshOptions): Promise<number> {
   const { tasks, artifacts, status, repo } = options;
-  const running = await tasks.inProgress(repo.id);
+  const running = (await tasks.listForRepo(repo.id)).filter(
+    (task) =>
+      task.pipelineStatus === "in_progress" ||
+      (task.pipelineStatus === "accepted" && !task.bundleKey),
+  );
   let changed = 0;
   for (const task of running) {
+    if (task.pipelineStatus === "accepted") {
+      const result = await syncRun({
+        tasks,
+        artifacts,
+        repo,
+        runId: task.runId,
+        repairAcceptedTask: task,
+      }).catch(() => undefined);
+      if (result?.synced) changed += 1;
+      continue;
+    }
     if (!task.workflowId) continue;
     const snapshot = await status
       .snapshot(task.workflowId)
@@ -55,7 +70,13 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
       snapshot.kind === "completed" &&
       snapshot.result.progress.status !== "infrastructure_failed"
     ) {
-      await syncRun({ tasks, artifacts, repo, runId: task.runId }).catch(() => undefined);
+      await syncRun({
+        tasks,
+        artifacts,
+        repo,
+        runId: task.runId,
+        completedWorkflowId: task.workflowId,
+      }).catch(() => undefined);
     }
     if (await applySnapshot(task, snapshot, tasks)) changed += 1;
   }

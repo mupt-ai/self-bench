@@ -67,7 +67,7 @@ export interface RepoTaskCounts {
 }
 
 export interface TaskStore {
-  upsertMany(rows: readonly TaskUpsert[]): Promise<void>;
+  upsertMany(rows: readonly TaskUpsert[], completedWorkflowId?: string): Promise<void>;
   /** Inserts a site-started task; rejects when the workflow id is already known. */
   insertStarted(row: TaskStart): Promise<TaskRecord>;
   reserveStarted(row: TaskStart): Promise<TaskRecord>;
@@ -125,7 +125,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
     syncedAt: now(),
   });
   return {
-    async upsertMany(rows) {
+    async upsertMany(rows, completedWorkflowId) {
       if (rows.length === 0) return;
       await db.transaction(async (tx) => {
         for (const row of rows) {
@@ -138,7 +138,8 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
               set,
               setWhere: sql`${tasks.repoId} = ${row.repoId}
                 and ${tasks.deletedAt} is null
-                and (${tasks.workflowId} is null or ${tasks.pipelineStatus} <> 'in_progress')`,
+                and (${tasks.workflowId} is null or ${tasks.pipelineStatus} <> 'in_progress'
+                  or ${tasks.workflowId} = ${completedWorkflowId ?? null})`,
             });
         }
       });

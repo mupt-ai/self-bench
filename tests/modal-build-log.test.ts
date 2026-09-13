@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { withExecutionEnvironment } from "../src/execution-environment.js";
 import {
   extractModalImageId,
   HARBOR_MODAL_APP,
@@ -9,6 +13,36 @@ const failure =
   "Harbor nop infrastructure failure for task: ImageBuildError: image build for im-Abc123xyz failed";
 
 describe("Modal build log tail", () => {
+  test("uses the current run's sandbox credentials when collecting build logs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "selfbench-modal-log-"));
+    try {
+      await writeFile(
+        join(directory, "modal"),
+        `#!/bin/sh
+test "$MODAL_TOKEN_ID" = "run-token-id" || exit 1
+test "$MODAL_TOKEN_SECRET" = "run-token-secret" || exit 1
+test -z "$E2B_API_KEY" || exit 1
+printf 'Building image im-Abc123xyz\\nThe lockfile needs to be updated\\n'
+`,
+        { mode: 0o700 },
+      );
+      const log = await withExecutionEnvironment(
+        {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH ?? ""}`,
+          MODAL_TOKEN_ID: "run-token-id",
+          MODAL_TOKEN_SECRET: "run-token-secret",
+          E2B_API_KEY: "unrelated-key",
+        },
+        () => modalBuildLogTail(failure),
+      );
+      expect(log).toContain("The lockfile needs to be updated");
+      expect(log).not.toContain("run-token-secret");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("extracts the image id from an ImageBuildError message", () => {
     expect(extractModalImageId(failure)).toBe("im-Abc123xyz");
     expect(extractModalImageId("cannot connect to the docker daemon")).toBeUndefined();

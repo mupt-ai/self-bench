@@ -24,9 +24,15 @@ test("unrelated ENOENT does not claim the checkout is unavailable", () => {
 test("workflow failure preserves complete technical details", async () => {
   const detail = "ENOENT: missing /work/tests/result.json\nUnderlying diagnostic";
   let saved: unknown;
-  const task = { id: 1, workflowId: "workflow", stage: "verification", round: 2 } as TaskRecord;
+  const task = {
+    id: 1,
+    workflowId: "workflow",
+    stage: "verification",
+    round: 2,
+    pipelineStatus: "in_progress",
+  } as TaskRecord;
   const tasks = {
-    inProgress: async () => [task],
+    listForRepo: async () => [task],
     progress: async (_id: number, patch: unknown) => {
       saved = patch;
       return task;

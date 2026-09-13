@@ -22,7 +22,6 @@
     "drizzle",
     "docs",
     "compose.yaml",
-    "dev-proxy",
     "Dockerfile",
     "Dockerfile.sandbox",
     "bun.lock",

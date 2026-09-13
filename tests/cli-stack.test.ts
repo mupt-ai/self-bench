@@ -53,7 +53,6 @@ printf '%s|%s|%s|%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBE
           SELFBENCH_SITE_PORT: "",
           SELFBENCH_PUBLIC_URL: "",
           // The checkout's real .env must not leak into the derivation.
-          SELFBENCH_DEV_DOMAIN: "",
           GITHUB_OAUTH_CLIENT_ID: "",
         },
         stdout: "pipe",

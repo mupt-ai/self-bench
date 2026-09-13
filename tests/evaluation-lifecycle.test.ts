@@ -50,7 +50,12 @@ test("multiple tasks and harnesses run once each; a zero score still completes",
         return { exitCode: 0, stdout: "", stderr: "" };
       },
     });
-    expect(calls).toEqual(["codex", "pi", "codex", "pi"]);
+    expect(calls).toEqual([
+      "harbor_gateway:SelfBenchCodex",
+      "pi",
+      "harbor_gateway:SelfBenchCodex",
+      "pi",
+    ]);
     const run = await getEvaluation(store, input.repoId, input.id);
     expect(run?.status).toBe("completed");
     expect(run?.trials.map((trial) => trial.rewards.reward)).toEqual([0, 0, 0, 0]);
