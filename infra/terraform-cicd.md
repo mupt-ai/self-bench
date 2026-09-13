@@ -4,11 +4,17 @@
 your deployment identities and runtime prerequisites before enabling deployment. The opt-in defaults
 to disabled for unconfigured repositories.
 
-- `deploy-dev.yml`: main push or manual main run.
+- `deploy-dev.yml`: every main push, including merges, or manual main run; no path filters.
 - `deploy-prod.yml`: published, non-draft, non-prerelease release.
 - `deploy-reusable.yml`: app validation, source verification, private Terraform plan, approval,
   apply if changed, image build/publish, Cloud SQL backup, VM migrations/rollout and verification.
 - Credential-free PR checks remain in `infra.yml` and normal app CI.
+
+Merging into main starts the full dev deployment, not just Terraform. Publishing a stable GitHub
+release starts the full production deployment, subject to the configured production approval.
+Both workflows validate, plan/apply infrastructure, build the image, back up the database, migrate,
+roll out the API and worker, and verify service health. No manual SSH rollout should be needed.
+Production builds the release commit; it does not promote the exact dev image digest.
 
 Production checks the actual release event, immutable triggering SHA and tag ancestry from main
 before cloud authentication. There are exactly two deployment environments: `dev` and `prod`.

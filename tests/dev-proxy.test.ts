@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,11 +58,28 @@ describe("dev proxy", () => {
       sites: join(root, "sites"),
     };
     const file = join(proxy.sites, "wt.caddy");
+    const command = mock(async () => {
+      throw new Error("Proxy is not running");
+    });
 
-    await registerSite(proxy, "wt", "wt.stack.example.test", "8281");
+    await registerSite(proxy, "wt", "wt.stack.example.test", "8281", command);
     expect(await readFile(file, "utf8")).toContain("host.docker.internal:8281");
 
-    await unregisterSite(proxy, "wt");
+    await unregisterSite(proxy, "wt", command);
     await expect(readFile(file, "utf8")).rejects.toThrow();
+    expect(command).toHaveBeenCalledTimes(2);
+    expect(command).toHaveBeenCalledWith("docker", [
+      "compose",
+      "--project-name",
+      "selfbench-dev-proxy",
+      "--file",
+      expect.stringContaining("dev-proxy/compose.yaml"),
+      "exec",
+      "caddy",
+      "caddy",
+      "reload",
+      "--config",
+      "/etc/caddy/Caddyfile",
+    ]);
   });
 });

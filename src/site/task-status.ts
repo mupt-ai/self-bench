@@ -44,7 +44,11 @@ export interface RefreshOptions {
  */
 export async function refreshInProgress(options: RefreshOptions): Promise<number> {
   const { tasks, artifacts, status, repo } = options;
-  const running = await tasks.inProgress(repo.id);
+  const running = (await tasks.listForRepo(repo.id)).filter(
+    (task) =>
+      task.pipelineStatus === "in_progress" ||
+      (task.pipelineStatus === "accepted" && !task.bundleKey),
+  );
   let changed = 0;
   for (const task of running) {
     if (!task.workflowId) continue;
@@ -55,7 +59,17 @@ export async function refreshInProgress(options: RefreshOptions): Promise<number
       snapshot.kind === "completed" &&
       snapshot.result.progress.status !== "infrastructure_failed"
     ) {
-      await syncRun({ tasks, artifacts, repo, runId: task.runId }).catch(() => undefined);
+      try {
+        await syncRun({
+          tasks,
+          artifacts,
+          repo,
+          runId: task.runId,
+          completedWorkflowId: task.workflowId,
+        });
+      } catch {
+        continue;
+      }
     }
     if (await applySnapshot(task, snapshot, tasks)) changed += 1;
   }

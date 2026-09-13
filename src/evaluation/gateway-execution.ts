@@ -4,6 +4,13 @@ export const gateways = {
   openrouter: { base: "https://openrouter.ai/api/v1", messages: "https://openrouter.ai/api" },
 } as const;
 
+export function solverAgent(harness: Harness, model: string): string {
+  if (harness !== "codex") return harness;
+  return model.startsWith("openai/") && model.slice(7).includes("/")
+    ? "harbor_gateway:GatewayCodex"
+    : "harbor_gateway:SelfBenchCodex";
+}
+
 /** Adapt the selected connection to each harness without inheriting host credentials. */
 export function gatewayTrial(
   input: EvaluationInput,

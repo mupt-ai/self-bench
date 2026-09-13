@@ -1,10 +1,45 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { catalog } from "../src/evaluation/catalog.js";
 import { credentialSchema } from "../src/evaluation/credentials.js";
 import { gatewayTrial } from "../src/evaluation/gateway-execution.js";
 import { routeFor } from "../src/evaluation/model-options.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
+import { runCommand } from "../src/process.js";
+
+test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
+  expect(solverArguments("task", "jobs", "codex", "openai/gpt-5.6-sol", "modal")).toContain(
+    "harbor_gateway:SelfBenchCodex",
+  );
+  const result = await runCommand("python3", [
+    "-c",
+    `import asyncio, importlib.util, os, subprocess, sys, types
+module = types.ModuleType("harbor.agents.installed.codex")
+class Codex:
+    async def exec_as_agent(self, environment, command, **kwargs):
+        return command, kwargs
+module.Codex = Codex
+sys.modules[module.__name__] = module
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+async def check():
+    command, options = await adapter.SelfBenchCodex().exec_as_agent(None, 'printf %s "$NVM_DIR"', timeout_sec=30)
+    output = subprocess.check_output(["bash", "-c", command], env={**os.environ, "HOME": "/home/test-agent", "NVM_DIR": "/usr/local/share/nvm"}, text=True)
+    assert output == "/home/test-agent/.nvm"
+    assert options == {"timeout_sec": 30}
+    gateway = adapter.GatewayCodex()
+    gateway.model_name = "openai/anthropic/claude-sonnet-5"
+    command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
+    assert "--model anthropic/claude-sonnet-5 " in command
+    assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
+asyncio.run(check())
+`,
+    fileURLToPath(new URL("../src/evaluation/harbor_gateway.py", import.meta.url)),
+  ]);
+  expect(result.exitCode).toBe(0);
+});
 
 for (const provider of ["openrouter"] as const) {
   test(`${provider} uses each harness protocol and preserves gateway model IDs`, () => {

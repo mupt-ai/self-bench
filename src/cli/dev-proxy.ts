@@ -48,22 +48,27 @@ export async function registerSite(
   project: string,
   hostname: string,
   port: string,
+  command: typeof runCommand = runCommand,
 ): Promise<void> {
   await mkdir(proxy.sites, { recursive: true });
   await writeFile(join(proxy.sites, `${project}.caddy`), renderSite(hostname, port));
-  if (!(await reload(proxy))) {
+  if (!(await reload(command))) {
     console.log(`The dev proxy is not running; start it with: self-bench proxy up`);
   }
 }
 
-export async function unregisterSite(proxy: DevProxy, project: string): Promise<void> {
+export async function unregisterSite(
+  proxy: DevProxy,
+  project: string,
+  command: typeof runCommand = runCommand,
+): Promise<void> {
   await rm(join(proxy.sites, `${project}.caddy`), { force: true });
-  await reload(proxy);
+  await reload(command);
 }
 
-async function reload(proxy: DevProxy): Promise<boolean> {
+async function reload(command: typeof runCommand): Promise<boolean> {
   try {
-    await runCommand("docker", [
+    await command("docker", [
       ...compose(),
       "exec",
       "caddy",

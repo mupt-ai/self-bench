@@ -16,6 +16,7 @@ export async function syncRun(options: {
   readonly runId: string;
   /** Live batches must not infer rejection from unfinished artifacts. */
   readonly preserveUnfinished?: boolean;
+  readonly completedWorkflowId?: string;
 }): Promise<{ synced: number }> {
   const { tasks, artifacts, repo, runId } = options;
   const list = await archivedCandidates(artifacts, runId);
@@ -47,7 +48,7 @@ export async function syncRun(options: {
     }
   });
   await Promise.all(workers);
-  await tasks.upsertMany(rows);
+  await tasks.upsertMany(rows, options.completedWorkflowId);
   return { synced: rows.length };
 }
 

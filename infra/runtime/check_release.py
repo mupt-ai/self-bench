@@ -53,6 +53,7 @@ def validate(environment, project, release_path):
         "SELFBENCH_ARTIFACT_BACKEND": "gcs", "SELFBENCH_GCS_BUCKET": f"{project}-artifacts",
         "SELFBENCH_GCS_PREFIX": "selfbench", "SELFBENCH_TEMPORAL_TLS": "true",
         "SELFBENCH_TASK_QUEUE": f"selfbench-{environment}",
+        "SELFBENCH_GENERATION_TASK_QUEUE": f"selfbench-{environment}",
         "SELFBENCH_EVAL_TASK_QUEUE": f"selfbench-{environment}",
         "SELFBENCH_EXECUTION_BACKEND": "modal", "SELFBENCH_HARBOR_ENVIRONMENT": "modal",
     }
