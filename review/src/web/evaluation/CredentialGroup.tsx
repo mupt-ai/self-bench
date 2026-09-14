@@ -40,7 +40,7 @@ export function CredentialGroup({
       >
         {canManage && (
           <Button size="small" onClick={onAdd}>
-            <Plus aria-hidden="true" />
+            <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
             {sandbox ? "Add Sandbox" : "Add Provider"}
           </Button>
         )}

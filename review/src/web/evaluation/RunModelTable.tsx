@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { Button, Notice } from "../ui";
+import { Notice } from "../ui";
 import { evaluationRequestId } from "./api";
 import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
@@ -55,11 +55,9 @@ export function RunModelTable({
                 });
               }}
             />
-            <Button
+            <button
               type="button"
-              size="small"
-              variant="ghost"
-              className="absolute right-2 bottom-3 h-9 w-8 px-0 text-muted-foreground hover:text-foreground"
+              className="absolute right-0 bottom-3 flex h-9 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground focus-visible:text-brand focus-visible:outline-none"
               aria-label={`Remove ${model.label}`}
               onClick={() => {
                 onChange({
@@ -72,7 +70,7 @@ export function RunModelTable({
               }}
             >
               <X className="size-4" aria-hidden="true" />
-            </Button>
+            </button>
           </section>
         );
       })}

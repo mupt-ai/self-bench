@@ -29,8 +29,6 @@ export function RunModelRow({
   onChange(value: ModelSelection): void;
 }) {
   const selected = selection ?? { catalogId: model.id, credentialId: "", harnesses: [] };
-  const credential = credentials.find((entry) => entry.id === selected.credentialId);
-  const route = credential ? routeFor(model, credential.kind) : undefined;
   const levels = thinkingOptions(model, selected.harnesses);
   const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
   const selectCredential = (credentialId: string) => {
@@ -50,9 +48,6 @@ export function RunModelRow({
       harnesses: harnesses.length ? harnesses : (available?.slice(0, 1) ?? []),
     });
   };
-  const supportsHarness = (harness: Harness) =>
-    (route ?? model).harnesses.includes(harness) &&
-    (credential?.auth !== "codex-login" || harness === "codex");
 
   return (
     <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
@@ -130,16 +125,12 @@ export function RunModelRow({
         >
           {!levels.includes(thinking) && (
             <option value={thinking} disabled>
-              {thinking} — unavailable
+              Select Thinking Level
             </option>
           )}
           {levels.map((level) => (
             <option key={level} value={level}>
-              {level === "default"
-                ? "Default"
-                : level === "xhigh"
-                  ? "XHigh"
-                  : level[0]?.toUpperCase() + level.slice(1)}
+              {level}
             </option>
           ))}
         </Select>
@@ -155,7 +146,7 @@ export function RunModelRow({
             onChange({
               ...selected,
               harnesses: [event.target.value as Harness],
-              thinking: "default",
+              thinking: undefined,
             })
           }
         >
@@ -167,13 +158,11 @@ export function RunModelRow({
               {selected.harnesses.join(" + ")}
             </option>
           )}
-          {harnessOptions
-            .filter((harness) => supportsHarness(harness.id))
-            .map((harness) => (
-              <option key={harness.id} value={harness.id}>
-                {harness.label}
-              </option>
-            ))}
+          {harnessOptions.map((harness) => (
+            <option key={harness.id} value={harness.id}>
+              {harness.label}
+            </option>
+          ))}
         </Select>
       </div>
     </div>

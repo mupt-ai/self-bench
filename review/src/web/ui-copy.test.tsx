@@ -44,7 +44,8 @@ test("settings and results use consistent action, section and table labels", () 
   expect(settings).not.toContain("Import Previous Setups");
   const results = renderPage(<EvaluationPage />);
   expect(results).toContain("Compare your runs. Inspect what the solver did.");
-  expect(results).toContain("Accuracy vs. Estimated Cost");
+  expect(results).toContain('aria-label="Accuracy versus Cost"');
+  expect(results).not.toContain("Accuracy vs. Estimated Cost");
 });
 
 test("sign-in labels preserve product spelling and short prepositions", () => {

@@ -1,9 +1,35 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
+import { thinkingLevels } from "../../../../src/evaluation/model-options";
 import { CredentialEditor } from "./CredentialEditor";
+import { CredentialGroup } from "./CredentialGroup";
 import { RunModelRow } from "./RunModelRow";
 import { RunModelTable } from "./RunModelTable";
+import { thinkingLabel } from "./run-presentation";
+
+test("thinking levels use lowercase in selectors and run summaries", () => {
+  const html = renderToStaticMarkup(
+    <RunModelRow
+      model={{
+        id: "openai-astra6",
+        label: "GPT-6 Astra",
+        provider: "openai",
+        model: "gpt-6-astra",
+        harnesses: ["codex"],
+        source: "",
+      }}
+      credentials={[]}
+      onChange={() => {}}
+    />,
+  );
+  const options = [...html.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g)];
+  const levels = options.filter((option) => thinkingLevels.some((level) => level === option[1]));
+  expect(levels.map((option) => option[2])).toEqual(["low", "medium", "high", "xhigh", "max"]);
+  for (const level of thinkingLevels) {
+    expect(thinkingLabel(level)).toBe(level === "default" ? "model default" : level);
+  }
+});
 
 test("model cards remain usable without credentials and never embed a table or secret fields", () => {
   const html = renderToStaticMarkup(
@@ -37,7 +63,7 @@ test("model cards remain usable without credentials and never embed a table or s
   expect(html).not.toContain("<table");
   expect(html).toContain("Select Credential");
   expect(html).toContain("Credential");
-  expect(html).toContain("Default");
+  expect(html).toContain('value="default" selected="">default</option>');
   expect(html).toContain('aria-label="Test model Credential"');
   expect(html).toContain('aria-label="Test model Thinking Level"');
   expect(html).toContain("Harness");
@@ -45,6 +71,8 @@ test("model cards remain usable without credentials and never embed a table or s
   expect(html).toContain("sm:grid-cols-3");
   expect(html).not.toContain("border-transparent!");
   expect(html).toContain('aria-label="Remove Test model"');
+  expect(html).toContain("right-0 bottom-3 flex h-9 w-10");
+  expect(html).toContain("border-0 bg-transparent p-0");
   expect(html).not.toContain("Shortlist");
   expect(html).not.toContain('type="password"');
 });
@@ -81,6 +109,27 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(options(html)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
 });
 
+test.each([false, true])(
+  "credential add actions match the small plus-button style: %s",
+  (sandbox) => {
+    const html = renderToStaticMarkup(
+      <CredentialGroup
+        title="Credentials"
+        credentials={[]}
+        loading={false}
+        canManage
+        sandbox={sandbox}
+        onAdd={() => {}}
+        onReplace={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(html).toContain(sandbox ? "Add Sandbox" : "Add Provider");
+    expect(html).toContain("h-8 px-3 text-xs");
+    expect(html).toContain("mr-1 h-4 w-4");
+  },
+);
+
 test("Add Sandbox offers only hosted sandboxes and the fields for its selected sandbox", () => {
   const html = credentialEditor("modal");
   expect(html).toContain("Add Sandbox");
@@ -105,7 +154,7 @@ test("replacement keeps the original credential category regardless of the defau
   expect(options(provider)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
 });
 
-test("Astra offers Codex with a ChatGPT credential", () => {
+test("harness dropdown keeps the static five options even with a ChatGPT credential", () => {
   const html = renderToStaticMarkup(
     <RunModelRow
       model={{
@@ -125,5 +174,7 @@ test("Astra offers Codex with a ChatGPT credential", () => {
   );
   expect(html).toContain('value="codex"');
   expect(html).not.toContain("Already Added");
-  expect(html).not.toContain('value="pi"');
+  for (const harness of ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"]) {
+    expect(html).toContain(`value="${harness}"`);
+  }
 });

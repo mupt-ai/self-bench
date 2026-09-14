@@ -1,6 +1,6 @@
 import type { EvaluationPricing, Harness } from "./types.js";
 
-export const catalogVersion = "2026-09-06.2";
+export const catalogVersion = "2026-09-14.1";
 export const supportedProviders = ["openai", "anthropic", "openrouter", "custom"] as const;
 export type CatalogProvider = (typeof supportedProviders)[number];
 export interface CatalogModel {
@@ -100,6 +100,38 @@ export const catalog: CatalogModel[] = [
     label: "DeepSeek V4 Pro",
     harnesses: ["pi"],
     source: "https://openrouter.ai/deepseek/deepseek-v4-pro",
+  },
+  {
+    id: "router-glm53flash",
+    provider: "openrouter",
+    model: "z-ai/glm-5.3-flash",
+    label: "GLM 5.3 Flash",
+    harnesses: ["pi"],
+    source: "https://openrouter.ai/z-ai/glm-5.3-flash",
+  },
+  {
+    id: "router-deepseek41flash",
+    provider: "openrouter",
+    model: "deepseek/deepseek-v4.1-flash",
+    label: "DeepSeek V4.1 Flash",
+    harnesses: ["pi"],
+    source: "https://openrouter.ai/deepseek/deepseek-v4.1-flash",
+  },
+  {
+    id: "router-deepseek4flash0731",
+    provider: "openrouter",
+    model: "deepseek/deepseek-v4-flash-0731",
+    label: "DeepSeek V4 Flash 0731",
+    harnesses: ["pi"],
+    source: "https://openrouter.ai/deepseek/deepseek-v4-flash-0731",
+  },
+  {
+    id: "router-minimax3",
+    provider: "openrouter",
+    model: "minimax/minimax-m3",
+    label: "MiniMax M3",
+    harnesses: ["pi"],
+    source: "https://openrouter.ai/minimax/minimax-m3",
   },
 ];
 export const hostedSandboxes = ["e2b", "modal", "daytona"] as const;

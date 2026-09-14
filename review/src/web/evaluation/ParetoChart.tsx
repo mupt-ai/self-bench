@@ -1,6 +1,5 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
-import { SectionHeader } from "../ui";
 import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({
@@ -27,14 +26,6 @@ export function ParetoChart({
       className="border border-border bg-background p-4 sm:p-6 [&_footer]:mt-2.5 [&_footer]:font-mono [&_footer]:text-xs [&_footer]:text-muted-foreground"
       aria-label="Accuracy versus Cost"
     >
-      <SectionHeader title="Accuracy vs. Estimated Cost">
-        {points.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {points[0]?.tasks} {points[0]?.tasks === 1 ? "task" : "tasks"} · same dataset
-            {oneHarness ? ` · ${points[0]?.harness}` : ""}
-          </p>
-        )}
-      </SectionHeader>
       {!points.length ? (
         <div className="py-2 text-sm text-muted-foreground [&_span]:mt-2 [&_span]:block [&_span]:max-w-2xl [&_span]:text-xs [&_span]:leading-5">
           <p>Your completed runs appear here.</p>
@@ -44,13 +35,13 @@ export function ParetoChart({
           </span>
         </div>
       ) : (
-        <div className="mt-4 [&_svg]:block [&_svg]:w-full">
+        <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-frontier:var(--brand)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)] [&_text]:text-xs [&_text[font-size='11']]:text-sm [&_text[font-size='14']]:text-sm"
+            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-frontier:#8ee6bd] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)] [&>text[font-size='14']]:text-[18px] [&>text[font-size='14']]:tracking-normal [&_polyline]:opacity-50 [&_polyline]:[stroke-dasharray:3_6] [&_polyline]:[stroke-width:1] [&_circle[role='button'][r='6']]:[r:4] [&_circle[role='button'][r='5']]:[r:3.5] [&_circle[role='button'][r='8']]:[r:5] [&_circle[role='button'][r='8']]:stroke-[#8ee6bd] [&_circle[role='button'][r='8']]:[stroke-width:1]"
             title={width < 640 ? "Accuracy vs. Cost" : "Accuracy versus Cost per Task"}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
-            height={width < 640 ? 280 : 320}
+            height={width < 640 ? 300 : Math.min(520, Math.max(380, width * 0.45))}
             showLegend={width >= 640}
             points={points.map((point) => ({
               id: point.id,
@@ -72,7 +63,7 @@ export function ParetoChart({
               domain: [0, 100],
               format: (value) => `${value.toFixed(0)}%`,
             }}
-            showPointLabels="none"
+            showPointLabels={width < 640 ? "none" : "frontier"}
             onSelect={(selected) => {
               const point = points.find((entry) => entry.id === selected.id);
               if (point) onSelect(point.runId);

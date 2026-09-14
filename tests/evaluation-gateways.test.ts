@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import { catalog } from "../src/evaluation/catalog.js";
 import { credentialSchema } from "../src/evaluation/credentials.js";
 import { gatewayTrial } from "../src/evaluation/gateway-execution.js";
-import { routeFor } from "../src/evaluation/model-options.js";
+import { harnessIds } from "../src/evaluation/harnesses.js";
+import { modelRoutes, routeFor } from "../src/evaluation/model-options.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { runCommand } from "../src/process.js";
@@ -71,12 +72,17 @@ for (const provider of ["openrouter"] as const) {
   });
 }
 
-test("gateway connections offer cross-provider harnesses while direct OpenAI stays compatible", () => {
+test("every model route offers all five harnesses regardless of provider", () => {
+  for (const entry of catalog) {
+    for (const route of modelRoutes(entry)) {
+      expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+    }
+  }
   const model = catalog.find((entry) => entry.id === "openai-sol56");
   if (!model) throw new Error("Missing model fixture");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("mini-swe-agent");
-  expect(routeFor(model, "openai")?.harnesses).not.toContain("claude-code");
+  expect(routeFor(model, "openai")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "vercel")).toBeUndefined();
   expect(
     credentialSchema.parse({ name: "Gateway", kind: "openrouter", value: "test-key" }).kind,
