@@ -17,6 +17,8 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-fg);
   --color-destructive: var(--bad-fg);
+  --color-destructive-background: var(--bad);
+  --color-destructive-foreground: hsl(0 0% 98%);
   --color-success: var(--ok);
   --color-warning: var(--warn-fg);
   --color-sidebar: var(--sidebar-background);

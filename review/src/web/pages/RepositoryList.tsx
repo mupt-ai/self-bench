@@ -10,7 +10,7 @@ export interface RepoStats {
   lastPr?: number;
 }
 const columns =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 md:grid-cols-[minmax(0,1fr)_5rem_8rem_5rem_2.25rem]";
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-3 md:grid-cols-[minmax(0,1fr)_5rem_8rem_5rem_2.5rem]";
 
 export function RepositoryList({
   repos,
