@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { readBody, sendJson } from "../api/http.js";
+import { readBody, sendJson, trustedMutation } from "../api/http.js";
 import type { ArtifactStore } from "../artifacts.js";
 import type { User, UserStore } from "../auth/users.js";
 import type { RepoStore } from "../site/repo-store.js";
@@ -83,6 +83,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
             ownerId: user.githubId,
             tenant: tenant.login,
             publicUrl: options.publicUrl,
+            trusted: trustedMutation(request, options.publicUrl, user),
           },
           env,
         );
@@ -144,10 +145,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         sendJson(response, 405, { error: "Method not allowed" });
         return true;
       }
-      if (
-        request.headers.origin !== new URL(options.publicUrl).origin ||
-        !request.headers["content-type"]?.startsWith("application/json")
-      ) {
+      if (!trustedMutation(request, options.publicUrl, user)) {
         sendJson(response, 403, { error: "Same-origin JSON request required" });
         return true;
       }

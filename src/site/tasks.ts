@@ -110,10 +110,21 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         }
         return true;
       }
-      if (!leaf) return false;
+      if (
+        leaf &&
+        request.method !== "GET" &&
+        request.method !== "PUT" &&
+        request.method !== "DELETE"
+      )
+        return false;
+      if (!leaf && request.method !== "GET") return false;
       const task = await tasks.find(repo.id, runId, taskId);
       if (!task) {
         sendJson(response, 404, { error: "task not found" });
+        return true;
+      }
+      if (!leaf) {
+        sendJson(response, 200, { task: taskItem(task) });
         return true;
       }
       if (leaf === "review" && request.method === "PUT") {

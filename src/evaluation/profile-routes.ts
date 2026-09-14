@@ -25,17 +25,14 @@ export async function handleSetup(
   request: IncomingMessage,
   response: ServerResponse,
   store: ArtifactStore,
-  scope: { repoId: number; ownerId: number; tenant: string; publicUrl: string },
+  scope: { repoId: number; ownerId: number; tenant: string; publicUrl: string; trusted: boolean },
   env: NodeJS.ProcessEnv,
 ) {
   if (request.method !== "POST") {
     sendJson(response, 405, { error: "Method not allowed" });
     return;
   }
-  if (
-    request.headers.origin !== new URL(scope.publicUrl).origin ||
-    !request.headers["content-type"]?.startsWith("application/json")
-  ) {
+  if (!scope.trusted) {
     sendJson(response, 403, { error: "Same-origin JSON request required" });
     return;
   }

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { readBody, sendJson } from "../api/http.js";
+import { readBody, sendJson, trustedMutation } from "../api/http.js";
 import type { User } from "../auth/users.js";
 import { tenantFor } from "../site/tenant.js";
 import { codexLogins } from "./codex-login.js";
@@ -29,9 +29,7 @@ export async function codexLoginRoutes(
   if (
     org.role !== "admin" ||
     (request.method !== "GET" &&
-      (request.method !== "POST" ||
-        request.headers.origin !== new URL(options.publicUrl).origin ||
-        !request.headers["content-type"]?.startsWith("application/json")))
+      (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user)))
   ) {
     sendJson(response, 403, { error: "Organization admin and same-origin JSON request required" });
     return true;

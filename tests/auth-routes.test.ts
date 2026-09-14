@@ -155,6 +155,7 @@ describe("/api/me and logout", () => {
     });
     expect(me.status).toBe(200);
     expect(await me.json()).toEqual({
+      auth: "session",
       user: { login: "avyay", name: "Avyay", avatarUrl: "https://a/x.png" },
       orgs: [
         {

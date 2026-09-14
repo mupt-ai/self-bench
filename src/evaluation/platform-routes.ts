@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../api/http.js";
+import { readBody, sendJson, trustedMutation } from "../api/http.js";
 import type { User } from "../auth/users.js";
 import { tenantFor } from "../site/tenant.js";
 import { readAccount } from "./account.js";
@@ -61,9 +61,7 @@ export async function platformRoutes(
   }
   if (
     request.method !== "GET" &&
-    (request.method !== "POST" ||
-      request.headers.origin !== new URL(options.publicUrl).origin ||
-      !request.headers["content-type"]?.startsWith("application/json"))
+    (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user))
   ) {
     sendJson(response, 403, { error: "Same-origin JSON request required" });
     return true;
