@@ -151,3 +151,38 @@ test("reports a failed load and offers to reload", async () => {
   failing.mockRestore();
   restoreFetch = () => undefined;
 });
+
+async function createKey() {
+  await waitFor(() => container.textContent?.includes("No API keys yet") ?? false);
+  await click("Create Key");
+  await type("api-key-name", "CI");
+  await act(async () => submit().click());
+  await waitFor(() => !!container.querySelector('[data-testid="api-key-secret"]'));
+}
+
+test("copying confirms in the button and a status line", async () => {
+  const written: string[] = [];
+  Object.defineProperty(browser.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (text: string) => void written.push(text) },
+  });
+  await createKey();
+  await click("Copy API Key");
+  await waitFor(
+    () => container.querySelector('[role="status"]')?.textContent === "Copied to clipboard.",
+  );
+  expect(written).toEqual([secret]);
+  expect(button("Copy API Key").textContent).toContain("Copied");
+});
+
+test("without a clipboard the key is selected and the user is told to copy it by hand", async () => {
+  Object.defineProperty(browser.navigator, "clipboard", { configurable: true, value: undefined });
+  await createKey();
+  await click("Copy API Key");
+  await waitFor(
+    () => container.querySelector('[role="status"]')?.textContent?.includes("press") ?? false,
+  );
+  expect(button("Copy API Key").textContent).toContain("Copy");
+  expect(button("Copy API Key").textContent).not.toContain("Copied");
+  expect(String(browser.getSelection())).toBe(secret);
+});

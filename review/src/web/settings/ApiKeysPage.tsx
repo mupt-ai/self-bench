@@ -100,14 +100,17 @@ export function ApiKeysPage() {
 
 /** The one and only time the secret is visible; it is never sent by the server again. */
 function NewSecret({ created, onDismiss }: { created: CreatedApiKey; onDismiss(): void }) {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = React.useState<"idle" | "copied" | "failed">("idle");
+  const secret = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    if (copied !== "copied") return;
+    const timer = window.setTimeout(() => setCopied("idle"), 2_500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(created.secret);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+    const ok = await copyText(created.secret, secret.current);
+    setCopied(ok ? "copied" : "failed");
+    if (!ok) selectContents(secret.current);
   };
   return (
     <section
@@ -120,25 +123,67 @@ function NewSecret({ created, onDismiss }: { created: CreatedApiKey; onDismiss()
       <p className="text-sm text-muted-foreground">Copy the key now. It will not be shown again.</p>
       <div className="flex flex-wrap items-center gap-2">
         <code
+          ref={secret}
           data-testid="api-key-secret"
-          className="min-w-0 max-w-full break-all border border-border bg-background px-3 py-2 font-mono text-xs"
+          className="min-w-0 max-w-full break-all border border-border bg-background px-3 py-2 font-mono text-xs select-all"
         >
           {created.secret}
         </code>
-        <Button size="small" onClick={() => void copy()} aria-label="Copy API Key">
-          {copied ? (
+        <Button
+          size="small"
+          variant={copied === "copied" ? "primary" : "secondary"}
+          onClick={() => void copy()}
+          aria-label="Copy API Key"
+        >
+          {copied === "copied" ? (
             <Check className="mr-1 h-4 w-4" aria-hidden="true" />
           ) : (
             <Copy className="mr-1 h-4 w-4" aria-hidden="true" />
           )}
-          {copied ? "Copied" : "Copy"}
+          {copied === "copied" ? "Copied" : "Copy"}
         </Button>
         <Button size="small" variant="ghost" onClick={onDismiss}>
           Done
         </Button>
       </div>
+      <p
+        role="status"
+        className={copied === "failed" ? "text-sm text-destructive" : "text-sm text-success"}
+      >
+        {copied === "copied" && "Copied to clipboard."}
+        {copied === "failed" &&
+          "Copying is not available here. The key is selected; press ⌘C or Ctrl+C to copy it."}
+      </p>
     </section>
   );
+}
+
+/** Clipboard API first (secure contexts only), then the selection-based command older pages use. */
+async function copyText(text: string, node: HTMLElement | null): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the selection-based copy
+  }
+  try {
+    if (!selectContents(node)) return false;
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  }
+}
+
+function selectContents(node: HTMLElement | null): boolean {
+  const selection = window.getSelection();
+  if (!node || !selection) return false;
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
 }
 
 function KeyTable({
