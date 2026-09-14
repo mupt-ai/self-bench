@@ -37,7 +37,7 @@ export function ParetoChart({
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-frontier:#8ee6bd] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)] [&>text[font-size='14']]:text-[18px] [&>text[font-size='14']]:tracking-normal [&_polyline]:opacity-50 [&_polyline]:[stroke-dasharray:3_6] [&_polyline]:[stroke-width:1] [&_circle[role='button'][r='6']]:[r:4] [&_circle[role='button'][r='5']]:[r:3.5] [&_circle[role='button'][r='8']]:[r:5] [&_circle[role='button'][r='8']]:stroke-[#8ee6bd] [&_circle[role='button'][r='8']]:[stroke-width:1]"
+            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)]"
             title={width < 640 ? "Accuracy vs. Cost" : "Accuracy versus Cost per Task"}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
