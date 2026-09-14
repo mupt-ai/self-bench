@@ -6,7 +6,7 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0";
+  "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
 export const buttonStyles = {
   primary: cn(
     buttonBase,

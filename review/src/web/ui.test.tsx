@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Button, buttonStyles } from "./ui";
 
-test("button links carry the same dimensions and icon sizing as buttons", () => {
+test("button links carry the same dimensions as buttons without overriding icon sizes", () => {
   for (const style of Object.values(buttonStyles)) {
     expect(style.split(" ")).toContain("h-9");
     expect(style.split(" ")).toContain("px-3");
     expect(style.split(" ")).toContain("gap-2");
-    expect(style).toContain("[&>svg]:size-4");
+    expect(style).not.toContain("[&>svg]:size-4");
   }
 });
 

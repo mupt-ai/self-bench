@@ -88,7 +88,7 @@ export function GenerateBatch({
           setOpen(true);
         }}
       >
-        <Layers aria-hidden="true" />
+        <Layers className="size-4" aria-hidden="true" />
         Generate Batch
       </Button>
       {open && (

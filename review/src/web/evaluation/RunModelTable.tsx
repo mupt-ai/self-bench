@@ -78,7 +78,7 @@ export function RunModelTable({
                 });
               }}
             >
-              <X aria-hidden="true" />
+              <X className="size-4" aria-hidden="true" />
             </Button>
           </section>
         );

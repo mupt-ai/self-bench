@@ -107,7 +107,7 @@ export function RunExecution({
           disabled={busy || (!submitted && !ready)}
           onClick={onSubmit}
         >
-          <Play aria-hidden="true" />
+          <Play className="size-4" aria-hidden="true" />
           {busy ? "Saving Comparison…" : submitted ? "Retry Same Comparison" : "Run Comparison"}
         </Button>
         {!ready && !submitted && (

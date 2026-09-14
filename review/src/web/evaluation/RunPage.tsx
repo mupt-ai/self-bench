@@ -226,7 +226,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
                 })
               }
             >
-              <Plus aria-hidden="true" />
+              <Plus className="size-4" aria-hidden="true" />
             </Button>
           </div>
           <RunModelTable
