@@ -31,6 +31,16 @@ test("one model row resolves its saved route and rejects unsupported thinking be
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(0);
     draft.models = [
+      {
+        catalogId: "openai-sol56",
+        credentialId: router,
+        harnesses: ["codex"],
+        thinking: "default",
+      },
+    ];
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    expect(fixture.starts).toHaveLength(0);
+    draft.models = [
       { catalogId: "openai-sol56", credentialId: router, harnesses: ["pi"], thinking: "xhigh" },
     ];
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
@@ -74,7 +84,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
       sandbox: "e2b",
       sandboxCredentialId,
       models: [
-        { ...selection, harnesses: ["codex"] },
+        { ...selection, harnesses: ["codex"], thinking: "low" },
         { ...selection, harnesses: ["mini-swe-agent"] },
       ],
     };
@@ -86,7 +96,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
       harnesses: ["mini-swe-agent"],
     });
     draft.id = crypto.randomUUID();
-    draft.models[1] = { ...selection, harnesses: ["codex"] };
+    draft.models[1] = { ...selection, harnesses: ["codex"], thinking: "low" };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(2);
     draft.models[1] = { ...selection, harnesses: ["codex"], thinking: "high" };

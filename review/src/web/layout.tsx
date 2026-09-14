@@ -3,12 +3,12 @@ import type { ComponentProps, ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "./primitives/cn";
 
-export const pageContainer = "mx-auto w-full min-w-0 max-w-[1440px]";
-export const pageGutter = "px-4 sm:px-6 lg:px-8";
+export const pageContainer = "w-full min-w-0";
+export const pageGutter = "px-4 sm:px-6";
 
 export function PageFrame({ children, className, ...props }: ComponentProps<"main">) {
   return (
-    <main {...props} className={cn("w-full min-w-0 flex-1 py-6 pb-12", pageGutter, className)}>
+    <main {...props} className={cn("w-full min-w-0 flex-1 py-6", pageGutter, className)}>
       <div className={pageContainer}>{children}</div>
     </main>
   );
@@ -31,17 +31,21 @@ export function PageHeader({
 }) {
   return (
     <header
-      className={cn("mb-6 flex min-w-0 flex-wrap items-center justify-between gap-4", className)}
+      className={cn(
+        "mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        className,
+      )}
       data-slot="page-header"
     >
       <div className="min-w-0">
-        <h1 className="text-xl leading-7 font-medium tracking-tight text-foreground">{title}</h1>
-        {description && (
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-        )}
+        <h1 className="text-xl font-medium text-foreground">{title}</h1>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children && (
-        <div className="flex max-w-full flex-wrap items-center gap-2" data-slot="page-actions">
+        <div
+          className="flex w-full max-w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0"
+          data-slot="page-actions"
+        >
           {children}
         </div>
       )}
@@ -62,9 +66,7 @@ export function SectionHeader({
     <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
         <h2 className="text-sm leading-6 font-medium text-foreground">{title}</h2>
-        {description && (
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}
     </header>

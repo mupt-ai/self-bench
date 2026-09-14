@@ -1,7 +1,8 @@
+import { Maximize2, Minimize2 } from "lucide-react";
 import React from "react";
 import { DiffView } from "../components/DiffView";
 import { Block, Script } from "../components/Script";
-import { loading, notice, sheetBody, viewerButton, viewerLink } from "../components/viewer-ui";
+import { loading, notice, sheetBody, viewerIconButton, viewerLink } from "../components/viewer-ui";
 import { formatBytes } from "../lib/format";
 import { fileKind } from "../lib/task-model";
 
@@ -72,8 +73,14 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
           <span className="text-xs text-(--faint) site:hidden site:font-mono site:text-sm site:text-muted-foreground site:sm:inline">
             esc to close
           </span>
-          <button type="button" className={viewerButton} onClick={() => setFullscreen(false)}>
-            Exit Full Screen
+          <button
+            type="button"
+            className={viewerIconButton}
+            onClick={() => setFullscreen(false)}
+            aria-label="Exit Full Screen"
+            title="Exit Full Screen"
+          >
+            <Minimize2 aria-hidden="true" className="size-4" />
           </button>
         </div>
         <div className="overflow-auto px-6 pt-4 pb-10 [&_pre]:p-0 site:pb-4">{body}</div>
@@ -96,8 +103,14 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
         right={
           <span className="inline-flex items-baseline gap-3.5 site:items-center site:gap-3">
             <span>{stats}</span>
-            <button type="button" className={viewerLink} onClick={() => setFullscreen(true)}>
-              Full Screen
+            <button
+              type="button"
+              className="inline-flex size-8 cursor-pointer items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => setFullscreen(true)}
+              aria-label="Full Screen"
+              title="Full Screen"
+            >
+              <Maximize2 aria-hidden="true" className="size-4" />
             </button>
           </span>
         }

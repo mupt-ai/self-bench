@@ -6,18 +6,26 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap border px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-40 [&>svg]:size-4 [&>svg]:shrink-0";
-export const buttonStyles = {
-  primary: cn(buttonBase, "border-primary bg-primary text-primary-foreground hover:bg-primary/90"),
-  secondary: cn(buttonBase, "border-input bg-transparent text-foreground hover:bg-accent"),
-  ghost: cn(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
+const buttonVariants = {
+  primary: cn(
     buttonBase,
-    "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
+    "border border-primary bg-primary text-primary-foreground hover:bg-primary/90",
   ),
+  secondary: cn(buttonBase, "border border-border bg-transparent text-foreground hover:bg-accent"),
+  ghost: cn(buttonBase, "bg-transparent text-foreground hover:bg-accent"),
   destructive: cn(
     buttonBase,
-    "border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10",
+    "border border-destructive-background bg-destructive-background text-destructive-foreground hover:bg-destructive-background/90",
   ),
+};
+
+const standaloneButtonGeometry = "h-9 gap-2 px-3 py-2 [&>svg]:size-4 [&>svg]:shrink-0";
+export const buttonStyles = {
+  primary: cn(buttonVariants.primary, standaloneButtonGeometry),
+  secondary: cn(buttonVariants.secondary, standaloneButtonGeometry),
+  ghost: cn(buttonVariants.ghost, standaloneButtonGeometry),
+  destructive: cn(buttonVariants.destructive, standaloneButtonGeometry),
 };
 
 export function Button({
@@ -35,9 +43,10 @@ export function Button({
       type={type}
       {...props}
       className={cn(
-        buttonStyles[variant],
-        size === "small" && "h-8 px-2 text-xs",
-        size === "icon" && "size-9 p-0",
+        buttonVariants[variant],
+        size === "default" && "h-9 px-3 py-2",
+        size === "small" && "h-8 px-3 text-xs",
+        size === "icon" && "h-9 w-9",
         className,
       )}
     />

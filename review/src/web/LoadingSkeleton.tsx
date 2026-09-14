@@ -2,7 +2,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`block animate-pulse bg-accent motion-reduce:animate-none ${className}`}
+      className={`block animate-pulse rounded-md bg-muted motion-reduce:animate-none ${className}`}
     />
   );
 }
@@ -16,8 +16,8 @@ export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number
     >
       <span className="sr-only">{label}</span>
       {["first", "second", "third", "fourth"].slice(0, rows).map((key) => (
-        <div key={key} className="flex items-center gap-4 px-5 py-5" aria-hidden="true">
-          <Skeleton className="size-10 shrink-0" />
+        <div key={key} className="flex items-center gap-4 px-4 py-4" aria-hidden="true">
+          <Skeleton className="size-8 shrink-0" />
           <div className="min-w-0 flex-1 space-y-3">
             <Skeleton className="h-3.5 w-36 max-w-full" />
             <Skeleton className="h-3 w-56 max-w-full" />
@@ -31,11 +31,11 @@ export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number
 
 export function SiteSkeleton() {
   return (
-    <div className="min-h-screen lg:pl-60" role="status" aria-label="Loading Workspace">
+    <div className="min-h-screen md:pl-64" role="status" aria-label="Loading Workspace">
       <span className="sr-only">Loading workspace…</span>
       <aside
         aria-hidden="true"
-        className="fixed inset-y-0 left-0 hidden w-60 space-y-6 border-r border-border bg-card p-6 lg:block"
+        className="fixed inset-y-0 left-0 hidden w-64 space-y-6 border-r border-border bg-background p-4 md:block"
       >
         <Skeleton className="h-8 w-36" />
         <Skeleton className="h-10 w-full" />
@@ -44,11 +44,11 @@ export function SiteSkeleton() {
       </aside>
       <div
         aria-hidden="true"
-        className="flex h-14 items-center justify-end border-b border-border px-8"
+        className="flex h-14 items-center justify-end border-b border-border px-6"
       >
         <Skeleton className="size-7" />
       </div>
-      <div className="space-y-7 px-4 py-8 sm:px-8" aria-hidden="true">
+      <div className="space-y-6 px-6 py-6" aria-hidden="true">
         <Skeleton className="h-6 w-52" />
         <Skeleton className="h-4 w-80 max-w-full" />
         <ListSkeleton label="Loading Content" />

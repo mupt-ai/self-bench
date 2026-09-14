@@ -25,7 +25,7 @@ export function CredentialGroup({
   onDelete(credential: CredentialInfo): void;
 }) {
   return (
-    <section aria-label={title}>
+    <section className="min-w-0" aria-label={title}>
       <SectionHeader
         title={
           <>
@@ -39,8 +39,8 @@ export function CredentialGroup({
         }
       >
         {canManage && (
-          <Button variant="ghost" size="small" onClick={onAdd}>
-            <Plus aria-hidden="true" />
+          <Button size="small" onClick={onAdd}>
+            <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
             {sandbox ? "Add Sandbox" : "Add Provider"}
           </Button>
         )}

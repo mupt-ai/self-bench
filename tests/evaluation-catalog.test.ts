@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { catalog } from "../src/evaluation/catalog.js";
+import { type CatalogModel, catalog } from "../src/evaluation/catalog.js";
 import { withReferencePricing } from "../src/evaluation/catalog-pricing.js";
+import { harnessIds } from "../src/evaluation/harnesses.js";
 import {
   modelRoutes,
   thinkingArguments,
@@ -23,6 +24,24 @@ test("current catalog exposes explicit model IDs and dated provider pricing", ()
     cacheRead: 0.25,
     cacheWrite: 12.5,
     asOf: "2026-09-06",
+  });
+});
+
+test.each([
+  ["router-glm53flash", "z-ai/glm-5.3-flash"],
+  ["router-deepseek41flash", "deepseek/deepseek-v4.1-flash"],
+  ["router-deepseek4flash0731", "deepseek/deepseek-v4-flash-0731"],
+  ["router-minimax3", "minimax/minimax-m3"],
+])("lower-cost catalog model %s preserves its OpenRouter ID and all harnesses", (id, modelId) => {
+  const model = catalog.find((entry) => entry.id === id);
+  if (!model) throw new Error(`Missing model ${id}`);
+  expect(model.provider).toBe("openrouter");
+  expect(model.model).toBe(modelId);
+  expect(modelRoutes(model)).toHaveLength(1);
+  expect(modelRoutes(model)[0]).toMatchObject({
+    provider: "openrouter",
+    model: modelId,
+    harnesses: [...harnessIds],
   });
 });
 
@@ -55,3 +74,31 @@ test("thinking levels reach the actual Harbor harness flags without changing mod
   expect(thinkingArguments("pi", "high")).toEqual(["--agent-kwarg", "thinking=high"]);
   expect(thinkingArguments("pi", "default")).toEqual([]);
 });
+
+test("custom endpoints only offer default thinking whatever model ID is typed", () => {
+  const custom: Omit<CatalogModel, "model"> = {
+    id: "custom",
+    label: "Custom model",
+    source: "",
+    provider: "custom",
+    harnesses: ["pi"],
+  };
+  expect(thinkingOptions({ ...custom, model: "" }, ["pi"])).toEqual(["default"]);
+  expect(thinkingOptions({ ...custom, model: "z-ai/glm-5.3" }, ["pi"])).toEqual(["default"]);
+});
+
+test.each([
+  ["router-glm53flash", ["low", "high", "max"]],
+  ["router-deepseek4flash0731", ["off", "low", "high", "max"]],
+  ["router-deepseek41flash", ["off", "low", "high", "xhigh", "max"]],
+] as const)(
+  "%s exposes its reasoning levels independently of gateway ID mappings",
+  (id, levels) => {
+    const model = catalog.find((entry) => entry.id === id);
+    if (!model) throw new Error(`Missing model ${id}`);
+    expect(thinkingOptions(model, ["codex"])).toEqual([...levels]);
+    expect(thinkingOptions(model, ["pi"])).toEqual(levels.filter((level) => level !== "max"));
+    expect(thinkingOptions(model, ["mini-swe-agent"])).toEqual(["default"]);
+    expect(thinkingOptions(model, ["terminus-2"])).toEqual(["default"]);
+  },
+);

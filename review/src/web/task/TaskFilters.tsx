@@ -26,7 +26,7 @@ export function TaskFilters({
   const statusId = useId();
   return (
     <div className="border-b border-border">
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput
           className="w-full sm:max-w-80"
           placeholder="Search Tasks…"

@@ -9,7 +9,15 @@ function PageContent() {
   return <h1>Page content for {org.login}</h1>;
 }
 
-for (const section of ["", "/run", "/results", "/settings/credentials", "/comparisons/example"]) {
+for (const section of [
+  "",
+  "/batches",
+  "/batches/example",
+  "/run",
+  "/results",
+  "/settings/credentials",
+  "/comparisons/example",
+]) {
   test(`repository layout owns one breadcrumb and navigation on ${section || "dataset"}`, () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={[`/repos/mupt-ai/self-bench${section}`]}>
@@ -26,6 +34,12 @@ for (const section of ["", "/run", "/results", "/settings/credentials", "/compar
     expect(html.match(/aria-label="Breadcrumb"/g)).toHaveLength(1);
     expect(html.match(/aria-label="Repository Sections"/g)).toHaveLength(1);
     expect(html.match(/<main/g)).toHaveLength(1);
+    expect(html).toContain("h-full min-h-0 min-w-0 flex-col overflow-hidden");
+    expect(html).not.toContain("dvh");
+    expect(html).toContain("min-h-0 flex-1 overflow-y-auto");
+    expect(html.indexOf('data-slot="repository-content"')).toBeGreaterThan(
+      html.indexOf("</nav>", html.indexOf('aria-label="Repository Sections"')),
+    );
     expect(html).toContain("mupt-ai/self-bench");
     expect(html).toContain("Page content for mupt-ai");
     expect(html).not.toContain('href="/repos/mupt-ai/self-bench/dataset"');

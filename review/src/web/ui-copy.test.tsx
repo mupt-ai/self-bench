@@ -44,12 +44,14 @@ test("settings and results use consistent action, section and table labels", () 
   expect(settings).not.toContain("Import Previous Setups");
   const results = renderPage(<EvaluationPage />);
   expect(results).toContain("Compare your runs. Inspect what the solver did.");
-  expect(results).toContain("Accuracy vs. Estimated Cost");
+  expect(results).toContain('aria-label="Accuracy versus Cost"');
+  expect(results).not.toContain("Accuracy vs. Estimated Cost");
 });
 
 test("sign-in labels preserve product spelling and short prepositions", () => {
   const html = renderPage(<LoginPage />);
   expect(html).toContain("Continue with GitHub");
+  expect(html).toContain('class="size-4 shrink-0" width="16" height="16"');
   expect(html).toContain("self-bench</h1>");
   expect(html).toContain('href="/auth/github"');
   expect(html).not.toContain("Build verified coding tasks");
