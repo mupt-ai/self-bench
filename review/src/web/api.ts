@@ -28,7 +28,7 @@ export interface ConnectedRepo {
   connectedAt: string;
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: { accept: "application/json", ...init?.headers },

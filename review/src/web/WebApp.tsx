@@ -22,6 +22,7 @@ import {
   type SessionState,
   useSession,
 } from "./session";
+import { ApiKeysPage } from "./settings/ApiKeysPage";
 
 /**
  * selfbench.dev. One session probe on boot decides between the login page and the shell;
@@ -61,6 +62,7 @@ export function WebApp() {
               <Route element={<RequireUser />}>
                 <Route index element={<ReposPage />} />
                 <Route path="settings/credentials" element={<CredentialsPage />} />
+                <Route path="settings/api-keys" element={<ApiKeysPage />} />
                 <Route path="repos/:owner/:name" element={<RepoLayout />}>
                   <Route index element={<RepoPage />} />
                   <Route path="batches" element={<BatchesPage />} />

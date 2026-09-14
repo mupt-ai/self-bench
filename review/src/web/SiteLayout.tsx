@@ -56,7 +56,7 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
     rememberOrg(next.login);
     setOrg(next);
     setMenuOpen(false);
-    if (location.pathname !== "/" && location.pathname !== "/settings/credentials")
+    if (location.pathname !== "/" && !location.pathname.startsWith("/settings/"))
       void navigate("/");
   };
   return (

@@ -1,4 +1,4 @@
-import { FolderGit2, LockKeyhole, X } from "lucide-react";
+import { FolderGit2, KeyRound, LockKeyhole, X } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
@@ -58,7 +58,10 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/")}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/settings/credentials")}
+                  >
                     <Link
                       to="/settings/credentials"
                       onClick={onNavigate}
@@ -67,6 +70,19 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
                     >
                       <LockKeyhole />
                       {!collapsed && <span>Credentials</span>}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/api-keys")}>
+                    <Link
+                      to="/settings/api-keys"
+                      onClick={onNavigate}
+                      aria-label="API Keys"
+                      title="API Keys"
+                    >
+                      <KeyRound />
+                      {!collapsed && <span>API Keys</span>}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
