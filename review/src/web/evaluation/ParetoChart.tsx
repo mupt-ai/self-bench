@@ -23,7 +23,7 @@ export function ParetoChart({
   return (
     <section
       ref={container}
-      className="border border-border bg-background p-4 sm:p-6 [&_footer]:mt-2.5 [&_footer]:font-mono [&_footer]:text-xs [&_footer]:text-muted-foreground"
+      className="border border-border bg-background p-4 sm:p-6"
       aria-label="Accuracy versus Cost"
     >
       {!points.length ? (
@@ -37,11 +37,11 @@ export function ParetoChart({
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:var(--mono)]"
+            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:'DM_Mono',var(--mono)]"
             title={width < 640 ? "Accuracy vs. Cost" : "Accuracy versus Cost per Task"}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
-            height={width < 640 ? 300 : Math.min(520, Math.max(380, width * 0.45))}
+            height={width < 640 ? 300 : Math.round(Math.min(520, Math.max(380, width * 0.55)))}
             showLegend={width >= 640}
             points={points.map((point) => ({
               id: point.id,
@@ -60,8 +60,8 @@ export function ParetoChart({
             yAxis={{
               label: "Accuracy",
               objective: "maximize",
-              domain: [0, 100],
-              format: (value) => `${value.toFixed(0)}%`,
+              // Auto range leaves headroom above the top point; never label past 100%.
+              format: (value) => (value > 100 ? "" : `${value.toFixed(0)}%`),
             }}
             showPointLabels={width < 640 ? "none" : "frontier"}
             onSelect={(selected) => {
@@ -71,9 +71,6 @@ export function ParetoChart({
           />
         </div>
       )}
-      <footer>
-        Estimated token cost, not an invoice. Sandbox costs excluded. Hover or focus for details.
-      </footer>
     </section>
   );
 }

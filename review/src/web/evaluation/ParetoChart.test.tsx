@@ -31,7 +31,7 @@ test("Pareto charts rely on the package defaults and only map app theme tokens",
     />,
   );
   expect(html).toContain("[--pareto-background:var(--background)]");
-  expect(html).toContain("[--pareto-font-family:var(--mono)]");
+  expect(html).toContain("[--pareto-font-family:&#x27;DM_Mono&#x27;,var(--mono)]");
   expect(html).not.toContain("[--pareto-frontier");
   expect(html).not.toContain("var(--brand)");
   expect(html).not.toContain("[&amp;_polyline]");
@@ -39,7 +39,9 @@ test("Pareto charts rely on the package defaults and only map app theme tokens",
   expect(html).not.toContain("[&amp;&gt;text");
   expect(html).not.toContain("Accuracy vs. Estimated Cost");
   expect(html).not.toContain("same dataset");
-  expect(html).toContain('height="468"');
+  expect(html).toContain('height="520"');
+  expect(html).not.toContain("Estimated token cost");
+  expect(html).not.toContain("<footer");
   expect(html).toContain(">Model</text>");
   // Quiet dashed frontier and mint hover ship with dari-pareto >= 0.2.0.
   expect(html).toContain('stroke-dasharray="4 5"');
