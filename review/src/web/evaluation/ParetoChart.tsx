@@ -38,7 +38,7 @@ export function ParetoChart({
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
             className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:'DM_Mono',var(--mono)] [&>text[font-size='14']]:text-[17px] [&_text[font-size='11']]:text-[13px] [&_text[font-size='10']]:text-[12px] [&_text[font-size='8']]:text-[10px]"
-            title={width < 640 ? "Model comparison" : "Model Comparison"}
+            title="Model Comparison"
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
             height={width < 640 ? 300 : Math.round(Math.min(520, Math.max(380, width * 0.55)))}
