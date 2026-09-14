@@ -1,3 +1,4 @@
+import { Check, CircleX } from "lucide-react";
 import React from "react";
 import { clearReview, formatAgo, putReview, type TaskItem } from "../api";
 import { Button, Input } from "../ui";
@@ -53,28 +54,33 @@ export function ReviewBar({
 
   if (task.review) {
     return (
-      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 border border-border bg-background px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <span
-            className={
-              task.review.decision === "approve"
-                ? "text-xs text-success uppercase"
-                : "text-xs text-destructive uppercase"
-            }
+            className={`inline-flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase ${
+              task.review.decision === "approve" ? "text-success" : "text-destructive"
+            }`}
           >
+            {task.review.decision === "approve" ? (
+              <Check aria-hidden="true" className="size-3.5" strokeWidth={2.5} />
+            ) : (
+              <CircleX aria-hidden="true" className="size-3.5" strokeWidth={2} />
+            )}
             {task.review.decision === "approve" ? "Approved" : "Rejected"}
           </span>
-          <span className="text-sm text-muted-foreground">
-            by <span className="font-mono">{task.review.decidedBy}</span>{" "}
-            {formatAgo(task.review.decidedAt)}
+          <span className="text-xs text-muted-foreground">
+            {task.review.decidedBy} · {formatAgo(task.review.decidedAt)}
           </span>
           {task.review.note && (
-            <span className="max-w-[40ch] truncate text-sm text-foreground">
+            <span
+              className="max-w-[40ch] truncate text-sm text-foreground"
+              title={task.review.note}
+            >
               “{task.review.note}”
             </span>
           )}
         </div>
-        <Button type="button" variant="ghost" disabled={busy} onClick={clear}>
+        <Button type="button" variant="ghost" size="small" disabled={busy} onClick={clear}>
           Clear Decision
         </Button>
         {error && <span className="font-mono text-sm text-destructive">{error}</span>}
