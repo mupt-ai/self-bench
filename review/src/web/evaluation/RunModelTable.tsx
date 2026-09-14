@@ -1,8 +1,10 @@
+import { X } from "lucide-react";
+import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { routeFor } from "../../../../src/evaluation/model-options";
-import { Button } from "../ui";
+import { Button, Notice } from "../ui";
+import { hasModelSelection } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
 
 export function RunModelTable({
@@ -16,47 +18,71 @@ export function RunModelTable({
   draft: ComparisonDraft;
   onChange(value: ComparisonDraft): void;
 }) {
+  const [error, setError] = useState("");
   return (
-    <div className="space-y-1">
-      {models.map((model, index) => (
-        <section
-          key={`${model.id}-${draft.models[index]?.harnesses.join("+")}`}
-          className="relative border border-border bg-card"
-        >
-          <RunModelRow
-            model={model}
-            credentials={credentials.filter((credential) => routeFor(model, credential.kind))}
-            selection={draft.models[index]}
-            onChange={(selection) =>
-              onChange({
-                ...draft,
-                models: draft.models.map((entry, position) =>
-                  position === index ? selection : entry,
-                ),
-              })
-            }
-          />
-          <Button
-            type="button"
-            size="small"
-            className="absolute right-2 top-2 border-transparent! text-muted-foreground hover:text-foreground"
-            aria-label={`Remove ${model.label}`}
-            onClick={() =>
-              onChange({
-                ...draft,
-                models: draft.models.filter((_entry, position) => position !== index),
-              })
-            }
+    <div className="divide-y divide-border">
+      {error && <Notice>{error}</Notice>}
+      {draft.models.map((selected, index) => {
+        const model: CatalogModel = models.find((entry) => entry.id === selected.catalogId) ?? {
+          id: selected.catalogId,
+          label: "Model",
+          provider: "custom",
+          model: "",
+          harnesses: [],
+          source: "",
+        };
+        return (
+          <section
+            key={`${model.id}-${draft.models[index]?.harnesses.join("+")}-${draft.models[index]?.thinking ?? "auto"}`}
+            className="relative min-w-0 bg-card"
           >
-            ×
-          </Button>
-        </section>
-      ))}
-      {!models.length && (
-        <p className="flex min-h-40 items-center justify-center border border-dashed border-border p-6 text-sm text-muted-foreground">
-          Add a model to get started.
-        </p>
-      )}
+            <RunModelRow
+              model={model}
+              models={models}
+              credentials={credentials}
+              selection={draft.models[index]}
+              onChange={(selection) => {
+                if (
+                  hasModelSelection(
+                    models.find((entry) => entry.id === selection.catalogId) ?? model,
+                    draft.models.filter((_entry, position) => position !== index),
+                    selection,
+                  )
+                ) {
+                  setError("That model, thinking level, and harness are already added.");
+                  return;
+                }
+                setError("");
+                onChange({
+                  ...draft,
+                  models: draft.models.map((entry, position) =>
+                    position === index ? selection : entry,
+                  ),
+                });
+              }}
+            />
+            <Button
+              type="button"
+              size="small"
+              variant="ghost"
+              className="absolute right-2 bottom-3 h-9 w-8 px-0 text-muted-foreground hover:text-foreground"
+              aria-label={`Remove ${model.label}`}
+              onClick={() => {
+                setError("");
+                onChange({
+                  ...draft,
+                  models:
+                    draft.models.length === 1
+                      ? [{ catalogId: "", credentialId: "", harnesses: [] }]
+                      : draft.models.filter((_entry, position) => position !== index),
+                });
+              }}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </section>
+        );
+      })}
     </div>
   );
 }

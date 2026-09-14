@@ -9,18 +9,21 @@ import {
 } from "../../../../src/evaluation/model-options";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
+import { nextModelSelection } from "./model-selection";
 
-const mobileLabel = "sr-only";
+const mobileLabel = "mb-2 block text-xs text-muted-foreground";
 
 type ModelSelection = ComparisonDraft["models"][number];
 
 export function RunModelRow({
   model,
+  models = [model],
   credentials,
   selection,
   onChange,
 }: {
   model: CatalogModel;
+  models?: CatalogModel[];
   credentials: CredentialInfo[];
   selection?: ModelSelection;
   onChange(value: ModelSelection): void;
@@ -52,11 +55,39 @@ export function RunModelRow({
     (credential?.auth !== "codex-login" || harness === "codex");
 
   return (
-    <div className="grid items-center gap-2 px-3 py-2 pr-10 grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_170px_160px]">
-      <div className="min-w-0 self-center">
-        <strong className="block truncate text-sm font-medium" title={model.label}>
-          {model.label}
-        </strong>
+    <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
+      <div className="min-w-0 sm:col-span-3 xl:col-span-1">
+        <span className={mobileLabel}>Model</span>
+        <Select
+          className="text-xs md:text-xs"
+          aria-label="Model"
+          value={selected.catalogId}
+          onChange={(event) => {
+            const nextModel = models.find((entry) => entry.id === event.target.value);
+            if (!nextModel) return;
+            const next = nextModelSelection(nextModel, credentials, selected.harnesses[0]) ??
+              nextModelSelection(nextModel, credentials) ?? {
+                catalogId: nextModel.id,
+                credentialId: "",
+                harnesses: [],
+              };
+            if (
+              selected.thinking &&
+              thinkingOptions(nextModel, next.harnesses).includes(selected.thinking)
+            )
+              next.thinking = selected.thinking;
+            onChange(next);
+          }}
+        >
+          <option value="" disabled>
+            Select Model
+          </option>
+          {models.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
+        </Select>
         {model.id === "custom" && (
           <Input
             aria-label="Custom Model ID"
@@ -69,24 +100,28 @@ export function RunModelRow({
       <div className="min-w-0">
         <span className={mobileLabel}>Credential</span>
         <Select
-          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
+          className="text-xs md:text-xs"
           aria-label={`${model.label} Credential`}
+          disabled={!selected.catalogId}
           value={selected.credentialId}
           onChange={(event) => selectCredential(event.target.value)}
         >
           <option value="">Select Credential</option>
-          {credentials.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name}
-            </option>
-          ))}
+          {credentials
+            .filter((entry) => routeFor(model, entry.kind))
+            .map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
         </Select>
       </div>
       <div className="min-w-0">
         <span className={mobileLabel}>Reasoning</span>
         <Select
-          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
+          className="text-xs md:text-xs"
           aria-label={`${model.label} Thinking Level`}
+          disabled={!selected.catalogId}
           value={thinking}
           onChange={(event) => {
             const level = thinkingLevels.find((value) => value === event.target.value);
@@ -100,7 +135,6 @@ export function RunModelRow({
           )}
           {levels.map((level) => (
             <option key={level} value={level}>
-              Thinking:{" "}
               {level === "default"
                 ? "Default"
                 : level === "xhigh"
@@ -113,8 +147,9 @@ export function RunModelRow({
       <div className="min-w-0">
         <span className={mobileLabel}>Harness</span>
         <Select
-          className="h-8! border-transparent! bg-transparent! pl-2! pr-7! text-xs! hover:bg-muted!"
+          className="text-xs md:text-xs"
           aria-label={`${model.label} Harness`}
+          disabled={!selected.catalogId}
           value={selected.harnesses.length > 1 ? "multiple" : (selected.harnesses[0] ?? "")}
           onChange={(event) =>
             onChange({

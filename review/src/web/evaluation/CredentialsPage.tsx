@@ -98,7 +98,7 @@ function CredentialsContent({ org }: { org: string }) {
         <p className="mb-6 text-sm text-muted-foreground">Only admins can manage credentials.</p>
       )}
       {(!error || data) && (
-        <div className="space-y-8">
+        <div className="grid items-start gap-6 lg:grid-cols-2">
           <CredentialGroup
             {...groupProps}
             title="Model Providers"

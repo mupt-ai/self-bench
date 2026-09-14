@@ -1,3 +1,4 @@
+import { ArrowRight, Database, Plus } from "lucide-react";
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
@@ -6,10 +7,10 @@ import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, fieldStyles, Notice, PageContent, PageHeader, Select } from "../ui";
+import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
-import { RunModelPicker } from "./RunModelPicker";
+import { RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
@@ -33,8 +34,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [sandboxes, setSandboxes] = React.useState<HostedSandbox[]>([]);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
-  const [picking, setPicking] = React.useState(false);
-  const [query, setQuery] = React.useState("");
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [tasksReady, setTasksReady] = React.useState(false);
@@ -102,6 +101,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const ready =
     tasksReady &&
     selected.length > 0 &&
+    selected.length === draft.models.length &&
     selected.length <= 12 &&
     credentials.some(
       (credential) =>
@@ -154,7 +154,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     <PageContent>
       <PageHeader
         title="Run"
-        description={`${draft.tasks.length} accepted ${draft.tasks.length === 1 ? "task" : "tasks"}`}
+        description="Compare models and harnesses against your accepted tasks."
       />
       {state.submitted && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-border bg-card p-4">
@@ -177,121 +177,78 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         </div>
       )}
       {error && <Notice className="mb-4">{error}</Notice>}
-      {!draft.tasks.length && (
-        <Link to={`/repos/${repo}`}>No accepted tasks yet. Review Dataset →</Link>
-      )}
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <fieldset className="min-w-0 border-0 p-0" disabled={busy || state.submitted}>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-medium">Models and Harnesses</h2>
-            <Button type="button" onClick={() => setPicking(!picking)} aria-expanded={picking}>
-              + Add Model / Harness
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">
+              {draft.tasks.length} {draft.tasks.length === 1 ? "Accepted Task" : "Accepted Tasks"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {draft.tasks.length
+                ? "Each configuration runs against the same dataset."
+                : "Accept tasks in your dataset before starting a comparison."}
+            </p>
+          </div>
+        </div>
+        <Link
+          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+          to={`/repos/${repo}`}
+        >
+          Review Dataset <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <fieldset
+          className="min-w-0 border border-border bg-card p-0"
+          disabled={busy || state.submitted}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div>
+              <h2 className="text-sm font-medium">Models and Harnesses</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {draft.models.length} of 12 configurations
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              aria-label="Add Model"
+              title="Add Model"
+              disabled={draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)}
+              onClick={() =>
+                setState({
+                  draft: {
+                    ...draft,
+                    models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
+                  },
+                  submitted: false,
+                })
+              }
+            >
+              <Plus aria-hidden="true" />
             </Button>
           </div>
-          <RunModelPicker
-            picking={picking}
-            visible={[...models, custom]}
-            draft={draft}
-            credentials={credentials}
-            query={query}
-            setQuery={setQuery}
-            setPicking={setPicking}
-            state={state}
-            setState={setState}
-          />
           <RunModelTable
-            models={draft.models
-              .map((selection) =>
-                [...models, custom].find((model) => model.id === selection.catalogId),
-              )
-              .filter((model): model is CatalogModel => !!model)}
+            models={[...models, custom]}
             credentials={credentials}
             draft={draft}
             onChange={(value) => setState({ draft: value, submitted: false })}
           />
         </fieldset>
-        <aside className="border border-border bg-card p-5">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-sm font-medium">Execution</h2>
-            <Link
-              className="text-xs text-muted-foreground hover:text-foreground"
-              to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
-            >
-              Credentials
-            </Link>
-          </div>
-          <fieldset className="grid min-w-0 gap-4 border-0 p-0" disabled={busy || state.submitted}>
-            <label className={fieldStyles} htmlFor="runpage-field-0">
-              Sandbox
-              <Select
-                id="runpage-field-0"
-                aria-label="Sandbox"
-                value={draft.sandbox}
-                onChange={(event) =>
-                  setState({
-                    ...state,
-                    draft: {
-                      ...draft,
-                      sandbox: event.target.value as HostedSandbox,
-                      sandboxCredentialId: "",
-                    },
-                  })
-                }
-              >
-                {sandboxes.map((sandbox) => (
-                  <option key={sandbox} value={sandbox}>
-                    {sandbox === "e2b" ? "E2B" : sandbox === "modal" ? "Modal" : "Daytona"}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className={fieldStyles} htmlFor="runpage-field-1">
-              Sandbox Credential
-              <Select
-                id="runpage-field-1"
-                aria-label="Sandbox Credential"
-                value={draft.sandboxCredentialId}
-                onChange={(event) =>
-                  setState({
-                    ...state,
-                    draft: { ...draft, sandboxCredentialId: event.target.value },
-                  })
-                }
-              >
-                <option value="">Select Credential</option>
-                {credentials
-                  .filter((entry) => entry.kind === draft.sandbox)
-                  .map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </option>
-                  ))}
-              </Select>
-            </label>
-          </fieldset>
-          <div className="mt-5 border-t border-border pt-4">
-            <div className="mb-4 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Trials</span>
-              <span>{pairs * draft.tasks.length}</span>
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              className="w-full"
-              disabled={busy || (!state.submitted && !ready)}
-              onClick={() => void submit()}
-            >
-              {busy
-                ? "Saving Comparison…"
-                : state.submitted
-                  ? "Retry Same Comparison"
-                  : "Run Comparison"}
-            </Button>
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              Model and sandbox usage is billed by your providers.
-            </p>
-          </div>
-        </aside>
+        <RunExecution
+          repo={repo}
+          draft={draft}
+          credentials={credentials}
+          sandboxes={sandboxes}
+          submitted={state.submitted}
+          busy={busy}
+          ready={ready}
+          tasksReady={tasksReady}
+          pairs={pairs}
+          onChange={(value) => setState({ ...state, draft: value })}
+          onSubmit={() => void submit()}
+        />
       </div>
     </PageContent>
   );

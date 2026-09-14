@@ -38,6 +38,7 @@ export function BatchPage() {
           ) : undefined
         }
       >
+        {status && <BatchState phase={status.phase} />}
         {status && !batchIsTerminal(status.phase) && (
           <CancelBatch key={batchId} repoId={repoId} runId={batchId} onCancelled={refresh} />
         )}
@@ -65,12 +66,6 @@ export function BatchPage() {
       {run && !status && !statusError && <ListSkeleton label="Loading Batch Status" />}
       {run && status && (
         <>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <BatchState phase={status.phase} />
-            {!batchIsTerminal(status.phase) && (
-              <span className="text-xs text-muted-foreground">Updates Automatically</span>
-            )}
-          </div>
           {status.activity && (
             <div
               className="mb-4 border-l-2 border-brand bg-brand/5 px-4 py-3 text-sm"
@@ -85,7 +80,7 @@ export function BatchPage() {
         </>
       )}
       {run && (
-        <dl className="mt-8 border-t border-border pt-4 text-xs text-muted-foreground">
+        <dl className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
           <dt className="mb-1">Batch ID</dt>
           <dd className="break-all select-all">{run.runId}</dd>
         </dl>

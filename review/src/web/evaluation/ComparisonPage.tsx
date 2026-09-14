@@ -77,12 +77,12 @@ export function ComparisonPage() {
         title="Comparison"
         description={
           status
-            ? `${status.runs.filter((run) => run.status === "running").length} running · ${status.runs.filter((run) => run.status === "queued" || run.status === "pending").length} waiting`
+            ? `${status.runs.filter((run) => run.status === "completed").length} of ${status.runs.length} runs complete · ${status.runs.filter((run) => run.status === "running").length} running · ${status.runs.filter((run) => run.status === "queued" || run.status === "pending").length} waiting`
             : ""
         }
       >
         <Link className={buttonStyles.secondary} to={`/repos/${repo}/results`}>
-          Scores & Pareto
+          View Results
         </Link>
       </PageHeader>
       {missing ? (
@@ -98,17 +98,17 @@ export function ComparisonPage() {
       {!status && !error && <p>Loading comparison…</p>}
       {status && (
         <>
-          <div className="space-y-3">
+          <div className="divide-y divide-border border border-border">
             {[...status.runs]
               .sort((a, b) => Number(b.status === "running") - Number(a.status === "running"))
               .map((run) => (
                 <Link
                   key={run.id}
                   to={`/repos/${repo}/results?run=${run.id}`}
-                  className={`block border border-border bg-card p-4 hover:bg-muted ${run.status === "running" ? "border-l-2 border-l-brand" : ""}`}
+                  className={`block min-w-0 bg-card px-4 py-3 hover:bg-muted ${run.status === "running" ? "border-l-2 border-l-brand" : ""}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-sm font-medium">{run.model}</h2>
+                    <h2 className="min-w-0 break-all text-sm font-medium">{run.model}</h2>
                     <span
                       className={
                         run.status === "running"

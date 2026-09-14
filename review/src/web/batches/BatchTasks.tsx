@@ -15,7 +15,7 @@ const taskLabels = {
 };
 export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName: string }) {
   return (
-    <section className="mt-8">
+    <section className="mt-6">
       <SectionHeader title="Tasks">
         <Link
           to={`/repos/${fullName}`}
@@ -38,7 +38,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
               <li key={task.candidateId}>
                 <Link
                   to={`/repos/${fullName}/tasks/${encodeURIComponent(status.runId)}/${encodeURIComponent(task.taskId)}`}
-                  className="grid items-center gap-3 px-4 py-4 hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_5rem_10rem]"
+                  className="grid items-center gap-3 px-4 py-3 hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_5rem_10rem]"
                 >
                   <span className="min-w-0">
                     <span className="block break-words text-sm">
@@ -75,7 +75,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
         </ul>
       ) : (
         <EmptyState
-          className="min-h-28 border-solid"
+          className="border-solid"
           title={
             status.tasks
               ? batchIsTerminal(status.phase)

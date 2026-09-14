@@ -19,13 +19,21 @@ test("model cards remain usable without credentials and never embed a table or s
         },
       ]}
       credentials={[]}
-      draft={{ id: "draft", tasks: [], models: [], sandbox: "e2b", sandboxCredentialId: "" }}
+      draft={{
+        id: "draft",
+        tasks: [],
+        models: [{ catalogId: "test", credentialId: "", harnesses: [] }],
+        sandbox: "e2b",
+        sandboxCredentialId: "",
+      }}
       onChange={() => {
         throw new Error("Render must not change selection");
       }}
     />,
   );
   expect(html).toContain("Test model");
+  expect(html).toContain('aria-label="Model"');
+  expect(html).not.toContain(">openai<");
   expect(html).not.toContain("<table");
   expect(html).toContain("Select Credential");
   expect(html).toContain("Credential");
@@ -33,6 +41,10 @@ test("model cards remain usable without credentials and never embed a table or s
   expect(html).toContain('aria-label="Test model Credential"');
   expect(html).toContain('aria-label="Test model Thinking Level"');
   expect(html).toContain("Harness");
+  expect(html).toContain("Reasoning");
+  expect(html).toContain("sm:grid-cols-3");
+  expect(html).not.toContain("border-transparent!");
+  expect(html).toContain('aria-label="Remove Test model"');
   expect(html).not.toContain("Shortlist");
   expect(html).not.toContain('type="password"');
 });

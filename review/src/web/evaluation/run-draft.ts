@@ -31,7 +31,12 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
   if (saved && selectedTasks === null) {
     try {
       const parsed = draftStateSchema.safeParse(JSON.parse(saved));
-      if (parsed.success) return parsed.data;
+      if (parsed.success) {
+        if (!parsed.data.draft.models.length) {
+          parsed.data.draft.models = [{ catalogId: "", credentialId: "", harnesses: [] }];
+        }
+        return parsed.data;
+      }
     } catch {}
   }
   let tasks: z.infer<typeof tasksSchema> = [];
@@ -46,7 +51,7 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
     draft: {
       id: evaluationRequestId(),
       tasks,
-      models: [],
+      models: [{ catalogId: "", credentialId: "", harnesses: [] }],
       sandbox: "e2b" as const,
       sandboxCredentialId: "",
     },

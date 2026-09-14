@@ -6,7 +6,9 @@ import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import {
   Button,
+  buttonStyles,
   DataTable,
+  EmptyState,
   Notice,
   PageContent,
   PageHeader,
@@ -98,6 +100,9 @@ export function EvaluationPage() {
   return (
     <PageContent>
       <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
+        <Link className={buttonStyles.primary} to={`/repos/${repo}/run`}>
+          New Comparison
+        </Link>
         {selectedId && (
           <Button type="button" variant="secondary" onClick={() => setSearch({})}>
             All Results
@@ -136,13 +141,13 @@ export function EvaluationPage() {
           )}
           <ParetoChart points={comparable} onSelect={(id) => setSearch({ run: id })} />
           <ComparisonHistory key={url} repo={repo} url={url} />
-          <section className="mt-8">
+          <section className="mt-6">
             <SectionHeader title="Runs" />
             {loading && !runs.length && !error && <ListSkeleton label="Loading Runs" />}
             {!loading && !runs.length && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                No runs yet. <Link to={`/repos/${repo}`}>Run Your Dataset →</Link>
-              </p>
+              <EmptyState title="No Runs Yet">
+                Choose models and a sandbox on the Run page to compare them against your dataset.
+              </EmptyState>
             )}
             {runs.length > 0 && (
               <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">

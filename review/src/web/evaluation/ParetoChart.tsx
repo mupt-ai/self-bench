@@ -15,7 +15,7 @@ export function ParetoChart({
   useEffect(() => {
     if (!container.current) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(Math.max(320, Math.min(1040, entry.contentRect.width)));
+      if (entry) setWidth(Math.max(320, entry.contentRect.width));
     });
     observer.observe(container.current);
     return () => observer.disconnect();
@@ -36,7 +36,7 @@ export function ParetoChart({
         )}
       </SectionHeader>
       {!points.length ? (
-        <div className="py-16 text-center text-muted-foreground [&_span]:mx-auto [&_span]:mt-3 [&_span]:block [&_span]:max-w-[440px] [&_span]:text-sm [&_span]:text-muted-foreground">
+        <div className="py-2 text-sm text-muted-foreground [&_span]:mt-2 [&_span]:block [&_span]:max-w-2xl [&_span]:text-xs [&_span]:leading-5">
           <p>Your completed runs appear here.</p>
           <span>
             Runs need complete scores, verified model usage, and a cost estimate. Missing costs
@@ -50,7 +50,7 @@ export function ParetoChart({
             title={width < 640 ? "Accuracy vs. Cost" : "Accuracy versus Cost per Task"}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
-            height={width < 640 ? 320 : 400}
+            height={width < 640 ? 280 : 320}
             showLegend={width >= 640}
             points={points.map((point) => ({
               id: point.id,

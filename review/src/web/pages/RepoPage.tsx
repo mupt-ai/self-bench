@@ -191,7 +191,7 @@ function RepoTasksPage() {
           <div role="alert">
             <EmptyState
               title="Could Not Load Tasks"
-              className="min-h-64 border-0 bg-transparent"
+              className="border-0 bg-transparent"
               action={<Button onClick={loadTasks}>Try Again</Button>}
             >
               {error}
@@ -199,14 +199,14 @@ function RepoTasksPage() {
           </div>
         )}
         {tasks !== null && tasks.length === 0 && (
-          <EmptyState title="No Tasks Yet" className="min-h-64 border-0 bg-transparent">
+          <EmptyState title="No Tasks Yet" className="border-0 bg-transparent">
             Add a PR to generate your first task.
           </EmptyState>
         )}
         {tasks !== null && tasks.length > 0 && visible.length === 0 && (
           <EmptyState
             title="No Matching Tasks"
-            className="min-h-64 border-0 bg-transparent"
+            className="border-0 bg-transparent"
             action={
               <Button
                 variant="ghost"
