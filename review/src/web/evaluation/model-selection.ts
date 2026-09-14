@@ -36,3 +36,13 @@ export function hasModelSelection(
       selection.harnesses.some((harness) => candidate.harnesses.includes(harness)),
   );
 }
+
+export function hasDuplicateModelSelections(
+  models: CatalogModel[],
+  selections: ComparisonDraft["models"],
+): boolean {
+  return selections.some((selection, index) => {
+    const model = models.find((entry) => entry.id === selection.catalogId);
+    return !!model && hasModelSelection(model, selections.slice(0, index), selection);
+  });
+}

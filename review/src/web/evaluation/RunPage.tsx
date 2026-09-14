@@ -10,6 +10,7 @@ import { useDocumentTitle } from "../session";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
+import { hasDuplicateModelSelections } from "./model-selection";
 import { RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { restoreRunDraft } from "./run-draft";
@@ -102,6 +103,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     tasksReady &&
     selected.length > 0 &&
     selected.length === draft.models.length &&
+    !hasDuplicateModelSelections([...models, custom], draft.models) &&
     selected.length <= 12 &&
     credentials.some(
       (credential) =>
@@ -126,7 +128,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       );
     });
   const submit = async () => {
-    if (busy) return;
+    if (busy || (!state.submitted && !ready)) return;
     setBusy(true);
     setError("");
     const frozen = state.submitted ? draft : { ...draft, models: selected };
