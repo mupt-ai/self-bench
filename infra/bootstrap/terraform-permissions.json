@@ -93,6 +93,8 @@
     "iap.tunnelInstances.setIamPolicy",
     "servicenetworking.services.addPeering",
     "artifactregistry.repositories.uploadArtifacts",
+    "artifactregistry.tags.get",
+    "artifactregistry.versions.get",
     "cloudsql.backupRuns.create",
     "cloudsql.backupRuns.get",
     "cloudsql.backupRuns.list",
