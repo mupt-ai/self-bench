@@ -377,7 +377,7 @@ Directories are recognized by a `task.toml` up to four levels deep, so an extrac
 
 ## HTTP API
 
-The CLI is the recommended client. The API exposes:
+The CLI is the recommended client for run workflows. Every site feature is also reachable over HTTP with a personal API key; see the [HTTP API reference](api.md) for the full route list and authentication. The run routes are:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -405,9 +405,11 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 | `GET` | `/auth/github` | Redirect to GitHub with a state cookie (scopes `read:user read:org repo`) |
 | `GET` | `/auth/github/callback` | Exchange the code, record the user and their org memberships, set the session cookie |
 | `POST` | `/auth/logout` | Clear the session cookie |
-| `GET` | `/api/me` | The signed-in user's login, name, and avatar |
+| `GET` | `/api/me` | The caller's login, name, avatar, organizations, and how they authenticated |
+| `*` | `/api/api-keys…` | Personal API keys: list, create (secret shown once), revoke |
+| `*` | `/api/orgs/:org/…` | Repositories, tasks, batches, evaluations, comparisons, and credentials; see the [API reference](api.md) |
 
-The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session or the bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. `self-bench view <dir>` never requires sign-in.
+The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
 
 Compose: put the three sign-in variables in `.env` and set `SELFBENCH_PUBLIC_URL` to the browser-facing origin. Register that origin with `/auth/github/callback` as the GitHub OAuth callback.
 

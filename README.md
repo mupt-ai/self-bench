@@ -213,6 +213,7 @@ bun run dev:review
 
 - [Task construction and validation](docs/task-construction.md)
 - [Running evaluations](docs/evaluations.md)
+- [HTTP API reference](docs/api.md)
 - [Operations and deployment](docs/operations.md)
 
 ## License
