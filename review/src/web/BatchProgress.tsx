@@ -11,7 +11,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
     : 0;
   return (
     <section className="border border-border bg-card" aria-label="Batch Progress">
-      <div className="border-b border-border p-4 sm:p-5">
+      <div className="border-b border-border px-4 py-3">
         <p
           className={cn(
             "max-w-3xl break-words text-sm leading-6",
@@ -33,7 +33,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
           <div
             key={label}
             className={cn(
-              "min-w-0 border-border px-4 py-5 sm:px-5",
+              "min-w-0 border-border px-4 py-4",
               index % 2 === 0 && "border-r border-border",
               index < 2 && "max-md:border-b",
               index === 1 && "md:border-r",

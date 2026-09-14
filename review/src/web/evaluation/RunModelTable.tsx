@@ -1,8 +1,11 @@
+import { X } from "lucide-react";
+import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { routeFor } from "../../../../src/evaluation/model-options";
-import { Button } from "../ui";
+import { Notice } from "../ui";
+import { evaluationRequestId } from "./api";
+import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
 
 export function RunModelTable({
@@ -16,47 +19,61 @@ export function RunModelTable({
   draft: ComparisonDraft;
   onChange(value: ComparisonDraft): void;
 }) {
+  const [rowKeys] = useState(() => new WeakMap<ComparisonDraft["models"][number], string>());
   return (
-    <div className="space-y-1">
-      {models.map((model, index) => (
-        <section
-          key={`${model.id}-${draft.models[index]?.harnesses.join("+")}`}
-          className="relative border border-border bg-card"
-        >
-          <RunModelRow
-            model={model}
-            credentials={credentials.filter((credential) => routeFor(model, credential.kind))}
-            selection={draft.models[index]}
-            onChange={(selection) =>
-              onChange({
-                ...draft,
-                models: draft.models.map((entry, position) =>
-                  position === index ? selection : entry,
-                ),
-              })
-            }
-          />
-          <Button
-            type="button"
-            size="small"
-            className="absolute right-2 top-2 border-transparent! text-muted-foreground hover:text-foreground"
-            aria-label={`Remove ${model.label}`}
-            onClick={() =>
-              onChange({
-                ...draft,
-                models: draft.models.filter((_entry, position) => position !== index),
-              })
-            }
-          >
-            ×
-          </Button>
-        </section>
-      ))}
-      {!models.length && (
-        <p className="flex min-h-40 items-center justify-center border border-dashed border-border p-6 text-sm text-muted-foreground">
-          Add a model to get started.
-        </p>
+    <div className="divide-y divide-border">
+      {hasDuplicateModelSelections(models, draft.models) && (
+        <Notice>
+          Duplicate configurations cannot run. Choose a different model, thinking level, or harness.
+        </Notice>
       )}
+      {draft.models.map((selected, index) => {
+        const rowKey = rowKeys.get(selected) ?? evaluationRequestId();
+        rowKeys.set(selected, rowKey);
+        const model: CatalogModel = models.find((entry) => entry.id === selected.catalogId) ?? {
+          id: selected.catalogId,
+          label: "Model",
+          provider: "custom",
+          model: "",
+          harnesses: [],
+          source: "",
+        };
+        return (
+          <section key={rowKey} className="relative min-w-0 bg-card">
+            <RunModelRow
+              model={model}
+              models={models}
+              credentials={credentials}
+              selection={draft.models[index]}
+              onChange={(selection) => {
+                rowKeys.set(selection, rowKey);
+                onChange({
+                  ...draft,
+                  models: draft.models.map((entry, position) =>
+                    position === index ? selection : entry,
+                  ),
+                });
+              }}
+            />
+            <button
+              type="button"
+              className="absolute right-0 bottom-3 flex h-9 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground focus-visible:text-brand focus-visible:outline-none"
+              aria-label={`Remove ${model.label}`}
+              onClick={() => {
+                onChange({
+                  ...draft,
+                  models:
+                    draft.models.length === 1
+                      ? [{ catalogId: "", credentialId: "", harnesses: [] }]
+                      : draft.models.filter((_entry, position) => position !== index),
+                });
+              }}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </section>
+        );
+      })}
     </div>
   );
 }

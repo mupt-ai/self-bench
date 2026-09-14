@@ -6,7 +6,7 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
 const buttonVariants = {
   primary: cn(
     buttonBase,
@@ -20,7 +20,7 @@ const buttonVariants = {
   ),
 };
 
-const standaloneButtonGeometry = "h-10 gap-2 px-4 py-2 [&>svg]:size-4 [&>svg]:shrink-0";
+const standaloneButtonGeometry = "h-9 gap-2 px-3 py-2 [&>svg]:size-4 [&>svg]:shrink-0";
 export const buttonStyles = {
   primary: cn(buttonVariants.primary, standaloneButtonGeometry),
   secondary: cn(buttonVariants.secondary, standaloneButtonGeometry),
@@ -44,9 +44,9 @@ export function Button({
       {...props}
       className={cn(
         buttonVariants[variant],
-        size === "default" && "h-10 px-4 py-2",
+        size === "default" && "h-9 px-3 py-2",
         size === "small" && "h-8 px-3 text-xs",
-        size === "icon" && "h-10 w-10",
+        size === "icon" && "h-9 w-9",
         className,
       )}
     />
@@ -55,7 +55,7 @@ export function Button({
 
 export const fieldStyles = "grid min-w-0 gap-2 text-sm font-medium text-foreground";
 export const controlStyles =
-  "h-10 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
+  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input {...props} className={cn(controlStyles, className)} />;

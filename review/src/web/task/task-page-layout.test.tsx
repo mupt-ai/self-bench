@@ -6,7 +6,7 @@ import { TaskSkeleton } from "./TaskSkeleton";
 
 test("loaded task and skeleton keep a fixed-height frame instead of growing with file content", () => {
   const source = readFileSync(new URL("../pages/TaskPage.tsx", import.meta.url), "utf8");
-  const frame = source.match(/<div className="([^"]*h-\[calc\(100dvh-56px\)\][^"]*)"/)?.[1];
+  const frame = source.match(/<div className="([^"]*h-\[calc\(100dvh-3\.5rem\)\][^"]*)"/)?.[1];
   expect(frame).toBeDefined();
   const classes = frame?.split(" ");
   expect(classes).toContain("flex-none");

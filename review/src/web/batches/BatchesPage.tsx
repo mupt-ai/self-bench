@@ -17,6 +17,7 @@ export function BatchesPage() {
     <PageContent>
       <PageHeader title="Batches" description="Track task generation and revisit past batches.">
         <GenerateBatch
+          variant="primary"
           repoId={repoId}
           onStarted={(runId, warning) => {
             refresh();
@@ -43,7 +44,7 @@ export function BatchesPage() {
       {!!runs?.length && (
         <section className="border border-border bg-card" aria-label="Batch History">
           <div
-            className={`${columns} border-b border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground max-md:hidden`}
+            className={`${columns} border-b border-border bg-muted/30 px-4 py-3 text-xs tracking-wider text-muted-foreground uppercase max-md:hidden`}
             aria-hidden="true"
           >
             <span>Batch</span>
@@ -58,7 +59,7 @@ export function BatchesPage() {
                 <li key={run.runId}>
                   <Link
                     to={batchPath(repoId.fullName, run.runId)}
-                    className={`${columns} items-center px-4 py-4 hover:bg-muted/50`}
+                    className={`${columns} items-center px-4 py-3 hover:bg-muted/50`}
                   >
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{batchName(run.runId)}</span>
@@ -78,7 +79,7 @@ export function BatchesPage() {
                       {status ? (
                         <>
                           <span>{status.discovered ?? "—"} Discovered</span>
-                          <span className="mx-2 text-input">/</span>
+                          <span className="mx-2 text-muted-foreground">/</span>
                           <span>{status.accepted ?? "—"} Verified</span>
                         </>
                       ) : (

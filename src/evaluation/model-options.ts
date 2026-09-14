@@ -15,6 +15,20 @@ export const thinkingLevels = [
 ] as const;
 export type ThinkingLevel = (typeof thinkingLevels)[number];
 
+const modelThinkingLevels: Record<string, ThinkingLevel[]> = {
+  "z-ai/glm-5.3": ["default", "low", "high", "max"],
+  "z-ai/glm-5.3-flash": ["default", "low", "high", "max"],
+  "deepseek/deepseek-v4-pro": ["default", "off", "low", "high", "max"],
+  "deepseek/deepseek-v4-flash-0731": ["default", "off", "low", "high", "max"],
+  "deepseek/deepseek-v4.1-flash": ["default", "off", "low", "high", "xhigh", "max"],
+};
+
+/** Harnesses a direct provider key can drive; only OpenRouter is remapped for the rest. */
+const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
+  openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
+  anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
+};
+
 const routedModels: Record<string, string> = {
   "openai-astra6": "openai/gpt-6-astra",
   "openai-sol56": "openai/gpt-5.6-sol",
@@ -31,25 +45,14 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
     (model.provider === "openrouter" || model.provider === "custom"
       ? model.model
       : `${model.provider}/${model.model}`);
-  const nativeHarnesses: Harness[] =
-    model.provider === "openai"
-      ? ["codex", "pi", "mini-swe-agent", "terminus-2"]
-      : model.provider === "anthropic"
-        ? ["claude-code", "pi", "mini-swe-agent", "terminus-2"]
-        : model.harnesses;
+  const nativeHarnesses = providerHarnesses[model.provider] ?? providerHarnesses.openai ?? [];
   const { pricing: _pricing, ...gatewayModel } = model;
   return [
     ...(model.provider !== "openrouter"
-      ? [withReferencePricing({ ...model, harnesses: nativeHarnesses })]
+      ? [withReferencePricing({ ...model, harnesses: [...nativeHarnesses] })]
       : []),
     ...(model.provider === "custom"
-      ? [
-          {
-            ...gatewayModel,
-            provider: "openai" as const,
-            harnesses: ["codex", "pi", "mini-swe-agent", "terminus-2"] as Harness[],
-          },
-        ]
+      ? [{ ...gatewayModel, provider: "openai" as const, harnesses: [...nativeHarnesses] }]
       : []),
     withReferencePricing({
       ...gatewayModel,
@@ -68,10 +71,17 @@ export function routeFor(model: CatalogModel, provider: string) {
 export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): ThinkingLevel[] {
   if (harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2"))
     return ["default"];
-  if (!routedModels[model.id]) return ["default"];
-  const levels: ThinkingLevel[] = ["default", "low", "medium", "high", "xhigh", "max"];
-  if (model.id.startsWith("openai-") && model.id !== "openai-astra6") levels.unshift("off");
-  return harnesses.includes("pi") ? levels.filter((level) => level !== "max") : levels;
+  // Custom endpoints are typed in by the user; the level table only describes catalog IDs.
+  const configured = model.provider === "custom" ? undefined : modelThinkingLevels[model.model];
+  if (!configured && !routedModels[model.id]) return ["default"];
+  const levels: ThinkingLevel[] = configured
+    ? [...configured]
+    : ["default", "low", "medium", "high", "xhigh", "max"];
+  if (!configured && model.id.startsWith("openai-") && model.id !== "openai-astra6")
+    levels.unshift("off");
+  return levels.filter(
+    (level) => level !== "default" && (!harnesses.includes("pi") || level !== "max"),
+  );
 }
 
 export function thinkingArguments(harness: Harness, level?: ThinkingLevel): string[] {

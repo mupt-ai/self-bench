@@ -3,8 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { nextModelSelection } from "./model-selection";
-import { RunModelPicker } from "./RunModelPicker";
+import { hasModelSelection, nextModelSelection } from "./model-selection";
+import { RunModelRow } from "./RunModelRow";
+import { RunModelTable } from "./RunModelTable";
 
 const model: CatalogModel = {
   id: "anthropic-test",
@@ -22,6 +23,57 @@ const credential: CredentialInfo = {
   createdAt: "2026-09-11T00:00:00Z",
 };
 
+test("requested harness chooses a compatible credential and respects login restrictions", () => {
+  const openai: CatalogModel = { ...model, provider: "openai" };
+  const login: CredentialInfo = { ...credential, kind: "openai", auth: "codex-login" };
+  expect(nextModelSelection(openai, [login], "pi")).toBeUndefined();
+  expect(
+    nextModelSelection(openai, [login, { ...login, id: "api-key", auth: "api-key" }], "pi"),
+  ).toEqual({ catalogId: model.id, credentialId: "api-key", harnesses: ["pi"] });
+});
+
+test("duplicates match model, effective thinking level, and harness, not credential", () => {
+  const astra: CatalogModel = { ...model, id: "openai-astra6", provider: "openai" };
+  const selection: ComparisonDraft["models"][number] = {
+    catalogId: astra.id,
+    credentialId: "first",
+    harnesses: ["codex"],
+  };
+  expect(
+    hasModelSelection(astra, [selection], {
+      ...selection,
+      credentialId: "second",
+      thinking: "high",
+    }),
+  ).toBe(true);
+  expect(hasModelSelection(astra, [selection], { ...selection, thinking: "low" })).toBe(false);
+  expect(hasModelSelection(astra, [selection], { ...selection, harnesses: ["pi"] })).toBe(false);
+  expect(hasModelSelection(astra, [selection], { ...selection, catalogId: "other" })).toBe(false);
+  expect(hasModelSelection(astra, [{ ...selection, harnesses: ["codex", "pi"] }], selection)).toBe(
+    true,
+  );
+});
+
+test("inline rows expose model, thinking, and harness dropdowns without provider subtitles", () => {
+  const selection = nextModelSelection(model, [credential]);
+  if (!selection) throw new Error("Expected compatible selection");
+  const html = renderToStaticMarkup(
+    <RunModelRow
+      model={model}
+      credentials={[credential]}
+      selection={selection}
+      onChange={() => {
+        throw new Error("Rendering cannot add a model");
+      }}
+    />,
+  );
+  expect(html).toContain('aria-label="Test Model Thinking Level"');
+  expect(html).toContain('aria-label="Test Model Harness"');
+  expect(html).toContain('aria-label="Model"');
+  expect(html).not.toContain(">anthropic<");
+  expect(html).toContain('value="default" selected=""');
+});
+
 test("selection fails without credentials", () => {
   expect(nextModelSelection(model, [])).toBeUndefined();
 });
@@ -30,16 +82,30 @@ test("selection fails without a compatible provider", () => {
   expect(nextModelSelection(model, [{ ...credential, kind: "openai" }])).toBeUndefined();
 });
 
-test("selection fails without a compatible harness", () => {
+test("custom endpoints speak the OpenAI protocol and offer its harnesses", () => {
   expect(
     nextModelSelection({ ...model, provider: "custom", harnesses: [] }, [
       { ...credential, kind: "custom" },
     ]),
+  ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
+  expect(
+    nextModelSelection(
+      { ...model, provider: "custom", harnesses: [] },
+      [{ ...credential, kind: "custom" }],
+      "claude-code",
+    ),
   ).toBeUndefined();
 });
 
-test("selection rejects a login credential when the route has no Codex harness", () => {
-  expect(nextModelSelection(model, [{ ...credential, auth: "codex-login" }])).toBeUndefined();
+test("requested Codex needs a gateway credential for an Anthropic model", () => {
+  expect(nextModelSelection(model, [credential], "codex")).toBeUndefined();
+  expect(
+    nextModelSelection(
+      model,
+      [credential, { ...credential, id: "gateway", kind: "openrouter" }],
+      "codex",
+    ),
+  ).toEqual({ catalogId: model.id, credentialId: "gateway", harnesses: ["codex"] });
 });
 
 test("selection skips incompatible credentials and fills the first compatible row", () => {
@@ -56,30 +122,26 @@ test("selection uses Codex for a compatible login credential", () => {
   ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
 });
 
-test.each([false, true])("picker enables models only with a matching connection: %s", (matched) => {
+test("an empty inline row offers the catalog and disables dependent controls", () => {
   const draft: ComparisonDraft = {
     id: "draft",
     tasks: [],
-    models: [],
+    models: [{ catalogId: "", credentialId: "", harnesses: [] }],
     sandbox: "e2b",
     sandboxCredentialId: "",
   };
   const html = renderToStaticMarkup(
-    <RunModelPicker
-      picking
-      visible={[model]}
+    <RunModelTable
+      models={[model]}
       draft={draft}
-      credentials={matched ? [credential] : []}
-      query=""
-      setQuery={() => {}}
-      setPicking={() => {}}
-      state={{ draft, submitted: false }}
-      setState={() => {
+      credentials={[credential]}
+      onChange={() => {
         throw new Error("Render must not change selection");
       }}
     />,
   );
-  const button = html.match(/<button\b[^>]*><span>Test Model<\/span>/)?.[0];
-  expect(button).toBeDefined();
-  expect(button?.includes('disabled=""')).toBe(!matched);
+  expect(html).toContain("Select Model");
+  expect(html).toContain("Test Model");
+  expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
+  expect(html).not.toContain('role="dialog"');
 });
