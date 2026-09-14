@@ -1,9 +1,15 @@
-"""Keep gateway model IDs intact in Harbor's Codex command."""
+"""Isolate Codex installation and preserve gateway model IDs."""
 import shlex
 from harbor.agents.installed.codex import Codex
 
 
-class GatewayCodex(Codex):
+class SelfBenchCodex(Codex):
+    async def exec_as_agent(self, environment, command, **kwargs):
+        command = 'export NVM_DIR="$HOME/.nvm"; ' + command
+        return await super().exec_as_agent(environment, command=command, **kwargs)
+
+
+class GatewayCodex(SelfBenchCodex):
     async def exec_as_agent(self, environment, command, **kwargs):
         if "codex exec " in command:
             # Harbor's pinned adapter keeps only the final slash component.

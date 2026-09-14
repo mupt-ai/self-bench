@@ -1,3 +1,4 @@
+import { executionEnvironment } from "../../execution-environment.js";
 import { harborChildEnvironment } from "../../harbor-environment.js";
 import { type CommandResult, runCommand } from "../../process.js";
 
@@ -67,7 +68,7 @@ async function defaultRunner(
 ): Promise<Pick<CommandResult, "exitCode" | "stdout" | "stderr">> {
   return await runCommand(command, args, {
     allowFailure: true,
-    env: harborChildEnvironment(),
+    env: harborChildEnvironment(executionEnvironment()),
     timeoutMs: 60_000,
   });
 }

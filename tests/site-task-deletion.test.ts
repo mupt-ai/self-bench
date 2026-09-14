@@ -114,6 +114,7 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
     });
     for (const pipelineStatus of ["accepted", "rejected"] as const) {
       await store.upsertMany([{ ...workflowRow, pipelineStatus }]);
+      await store.upsertMany([{ ...workflowRow, pipelineStatus }], "other-workflow");
       expect(await store.deleteTask(repo.id, workflowRow.runId, workflowRow.taskId)).toBe("active");
       expect((await store.inProgress(repo.id)).some((entry) => entry.id === workflow.id)).toBe(
         true,

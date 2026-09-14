@@ -33,6 +33,8 @@ Several checkouts (for example git worktrees) can run at once. `self-bench up` d
 
 Compose and `self-bench up` both read `.env` from the checkout; copy `.env.example` to start. Keep `.env` free of per-stack values (project, ports, public URL) when it is shared between worktrees, and export those in the shell instead. With `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` set, the API serves the signed-in selfbench.dev site (see [Site sign-in](#site-sign-in-selfbenchdev)); without them it serves the bearer-token Harbor Ledger. `SELFBENCH_SITE_HOSTNAME` is the name browsers open: leave it unset to stay on loopback, or set a tailnet or LAN name to reach the site from another machine.
 
+Manage development DNS and reverse proxies with your local tooling. Set `SELFBENCH_PUBLIC_URL` to the externally reachable origin and `SELFBENCH_SITE_BIND` / `SELFBENCH_SITE_PORT` to the address and port the proxy should reach.
+
 Temporal, site, and artifact state live in the `<project>_temporal-postgres`, `<project>_site-postgres`, and `<project>_artifacts` volumes. Back up those volumes before an upgrade when workflow history, users, or generated artifacts must be retained. Site database migrations (`drizzle/`) run automatically when the API or worker starts.
 
 ## Credentials
@@ -463,7 +465,6 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
 | `SELFBENCH_PUBLIC_URL` | `http://<hostname>:<site port>` | API; public origin, forms the OAuth callback URL |
 | `SELFBENCH_SITE_HOSTNAME` | `127.0.0.1` | `self-bench up`; hostname in the public URL, non-loopback binds `0.0.0.0` |
-| `SELFBENCH_DEV_DOMAIN` / `SELFBENCH_DEV_PROXY_IP` / `SELFBENCH_DEV_PROXY_PORT` | unset | Behind the shared dev proxy (`self-bench proxy up`): each stack answers at `http://<project>.<domain>[:<proxy port>]`, resolved by the proxy's DNS at the given IP; the API port stays on loopback |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
 | `SELFBENCH_SITE_PORT` / `SELFBENCH_SITE_BIND` | per checkout / `127.0.0.1` | Compose host port and bind address for the API |

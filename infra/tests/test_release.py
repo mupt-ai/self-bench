@@ -25,6 +25,7 @@ class ReleaseTests(unittest.TestCase):
                 "SELFBENCH_TEMPORAL_ADDRESS": "test.tmprl.cloud:7233",
                 "SELFBENCH_TEMPORAL_NAMESPACE": "selfbench-dev.test", "SELFBENCH_TEMPORAL_API_KEY": "fake-test-key",
                 "SELFBENCH_TASK_QUEUE": "selfbench-dev", "SELFBENCH_EVAL_TASK_QUEUE": "selfbench-dev",
+                "SELFBENCH_GENERATION_TASK_QUEUE": "selfbench-dev",
                 "SELFBENCH_EXECUTION_BACKEND": "modal", "SELFBENCH_HARBOR_ENVIRONMENT": "modal",
                 "SELFBENCH_DATABASE_URL": "postgres://test:fake@db.test/selfbench?sslmode=require",
                 "SELFBENCH_EVAL_CREDENTIAL_KEY": "a" * 64, "SELFBENCH_ACTIVITY_CONCURRENCY": "1",
@@ -60,12 +61,32 @@ class ReleaseTests(unittest.TestCase):
         self.coordinates["SELFBENCH_IMAGE"] = self.coordinates["SELFBENCH_IMAGE"].replace("selfbench-dev-test", "selfbench-prod-test")
         with self.assertRaises(ValueError): self.validate()
 
+    def test_byok_worker_needs_no_global_provider_credentials(self):
+        self.values["worker"] = {"SELFBENCH_API_TOKEN": "c" * 40}
+        self.assertEqual(self.validate()["environment"], "dev")
+
+    def test_worker_token_is_still_required(self):
+        del self.values["worker"]["SELFBENCH_API_TOKEN"]
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_unknown_worker_keys_rejected(self):
+        self.values["worker"]["UNKNOWN_SECRET"] = "fake-secret"
+        with self.assertRaises(ValueError): self.validate()
+
     def test_mutable_image_rejected(self):
         self.coordinates["SELFBENCH_IMAGE"] = "us-central1-docker.pkg.dev/selfbench-dev-test/selfbench/selfbench:latest"
         with self.assertRaises(ValueError): self.validate()
 
     def test_orphaned_evaluation_queue_rejected(self):
         self.values["shared"]["SELFBENCH_EVAL_TASK_QUEUE"] = "selfbench-evaluations"
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_missing_generation_queue_rejected(self):
+        del self.values["shared"]["SELFBENCH_GENERATION_TASK_QUEUE"]
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_orphaned_generation_queue_rejected(self):
+        self.values["shared"]["SELFBENCH_GENERATION_TASK_QUEUE"] = "selfbench-generation"
         with self.assertRaises(ValueError): self.validate()
 
     def test_dev_cannot_use_prod_namespace(self):

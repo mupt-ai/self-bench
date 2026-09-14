@@ -35,6 +35,8 @@ class DeployTests(unittest.TestCase):
         dev=(root/'deploy-dev.yml').read_text();prod=(root/'deploy-prod.yml').read_text()
         shared=(root/'deploy-reusable.yml').read_text()
         self.assertIn('branches: [main]',dev)
+        self.assertNotIn('paths:',dev)
+        self.assertNotIn('paths-ignore:',dev)
         self.assertIn('types: [published]',prod)
         self.assertIn('!github.event.release.prerelease',prod)
         self.assertIn('deploy-reusable.yml',dev);self.assertIn('deploy-reusable.yml',prod)

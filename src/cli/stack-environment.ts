@@ -13,7 +13,7 @@ const DERIVED_TEMPORAL_PORTS = { first: 7300, count: 800 };
 
 export interface StackEnvironment {
   readonly COMPOSE_PROJECT_NAME: string;
-  /** The stack's hostname behind the dev proxy, when `SELFBENCH_DEV_DOMAIN` is set. */
+  /** The hostname used to form the stack's default public URL. */
   readonly SELFBENCH_SITE_HOSTNAME: string;
   readonly SELFBENCH_IMAGE: string;
   readonly SELFBENCH_DOCKER_IMAGE: string;
@@ -37,21 +37,14 @@ export function stackEnvironment(
   const environment = { ...readEnvFile(resolve(root, ".env")), ...defined(processEnvironment) };
   const project = environment.COMPOSE_PROJECT_NAME || projectNameFor(root);
   const derived = project !== DEFAULT_STACK;
-  // Behind the dev proxy every stack has its own name under the domain and no port in its URL;
-  // the API port itself stays on loopback for the proxy to reach.
-  const devDomain = environment.SELFBENCH_DEV_DOMAIN?.trim().toLowerCase();
-  const hostname =
-    environment.SELFBENCH_SITE_HOSTNAME || (devDomain ? `${project}.${devDomain}` : "127.0.0.1");
+  const hostname = environment.SELFBENCH_SITE_HOSTNAME || "127.0.0.1";
   const sitePort =
     environment.SELFBENCH_SITE_PORT ||
     String(derived ? derivePort(project, DERIVED_SITE_PORTS) : DEFAULT_SITE_PORT);
-  const proxyPort = environment.SELFBENCH_DEV_PROXY_PORT?.trim() || "80";
-  const publicUrl = (
-    environment.SELFBENCH_PUBLIC_URL ||
-    (devDomain
-      ? `http://${hostname}${proxyPort === "80" ? "" : `:${proxyPort}`}`
-      : `http://${hostname}:${sitePort}`)
-  ).replace(/\/+$/, "");
+  const publicUrl = (environment.SELFBENCH_PUBLIC_URL || `http://${hostname}:${sitePort}`).replace(
+    /\/+$/,
+    "",
+  );
   return {
     COMPOSE_PROJECT_NAME: project,
     SELFBENCH_SITE_HOSTNAME: hostname,
@@ -62,8 +55,7 @@ export function stackEnvironment(
       (derived ? `${project}-sandbox:local` : DEFAULT_SANDBOX_IMAGE),
     SELFBENCH_SITE_PORT: sitePort,
     SELFBENCH_SITE_BIND:
-      environment.SELFBENCH_SITE_BIND ||
-      (isLoopback(hostname) || devDomain ? "127.0.0.1" : "0.0.0.0"),
+      environment.SELFBENCH_SITE_BIND || (isLoopback(hostname) ? "127.0.0.1" : "0.0.0.0"),
     SELFBENCH_TEMPORAL_PORT:
       environment.SELFBENCH_TEMPORAL_PORT ||
       String(derived ? derivePort(project, DERIVED_TEMPORAL_PORTS) : DEFAULT_TEMPORAL_PORT),

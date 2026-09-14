@@ -92,20 +92,14 @@ describe("stackEnvironment", () => {
     expect(stack.SELFBENCH_TEMPORAL_PORT).toBe("7500");
   });
 
-  test("a dev domain gives each stack a portless hostname and keeps its port on loopback", () => {
-    const stack = stackEnvironment("/w/avyay-harbor-review-page", {
-      SELFBENCH_DEV_DOMAIN: "Stack.Example.test",
+  test("an external proxy URL preserves the local bind address and port", () => {
+    const stack = stackEnvironment("/w/feature-x", {
+      SELFBENCH_PUBLIC_URL: "https://feature-x.example.test/",
+      SELFBENCH_SITE_PORT: "8281",
     });
-    expect(stack.SELFBENCH_SITE_HOSTNAME).toBe("avyay-harbor-review-page.stack.example.test");
-    expect(stack.SELFBENCH_PUBLIC_URL).toBe("http://avyay-harbor-review-page.stack.example.test");
+    expect(stack.SELFBENCH_PUBLIC_URL).toBe("https://feature-x.example.test");
     expect(stack.SELFBENCH_SITE_BIND).toBe("127.0.0.1");
-    expect(Number(stack.SELFBENCH_SITE_PORT)).toBeGreaterThanOrEqual(8100);
-    expect(
-      stackEnvironment("/w/wt", {
-        SELFBENCH_DEV_DOMAIN: "stack.example.test",
-        SELFBENCH_DEV_PROXY_PORT: "8000",
-      }).SELFBENCH_PUBLIC_URL,
-    ).toBe("http://wt.stack.example.test:8000");
+    expect(stack.SELFBENCH_SITE_PORT).toBe("8281");
   });
 
   test("project names are valid Compose names", () => {

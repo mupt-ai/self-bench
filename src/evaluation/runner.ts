@@ -9,7 +9,7 @@ import { HARBOR_VERSION, solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
-import { gatewayTrial } from "./gateway-execution.js";
+import { gatewayTrial, solverAgent } from "./gateway-execution.js";
 import { type ThinkingLevel, thinkingArguments } from "./model-options.js";
 import {
   boundedSteps,
@@ -37,9 +37,7 @@ export function solverArguments(
     "--path",
     taskPath,
     "--agent",
-    harness === "codex" && model.startsWith("openai/") && model.slice(7).includes("/")
-      ? "harbor_gateway:GatewayCodex"
-      : harness,
+    solverAgent(harness, model),
     "--model",
     model,
     "--env",
