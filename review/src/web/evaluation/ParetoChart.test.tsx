@@ -36,8 +36,11 @@ test("Pareto charts rely on the package defaults and only map app theme tokens",
   expect(html).not.toContain("var(--brand)");
   expect(html).not.toContain("[&amp;_polyline]");
   expect(html).not.toContain("[&amp;_circle");
-  expect(html).not.toContain("[&amp;&gt;text");
+  // Title-size override ships so chart text reads at app scale.
+  expect(html).toContain("[&amp;&gt;text[font-size=&#x27;14&#x27;]]:text-[17px]");
+  expect(html).toContain(">Model Comparison</text>");
   expect(html).not.toContain("Accuracy vs. Estimated Cost");
+  expect(html).not.toContain("Accuracy versus Cost per Task");
   expect(html).not.toContain("same dataset");
   expect(html).toContain('height="520"');
   expect(html).not.toContain("Estimated token cost");
