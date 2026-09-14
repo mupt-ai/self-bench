@@ -14,16 +14,13 @@ export function EmptyState({
 }) {
   return (
     <div
-      className={cn(
-        "flex min-h-32 flex-col items-start gap-2 border border-border bg-card p-4 text-left",
-        className,
-      )}
+      className={cn("flex flex-col gap-4 border border-border bg-card p-4 text-left", className)}
     >
-      <h3 className="text-sm font-medium text-foreground">{title}</h3>
-      {children && (
-        <div className="max-w-2xl text-sm leading-6 text-muted-foreground">{children}</div>
-      )}
-      {action && <div className="mt-2">{action}</div>}
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        {children && <div className="max-w-2xl text-sm text-muted-foreground">{children}</div>}
+      </div>
+      {action && <div className="flex flex-wrap gap-2">{action}</div>}
     </div>
   );
 }

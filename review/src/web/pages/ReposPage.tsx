@@ -85,12 +85,12 @@ export function ReposPage() {
         title="Connected Repositories"
         description={`Repositories available to ${org.login}.`}
       >
-        <Button onClick={() => setConnecting("public")}>
-          <Plus aria-hidden="true" />
+        <Button size="small" onClick={() => setConnecting("public")}>
+          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           Connect Public Repo
         </Button>
-        <Button variant="primary" onClick={() => setConnecting("mine")}>
-          <Plus aria-hidden="true" />
+        <Button size="small" variant="primary" onClick={() => setConnecting("mine")}>
+          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           Connect My Repo
         </Button>
       </PageHeader>
@@ -100,8 +100,8 @@ export function ReposPage() {
         <EmptyState
           title="Connect a Repository to Get Started"
           action={
-            <Button variant="primary" onClick={() => setConnecting("mine")}>
-              <Plus aria-hidden="true" />
+            <Button size="small" variant="primary" onClick={() => setConnecting("mine")}>
+              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
               Connect My Repo
             </Button>
           }

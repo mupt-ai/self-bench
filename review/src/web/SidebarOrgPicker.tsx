@@ -1,6 +1,6 @@
-import { ChevronsUpDown } from "lucide-react";
 import React from "react";
 import { Avatar } from "./Dropdown";
+import { cn } from "./primitives/cn";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,23 +40,23 @@ export function SidebarOrgPicker({
           <button
             type="button"
             aria-label="Organization"
-            className={`group flex min-h-9 w-full cursor-pointer items-center border border-border py-2 text-left transition-colors hover:border-brand/60 hover:bg-muted focus-visible:outline-2 focus-visible:outline-brand data-[state=open]:border-brand data-[state=open]:bg-muted ${collapsed ? "justify-center px-0" : "gap-2 px-3"}`}
+            className={cn(
+              "flex h-9 w-full min-w-0 cursor-pointer items-center gap-2 border border-border bg-transparent px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand",
+              collapsed && "justify-center px-0",
+            )}
           >
             <span className="shrink-0 overflow-hidden border border-border">
               <Avatar login={org.login} url={org.avatarUrl} size={20} />
             </span>
+            {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{org.login}</span>}
             {!collapsed && (
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-xs font-normal leading-5 text-foreground">
-                  {org.login}
-                </span>
-              </span>
-            )}
-            {!collapsed && (
-              <ChevronsUpDown
+              <svg
                 aria-hidden="true"
-                className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-brand"
-              />
+                viewBox="0 0 12 12"
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+              >
+                <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.25" />
+              </svg>
             )}
           </button>
         </DropdownMenuTrigger>

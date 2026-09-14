@@ -1,9 +1,9 @@
-import { PanelLeft } from "lucide-react";
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { Lockup } from "./Lockup";
 import { pageContainer, pageGutter } from "./layout";
 import { cn } from "./primitives/cn";
+import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
 import { UserMenu } from "./UserMenu";
@@ -62,15 +62,19 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
   return (
     <div
       className={cn(
-        "min-h-screen transition-[padding] duration-200 ease-linear",
+        "flex h-svh overflow-hidden transition-[padding] duration-200 ease-linear",
         sidebarCollapsed ? "md:pl-12" : "md:pl-64",
       )}
     >
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-20 hidden border-r border-border transition-[width] duration-200 ease-linear md:block",
+          "group/sidebar fixed inset-y-0 left-0 z-20 hidden border-r border-border text-sidebar-foreground transition-[width] duration-200 ease-linear md:block",
           sidebarCollapsed ? "w-12" : "w-64",
         )}
+        data-state={sidebarCollapsed ? "collapsed" : "expanded"}
+        data-collapsible={sidebarCollapsed ? "icon" : ""}
+        data-variant="sidebar"
+        data-side="left"
       >
         <SiteSidebar
           user={user}
@@ -81,52 +85,50 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
           collapsed={sidebarCollapsed}
         />
       </div>
-      <header
-        className={cn("sticky top-0 z-10 h-14 border-b border-border bg-background", pageGutter)}
-      >
-        <div className={cn(pageContainer, "flex h-full items-center justify-between")}>
-          <Button
-            size="icon"
-            variant="ghost"
-            type="button"
-            aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            onClick={toggleSidebar}
-            className="-ml-2 hidden size-7 md:inline-flex [&>svg]:size-4"
-          >
-            <PanelLeft strokeWidth={1.5} aria-hidden="true" />
-          </Button>
-          <div className="md:hidden">
-            <Lockup compact />
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            <UserMenu user={user} onSignOut={signOut} />
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Open Navigation"
-              aria-haspopup="dialog"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(true)}
-              className="md:hidden"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                aria-hidden="true"
+      <SidebarInset>
+        <header
+          className={cn("z-10 h-14 shrink-0 border-b border-border bg-background", pageGutter)}
+        >
+          <div className={cn(pageContainer, "flex h-full items-center justify-between")}>
+            <SidebarTrigger
+              type="button"
+              aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              onClick={toggleSidebar}
+              className="-ml-2 hidden md:inline-flex"
+            />
+            <div className="md:hidden">
+              <Lockup compact />
+            </div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <UserMenu user={user} onSignOut={signOut} />
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Open Navigation"
+                aria-haspopup="dialog"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen(true)}
+                className="md:hidden"
               >
-                <path d="M3 5h14M3 10h14M3 15h14" />
-              </svg>
-            </Button>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M3 5h14M3 10h14M3 15h14" />
+                </svg>
+              </Button>
+            </div>
           </div>
+        </header>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+          <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
         </div>
-      </header>
-      <div className="flex min-h-[calc(100dvh_-_3.5rem)] min-w-0 flex-col">
-        <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
-      </div>
+      </SidebarInset>
       {menuOpen && (
         <MobileSidebar
           user={user}
