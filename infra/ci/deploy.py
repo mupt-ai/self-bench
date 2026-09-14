@@ -46,8 +46,8 @@ def main():
             with runner.log.open('ab') as log:
                 runner.run(['docker','build','--platform','linux/amd64','--build-arg','SELFBENCH_BUILD_COMMIT='+ctx['source_sha'],'-t',tag,'.'],stdout=log)
                 runner.run(['docker','push',tag],stdout=log)
-            image = json.loads(runner.run(['gcloud','artifacts','docker','images','describe',tag,'--format=json']))
-            digest = image['image_summary']['digest']
+            inspect = json.loads(runner.run(['docker','image','inspect',tag]))
+            digest = next((ref.rsplit('@',1)[-1] for ref in inspect[0].get('RepoDigests') or [] if ref.startswith(output['image_prefix']+'@')), '')
             if not re.fullmatch('sha256:[0-9a-f]{64}',digest): raise ValueError('Registry digest not confirmed')
             image_ref = output['image_prefix']+'@'+digest
             database=output.get('database')
