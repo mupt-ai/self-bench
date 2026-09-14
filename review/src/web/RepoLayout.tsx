@@ -15,7 +15,7 @@ export function RepoLayout() {
       key={`${context.org.login}/${repo}`}
       repoId={{ org: context.org.login, fullName: repo }}
     >
-      <main className="flex h-[calc(100dvh-3.5rem)] min-h-0 min-w-0 flex-col overflow-hidden">
+      <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
         <div className={cn("shrink-0 pt-6", pageGutter)}>
           <Breadcrumbs items={[{ label: "Repositories", to: "/" }, { label: repo }]} />
           <nav

@@ -55,7 +55,7 @@ export function Button({
 
 export const fieldStyles = "grid min-w-0 gap-2 text-sm font-medium text-foreground";
 export const controlStyles =
-  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40";
+  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input {...props} className={cn(controlStyles, className)} />;
