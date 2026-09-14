@@ -23,6 +23,12 @@ const modelThinkingLevels: Record<string, ThinkingLevel[]> = {
   "deepseek/deepseek-v4.1-flash": ["default", "off", "low", "high", "xhigh", "max"],
 };
 
+/** Harnesses a direct provider key can drive; only OpenRouter is remapped for the rest. */
+const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
+  openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
+  anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
+};
+
 const routedModels: Record<string, string> = {
   "openai-astra6": "openai/gpt-6-astra",
   "openai-sol56": "openai/gpt-5.6-sol",
@@ -39,20 +45,14 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
     (model.provider === "openrouter" || model.provider === "custom"
       ? model.model
       : `${model.provider}/${model.model}`);
-  const nativeHarnesses = [...new Set([...model.harnesses, ...harnessIds])];
+  const nativeHarnesses = providerHarnesses[model.provider] ?? providerHarnesses.openai ?? [];
   const { pricing: _pricing, ...gatewayModel } = model;
   return [
     ...(model.provider !== "openrouter"
-      ? [withReferencePricing({ ...model, harnesses: nativeHarnesses })]
+      ? [withReferencePricing({ ...model, harnesses: [...nativeHarnesses] })]
       : []),
     ...(model.provider === "custom"
-      ? [
-          {
-            ...gatewayModel,
-            provider: "openai" as const,
-            harnesses: [...harnessIds],
-          },
-        ]
+      ? [{ ...gatewayModel, provider: "openai" as const, harnesses: [...nativeHarnesses] }]
       : []),
     withReferencePricing({
       ...gatewayModel,
@@ -71,7 +71,8 @@ export function routeFor(model: CatalogModel, provider: string) {
 export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): ThinkingLevel[] {
   if (harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2"))
     return ["default"];
-  const configured = modelThinkingLevels[model.model];
+  // Custom endpoints are typed in by the user; the level table only describes catalog IDs.
+  const configured = model.provider === "custom" ? undefined : modelThinkingLevels[model.model];
   if (!configured && !routedModels[model.id]) return ["default"];
   const levels: ThinkingLevel[] = configured
     ? [...configured]

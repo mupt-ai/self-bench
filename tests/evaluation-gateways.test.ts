@@ -72,17 +72,25 @@ for (const provider of ["openrouter"] as const) {
   });
 }
 
-test("every model route offers all five harnesses regardless of provider", () => {
+test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
-      expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      if (route.provider === "openrouter")
+        expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      else
+        expect(route.harnesses).not.toContain(
+          route.provider === "openai" ? "claude-code" : "codex",
+        );
     }
   }
   const model = catalog.find((entry) => entry.id === "openai-sol56");
   if (!model) throw new Error("Missing model fixture");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("mini-swe-agent");
-  expect(routeFor(model, "openai")?.harnesses).toContain("claude-code");
+  expect(routeFor(model, "openai")?.harnesses).not.toContain("claude-code");
+  const anthropic = catalog.find((entry) => entry.id === "anthropic-opus5");
+  if (!anthropic) throw new Error("Missing model fixture");
+  expect(routeFor(anthropic, "anthropic")?.harnesses).not.toContain("codex");
   expect(routeFor(model, "vercel")).toBeUndefined();
   expect(
     credentialSchema.parse({ name: "Gateway", kind: "openrouter", value: "test-key" }).kind,

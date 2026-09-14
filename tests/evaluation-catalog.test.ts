@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { catalog } from "../src/evaluation/catalog.js";
+import { type CatalogModel, catalog } from "../src/evaluation/catalog.js";
 import { withReferencePricing } from "../src/evaluation/catalog-pricing.js";
 import { harnessIds } from "../src/evaluation/harnesses.js";
 import {
@@ -73,6 +73,18 @@ test("thinking levels reach the actual Harbor harness flags without changing mod
   ]);
   expect(thinkingArguments("pi", "high")).toEqual(["--agent-kwarg", "thinking=high"]);
   expect(thinkingArguments("pi", "default")).toEqual([]);
+});
+
+test("custom endpoints only offer default thinking whatever model ID is typed", () => {
+  const custom: Omit<CatalogModel, "model"> = {
+    id: "custom",
+    label: "Custom model",
+    source: "",
+    provider: "custom",
+    harnesses: ["pi"],
+  };
+  expect(thinkingOptions({ ...custom, model: "" }, ["pi"])).toEqual(["default"]);
+  expect(thinkingOptions({ ...custom, model: "z-ai/glm-5.3" }, ["pi"])).toEqual(["default"]);
 });
 
 test.each([

@@ -82,20 +82,30 @@ test("selection fails without a compatible provider", () => {
   expect(nextModelSelection(model, [{ ...credential, kind: "openai" }])).toBeUndefined();
 });
 
-test("custom models can select any of the five harnesses", () => {
+test("custom endpoints speak the OpenAI protocol and offer its harnesses", () => {
   expect(
     nextModelSelection({ ...model, provider: "custom", harnesses: [] }, [
       { ...credential, kind: "custom" },
     ]),
   ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
+  expect(
+    nextModelSelection(
+      { ...model, provider: "custom", harnesses: [] },
+      [{ ...credential, kind: "custom" }],
+      "claude-code",
+    ),
+  ).toBeUndefined();
 });
 
-test("requested Codex is available for an Anthropic model", () => {
-  expect(nextModelSelection(model, [credential], "codex")).toEqual({
-    catalogId: model.id,
-    credentialId: credential.id,
-    harnesses: ["codex"],
-  });
+test("requested Codex needs a gateway credential for an Anthropic model", () => {
+  expect(nextModelSelection(model, [credential], "codex")).toBeUndefined();
+  expect(
+    nextModelSelection(
+      model,
+      [credential, { ...credential, id: "gateway", kind: "openrouter" }],
+      "codex",
+    ),
+  ).toEqual({ catalogId: model.id, credentialId: "gateway", harnesses: ["codex"] });
 });
 
 test("selection skips incompatible credentials and fills the first compatible row", () => {

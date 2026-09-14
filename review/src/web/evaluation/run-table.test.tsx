@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { thinkingLevels } from "../../../../src/evaluation/model-options";
 import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
@@ -154,27 +155,40 @@ test("replacement keeps the original credential category regardless of the defau
   expect(options(provider)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
 });
 
-test("harness dropdown keeps the static five options even with a ChatGPT credential", () => {
-  const html = renderToStaticMarkup(
-    <RunModelRow
-      model={{
-        id: "openai-astra6",
-        label: "GPT-6 Astra",
-        provider: "openai",
-        model: "gpt-6-astra",
-        harnesses: ["codex", "pi"],
-        source: "",
-      }}
-      credentials={[
-        { id: "login", name: "ChatGPT", kind: "openai", auth: "codex-login" } as CredentialInfo,
-      ]}
-      selection={{ catalogId: "openai-astra6", credentialId: "login", harnesses: [] }}
-      onChange={() => {}}
-    />,
-  );
-  expect(html).toContain('value="codex"');
-  expect(html).not.toContain("Already Added");
-  for (const harness of ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"]) {
-    expect(html).toContain(`value="${harness}"`);
-  }
+test("harness dropdown follows the selected credential's route", () => {
+  const astra: CatalogModel = {
+    id: "openai-astra6",
+    label: "GPT-6 Astra",
+    provider: "openai",
+    model: "gpt-6-astra",
+    harnesses: ["codex", "pi"],
+    source: "",
+  };
+  const credentials = [
+    { id: "login", name: "ChatGPT", kind: "openai", auth: "codex-login" },
+    { id: "key", name: "OpenAI", kind: "openai", auth: "api-key" },
+    { id: "gateway", name: "OpenRouter", kind: "openrouter", auth: "api-key" },
+  ] as CredentialInfo[];
+  const harnesses = (credentialId: string) =>
+    [
+      ...(renderToStaticMarkup(
+        <RunModelRow
+          model={astra}
+          credentials={credentials}
+          selection={{ catalogId: astra.id, credentialId, harnesses: [] }}
+          onChange={() => {}}
+        />,
+      )
+        .split('aria-label="GPT-6 Astra Harness"')[1]
+        ?.matchAll(/value="([^"]+)"/g) ?? []),
+    ].map((match) => match[1]);
+  expect(harnesses("login")).toEqual(["codex"]);
+  expect(harnesses("key")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
+  expect(harnesses("gateway")).toEqual([
+    "codex",
+    "claude-code",
+    "pi",
+    "mini-swe-agent",
+    "terminus-2",
+  ]);
 });
