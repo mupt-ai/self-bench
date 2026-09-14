@@ -6,17 +6,17 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap border px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-40 [&>svg]:size-4 [&>svg]:shrink-0";
+  "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50";
 export const buttonStyles = {
-  primary: cn(buttonBase, "border-primary bg-primary text-primary-foreground hover:bg-primary/90"),
-  secondary: cn(buttonBase, "border-input bg-transparent text-foreground hover:bg-accent"),
-  ghost: cn(
+  primary: cn(
     buttonBase,
-    "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
+    "border border-primary bg-primary text-primary-foreground hover:bg-primary/90",
   ),
+  secondary: cn(buttonBase, "border border-border bg-transparent text-foreground hover:bg-accent"),
+  ghost: cn(buttonBase, "bg-transparent text-foreground hover:bg-accent"),
   destructive: cn(
     buttonBase,
-    "border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10",
+    "border border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90",
   ),
 };
 
@@ -36,8 +36,9 @@ export function Button({
       {...props}
       className={cn(
         buttonStyles[variant],
-        size === "small" && "h-8 px-2 text-xs",
-        size === "icon" && "size-9 p-0",
+        size === "default" && "h-10 px-4 py-2",
+        size === "small" && "h-8 px-3 text-xs",
+        size === "icon" && "h-10 w-10",
         className,
       )}
     />
@@ -46,7 +47,7 @@ export function Button({
 
 export const fieldStyles = "grid min-w-0 gap-2 text-sm font-medium text-foreground";
 export const controlStyles =
-  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
+  "h-10 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input {...props} className={cn(controlStyles, className)} />;

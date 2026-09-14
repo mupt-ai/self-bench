@@ -1,10 +1,11 @@
-import { FolderGit2, Settings2, X } from "lucide-react";
+import { FolderGit2, LockKeyhole, X } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
 import {
   SidebarContent,
   SidebarFooter,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -22,46 +23,58 @@ interface SidebarProps {
   onSelect: (org: SiteOrg) => void;
   onSignOut: () => Promise<void>;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-export function SiteSidebar({ org, orgs, onSelect, onNavigate }: SidebarProps) {
+export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false }: SidebarProps) {
   const { pathname } = useLocation();
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
-      <SidebarHeader className="h-14 shrink-0 justify-center border-b border-border px-4">
-        <Lockup compact />
+      <SidebarHeader
+        className={`h-14 shrink-0 border-b border-border ${collapsed ? "items-center justify-center px-2" : "justify-center px-4"}`}
+      >
+        <Lockup compact showName={!collapsed} />
       </SidebarHeader>
-      <SidebarContent className="px-3 py-4">
+      <SidebarContent className="px-2 py-2">
         <nav aria-label="Organization Navigation">
+          <SidebarGroupLabel className={collapsed ? "-mt-8 opacity-0" : undefined}>
+            Workspace
+          </SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
+                className={collapsed ? "justify-center px-0" : undefined}
                 isActive={pathname === "/" || pathname.startsWith("/repos/")}
               >
-                <Link to="/" onClick={onNavigate}>
+                <Link to="/" onClick={onNavigate} aria-label="Repositories" title="Repositories">
                   <FolderGit2 />
-                  <span>Repositories</span>
+                  {!collapsed && <span>Repositories</span>}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/")}>
+              <SidebarMenuButton
+                className={collapsed ? "justify-center px-0" : undefined}
+                asChild
+                isActive={pathname.startsWith("/settings/")}
+              >
                 <Link
                   to="/settings/credentials"
                   onClick={onNavigate}
-                  aria-label="Organization Settings"
+                  aria-label="Credentials"
+                  title="Credentials"
                 >
-                  <Settings2 />
-                  <span>Settings</span>
+                  <LockKeyhole />
+                  {!collapsed && <span>Credentials</span>}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </nav>
       </SidebarContent>
-      <SidebarFooter className="mx-3 gap-0 border-t border-border px-0 pt-2 pb-3">
-        <SidebarOrgPicker org={org} orgs={orgs} onSelect={onSelect} />
+      <SidebarFooter className="gap-0 border-t border-border p-2">
+        <SidebarOrgPicker org={org} orgs={orgs} onSelect={onSelect} collapsed={collapsed} />
       </SidebarFooter>
     </aside>
   );

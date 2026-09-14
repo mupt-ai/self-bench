@@ -1,3 +1,4 @@
+import { PanelLeft } from "lucide-react";
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { Lockup } from "./Lockup";
@@ -25,8 +26,26 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
   const location = useLocation();
   const [org, setOrg] = React.useState(() => defaultOrg(orgs));
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
+    try {
+      return window.localStorage.getItem("selfbench.sidebar.collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        window.localStorage.setItem("selfbench.sidebar.collapsed", String(next));
+      } catch {
+        // Sidebar state is a convenience; keep the UI usable when storage is unavailable.
+      }
+      return next;
+    });
+  };
   React.useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
+    const media = window.matchMedia("(min-width: 768px)");
     const changed = () => {
       if (media.matches) setMenuOpen(false);
     };
@@ -41,15 +60,43 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
       void navigate("/");
   };
   return (
-    <div className="min-h-screen lg:pl-60">
-      <div className="fixed inset-y-0 left-0 z-20 hidden w-60 border-r border-border lg:block">
-        <SiteSidebar user={user} org={org} orgs={orgs} onSelect={choose} onSignOut={signOut} />
+    <div
+      className={cn(
+        "min-h-screen transition-[padding] duration-200 ease-linear",
+        sidebarCollapsed ? "md:pl-12" : "md:pl-64",
+      )}
+    >
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-20 hidden border-r border-border transition-[width] duration-200 ease-linear md:block",
+          sidebarCollapsed ? "w-12" : "w-64",
+        )}
+      >
+        <SiteSidebar
+          user={user}
+          org={org}
+          orgs={orgs}
+          onSelect={choose}
+          onSignOut={signOut}
+          collapsed={sidebarCollapsed}
+        />
       </div>
       <header
         className={cn("sticky top-0 z-10 h-14 border-b border-border bg-background", pageGutter)}
       >
         <div className={cn(pageContainer, "flex h-full items-center justify-between")}>
-          <div className="lg:hidden">
+          <Button
+            size="icon"
+            variant="ghost"
+            type="button"
+            aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            onClick={toggleSidebar}
+            className="-ml-2 hidden size-7 md:inline-flex [&>svg]:size-4"
+          >
+            <PanelLeft strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+          <div className="md:hidden">
             <Lockup compact />
           </div>
           <div className="ml-auto flex items-center gap-1.5">
@@ -61,7 +108,7 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
               aria-haspopup="dialog"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(true)}
-              className="lg:hidden"
+              className="md:hidden"
             >
               <svg
                 width="20"

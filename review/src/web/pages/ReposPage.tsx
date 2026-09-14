@@ -97,7 +97,15 @@ export function ReposPage() {
       {error && <Notice className="mb-4">{error}</Notice>}
       {repos.status === "loading" && !error && <ListSkeleton label="Loading Repositories" />}
       {repos.status === "ok" && repos.repos.length === 0 && (
-        <EmptyState title="Connect a Repository to Get Started">
+        <EmptyState
+          title="Connect a Repository to Get Started"
+          action={
+            <Button variant="primary" onClick={() => setConnecting("mine")}>
+              <Plus aria-hidden="true" />
+              Connect My Repo
+            </Button>
+          }
+        >
           Choose a repository to turn merged pull requests into reviewable tasks.
         </EmptyState>
       )}

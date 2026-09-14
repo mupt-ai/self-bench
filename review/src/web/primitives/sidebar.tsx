@@ -22,6 +22,18 @@ export function SidebarContent({ className, ...props }: ComponentProps<"div">) {
     />
   );
 }
+export function SidebarGroupLabel({ className, ...props }: ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="sidebar-group-label"
+      className={cn(
+        "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 transition-[margin,opacity] duration-200 ease-linear",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 export function SidebarFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
@@ -50,11 +62,11 @@ export function SidebarMenuItem({ className, ...props }: ComponentProps<"li">) {
   );
 }
 const menuButton = cva(
-  "flex w-full items-center gap-2.5 overflow-hidden px-3 text-left font-mono text-sm leading-5 font-normal outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
-      active: { true: "bg-brand/10 text-brand", false: "text-muted-foreground" },
-      size: { default: "h-9", lg: "h-10" },
+      active: { true: "", false: "text-sidebar-foreground" },
+      size: { default: "h-8 text-sm", lg: "h-12 text-sm" },
     },
     defaultVariants: { active: false, size: "default" },
   },

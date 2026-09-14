@@ -19,14 +19,32 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
   );
 }
 
-test("sidebar exposes labeled navigation and settings", () => {
+test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
   expect(links).toHaveLength(2);
   expect(html).toContain('aria-label="Organization Navigation"');
-  expect(html).toContain('aria-label="Organization Settings"');
+  expect(html).toContain('aria-label="Credentials"');
+  expect(html).toContain("Credentials");
   expect(html).toContain('aria-label="self-bench by dari.dev Home"');
   expect(html).toContain("by dari.dev</span>");
+});
+
+test("sidebar supports the compact icon mode", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter initialEntries={["/"]}>
+      <SiteSidebar
+        user={{ login: "example-user" }}
+        org={{ login: "example-account", kind: "org", role: "admin" }}
+        orgs={[]}
+        onSelect={() => {}}
+        onSignOut={async () => {}}
+        collapsed
+      />
+    </MemoryRouter>,
+  );
+  expect(html).not.toContain(">Repositories</span>");
+  expect(html).not.toContain(">Credentials</span>");
 });
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
@@ -48,5 +66,4 @@ test("account picker keeps its menu affordance and readable personal account lab
   expect(html).toContain('aria-label="Organization"');
   expect(html).toContain("cursor-pointer");
   expect(html).toContain("example-account");
-  expect(html).toContain("Personal Account");
 });

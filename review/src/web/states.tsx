@@ -15,13 +15,13 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex min-h-40 flex-col items-center justify-center gap-2 border border-dashed border-input bg-card/30 p-6 text-center",
+        "flex min-h-32 flex-col items-start gap-2 border border-border bg-card p-4 text-left",
         className,
       )}
     >
       <h3 className="text-sm font-medium text-foreground">{title}</h3>
       {children && (
-        <div className="max-w-lg text-sm leading-6 text-muted-foreground">{children}</div>
+        <div className="max-w-2xl text-sm leading-6 text-muted-foreground">{children}</div>
       )}
       {action && <div className="mt-2">{action}</div>}
     </div>
