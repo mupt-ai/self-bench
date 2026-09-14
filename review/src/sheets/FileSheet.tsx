@@ -2,7 +2,7 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import React from "react";
 import { DiffView } from "../components/DiffView";
 import { Block, Script } from "../components/Script";
-import { loading, notice, sheetBody, viewerButton, viewerLink } from "../components/viewer-ui";
+import { loading, notice, sheetBody, viewerIconButton, viewerLink } from "../components/viewer-ui";
 import { formatBytes } from "../lib/format";
 import { fileKind } from "../lib/task-model";
 
@@ -75,7 +75,7 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
           </span>
           <button
             type="button"
-            className={`${viewerButton} size-9 px-0`}
+            className={viewerIconButton}
             onClick={() => setFullscreen(false)}
             aria-label="Exit Full Screen"
             title="Exit Full Screen"

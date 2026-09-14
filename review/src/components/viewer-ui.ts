@@ -1,3 +1,4 @@
+import { cn } from "../web/primitives/cn";
 import { buttonStyles, controlStyles } from "../web/ui";
 
 export const sheetBody =
@@ -7,6 +8,7 @@ export const loading = notice;
 export const prose =
   "max-w-[96ch] px-4 py-3 text-sm leading-6 whitespace-pre-wrap wrap-anywhere text-foreground [&:is(pre)]:max-w-none";
 export const viewerButton = buttonStyles.secondary;
+export const viewerIconButton = cn(viewerButton, "size-9 p-0");
 export const viewerLink =
   "cursor-pointer text-left text-sm text-foreground hover:text-brand hover:underline hover:underline-offset-4";
 export const viewerField = controlStyles;
