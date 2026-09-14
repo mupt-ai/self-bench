@@ -60,7 +60,7 @@ export function TaskPage() {
     );
   }
   return (
-    <div className="grid h-[calc(100dvh-56px)] min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)]">
+    <div className="grid h-[calc(100dvh-56px)] min-h-0 min-w-0 flex-none grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
       <header
         className={`flex flex-wrap items-start justify-between gap-4 border-b border-border bg-card py-4 ${pageGutter}`}
       >
