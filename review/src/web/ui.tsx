@@ -6,8 +6,8 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
-export const buttonStyles = {
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
+const buttonVariants = {
   primary: cn(
     buttonBase,
     "border border-primary bg-primary text-primary-foreground hover:bg-primary/90",
@@ -16,8 +16,16 @@ export const buttonStyles = {
   ghost: cn(buttonBase, "bg-transparent text-foreground hover:bg-accent"),
   destructive: cn(
     buttonBase,
-    "border border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90",
+    "border border-destructive-background bg-destructive-background text-destructive-foreground hover:bg-destructive-background/90",
   ),
+};
+
+const standaloneButtonGeometry = "h-9 gap-2 px-3 py-2 [&>svg]:size-4 [&>svg]:shrink-0";
+export const buttonStyles = {
+  primary: cn(buttonVariants.primary, standaloneButtonGeometry),
+  secondary: cn(buttonVariants.secondary, standaloneButtonGeometry),
+  ghost: cn(buttonVariants.ghost, standaloneButtonGeometry),
+  destructive: cn(buttonVariants.destructive, standaloneButtonGeometry),
 };
 
 export function Button({
@@ -35,7 +43,7 @@ export function Button({
       type={type}
       {...props}
       className={cn(
-        buttonStyles[variant],
+        buttonVariants[variant],
         size === "default" && "h-9 px-3 py-2",
         size === "small" && "h-8 px-3 text-xs",
         size === "icon" && "h-9 w-9",
