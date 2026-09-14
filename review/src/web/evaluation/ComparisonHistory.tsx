@@ -24,7 +24,7 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
   }, [url]);
   if (!comparisons.length && !error) return null;
   return (
-    <section className="mt-8">
+    <section className="mt-6">
       <SectionHeader title="Saved Comparisons" />
       {error && <p className="mt-2 text-sm text-muted-foreground">{error}</p>}
       <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">
@@ -41,15 +41,20 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
             {comparisons.map((comparison) => (
               <tr key={comparison.id}>
                 <td>{new Date(comparison.createdAt).toLocaleString()}</td>
-                <td>{comparison.runs.map((run) => run.model).join(", ")}</td>
+                <td className="max-w-md">
+                  <span
+                    className="block truncate"
+                    title={comparison.runs.map((run) => run.model).join(", ")}
+                  >
+                    {comparison.runs.map((run) => run.model).join(", ")}
+                  </span>
+                </td>
                 <td>
                   {comparison.runs.reduce((sum, run) => sum + run.completed, 0)} /{" "}
                   {comparison.runs.reduce((sum, run) => sum + run.trials, 0)}
                 </td>
                 <td>
-                  <Link to={`/repos/${repo}/comparisons/${comparison.id}`}>
-                    View Status / Resume →
-                  </Link>
+                  <Link to={`/repos/${repo}/comparisons/${comparison.id}`}>View Comparison →</Link>
                 </td>
               </tr>
             ))}

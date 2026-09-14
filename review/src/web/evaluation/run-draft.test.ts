@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
 import { restoreRunDraft } from "./run-draft";
 
+test("new and saved empty drafts always start with one blank model row", () => {
+  const state = restoreRunDraft(null, null);
+  const blank = { catalogId: "", credentialId: "", harnesses: [] };
+  expect(state.draft.models).toEqual([blank]);
+  const saved = JSON.stringify({ ...state, draft: { ...state.draft, models: [] } });
+  expect(restoreRunDraft(saved, null).draft.models).toEqual([blank]);
+});
+
 test("run drafts reject corrupt browser state and malformed task links", () => {
   for (const invalid of ["not-json", "null", "{}", '{"draft":{"models":null}}']) {
     const state = restoreRunDraft(invalid, null);
     expect(state.submitted).toBe(false);
-    expect(state.draft.models).toEqual([]);
+    expect(state.draft.models).toEqual([{ catalogId: "", credentialId: "", harnesses: [] }]);
     expect(state.draft.tasks).toEqual([]);
   }
   expect(restoreRunDraft(null, '{"task":"invalid"}').draft.tasks).toEqual([]);

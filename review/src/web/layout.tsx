@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { cn } from "./primitives/cn";
 
 export const pageContainer = "w-full min-w-0";
-export const pageGutter = "px-6";
+export const pageGutter = "px-4 sm:px-6";
 
 export function PageFrame({ children, className, ...props }: ComponentProps<"main">) {
   return (

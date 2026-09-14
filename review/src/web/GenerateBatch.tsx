@@ -1,3 +1,4 @@
+import { Layers } from "lucide-react";
 import React from "react";
 import { Link } from "react-router";
 import {
@@ -17,12 +18,18 @@ import { useGenerationSettings } from "./useGenerationSettings";
 export interface GenerateBatchProps {
   repoId: BatchRepoId;
   disabled?: boolean;
+  variant?: "primary" | "secondary";
   /** Open the submitted batch, including starts whose confirmation was interrupted. */
   onStarted?: (runId: string, warning?: string) => void;
 }
 
 /** Two-step creation only; submitted batches are tracked in the repository history. */
-export function GenerateBatch({ repoId, onStarted, disabled }: GenerateBatchProps) {
+export function GenerateBatch({
+  repoId,
+  onStarted,
+  disabled,
+  variant = "secondary",
+}: GenerateBatchProps) {
   const [open, setOpen] = React.useState(false);
   const [step, setStep] = React.useState<1 | 2>(1);
   const [counts, setCounts] = React.useState<CandidateCounts>({ easy: 1, medium: 1, hard: 1 });
@@ -72,6 +79,7 @@ export function GenerateBatch({ repoId, onStarted, disabled }: GenerateBatchProp
     <>
       <Button
         type="button"
+        variant={variant}
         disabled={disabled}
         onClick={() => {
           setStep(1);
@@ -80,6 +88,7 @@ export function GenerateBatch({ repoId, onStarted, disabled }: GenerateBatchProp
           setOpen(true);
         }}
       >
+        <Layers className="size-4" aria-hidden="true" />
         Generate Batch
       </Button>
       {open && (

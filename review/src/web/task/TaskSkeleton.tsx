@@ -8,7 +8,7 @@ import { taskTitle } from "./task-title";
 export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: string }) {
   return (
     <div
-      className="grid h-[calc(100dvh-56px)] min-h-0 min-w-0 flex-none grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+      className="grid h-[calc(100dvh-3.5rem)] min-h-0 min-w-0 flex-none grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
       role="status"
       aria-label="Loading Task"
     >

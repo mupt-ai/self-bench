@@ -16,6 +16,7 @@ test.each(messages)("empty-state styling stays consistent for: %s", (message) =>
   expect(html).toContain("bg-card");
   expect(html).toContain("No Results");
   expect(html).toContain(message);
+  expect(html).not.toContain("min-h-");
 });
 
 test("empty-state copy is escaped, not interpreted as markup", () => {
