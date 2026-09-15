@@ -2,19 +2,38 @@ import { isDeepStrictEqual } from "node:util";
 import { readAccount, secretPath } from "../evaluation/account.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import { executionBackendLabels } from "../providers.js";
+import { HARBOR_E2B_API_KEY, HARBOR_VERCEL_CREDENTIALS } from "../harbor-environment.js";
+import {
+  executionBackendLabels,
+  type HostedExecutionBackend,
+  type HostedHarborEnvironment,
+  harborEnvironmentLabels,
+} from "../providers.js";
 import type { GenerationReference, GenerationSettings } from "./generation-settings.js";
 import { generationSubscriptionAuth } from "./generation-subscription.js";
 
-function sandboxCredentials(settings: GenerationSettings) {
-  const credentials: { id: string | undefined; kind: "modal" | "e2b" | "vercel" }[] = [];
-  if (settings.sandbox !== "docker")
-    credentials.push({ id: settings.sandboxCredentialId, kind: settings.sandbox });
-  if (
-    (settings.sandbox === "e2b" || settings.sandbox === "vercel") &&
-    settings.harborEnvironment === "modal"
-  )
-    credentials.push({ id: settings.harborCredentialId, kind: "modal" });
+type ProviderCredential =
+  | { role: "sandbox"; id: string | undefined; kind: HostedExecutionBackend }
+  | { role: "harbor"; id: string | undefined; kind: HostedHarborEnvironment };
+
+const credentialLabels = { ...harborEnvironmentLabels, ...executionBackendLabels };
+const VERCEL_SANDBOX_CREDENTIALS = {
+  VERCEL_TOKEN: "VERCEL_TOKEN",
+  VERCEL_TEAM_ID: "VERCEL_TEAM_ID",
+  VERCEL_PROJECT_ID: "VERCEL_PROJECT_ID",
+} as const;
+
+/** The generation sandbox credential plus, for hosted-only backends, the separate Harbor credential. */
+function sandboxCredentials(settings: GenerationSettings): ProviderCredential[] {
+  const credentials: ProviderCredential[] = [
+    { role: "sandbox", id: settings.sandboxCredentialId, kind: settings.sandbox },
+  ];
+  if ((settings.sandbox === "e2b" || settings.sandbox === "vercel") && settings.harborEnvironment)
+    credentials.push({
+      role: "harbor",
+      id: settings.harborCredentialId,
+      kind: settings.harborEnvironment,
+    });
   return credentials;
 }
 
@@ -37,7 +56,7 @@ export async function checkGenerationCredentials(
   for (const { id, kind } of sandboxCredentials(settings)) {
     const sandbox = account.credentials.find((item) => item.id === id && !item.deleted);
     if (sandbox?.kind !== kind || sandbox.auth !== "api-key")
-      throw new Error(`Choose a ${executionBackendLabels[kind]} credential from your account.`);
+      throw new Error(`Choose a ${credentialLabels[kind]} credential from your account.`);
   }
   return model;
 }
@@ -76,9 +95,12 @@ export async function generationEnvironment(
     "VERCEL_TEAM_ID",
     "VERCEL_PROJECT_ID",
     "VERCEL_OIDC_TOKEN",
+    "DAYTONA_API_KEY",
+    HARBOR_E2B_API_KEY,
+    ...Object.values(HARBOR_VERCEL_CREDENTIALS),
   ])
     delete env[key];
-  for (const { id, kind } of sandboxCredentials(reference.settings)) {
+  for (const { role, id, kind } of sandboxCredentials(reference.settings)) {
     const sandbox = await records.read<{
       value: string;
       tokenId?: string;
@@ -86,19 +108,21 @@ export async function generationEnvironment(
       projectId?: string;
     }>(secretPath(reference.ownerId, id ?? ""));
     const secret = sandbox?.value;
-    if (!secret?.value)
-      throw new Error(`${executionBackendLabels[kind]} credential is unavailable.`);
+    if (!secret?.value) throw new Error(`${credentialLabels[kind]} credential is unavailable.`);
     if (kind === "modal") {
       if (!secret.tokenId) throw new Error("Modal credential is unavailable.");
       env.MODAL_TOKEN_ID = secret.tokenId;
       env.MODAL_TOKEN_SECRET = secret.value;
     } else if (kind === "e2b") {
-      env.E2B_API_KEY = secret.value;
+      env[role === "harbor" ? HARBOR_E2B_API_KEY : "E2B_API_KEY"] = secret.value;
+    } else if (kind === "daytona") {
+      env.DAYTONA_API_KEY = secret.value;
     } else {
       if (!secret.teamId || !secret.projectId) throw new Error("Vercel credential is unavailable.");
-      env.VERCEL_TOKEN = secret.value;
-      env.VERCEL_TEAM_ID = secret.teamId;
-      env.VERCEL_PROJECT_ID = secret.projectId;
+      const names = role === "harbor" ? HARBOR_VERCEL_CREDENTIALS : VERCEL_SANDBOX_CREDENTIALS;
+      env[names.VERCEL_TOKEN] = secret.value;
+      env[names.VERCEL_TEAM_ID] = secret.teamId;
+      env[names.VERCEL_PROJECT_ID] = secret.projectId;
     }
   }
   return env;

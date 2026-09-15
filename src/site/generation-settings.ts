@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { isDigestPinnedOciImage } from "../config.js";
-import { EXECUTION_BACKENDS, executionBackendLabels, HARBOR_ENVIRONMENTS } from "../providers.js";
+import {
+  executionBackendLabels,
+  HOSTED_EXECUTION_BACKENDS,
+  HOSTED_HARBOR_ENVIRONMENTS,
+  harborEnvironmentLabels,
+} from "../providers.js";
 import { normalizeE2BTemplateReference } from "../setup/e2b/template.js";
 
 export const generationModels = [
@@ -9,7 +14,7 @@ export const generationModels = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
 ] as const;
-export const generationSandboxes = EXECUTION_BACKENDS;
+export const generationSandboxes = HOSTED_EXECUTION_BACKENDS;
 export function generationSandboxLabel(sandbox: string) {
   return executionBackendLabels[sandbox as keyof typeof executionBackendLabels] ?? sandbox;
 }
@@ -18,16 +23,16 @@ export const generationSettingsSchema = z
     authorModel: z.enum(generationModels),
     verifierModel: z.enum(generationModels),
     reasoning: z.enum(["low", "medium", "high"]),
-    sandbox: z.enum(EXECUTION_BACKENDS),
+    sandbox: z.enum(HOSTED_EXECUTION_BACKENDS),
     modelCredentialId: z.uuid(),
     sandboxCredentialId: z.uuid().optional(),
     sandboxImage: z.string().trim().min(1).max(512).optional(),
-    harborEnvironment: z.enum(HARBOR_ENVIRONMENTS).optional(),
+    harborEnvironment: z.enum(HOSTED_HARBOR_ENVIRONMENTS).optional(),
     harborCredentialId: z.uuid().optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.sandbox !== "docker" && !value.sandboxCredentialId)
+    if (!value.sandboxCredentialId)
       context.addIssue({
         code: "custom",
         path: ["sandboxCredentialId"],
@@ -47,13 +52,13 @@ export const generationSettingsSchema = z
       context.addIssue({
         code: "custom",
         path: ["harborEnvironment"],
-        message: "Choose Docker or Modal for Harbor verification.",
+        message: "Choose a Harbor verification environment.",
       });
-    if (value.harborEnvironment === "modal" && !value.harborCredentialId)
+    else if (!value.harborCredentialId)
       context.addIssue({
         code: "custom",
         path: ["harborCredentialId"],
-        message: "Choose a Modal credential for Harbor verification.",
+        message: `Choose a ${harborEnvironmentLabels[value.harborEnvironment]} credential for Harbor verification.`,
       });
     if (value.sandbox === "vercel" && !isDigestPinnedOciImage(value.sandboxImage ?? ""))
       context.addIssue({

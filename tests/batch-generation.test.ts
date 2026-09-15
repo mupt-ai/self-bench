@@ -104,27 +104,10 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       excludedSourcePrs: [],
     }),
   ).rejects.toThrow("credentials are not configured");
+  // Docker would run every sandbox on the shared worker, so the site never accepts it.
   const dockerSettings = { ...f.generation, sandbox: "docker", sandboxCredentialId: undefined };
-  expect((await f.post(dockerSettings)).status).toBe(202);
-  const dockerRun = f.started[1];
-  if (!dockerRun?.generation) throw new Error("missing Docker run");
-  expect(dockerRun.version.executionBackend).toBe("docker");
-  const dockerEnv = await generationEnvironment(f.records, dockerRun.runId, dockerRun.generation, {
-    MODAL_TOKEN_ID: "host",
-    MODAL_TOKEN_SECRET: "host",
-  });
-  expect(dockerEnv.MODAL_TOKEN_SECRET).toBeUndefined();
-  await withGenerationRuntime(
-    config,
-    f.records,
-    dockerRun,
-    "author",
-    legacy,
-    async (sandbox, environment) => {
-      expect(sandbox.constructor.name).toBe("DockerSandboxExecutor");
-      expect(environment).toBe("docker");
-    },
-  );
+  expect((await f.post(dockerSettings)).status).toBe(400);
+  expect(f.started).toHaveLength(1);
 });
 
 test("invalid, foreign and missing batch credentials fail before discovery or workflow start", async () => {

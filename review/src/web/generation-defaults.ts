@@ -45,5 +45,11 @@ export function withDefaultCredentials(
       value.sandboxCredentialId ||
       options.credentials.find((item) => item.kind === value.sandbox && item.auth === "api-key")
         ?.id,
+    harborCredentialId: value.harborEnvironment
+      ? value.harborCredentialId ||
+        options.credentials.find(
+          (item) => item.kind === value.harborEnvironment && item.auth === "api-key",
+        )?.id
+      : undefined,
   };
 }

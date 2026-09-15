@@ -44,8 +44,8 @@ describe("SelfBench configuration", () => {
     ).toBe(6);
   });
 
-  test("requires an explicit Docker or Modal Harbor backend for Vercel", () => {
-    expect(() =>
+  test("defaults Vercel generation to Vercel Harbor", () => {
+    expect(
       loadConfig({
         SELFBENCH_EXECUTION_BACKEND: "vercel",
         VERCEL_TOKEN: "token",
@@ -53,8 +53,8 @@ describe("SelfBench configuration", () => {
         VERCEL_PROJECT_ID: "project",
         SELFBENCH_HARBOR_ENVIRONMENT: "",
         SELFBENCH_VERCEL_IMAGE: image,
-      }),
-    ).toThrow("SELFBENCH_HARBOR_ENVIRONMENT is required");
+      }).harborEnvironment,
+    ).toBe("vercel");
   });
 
   test("requires a complete nonblank Vercel credential triple", () => {
@@ -158,7 +158,7 @@ describe("SelfBench configuration", () => {
     }
   });
 
-  test("requires explicit E2B template, Harbor environment, and worker API key", () => {
+  test("requires an E2B template and worker API key and defaults E2B Harbor", () => {
     const base = {
       SELFBENCH_EXECUTION_BACKEND: "e2b",
       SELFBENCH_HARBOR_ENVIRONMENT: "docker",
@@ -171,13 +171,21 @@ describe("SelfBench configuration", () => {
     expect(() => loadConfig({ ...base, SELFBENCH_E2B_TEMPLATE: "Not Lowercase" })).toThrow(
       "invalid E2B template reference",
     );
-    expect(() =>
+    // E2B is itself a Harbor environment, so it is the default when none is named.
+    expect(
       loadConfig({
         ...base,
         SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
         SELFBENCH_HARBOR_ENVIRONMENT: "",
-      }),
-    ).toThrow("SELFBENCH_HARBOR_ENVIRONMENT is required");
+      }).harborEnvironment,
+    ).toBe("e2b");
+    expect(
+      loadConfig({
+        ...base,
+        SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
+        SELFBENCH_HARBOR_ENVIRONMENT: "daytona",
+      }).harborEnvironment,
+    ).toBe("daytona");
     expect(() =>
       loadWorkerConfig({ ...base, SELFBENCH_E2B_TEMPLATE: "selfbench-runtime" }),
     ).toThrow("E2B_API_KEY is required");
