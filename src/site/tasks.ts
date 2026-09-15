@@ -118,6 +118,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       )
         return false;
       if (!leaf && request.method !== "GET") return false;
+      if (!leaf && status) await refreshInProgress({ tasks, artifacts, status, repo });
       const task = await tasks.find(repo.id, runId, taskId);
       if (!task) {
         sendJson(response, 404, { error: "task not found" });

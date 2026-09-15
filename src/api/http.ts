@@ -101,8 +101,9 @@ function contentType(path: string): string {
 
 /**
  * Whether a state-changing request may proceed. Browser sessions are cookie-authenticated, so a
- * cross-site page could trigger them: they must be same-origin JSON requests. An API key cannot be
- * attached by another site, so key-authenticated requests are trusted as they are.
+ * cross-site page could trigger them: they must come from the site's own origin, and any body must
+ * be JSON (a plain form post cannot be). An API key cannot be attached by another site, so
+ * key-authenticated requests are trusted as they are.
  */
 export function trustedMutation(
   request: IncomingMessage,
@@ -110,8 +111,9 @@ export function trustedMutation(
   user: { readonly apiKey?: unknown },
 ): boolean {
   if (user.apiKey) return true;
-  return (
-    request.headers.origin === new URL(publicUrl).origin &&
-    (request.headers["content-type"]?.startsWith("application/json") ?? false)
-  );
+  if (request.headers.origin !== new URL(publicUrl).origin) return false;
+  const hasBody =
+    Number(request.headers["content-length"] ?? 0) > 0 ||
+    request.headers["transfer-encoding"] !== undefined;
+  return !hasBody || (request.headers["content-type"]?.startsWith("application/json") ?? false);
 }

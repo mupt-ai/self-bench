@@ -1,20 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { LocalArtifactStore } from "../src/artifacts.js";
 import { API_KEY_PREFIX, createApiKeyStore, hashApiKey } from "../src/auth/api-keys.js";
-import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
-import { SESSION_COOKIE } from "../src/auth/session.js";
 import { createUserStore } from "../src/auth/users.js";
 import { apiKeys } from "../src/db/schema.js";
-import { createRepoStore } from "../src/site/repo-store.js";
-import { createTaskStore } from "../src/site/task-store.js";
-import { evaluationServer } from "./support/evaluation-fixture.js";
+import { mint, signedIn } from "./support/api-keys.js";
 import {
   type AuthServer,
-  cookieValue,
   fakeGitHub,
   startAuthServer,
   testAuthConfig,
@@ -26,30 +17,6 @@ afterEach(async () => {
   await server?.stop();
   server = undefined;
 });
-
-/** Signs in through the OAuth flow and returns cookie headers that pass the same-origin check. */
-async function signedIn(site: AuthServer) {
-  const start = await site.request("/auth/github");
-  const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await site.request(`/auth/github/callback?code=c&state=${state}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${state}` },
-  });
-  const cookie = `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`;
-  return { cookie, origin: site.origin, "content-type": "application/json" };
-}
-
-async function mint(site: AuthServer, headers: Record<string, string>, body: object) {
-  const response = await site.request("/api/api-keys", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  expect(response.status).toBe(201);
-  return (await response.json()) as {
-    key: { id: number; name: string; prefix: string; scope: string; createdAt: string };
-    secret: string;
-  };
-}
 
 describe("api key store", () => {
   test("mints an unguessable secret, stores only its hash, and resolves it to the owner", async () => {
@@ -132,12 +99,12 @@ describe("api key routes", () => {
     });
     expect(fromKey.status).toBe(403);
 
-    expect(
-      (await server.request(`/api/api-keys/${key.id}`, { method: "DELETE", headers })).status,
-    ).toBe(200);
-    expect(
-      (await server.request(`/api/api-keys/${key.id}`, { method: "DELETE", headers })).status,
-    ).toBe(404);
+    // The browser revokes with a body-less DELETE: same-origin cookie, no content type.
+    const { cookie, origin } = headers;
+    const revoke = () =>
+      server?.request(`/api/api-keys/${key.id}`, { method: "DELETE", headers: { cookie, origin } });
+    expect((await revoke())?.status).toBe(200);
+    expect((await revoke())?.status).toBe(404);
     expect((await (await server.request("/api/api-keys", { headers })).json()).keys).toEqual([]);
   });
 
@@ -188,106 +155,5 @@ describe("api key routes", () => {
     ).toBe(200);
     const revoked = await server.request("/api/orgs/mupt-ai/repos", { headers: keyHeaders });
     expect(revoked.status).toBe(401);
-  });
-
-  test("read keys may list but not change anything", async () => {
-    server = await startAuthServer({
-      fetchImpl: fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] })
-        .fetch,
-    });
-    const headers = await signedIn(server);
-    const { secret } = await mint(server, headers, { name: "reader", scope: "read" });
-    const keyHeaders = { authorization: `Bearer ${secret}` };
-    expect((await server.request("/api/orgs/mupt-ai/repos", { headers: keyHeaders })).status).toBe(
-      200,
-    );
-    const blocked = await server.request("/api/orgs/mupt-ai/repos", {
-      method: "POST",
-      headers: keyHeaders,
-      body: JSON.stringify({ fullName: "mupt-ai/self-bench" }),
-    });
-    expect(blocked.status).toBe(403);
-    expect(await blocked.json()).toEqual({ error: "this API key is read-only" });
-  });
-
-  test("a single task is readable by run and task id", async () => {
-    const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "api-keys-tasks-")));
-    server = await startAuthServer({
-      artifacts,
-      fetchImpl: fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] })
-        .fetch,
-    });
-    const headers = await signedIn(server);
-    const { secret } = await mint(server, headers, { name: "CI" });
-    const keyHeaders = { "x-api-key": secret };
-    await server.request("/api/orgs/mupt-ai/repos", {
-      method: "POST",
-      headers: keyHeaders,
-      body: JSON.stringify({ fullName: "mupt-ai/self-bench" }),
-    });
-    const user = await server.users.findByGitHubId(42);
-    const org = (await server.users.orgsFor(user?.id ?? 0)).find((o) => o.kind === "org");
-    const repo = await createRepoStore(server.db).find(org?.id ?? 0, "Mupt-AI/self-bench");
-    if (!repo) throw new Error("repo missing");
-    await createTaskStore(server.db).upsertMany([
-      {
-        repoId: repo.id,
-        runId: "batch-one",
-        candidateId: "w0s1-alpha",
-        taskId: "alpha-task",
-        pipelineStatus: "accepted",
-        stage: "accepted",
-        difficulty: "easy",
-        bundleKey: "runs/batch-one/bundle.tar.gz",
-      },
-    ]);
-    const path = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench/tasks/batch-one";
-    const byTask = await server.request(`${path}/alpha-task`, { headers: keyHeaders });
-    expect(byTask.status).toBe(200);
-    expect(await byTask.json()).toMatchObject({
-      task: { runId: "batch-one", taskId: "alpha-task", state: "needs_review" },
-    });
-    const byCandidate = await server.request(`${path}/w0s1-alpha`, { headers: keyHeaders });
-    expect(byCandidate.status).toBe(200);
-    expect((await server.request(`${path}/missing`, { headers: keyHeaders })).status).toBe(404);
-  });
-});
-
-describe("api keys and evaluation mutations", () => {
-  test("a write key may mutate without a browser origin; a read key may not", async () => {
-    const fixture = await evaluationServer();
-    try {
-      const writer = await fixture.apiKeys.create(fixture.user.id, { name: "w", scope: "write" });
-      const reader = await fixture.apiKeys.create(fixture.user.id, { name: "r", scope: "read" });
-      const body = JSON.stringify({ name: "openai", kind: "openai", value: "model-secret" });
-      const foreignOrigin = { origin: "https://evil.example" };
-      const cookieCrossSite = await fixture.request(`${fixture.base}/credentials`, {
-        method: "POST",
-        headers: foreignOrigin,
-        body,
-      });
-      expect(cookieCrossSite.status).toBe(403);
-      const keyed = await fixture.request(
-        `${fixture.base}/credentials`,
-        { method: "POST", headers: { ...foreignOrigin, "x-api-key": writer.secret }, body },
-        null,
-      );
-      expect(keyed.status).toBe(201);
-      const listed = await fixture.request(
-        `${fixture.base}/credentials`,
-        { headers: { "x-api-key": reader.secret } },
-        null,
-      );
-      expect(listed.status).toBe(200);
-      expect((await listed.json()).credentials).toHaveLength(1);
-      const readOnly = await fixture.request(
-        `${fixture.base}/credentials`,
-        { method: "POST", headers: { "x-api-key": reader.secret }, body },
-        null,
-      );
-      expect(readOnly.status).toBe(403);
-    } finally {
-      await fixture.close();
-    }
   });
 });
