@@ -43,6 +43,8 @@ export async function openSite(
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
+  /** The origin browsers send; a separate frontend URL wins when the site is served from one. */
+  const publicUrl = process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl;
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
@@ -53,13 +55,13 @@ export async function openSite(
       : undefined;
   return {
     auth: createSiteAuth({ config: auth, users, apiKeys }),
-    apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl: auth.publicUrl }),
+    apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),
     evaluations: createEvaluationRoutes({
       users,
       repos,
       tasks,
       artifacts,
-      publicUrl: process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl,
+      publicUrl,
       ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
         ? {
             records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
