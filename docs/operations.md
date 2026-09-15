@@ -50,18 +50,25 @@ Sandbox-provider credentials are separate. Modal accepts its mounted profile or 
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
+SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `--harbor-environment docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
 
 ```bash
 self-bench up --backend docker                         # Docker + Docker
 self-bench up --backend modal                          # Modal + Modal
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
+self-bench up --backend vercel                         # Vercel + Vercel
+self-bench up --backend vercel --harbor-environment e2b
+self-bench up --backend vercel --harbor-environment daytona
+self-bench up --backend e2b                            # E2B + E2B
 self-bench up --backend e2b --harbor-environment docker
 self-bench up --backend e2b --harbor-environment modal
 self-bench up --backend docker --harbor-environment modal
 self-bench up --backend modal --harbor-environment docker
+self-bench up --backend modal --harbor-environment daytona
 ```
+
+The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider.
 
 Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
 
@@ -94,7 +101,7 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 
 ### E2B
 
-E2B is a generation backend only; choose Docker or Modal for Harbor. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
+E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `--harbor-environment`. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
@@ -159,7 +166,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `--harbor-environment`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 
@@ -377,7 +384,7 @@ Directories are recognized by a `task.toml` up to four levels deep, so an extrac
 
 ## HTTP API
 
-The CLI is the recommended client. The API exposes:
+The CLI is the recommended client for run workflows. Every site feature is also reachable over HTTP with a personal API key; see the [HTTP API reference](api.md) for the full route list and authentication. The run routes are:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -405,9 +412,11 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 | `GET` | `/auth/github` | Redirect to GitHub with a state cookie (scopes `read:user read:org repo`) |
 | `GET` | `/auth/github/callback` | Exchange the code, record the user and their org memberships, set the session cookie |
 | `POST` | `/auth/logout` | Clear the session cookie |
-| `GET` | `/api/me` | The signed-in user's login, name, and avatar |
+| `GET` | `/api/me` | The caller's login, name, avatar, organizations, and how they authenticated |
+| `*` | `/api/api-keys…` | Personal API keys: list, create (secret shown once), revoke |
+| `*` | `/api/orgs/:org/…` | Repositories, tasks, batches, evaluations, comparisons, and credentials; see the [API reference](api.md) |
 
-The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session or the bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. `self-bench view <dir>` never requires sign-in.
+The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
 
 Compose: put the three sign-in variables in `.env` and set `SELFBENCH_PUBLIC_URL` to the browser-facing origin. Register that origin with `/auth/github/callback` as the GitHub OAuth callback.
 

@@ -2,7 +2,6 @@ import { matchingHarborEnvironment } from "../providers.js";
 import type { GenerationSettings } from "./generation-settings.js";
 
 const imageVariables = {
-  docker: "SELFBENCH_DOCKER_IMAGE",
   modal: "SELFBENCH_MODAL_IMAGE",
   vercel: "SELFBENCH_VERCEL_IMAGE",
   e2b: "SELFBENCH_E2B_TEMPLATE",
@@ -18,7 +17,7 @@ export function generationConfigEnvironment(
     ...base,
     SELFBENCH_EXECUTION_BACKEND: settings.sandbox,
     SELFBENCH_HARBOR_ENVIRONMENT:
-      matchingHarborEnvironment(settings.sandbox) ?? settings.harborEnvironment,
+      settings.harborEnvironment ?? matchingHarborEnvironment(settings.sandbox),
     ...(image ? { [imageVariables[settings.sandbox]]: image } : {}),
   };
 }

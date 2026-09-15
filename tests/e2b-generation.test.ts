@@ -4,6 +4,7 @@ import type { RunRequest } from "../src/contracts.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { executionEnvironment } from "../src/execution-environment.js";
+import { harborChildEnvironment } from "../src/harbor-environment.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { generationEnvironment } from "../src/site/generation-credentials.js";
 import { generationSettingsSchema } from "../src/site/generation-settings.js";
@@ -15,7 +16,7 @@ import { MemoryRecords } from "./support/evaluation-records.js";
 import { prFixture, pullRequest, REPO } from "./support/pr-fixture.js";
 
 test.each(["batch", "pr"] as const)(
-  "%s generation carries E2B credentials and pins its template while Harbor uses Docker",
+  "%s generation carries E2B credentials and pins its template while Harbor uses a separate E2B account",
   async (kind) => {
     const previous = process.env.SELFBENCH_E2B_TEMPLATE;
     process.env.SELFBENCH_E2B_TEMPLATE = "selfbench-test";
@@ -75,6 +76,12 @@ test.each(["batch", "pr"] as const)(
         },
         {},
       );
+      const harbor = await saveCredential(
+        scoped,
+        ownerId,
+        { name: "Harbor E2B", kind: "e2b", auth: "api-key", value: "harbor-e2b-secret" },
+        {},
+      );
       const foreign = await saveCredential(
         orgRecords(records, ownerId + 100),
         ownerId + 100,
@@ -87,22 +94,31 @@ test.each(["batch", "pr"] as const)(
         reasoning: "high",
         sandbox: "e2b",
         sandboxImage: "selfbench-test",
-        harborEnvironment: "docker",
+        harborEnvironment: "e2b",
         modelCredentialId: model.id,
         sandboxCredentialId: e2b.id,
+        harborCredentialId: harbor.id,
       };
       expect(
         generationSettingsSchema.safeParse({ ...settings, sandboxCredentialId: undefined }).success,
       ).toBe(false);
+      expect(
+        generationSettingsSchema.safeParse({ ...settings, harborCredentialId: undefined }).success,
+      ).toBe(false);
+      expect(
+        generationSettingsSchema.safeParse({ ...settings, harborEnvironment: "docker" }).success,
+      ).toBe(false);
       for (const id of [modal.id, foreign.id, model.id])
         expect((await submit({ ...settings, sandboxCredentialId: id })).status).toBe(400);
+      for (const id of [modal.id, foreign.id, model.id])
+        expect((await submit({ ...settings, harborCredentialId: id })).status).toBe(400);
       expect(submitted()).toBeUndefined();
       expect((await submit(settings)).status).toBe(kind === "batch" ? 202 : 201);
       const run = submitted();
       if (!run?.generation) throw new Error("Missing generation");
       expect(run.version).toMatchObject({
         executionBackend: "e2b",
-        harborEnvironment: "docker",
+        harborEnvironment: "e2b",
         sandboxImage: "selfbench-test",
         sandboxTimeoutCapMs: 3600000,
       });
@@ -117,6 +133,8 @@ test.each(["batch", "pr"] as const)(
       expect(env.E2B_API_KEY).toBe("selected-e2b-secret");
       expect(env.E2B_DOMAIN).toBeUndefined();
       expect(env.MODAL_TOKEN_SECRET).toBeUndefined();
+      expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe("harbor-e2b-secret");
+      expect(harborChildEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
       process.env.SELFBENCH_E2B_TEMPLATE = "changed-host-template";
       const config = loadWorkerConfig({});
       for (const stage of ["author", "verifier"] as const) {
@@ -128,7 +146,7 @@ test.each(["batch", "pr"] as const)(
           createSandboxExecutor(config.execution),
           async (sandbox, harbor, configured) => {
             expect(sandbox.constructor.name).toBe("TimeoutCappedSandboxExecutor");
-            expect(harbor).toBe("docker");
+            expect(harbor).toBe("e2b");
             expect(configured.version.sandboxImage).toBe("selfbench-test");
             expect(executionEnvironment().E2B_API_KEY).toBe("selected-e2b-secret");
             expect((await loadPiModelAuth()).provider).toBe("openai-codex");

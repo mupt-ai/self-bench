@@ -25,7 +25,7 @@ test("generation defaults select compatible credentials and remember choices wit
   ) =>
     Response.json({
       models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
-      sandboxes: ["modal", "docker", "e2b"],
+      sandboxes: ["modal", "e2b"],
       available: true,
       credentials: empty
         ? []
@@ -63,20 +63,42 @@ test("generation defaults select compatible credentials and remember choices wit
         ...current.settings,
         sandbox: "e2b",
         sandboxImage: "selfbench-test",
-        harborEnvironment: "docker",
+        harborEnvironment: "modal",
       }),
     );
     expect(current.settings.sandboxCredentialId).toBe(id(6));
+    expect(current.settings.harborCredentialId).toBe(id(4));
     expect(current.valid).toBe(true);
+    await act(async () =>
+      current.setSettings({
+        ...current.settings,
+        harborEnvironment: "e2b",
+        harborCredentialId: undefined,
+      }),
+    );
+    expect(current.settings.harborCredentialId).toBe(id(6));
+    expect(current.valid).toBe(true);
+    await act(async () =>
+      current.setSettings({
+        ...current.settings,
+        harborEnvironment: "daytona",
+        harborCredentialId: undefined,
+      }),
+    );
+    expect(current.settings.harborCredentialId).toBeUndefined();
+    expect(current.valid).toBe(false);
     await act(async () => current.setSettings({ ...current.settings, sandbox: "modal" }));
     expect(current.settings.sandboxCredentialId).toBe(id(4));
+    expect(current.settings.harborEnvironment).toBeUndefined();
+    expect(current.settings.harborCredentialId).toBeUndefined();
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",
       verifierModel: "gpt-5.6-luna",
       reasoning: "low" as const,
-      sandbox: "docker" as const,
+      sandbox: "modal" as const,
       modelCredentialId: id(5),
+      sandboxCredentialId: id(4),
     };
     await act(async () => current.setSettings(chosen));
     await act(async () => root.render(null));

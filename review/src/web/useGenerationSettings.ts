@@ -19,10 +19,9 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
   );
   const selection = React.useRef({ key, settings });
   const setSettings = (value: GenerationSettings) => {
-    if (value.sandbox !== selection.current.settings.sandbox && options) {
-      if (value.sandbox !== "docker") {
-        value = withDefaultCredentials({ ...value, sandboxCredentialId: undefined }, options);
-      }
+    const previous = selection.current.settings;
+    if (options && value.sandbox !== previous.sandbox) {
+      value = { ...value, sandboxCredentialId: undefined };
       if (value.sandbox !== "e2b" && value.sandbox !== "vercel") {
         value = {
           ...value,
@@ -32,6 +31,11 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
         };
       }
     }
+    if (
+      options &&
+      (value.sandbox !== previous.sandbox || value.harborEnvironment !== previous.harborEnvironment)
+    )
+      value = withDefaultCredentials(value, options);
     selection.current = { key, settings: value };
     updateSettings(value);
     rememberGenerationSettings(key, value);
@@ -91,19 +95,17 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
         item.kind === "openai" &&
         ["api-key", "codex-login"].includes(item.auth),
     ) &&
-    (settings.sandbox === "docker" ||
-      options.credentials.some(
-        (item) =>
-          item.id === settings.sandboxCredentialId &&
-          item.kind === settings.sandbox &&
-          item.auth === "api-key",
-      )) &&
+    options.credentials.some(
+      (item) =>
+        item.id === settings.sandboxCredentialId &&
+        item.kind === settings.sandbox &&
+        item.auth === "api-key",
+    ) &&
     (!(settings.sandbox === "e2b" || settings.sandbox === "vercel") ||
-      settings.harborEnvironment !== "modal" ||
       options.credentials.some(
         (item) =>
           item.id === settings.harborCredentialId &&
-          item.kind === "modal" &&
+          item.kind === settings.harborEnvironment &&
           item.auth === "api-key",
       ));
   return {

@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts.js";
+import { apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
 import { createUserStore } from "../../src/auth/users.js";
@@ -112,9 +113,11 @@ export async function evaluationServer(records?: EncryptedRecordStore, codexLogi
   await tasks.review(approved.id, { decision: "approve", note: "Reviewed", userId: user.id });
   const starts: EvaluationInput[] = [];
   let failStart = false;
+  const apiKeys = createApiKeyStore(database.db);
   const auth = createSiteAuth({
     config: testAuthConfig,
     users,
+    apiKeys,
     fetchImpl: (async (input, init) => {
       if (String(input) !== `${testAuthConfig.githubApiUrl}/user`) {
         throw new Error("Unexpected mock GitHub request");
@@ -131,6 +134,12 @@ export async function evaluationServer(records?: EncryptedRecordStore, codexLogi
       const signedIn = await auth.authenticate(request);
       if (!signedIn) {
         response.writeHead(401).end();
+        return;
+      }
+      const denied = apiKeyDenies(signedIn, request.method);
+      if (denied) {
+        response.writeHead(403, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: denied }));
         return;
       }
       const routes = createEvaluationRoutes({
@@ -166,6 +175,8 @@ export async function evaluationServer(records?: EncryptedRecordStore, codexLogi
   const signer = createSessionSigner(testAuthConfig.sessionSecret);
   return {
     users,
+    user,
+    apiKeys,
     artifacts,
     tasks,
     repo,

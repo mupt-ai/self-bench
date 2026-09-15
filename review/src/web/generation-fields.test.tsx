@@ -2,27 +2,30 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import type { CredentialInfo } from "../../../src/evaluation/account";
-import { EXECUTION_BACKENDS, executionBackendLabels } from "../../../src/providers";
+import { executionBackendLabels, HOSTED_EXECUTION_BACKENDS } from "../../../src/providers";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";
 
-const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel"].map((kind) => ({
-  id: crypto.randomUUID(),
-  name: `${kind}-credential`,
-  kind: kind as CredentialInfo["kind"],
-  auth: "api-key",
-  createdAt: "2026-09-09",
-}));
+const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel", "daytona"].map(
+  (kind) => ({
+    id: crypto.randomUUID(),
+    name: `${kind}-credential`,
+    kind: kind as CredentialInfo["kind"],
+    auth: "api-key",
+    createdAt: "2026-09-09",
+  }),
+);
 const base: GenerationSettings = {
   authorModel: "gpt-5.6-sol",
   verifierModel: "gpt-6-astra",
   reasoning: "high",
-  sandbox: "docker",
+  sandbox: "modal",
   modelCredentialId: credentials[0]?.id ?? "",
+  sandboxCredentialId: credentials[1]?.id,
 };
-function render(value: GenerationSettings, sandboxes = [...EXECUTION_BACKENDS]) {
+function render(value: GenerationSettings, sandboxes = [...HOSTED_EXECUTION_BACKENDS]) {
   return renderToStaticMarkup(
     <MemoryRouter>
       <GenerationFields
@@ -42,31 +45,39 @@ function render(value: GenerationSettings, sandboxes = [...EXECUTION_BACKENDS]) 
 
 test("generation sandbox options come from the API and use the shared provider labels", () => {
   const html = render(base);
-  for (const sandbox of EXECUTION_BACKENDS)
+  for (const sandbox of HOSTED_EXECUTION_BACKENDS)
     expect(html).toContain(`>${executionBackendLabels[sandbox]}</option>`);
-  expect(render(base, ["docker"])).not.toContain('value="vercel"');
+  expect(html).not.toContain('value="docker"');
+  expect(render(base, ["modal"])).not.toContain('value="vercel"');
 });
 
 test.each(["e2b", "vercel"] as const)(
   "%s generation exposes runtime and separate Harbor settings with only matching credentials",
   (sandbox) => {
-    const html = render({ ...base, sandbox, harborEnvironment: "docker" });
+    const html = render({ ...base, sandbox, sandboxCredentialId: undefined });
     expect(html).toContain(sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image");
     expect(html).toContain("Harbor Verification");
+    expect(html).not.toContain('value="docker"');
+    for (const environment of ["modal", "vercel", "e2b", "daytona"])
+      expect(html).toContain(`value="${environment}"`);
     expect(html).toContain(`${sandbox}-credential`);
     expect(html).not.toContain(`${sandbox === "e2b" ? "vercel" : "e2b"}-credential`);
     expect(html).not.toContain("modal-credential");
+    expect(html).not.toContain("daytona-credential");
     const modal = render({ ...base, sandbox, harborEnvironment: "modal" });
     expect(modal).toContain("Harbor Modal Credential");
     expect(modal).toContain("modal-credential");
+    const daytona = render({ ...base, sandbox, harborEnvironment: "daytona" });
+    expect(daytona).toContain("Harbor Daytona Credential");
+    expect(daytona).toContain("daytona-credential");
+    expect(daytona).not.toContain("modal-credential");
   },
 );
 
-test("Docker stays credential-free and Modal retains its existing credential selection", () => {
-  expect(render(base)).not.toContain("Harbor Verification");
-  expect(render(base)).not.toContain("Choose a Credential");
-  const modal = render({ ...base, sandbox: "modal" });
+test("Modal generation requires a credential and has no separate Harbor settings", () => {
+  const modal = render(base);
   expect(modal).toContain("Modal Credential");
+  expect(modal).toContain("modal-credential");
   expect(modal).not.toContain("Harbor Verification");
 });
 

@@ -1,5 +1,7 @@
 import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts.js";
+import { type ApiKeyRoutes, createApiKeyRoutes } from "../auth/api-key-routes.js";
+import { createApiKeyStore } from "../auth/api-keys.js";
 import type { AuthConfig } from "../auth/config.js";
 import { createSiteAuth, type SiteAuth } from "../auth/routes.js";
 import { createUserStore } from "../auth/users.js";
@@ -22,6 +24,7 @@ import { temporalStarter, temporalStatus } from "./temporal-status.js";
 
 interface Site {
   readonly auth: SiteAuth;
+  readonly apiKeys: ApiKeyRoutes;
   readonly github: GitHubRepoRoutes;
   readonly repos: ConnectedRepoRoutes;
   readonly tasks: TaskRoutes;
@@ -39,6 +42,9 @@ export async function openSite(
 ): Promise<Site> {
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
+  const apiKeys = createApiKeyStore(database.db);
+  /** The origin browsers send; a separate frontend URL wins when the site is served from one. */
+  const publicUrl = process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl;
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
@@ -48,13 +54,14 @@ export async function openSite(
       ? createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
       : undefined;
   return {
-    auth: createSiteAuth({ config: auth, users }),
+    auth: createSiteAuth({ config: auth, users, apiKeys }),
+    apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),
     evaluations: createEvaluationRoutes({
       users,
       repos,
       tasks,
       artifacts,
-      publicUrl: process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl,
+      publicUrl,
       ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
         ? {
             records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),

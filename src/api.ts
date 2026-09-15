@@ -14,6 +14,7 @@ import { buildRunRequest } from "./api/run-request.js";
 import { queryStatus } from "./api/status.js";
 import { handleViewerRoute } from "./api/viewer-routes.js";
 import { createArtifactStore } from "./artifacts.js";
+import { apiKeyDenies } from "./auth/api-keys.js";
 import type { AuthConfig } from "./auth/config.js";
 import { sendIdentityError } from "./auth/routes.js";
 import { sendExpiredSession } from "./auth/session-expired.js";
@@ -72,7 +73,13 @@ export async function startApi(
         sendJson(response, 401, { error: "unauthorized" });
         return;
       }
+      const denied = user ? apiKeyDenies(user, request.method) : undefined;
+      if (denied) {
+        sendJson(response, 403, { error: denied });
+        return;
+      }
       if (site && user && url.pathname.startsWith("/api/")) {
+        if (await site.apiKeys.handle(request, url, response, user)) return;
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;

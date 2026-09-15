@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { bearerMatches, sendJson } from "../api/http.js";
+import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "./api-keys.js";
 import type { AuthConfig } from "./config.js";
 import { clearCookie, parseCookies, sendRedirect, setCookie } from "./cookies.js";
 import { constantTimeEqual, randomToken } from "./crypto.js";
@@ -24,6 +25,8 @@ export type LoginError = "state" | "denied" | "github";
 export interface SiteAuthOptions {
   readonly config: AuthConfig;
   readonly users: UserStore;
+  /** When present, `Authorization: Bearer sbk_…` and `X-API-Key` resolve to their owner. */
+  readonly apiKeys?: ApiKeyStore;
   readonly fetchImpl?: typeof fetch;
   readonly now?: () => Date;
 }
@@ -31,7 +34,10 @@ export interface SiteAuthOptions {
 export interface SiteAuth {
   /** Answers /auth/* and /api/me. True when the response has been sent. */
   handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean>;
-  /** Validates GitHub for site cookies; a matching CLI bearer is authorized separately. */
+  /**
+   * Resolves the caller: an API key first, else the session cookie (validated against GitHub).
+   * A matching CLI bearer is authorized separately. Throws ApiKeyError for an unknown key.
+   */
   authenticate(request: IncomingMessage, apiToken?: string): Promise<User | undefined>;
 }
 
@@ -47,6 +53,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     apiToken?: string,
   ): Promise<User | undefined> => {
     if (apiToken && bearerMatches(request, apiToken)) return undefined;
+    const secret = presentedApiKey(request.headers);
+    if (secret !== undefined) {
+      const owner = await options.apiKeys?.authenticate(secret);
+      if (!owner) throw new ApiKeyError();
+      return owner;
+    }
     const claims = signer.verify(parseCookies(request)[SESSION_COOKIE]);
     if (!claims) return undefined;
     const token = await users.gitHubToken(claims.githubId);
@@ -128,7 +140,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
           return true;
         }
         const orgs = await users.orgsFor(user.id);
-        sendJson(response, 200, { user: publicUser(user), orgs: orgs.map(publicOrg) });
+        sendJson(response, 200, {
+          user: publicUser(user),
+          orgs: orgs.map(publicOrg),
+          auth: user.apiKey ? "api-key" : "session",
+          ...(user.apiKey ? { apiKey: { name: user.apiKey.name, scope: user.apiKey.scope } } : {}),
+        });
         return true;
       }
       return false;
@@ -175,6 +192,11 @@ export function sendIdentityError(
   error: unknown,
   publicUrl: string,
 ): boolean {
+  if (error instanceof ApiKeyError) {
+    response.setHeader("cache-control", "no-store");
+    sendJson(response, error.status, { error: error.message, code: "invalid_api_key" });
+    return true;
+  }
   if (!(error instanceof GitHubIdentityError)) return false;
   if (error.status === 401)
     clearCookie(response, SESSION_COOKIE, { secure: publicUrl.startsWith("https://") });

@@ -4,6 +4,13 @@ import { orgMembers, orgs, users } from "../db/schema.js";
 import { createSecretBox, deriveKey } from "./crypto.js";
 import type { GitHubProfile, OrgMembership } from "./github.js";
 
+/** How an API-key request identifies itself; absent on cookie sessions. */
+export interface ApiKeyRef {
+  readonly id: number;
+  readonly name: string;
+  readonly scope: "read" | "write";
+}
+
 /** The user as routes see it. The GitHub token is deliberately not here. */
 export interface User {
   readonly id: number;
@@ -11,6 +18,8 @@ export interface User {
   readonly login: string;
   readonly name?: string;
   readonly avatarUrl?: string;
+  /** Set when the request authenticated with an API key rather than a browser session. */
+  readonly apiKey?: ApiKeyRef;
 }
 
 /** A tenant the user can work in: a GitHub org, or their personal account (`kind: "user"`). */

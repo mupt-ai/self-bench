@@ -153,3 +153,23 @@ export const tasks = pgTable(
     index("tasks_repo_pr").on(table.repoId, table.sourcePr),
   ],
 );
+
+/** Personal API keys. Only a SHA-256 of the secret is stored; the secret is shown once at creation. */
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("user_id", { mode: "number" })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** The first characters of the secret, so a key can be recognised without revealing it. */
+    prefix: text("prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    scope: text("scope", { enum: ["read", "write"] }).notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+  },
+  (table) => [index("api_keys_user_id").on(table.userId)],
+);

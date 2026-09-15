@@ -98,8 +98,8 @@ describe("contracts", () => {
     ).toBe(false);
   });
 
-  test("persists Vercel generation separately from its Docker or Modal Harbor backend", () => {
-    for (const harborEnvironment of ["docker", "modal"]) {
+  test("persists Vercel generation separately from any Harbor backend", () => {
+    for (const harborEnvironment of ["docker", "modal", "vercel", "e2b", "daytona"]) {
       expect(
         runRequestSchema.safeParse({
           ...request,
@@ -121,14 +121,14 @@ describe("contracts", () => {
         version: {
           ...request.version,
           executionBackend: "vercel",
-          harborEnvironment: "vercel",
+          harborEnvironment: "runloop",
         },
       }).success,
     ).toBe(false);
   });
 
-  test("persists E2B generation separately from its Docker or Modal Harbor backend", () => {
-    for (const harborEnvironment of ["docker", "modal"]) {
+  test("persists E2B generation separately from any Harbor backend", () => {
+    for (const harborEnvironment of ["docker", "modal", "vercel", "e2b", "daytona"]) {
       const parsed = runRequestSchema.safeParse({
         ...request,
         candidateCounts: { easy: 1, medium: 0, hard: 0 },
@@ -173,6 +173,7 @@ describe("contracts", () => {
     for (const [executionBackend, harborEnvironment] of [
       ["docker", "modal"],
       ["modal", "docker"],
+      ["modal", "daytona"],
     ] as const) {
       expect(
         runRequestSchema.parse({

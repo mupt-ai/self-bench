@@ -92,6 +92,15 @@ export function createConnectedRepoRoutes(
         sendJson(response, existing ? 200 : 201, { repo: publicRepo(repo) });
         return true;
       }
+      if (item?.[2] && item[3] && request.method === "GET") {
+        const repo = await repos.find(tenant.id, `${item[2]}/${item[3]}`);
+        if (!repo) {
+          sendJson(response, 404, { error: "not connected" });
+          return true;
+        }
+        sendJson(response, 200, { repo: publicRepo(repo) });
+        return true;
+      }
       if (item?.[2] && item[3] && request.method === "PATCH") {
         const body = JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}") as {
           continuous?: unknown;

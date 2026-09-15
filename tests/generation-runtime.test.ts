@@ -25,6 +25,12 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
     },
     {},
   );
+  const sandbox = await saveCredential(
+    records,
+    1,
+    { name: "Modal", kind: "modal", auth: "api-key", value: "sandbox-secret", tokenId: "id" },
+    {},
+  );
   const reference: GenerationReference = {
     ownerId: 1,
     repoId: 1,
@@ -32,8 +38,9 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-5.6-sol",
       reasoning: "high",
-      sandbox: "docker",
+      sandbox: "modal",
       modelCredentialId: credential.id,
+      sandboxCredentialId: sandbox.id,
     },
   };
   await records.write(generationRecordPath("codex-run"), reference, 0);

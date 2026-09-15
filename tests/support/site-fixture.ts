@@ -4,6 +4,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { sendApiError } from "../../src/api/http.js";
 import type { ArtifactStore } from "../../src/artifacts.js";
+import { createApiKeyRoutes } from "../../src/auth/api-key-routes.js";
+import { type ApiKeyStore, apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
 import type { AuthConfig } from "../../src/auth/config.js";
 import { createSiteAuth, sendIdentityError } from "../../src/auth/routes.js";
 import { sendExpiredSession } from "../../src/auth/session-expired.js";
@@ -146,6 +148,7 @@ export interface AuthServer {
   readonly db: Database;
   readonly origin: string;
   readonly users: UserStore;
+  readonly apiKeys: ApiKeyStore;
   /** fetch without following redirects, so Location and Set-Cookie can be asserted. */
   request(path: string, init?: RequestInit): Promise<Response>;
   stop(): Promise<void>;
@@ -165,10 +168,18 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const config = options.config ?? testAuthConfig;
   const database = await testDatabase();
   const users = createUserStore(database.db, { secret: config.sessionSecret });
+  const apiKeys = createApiKeyStore(database.db);
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const fetchImpl = options.fetchImpl ?? fetch;
-  const auth = createSiteAuth({ config, users, fetchImpl });
+  const auth = createSiteAuth({ config, users, apiKeys, fetchImpl });
+  let origin = "";
+  const keyRoutes = createApiKeyRoutes({
+    keys: apiKeys,
+    get publicUrl() {
+      return origin;
+    },
+  });
   const github = createGitHubRepoRoutes({ config, users, fetchImpl });
   const connected = createConnectedRepoRoutes({ config, users, repos, fetchImpl });
   const taskRoutes = options.artifacts
@@ -204,6 +215,13 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
           response.writeHead(401).end();
           return;
         }
+        const denied = apiKeyDenies(user, request.method);
+        if (denied) {
+          response.writeHead(403, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: denied }));
+          return;
+        }
+        if (await keyRoutes.handle(request, url, response, user)) return;
         if (await github.handle(request, url, response, user)) return;
         if (await connected.handle(request, url, response, user)) return;
         if (pullRequestRoutes && (await pullRequestRoutes.handle(request, url, response, user))) {
@@ -221,11 +239,12 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
-  const origin = `http://127.0.0.1:${port}`;
+  origin = `http://127.0.0.1:${port}`;
   return {
     origin,
     db: database.db,
     users,
+    apiKeys,
     request: (path, init) => fetch(`${origin}${path}`, { redirect: "manual", ...init }),
     stop: async () => {
       await new Promise<void>((resolve, reject) =>

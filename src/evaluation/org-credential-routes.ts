@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson } from "../api/http.js";
+import { readBody, sendJson, trustedMutation } from "../api/http.js";
 import type { User } from "../auth/users.js";
 import { tenantFor } from "../site/tenant.js";
 import {
@@ -34,8 +34,7 @@ export async function orgCredentialRoutes(
     mutation &&
     (request.method !== "POST" ||
       org.role !== "admin" ||
-      request.headers.origin !== new URL(options.publicUrl).origin ||
-      !request.headers["content-type"]?.startsWith("application/json"))
+      !trustedMutation(request, options.publicUrl, user))
   ) {
     sendJson(response, 403, { error: "Organization admin and same-origin JSON request required" });
     return true;
