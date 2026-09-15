@@ -92,11 +92,30 @@ describe("what an api key may reach", () => {
     const byCandidate = await server.request(`${path}/w0s1-alpha`, { headers: keyHeaders });
     expect(byCandidate.status).toBe(200);
     snapshot.mockImplementation(async () => ({
+      kind: "running",
+      progress: {
+        candidateId: "w0s2-beta",
+        difficulty: "easy",
+        status: "verifying",
+        stage: "verification",
+        round: 2,
+        taskId: "beta-renamed",
+      },
+    }));
+    const renamed = await server.request(`${path}/beta-task`, { headers: keyHeaders });
+    expect(renamed.status).toBe(200);
+    expect((await renamed.json()).task).toMatchObject({
+      taskId: "beta-renamed",
+      candidateId: "w0s2-beta",
+      stage: "verification",
+      round: 2,
+    });
+    snapshot.mockImplementation(async () => ({
       kind: "failed",
       status: "TERMINATED",
       detail: "worker lost",
     }));
-    const running = await server.request(`${path}/beta-task`, { headers: keyHeaders });
+    const running = await server.request(`${path}/beta-renamed`, { headers: keyHeaders });
     expect((await running.json()).task).toMatchObject({
       state: "failed",
       pipelineStatus: "infrastructure_failed",

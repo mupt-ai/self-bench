@@ -118,16 +118,22 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       )
         return false;
       if (!leaf && request.method !== "GET") return false;
-      if (!leaf && status) await refreshInProgress({ tasks, artifacts, status, repo });
-      const task = await tasks.find(repo.id, runId, taskId);
-      if (!task) {
+      const found = await tasks.find(repo.id, runId, taskId);
+      if (!found) {
         sendJson(response, 404, { error: "task not found" });
         return true;
       }
       if (!leaf) {
+        let task = found;
+        if (status) {
+          await refreshInProgress({ tasks, artifacts, status, repo });
+          // The refresh may have renamed the task; re-read it by its stable candidate id.
+          task = (await tasks.find(repo.id, runId, found.candidateId)) ?? found;
+        }
         sendJson(response, 200, { task: taskItem(task) });
         return true;
       }
+      const task = found;
       if (leaf === "review" && request.method === "PUT") {
         const body = await json(request);
         if (body.decision !== "approve" && body.decision !== "reject") {
