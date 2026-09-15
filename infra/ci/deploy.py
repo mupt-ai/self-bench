@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import shlex
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -26,6 +27,17 @@ def preflight(env):
     if not ctx["infrastructure_only"]:
         return settings(env)
     return None
+
+
+def connect(runner, args, **kwargs):
+    error = RuntimeError('VM connection failed')
+    for attempt in range(5):
+        try:
+            return runner.run(args, **kwargs)
+        except RuntimeError as cause:
+            error = cause
+            time.sleep(min(2 ** attempt, 8))
+    raise error
 
 
 def main():
@@ -63,15 +75,18 @@ def main():
                 (folder/name).write_bytes((Path('infra/runtime')/name).read_bytes())
             (folder/'request.json').write_bytes(contracts.canonical(request))
             remote='/tmp/selfbench-release-'+ctx['run_id']+'-'+ctx['run_attempt']
+            dest=f'/var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]}'
             common=['--project='+ctx['project'],'--zone='+output['zone'],'--tunnel-through-iap','--quiet']
-            runner.run(['gcloud','compute','scp','--recurse',str(folder),output['instance']+':'+remote,*common])
-            # Root-owned copy prevents mutation by another login while scripts execute. Private log stays on VM.
-            command=('sudo install -d -m 0700 /var/lib/selfbench-deploy && '
-                     f'sudo cp -r {shlex.quote(remote)} /var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]} && '
-                     f'sudo chown -R root:root /var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]} && '
-                     f'sudo chmod -R go-rwx /var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]} && '
-                     'sudo bash -c '+shlex.quote(f'cd /var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]} && python3 deploy-host.py request.json > deploy.log 2>&1'))
-            runner.run(['gcloud','compute','ssh',output['instance'],*common,'--command='+command])
+            # One SSH session: a second OS Login cert after scp can fail with publickey on first-time profiles.
+            archive = runner.run(['tar','-C',str(folder),'-czf','-','.'])
+            host=('set -euo pipefail; '
+                  f'mkdir -p {shlex.quote(remote)}; tar -C {shlex.quote(remote)} -xzf -; '
+                  'sudo install -d -m 0700 /var/lib/selfbench-deploy && '
+                  f'sudo cp -r {shlex.quote(remote)} {shlex.quote(dest)} && '
+                  f'sudo chown -R root:root {shlex.quote(dest)} && '
+                  f'sudo chmod -R go-rwx {shlex.quote(dest)} && '
+                  'sudo bash -c '+shlex.quote(f'cd {dest} && python3 deploy-host.py request.json > deploy.log 2>&1'))
+            connect(runner, ['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
             with urllib.request.urlopen(origin+'/healthz',timeout=30) as response:
                 if response.status != 200: raise ValueError('Public health check failed')
             try:

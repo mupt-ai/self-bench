@@ -1,12 +1,23 @@
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from infra.ci import contracts, deploy, source
 from infra.tests.test_terraform_ci import context_env
 
 
 class DeployTests(unittest.TestCase):
+    def test_connect_retries_runtime_errors(self):
+        class Boom:
+            def __init__(self):
+                self.n = 0
+            def run(self, *_args, **_kwargs):
+                self.n += 1
+                if self.n < 3: raise RuntimeError('fail')
+                return b'ok'
+        with patch('infra.ci.deploy.time.sleep'):
+            self.assertEqual(deploy.connect(Boom(), ['ssh']), b'ok')
+
     def test_missing_or_mutable_secret_versions_rejected(self):
         for value in ('{}', '{"shared":"latest","api":1,"worker":2}'):
             with self.assertRaises(ValueError): deploy.settings({'RUNTIME_SECRET_VERSIONS':value,'SELFBENCH_PUBLIC_URL':'https://example.com'})
@@ -47,6 +58,9 @@ class DeployTests(unittest.TestCase):
         deploy_src=(Path(__file__).parents[1]/'ci'/'deploy.py').read_text()
         self.assertIn("docker','image','inspect'",deploy_src)
         self.assertNotIn('artifacts docker images describe',deploy_src)
+        self.assertNotIn("compute','scp'",deploy_src)
+        self.assertIn("tar','-C'",deploy_src)
+        self.assertIn('connect(',deploy_src)
         self.assertLess(shared.index('Verify Apply Approval Protection'),shared.rindex('google-github-actions/auth@'))
         self.assertNotIn('pull_request_target',shared)
         self.assertNotIn('upload-artifact',shared)
