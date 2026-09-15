@@ -5,7 +5,6 @@ from pathlib import Path
 import re
 import shlex
 import tempfile
-import time
 import urllib.error
 import urllib.request
 
@@ -27,17 +26,6 @@ def preflight(env):
     if not ctx["infrastructure_only"]:
         return settings(env)
     return None
-
-
-def connect(runner, args, **kwargs):
-    error = RuntimeError('VM connection failed')
-    for attempt in range(5):
-        try:
-            return runner.run(args, **kwargs)
-        except RuntimeError as cause:
-            error = cause
-            time.sleep(min(2 ** attempt, 8))
-    raise error
 
 
 def main():
@@ -86,7 +74,7 @@ def main():
                   f'sudo chown -R root:root {shlex.quote(dest)} && '
                   f'sudo chmod -R go-rwx {shlex.quote(dest)} && '
                   'sudo bash -c '+shlex.quote(f'cd {dest} && python3 deploy-host.py request.json > deploy.log 2>&1'))
-            connect(runner, ['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
+            runner.run(['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
             with urllib.request.urlopen(origin+'/healthz',timeout=30) as response:
                 if response.status != 200: raise ValueError('Public health check failed')
             try:
