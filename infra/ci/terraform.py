@@ -22,10 +22,10 @@ class Runner:
         if any(name in os.environ for name in ("TF_CLI_ARGS", "TF_CLI_ARGS_plan", "TF_CLI_ARGS_apply")):
             raise ValueError("Unreviewed Terraform CLI argument overrides are forbidden.")
 
-    def run(self, args, *, stdout=None, allowed=(0,)):
+    def run(self, args, *, stdout=None, payload=None, allowed=(0,)):
         with self.log.open("ab") as errors:
             result = subprocess.run(args, stdout=subprocess.PIPE if stdout is None else stdout,
-                                    stderr=errors, env=self.env, timeout=1800)
+                                    stderr=errors, input=payload, env=self.env, timeout=1800)
         if result.returncode not in allowed:
             if stdout is None and result.stdout:
                 with self.log.open("ab") as errors: errors.write(result.stdout)
