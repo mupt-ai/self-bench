@@ -1,16 +1,18 @@
 import { Link } from "react-router";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import {
-  type ExecutionBackend,
   executionBackendLabels,
-  type HarborEnvironment,
+  HOSTED_HARBOR_ENVIRONMENTS,
+  type HostedExecutionBackend,
+  type HostedHarborEnvironment,
+  harborEnvironmentLabels,
 } from "../../../src/providers";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { Input, Select } from "./ui";
 
 export interface GenerationOptions {
   models: string[];
-  sandboxes: ExecutionBackend[];
+  sandboxes: HostedExecutionBackend[];
   credentials: CredentialInfo[];
   available: boolean;
 }
@@ -29,20 +31,20 @@ export function GenerationFields({
   const hosted = value.sandbox === "e2b" || value.sandbox === "vercel";
   const sandboxFields: {
     field: "sandboxCredentialId" | "harborCredentialId";
-    kind: Exclude<ExecutionBackend, "docker">;
+    kind: HostedExecutionBackend | HostedHarborEnvironment;
     label: string;
-  }[] = [];
-  if (value.sandbox !== "docker")
-    sandboxFields.push({
+  }[] = [
+    {
       field: "sandboxCredentialId",
       kind: value.sandbox,
       label: `${executionBackendLabels[value.sandbox]} Credential`,
-    });
-  if (hosted && value.harborEnvironment === "modal")
+    },
+  ];
+  if (hosted && value.harborEnvironment)
     sandboxFields.push({
       field: "harborCredentialId",
-      kind: "modal",
-      label: "Harbor Modal Credential",
+      kind: value.harborEnvironment,
+      label: `Harbor ${harborEnvironmentLabels[value.harborEnvironment]} Credential`,
     });
   return (
     <fieldset disabled={disabled} className="grid min-w-0 gap-6 border-0 p-0 sm:grid-cols-2">
@@ -107,7 +109,7 @@ export function GenerationFields({
               sandbox,
               sandboxCredentialId: undefined,
               sandboxImage: undefined,
-              harborEnvironment: sandbox === "e2b" || sandbox === "vercel" ? "docker" : undefined,
+              harborEnvironment: sandbox === "e2b" || sandbox === "vercel" ? sandbox : undefined,
               harborCredentialId: undefined,
             });
           }}
@@ -176,18 +178,21 @@ export function GenerationFields({
               onChange={(event) =>
                 onChange({
                   ...value,
-                  harborEnvironment: event.target.value as HarborEnvironment,
+                  harborEnvironment: event.target.value as HostedHarborEnvironment,
                   harborCredentialId: undefined,
                 })
               }
             >
               <option value="">Choose an Environment</option>
-              <option value="docker">Docker</option>
-              <option value="modal">Modal</option>
+              {HOSTED_HARBOR_ENVIRONMENTS.map((environment) => (
+                <option key={environment} value={environment}>
+                  {harborEnvironmentLabels[environment]}
+                </option>
+              ))}
             </Select>
             <span className="text-xs leading-5">
-              Generation runs in {executionBackendLabels[value.sandbox]}; verification uses Docker
-              on the worker or your Modal account.
+              Generation runs in {executionBackendLabels[value.sandbox]}; Harbor verification runs
+              in your Modal, Vercel, E2B, or Daytona account.
             </span>
           </label>
         </>

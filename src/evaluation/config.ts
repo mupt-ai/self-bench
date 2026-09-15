@@ -3,7 +3,7 @@ import { harnessIds } from "./harnesses.js";
 import { modelIdPattern, modelProvider, providers } from "./providers.js";
 import type { EvaluationChoices, EvaluationInput } from "./types.js";
 
-export const HARBOR_VERSION = "0.20.1.dev202608040148";
+export const HARBOR_VERSION = "0.23.0";
 export const evaluationSandboxes = ["docker", "modal", "e2b", "daytona"] as const;
 const profileSchema = z
   .object({

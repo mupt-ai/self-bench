@@ -52,7 +52,7 @@ export async function runHarborGate(
     ],
     {
       allowFailure: true,
-      env: harborChildEnvironment(executionEnvironment()),
+      env: harborChildEnvironment(executionEnvironment(), environment),
       timeoutMs: 3 * 60 * 60 * 1000,
       signal,
     },

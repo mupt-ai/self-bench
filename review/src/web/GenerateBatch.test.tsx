@@ -36,7 +36,7 @@ test("batch creation advances without starting, then closes and opens the submit
         ? Response.json({ error: "Settings unavailable" }, { status: 503 })
         : Response.json({
             models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
-            sandboxes: ["modal", "docker"],
+            sandboxes: ["modal", "e2b"],
             available: optionsAvailable,
             credentials: [
               { id: modelId, kind: "openai", auth: "api-key", name: "Model" },
@@ -99,9 +99,17 @@ test("batch creation advances without starting, then closes and opens the submit
     await select("Modal Credential", "");
     await select("OpenAI Credential", modelId);
     expect(button("Generate").disabled).toBe(true);
-    await select("Sandbox", "docker");
-    expect(button("Generate").disabled).toBe(false);
+    expect(
+      container.querySelector('select[aria-label="Sandbox"] option[value="docker"]'),
+    ).toBeNull();
+    await select("Sandbox", "e2b");
+    expect(button("Generate").disabled).toBe(true);
     expect(container.querySelector('select[aria-label="Modal Credential"]')).toBeNull();
+    expect(container.querySelector('select[aria-label="E2B Credential"]')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLSelectElement>('select[aria-label="Harbor Verification"]')?.value,
+    ).toBe("e2b");
+    expect(container.querySelector('select[aria-label="Harbor E2B Credential"]')).not.toBeNull();
     await select("Sandbox", "modal");
     expect(button("Generate").disabled).toBe(false);
     await select("Modal Credential", sandboxId);

@@ -78,42 +78,47 @@ printf '%s|%s|%s|%s|%s|%s|%s|%s\\n' "$*" "$SELFBENCH_EXECUTION_BACKEND" "$SELFBE
       /\|[0-9a-f]{40}\|stack-test\|(8[1-8]\d\d)\|http:\/\/bench\.example\.ts\.net:\1\n/,
     );
   });
-  test("requires an explicit Docker or Modal Harbor backend for Vercel", async () => {
+  test("Vercel generation defaults to Vercel Harbor and then needs its runtime image", async () => {
     const child = Bun.spawn([process.execPath, "src/cli.ts", "up", "--backend", "vercel"], {
       cwd: join(import.meta.dir, ".."),
-      env: process.env,
+      env: {
+        ...process.env,
+        VERCEL_TOKEN: "token",
+        VERCEL_TEAM_ID: "team",
+        VERCEL_PROJECT_ID: "project",
+        SELFBENCH_VERCEL_IMAGE: "",
+      },
       stdout: "pipe",
       stderr: "pipe",
     });
     const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
 
     expect(exitCode).not.toBe(0);
-    expect(stderr).toContain("--harbor-environment is required with --backend vercel");
+    expect(stderr).not.toContain("--harbor-environment is required");
+    expect(stderr).toContain("Vercel is not configured");
   });
-  test("requires explicit E2B Harbor, template, and API-key configuration", async () => {
+  test("requires E2B template and API-key configuration and rejects unknown Harbor environments", async () => {
     const projectRoot = join(import.meta.dir, "..");
-    const missingHarbor = Bun.spawn([process.execPath, "src/cli.ts", "up", "--backend", "e2b"], {
+    const unknownHarbor = Bun.spawn(
+      [process.execPath, "src/cli.ts", "up", "--backend", "e2b", "--harbor-environment", "runloop"],
+      { cwd: projectRoot, env: process.env, stdout: "pipe", stderr: "pipe" },
+    );
+    const [harborExit, harborError] = await Promise.all([
+      unknownHarbor.exited,
+      new Response(unknownHarbor.stderr).text(),
+    ]);
+    expect(harborExit).not.toBe(0);
+    expect(harborError).toContain(
+      '--harbor-environment must be "docker", "modal", "vercel", "e2b", or "daytona"',
+    );
+
+    // E2B generation defaults to E2B Harbor, so the template is the next missing piece.
+    const missingTemplate = Bun.spawn([process.execPath, "src/cli.ts", "up", "--backend", "e2b"], {
       cwd: projectRoot,
-      env: process.env,
+      env: { ...process.env, E2B_API_KEY: "test-key", SELFBENCH_E2B_TEMPLATE: "" },
       stdout: "pipe",
       stderr: "pipe",
     });
-    const [harborExit, harborError] = await Promise.all([
-      missingHarbor.exited,
-      new Response(missingHarbor.stderr).text(),
-    ]);
-    expect(harborExit).not.toBe(0);
-    expect(harborError).toContain("--harbor-environment is required with --backend e2b");
-
-    const missingTemplate = Bun.spawn(
-      [process.execPath, "src/cli.ts", "up", "--backend", "e2b", "--harbor-environment", "docker"],
-      {
-        cwd: projectRoot,
-        env: { ...process.env, E2B_API_KEY: "test-key", SELFBENCH_E2B_TEMPLATE: "" },
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
     const [templateExit, templateError] = await Promise.all([
       missingTemplate.exited,
       new Response(missingTemplate.stderr).text(),

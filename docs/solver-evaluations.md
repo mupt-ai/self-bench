@@ -14,7 +14,7 @@ Comparisons are persisted before workflow submission. A retry uses the same froz
 
 ## Enable on the server
 
-Set `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY` identically on the API and evaluation worker. The key must be a securely generated 32-byte lowercase hex encryption key, separate from session/OAuth secrets. Back it up securely; losing it makes saved credentials unreadable. Startup applies the additive `evaluation_records` migration. Changing the key does not rotate existing records: retain the current key until an explicit decrypt/re-encrypt migration is available. Install `harbor[e2b,daytona,modal]==0.20.1.dev202608040148` on the worker. Set `SELFBENCH_EVAL_TASK_QUEUE` identically on API and worker, then run `node dist/evaluation/worker-main.js`. This worker does not consume task-generation work. The normal combined worker remains supported when using its task queue.
+Set `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY` identically on the API and evaluation worker. The key must be a securely generated 32-byte lowercase hex encryption key, separate from session/OAuth secrets. Back it up securely; losing it makes saved credentials unreadable. Startup applies the additive `evaluation_records` migration. Changing the key does not rotate existing records: retain the current key until an explicit decrypt/re-encrypt migration is available. Install `harbor[e2b,daytona,modal,vercel]==0.23.0` on the worker. Set `SELFBENCH_EVAL_TASK_QUEUE` identically on API and worker, then run `node dist/evaluation/worker-main.js`. This worker does not consume task-generation work. The normal combined worker remains supported when using its task queue.
 
 Alternatively, operators can preconfigure profiles with these non-secret settings on the API and Temporal worker:
 
@@ -29,7 +29,7 @@ For legacy operator profiles, provision the corresponding `SELFBENCH_EVAL_SECRET
 
 Docker requires a working worker-accessible Docker daemon and Compose. For operator profiles, Modal uses dedicated `SELFBENCH_EVAL_SECRET_MODAL_TOKEN_ID` and `SELFBENCH_EVAL_SECRET_MODAL_TOKEN_SECRET`; E2B and Daytona use `SELFBENCH_EVAL_SECRET_E2B_API_KEY` and `SELFBENCH_EVAL_SECRET_DAYTONA_API_KEY`. These are Harbor's built-in solver environments, not the separate generation executors. Generation credentials are not reused automatically.
 
-The worker verifies Harbor **0.20.1.dev202608040148**, matching the existing Dockerfile pin. Harbor installs the selected solver CLI using its built-in harness. Installed agent version details remain in Harbor's trial result artifact. Restart/redeploy the API and worker through your normal deployment process after configuring them. This does not modify OAuth callback registration or existing preview services.
+The worker verifies Harbor **0.23.0**, matching the existing Dockerfile pin. Harbor installs the selected solver CLI using its built-in harness. Installed agent version details remain in Harbor's trial result artifact. Restart/redeploy the API and worker through your normal deployment process after configuring them. This does not modify OAuth callback registration or existing preview services.
 
 ## Results and safety
 

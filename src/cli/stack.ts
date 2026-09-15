@@ -71,7 +71,7 @@ export async function up(args: string[]): Promise<void> {
     parsed.values["harbor-environment"] !== undefined &&
     !isHarborEnvironment(parsed.values["harbor-environment"])
   ) {
-    fail('--harbor-environment must be "docker" or "modal"');
+    fail('--harbor-environment must be "docker", "modal", "vercel", "e2b", or "daytona"');
   }
 
   const root = packageRoot(import.meta.url);

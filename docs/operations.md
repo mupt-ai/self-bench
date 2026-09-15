@@ -50,18 +50,25 @@ Sandbox-provider credentials are separate. Modal accepts its mounted profile or 
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Docker and Modal default Harbor to the matching environment. Vercel and E2B have no Harbor environment, so `--harbor-environment docker|modal` is mandatory for either hosted generation backend.
+SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `--harbor-environment docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
 
 ```bash
 self-bench up --backend docker                         # Docker + Docker
 self-bench up --backend modal                          # Modal + Modal
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
+self-bench up --backend vercel                         # Vercel + Vercel
+self-bench up --backend vercel --harbor-environment e2b
+self-bench up --backend vercel --harbor-environment daytona
+self-bench up --backend e2b                            # E2B + E2B
 self-bench up --backend e2b --harbor-environment docker
 self-bench up --backend e2b --harbor-environment modal
 self-bench up --backend docker --harbor-environment modal
 self-bench up --backend modal --harbor-environment docker
+self-bench up --backend modal --harbor-environment daytona
 ```
+
+The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider.
 
 Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
 
@@ -94,7 +101,7 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 
 ### E2B
 
-E2B is a generation backend only; choose Docker or Modal for Harbor. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
+E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `--harbor-environment`. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
@@ -159,7 +166,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel is a generation backend only; choose Docker or Modal for Harbor. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `--harbor-environment`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 

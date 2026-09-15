@@ -81,7 +81,7 @@ The repository must be a Git checkout with a GitHub `origin`. self-bench pins it
 Install Harbor and extract the generated tasks:
 
 ```bash
-uv tool install --python 3.12 'harbor==0.20.1.dev202608040148'
+uv tool install --python 3.12 'harbor==0.23.0'
 
 mkdir -p ./self-bench-export ./self-bench-tasks
 tar -xzf ./self-bench-evals.tar.gz -C ./self-bench-export
@@ -140,29 +140,33 @@ The quickstart uses local Docker sandboxes so it works without a hosted sandbox 
 
 - **Docker:** `self-bench up --backend docker` keeps generation and validation on your machine.
 - **Modal:** authenticate with `modal token new`, then run `self-bench up --backend modal`.
-- **Vercel Sandbox:** run `self-bench setup vercel`, then choose Docker or Modal for Harbor validation.
-- **E2B:** build the pinned SelfBench runtime with `self-bench setup e2b --name NAME[:TAG]`, then choose Docker or Modal for Harbor validation.
+- **Vercel Sandbox:** run `self-bench setup vercel`; Harbor validation defaults to Vercel too.
+- **E2B:** build the pinned SelfBench runtime with `self-bench setup e2b --name NAME[:TAG]`; Harbor validation defaults to E2B too.
 - **Temporal Cloud + Modal/E2B:** use a persistent worker for unattended runs and large repositories.
 
 See [Operations and deployment](docs/operations.md) for provider setup, credentials, persistence, object storage, and Temporal Cloud deployment.
 
-Generation sandboxes and Harbor validation are independent choices. Docker and Modal retain their matching defaults; Vercel and E2B must name a Harbor environment because Harbor supports neither as an environment:
+Generation sandboxes and Harbor validation are independent choices. Every generation backend defaults to the matching Harbor environment, and `--harbor-environment` picks a different one. Daytona is available for Harbor only:
 
 ```bash
 # Matching defaults
 self-bench up --backend docker
 self-bench up --backend modal
 
-# Vercel generation with either supported Harbor environment
+# Vercel generation, with Vercel Harbor by default or any other environment
 self-bench setup vercel
+self-bench up --backend vercel                           # Vercel + Vercel
 self-bench up --backend vercel --harbor-environment docker
 self-bench up --backend vercel --harbor-environment modal
+self-bench up --backend vercel --harbor-environment e2b
+DAYTONA_API_KEY=... self-bench up --backend vercel --harbor-environment daytona
 
 # E2B generation uses a required prebuilt template; setup never installs at runtime
 export E2B_API_KEY=...
 self-bench setup e2b --name selfbench-runtime:v1
 export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
-self-bench up --backend e2b --harbor-environment docker
+self-bench up --backend e2b                              # E2B + E2B
+# self-bench up --backend e2b --harbor-environment docker
 # self-bench up --backend e2b --harbor-environment modal
 
 # Explicit cross-provider combinations are also supported

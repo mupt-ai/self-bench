@@ -74,7 +74,7 @@ All paths below are relative to `/api/orgs/:org/repos/:owner/:name`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/pull-requests?page=N` | Merged pull requests from GitHub, twenty per page: `pullRequests`, `nextPage`, `incomplete` |
-| `GET` | `/generation-options` | What a generation run may use: `models`, `sandboxes`, `credentials`, and whether generation is `available` |
+| `GET` | `/generation-options` | What a generation run may use: `models`, `sandboxes` (hosted providers only, never `docker`), `credentials`, and whether generation is `available` |
 | `POST` | `/tasks/from-pr` | Body `{ "pr": 123 \| "https://github.com/owner/name/pull/123", "generation"?: GenerationSettings }`. Builds one task from a merged pull request; `201 { task }` |
 | `GET` | `/tasks` | Every task of the repository (`tasks`), refreshed against running workflows |
 | `GET` | `/tasks/:runId/:taskId` | One task, by task id or candidate id (`task`) |
@@ -85,7 +85,7 @@ All paths below are relative to `/api/orgs/:org/repos/:owner/:name`.
 
 A task object carries `runId`, `taskId`, `candidateId`, `difficulty`, `stage`, `pipelineStatus`, the derived `state` (`needs_review`, `accepted`, `rejected`, `failed`, `in_progress`), `reason`, `sourcePr`, `sourceUrl`, `review`, `round`, `workflowId`, `startedBy`, `startedAt`, and `syncedAt`.
 
-`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox, modelCredentialId, sandboxCredentialId?, sandboxImage?, harborEnvironment?, harborCredentialId? }`; the credential ids come from the organization credentials routes. The full schema is `generationSettingsSchema` in `src/site/generation-settings.ts`.
+`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox: "modal" | "vercel" | "e2b", modelCredentialId, sandboxCredentialId, sandboxImage?, harborEnvironment?: "modal" | "vercel" | "e2b" | "daytona", harborCredentialId? }`; the credential ids come from the organization credentials routes. `sandboxImage`, `harborEnvironment`, and `harborCredentialId` are required for `vercel` and `e2b` and rejected for `modal`. The full schema is `generationSettingsSchema` in `src/site/generation-settings.ts`.
 
 ## Batches
 
