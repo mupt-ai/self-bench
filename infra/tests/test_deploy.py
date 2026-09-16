@@ -66,11 +66,12 @@ class DeployTests(unittest.TestCase):
         self.assertIn('deploy-prod.yml@',policy)
         self.assertNotIn('pull_request',policy)
 
-    def test_only_dev_and_prod_environments_with_phase_specific_identities(self):
+    def test_phase_specific_deployment_environments_and_identities(self):
         from infra.bootstrap import terraform_ci, terraform_github
         root=Path(__file__).parents[2]
         workflow=(root/'.github/workflows/deploy-reusable.yml').read_text()
-        self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),2)
+        self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),1)
+        self.assertIn("environment: ${{ inputs.target_environment == 'prod' && 'prod-plan' || inputs.target_environment }}",workflow)
         self.assertNotIn('target_environment }}-plan',workflow)
         self.assertNotIn('target_environment }}-apply',workflow)
         for phase in ('PLAN','APPLY'):

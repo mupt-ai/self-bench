@@ -17,10 +17,8 @@ roll out the API and worker, and verify service health. No manual SSH rollout sh
 Production builds the release commit; it does not promote the exact dev image digest.
 
 Production checks the actual release event, immutable triggering SHA and tag ancestry from main
-before cloud authentication. There are exactly two deployment environments: `dev` and `prod`.
-Dev deploys from main without a separate environment approval. Production retains required review;
-both its plan and deployment jobs reference `prod`, so GitHub may request approval for both jobs.
-Plan/apply remain pipeline jobs and cloud identities, not additional GitHub environments.
+before cloud authentication. Production planning uses an ungated `prod-plan` environment;
+apply and deployment remain protected by the `prod` environment review.
 
 ## Prerequisites and Transition
 
@@ -79,7 +77,7 @@ controlled dev deployment. **No live deployment was run while implementing this 
 Each environment holds common project/state/runtime settings plus two named identity pairs:
 `GCP_PLAN_SERVICE_ACCOUNT`, `GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER`,
 `GCP_APPLY_SERVICE_ACCOUNT`, `GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER`.
-These preserve different cloud permissions without duplicating deployment environments.
+Production planning uses `prod-plan`; apply uses `prod`.
 The original `GCP_SERVICE_ACCOUNT` and `GCP_WORKLOAD_IDENTITY_PROVIDER` remain for the manual
 non-provisioning auth check. Production now permits release tags, so its old main-only auth check
 is intentionally not a release test; use the production deployment workflow's authenticated jobs.

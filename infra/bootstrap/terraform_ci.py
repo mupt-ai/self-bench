@@ -15,10 +15,16 @@ DESCRIPTION = "SelfBench Terraform CI; managed by infra/bootstrap/terraform_ci.p
 ROLE_IDS = {"plan": "selfbenchTerraformPlan", "apply": "selfbenchTerraformApply", "lock": "selfbenchTerraformLock"}
 
 
+def github_environment(config, phase):
+    if phase not in ("plan", "apply"):
+        raise ValueError("Unknown deployment phase.")
+    return "prod-plan" if config["environment"] == "prod" and phase == "plan" else config["environment"]
+
+
 def identity(config, phase):
     return auth.validate_config({key: config[key] for key in (
         "account", "project_id", "project_number", "repository", "repository_id", "repository_owner_id", "branch"
-    )} | {"environment": config["environment"], "workflow_path": f".github/workflows/deploy-{config['environment']}.yml",
+    )} | {"environment": github_environment(config, phase), "workflow_path": f".github/workflows/deploy-{config['environment']}.yml",
           "pool_id": f"{config['identity_prefix']}-{phase}", "provider_id": "github",
           "service_account_id": f"{config['identity_prefix']}-{phase}"})
 
