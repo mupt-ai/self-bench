@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { Link } from "react-router";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import {
@@ -15,6 +16,15 @@ export interface GenerationOptions {
   sandboxes: HostedExecutionBackend[];
   credentials: CredentialInfo[];
   available: boolean;
+}
+
+function Hint({ text }: { text: string }) {
+  return (
+    <span title={text} className="inline-flex cursor-help text-muted-foreground/70">
+      <Info aria-hidden="true" className="size-3.5" />
+      <span className="sr-only">{text}</span>
+    </span>
+  );
 }
 
 export function GenerationFields({
@@ -58,7 +68,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+          className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
         >
           {field === "authorModel" ? "Author Model" : "Verifier Model"}
           <Select
@@ -77,7 +87,7 @@ export function GenerationFields({
       ))}
       <label
         htmlFor="generation-reasoning"
-        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
       >
         Reasoning
         <Select
@@ -95,7 +105,7 @@ export function GenerationFields({
       </label>
       <label
         htmlFor="generation-sandbox"
-        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
       >
         Sandbox
         <Select
@@ -123,7 +133,7 @@ export function GenerationFields({
       </label>
       <label
         htmlFor="generation-model-key"
-        className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
       >
         OpenAI Credential
         <Select
@@ -147,10 +157,19 @@ export function GenerationFields({
       {hosted && (
         <>
           <label
-            className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+            className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
             htmlFor="generation-image"
           >
-            {value.sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image"}
+            <span className="flex items-center gap-1.5">
+              {value.sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image"}
+              <Hint
+                text={
+                  value.sandbox === "e2b"
+                    ? "Use a SelfBench template built with self-bench setup e2b, not the base template."
+                    : "Use the digest-pinned image from self-bench setup vercel."
+                }
+              />
+            </span>
             <Input
               id="generation-image"
               required
@@ -160,17 +179,17 @@ export function GenerationFields({
                 value.sandbox === "e2b" ? "Template Name or ID" : "registry/image@sha256:…"
               }
             />
-            <span className="text-xs leading-5">
-              {value.sandbox === "e2b"
-                ? "Use a SelfBench template built with self-bench setup e2b, not the base template."
-                : "Use the digest-pinned image from self-bench setup vercel."}
-            </span>
           </label>
           <label
-            className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+            className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
             htmlFor="generation-harbor"
           >
-            Harbor Verification
+            <span className="flex items-center gap-1.5">
+              Harbor Verification
+              <Hint
+                text={`Generation runs in ${executionBackendLabels[value.sandbox]}; Harbor verification runs in your Modal, Vercel, E2B, or Daytona account.`}
+              />
+            </span>
             <Select
               id="generation-harbor"
               aria-label="Harbor Verification"
@@ -190,10 +209,6 @@ export function GenerationFields({
                 </option>
               ))}
             </Select>
-            <span className="text-xs leading-5">
-              Generation runs in {executionBackendLabels[value.sandbox]}; Harbor verification runs
-              in your Modal, Vercel, E2B, or Daytona account.
-            </span>
           </label>
         </>
       )}
@@ -201,7 +216,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid gap-2 font-mono text-[13px] text-muted-foreground"
+          className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
         >
           {label}
           <Select

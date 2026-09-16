@@ -10,6 +10,10 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_API_TOKEN: ${SELFBENCH_API_TOKEN:-selfbench-local}
   SELFBENCH_BUILD_COMMIT: ${SELFBENCH_BUILD_COMMIT:-}
   SELFBENCH_TEMPORAL_ADDRESS: temporal:7233
+  # Generation from the site needs its queue named; the combined worker serves it alongside
+  # SELFBENCH_TASK_QUEUE, so both default to the same queue.
+  SELFBENCH_TASK_QUEUE: ${SELFBENCH_TASK_QUEUE:-selfbench-dev}
+  SELFBENCH_GENERATION_TASK_QUEUE: ${SELFBENCH_GENERATION_TASK_QUEUE:-selfbench-dev}
   SELFBENCH_ARTIFACT_BACKEND: local
   SELFBENCH_ARTIFACT_DIR: /var/lib/selfbench/artifacts
   SELFBENCH_EXECUTION_BACKEND: ${SELFBENCH_EXECUTION_BACKEND:-docker}
