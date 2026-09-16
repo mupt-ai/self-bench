@@ -40,7 +40,8 @@ jobs:
     if: vars.GCP_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ inputs.target_environment }}
+    # Planning is automatic; only the production apply job requires review.
+    environment: ${{ inputs.target_environment == 'prod' && 'prod-plan' || inputs.target_environment }}
     permissions:
       contents: read
       id-token: write

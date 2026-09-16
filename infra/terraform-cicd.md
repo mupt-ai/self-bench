@@ -17,10 +17,11 @@ roll out the API and worker, and verify service health. No manual SSH rollout sh
 Production builds the release commit; it does not promote the exact dev image digest.
 
 Production checks the actual release event, immutable triggering SHA and tag ancestry from main
-before cloud authentication. There are exactly two deployment environments: `dev` and `prod`.
-Dev deploys from main without a separate environment approval. Production retains required review;
-both its plan and deployment jobs reference `prod`, so GitHub may request approval for both jobs.
-Plan/apply remain pipeline jobs and cloud identities, not additional GitHub environments.
+before cloud authentication. GitHub uses `dev`, `prod-plan`, and `prod` environments.
+Dev deploys from main without a separate environment approval. Production planning uses ungated
+`prod-plan`; apply and application deployment use `prod`, which retains required review and the
+fail-closed approval check. Terraform state, inputs, and saved-plan receipts still use `prod`.
+The planner's WIF subject is `environment:prod-plan`; the apply identity trusts only `environment:prod`.
 
 ## Prerequisites and Transition
 
@@ -79,7 +80,8 @@ controlled dev deployment. **No live deployment was run while implementing this 
 Each environment holds common project/state/runtime settings plus two named identity pairs:
 `GCP_PLAN_SERVICE_ACCOUNT`, `GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER`,
 `GCP_APPLY_SERVICE_ACCOUNT`, `GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER`.
-These preserve different cloud permissions without duplicating deployment environments.
+Dev holds both identity pairs. Production's `prod-plan` holds only the plan pair; `prod` holds the
+apply pair. Both production environments need identical common project/state/runtime settings.
 The original `GCP_SERVICE_ACCOUNT` and `GCP_WORKLOAD_IDENTITY_PROVIDER` remain for the manual
 non-provisioning auth check. Production now permits release tags, so its old main-only auth check
 is intentionally not a release test; use the production deployment workflow's authenticated jobs.
@@ -101,3 +103,52 @@ pushes and stable production releases always use the full deployment path.
 ## User-Owned Generation Credentials
 
 Generation uses the user-selected encrypted model and sandbox credentials from the application database. The VM worker must not be configured with global `OPENAI_API_KEY`, `SELFBENCH_PI_AUTH_JSON`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `E2B_API_KEY`, `VERCEL_TOKEN`, or `GH_TOKEN` values for generation. `generationEnvironment()` resolves the selected user credentials and the submitting user's GitHub OAuth token server-side and injects them only into that run's activities and isolated sandbox. The deploy preflight therefore requires only the worker runtime token, not provider credentials.
+
+## Migrating to Automatic Production Planning
+
+Complete this setup before publishing a release containing the changed workflow. No Terraform
+apply, new infrastructure, or runtime secret payload copy is needed.
+
+1. Create `prod-plan` with no required reviewers, wait timer, or custom deployment protection rules.
+   Allow exactly the `*` tag policy, not branches. Leave all `prod` protections untouched.
+   `infra.bootstrap.terraform_github` now configures this split and refuses to overwrite drift.
+2. Copy these variables from `prod` to `prod-plan`: `GCP_PROJECT_ID`, `TF_STATE_BUCKET`,
+   `TF_PLAN_BUCKET`, `TF_INPUTS_JSON`, `GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER`,
+   `GCP_PLAN_SERVICE_ACCOUNT`, `RUNTIME_SECRET_VERSIONS`, and `SELFBENCH_PUBLIC_URL`.
+   The bootstrap configures the first six; configure the last two separately. Do not copy apply
+   identity variables or secrets. Keep shared values synchronized; mismatched inputs fail receipt verification.
+3. Inspect the existing production **plan** WIF provider condition. Change only its exact subject
+   from `repo:OWNER/REPO:environment:prod` to `repo:OWNER/REPO:environment:prod-plan`.
+   Preserve repository/owner IDs, release-only event, tag, caller, reusable-workflow and runner checks.
+   Do not change the apply provider, service-account IAM, or role permissions. The cloud bootstrap
+   intentionally refuses to overwrite existing provider drift; this migration needs an explicit
+   operator update and read-back verification. Old workflow releases will no longer authenticate
+   their planner after this change, so coordinate the transition with queued/in-progress releases.
+4. After merging, verify on the next intended stable release that planning completes automatically
+   and deployment waits for review on `prod`. Approve only after reviewing the plan. Local tests
+   do not establish that the live environment and WIF migration has been completed.
+
+## Releasing Without a Dedicated Release PR
+
+The production workflow does not require a release PR. Publish a stable GitHub release targeting
+an existing commit on `main`; the tag must resolve to that commit. Normal code review and branch
+policies still apply to getting changes onto `main`. Do not bypass those policies or move old tags.
+
+This repository also publishes npm on `v*` tag pushes and checks that the tag equals
+`v` plus `package.json`'s version. Include the intended version bump in a normal code PR if you
+want a new npm version without a separate release-only PR. From a clean checkout of the intended
+merged commit, after confirming that the version and tag are unused:
+
+```sh
+version="$(node -p "require('./package.json').version")"
+tag="v$version"
+git fetch origin main --tags
+git merge-base --is-ancestor HEAD origin/main
+git tag "$tag" HEAD
+git push origin "refs/tags/$tag"
+gh release create "$tag" --verify-tag --title "$tag" --generate-notes
+```
+
+These are publishing commands, not a dry run: the tag push starts npm publishing and the stable
+release starts production planning. Apply/deploy still waits for `prod` approval. Publishing a
+release alone does not bump the package version. Never re-publish an already-used npm version.

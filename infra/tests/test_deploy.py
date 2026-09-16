@@ -66,11 +66,15 @@ class DeployTests(unittest.TestCase):
         self.assertIn('deploy-prod.yml@',policy)
         self.assertNotIn('pull_request',policy)
 
-    def test_only_dev_and_prod_environments_with_phase_specific_identities(self):
+    def test_automatic_prod_plan_and_protected_apply_with_phase_specific_identities(self):
         from infra.bootstrap import terraform_ci, terraform_github
         root=Path(__file__).parents[2]
         workflow=(root/'.github/workflows/deploy-reusable.yml').read_text()
-        self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),2)
+        self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),1)
+        plan_job, deploy_job = workflow.split('  deploy:', 1)
+        self.assertIn("environment: ${{ inputs.target_environment == 'prod' && 'prod-plan' || inputs.target_environment }}", plan_job)
+        self.assertIn('environment: ${{ inputs.target_environment }}', deploy_job)
+        self.assertIn('python3 -m infra.ci.approval', deploy_job)
         self.assertNotIn('target_environment }}-plan',workflow)
         self.assertNotIn('target_environment }}-apply',workflow)
         for phase in ('PLAN','APPLY'):
@@ -81,6 +85,30 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(terraform_ci.identity(config,phase)['environment'],'dev')
             values=terraform_github.variables(config,{},phase)
             self.assertIn('GCP_'+phase.upper()+'_SERVICE_ACCOUNT',values)
+
+    def test_prod_planner_cannot_assume_apply_identity(self):
+        from infra.bootstrap import github_auth, terraform_ci, terraform_github
+        config=json.loads((Path(__file__).parents[1]/'bootstrap/terraform-ci.json.example').read_text())
+        config['environment']='prod'
+        for phase, environment in (('plan', 'prod-plan'), ('apply', 'prod')):
+            identity=terraform_ci.identity(config, phase)
+            self.assertEqual(identity['environment'], environment)
+            policy=github_auth.condition(identity, terraform_ci.events(config))
+            self.assertIn(f"assertion.sub == 'repo:{config['repository']}:environment:{environment}'", policy)
+            self.assertIn('deploy-prod.yml@', policy)
+            self.assertIn('deploy-reusable.yml@', policy)
+            self.assertIn("assertion.event_name == 'release'", policy)
+            values=terraform_github.variables(config, {}, phase)
+            other='APPLY' if phase == 'plan' else 'PLAN'
+            self.assertNotIn(f'GCP_{other}_SERVICE_ACCOUNT', values)
+
+    def test_prod_apply_still_requires_review(self):
+        from infra.ci.approval import verify
+        env={'deployment_branch_policy':{'protected_branches':False,'custom_branch_policies':True},'protection_rules':[]}
+        policy={'total_count':1,'branch_policies':[{'name':'*','type':'tag'}]}
+        with self.assertRaises(ValueError): verify(env,policy,'main',release=True)
+        env['protection_rules']=[{'type':'required_reviewers','reviewers':[{'id':123}]}]
+        verify(env,policy,'main',release=True)
 
     def test_dev_requires_branch_restriction_but_not_prod_reviewers(self):
         from infra.ci.approval import verify

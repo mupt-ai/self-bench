@@ -41,9 +41,9 @@ def execute(config, inputs, reviewer_ids):
     ref_type = "tag" if config["environment"] == "prod" else "branch"
     branch_policy = {"protected_branches": False, "custom_branch_policies": True}
     for phase in ("plan", "apply"):
-        name = config["environment"]
+        name = terraform_ci.github_environment(config, phase)
         endpoint = f"repos/{repo}/environments/{name}"
-        required = reviewer_ids if config["environment"] == "prod" else []
+        required = reviewer_ids if config["environment"] == "prod" and phase == "apply" else []
         if name not in names:
             api(endpoint, "PUT", {"deployment_branch_policy": branch_policy, "wait_timer": 0,
                                   "prevent_self_review": False,
@@ -99,8 +99,8 @@ def main():
         execute(config, inputs, args.reviewer_id)
     else:
         print(json.dumps({"dry_run": True, "environments": {
-            phase: {"environment": config["environment"], "variables": variables(config, inputs, phase),
-                                               "reviewers": args.reviewer_id if config["environment"] == "prod" else []}
+            phase: {"environment": terraform_ci.github_environment(config, phase), "variables": variables(config, inputs, phase),
+                                               "reviewers": args.reviewer_id if config["environment"] == "prod" and phase == "apply" else []}
             for phase in ("plan", "apply")}}, indent=2))
 
 
