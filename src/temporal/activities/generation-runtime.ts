@@ -1,5 +1,5 @@
 import { Context } from "@temporalio/activity";
-import { ApplicationFailure } from "@temporalio/common";
+import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../config.js";
 import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
@@ -76,6 +76,9 @@ export async function withGenerationRuntime<T>(
         signal: Context.current().cancellationSignal,
       });
     } catch (error) {
+      // Cancellation must propagate as cancellation, not a non-retryable configuration failure.
+      if (Context.current().cancellationSignal.aborted)
+        throw new CancelledFailure("activity cancellation requested");
       throw ApplicationFailure.nonRetryable(
         error instanceof Error ? error.message : "Managed E2B template unavailable",
         "GenerationConfiguration",
