@@ -129,16 +129,23 @@ describe("static submission check", () => {
     ]);
   });
 
-  test("enforces the fix boundary when an original task is supplied", () => {
-    const result = staticCheckSubmission({
-      definitionJson: JSON.stringify({ ...definition, prompt: "changed" }),
-      testPatch,
-      goldPatch,
-      original: { definitionJson: JSON.stringify(definition), testPatch, goldPatch },
-    });
-    expect(result.errors).toEqual([
-      { gate: "fix", message: "verifier fix changed immutable definition field prompt" },
-    ]);
+  test("sandbox-check rejects the retired original-task arguments", async () => {
+    const result = await runCommand(
+      "bun",
+      [
+        "src/sandbox/programs/check.ts",
+        "definition",
+        "test",
+        "gold",
+        "output",
+        "original-definition",
+        "original-test",
+        "original-gold",
+      ],
+      { allowFailure: true },
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("usage: sandbox-check");
   });
 
   test("the sandbox-check program proves patches apply against a clean base worktree", async () => {

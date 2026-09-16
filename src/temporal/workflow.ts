@@ -22,9 +22,9 @@ import { executeRun } from "./workflow/run.js";
 
 export const statusQuery = defineQuery<RunStatus>("status");
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
-export const candidateProgressSignal = defineSignal<[TaskProgress]>("candidateProgress");
+const candidateProgressSignal = defineSignal<[TaskProgress]>("candidateProgress");
 
-export function candidateWorkflowId(runId: string, candidateId: string): string {
+function candidateWorkflowId(runId: string, candidateId: string): string {
   return `${runId}/candidate/${candidateId}`;
 }
 

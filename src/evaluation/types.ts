@@ -2,7 +2,8 @@ import type { Harness } from "./harnesses.js";
 import type { ThinkingLevel } from "./model-options.js";
 
 export type { Harness } from "./harnesses.js";
-export type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
+
+type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
 export interface EvaluationPricing {
   maxInputTokens?: number;
   input: number;
@@ -12,7 +13,7 @@ export interface EvaluationPricing {
   source: string;
   asOf: string;
 }
-export interface EvaluationTask {
+interface EvaluationTask {
   runId: string;
   taskId: string;
   bundleKey: string;

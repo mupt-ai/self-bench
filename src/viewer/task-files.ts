@@ -2,7 +2,7 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { LocalTaskSummary, TaskFileEntry, TaskFiles } from "./types.js";
 
-export const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024;
+const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_SCAN_DEPTH = 4;
 const BINARY_SUFFIXES = [".gz", ".tgz", ".tar", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".pdf"];
 
@@ -47,7 +47,7 @@ async function summarizeTask(base: string, directory: string): Promise<LocalTask
   };
 }
 
-export function taskIdFor(base: string, directory: string): string {
+function taskIdFor(base: string, directory: string): string {
   const path = relative(base, directory);
   if (!path) return basename(base);
   const segments = path.split(sep);
@@ -94,7 +94,7 @@ export async function readTaskDirectory(directory: string, taskId: string): Prom
   return { taskId, files };
 }
 
-export async function listFiles(directory: string): Promise<string[]> {
+async function listFiles(directory: string): Promise<string[]> {
   const output: string[] = [];
   const visit = async (current: string, prefix: string): Promise<void> => {
     const entries = await readdir(current, { withFileTypes: true });
@@ -112,7 +112,7 @@ export async function listFiles(directory: string): Promise<string[]> {
   return output;
 }
 
-export function looksLikeText(bytes: Uint8Array): boolean {
+function looksLikeText(bytes: Uint8Array): boolean {
   const sample = bytes.subarray(0, 8192);
   for (const byte of sample) {
     if (byte === 0) return false;

@@ -18,13 +18,13 @@ import { verifierRuntimeFiles } from "./runtime-assets.js";
 import { assertTestPatch } from "./test-patch.js";
 import { solutionScript, testScript } from "./verifier.js";
 
-export interface AuthoredTaskFiles {
+interface AuthoredTaskFiles {
   readonly definition: TaskDefinition;
   readonly testPatch: string;
   readonly goldPatch: string;
 }
 
-export async function loadAuthoredTask(directory: string): Promise<AuthoredTaskFiles> {
+async function loadAuthoredTask(directory: string): Promise<AuthoredTaskFiles> {
   const definition = taskDefinitionSchema.parse(
     JSON.parse(await readFile(join(directory, "definition.json"), "utf8")),
   );

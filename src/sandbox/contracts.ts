@@ -34,7 +34,7 @@ export interface SandboxRequest {
   readonly memoryMiB?: number;
 }
 
-export interface SandboxProgress {
+interface SandboxProgress {
   readonly stream: "stdout" | "stderr";
   readonly bytes: number;
 }

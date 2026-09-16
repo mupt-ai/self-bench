@@ -73,15 +73,6 @@ export function SearchInput({ className, ...props }: ComponentProps<typeof Input
   );
 }
 
-export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
-  return (
-    <textarea
-      {...props}
-      className={cn(controlStyles, "h-auto min-h-24 resize-y py-2 leading-6", className)}
-    />
-  );
-}
-
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <span className="relative block min-w-0">

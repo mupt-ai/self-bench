@@ -15,7 +15,6 @@ export { extractProvenanceMessages } from "./provenance/session.js";
 export type {
   LocalSessionMetadata,
   ProvenanceMessage,
-  RepositoryProvenanceCollection,
   SessionProvenanceFormat,
 } from "./provenance/types.js";
 export { provenanceMessageSchema } from "./provenance/types.js";

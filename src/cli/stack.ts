@@ -149,7 +149,7 @@ export async function down(): Promise<void> {
 }
 
 /** What Compose will see: the checkout's `.env` under the process environment. */
-export function checkoutEnvironment(root: string): Record<string, string> {
+function checkoutEnvironment(root: string): Record<string, string> {
   const fromProcess = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,

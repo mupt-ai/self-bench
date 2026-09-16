@@ -41,7 +41,7 @@ const profileSchema = z
       context.addIssue({ code: "custom", message: "Claude Code requires an Anthropic model" });
     }
   });
-export function evaluationConfig(env: NodeJS.ProcessEnv = process.env) {
+function evaluationConfig(env: NodeJS.ProcessEnv = process.env) {
   const profiles = z
     .array(profileSchema)
     .max(50)

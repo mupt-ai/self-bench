@@ -10,7 +10,7 @@ const PRIVATE_FILE_MODE = 0o600;
 const CONFIG_FILE = "config.json";
 const CREDENTIALS_FILE = "credentials.json";
 
-function profileFilePaths(directory: string) {
+export function profileFilePaths(directory: string) {
   return { config: join(directory, CONFIG_FILE), credentials: join(directory, CREDENTIALS_FILE) };
 }
 
@@ -73,7 +73,7 @@ export async function ensurePrivateDirectory(directory: string): Promise<void> {
   await chmod(directory, PRIVATE_DIRECTORY_MODE);
 }
 
-export async function readPrivateJson(path: string): Promise<unknown | undefined> {
+async function readPrivateJson(path: string): Promise<unknown | undefined> {
   let stats: Stats;
   try {
     stats = await lstat(path);

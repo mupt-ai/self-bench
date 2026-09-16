@@ -1,7 +1,5 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { FIX_FIELDS } from "./schemas.js";
 import { failure, type ToolFailure } from "./static-check.js";
 
 export interface TaskDeliverable {
@@ -10,7 +8,7 @@ export interface TaskDeliverable {
   readonly goldPatch: string;
 }
 
-export const TASK_DELIVERABLE_FILES = [
+const TASK_DELIVERABLE_FILES = [
   "definition.json",
   "instruction.md",
   "test.patch",
@@ -64,86 +62,6 @@ export function loadTaskDeliverable(root: string): TaskDeliverable | ToolFailure
     return deliverableFailure(root, problems);
   }
   return { definition: { ...definition, prompt: instruction }, testPatch, goldPatch };
-}
-
-export interface FixDeliverable {
-  readonly definition: Record<string, unknown>;
-  readonly testPatch: string;
-  readonly goldPatch: string;
-  readonly testPatchSource: "file" | "working-tree";
-  readonly original: { definition: string; testPatch: string; goldPatch: string };
-}
-
-/**
- * Verifier deliverable: `<fixRoot>/definition.json` (optional; only environment, testCommand,
- * failToPass, passToPass, testPaths, timeouts, resources are read and merged onto the compiled
- * task's definition) and `<fixRoot>/test.patch` (optional; regenerated with `git diff` from the
- * repository working tree when absent).
- */
-export function loadFixDeliverable(
-  fixRoot: string,
-  taskDirectory: string,
-  repository: string,
-): FixDeliverable | ToolFailure {
-  const originalDefinition = join(taskDirectory, "definition.json");
-  const definition = JSON.parse(readFileSync(originalDefinition, "utf8")) as Record<
-    string,
-    unknown
-  >;
-  const fixDefinitionPath = join(fixRoot, "definition.json");
-  if (existsSync(fixDefinitionPath)) {
-    let fix: Record<string, unknown>;
-    try {
-      fix = JSON.parse(readFileSync(fixDefinitionPath, "utf8")) as Record<string, unknown>;
-    } catch (error) {
-      return deliverableFailure(fixRoot, [
-        `definition.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-      ]);
-    }
-    for (const field of FIX_FIELDS) {
-      if (fix[field] !== undefined) {
-        definition[field] = fix[field];
-      }
-    }
-  }
-  const testPatchPath = join(fixRoot, "test.patch");
-  const fromFile = existsSync(testPatchPath);
-  const testPatch = fromFile ? readFileSync(testPatchPath, "utf8") : workingTreePatch(repository);
-  if (!testPatch.trim()) {
-    return deliverableFailure(fixRoot, [
-      fromFile ? "test.patch is empty" : "test.patch is absent and /work/repo has no changes",
-    ]);
-  }
-  return {
-    definition,
-    testPatch,
-    goldPatch: readFileSync(join(taskDirectory, "solution/gold.patch"), "utf8"),
-    testPatchSource: fromFile ? "file" : "working-tree",
-    original: {
-      definition: originalDefinition,
-      testPatch: join(taskDirectory, "tests/test.patch"),
-      goldPatch: join(taskDirectory, "solution/gold.patch"),
-    },
-  };
-}
-
-export function workingTreePatch(repository: string): string {
-  for (const args of [
-    ["add", "-N", "--all"],
-    ["diff", "--binary", "HEAD"],
-  ]) {
-    const result = spawnSync("git", ["-C", repository, ...args], {
-      encoding: "utf8",
-      maxBuffer: 256 * 1024 * 1024,
-    });
-    if (result.status !== 0) {
-      throw new Error(`git ${args[0]} failed: ${result.stderr.slice(-2_000)}`);
-    }
-    if (args[0] === "diff") {
-      return result.stdout;
-    }
-  }
-  return "";
 }
 
 function deliverableFailure(root: string, problems: readonly string[]): ToolFailure {

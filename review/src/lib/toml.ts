@@ -48,16 +48,6 @@ export function parseToml(text: string): TomlSection[] {
   return sections.filter((section) => section.entries.length > 0 || section.name);
 }
 
-export function tomlLookup(
-  sections: TomlSection[],
-  section: string,
-  key: string,
-): TomlValue | undefined {
-  return sections
-    .find((entry) => entry.name === section)
-    ?.entries.find(([name]) => name === key)?.[1];
-}
-
 export function formatTomlValue(value: TomlValue): string {
   if (Array.isArray(value)) return value.map(formatTomlValue).join(", ");
   return String(value);

@@ -87,35 +87,6 @@ function harborCommandFailureMessage(
   const detail = output.trim();
   return `Harbor ${agent} exited ${exitCode} for ${taskId}${detail ? `:\n${boundedTail(detail)}` : ""}`;
 }
-export function harborGateFailureReason(
-  nopPassed: boolean,
-  nopChecks: Record<string, unknown>,
-  oraclePassed: boolean,
-  oracleChecks: Record<string, unknown>,
-  nopOutput?: string,
-  oracleOutput?: string,
-): string {
-  const formatChecks = (checks: Record<string, unknown>): string =>
-    [
-      "patch_applied",
-      "fail_to_pass",
-      "pass_to_pass",
-      "deterministic",
-      "setup_completed",
-      "fail_to_pass_exit_code",
-      "fail_to_pass_repeat_exit_code",
-      "pass_to_pass_exit_code",
-    ]
-      .map((key) => `${key}=${String(checks[key] ?? "missing")}`)
-      .join(", ");
-  const diagnostics = [
-    ...(!nopPassed && nopOutput ? [`nop verifier tail:\n${boundedTail(nopOutput)}`] : []),
-    ...(!oraclePassed && oracleOutput
-      ? [`oracle verifier tail:\n${boundedTail(oracleOutput)}`]
-      : []),
-  ];
-  return `Harbor gates failed: nop=${nopPassed} (${formatChecks(nopChecks)}); oracle=${oraclePassed} (${formatChecks(oracleChecks)})${diagnostics.length > 0 ? `\n${diagnostics.join("\n")}` : ""}`;
-}
 export function verifierOutput(
   result: Awaited<ReturnType<typeof readHarborJobResult>>,
 ): string | undefined {
@@ -144,9 +115,6 @@ export function rewards(trial: unknown): Record<string, unknown> {
 }
 export function exception(trial: unknown): unknown {
   return isRecord(trial) ? trial.exception_info : undefined;
-}
-export function numberValue(value: unknown): number {
-  return typeof value === "number" ? value : 0;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

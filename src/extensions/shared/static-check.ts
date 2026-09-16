@@ -59,11 +59,7 @@ export interface PatchApplyTarget {
   readonly base: string;
 }
 
-export function runStaticCheck(
-  staging: string,
-  extra: readonly string[] = [],
-  applyAgainst?: PatchApplyTarget,
-): CheckVerdict {
+export function runStaticCheck(staging: string, applyAgainst?: PatchApplyTarget): CheckVerdict {
   const program = requiredEnvironment("SELFBENCH_CHECK_PROGRAM");
   const repository =
     applyAgainst?.repository ?? process.env.SELFBENCH_REPO_DIRECTORY ?? "/work/repo";
@@ -75,7 +71,6 @@ export function runStaticCheck(
       join(staging, "test.patch"),
       join(staging, "gold.patch"),
       process.env.SELFBENCH_RENDER_OUTPUT ?? "/work",
-      ...extra,
       ...(applyAgainst ? ["--repository", repository, "--base", applyAgainst.base] : []),
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },

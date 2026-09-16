@@ -101,7 +101,7 @@ async function taskRow(
 }
 
 /** Archived runs keep no verdict beyond "accepted"; anything else ended without one. */
-export function pipelineStatus(candidate: Pick<CandidateSummary, "status">): PipelineStatus {
+function pipelineStatus(candidate: Pick<CandidateSummary, "status">): PipelineStatus {
   switch (candidate.status) {
     case "accepted":
       return "accepted";

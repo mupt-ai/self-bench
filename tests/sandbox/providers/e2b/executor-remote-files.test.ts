@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";
 import { E2BSandboxExecutor } from "../../../../src/sandbox/providers/e2b/executor.js";
-import {
-  e2bFixtureConfig as config,
-  E2BSdkFixture,
-  fastLifecycleTimings,
-} from "../../../support/e2b-sdk-fixture.js";
+import { e2bFixtureConfig as config, E2BSdkFixture } from "../../../support/e2b-sdk-fixture.js";
 
 describe("E2BSandboxExecutor remote files", () => {
   test("has the sandbox fetch remote files by URL before the command runs", async () => {

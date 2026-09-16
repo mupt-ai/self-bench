@@ -10,7 +10,7 @@ export interface PiModelAuth {
   readonly authJson?: string;
 }
 
-export function openAiApiKey(): string | undefined {
+function openAiApiKey(): string | undefined {
   const key = executionEnvironment().OPENAI_API_KEY?.trim();
   return key || undefined;
 }

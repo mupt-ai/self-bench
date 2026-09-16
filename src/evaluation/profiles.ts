@@ -61,7 +61,7 @@ function box(env: NodeJS.ProcessEnv) {
   if (!key || !/^[a-f0-9]{64}$/.test(key)) throw new Error("Credential encryption is unavailable");
   return createSecretBox(Buffer.from(key, "hex"));
 }
-export function publicSetup(setup: SavedSetup): EvaluationModel {
+function publicSetup(setup: SavedSetup): EvaluationModel {
   return {
     id: setup.id,
     label: `${setup.model} · ${setup.sandbox}`.slice(0, 100),

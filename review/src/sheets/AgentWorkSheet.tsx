@@ -1,6 +1,6 @@
 import React from "react";
 import { type AgentFeedEvent, agentFeedEvents } from "../../../src/agent-feed";
-import { loading, notice, sheetBody } from "../components/viewer-ui";
+import { notice, sheetBody } from "../components/viewer-ui";
 import { type AgentRound, agentRounds } from "../lib/agent-rounds";
 import type { TaskSource } from "../sources/types";
 import type { CandidateArtifacts, TaskRow } from "../types";
@@ -40,7 +40,7 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
       {row.reason && (
         <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-danger`}>{row.reason}</p>
       )}
-      {!artifacts && !error && <p className={`${loading} site:p-0!`}>Loading agent activity…</p>}
+      {!artifacts && !error && <p className={`${notice} site:p-0!`}>Loading agent activity…</p>}
       {artifacts && rounds.length === 0 && (
         <p className={`${notice} site:p-0!`}>No agent activity yet.</p>
       )}

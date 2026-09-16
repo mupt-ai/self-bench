@@ -48,7 +48,7 @@ type BuildRecord =
   | { status: "ready"; templateId: string; buildId: string; builtAt: string }
   | { status: "failed"; failedAt: string };
 
-export interface ManagedE2BTemplateApi {
+interface ManagedE2BTemplateApi {
   exists(reference: string, signal?: AbortSignal): Promise<boolean>;
   build?(
     template: unknown,

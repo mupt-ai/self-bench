@@ -45,7 +45,6 @@ html:has(.sb) {
   color-scheme: dark;
   --background: hsl(30 6% 4%);
   --foreground: hsl(30 8% 93%);
-  --fg-2: hsl(30 6% 80%);
   --card: hsl(30 5% 6%);
   --viewer-panel: hsl(30 5% 8%);
   --muted: hsl(30 5% 8%);
@@ -53,32 +52,19 @@ html:has(.sb) {
   --faint: hsl(30 5% 40%);
   --border: hsl(30 5% 14%);
   --input: hsl(30 5% 14%);
-  --border-soft: hsl(30 5% 10%);
   --accent: hsl(30 5% 13%);
   --brand: hsl(38 95% 55%);
-  --brand-dark: hsl(32 70% 38%);
   --primary: hsl(0 0% 100%);
   --primary-fg: hsl(0 0% 0%);
-  --brand-10: hsla(38 95% 55% / 0.1);
-  --brand-40: hsla(38 95% 55% / 0.4);
   --ok: hsl(150 40% 45%);
-  --ok-10: hsla(150 40% 45% / 0.08);
-  --ok-45: hsla(150 40% 45% / 0.45);
   --bad: hsl(0 72% 45%);
   --bad-fg: hsl(0 70% 62%);
-  --bad-10: hsla(0 72% 45% / 0.1);
-  --bad-50: hsla(0 72% 45% / 0.5);
-  --warn: hsl(32 70% 38%);
   --warn-fg: hsl(38 80% 60%);
-  --live: hsl(38 95% 55%);
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --sans: var(--mono);
 
   /* Match dari-mono's sidebar token aliases exactly. */
   --sidebar-background: var(--background);
   --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-fg);
   --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);

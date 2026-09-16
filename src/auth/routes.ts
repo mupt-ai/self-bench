@@ -20,7 +20,7 @@ export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
 const STATE_TTL_SECONDS = 10 * 60;
 
 /** Why a sign-in attempt bounced back to /login; the page renders one line per code. */
-export type LoginError = "state" | "denied" | "github";
+type LoginError = "state" | "denied" | "github";
 
 export interface SiteAuthOptions {
   readonly config: AuthConfig;
@@ -154,7 +154,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
 }
 
 /** The browser-facing shape of a user: display fields only. */
-export function publicUser(user: User): {
+function publicUser(user: User): {
   login: string;
   name?: string;
   avatarUrl?: string;
@@ -167,7 +167,7 @@ export function publicUser(user: User): {
 }
 
 /** The browser-facing shape of a tenant. */
-export function publicOrg(org: Org): {
+function publicOrg(org: Org): {
   login: string;
   kind: "org" | "user";
   role: "admin" | "member";

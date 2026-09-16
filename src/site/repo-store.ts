@@ -16,7 +16,7 @@ export interface ConnectedRepo {
   readonly connectedAt: string;
 }
 
-export interface ConnectRepoInput {
+interface ConnectRepoInput {
   readonly orgId: number;
   readonly githubId: number;
   readonly fullName: string;

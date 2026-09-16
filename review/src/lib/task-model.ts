@@ -2,20 +2,20 @@ import type { TaskFileEntry, TaskFiles } from "../types";
 import { type DockerInstruction, parseDockerfile } from "./dockerfile";
 import { parseToml, type TomlSection } from "./toml";
 
-export interface ScriptFile {
+interface ScriptFile {
   label: string;
   path: string;
   text: string;
 }
 
-export interface DockerImage {
+interface DockerImage {
   label: string;
   path: string;
   text: string;
   instructions: DockerInstruction[];
 }
 
-export interface ServiceLike {
+interface ServiceLike {
   name?: string;
   image?: string;
   command?: string[];
@@ -29,7 +29,7 @@ export interface ServiceLike {
   };
 }
 
-export interface DefinitionLike {
+interface DefinitionLike {
   taskId?: string;
   difficulty?: string;
   repo?: string;
@@ -136,7 +136,7 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
   };
 }
 
-export function parseJson(text: string | undefined): DefinitionLike | undefined {
+function parseJson(text: string | undefined): DefinitionLike | undefined {
   if (!text) return undefined;
   try {
     const value = JSON.parse(text) as unknown;

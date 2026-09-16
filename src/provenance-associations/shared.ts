@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { SessionProvenanceFormat } from "../provenance.js";
 
-export const localSourceTypeSchema = z.enum(["pi", "claude-code", "codex"]);
+const localSourceTypeSchema = z.enum(["pi", "claude-code", "codex"]);
 export type LocalSourceType = z.infer<typeof localSourceTypeSchema>;
 
 export const associationMessageSchema = z

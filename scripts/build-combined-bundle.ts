@@ -32,18 +32,10 @@ async function readJson(key: string): Promise<unknown | undefined> {
 async function finalTask(run: string, candidateId: string) {
   let task: unknown;
   for (let round = 1; round <= 3; round += 1) {
-    const r = (await readJson(
-      `runs/${run}/verification/${candidateId}/round-${round}/result.json`,
+    const result = (await readJson(
+      `runs/${run}/authoring/${candidateId}/round-${round}/result.json`,
     )) as { kind?: string; task?: unknown } | undefined;
-    if (r?.kind === "fixed" && r.task) task = r.task;
-  }
-  if (!task) {
-    for (let round = 1; round <= 3; round += 1) {
-      const r = (await readJson(
-        `runs/${run}/authoring/${candidateId}/round-${round}/result.json`,
-      )) as { kind?: string; task?: unknown } | undefined;
-      if (r?.kind === "submitted" && r.task) task = r.task;
-    }
+    if (result?.kind === "submitted" && result.task) task = result.task;
   }
   if (!task) throw new Error(`no final task for ${run}/${candidateId}`);
   return authoredTaskSchema.omit({ bundle: true }).parse(task);
@@ -200,7 +192,7 @@ const manifest = {
   tasks: manifestTasks,
   sources: Object.entries(sources).map(([runId, taskIds]) => ({ runId, taskIds })),
   notes:
-    "One accepted task per source pull request, taken from each candidate's final accepted deliverable (the last verifier fix, else the authoring submission), packaged with the trusted compiler exactly as run exports are.",
+    "One accepted task per source pull request, taken from each candidate's final accepted deliverable (the final authoring submission), packaged with the trusted compiler exactly as run exports are.",
 };
 await writeFile(join(bundleDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 await writeFile(

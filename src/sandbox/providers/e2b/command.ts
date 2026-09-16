@@ -6,7 +6,7 @@ import { readOutputWithRetry } from "../../output-retry.js";
 import { raceWithTermination } from "./lifecycle.js";
 import type { E2BSandboxHandle } from "./types.js";
 
-export const E2B_WORK_DIRECTORY = "/work";
+const E2B_WORK_DIRECTORY = "/work";
 
 export async function executeE2BCommand(input: {
   readonly sandbox: E2BSandboxHandle;

@@ -8,7 +8,7 @@ export type BatchStatus = Pick<RunStatus, "runId" | "phase"> &
   Partial<Omit<RunStatus, "runId" | "phase">> & {
     activity?: Record<string, "running" | "queued" | "unknown">;
   };
-export const terminalBatch = (phase: RunPhase): boolean =>
+const terminalBatch = (phase: RunPhase): boolean =>
   ["complete", "failed", "blocked", "cancelled"].includes(phase);
 
 /** Import artifacts first, then overlay live stages without ever writing human review fields. */

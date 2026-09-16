@@ -2,7 +2,7 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import React from "react";
 import { DiffView } from "../components/DiffView";
 import { Block, Script } from "../components/Script";
-import { loading, notice, sheetBody, viewerIconButton, viewerLink } from "../components/viewer-ui";
+import { notice, sheetBody, viewerIconButton, viewerLink } from "../components/viewer-ui";
 import { formatBytes } from "../lib/format";
 import { fileKind } from "../lib/task-model";
 
@@ -28,7 +28,7 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
   }, [fullscreen]);
 
   if (!file) return <p className={notice}>Select a file to inspect.</p>;
-  if (file.loading) return <p className={loading}>reading {file.path}</p>;
+  if (file.loading) return <p className={notice}>reading {file.path}</p>;
   if (file.error)
     return <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{file.error}</p>;
   const size = file.sizeBytes ?? file.text?.length ?? 0;

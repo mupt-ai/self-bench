@@ -45,7 +45,7 @@ export async function candidateArtifacts(
   return { runId, taskId: task.taskId, candidateId: task.candidateId, groups, bundles };
 }
 
-export function groupPrefix(
+function groupPrefix(
   runId: string,
   group: ArtifactGroup,
   task: Pick<TaskProgress, "taskId" | "candidateId">,

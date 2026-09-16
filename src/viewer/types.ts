@@ -1,7 +1,7 @@
 import type { Difficulty, TaskProgress } from "../contracts.js";
 
-export const VIEWER_MODES = ["runs", "local"] as const;
-export type ViewerMode = (typeof VIEWER_MODES)[number];
+const VIEWER_MODES = ["runs", "local"] as const;
+type ViewerMode = (typeof VIEWER_MODES)[number];
 
 export interface ViewerInfo {
   readonly modes: readonly ViewerMode[];
@@ -29,7 +29,7 @@ export interface LocalTaskSummary {
   readonly fileCount: number;
 }
 
-export const CANDIDATE_STAGES = [
+const CANDIDATE_STAGES = [
   "discovery",
   "authoring",
   "environment",
@@ -84,7 +84,7 @@ export interface ArtifactEntry {
   readonly updatedAt?: string;
 }
 
-export const BUNDLE_STAGES = [
+const BUNDLE_STAGES = [
   "verification",
   "verify",
   "authoring",

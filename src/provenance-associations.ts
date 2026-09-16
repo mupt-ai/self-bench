@@ -5,10 +5,9 @@ import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 import type { LocalSessionMetadata, ProvenanceMessage } from "./provenance.js";
 
-export {
-  type MergedPullRequest,
-  type ProvenanceAssociationManifest,
-  provenanceAssociationManifestSchema,
+export type {
+  MergedPullRequest,
+  ProvenanceAssociationManifest,
 } from "./provenance-associations/shared.js";
 
 import {

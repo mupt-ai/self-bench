@@ -132,7 +132,7 @@ export function createConnectedRepoRoutes(
 }
 
 /** The browser-facing shape of a connected repo. */
-export function publicRepo(repo: ConnectedRepo): {
+function publicRepo(repo: ConnectedRepo): {
   fullName: string;
   defaultBranch: string;
   private: boolean;

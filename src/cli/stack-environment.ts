@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
 /** The project name plain `docker compose up` has always used; its volumes are `selfbench_*`. */
-export const DEFAULT_STACK = "selfbench";
+const DEFAULT_STACK = "selfbench";
 const DEFAULT_SITE_PORT = 8080;
 const DEFAULT_TEMPORAL_PORT = 7233;
 const DEFAULT_IMAGE = "selfbench:local";

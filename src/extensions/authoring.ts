@@ -40,16 +40,16 @@ export default function authoringExtension(pi: ExtensionAPI): void {
         "selfbench-verify-",
       );
       try {
-        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
+        const verdict = runStaticCheck(staging.directory, applyTarget(loaded.definition));
         if (!verdict.ok) {
           return staticCheckFailure(verdict, "task");
         }
       } finally {
         staging.dispose();
       }
-      const outcome = await client.verify("task", loaded);
+      const outcome = await client.verify(loaded);
       return {
-        content: [{ type: "text", text: verifyOutcomeText(outcome, "submit_task") }],
+        content: [{ type: "text", text: verifyOutcomeText(outcome) }],
         details: { kind: outcome.kind, remaining: client.remaining },
         ...(outcome.kind === "exhausted" ? { isError: true } : {}),
       };
@@ -71,7 +71,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
       const taskId = String(loaded.definition.taskId ?? "");
       const staging = stageSubmission(loaded.definition, loaded.testPatch, loaded.goldPatch);
       try {
-        const verdict = runStaticCheck(staging.directory, [], applyTarget(loaded.definition));
+        const verdict = runStaticCheck(staging.directory, applyTarget(loaded.definition));
         if (!verdict.ok) {
           return staticCheckFailure(verdict, "submission");
         }

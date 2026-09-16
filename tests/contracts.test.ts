@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { runRequestSchema, taskDefinitionSchema } from "../src/contracts.js";
+import {
+  runRequestSchema,
+  taskDefinitionSchema,
+  verifierRoundResultSchema,
+} from "../src/contracts.js";
 
 const definition = {
   schemaVersion: 2 as const,
@@ -214,4 +218,13 @@ describe("contracts", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test("verifier results reject retired fixed checkpoints", () => {
+  expect(verifierRoundResultSchema.options.map((option) => option.shape.kind.value)).toEqual([
+    "accepted",
+    "suggestions",
+    "rejected",
+  ]);
+  expect(verifierRoundResultSchema.safeParse({ kind: "fixed" }).success).toBe(false);
 });

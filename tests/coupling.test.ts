@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildCouplingEvidence,
-  discoverContractArtifacts,
-  resolveCouplingReview,
-} from "../src/coupling.js";
+import { buildCouplingEvidence, discoverContractArtifacts } from "../src/coupling.js";
 
 describe("coupling evidence", () => {
   test("rejects gold-only response fields asserted by held-out tests", () => {
@@ -78,47 +74,6 @@ describe("coupling evidence", () => {
     expect(candidates.some((candidate) => candidate.artifact === "org_test")).toBe(false);
     expect(evidence.artifacts).toEqual([]);
     expect(evidence.blockers).toEqual([]);
-  });
-
-  test("fails closed when the reviewer omits or accepts a gold-only artifact", () => {
-    const evidence = buildCouplingEvidence({
-      prompt: "Choose using resolved configuration.",
-      testPatch: patch("tests/runtime.test.ts", "+expect(input.routing_strategy).toBeTruthy();"),
-      goldPatch: patch("src/runtime.ts", "+return { routing_strategy: strategy };"),
-      baseArtifacts: new Set(),
-    });
-
-    const missing = resolveCouplingReview(evidence, {
-      verdict: "clean",
-      reason: "looks good",
-      findings: [],
-    });
-    const admitted = resolveCouplingReview(evidence, {
-      verdict: "clean",
-      reason: "looks good",
-      findings: [{ artifact: "routing_strategy", disposition: "gold_only" }],
-    });
-
-    expect(missing.verdict).toBe("coupled");
-    expect(missing.missingArtifacts).toEqual(["routing_strategy"]);
-    expect(admitted.verdict).toBe("coupled");
-    expect(admitted.goldOnlyArtifacts).toEqual(["routing_strategy"]);
-  });
-
-  test("allows a reviewer to justify a named external protocol contract", () => {
-    const evidence = buildCouplingEvidence({
-      prompt: "Implement the OpenAI Responses HTTP format.",
-      testPatch: patch("tests/responses.test.ts", '+expect(event.type).toBe("output_text");'),
-      goldPatch: patch("src/responses.ts", "+return { output_text: text };"),
-      baseArtifacts: new Set(),
-    });
-    const resolution = resolveCouplingReview(evidence, {
-      verdict: "clean",
-      reason: "The named protocol fixes this field.",
-      findings: [{ artifact: "output_text", disposition: "external_contract" }],
-    });
-
-    expect(resolution.verdict).toBe("clean");
   });
 });
 

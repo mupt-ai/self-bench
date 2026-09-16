@@ -1,7 +1,7 @@
-import { readdir, readFile, rename } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export interface HarborVerifierOutput {
+interface HarborVerifierOutput {
   readonly combined?: string;
   readonly stderr?: string;
 }
@@ -82,37 +82,6 @@ export async function readHarborJobResult(
     throw new IncompleteHarborJobError(`Harbor job ${jobName} has not finished`);
   }
   throw new Error(`expected one Harbor trial result in ${jobDirectory}, found ${trials.length}`);
-}
-
-export async function tryReadHarborJobResult(
-  jobsDirectory: string,
-  jobName: string,
-): Promise<HarborJobResult | undefined> {
-  try {
-    return await readHarborJobResult(jobsDirectory, jobName);
-  } catch (error) {
-    if (isNotFound(error) || error instanceof IncompleteHarborJobError) {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
-export async function archiveIncompleteHarborJob(
-  jobsDirectory: string,
-  jobName: string,
-): Promise<string | undefined> {
-  const source = join(jobsDirectory, jobName);
-  const destination = `${source}.incomplete-${Date.now()}`;
-  try {
-    await rename(source, destination);
-    return destination;
-  } catch (error) {
-    if (isNotFound(error)) {
-      return undefined;
-    }
-    throw error;
-  }
 }
 
 async function readVerifierOutput(

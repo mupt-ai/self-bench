@@ -236,7 +236,7 @@ function section(output: string, start: string, end?: string): string {
 }
 
 /** Verifier script for the smoke+nop run; nop rewards are re-emitted under `nop_*` keys. */
-export function smokeAndNopScript(): string {
+function smokeAndNopScript(): string {
   const fields = NOP_REWARD_KEYS.map(
     (key) => `printf ', "nop_${key}": %s' "$(field ${key} ${key.endsWith("_code") ? "-1" : "0"})"`,
   ).join("\n");

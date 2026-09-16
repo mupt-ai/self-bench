@@ -40,7 +40,7 @@ const repositoryPathSchema = z
 
 const environmentVariablesSchema = z.record(environmentVariableNameSchema, z.string());
 
-export const environmentServiceSchema = z
+const environmentServiceSchema = z
   .object({
     name: z
       .string()
@@ -61,7 +61,7 @@ export const environmentServiceSchema = z
   })
   .strict();
 
-export const taskEnvironmentSchema = z
+const taskEnvironmentSchema = z
   .object({
     schemaVersion: z.literal(1),
     baseImage: z.string().min(1),
@@ -86,7 +86,7 @@ export const taskEnvironmentSchema = z
 
 export type TaskEnvironment = z.infer<typeof taskEnvironmentSchema>;
 
-export const taskDraftDefinitionSchema = z
+const taskDraftDefinitionSchema = z
   .object({
     schemaVersion: z.literal(2),
     difficulty: difficultySchema,
@@ -197,8 +197,6 @@ export const taskDraftDefinitionSchema = z
       });
     }
   });
-
-export type TaskDraftDefinition = z.infer<typeof taskDraftDefinitionSchema>;
 
 export const taskDefinitionSchema = taskDraftDefinitionSchema.safeExtend({
   environment: taskEnvironmentSchema,

@@ -1,6 +1,6 @@
 import type { EvaluationInput, Harness } from "./types.js";
 
-export const gateways = {
+const gateways = {
   openrouter: { base: "https://openrouter.ai/api/v1", messages: "https://openrouter.ai/api" },
 } as const;
 

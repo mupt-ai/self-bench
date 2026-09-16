@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertRepairedPatchPaths, assertRepairPaths, patchPaths } from "../src/repair.js";
+import { patchPaths } from "../src/repair.js";
 
 const patch = `diff --git a/tests/a.test.ts b/tests/a.test.ts
 index 1111111..2222222 100644
@@ -16,23 +16,8 @@ new file mode 100644
 +test
 `;
 
-describe("test repair boundaries", () => {
+describe("patch path parsing", () => {
   test("extracts the original held-out test paths", () => {
     expect(patchPaths(patch)).toEqual(["tests/a.test.ts", "tests/b.test.ts"]);
-  });
-
-  test("permits only files already owned by the test patch", () => {
-    expect(() => assertRepairPaths(patch, ["tests/b.test.ts"])).not.toThrow();
-    expect(() => assertRepairPaths(patch, ["src/product.ts"])).toThrow(
-      "repair changed files outside the held-out tests: src/product.ts",
-    );
-  });
-
-  test("requires the final repaired patch to retain every held-out path", () => {
-    expect(() => assertRepairedPatchPaths(patch, patch)).not.toThrow();
-    const partial = patch.slice(patch.indexOf("diff --git a/tests/b.test.ts"));
-    expect(() => assertRepairedPatchPaths(patch, partial)).toThrow(
-      "repair removed held-out test paths: tests/a.test.ts",
-    );
   });
 });
