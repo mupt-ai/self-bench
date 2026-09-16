@@ -4,6 +4,7 @@ import { parseSandboxTimeoutCapText } from "../../sandbox/timeout.js";
 import {
   ensurePrivateDirectory,
   loadMutableProfileData,
+  profileFilePaths,
   writePrivateJson,
 } from "./profile-files.js";
 import {
@@ -16,10 +17,6 @@ import {
 } from "./profile-schema.js";
 
 export type { VercelProfile, VercelProfileData } from "./profile-schema.js";
-export { vercelProfileSchema } from "./profile-schema.js";
-
-const CONFIG_FILE = "config.json";
-const CREDENTIALS_FILE = "credentials.json";
 
 export function selfBenchConfigDirectory(environment: NodeJS.ProcessEnv = process.env): string {
   const override = environment.SELFBENCH_CONFIG_DIR?.trim();
@@ -76,8 +73,9 @@ export async function saveVercelProfile(input: {
 
   // Credentials are written first. A crash can leave an unreferenced token, but
   // never an active profile whose credential has not reached disk.
-  await writePrivateJson(join(directory, CREDENTIALS_FILE), nextCredentials);
-  await writePrivateJson(join(directory, CONFIG_FILE), nextConfig);
+  const paths = profileFilePaths(directory);
+  await writePrivateJson(paths.credentials, nextCredentials);
+  await writePrivateJson(paths.config, nextConfig);
 }
 
 export async function applyVercelProfile(
@@ -111,16 +109,6 @@ export async function applyVercelProfile(
     profile.timeoutCapMs,
   );
   return result;
-}
-
-export function profileFilePaths(directory = selfBenchConfigDirectory()): {
-  readonly config: string;
-  readonly credentials: string;
-} {
-  return {
-    config: join(directory, CONFIG_FILE),
-    credentials: join(directory, CREDENTIALS_FILE),
-  };
 }
 
 const requiredEnvironmentKeys = [

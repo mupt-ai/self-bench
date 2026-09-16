@@ -66,8 +66,7 @@ export function createActivities(
         input.run,
         "verifier",
         sandbox,
-        (executor, environment, run) =>
-          runVerifierRound(store, executor, environment, { ...input, run }),
+        (executor, _environment, run) => runVerifierRound(store, executor, { ...input, run }),
       ),
     buildExport: (input) => buildExport(store, input),
   };

@@ -2,11 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  compileHarborTask,
-  goldPatchChangesDependencyManifests,
-  refreshHarborTask,
-} from "../src/harbor-task.js";
+import { dependencyManifestPatch } from "../src/harbor-task/dependencies.js";
+import { compileHarborTask, refreshHarborTask } from "../src/harbor-task.js";
 import { sha256 } from "../src/hash.js";
 import { runCommand } from "../src/process.js";
 
@@ -211,14 +208,10 @@ describe("Harbor task compiler", () => {
 
   test("detects supported dependency manifests without treating source changes as dependencies", () => {
     expect(
-      goldPatchChangesDependencyManifests(
-        "diff --git a/apps/api/pyproject.toml b/apps/api/pyproject.toml\n",
-      ),
-    ).toBe(true);
+      dependencyManifestPatch("diff --git a/apps/api/pyproject.toml b/apps/api/pyproject.toml\n"),
+    ).not.toBe("");
     expect(
-      goldPatchChangesDependencyManifests(
-        "diff --git a/src/package-handler.ts b/src/package-handler.ts\n",
-      ),
-    ).toBe(false);
+      dependencyManifestPatch("diff --git a/src/package-handler.ts b/src/package-handler.ts\n"),
+    ).toBe("");
   });
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { FileTree } from "../../components/FileTree";
-import { loading, notice, tabList, tab as viewerTab } from "../../components/viewer-ui";
+import { notice, tabList, tab as viewerTab } from "../../components/viewer-ui";
 import { buildTaskModel } from "../../lib/task-model";
 import { AgentWorkSheet } from "../../sheets/AgentWorkSheet";
 import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
@@ -104,7 +104,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           ) : error ? (
             <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{error}</p>
           ) : (
-            <p className={loading}>Loading files…</p>
+            <p className={notice}>Loading files…</p>
           )}
         </div>
       </aside>
@@ -133,7 +133,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         ) : tab === "file" ? (
           <FileSheet key={openFile?.path ?? ""} file={openFile} />
         ) : !model ? (
-          <p className={loading}>Loading files…</p>
+          <p className={notice}>Loading files…</p>
         ) : (
           <EnvironmentSheet model={model} onOpenFile={openPath} />
         )}

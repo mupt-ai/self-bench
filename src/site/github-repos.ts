@@ -19,7 +19,7 @@ export interface RepoSummary {
 }
 
 /** What the picker shows once a repo is chosen: the repo itself plus the eligibility signal. */
-export interface RepoDetail {
+interface RepoDetail {
   readonly repo: RepoSummary;
   readonly mergedPullRequests: number;
   readonly since: string;

@@ -8,10 +8,10 @@ const DEFAULT_POLL_INTERVAL_MS = 10_000;
 
 export interface MailboxRequest {
   readonly id: string;
-  readonly kind: "task" | "fix";
+  readonly kind: "task";
   readonly definition: unknown;
   readonly testPatch: string;
-  readonly goldPatch?: string;
+  readonly goldPatch: string;
 }
 
 export type MailboxResponse =
@@ -135,19 +135,19 @@ async function writeResponse(sandbox: LiveSandbox, response: MailboxResponse): P
 function parseRequest(id: string, bytes: Uint8Array): MailboxRequest {
   const parsed = JSON.parse(Buffer.from(bytes).toString("utf8")) as Partial<MailboxRequest>;
   if (
-    (parsed.kind !== "task" && parsed.kind !== "fix") ||
+    parsed.kind !== "task" ||
     typeof parsed.testPatch !== "string" ||
     parsed.definition === undefined ||
-    (parsed.goldPatch !== undefined && typeof parsed.goldPatch !== "string")
+    typeof parsed.goldPatch !== "string"
   ) {
-    throw new Error("request must carry kind, definition, and testPatch");
+    throw new Error("request must carry kind=task, definition, testPatch, and goldPatch");
   }
   return {
     id,
     kind: parsed.kind,
     definition: parsed.definition,
     testPatch: parsed.testPatch,
-    ...(parsed.goldPatch !== undefined ? { goldPatch: parsed.goldPatch } : {}),
+    goldPatch: parsed.goldPatch,
   };
 }
 

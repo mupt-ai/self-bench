@@ -13,31 +13,3 @@ export function patchPaths(patch: string): readonly string[] {
   }
   return [...paths].sort();
 }
-
-export function assertRepairPaths(
-  originalTestPatch: string,
-  changedPaths: readonly string[],
-): void {
-  const allowed = new Set(patchPaths(originalTestPatch));
-  if (allowed.size === 0) {
-    throw new Error("original held-out test patch changes no files");
-  }
-  const outside = changedPaths.filter((path) => !allowed.has(path));
-  if (outside.length > 0) {
-    throw new Error(`repair changed files outside the held-out tests: ${outside.join(", ")}`);
-  }
-}
-
-export function assertRepairedPatchPaths(
-  originalTestPatch: string,
-  repairedTestPatch: string,
-): void {
-  const original = new Set(patchPaths(originalTestPatch));
-  const repaired = patchPaths(repairedTestPatch);
-  assertRepairPaths(originalTestPatch, repaired);
-  const retained = new Set(repaired);
-  const missing = [...original].filter((path) => !retained.has(path));
-  if (missing.length > 0) {
-    throw new Error(`repair removed held-out test paths: ${missing.join(", ")}`);
-  }
-}

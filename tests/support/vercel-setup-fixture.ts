@@ -66,7 +66,7 @@ export class FakePrompter implements SetupPrompter {
   }
 }
 
-export class FakeReporter implements SetupReporter {
+class FakeReporter implements SetupReporter {
   constructor(readonly logs: string[]) {}
 
   intro(title: string): void {

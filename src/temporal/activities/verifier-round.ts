@@ -1,6 +1,5 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts.js";
-import type { SelfBenchConfig } from "../../config.js";
 import type { ArtifactRef } from "../../contracts.js";
 import {
   type VerifierRoundResult,
@@ -30,7 +29,6 @@ import { resolveVerifierOutcome, VERDICT_PATH } from "./verifier-outcome.js";
 export async function runVerifierRound(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
-  _harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: VerifierRoundInput,
 ): Promise<VerifierRoundResult> {
   const { run, candidate, task, round } = input;

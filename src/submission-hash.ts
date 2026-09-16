@@ -9,7 +9,7 @@ export interface SubmissionPayload {
 
 /**
  * Identity of a submission for matching an in-session `verify` against the final `submit_task`
- * or `submit_fix` payload. The sandbox extension computes the same value over the same fields.
+ * payload. Shared by the worker and bundled sandbox extension.
  */
 export function submissionHash(payload: SubmissionPayload): string {
   const definition =

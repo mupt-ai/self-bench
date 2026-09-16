@@ -1,7 +1,7 @@
 import type { AuthConfig } from "./config.js";
 
 /** read:user for the profile, read:org for org memberships, repo so discovery can read private PRs. */
-export const OAUTH_SCOPES = ["read:user", "read:org", "repo"] as const;
+const OAUTH_SCOPES = ["read:user", "read:org", "repo"] as const;
 
 export interface GitHubProfile {
   readonly githubId: number;
@@ -70,7 +70,7 @@ export async function validateGitHubIdentity(
 
 type FetchLike = typeof fetch;
 
-export function callbackUrl(config: Pick<AuthConfig, "publicUrl">): string {
+function callbackUrl(config: Pick<AuthConfig, "publicUrl">): string {
   return `${config.publicUrl}/auth/github/callback`;
 }
 

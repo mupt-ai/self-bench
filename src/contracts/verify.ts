@@ -2,16 +2,14 @@ import { z } from "zod";
 import { type ArtifactRef, artifactRefSchema } from "./common.js";
 import { type AuthoredTask, authoredTaskDraftSchema, authoredTaskSchema } from "./task.js";
 
-export const verifyStageSchema = z.enum(["authoring", "verification"]);
+const verifyStageSchema = z.enum(["authoring", "verification"]);
 export type VerifyStage = z.infer<typeof verifyStageSchema>;
 
 export const MAX_AUTHORING_ROUNDS = 3;
-export const MAX_VERIFIER_ROUNDS = 3;
 /** In-session `verify` calls per agent session (carried across fallback rounds). */
 export const AUTHOR_VERIFY_BUDGET = 5;
-export const VERIFIER_VERIFY_BUDGET = 2;
 
-export const harborRewardsSchema = z.record(z.string(), z.number());
+const harborRewardsSchema = z.record(z.string(), z.number());
 export type HarborRewards = z.infer<typeof harborRewardsSchema>;
 
 const gateSchema = z.object({
@@ -47,12 +45,6 @@ export const verifyReportSchema = z
   .strict();
 
 export type VerifyReport = z.infer<typeof verifyReportSchema>;
-
-export const verifyOutcomeSchema = z.object({
-  report: verifyReportSchema,
-  reportRef: artifactRefSchema,
-  task: authoredTaskDraftSchema.extend({ bundle: artifactRefSchema }).optional(),
-});
 
 export interface VerifyOutcome {
   readonly report: VerifyReport;
@@ -94,15 +86,6 @@ export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
     session: artifactRefSchema,
     summary: z.string().min(1),
     suggestions: z.string().min(1),
-  }),
-  // Historical compatibility; new verifier sessions cannot produce this variant.
-  z.object({
-    kind: z.literal("fixed"),
-    task: authoredTaskDraftSchema,
-    session: artifactRefSchema,
-    summary: z.string().min(1),
-    verifyCalls: z.number().int().nonnegative().optional(),
-    verified: verifiedSubmissionSchema.optional(),
   }),
   rejectedRoundSchema,
 ]);

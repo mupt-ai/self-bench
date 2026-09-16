@@ -4,7 +4,7 @@ export const SESSION_COOKIE = "selfbench_session";
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /** What the cookie carries: enough to find the user, nothing a browser could use elsewhere. */
-export interface SessionClaims {
+interface SessionClaims {
   readonly githubId: number;
   readonly issuedAt: number;
   readonly expiresAt: number;

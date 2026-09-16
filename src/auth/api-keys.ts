@@ -10,7 +10,7 @@ export const API_KEY_SCOPES: readonly ApiKeyScope[] = ["read", "write"];
 const DISPLAY_PREFIX_LENGTH = API_KEY_PREFIX.length + 8;
 
 /** A key as the owner sees it after creation: everything but the secret. */
-export interface ApiKeyInfo {
+interface ApiKeyInfo {
   readonly id: number;
   readonly name: string;
   readonly prefix: string;

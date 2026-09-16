@@ -2,7 +2,7 @@ import { posix } from "node:path";
 import type { SandboxRequest } from "./contracts.js";
 
 const MAX_SANDBOX_TIMEOUT_MS = 24 * 60 * 60 * 1_000;
-export const SANDBOX_WORK_DIRECTORY = "/work";
+const SANDBOX_WORK_DIRECTORY = "/work";
 
 export function validateSandboxRequest(request: SandboxRequest): void {
   if (!request.runId || !request.stage) {

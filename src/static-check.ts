@@ -16,17 +16,8 @@ import { verifierRuntimeFiles } from "./harbor-task/runtime-assets.js";
 import { isBaseOnlyTestPatch } from "./harbor-task/test-patch.js";
 import { solutionScript, testScript } from "./harbor-task/verifier.js";
 import { malformedPatchProblems } from "./patch-check.js";
-import { assertVerifierFix } from "./verifier-fix.js";
 
-export type StaticCheckGate =
-  | "schema"
-  | "policy"
-  | "paths"
-  | "patches"
-  | "patch"
-  | "audit"
-  | "render"
-  | "fix";
+type StaticCheckGate = "schema" | "policy" | "paths" | "patches" | "patch" | "audit" | "render";
 
 export interface StaticCheckError {
   readonly gate: StaticCheckGate;
@@ -34,7 +25,7 @@ export interface StaticCheckError {
 }
 
 /** Relative path → contents of every text file the compiler renders from a submission. */
-export type RenderedTaskFiles = Readonly<Record<string, string>>;
+type RenderedTaskFiles = Readonly<Record<string, string>>;
 
 export interface StaticCheckResult {
   readonly ok: boolean;
@@ -46,12 +37,6 @@ export interface StaticCheckInput {
   readonly definitionJson: string;
   readonly testPatch: string;
   readonly goldPatch: string;
-  /** When present, the submission is a verifier fix and must stay within the fix boundary. */
-  readonly original?: {
-    readonly definitionJson: string;
-    readonly testPatch: string;
-    readonly goldPatch: string;
-  };
 }
 
 /**
@@ -82,19 +67,6 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
     const audit = auditTaskDefinition(definition, input.goldPatch, input.testPatch);
     errors.push(...audit.blockers.map((message) => ({ gate: "audit" as const, message })));
   }
-  if (input.original) {
-    guard(errors, "fix", () => {
-      const original = taskDefinitionSchema.parse(JSON.parse(input.original?.definitionJson ?? ""));
-      assertVerifierFix({
-        original,
-        fixed: definition,
-        originalTestPatch: input.original?.testPatch ?? "",
-        fixedTestPatch: input.testPatch,
-        originalGoldPatch: input.original?.goldPatch ?? "",
-        fixedGoldPatch: input.goldPatch,
-      });
-    });
-  }
   let rendered: RenderedTaskFiles | undefined;
   if (!errors.some((error) => error.gate === "patches")) {
     guard(errors, "render", () => {
@@ -108,7 +80,7 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
  * Dry render of the Harbor tree (everything except the repository snapshot and the held-out
  * patch copies), mirroring src/harbor-task/compiler.ts so the agent can inspect what will be built.
  */
-export function renderTaskFiles(
+function renderTaskFiles(
   definition: TaskDefinition,
   goldPatch: string,
   testPatch = "",
@@ -143,11 +115,6 @@ function environmentScripts(directory: string, definition: TaskDefinition): Rend
     [`${directory}/setup.sh`]: bashScript(definition.environment.setupCommand),
     [`${directory}/smoke.sh`]: smokeScript(definition),
   };
-}
-
-/** Human-readable summary for a tool result. */
-export function formatStaticCheckErrors(errors: readonly StaticCheckError[]): string {
-  return errors.map((error) => `- [${error.gate}] ${error.message}`).join("\n");
 }
 
 function parseDefinition(json: string, errors: StaticCheckError[]): TaskDefinition | undefined {

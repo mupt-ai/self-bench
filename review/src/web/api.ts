@@ -77,22 +77,6 @@ export async function connectRepo(org: string, fullName: string): Promise<Connec
   return body.repo;
 }
 
-export async function setRepoContinuous(
-  org: string,
-  fullName: string,
-  continuous: boolean,
-): Promise<ConnectedRepo> {
-  const body = await requestJson<{ repo: ConnectedRepo }>(
-    `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ continuous }),
-    },
-  );
-  return body.repo;
-}
-
 export async function disconnectRepo(org: string, fullName: string): Promise<void> {
   await requestJson<{ ok: true }>(`/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`, {
     method: "DELETE",
@@ -117,7 +101,7 @@ export function formatAgo(iso: string | undefined, now = Date.now()): string {
 
 export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
 
-export interface TaskReview {
+interface TaskReview {
   decision: "approve" | "reject";
   note: string;
   decidedBy: string;

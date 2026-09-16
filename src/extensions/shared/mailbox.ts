@@ -1,16 +1,11 @@
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { type SubmissionPayload, submissionHash } from "../../submission-hash.js";
 
 const DEFAULT_MAILBOX = "/work/mailbox";
 const DEFAULT_POLL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1_000;
-
-export interface VerifyPayload {
-  readonly definition: unknown;
-  readonly testPatch: string;
-  readonly goldPatch: string;
-}
 
 export type VerifyOutcome =
   | {
@@ -22,13 +17,6 @@ export type VerifyOutcome =
     }
   | { readonly kind: "error"; readonly message: string }
   | { readonly kind: "exhausted" };
-
-/** Same formula as src/submission-hash.ts on the worker. */
-export function payloadHash(payload: VerifyPayload): string {
-  return createHash("sha256")
-    .update(`${JSON.stringify(payload.definition)}\0${payload.testPatch}\0${payload.goldPatch}`)
-    .digest("hex");
-}
 
 /**
  * Sandbox side of the worker mailbox: writes a verify request the supervising activity picks up,
@@ -51,11 +39,11 @@ export class VerifyClient {
   }
 
   /** Whether this exact payload was verified green in this session. */
-  verifiedGreen(payload: VerifyPayload): boolean {
-    return this.#lastGreenHash !== undefined && this.#lastGreenHash === payloadHash(payload);
+  verifiedGreen(payload: SubmissionPayload): boolean {
+    return this.#lastGreenHash !== undefined && this.#lastGreenHash === submissionHash(payload);
   }
 
-  async verify(kind: "task" | "fix", payload: VerifyPayload): Promise<VerifyOutcome> {
+  async verify(payload: SubmissionPayload): Promise<VerifyOutcome> {
     if (this.remaining === 0) {
       return { kind: "exhausted" };
     }
@@ -66,7 +54,7 @@ export class VerifyClient {
     this.#sequence += 1;
     const id = `${Date.now()}-${this.#sequence}`;
     const request = join(requests, `${id}.json`);
-    writeFileSync(`${request}.tmp`, `${JSON.stringify({ id, kind, ...payload })}\n`);
+    writeFileSync(`${request}.tmp`, `${JSON.stringify({ id, kind: "task", ...payload })}\n`);
     renameSync(`${request}.tmp`, request);
     const response = join(responses, `${id}.json`);
     const deadline = Date.now() + this.#timeoutMs;
@@ -91,7 +79,7 @@ export class VerifyClient {
     };
   }
 
-  #record(response: Record<string, unknown>, payload: VerifyPayload): VerifyOutcome {
+  #record(response: Record<string, unknown>, payload: SubmissionPayload): VerifyOutcome {
     if (response.kind !== "report") {
       return {
         kind: "error",
@@ -102,7 +90,7 @@ export class VerifyClient {
     this.#used += 1;
     const green = response.green === true;
     if (green) {
-      this.#lastGreenHash = payloadHash(payload);
+      this.#lastGreenHash = submissionHash(payload);
     }
     return {
       kind: "report",
@@ -114,15 +102,15 @@ export class VerifyClient {
   }
 }
 
-export function verifyOutcomeText(outcome: VerifyOutcome, submitTool: string): string {
+export function verifyOutcomeText(outcome: VerifyOutcome): string {
   if (outcome.kind === "exhausted") {
-    return `No verify calls remain in this session. Call ${submitTool} with your best task or explain in your final message why it cannot be made fair.`;
+    return `No verify calls remain in this session. Call submit_task with your best task or explain in your final message why it cannot be made fair.`;
   }
   if (outcome.kind === "error") {
     return `verify could not complete: ${outcome.message}`;
   }
   const next = outcome.green
-    ? `Call ${submitTool} with exactly this payload to record it; the worker will reuse this report.`
-    : `Fix the red gates and call verify again, or ${submitTool} if you must (the worker verifies again and a round is spent if it fails).`;
+    ? `Call submit_task with exactly this payload to record it; the worker will reuse this report.`
+    : `Fix the red gates and call verify again, or submit_task if you must (the worker verifies again and a round is spent if it fails).`;
   return `${outcome.rendered.trim()}\n\nverify result: green=${outcome.green}. ${outcome.remaining} verify call(s) remain in this session. ${next}`;
 }

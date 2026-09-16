@@ -1,7 +1,7 @@
 import { checkSessionExpired } from "../session-expired";
 import type { CandidateArtifacts, TaskFiles, TaskRow } from "../types";
 
-export type SourceKind = "run" | "local";
+type SourceKind = "run" | "local";
 
 /**
  * Where the ledger's rows come from. Every source can list tasks and open one task's

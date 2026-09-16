@@ -2,13 +2,9 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runCommand } from "./process.js";
 
-export type ContractArtifactCategory =
-  | "endpoint_path"
-  | "field_name"
-  | "header_name"
-  | "media_type";
+type ContractArtifactCategory = "endpoint_path" | "field_name" | "header_name" | "media_type";
 
-export interface ContractArtifactEvidence {
+interface ContractArtifactEvidence {
   readonly artifact: string;
   readonly category: ContractArtifactCategory;
   readonly testLocations: readonly string[];
@@ -21,27 +17,6 @@ export interface CouplingEvidence {
   readonly schemaVersion: 1;
   readonly artifacts: readonly ContractArtifactEvidence[];
   readonly blockers: readonly string[];
-}
-
-export interface CouplingReviewInput {
-  readonly verdict: "clean" | "coupled";
-  readonly reason: string;
-  readonly findings: readonly {
-    readonly artifact: string;
-    readonly disposition:
-      | "base_contract"
-      | "prompt_contract"
-      | "external_contract"
-      | "gold_only"
-      | "not_contract";
-  }[];
-}
-
-export interface CouplingReviewResolution {
-  readonly verdict: "clean" | "coupled";
-  readonly reason: string;
-  readonly missingArtifacts: readonly string[];
-  readonly goldOnlyArtifacts: readonly string[];
 }
 
 interface AddedLine {
@@ -110,33 +85,6 @@ export function buildCouplingEvidence(input: {
         `held-out tests assert gold-only ${artifact.category} ${JSON.stringify(artifact.artifact)} at ${artifact.testLocations.join(", ")}`,
     );
   return { schemaVersion: 1, artifacts, blockers };
-}
-
-export function resolveCouplingReview(
-  evidence: CouplingEvidence,
-  review: CouplingReviewInput,
-): CouplingReviewResolution {
-  const unresolvedArtifacts = evidence.artifacts
-    .filter((artifact) => !artifact.presentInBase && !artifact.presentInPrompt)
-    .map((artifact) => artifact.artifact);
-  const reviewedArtifacts = new Set(review.findings.map((finding) => finding.artifact));
-  const missingArtifacts = unresolvedArtifacts.filter(
-    (artifact) => !reviewedArtifacts.has(artifact),
-  );
-  const goldOnlyArtifacts = review.findings
-    .filter((finding) => finding.disposition === "gold_only")
-    .map((finding) => finding.artifact);
-  const verdict =
-    review.verdict === "coupled" || missingArtifacts.length > 0 || goldOnlyArtifacts.length > 0
-      ? "coupled"
-      : "clean";
-  const reason =
-    missingArtifacts.length > 0
-      ? `review did not resolve deterministic coupling evidence for: ${missingArtifacts.join(", ")}`
-      : goldOnlyArtifacts.length > 0 && review.verdict === "clean"
-        ? `review identified gold-only artifacts: ${goldOnlyArtifacts.join(", ")}`
-        : review.reason;
-  return { verdict, reason, missingArtifacts, goldOnlyArtifacts };
 }
 
 export async function scanBaseContractArtifacts(

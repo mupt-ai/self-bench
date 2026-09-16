@@ -11,27 +11,6 @@ export function DiffView({ patch }: { patch: string }) {
   );
 }
 
-export function patchStats(patch: string): { files: number; added: number; removed: number } {
-  let files = 0;
-  let added = 0;
-  let removed = 0;
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("diff --git ")) files += 1;
-    else if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
-    else if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
-  }
-  return { files, added, removed };
-}
-
-export function patchPaths(patch: string): string[] {
-  const paths: string[] = [];
-  for (const line of patch.split("\n")) {
-    const match = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
-    if (match?.[2]) paths.push(match[2]);
-  }
-  return paths;
-}
-
 function RenderedPatch({ patch }: { patch: string }) {
   const files = React.useMemo(
     () => parsePatchFiles(patch).flatMap((parsed) => parsed.files),

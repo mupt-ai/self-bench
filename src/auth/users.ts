@@ -33,7 +33,7 @@ export interface Org {
   readonly role: "admin" | "member";
 }
 
-export interface SignedInProfile extends GitHubProfile {
+interface SignedInProfile extends GitHubProfile {
   readonly token: string;
   readonly scopes: string;
   /** Active org memberships at sign-in; the personal account is added by the store. */

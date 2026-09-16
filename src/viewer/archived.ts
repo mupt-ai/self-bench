@@ -99,9 +99,7 @@ export async function archivedCandidates(
       const parsed = text ? parseIdentity(text) : undefined;
       const taskId = parsed?.taskId ?? candidateId;
       const groups = groupsFor(entries, prefix, { taskId, candidateId });
-      const decision =
-        (await latestRoundDecision(store, entries, prefix, candidateId)) ??
-        (await latestReviewDecision(store, entries, prefix, taskId));
+      const decision = await latestRoundDecision(store, entries, prefix, candidateId);
       const stage = decision?.stage ?? furthestStage(groups);
       const bundleKey = latestBundleKey(entries, prefix, candidateId);
       const candidate: CandidateSummary = {
@@ -164,8 +162,7 @@ async function latestRoundDecision(
   const authoring = terminal
     .filter((item) => item.loop === "authoring")
     .sort((left, right) => right.round - left.round)[0];
-  // In the read-only reviewer flow, a later authoring rejection after suggestions is terminal.
-  // In the legacy flow, verification follows all authoring rounds and therefore wins.
+  // A later authoring rejection after suggestions is terminal.
   const latest =
     authoring && (!verification || authoring.round > verification.round) ? authoring : verification;
   if (!latest) return undefined;
@@ -190,30 +187,6 @@ async function latestRoundDecision(
     };
   }
   return undefined;
-}
-
-/** Legacy runs accepted a task exactly when its last coupling review was clean. */
-async function latestReviewDecision(
-  store: ArtifactStore,
-  entries: readonly ArtifactEntry[],
-  prefix: string,
-  taskId: string,
-): Promise<ArchivedDecision | undefined> {
-  const reviews = entries
-    .filter(
-      (entry) => entry.key.startsWith(`${prefix}reviews/${taskId}/`) && entry.key.endsWith(".json"),
-    )
-    .sort((left, right) =>
-      (left.updatedAt ?? left.key).localeCompare(right.updatedAt ?? right.key),
-    );
-  const latest = reviews[reviews.length - 1];
-  if (!latest) return undefined;
-  const value = await readJson(store, latest.key);
-  const verdict = typeof value?.verdict === "string" ? value.verdict : undefined;
-  if (!verdict) return undefined;
-  return verdict === "clean"
-    ? { stage: "accepted", reasonSummary: "final coupling review was clean" }
-    : { stage: "review", reasonSummary: `final coupling review: ${verdict}` };
 }
 
 async function readJson(

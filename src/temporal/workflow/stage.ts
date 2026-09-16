@@ -2,7 +2,7 @@ import type { ArtifactRef, AuthoredTask, RunRequest, TaskProgress } from "../../
 import type { SelfBenchActivities } from "../activities.js";
 
 /** Consecutive rounds whose verify hit Harbor infrastructure before the candidate stops counting rounds. */
-export const MAX_CONSECUTIVE_INFRASTRUCTURE_ROUNDS = 3;
+const MAX_CONSECUTIVE_INFRASTRUCTURE_ROUNDS = 3;
 
 export interface StageContext {
   readonly activitySet: SelfBenchActivities;

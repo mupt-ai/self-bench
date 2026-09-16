@@ -43,7 +43,7 @@ export function generationRecordPath(runId: string) {
 }
 
 /** The submitter's GitHub token for this run; the hosted worker has no GH_TOKEN of its own. */
-export function generationGitHubTokenPath(runId: string) {
+function generationGitHubTokenPath(runId: string) {
   return `${generationRecordPath(runId)}/github-token`;
 }
 

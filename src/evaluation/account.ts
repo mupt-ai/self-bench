@@ -24,7 +24,7 @@ export interface CredentialAccount {
   credentials: CredentialInfo[];
   comparisons: ComparisonRecord[];
 }
-export function accountPath(ownerId: number) {
+function accountPath(ownerId: number) {
   if (!Number.isSafeInteger(ownerId) || ownerId <= 0) throw new Error("Invalid credential owner");
   return `accounts/${ownerId}`;
 }

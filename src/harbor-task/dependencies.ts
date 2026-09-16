@@ -1,9 +1,5 @@
 import { posix } from "node:path";
 
-export function goldPatchChangesDependencyManifests(patch: string): boolean {
-  return dependencyManifestPatch(patch).length > 0;
-}
-
 export function dependencyManifestPatch(patch: string): string {
   const sections = patch.split(/(?=^diff --git )/m);
   const selected = sections.filter((section) => {

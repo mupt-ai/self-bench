@@ -2,12 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  archiveIncompleteHarborJob,
-  harborInfrastructureError,
-  readHarborJobResult,
-  tryReadHarborJobResult,
-} from "../src/harbor-results.js";
+import { harborInfrastructureError, readHarborJobResult } from "../src/harbor-results.js";
 
 const roots: string[] = [];
 
@@ -120,7 +115,7 @@ describe("Harbor result loading", () => {
     ).toContain("mounts denied");
   });
 
-  test("archives an interrupted job before retrying it", async () => {
+  test("rejects an interrupted job without a trial result", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-harbor-result-"));
     roots.push(root);
     await mkdir(join(root, "job"));
@@ -129,9 +124,8 @@ describe("Harbor result loading", () => {
       JSON.stringify({ finished_at: null, stats: { n_running_trials: 1 } }),
     );
 
-    expect(await tryReadHarborJobResult(root, "job")).toBeUndefined();
-    const archived = await archiveIncompleteHarborJob(root, "job");
-    expect(archived).toContain("job.incomplete-");
-    expect(await tryReadHarborJobResult(root, "job")).toBeUndefined();
+    await expect(readHarborJobResult(root, "job")).rejects.toThrow(
+      "Harbor job job has not finished",
+    );
   });
 });

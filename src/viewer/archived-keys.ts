@@ -4,8 +4,8 @@ import type { ArtifactEntry } from "./types.js";
 const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "verification", "verify"]);
 
 /**
- * The candidate's newest definition. Legacy runs wrote one at `authoring/<id>/definition.json`;
- * the agent pipeline rewrites it per round, attempt, and verify pass, so the latest write wins.
+ * The candidate's newest definition. The agent pipeline rewrites it per round, attempt, and verify pass,
+ * so the latest write wins.
  */
 export function latestDefinitionKey(
   entries: readonly ArtifactEntry[],

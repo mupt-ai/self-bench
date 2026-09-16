@@ -17,8 +17,5 @@ export async function reviewAuthoredTask(
   });
   if (verdict.kind === "accepted") return { kind: "green", ...green };
   if (verdict.kind === "rejected") return rejected(verdict.reason);
-  if (verdict.kind === "suggestions") {
-    return { kind: "suggestions", feedback: `${verdict.summary}\n\n${verdict.suggestions}` };
-  }
-  throw new Error("Read-only verifier returned a legacy fix instead of suggestions");
+  return { kind: "suggestions", feedback: `${verdict.summary}\n\n${verdict.suggestions}` };
 }

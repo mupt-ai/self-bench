@@ -68,7 +68,7 @@ export function draft(candidateId: string, suffix = ""): AuthoredTaskDraft {
   };
 }
 
-export function greenReport(stage: VerifyStage, round: number, taskId: string): VerifyReport {
+function greenReport(stage: VerifyStage, round: number, taskId: string): VerifyReport {
   const gate = { ran: true, ok: true, logTail: "" };
   return {
     schemaVersion: 1,

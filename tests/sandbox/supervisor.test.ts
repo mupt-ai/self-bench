@@ -91,9 +91,10 @@ describe("mailbox supervisor", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     sandbox.request("r2", {
-      kind: "fix",
+      kind: "task",
       definition: { taskId: "t" },
       testPatch: "diff --git a b",
+      goldPatch: "diff --git c d",
     });
 
     const summary = await run;
@@ -101,7 +102,7 @@ describe("mailbox supervisor", () => {
     expect(summary).toEqual({ handled: 2, stoppedBy: "done" });
     expect(handled.map((request) => [request.id, request.kind])).toEqual([
       ["r1", "task"],
-      ["r2", "fix"],
+      ["r2", "task"],
     ]);
     expect(sandbox.response("r1")).toEqual(
       expect.objectContaining({ kind: "report", green: false }),
@@ -141,6 +142,24 @@ describe("mailbox supervisor", () => {
       kind: "error",
       message: "verification failed on the worker: harbor exploded",
     });
+  });
+
+  test("rejects legacy fix requests and tasks without gold patches", async () => {
+    const sandbox = new FakeSandbox();
+    sandbox.request("fix", { kind: "fix", definition: {}, testPatch: "x", goldPatch: "y" });
+    sandbox.request("missing-gold", { kind: "task", definition: {}, testPatch: "x" });
+    sandbox.files.set(MAILBOX_DONE, "");
+    let handled = 0;
+    await superviseMailbox(sandbox, new AbortController().signal, {
+      handle: async () => {
+        handled += 1;
+        throw new Error("must not run");
+      },
+    });
+    expect(handled).toBe(0);
+    for (const id of ["fix", "missing-gold"]) {
+      expect(sandbox.response(id)).toMatchObject({ kind: "error" });
+    }
   });
 
   test("rethrows fatal handler errors", async () => {

@@ -11,7 +11,7 @@ import type { TaskFiles } from "./types.js";
 
 const inFlight = new Map<string, Promise<TaskFiles>>();
 
-export function bundleCacheRoot(): string {
+function bundleCacheRoot(): string {
   return join(tmpdir(), "selfbench-viewer-bundles");
 }
 

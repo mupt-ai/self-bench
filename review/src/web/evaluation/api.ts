@@ -1,26 +1,8 @@
-import type {
-  EvaluationChoices,
-  EvaluationRun,
-  EvaluationSandbox,
-  Harness,
-} from "../../../../src/evaluation/types";
+import type { EvaluationChoices } from "../../../../src/evaluation/types";
 
-export type { EvaluationSetup } from "../../../../src/evaluation/profiles";
-export type {
-  EvaluationModel,
-  EvaluationRun,
-  EvaluationTrial,
-  Harness,
-} from "../../../../src/evaluation/types";
+export type { EvaluationRun, EvaluationTrial, Harness } from "../../../../src/evaluation/types";
 export interface EvaluationOptions extends EvaluationChoices {
   tasks: { runId: string; taskId: string; difficulty: string }[];
-}
-export interface EvaluationSelection {
-  id: string;
-  model: string;
-  harnesses: Harness[];
-  sandbox: EvaluationSandbox;
-  tasks: { runId: string; taskId: string }[];
 }
 export function evaluationUrl(org: string, repo: string): string {
   return `/api/orgs/${encodeURIComponent(org)}/repos/${repo.split("/").map(encodeURIComponent).join("/")}/evaluations`;
@@ -64,10 +46,4 @@ export async function evaluationRequest<Result>(url: string, selection?: object)
     );
   }
   return response.json() as Promise<Result>;
-}
-export function startEvaluation(
-  url: string,
-  selection: EvaluationSelection,
-): Promise<EvaluationRun> {
-  return evaluationRequest(url, selection);
 }

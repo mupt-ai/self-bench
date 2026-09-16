@@ -1,7 +1,7 @@
 import type { EvaluationPricing, Harness } from "./types.js";
 
 export const catalogVersion = "2026-09-14.1";
-export const supportedProviders = ["openai", "anthropic", "openrouter", "custom"] as const;
+const supportedProviders = ["openai", "anthropic", "openrouter", "custom"] as const;
 export type CatalogProvider = (typeof supportedProviders)[number];
 export interface CatalogModel {
   id: string;

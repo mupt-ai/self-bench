@@ -1,41 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts.js";
-import {
-  type AuthoredTask,
-  type AuthoredTaskDraft,
-  type TaskDefinition,
-  taskDefinitionSchema,
-} from "../../contracts.js";
+import type { AuthoredTaskDraft } from "../../contracts.js";
 import { runCommand } from "../../process.js";
-import { withTaskBundle, withTemporaryDirectory } from "./runtime.js";
-
-export interface OriginalTask {
-  readonly definition: TaskDefinition;
-  readonly testPatch: string;
-  readonly goldPatch: string;
-}
-
-/** Reads the definition and both patches of a compiled task bundle. */
-export async function readOriginalTask(
-  store: ArtifactStore,
-  task: AuthoredTask,
-): Promise<OriginalTask> {
-  return await withTaskBundle(store, task, async (taskDirectory) => {
-    const [definitionBytes, testPatch, goldPatch] = await Promise.all([
-      store.get(task.definition),
-      readFile(join(taskDirectory, "tests/test.patch"), "utf8"),
-      readFile(join(taskDirectory, "solution/gold.patch"), "utf8"),
-    ]);
-    return {
-      definition: taskDefinitionSchema.parse(
-        JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
-      ),
-      testPatch,
-      goldPatch,
-    };
-  });
-}
+import { withTemporaryDirectory } from "./runtime.js";
 
 /**
  * Stores a submission (definition.json, test.patch, gold.patch) as the definition artifact plus

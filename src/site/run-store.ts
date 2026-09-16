@@ -3,7 +3,7 @@ import type { Database } from "../db/client.js";
 import { repoRuns, users } from "../db/schema.js";
 
 /** A pipeline run whose candidates count as a repository's tasks. */
-export interface AttachedRun {
+interface AttachedRun {
   readonly runId: string;
   readonly attachedBy: string;
   readonly attachedAt: string;

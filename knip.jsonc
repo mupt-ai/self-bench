@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/cli.ts!",
+    "src/api-main.ts!",
+    "src/temporal/worker-main.ts!",
+    // Documented standalone worker, separate from the combined worker.
+    "src/evaluation/worker-main.ts!",
+    // Temporal loads workflows and Pi loads extensions by path, not imports.
+    "src/temporal/workflow.ts!",
+    "src/evaluation/workflow.ts!",
+    "src/extensions/{authoring,verifier,discovery}.ts!",
+    "src/sandbox/programs/{author,check,verifier}.ts!",
+    "review/src/main.tsx!",
+    "scripts/*.ts!",
+    "tests/**/*.test.ts",
+    "review/src/**/*.test.{ts,tsx}"
+  ],
+  "project": [
+    "src/**/*.ts!",
+    "review/src/**/*.{ts,tsx,css}!",
+    "scripts/**/*.ts!",
+    "tests/**/*.ts"
+  ],
+  "includeEntryExports": true,
+  "ignoreIssues": {
+    // These exports are registration interfaces for the external loaders.
+    "src/temporal/workflow.ts": ["exports"],
+    "src/evaluation/workflow.ts": ["exports"],
+    "src/extensions/{authoring,verifier,discovery}.ts": ["exports"]
+  },
+  // Resolved through createRequire; the CLI is installed by the operator.
+  "ignoreDependencies": ["@openai/codex"],
+  "ignoreBinaries": ["vercel"]
+}

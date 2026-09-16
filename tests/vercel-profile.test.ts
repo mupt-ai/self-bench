@@ -6,10 +6,10 @@ import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
 import {
   applyVercelProfile,
   loadVercelProfileData,
-  profileFilePaths,
   saveVercelProfile,
   type VercelProfile,
 } from "../src/setup/vercel/profile.js";
+import { profileFilePaths } from "../src/setup/vercel/profile-files.js";
 
 const roots: string[] = [];
 const image = `selfbench-runtime@sha256:${"a".repeat(64)}`;

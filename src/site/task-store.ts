@@ -44,12 +44,12 @@ export type TaskUpsert = Omit<
 >;
 
 /** A task the site just started: no verdict yet, a workflow to watch. */
-export interface TaskStart extends TaskUpsert {
+interface TaskStart extends TaskUpsert {
   readonly workflowId: string;
   readonly startedBy: number;
 }
 
-export interface TaskProgressPatch {
+interface TaskProgressPatch {
   readonly stage: string;
   readonly round?: number;
   readonly pipelineStatus: PipelineStatus;
@@ -57,7 +57,7 @@ export interface TaskProgressPatch {
   readonly taskId?: string;
 }
 
-export interface RepoTaskCounts {
+interface RepoTaskCounts {
   readonly repoId: number;
   readonly total: number;
   readonly accepted: number;
