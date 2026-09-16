@@ -1,5 +1,6 @@
 import { loadConfig, type SelfBenchConfig } from "../config.js";
 import type { RunRequest } from "../contracts.js";
+import { managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "./generation-config.js";
 import type { GenerationReference } from "./generation-settings.js";
 
@@ -21,7 +22,8 @@ export function configureGenerationRun(
       settings,
       process.env,
       settings.sandboxImage ??
-        (settings.sandbox === config.execution.kind ? config.execution.image : undefined),
+        (settings.sandbox === config.execution.kind ? config.execution.image : undefined) ??
+        (settings.sandbox === "e2b" ? managedE2BTemplateReference() : undefined),
     ),
   );
   run.version.executionBackend = selected.execution.kind;

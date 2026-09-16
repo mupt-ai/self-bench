@@ -2,8 +2,10 @@ import { ApplicationFailure } from "@temporalio/common";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../config.js";
 import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
+import { orgRecords } from "../../evaluation/org-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
+import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../../site/generation-config.js";
 import { generationEnvironment } from "../../site/generation-credentials.js";
 
@@ -48,6 +50,33 @@ export async function withGenerationRuntime<T>(
       error instanceof Error ? error.message : "Generation runtime unavailable",
       "GenerationConfiguration",
     );
+  }
+  // A managed E2B run stamped by the API must use this build's template; build it in the
+  // user's account before the first sandbox request if the account does not have it yet.
+  if (
+    selected.execution.kind === "e2b" &&
+    selected.execution.image === managedE2BTemplateReference() &&
+    run.version.sandboxImage === selected.execution.image
+  ) {
+    const credentialId = settings.sandboxCredentialId;
+    if (!credentialId || !records)
+      throw ApplicationFailure.nonRetryable(
+        "Managed E2B template build is not configured on this worker.",
+        "GenerationConfiguration",
+      );
+    try {
+      await ensureManagedE2BTemplate({
+        reference: selected.execution.image,
+        credentials: selected.execution.credentials,
+        records: orgRecords(records, run.generation.orgId),
+        credentialId,
+      });
+    } catch (error) {
+      throw ApplicationFailure.nonRetryable(
+        error instanceof Error ? error.message : "Managed E2B template unavailable",
+        "GenerationConfiguration",
+      );
+    }
   }
   const execution =
     "timeoutCapMs" in selected.execution

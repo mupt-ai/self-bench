@@ -104,7 +104,9 @@ for (const sandbox of ["e2b", "vercel"] as const) {
           body: JSON.stringify({ pr: 57, generation: value }),
         });
       expect((await post({ ...generation, sandboxCredentialId: model.id })).status).toBe(400);
-      expect((await post({ ...generation, sandboxImage: undefined })).status).toBe(400);
+      // Vercel requires its digest-pinned runtime image; E2B defaults to the managed template.
+      if (sandbox === "vercel")
+        expect((await post({ ...generation, sandboxImage: undefined })).status).toBe(400);
       expect((await post({ ...generation, harborEnvironment: undefined })).status).toBe(400);
       // Docker generation and Docker Harbor would run on the worker; the site rejects both.
       expect((await post({ ...generation, sandbox: "docker" })).status).toBe(400);
@@ -221,15 +223,12 @@ test("cloud generation validates runtime artifacts and never offers worker-local
     sandboxImage: "team/selfbench:stable",
   };
   expect(generationSettingsSchema.safeParse(cloud).success).toBe(true);
-  for (const sandboxImage of [
-    "",
-    "base",
-    "base:latest",
-    "invalid image",
-    "https://example.com",
-    undefined,
-  ])
+  for (const sandboxImage of ["", "base", "base:latest", "invalid image", "https://example.com"])
     expect(generationSettingsSchema.safeParse({ ...cloud, sandboxImage }).success).toBe(false);
+  // Without an override the worker builds the managed template in the account.
+  expect(generationSettingsSchema.safeParse({ ...cloud, sandboxImage: undefined }).success).toBe(
+    true,
+  );
   expect(
     generationSettingsSchema.safeParse({ ...cloud, sandbox: "vercel", sandboxImage: image })
       .success,

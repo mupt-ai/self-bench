@@ -52,10 +52,16 @@ test("generation sandbox options come from the API and use the shared provider l
 });
 
 test.each(["e2b", "vercel"] as const)(
-  "%s generation exposes runtime and separate Harbor settings with only matching credentials",
+  "%s generation exposes separate Harbor settings with only matching credentials",
   (sandbox) => {
     const html = render({ ...base, sandbox, sandboxCredentialId: undefined });
-    expect(html).toContain(sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image");
+    // The E2B template is managed (built on first use); only Vercel asks for a runtime image.
+    expect(html).toContain(
+      sandbox === "e2b"
+        ? "The E2B template is built automatically in your account on first use."
+        : "Vercel Runtime Image",
+    );
+    expect(html).not.toContain(sandbox === "e2b" ? "Vercel Runtime Image" : "E2B Template");
     expect(html).toContain("Harbor Verification");
     expect(html).not.toContain('value="docker"');
     for (const environment of ["modal", "vercel", "e2b", "daytona"])

@@ -101,7 +101,7 @@ Modal defaults to 20 concurrent worker activities. Discovery starts eight indepe
 
 ### E2B
 
-E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `--harbor-environment`. It requires a custom, prebuilt SelfBench template. Stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects, so `SELFBENCH_E2B_TEMPLATE` has no default. SelfBench never installs those runtime dependencies while allocating a sandbox.
+E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `--harbor-environment`. Sandboxes must run a custom SelfBench template: stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects. Hosted generation manages this automatically — the worker builds a template named `selfbench-runtime:<dockerfile-hash>` in the run's E2B account from the packaged `Dockerfile.sandbox` the first time a run needs it, and reuses it after (an encrypted record serialises concurrent builds, and a lock left by a crashed worker is taken over after 45 minutes). Self-hosted stacks can rely on the same managed template or build their own with `self-bench setup e2b` and export `SELFBENCH_E2B_TEMPLATE`; SelfBench never installs runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
