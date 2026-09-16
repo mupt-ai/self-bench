@@ -1,10 +1,14 @@
 import { expect, test } from "bun:test";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { executionEnvironment, withExecutionEnvironment } from "../src/execution-environment.js";
-import { generationEnvironment, generationRecordPath } from "../src/site/generation-credentials.js";
+import {
+  generationEnvironment,
+  generationRecordPath,
+  saveGenerationRecords,
+} from "../src/site/generation-credentials.js";
 import type { GenerationReference } from "../src/site/generation-settings.js";
 import { generationSubscriptionAuth } from "../src/site/generation-subscription.js";
-import { loadPiModelAuth } from "../src/subscription-auth.js";
+import { githubToken, loadPiModelAuth } from "../src/subscription-auth.js";
 import {
   authoringRoundScript,
   verifierRoundScript,
@@ -95,13 +99,16 @@ test("generation credentials cannot be substituted and concurrent activity envir
       sandboxCredentialId: sandbox.id,
     },
   };
-  await records.write(generationRecordPath("run-one"), reference, 0);
+  await saveGenerationRecords(records, "run-one", reference, "github-one");
   const env = await generationEnvironment(records, "run-one", reference, {
     OPENAI_API_KEY: "host-key",
     MODAL_TOKEN_SECRET: "host-modal",
+    GH_TOKEN: "host-github",
   });
   expect(env.OPENAI_API_KEY).toBe("model-one");
   expect(env.MODAL_TOKEN_SECRET).toBe("sandbox-one");
+  expect(env.GH_TOKEN).toBe("github-one");
+  await withExecutionEnvironment(env, async () => expect(await githubToken()).toBe("github-one"));
   await expect(
     generationEnvironment(records, "run-one", { ...reference, ownerId: 2 }, {}),
   ).rejects.toThrow("saved configuration");

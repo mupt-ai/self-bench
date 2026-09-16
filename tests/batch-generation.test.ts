@@ -2,8 +2,10 @@ import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../src/config.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
+import { withExecutionEnvironment } from "../src/execution-environment.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { generationEnvironment } from "../src/site/generation-credentials.js";
+import { githubToken } from "../src/subscription-auth.js";
 import { createActivities } from "../src/temporal/activities/factory.js";
 import { withGenerationRuntime } from "../src/temporal/activities/generation-runtime.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
@@ -70,9 +72,13 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
   });
   expect(JSON.stringify(run)).not.toContain("batch-model-secret");
   expect(JSON.stringify(run)).not.toContain("batch-modal-secret");
+  expect(JSON.stringify(run)).not.toContain("secret-token");
   const env = await generationEnvironment(f.records, run.runId, run.generation, {});
   expect(env.OPENAI_API_KEY).toBe("batch-model-secret");
   expect(env.MODAL_TOKEN_SECRET).toBe("batch-modal-secret");
+  // The hosted worker has no GitHub login; provenance and discovery use the submitter's token.
+  expect(env.GH_TOKEN).toBe("secret-token");
+  await withExecutionEnvironment(env, async () => expect(await githubToken()).toBe("secret-token"));
   const config = loadWorkerConfig({});
   const legacy = createSandboxExecutor(config.execution);
   for (const stage of ["author", "verifier"] as const) {
@@ -92,8 +98,12 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       },
     );
   }
-  // Discovery must resolve this run's credentials before touching any sandbox or activity context.
+  // Provenance and discovery must resolve this run's credentials before touching any sandbox
+  // or activity context.
   const activities = createActivities(config);
+  await expect(activities.collectRunProvenance(run)).rejects.toThrow(
+    "credentials are not configured",
+  );
   await expect(
     activities.discoverCandidateShard({
       run,

@@ -42,6 +42,22 @@ export function generationRecordPath(runId: string) {
   return `generations/${runId}`;
 }
 
+/** The submitter's GitHub token for this run; the hosted worker has no GH_TOKEN of its own. */
+export function generationGitHubTokenPath(runId: string) {
+  return `${generationRecordPath(runId)}/github-token`;
+}
+
+/** Persist the run's configuration and GitHub token before any paid work starts. */
+export async function saveGenerationRecords(
+  records: EncryptedRecordStore,
+  runId: string,
+  reference: GenerationReference,
+  githubToken: string,
+) {
+  await records.write(generationRecordPath(runId), reference, 0);
+  await records.write(generationGitHubTokenPath(runId), { value: githubToken }, 0);
+}
+
 export async function checkGenerationCredentials(
   records: EncryptedRecordStore,
   ownerId: number,
@@ -70,6 +86,7 @@ export async function generationEnvironment(
   const saved = await records.read<GenerationReference>(generationRecordPath(runId));
   if (!saved || !isDeepStrictEqual(saved.value, reference))
     throw new Error("Generation does not match its saved configuration.");
+  const github = await records.read<{ value: string }>(generationGitHubTokenPath(runId));
   records = orgRecords(records, reference.orgId);
   const credential = await checkGenerationCredentials(
     records,
@@ -83,6 +100,7 @@ export async function generationEnvironment(
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;
   delete env.SELFBENCH_PI_AUTH_JSON;
+  if (github?.value.value) env.GH_TOKEN = github.value.value;
   if (credential.auth === "codex-login")
     env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(model.value.value);
   else env.OPENAI_API_KEY = model.value.value;

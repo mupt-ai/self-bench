@@ -20,7 +20,15 @@ export function createActivities(
   const store = createArtifactStore(config.artifact);
   const sandbox = createSandboxExecutor(config.execution);
   return {
-    collectRunProvenance: (run) => collectRunProvenance(store, run),
+    collectRunProvenance: (run) =>
+      withGenerationRuntime(
+        config,
+        records,
+        run,
+        "author",
+        sandbox,
+        (_executor, _environment, configured) => collectRunProvenance(store, configured),
+      ),
     collectExcludedSourcePrs: (runIds) => collectExcludedSourcePrs(store, runIds),
     discoverCandidateShard: (input) =>
       withGenerationRuntime(

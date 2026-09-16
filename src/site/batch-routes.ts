@@ -9,7 +9,7 @@ import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
-import { checkGenerationCredentials, generationRecordPath } from "./generation-credentials.js";
+import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
 import type { RepoStore } from "./repo-store.js";
 import type { RunStore } from "./run-store.js";
 import type { TaskStore } from "./task-store.js";
@@ -109,7 +109,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         // Persist ownership BEFORE starting paid work. A failed/ambiguous start remains visible
         // and recoverable under this repo rather than leaving an unowned running workflow.
         if (generation && options.records)
-          await options.records.write(generationRecordPath(input.runId), generation, 0);
+          await saveGenerationRecords(options.records, input.runId, generation, token);
         const run = await runs.attachRun(repo.id, input.runId, user.id);
         try {
           await options.start(input);
