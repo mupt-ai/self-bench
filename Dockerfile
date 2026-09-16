@@ -33,6 +33,8 @@ COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/src/extensions ./src/extensions
 COPY --from=build /app/src/skills ./src/skills
 COPY package.json ./package.json
+# The managed E2B template is built from this packaged file when a run needs it.
+COPY --from=build /app/Dockerfile.sandbox ./Dockerfile.sandbox
 
 USER node
 CMD ["node", "dist/api-main.js"]

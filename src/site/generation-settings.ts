@@ -66,9 +66,11 @@ export const generationSettingsSchema = z
         path: ["sandboxImage"],
         message: "Vercel requires a runtime image pinned by sha256 digest.",
       });
-    if (value.sandbox === "e2b") {
+    // E2B needs no image: the worker builds the managed SelfBench template in the user's
+    // account. An explicit reference is an override for a template the user built themselves.
+    if (value.sandbox === "e2b" && value.sandboxImage !== undefined) {
       try {
-        if (normalizeE2BTemplateReference(value.sandboxImage ?? "").split(":")[0] === "base")
+        if (normalizeE2BTemplateReference(value.sandboxImage).split(":")[0] === "base")
           throw new Error();
       } catch {
         context.addIssue({

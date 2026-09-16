@@ -156,30 +156,29 @@ export function GenerationFields({
       </label>
       {hosted && (
         <>
-          <label
-            className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-            htmlFor="generation-image"
-          >
-            <span className="flex items-center gap-1.5">
-              {value.sandbox === "e2b" ? "E2B Template" : "Vercel Runtime Image"}
-              <Hint
-                text={
-                  value.sandbox === "e2b"
-                    ? "Use a SelfBench template built with self-bench setup e2b, not the base template."
-                    : "Use the digest-pinned image from self-bench setup vercel."
-                }
+          {value.sandbox === "vercel" && (
+            <label
+              className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
+              htmlFor="generation-image"
+            >
+              <span className="flex items-center gap-1.5">
+                Vercel Runtime Image
+                <Hint text="Use the digest-pinned image from self-bench setup vercel." />
+              </span>
+              <Input
+                id="generation-image"
+                required
+                value={value.sandboxImage ?? ""}
+                onChange={(event) => onChange({ ...value, sandboxImage: event.target.value })}
+                placeholder="registry/image@sha256:…"
               />
-            </span>
-            <Input
-              id="generation-image"
-              required
-              value={value.sandboxImage ?? ""}
-              onChange={(event) => onChange({ ...value, sandboxImage: event.target.value })}
-              placeholder={
-                value.sandbox === "e2b" ? "Template Name or ID" : "registry/image@sha256:…"
-              }
-            />
-          </label>
+            </label>
+          )}
+          {value.sandbox === "e2b" && (
+            <p className="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-1">
+              The E2B template is built automatically in your account on first use.
+            </p>
+          )}
           <label
             className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
             htmlFor="generation-harbor"
