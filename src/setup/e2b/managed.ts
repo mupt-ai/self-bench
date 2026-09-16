@@ -45,7 +45,8 @@ export function managedE2BTemplateRecordPath(credentialId: string, reference: st
 
 type BuildRecord =
   | { status: "building"; startedAt: string }
-  | { status: "ready"; templateId: string; buildId: string; builtAt: string };
+  | { status: "ready"; templateId: string; buildId: string; builtAt: string }
+  | { status: "failed"; failedAt: string };
 
 export interface ManagedE2BTemplateApi {
   exists(reference: string, signal?: AbortSignal): Promise<boolean>;
@@ -64,6 +65,7 @@ export interface EnsureManagedE2BTemplateOptions {
   readonly credentialId: string;
   readonly projectRoot?: string;
   readonly api?: ManagedE2BTemplateApi;
+  /** Called on every wait poll and build log so activities can heartbeat. */
   readonly onLog?: (message: string) => void;
   readonly signal?: AbortSignal;
   readonly now?: () => number;
@@ -133,7 +135,9 @@ async function buildAndRecord(
 ): Promise<void> {
   const { reference, records, path, version } = options;
   options.onLog?.(`building E2B template ${reference} from the packaged Dockerfile.sandbox`);
+  const now = options.now ?? Date.now;
   let result: { name: string; templateId: string; buildId: string };
+  let lastLog = 0;
   try {
     result = options.api.build
       ? await options.api.build(undefined, reference, {
@@ -146,11 +150,21 @@ async function buildAndRecord(
           memoryMiB: MANAGED_E2B_TEMPLATE_MEMORY_MIB,
           credentials: options.credentials,
           projectRoot: options.projectRoot ?? projectRoot(import.meta.url),
-          ...(options.onLog ? { onLog: options.onLog } : {}),
+          onLog: (message) => {
+            // Long builds must heartbeat; coalesce log bursts to one call per 30 seconds.
+            if (options.onLog && now() - lastLog >= 30_000) {
+              lastLog = now();
+              options.onLog(message);
+            }
+          },
           ...(options.signal ? { signal: options.signal } : {}),
         });
   } catch (error) {
-    await records.destroy(path).catch(() => undefined);
+    // Release the claim by writing our own record at our version: a delete could wipe a
+    // successor's lock that a stale-window takeover already placed on this path.
+    await records
+      .write(path, { status: "failed", failedAt: new Date(now()).toISOString() }, version)
+      .catch(() => undefined);
     throw new Error(
       `E2B template ${reference} could not be built in this account: ${errorMessage(error)}`,
       { cause: error },
@@ -160,7 +174,7 @@ async function buildAndRecord(
     status: "ready",
     templateId: result.templateId,
     buildId: result.buildId,
-    builtAt: new Date((options.now ?? Date.now)()).toISOString(),
+    builtAt: new Date(now()).toISOString(),
   };
   await records.write(path, record, version);
   options.onLog?.(`built E2B template ${reference} (build ${result.buildId})`);

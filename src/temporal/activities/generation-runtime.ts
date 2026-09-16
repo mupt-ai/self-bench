@@ -1,3 +1,4 @@
+import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../config.js";
 import type { RunRequest } from "../../contracts.js";
@@ -8,6 +9,7 @@ import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../../site/generation-config.js";
 import { generationEnvironment } from "../../site/generation-credentials.js";
+import { safeHeartbeat } from "./runtime.js";
 
 export async function withGenerationRuntime<T>(
   config: SelfBenchWorkerConfig,
@@ -70,6 +72,8 @@ export async function withGenerationRuntime<T>(
         credentials: selected.execution.credentials,
         records: orgRecords(records, run.generation.orgId),
         credentialId,
+        onLog: safeHeartbeat,
+        signal: Context.current().cancellationSignal,
       });
     } catch (error) {
       throw ApplicationFailure.nonRetryable(

@@ -102,9 +102,12 @@ test("a failed build releases the lock and another attempt can rebuild", async (
   await expect(ensureManagedE2BTemplate(options)).rejects.toThrow(
     "could not be built in this account",
   );
+  // The claim is released by writing our own record (a delete could wipe a successor's lock).
   expect(
-    await records.read(managedE2BTemplateRecordPath(credentialId, "selfbench-runtime:missing")),
-  ).toBeUndefined();
+    await records.read<{ status: string }>(
+      managedE2BTemplateRecordPath(credentialId, "selfbench-runtime:missing"),
+    ),
+  ).toMatchObject({ value: { status: "failed" } });
   fail = false;
   await ensureManagedE2BTemplate(options);
   const record = await records.read<{ status: string; buildId: string }>(
