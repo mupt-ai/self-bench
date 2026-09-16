@@ -68,7 +68,7 @@ self-bench up --backend modal --harbor-environment docker
 self-bench up --backend modal --harbor-environment daytona
 ```
 
-The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider.
+The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider. The hosted worker has no `GH_TOKEN`: when a signed-in user starts a batch or PR task, the API stores that user's GitHub OAuth token in the encrypted record store beside the run's generation settings, and `generationEnvironment()` injects it as `GH_TOKEN` for provenance collection, discovery, authoring, and verification of that run only.
 
 Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
 
@@ -481,7 +481,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `COMPOSE_PROJECT_NAME` / `SELFBENCH_IMAGE` | per checkout | Compose project and API/worker image tag |
 | `OPENAI_API_KEY` | — | Worker sandboxes |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
-| `GH_TOKEN` | — | Worker GitHub reads |
+| `GH_TOKEN` | — | Worker GitHub reads; hosted generation uses the submitter's GitHub token instead |
 
 ## Cloud topology
 

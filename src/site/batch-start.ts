@@ -43,7 +43,8 @@ export async function prepareBatch(options: {
   const commit = commitSchema.parse(((await response.json()) as { sha?: unknown }).sha);
   const runId = `batch-${randomUUID()}`;
   // A real, readable empty local-session input. collectRunProvenance augments this with
-  // merged GitHub PRs using the worker's credentials. OAuth secrets never enter history.
+  // merged GitHub PRs using the submitter's token from the encrypted record store (hosted)
+  // or the worker's own credentials. OAuth secrets never enter history.
   const provenance = await artifacts.put(
     `runs/${runId}/input/provenance.jsonl`,
     Buffer.alloc(0),

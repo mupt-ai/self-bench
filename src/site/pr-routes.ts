@@ -9,7 +9,7 @@ import { listCredentials } from "../evaluation/credentials.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { HOSTED_EXECUTION_BACKENDS } from "../providers.js";
-import { checkGenerationCredentials, generationRecordPath } from "./generation-credentials.js";
+import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
 import { generationModels, generationSettingsSchema } from "./generation-settings.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
 import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
@@ -155,7 +155,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         artifacts,
         start: async (workflowId, input) => {
           if (generation && options.records)
-            await options.records.write(generationRecordPath(row.runId), generation, 0);
+            await saveGenerationRecords(options.records, row.runId, generation, token);
           await start(workflowId, input);
         },
         repository: repo,
