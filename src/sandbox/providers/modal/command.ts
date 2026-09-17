@@ -28,24 +28,6 @@ export async function runModalCommand(
   const outputs: Record<string, Uint8Array> = {};
   const readers = new Set<ReadableStreamDefaultReader<string | Uint8Array>>();
   let supervision: Supervision | undefined;
-  let finishing: Promise<void> | undefined;
-  let supervisionSucceeded = false;
-  let supervisionError: unknown;
-  const finishSupervision = (): Promise<void> => {
-    if (!supervision) return Promise.resolve();
-    finishing ??= supervision.finish().then(
-      () => {
-        supervisionSucceeded = true;
-      },
-      (error: unknown) => {
-        supervisionError = error;
-        throw error;
-      },
-    );
-    // The state above retains late failure even if the command deadline wins.
-    void finishing.catch(() => undefined);
-    return finishing;
-  };
   let stopped = false;
   let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
   let notifyFailure = (): void => {};
@@ -146,11 +128,13 @@ export async function runModalCommand(
     if (readers.size > 0) {
       void Promise.allSettled([...readers].map((reader) => reader.cancel()));
     }
-    await deadline.run(finishSupervision).catch((error: unknown) => {
-      supervisionError ??= error;
-    });
-    executionError ??=
-      deadline.signal.reason ?? inactivityError ?? processError ?? streamError ?? supervisionError;
+    const currentSupervision = supervision;
+    await deadline
+      .run(() => currentSupervision.finish())
+      .catch((error: unknown) => {
+        executionError ??= error;
+      });
+    executionError ??= deadline.signal.reason ?? inactivityError ?? processError ?? streamError;
     for (const path of request.outputPaths ?? []) {
       const { value, lastError } = await deadline.run(() =>
         readOutputWithRetry(() => deadline.run(() => sandbox.filesystem.readBytes(path)), {
@@ -163,6 +147,8 @@ export async function runModalCommand(
       }
     }
     if (executionError) throw executionError;
+    const settlement = currentSupervision.settlement();
+    if (settlement.status === "failed") throw settlement.error;
     return result();
   } catch (error) {
     const primary = executionError ?? processError ?? error;
@@ -172,11 +158,16 @@ export async function runModalCommand(
       { cause: primary },
     );
     if (supervision) {
-      void finishSupervision().catch(() => undefined);
-      if (!supervisionSucceeded) {
+      void supervision.finish().catch(() => undefined);
+      if (supervision.settlement().status !== "succeeded") {
         // Keep the primary cause, but never recover wrapper success while owned
         // work failed or remains unsettled. The getter retains late hook failure.
-        throw markOwnershipFailure(failure, () => supervisionError);
+        const currentSupervision = supervision;
+        throw markOwnershipFailure(failure, () => {
+          const settlement = currentSupervision.settlement();
+          if (settlement.status !== "failed") return undefined;
+          return "lateError" in settlement ? settlement.lateError : settlement.error;
+        });
       }
     }
     throw failure;
@@ -184,6 +175,6 @@ export async function runModalCommand(
     stopped = true;
     if (inactivityTimer) clearTimeout(inactivityTimer);
     void Promise.allSettled([...readers].map((reader) => reader.cancel()));
-    if (supervision) void finishSupervision().catch(() => undefined);
+    if (supervision) void supervision.finish().catch(() => undefined);
   }
 }

@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import type { ModalClient, Sandbox } from "modal";
 import type { ArtifactStore } from "../../../../src/artifacts.js";
 import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";
-import { LiveSandboxRegistry, SandboxSupervisionError } from "../../../../src/sandbox/live.js";
+import {
+  LiveSandboxRegistry,
+  SandboxSupervisionError,
+  type Supervision,
+} from "../../../../src/sandbox/live.js";
 import { runModalCommand } from "../../../../src/sandbox/providers/modal/command.js";
 import {
   ModalAllocation,
@@ -137,4 +141,81 @@ test("ordinary command diagnostics remain recoverable after confirmed supervisio
   } finally {
     deadline.dispose();
   }
+});
+
+class ObservedRegistry extends LiveSandboxRegistry {
+  handle: Supervision | undefined;
+  override start(...args: Parameters<LiveSandboxRegistry["start"]>): Supervision {
+    this.handle = super.start(...args);
+    return this.handle;
+  }
+}
+
+for (const afterGrace of [false, true]) {
+  test(`Modal keeps its local deadline and observes hook rejection ${afterGrace ? "after" : "before"} shared grace`, async () => {
+    const f = fixture();
+    f.process.wait = () => never();
+    let rejectHook!: (error: unknown) => void;
+    const hook = new Promise<void>((_, reject) => {
+      rejectHook = reject;
+    });
+    const registry = new ObservedRegistry(afterGrace ? 20 : 1_000);
+    const deadline = new ModalDeadline(10);
+    let failure: unknown;
+    try {
+      await runModalCommand(
+        f.sandbox as unknown as Sandbox,
+        [],
+        request,
+        { onLive: () => hook },
+        deadline,
+        registry,
+      );
+    } catch (error) {
+      failure = error;
+    } finally {
+      deadline.dispose();
+    }
+    const execution = failure as SandboxExecutionError & {
+      supervisionError: unknown;
+      ownershipFailure: boolean;
+    };
+    expect(execution).toBeInstanceOf(SandboxExecutionError);
+    expect(execution.message).toContain("deadline");
+    expect(execution.ownershipFailure).toBe(true);
+    const handle = registry.handle;
+    if (!handle) throw new Error("supervision was not started");
+    expect(handle.settlement()).toEqual({ status: "pending" });
+    const finishing = handle.finish();
+    if (afterGrace) await expect(finishing).rejects.toBeInstanceOf(SandboxSupervisionError);
+    const late = new Error("late hook rejection");
+    rejectHook(late);
+    if (!afterGrace) await expect(finishing).rejects.toBe(late);
+    await Bun.sleep(1);
+    expect(execution.supervisionError).toBe(late);
+    expect(handle.finish()).toBe(finishing);
+    expect(handle.settlement().status).toBe("failed");
+  });
+}
+
+test("a hook rejecting undefined is still failed ownership, not successful settlement", async () => {
+  const f = fixture();
+  const deadline = new ModalDeadline(500);
+  let failure: unknown;
+  try {
+    await runModalCommand(
+      f.sandbox as unknown as Sandbox,
+      [],
+      request,
+      { onLive: () => Promise.reject(undefined) },
+      deadline,
+      new LiveSandboxRegistry(20),
+    );
+  } catch (error) {
+    failure = error;
+  } finally {
+    deadline.dispose();
+  }
+  expect(failure).toBeInstanceOf(SandboxExecutionError);
+  expect(failure).toMatchObject({ ownershipFailure: true });
 });

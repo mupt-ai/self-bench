@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 export function createTerminationGate(): {
   readonly promise: Promise<never>;
   readonly reject: (error: unknown) => void;
@@ -41,4 +42,22 @@ export async function raceWithSignal<T>(operation: Promise<T>, signal: AbortSign
 
 export function abortReason(signal: AbortSignal | undefined): unknown {
   return signal?.reason ?? new DOMException("The operation was aborted", "AbortError");
+}
+
+export async function waitForCommandKill(
+  commandKill: Promise<boolean> | undefined,
+  diagnosticSignal: AbortSignal,
+  graceMs: number,
+): Promise<void> {
+  if (!commandKill) return;
+  const signal = AbortSignal.any([diagnosticSignal, AbortSignal.timeout(graceMs)]);
+  try {
+    await raceWithSignal(commandKill, signal);
+  } catch {
+    // Sandbox cleanup remains the authoritative process/resource stop.
+  }
+}
+
+export async function abortableDelay(delayMs: number, signal: AbortSignal): Promise<void> {
+  await delay(delayMs, undefined, { signal });
 }

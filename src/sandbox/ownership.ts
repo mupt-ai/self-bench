@@ -118,3 +118,8 @@ function attachProperties(
   Object.defineProperties(wrapped, properties);
   return wrapped;
 }
+
+/** A concurrent deadline must never erase evidence that work still has an owner. */
+export function selectSandboxFailure(operation: unknown, termination: unknown): unknown {
+  return hasOwnershipFailure(operation) ? operation : (termination ?? operation);
+}
