@@ -59,3 +59,9 @@ test("process setup does not mutate or reinterpret already isolated credentials"
   expect(HARBOR_PROCESS_TIMEOUT_MS.gate).toBe(10800000);
   expect(HARBOR_PROCESS_TIMEOUT_MS.solver).toBe(7200000);
 });
+
+test("Docker packaging and the process policy pin the same Harbor version", async () => {
+  const { HARBOR_VERSION } = await import("../src/harbor-command.js");
+  const dockerfile = await Bun.file(new URL("../Dockerfile", import.meta.url)).text();
+  expect(dockerfile.match(/^ARG HARBOR_VERSION=(.+)$/m)?.[1]).toBe(HARBOR_VERSION);
+});

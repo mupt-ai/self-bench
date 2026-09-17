@@ -19,6 +19,7 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../sandbox/index.js";
+import { hasOwnershipFailure } from "../../sandbox/ownership.js";
 import { wrapperStatusFrom } from "./round-outcome.js";
 
 /**
@@ -40,7 +41,7 @@ export async function runSandboxWithFailureLog(
       throw error;
     }
     const status = wrapperStatusFrom(error.result.outputs);
-    if (status !== undefined && !hasOwnershipFailure(error)) {
+    if (status !== undefined && !(hasOwnershipFailure(error) || hasCancellationCause(error))) {
       return {
         ...error.result,
         exitCode: status,
@@ -55,23 +56,6 @@ export async function runSandboxWithFailureLog(
     throw new Error(`${error.message}; partial log: ${log.uri}`, { cause: error });
   }
 }
-/** Provider adapters preserve supervision failures as causes, rather than copying markers. */
-function hasOwnershipFailure(error: unknown): boolean {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (current instanceof Error && !seen.has(current)) {
-    seen.add(current);
-    if (
-      "cleanupError" in current ||
-      ("ownershipFailure" in current && current.ownershipFailure === true) ||
-      current instanceof CancelledFailure
-    )
-      return true;
-    current = current.cause;
-  }
-  return false;
-}
-
 /** Combine the activity's cancellation with the command that owns this verification. */
 export function activityLifetimeSignal(lifetime?: AbortSignal): AbortSignal {
   const activity = Context.current().cancellationSignal;
@@ -233,4 +217,14 @@ export async function readTaskPatches(
     ),
   ]);
   return { testPatch, goldPatch };
+}
+
+function hasCancellationCause(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  while (error instanceof Error && !seen.has(error)) {
+    if (error instanceof CancelledFailure) return true;
+    seen.add(error);
+    error = error.cause;
+  }
+  return false;
 }
