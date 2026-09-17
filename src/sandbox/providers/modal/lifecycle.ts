@@ -28,8 +28,10 @@ export class ModalDeadline {
       abort = () => reject(this.signal.reason);
       this.signal.addEventListener("abort", abort, { once: true });
     });
+    const pending = Promise.resolve().then(operation);
+    void pending.catch(() => undefined);
     try {
-      return await Promise.race([operation(), interrupted]);
+      return await Promise.race([pending, interrupted]);
     } finally {
       this.signal.removeEventListener("abort", abort);
     }
