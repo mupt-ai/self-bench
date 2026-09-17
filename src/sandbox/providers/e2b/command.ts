@@ -3,6 +3,7 @@ import { InactivityTimeoutError, type RollingOutput } from "../../../process.js"
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { supervisionFailure } from "../../ownership.js";
 import { raceWithTermination } from "./lifecycle.js";
 import type { E2BSandboxHandle } from "./types.js";
 
@@ -86,14 +87,7 @@ export async function executeE2BCommand(input: {
         try {
           await supervision?.finish();
         } catch (supervisionError) {
-          const failure = new Error("E2B command failed with unresolved supervision", {
-            cause: error,
-          });
-          Object.defineProperties(failure, {
-            ownershipFailure: { value: true },
-            supervisionError: { value: supervisionError },
-          });
-          throw failure;
+          throw supervisionFailure(error, supervisionError);
         }
         throw error;
       }

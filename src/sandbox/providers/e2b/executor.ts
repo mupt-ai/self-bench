@@ -8,6 +8,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { hasOwnershipFailure } from "../../ownership.js";
 import { E2BCleanup } from "./cleanup.js";
 import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
@@ -208,9 +209,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             this.#timings.diagnosticTimeoutMs,
           )
         : {};
-      const ownershipFailure =
-        error instanceof Error && "ownershipFailure" in error && error.ownershipFailure === true;
-      const failure = ownershipFailure ? error : (terminationError ?? error);
+      const failure = hasOwnershipFailure(error) ? error : (terminationError ?? error);
       if (failure instanceof E2BHardTimeoutError) {
         outcome = {
           ok: true,

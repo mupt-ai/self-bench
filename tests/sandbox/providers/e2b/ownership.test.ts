@@ -12,11 +12,13 @@ import {
   fastLifecycleTimings,
 } from "../../../support/e2b-sdk-fixture.js";
 
-for (const mode of ["transport", "inactivity"] as const)
+for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const)
   test(`E2B ${mode} preserves supervision ownership failure behind a transport error and completed wrapper`, async () => {
     const root = await mkdtemp(join(tmpdir(), "e2b-ownership-"));
     try {
       const fixture = new E2BSdkFixture();
+      const controller = new AbortController();
+      const abortReason = new Error("caller stopped");
       if (mode === "transport") fixture.waitError = new Error("transport failed");
       else fixture.holdCommand = true;
       fixture.outputs.set(WRAPPER_STATUS_PATH, Buffer.from("0\n"));
@@ -33,18 +35,21 @@ for (const mode of ["transport", "inactivity"] as const)
               runId: "ownership",
               stage: "author",
               command: ["true"],
-              timeoutMs: 10000,
+              timeoutMs: mode === "hard-timeout" ? 100 : 10000,
               ...(mode === "inactivity" ? { inactivityTimeoutMs: 20 } : {}),
               outputPaths: [WRAPPER_STATUS_PATH],
             },
             {
+              signal: controller.signal,
               onLive: async () => {
+                if (mode === "abort") controller.abort(abortReason);
                 await new Promise(() => {});
               },
             },
           ),
         ),
       ).rejects.toThrow("unresolved supervision");
+      expect(fixture.allocationExists).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
