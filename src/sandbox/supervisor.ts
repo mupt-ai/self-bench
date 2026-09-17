@@ -81,9 +81,9 @@ export async function superviseMailbox(
       if (exited.aborted) return { handled, stoppedBy: "exited" };
       options.onPoll?.();
     } catch (error) {
-      // Only expected idle cancellation is normal shutdown. An active handler
+      // Once exited, idle transport failures may come from sandbox disposal. An active handler
       // owns work whose failure must still reach the provider.
-      if (!handling && exited.aborted && error === exited.reason) {
+      if (!handling && exited.aborted) {
         return { handled, stoppedBy: "exited" };
       }
       if (options.isFatal?.(error)) {

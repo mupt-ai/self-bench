@@ -61,6 +61,34 @@ test("real SessionVerifier resolves normal finish while sleeping after its first
   expect(polls).toBe(1);
 });
 
+for (const operation of ["execute", "readFile"] as const)
+  test(`idle ${operation} failure from a deleted sandbox is normal shutdown`, async () => {
+    const { verifier } = idleVerifier();
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let rejectPoll!: (error: Error) => void;
+    const pending = () =>
+      new Promise<never>((_, reject) => {
+        rejectPoll = reject;
+        entered();
+      });
+    const supervision = new LiveSandboxRegistry(100).start(
+      "idle-error",
+      {
+        execute: async () => (operation === "execute" ? pending() : ok),
+        readFile: async () => pending(),
+        writeFile: async () => {},
+      },
+      { onLive: (sandbox, signal) => verifier.supervise(sandbox, signal) },
+    );
+    await reading;
+    const finishing = supervision.finish();
+    rejectPoll(new Error("sandbox has been deleted"));
+    await expect(finishing).resolves.toBeUndefined();
+  });
+
 test("expected idle read cancellation resolves without hiding an active handler failure", async () => {
   const { verifier } = idleVerifier();
   let reading!: () => void;
