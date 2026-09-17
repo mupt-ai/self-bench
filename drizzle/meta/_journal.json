@@ -43,6 +43,13 @@
       "when": 1789417155739,
       "tag": "0005_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789606741939,
+      "tag": "0006_scope_repo_connections",
+      "breakpoints": true
     }
   ]
 }

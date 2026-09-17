@@ -71,7 +71,7 @@ export function createRepoStore(db: Database, options: { now?: () => Date } = {}
         .insert(repos)
         .values({ ...input, connectedAt: now() })
         .onConflictDoUpdate({
-          target: repos.githubId,
+          target: [repos.orgId, repos.githubId],
           set: {
             fullName: input.fullName,
             defaultBranch: input.defaultBranch,

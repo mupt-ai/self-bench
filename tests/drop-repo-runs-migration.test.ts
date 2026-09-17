@@ -9,7 +9,6 @@ import { LocalArtifactStore } from "../src/artifacts.js";
 import { createUserStore } from "../src/auth/users.js";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
-import { createRepoStore } from "../src/site/repo-store.js";
 import { createTaskStore } from "../src/site/task-store.js";
 import { testAuthConfig } from "./support/site-fixture.js";
 
@@ -36,14 +35,19 @@ test("review migrations preserve batch ownership, tasks, reviews, tombstones and
     });
     const [org] = await users.orgsFor(user.id);
     if (!org) throw new Error("Missing test organization");
-    const repo = await createRepoStore(db).connect({
-      orgId: org.id,
-      githubId: 1,
-      fullName: "owner/repo",
-      defaultBranch: "main",
-      private: true,
-      connectedBy: user.id,
-    });
+    // Seed using the historical schema, before workspace-scoped uniqueness existed.
+    const [repo] = await db
+      .insert(schema.repos)
+      .values({
+        orgId: org.id,
+        githubId: 1,
+        fullName: "owner/repo",
+        defaultBranch: "main",
+        private: true,
+        connectedBy: user.id,
+      })
+      .returning();
+    if (!repo) throw new Error("Missing seeded repository");
     const tasks = createTaskStore(db);
     const base = {
       repoId: repo.id,
