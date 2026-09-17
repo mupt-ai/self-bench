@@ -11,10 +11,18 @@ test("ownership survives frozen causes, aggregates and cycles without reclassify
   const supervision = new Error("stuck");
   const fatal = supervisionFailure(primary, supervision);
   expect(fatal.cause).toBe(primary);
+  expect(fatal.ownership.kind).toBe("supervision");
+  expect(fatal.ownership.error).toBe(supervision);
   expect(fatal.supervisionError).toBe(supervision);
   expect(
     hasOwnershipFailure(new AggregateError([primary, new Error("wrapper", { cause: fatal })])),
   ).toBe(true);
+  const cleanup = attachCleanupFailure(primary, new Error("cleanup"), {
+    detail: "cleanup failed",
+    aggregateMessage: "both failed",
+  });
+  expect(cleanup.ownership.kind).toBe("cleanup");
+  expect(hasOwnershipFailure(cleanup)).toBe(true);
   expect(hasOwnershipFailure(primary)).toBe(false);
   const cycle = new Error("cycle");
   cycle.cause = cycle;
