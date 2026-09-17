@@ -86,6 +86,31 @@ describe("connected repos routes", () => {
     expect((await post("avyay", "someone/else")).status).toBe(201);
   });
 
+  test("keeps connections to the same public repository isolated by workspace", async () => {
+    const { site, headers } = await signedIn({
+      orgs: ["Mupt-AI"],
+      repos: [{ full_name: "Mupt-AI/self-bench", private: false }],
+    });
+    const connect = (org: string) =>
+      site.request(`/api/orgs/${org}/repos`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
+      });
+    const personal = await connect("avyay");
+    expect(personal.status).toBe(201);
+    const organization = await connect("mupt-ai");
+    expect(organization.status).toBe(201);
+    const listed = await site.request("/api/orgs/mupt-ai/repos", { headers });
+    expect(await listed.json()).toMatchObject({ repos: [{ fullName: "Mupt-AI/self-bench" }] });
+    await site.request("/api/orgs/mupt-ai/repos/Mupt-AI/self-bench", {
+      method: "DELETE",
+      headers,
+    });
+    const preserved = await site.request("/api/orgs/avyay/repos", { headers });
+    expect(await preserved.json()).toMatchObject({ repos: [{ fullName: "Mupt-AI/self-bench" }] });
+  });
+
   test("toggles continuous per repo", async () => {
     const { site, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
     const created = await site.request("/api/orgs/avyay/repos", {

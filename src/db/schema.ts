@@ -79,7 +79,7 @@ export const repos = pgTable(
     orgId: bigint("org_id", { mode: "number" })
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
-    githubId: bigint("github_id", { mode: "number" }).notNull().unique(),
+    githubId: bigint("github_id", { mode: "number" }).notNull(),
     fullName: text("full_name").notNull(),
     defaultBranch: text("default_branch").notNull(),
     private: boolean("private").notNull().default(false),
@@ -90,7 +90,10 @@ export const repos = pgTable(
       .references(() => users.id),
     connectedAt: timestamptz("connected_at").notNull().defaultNow(),
   },
-  (table) => [index("repos_org_id").on(table.orgId)],
+  (table) => [
+    index("repos_org_id").on(table.orgId),
+    uniqueIndex("repos_org_github_id").on(table.orgId, table.githubId),
+  ],
 );
 
 /** Repository ownership for batch generation, including batches with no candidates yet. */
