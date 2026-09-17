@@ -95,7 +95,17 @@ export async function executeE2BCommand(input: {
     }
     clearInactivityTimer();
     if (supervision) {
-      await raceWithTermination(supervision.finish(), termination);
+      const finishing = supervision.finish();
+      try {
+        await raceWithTermination(finishing, termination);
+      } catch (primary) {
+        try {
+          await finishing; // Registry owns a bounded grace independent of the command deadline.
+        } catch (supervisionError) {
+          throw supervisionFailure(primary, supervisionError);
+        }
+        throw primary;
+      }
     }
     captureUnstreamedCommandOutput(completed, stdout, stderr);
 

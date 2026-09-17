@@ -12,7 +12,14 @@ import {
   fastLifecycleTimings,
 } from "../../../support/e2b-sdk-fixture.js";
 
-for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const)
+for (const mode of [
+  "transport",
+  "inactivity",
+  "hard-timeout",
+  "abort",
+  "completed-timeout",
+  "completed-abort",
+] as const)
   test(`E2B ${mode} preserves supervision ownership failure behind a transport error and completed wrapper`, async () => {
     const root = await mkdtemp(join(tmpdir(), "e2b-ownership-"));
     try {
@@ -20,7 +27,7 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
       const controller = new AbortController();
       const abortReason = new Error("caller stopped");
       if (mode === "transport") fixture.waitError = new Error("transport failed");
-      else fixture.holdCommand = true;
+      else if (!mode.startsWith("completed")) fixture.holdCommand = true;
       fixture.outputs.set(WRAPPER_STATUS_PATH, Buffer.from("0\n"));
       const executor = new E2BSandboxExecutor(
         e2bFixtureConfig,
@@ -37,7 +44,7 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
               runId: "ownership",
               stage: "author",
               command: ["true"],
-              timeoutMs: mode === "hard-timeout" ? 100 : 10000,
+              timeoutMs: mode.endsWith("timeout") ? 100 : 10000,
               ...(mode === "inactivity" ? { inactivityTimeoutMs: 20 } : {}),
               outputPaths: [WRAPPER_STATUS_PATH],
             },
@@ -45,6 +52,7 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
               signal: controller.signal,
               onLive: async () => {
                 if (mode === "abort") controller.abort(abortReason);
+                if (mode === "completed-abort") setTimeout(() => controller.abort(abortReason), 30);
                 await new Promise(() => {});
               },
             },
@@ -66,13 +74,13 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
       expect(
         ownership && "supervisionError" in ownership && ownership.supervisionError,
       ).toBeInstanceOf(Error);
-      if (mode === "abort") expect(causes).toContain(abortReason);
+      if (mode.endsWith("abort")) expect(causes).toContain(abortReason);
       if (mode === "transport")
         expect(causes.some((cause) => cause === fixture.waitError)).toBe(true);
       if (mode === "inactivity")
         expect(causes.some((cause) => cause.name === "InactivityTimeoutError")).toBe(true);
       const log = await new LocalArtifactStore(root).getByKey("failure.log");
-      if (mode === "abort")
+      if (mode.endsWith("abort"))
         expect(log).toBeUndefined(); // Caller cancellation propagates without diagnostic recovery.
       else expect(log).toBeDefined();
       expect(fixture.allocationExists).toBe(false);
