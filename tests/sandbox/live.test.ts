@@ -85,3 +85,18 @@ test("callback handles use the same validation and lifetime as registry operatio
   expect(() => captured?.writeFile("/work/file", "x")).toThrow("not running");
   expect(() => captured?.execute(["true"])).toThrow("not running");
 });
+
+test("a stuck hook cannot prevent disposal and stale handles cannot target a reused ID", async () => {
+  const registry = new LiveSandboxRegistry(10);
+  let captured: LiveSandbox | undefined;
+  const first = registry.start("reused", backing(new Map()), {
+    onLive: async (live) => {
+      captured = live;
+      await new Promise(() => {});
+    },
+  });
+  await expect(first.finish()).rejects.toThrow("supervision did not settle");
+  const second = registry.start("reused", backing(new Map()), {});
+  expect(() => captured?.execute(["true"])).toThrow("not running");
+  await second.finish();
+});

@@ -16,7 +16,8 @@ test("generation nop and oracle gates invoke the packaged E2B adapter", async ()
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
-fs.writeFileSync(process.env.CAPTURE, JSON.stringify({args, pythonPath: process.env.PYTHONPATH, key: process.env.E2B_API_KEY}));
+if (args[0] === '--version') { console.log('0.23.0'); process.exit(0); }
+fs.writeFileSync(${JSON.stringify(join(root, "capture.json"))}, JSON.stringify({args, pythonPath: process.env.PYTHONPATH, key: process.env.E2B_API_KEY}));
 const directory = path.join(args[args.indexOf('--jobs-dir')+1], args[args.indexOf('--job-name')+1]);
 fs.mkdirSync(directory, {recursive:true});
 fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_results:[{ok:true}]}));
@@ -46,6 +47,27 @@ fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_resu
       expect(recorded.pythonPath).toBe(harborPythonPath());
       expect(recorded.key).toBe("test-key");
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("gate version mismatch prevents any trial command", async () => {
+  const root = await mkdtemp(join(tmpdir(), "harbor-version-test-"));
+  try {
+    const executable = join(root, "harbor");
+    const marker = join(root, "trial-started");
+    await writeFile(
+      executable,
+      `#!${process.execPath}\nif(process.argv[2]==='--version'){console.log('wrong-version')}else{require('node:fs').writeFileSync(${JSON.stringify(marker)},'started')}\n`,
+    );
+    await chmod(executable, 0o700);
+    await expect(
+      withExecutionEnvironment({ PATH: root }, () =>
+        runHarborGate(root, root, "nop", "task", "docker", new AbortController().signal),
+      ),
+    ).rejects.toThrow("does not match");
+    expect(await Bun.file(marker).exists()).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

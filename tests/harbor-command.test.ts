@@ -22,7 +22,7 @@ test("all Harbor providers share invocation policy without acquiring solver retr
       );
       expect(args[args.indexOf("--path") + 1]).toBe("/task with spaces");
       expect(args).not.toContain("--model");
-      expect(args).not.toContain("--max-retries");
+      expect(args[args.indexOf("--max-retries") + 1]).toBe("0");
       expect(args).toContain("--quiet");
       expect(args).toContain("--delete");
     }

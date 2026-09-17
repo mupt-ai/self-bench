@@ -4,13 +4,14 @@ import { join } from "node:path";
 import { extractRegularArchive } from "../archive.js";
 import type { ArtifactStore } from "../artifacts.js";
 import {
+  assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
 } from "../harbor-command.js";
 import { runCommand } from "../process.js";
 import type { HarborEnvironment } from "../providers.js";
-import { HARBOR_VERSION, solverEnvironment } from "./config.js";
+import { solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
@@ -95,8 +96,7 @@ export async function executeEvaluation(
     const { profile } = execution;
     const child = harborProcessEnvironment(execution.child);
     const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
-    if (version.stdout.trim() !== HARBOR_VERSION)
-      throw new Error("Worker Harbor version does not match the supported version");
+    assertHarborVersion(version.stdout);
     for (const [index, trial] of run.trials.entries()) {
       options.signal?.throwIfAborted();
       const task = input.tasks.find(

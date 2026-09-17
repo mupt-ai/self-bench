@@ -28,7 +28,6 @@ describe("Harbor child environment", () => {
     expect(harborChildEnvironment(source)).toEqual({
       MODAL_TOKEN_ID: "modal-id",
       MODAL_TOKEN_SECRET: "modal-secret",
-      OPENAI_API_KEY: "workload-key",
       PATH: "/usr/bin",
     });
     expect(source.VERCEL_TOKEN).toBe("vercel-token");
@@ -49,7 +48,6 @@ describe("Harbor child environment", () => {
     expect(harborChildEnvironment(source, "e2b")).toEqual({
       E2B_API_KEY: "harbor-key",
       E2B_DOMAIN: "custom.e2b.example",
-      DAYTONA_API_KEY: "daytona-key",
       PATH: "/usr/bin",
     });
     // A local stack shares one E2B key between generation and Harbor.
@@ -59,7 +57,7 @@ describe("Harbor child environment", () => {
     for (const environment of ["docker", "modal", "vercel", "daytona"] as const) {
       const child = harborChildEnvironment(source, environment);
       expect(Object.keys(child).filter((key) => key.includes("E2B"))).toEqual([]);
-      expect(child.DAYTONA_API_KEY).toBe("daytona-key");
+      expect(child.DAYTONA_API_KEY).toBe(environment === "daytona" ? "daytona-key" : undefined);
     }
   });
 
@@ -107,4 +105,23 @@ test("Harbor E2B gates and evaluations resolve the packaged one-hour environment
   for (const provider of ["modal", "docker", "vercel", "daytona"] as const)
     expect(harborEnvironmentName(provider)).toBe(provider);
   expect(await Bun.file(`${harborPythonPath()}/harbor_e2b.py`).exists()).toBe(true);
+});
+
+test("gate projection excludes unrelated secrets and refuses partial role credentials", () => {
+  const source = {
+    PATH: "/bin",
+    GH_TOKEN: "github",
+    SELFBENCH_DATABASE_URL: "secret",
+    OPENAI_API_KEY: "model",
+    MODAL_TOKEN_SECRET: "modal",
+    DAYTONA_API_KEY: "daytona",
+    E2B_API_KEY: "e2b",
+  };
+  expect(harborChildEnvironment(source, "e2b")).toEqual({ PATH: "/bin", E2B_API_KEY: "e2b" });
+  expect(() =>
+    harborChildEnvironment(
+      { VERCEL_TOKEN: "ambient", SELFBENCH_HARBOR_VERCEL_TOKEN: "partial" },
+      "vercel",
+    ),
+  ).toThrow("must include");
 });

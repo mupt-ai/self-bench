@@ -1,22 +1,17 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { type Image, ModalClient, type Secret } from "modal";
 import type { SelfBenchConfig } from "../../../config.js";
-import { InactivityTimeoutError, RollingOutput } from "../../../process.js";
-import {
-  type SandboxExecResult,
-  SandboxExecutionError,
-  type SandboxExecutor,
-  type SandboxRequest,
-  type SandboxResult,
-  type SandboxRunOptions,
+import type {
+  SandboxExecResult,
+  SandboxExecutor,
+  SandboxRequest,
+  SandboxResult,
+  SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
-import { readOutputWithRetry } from "../../output-retry.js";
 import { materializeRemoteFiles } from "../../remote-files.js";
 import { validateSandboxRequest } from "../../request-validation.js";
-import { modalBacking } from "./live.js";
-
-const FAILURE_DRAIN_TIMEOUT_MS = 1_000;
+import { runModalCommand } from "./command.js";
+import { ModalAllocation, ModalDeadline, withCleanupFailure } from "./lifecycle.js";
 
 export class ModalSandboxExecutor implements SandboxExecutor {
   readonly #client: ModalClient;
@@ -27,6 +22,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   constructor(
     config: Extract<SelfBenchConfig["execution"], { kind: "modal" }>,
     client = new ModalClient(),
+    private readonly cleanupTimeoutMs = 5_000,
   ) {
     this.#config = config;
     this.#client = client;
@@ -35,166 +31,67 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   async run(request: SandboxRequest, options: SandboxRunOptions = {}): Promise<SandboxResult> {
     options.signal?.throwIfAborted();
     validateSandboxRequest(request);
-    const app = await this.#client.apps.fromName(this.#config.app, {
-      createIfMissing: true,
-      ...(this.#config.environment ? { environment: this.#config.environment } : {}),
-    });
-    options.signal?.throwIfAborted();
-    if (!this.#image) {
-      this.#image = this.#buildImage();
-    }
-    const sandbox = await this.#client.sandboxes.create(app, this.#image, {
-      timeoutMs: request.timeoutMs,
-      idleTimeoutMs: Math.min(request.timeoutMs, 10 * 60 * 1000),
-      cpu: request.cpu ?? 4,
-      memoryMiB: request.memoryMiB ?? 8192,
-      workdir: "/work",
-      name: sandboxName(request.runId, request.stage),
-      tags: { run_id: request.runId, stage: request.stage },
-    });
-
-    let notifyFailure = (): void => {};
-    const abort = () => {
-      notifyFailure();
-      void sandbox.terminate();
-    };
-    options.signal?.addEventListener("abort", abort, { once: true });
+    const deadline = new ModalDeadline(request.timeoutMs, options.signal);
+    const allocation = new ModalAllocation(
+      this.#client,
+      this.#config.app,
+      sandboxName(request.runId, request.stage),
+      this.#config.environment,
+      this.cleanupTimeoutMs,
+    );
+    let result: SandboxResult | undefined;
+    let primary: unknown;
+    let failed = false;
     try {
-      options.signal?.throwIfAborted();
-      for (const file of await materializeRemoteFiles(request.files ?? [], options.signal)) {
-        if (typeof file.contents === "string") {
-          await sandbox.filesystem.writeText(file.contents, file.path);
-        } else {
-          await sandbox.filesystem.writeBytes(file.contents, file.path);
-        }
-      }
-
-      const secrets = await this.#secrets(request.secrets);
-      const process = await sandbox.exec([...request.command], {
-        env: { ...request.environment },
-        ...(secrets.length > 0 ? { secrets } : {}),
-      });
-      await process.closeStdin();
-      const supervision = this.#live.start(sandbox.sandboxId, modalBacking(sandbox), options);
-      const stdoutOutput = new RollingOutput();
-      const stderrOutput = new RollingOutput();
-      const readers = new Set<ReadableStreamDefaultReader<string | Uint8Array>>();
-      let inactivityTimer: ReturnType<typeof setTimeout> | undefined;
-      let inactivityError: InactivityTimeoutError | undefined;
-      const failure = new Promise<void>((resolve) => {
-        notifyFailure = resolve;
-      });
-      const clearInactivityTimer = (): void => {
-        if (inactivityTimer) {
-          clearTimeout(inactivityTimer);
-          inactivityTimer = undefined;
-        }
-      };
-      const armInactivityTimer = (): void => {
-        clearInactivityTimer();
-        if (!request.inactivityTimeoutMs) {
-          return;
-        }
-        inactivityTimer = setTimeout(() => {
-          inactivityError = new InactivityTimeoutError(
-            `Modal sandbox ${sandbox.sandboxId} stage ${request.stage}`,
-            request.inactivityTimeoutMs ?? 0,
-          );
-          notifyFailure();
-        }, request.inactivityTimeoutMs);
-        inactivityTimer.unref();
-      };
-      const consume = async (
-        streamName: "stdout" | "stderr",
-        stream: ReadableStream<string | Uint8Array>,
-        output: RollingOutput,
-      ): Promise<void> => {
-        const reader = stream.getReader();
-        readers.add(reader);
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) {
-              return;
-            }
-            if (value !== undefined) {
-              const chunk = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
-              output.push(chunk);
-              options.onProgress?.({ stream: streamName, bytes: chunk.byteLength });
-              options.onOutput?.(streamName, chunk);
-              armInactivityTimer();
-            }
-          }
-        } finally {
-          readers.delete(reader);
-          reader.releaseLock();
-        }
-      };
-      let exitCode: number | undefined;
-      let processError: unknown;
-      let streamError: unknown;
-      const captureFailure = (error: unknown): void => {
-        streamError ??= error;
-        notifyFailure();
-      };
-      armInactivityTimer();
-      const completion = Promise.all([
-        process.wait().then(
-          (value) => {
-            exitCode = value;
-          },
-          (error: unknown) => {
-            processError = error;
-            notifyFailure();
-          },
-        ),
-        consume("stdout", process.stdout, stdoutOutput).catch(captureFailure),
-        consume("stderr", process.stderr, stderrOutput).catch(captureFailure),
-      ]);
-      await Promise.race([completion, failure.then(() => delay(FAILURE_DRAIN_TIMEOUT_MS))]).finally(
-        clearInactivityTimer,
+      const app = await deadline.run(() =>
+        this.#client.apps.fromName(this.#config.app, {
+          createIfMissing: true,
+          ...(this.#config.environment ? { environment: this.#config.environment } : {}),
+        }),
       );
-      if (readers.size > 0) {
-        void Promise.allSettled([...readers].map((reader) => reader.cancel()));
-      }
-      let supervisionError: unknown;
-      await supervision.finish().catch((error: unknown) => {
-        supervisionError = error;
-      });
-      const executionError =
-        options.signal?.reason ??
-        inactivityError ??
-        processError ??
-        streamError ??
-        supervisionError;
-      const outputs: Record<string, Uint8Array> = {};
-      for (const path of request.outputPaths ?? []) {
-        // Callers validate required outputs after persisting stdout/stderr. Returning an
-        // absent output keeps the model or command failure diagnosable.
-        const { value } = await readOutputWithRetry(() => sandbox.filesystem.readBytes(path));
-        if (value !== undefined) {
-          outputs[path] = value;
-        }
-      }
-      const result = {
-        sandboxId: sandbox.sandboxId,
-        exitCode: exitCode ?? 1,
-        stdout: stdoutOutput.text(),
-        stderr: stderrOutput.text(),
-        outputs,
-      };
-      if (executionError) {
-        throw new SandboxExecutionError(
-          `${executionError instanceof Error ? executionError.message : String(executionError)}; sandbox ${sandbox.sandboxId}`,
-          result,
-          { cause: executionError },
+      this.#image ??= this.#buildImage();
+      const image = this.#image;
+      const sandbox = await deadline.run(() =>
+        allocation.create(() =>
+          this.#client.sandboxes.create(app, image, {
+            timeoutMs: request.timeoutMs,
+            idleTimeoutMs: Math.min(request.timeoutMs, 10 * 60 * 1000),
+            cpu: request.cpu ?? 4,
+            memoryMiB: request.memoryMiB ?? 8192,
+            workdir: "/work",
+            name: allocation.name,
+            tags: { run_id: request.runId, stage: request.stage },
+          }),
+        ),
+      );
+      const files = await deadline.run(() =>
+        materializeRemoteFiles(request.files ?? [], deadline.signal),
+      );
+      for (const file of files) {
+        await deadline.run(() =>
+          typeof file.contents === "string"
+            ? sandbox.filesystem.writeText(file.contents, file.path)
+            : sandbox.filesystem.writeBytes(file.contents, file.path),
         );
       }
-      return result;
+      const secrets = await deadline.run(() => this.#secrets(request.secrets));
+      result = await runModalCommand(sandbox, secrets, request, options, deadline, this.#live);
+    } catch (error) {
+      primary = error;
+      failed = true;
     } finally {
-      options.signal?.removeEventListener("abort", abort);
-      await sandbox.terminate().catch(() => undefined);
+      deadline.dispose();
     }
+    // Cleanup has its own bounded grace, independent of caller cancellation. Total local
+    // settlement is bounded by timeoutMs + 5s; SDK requests themselves may settle later.
+    try {
+      await allocation.cleanup();
+    } catch (cleanupError) {
+      throw failed ? withCleanupFailure(primary, cleanupError) : cleanupError;
+    }
+    if (failed) throw primary;
+    if (!result) throw new Error("Modal execution completed without a result");
+    return result;
   }
 
   execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
@@ -242,6 +139,6 @@ export class ModalSandboxExecutor implements SandboxExecutor {
 }
 
 function sandboxName(runId: string, stage: string): string {
-  const suffix = crypto.randomUUID().slice(0, 8);
-  return `${runId.slice(0, 24)}-${stage.slice(0, 16)}-${suffix}`.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const suffix = crypto.randomUUID();
+  return `${runId.slice(0, 16)}-${stage.slice(0, 8)}-${suffix}`.replace(/[^a-zA-Z0-9._-]/g, "-");
 }

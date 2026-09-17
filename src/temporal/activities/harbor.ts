@@ -2,6 +2,7 @@ import { ApplicationFailure } from "@temporalio/common";
 import type { SelfBenchConfig } from "../../config.js";
 import { executionEnvironment } from "../../execution-environment.js";
 import {
+  assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
@@ -37,6 +38,29 @@ export async function runHarborGate(
   quiet = true,
 ): Promise<HarborJobResult> {
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
+  const environmentVariables = harborProcessEnvironment(
+    harborChildEnvironment(executionEnvironment(), environment),
+  );
+  const version = await runCommand("harbor", ["--version"], {
+    env: environmentVariables,
+    timeoutMs: 15_000,
+    signal,
+    allowFailure: true,
+  });
+  if (version.exitCode !== 0) {
+    throw ApplicationFailure.create({
+      message: `Harbor version check failed for ${agent}: ${version.stderr || version.stdout}`,
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
+  }
+  try {
+    assertHarborVersion(version.stdout);
+  } catch (error) {
+    throw ApplicationFailure.create({
+      message: error instanceof Error ? error.message : String(error),
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
+  }
   const result = await runCommand(
     "harbor",
     harborRunArguments({
@@ -49,7 +73,7 @@ export async function runHarborGate(
     }),
     {
       allowFailure: true,
-      env: harborProcessEnvironment(harborChildEnvironment(executionEnvironment(), environment)),
+      env: environmentVariables,
       timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
       signal,
     },
