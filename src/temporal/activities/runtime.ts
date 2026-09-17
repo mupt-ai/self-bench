@@ -19,12 +19,15 @@ import {
   type SandboxResult,
   type SandboxRunOptions,
 } from "../../sandbox/index.js";
+import { hasOwnershipFailure } from "../../sandbox/ownership.js";
 import { wrapperStatusFrom } from "./round-outcome.js";
 
 /**
  * Runs a round sandbox. A provider failure after the wrapper already finished (its status file
  * was collected) is downgraded to a result carrying the wrapper's status, with the provider's
- * complaint appended to stderr; any other provider failure stores the partial log and rethrows.
+ * complaint appended to stderr. Cleanup or ownership failures (including wrapped causes) are
+ * never recovered: a completed workload does not prove resource disposal. Other execution failures
+ * persist partial logs.
  */
 export async function runSandboxWithFailureLog(
   store: ArtifactStore,
@@ -38,7 +41,7 @@ export async function runSandboxWithFailureLog(
       throw error;
     }
     const status = wrapperStatusFrom(error.result.outputs);
-    if (status !== undefined) {
+    if (status !== undefined && !(hasOwnershipFailure(error) || hasCancellationCause(error))) {
       return {
         ...error.result,
         exitCode: status,
@@ -53,11 +56,19 @@ export async function runSandboxWithFailureLog(
     throw new Error(`${error.message}; partial log: ${log.uri}`, { cause: error });
   }
 }
+/** Combine the activity's cancellation with the command that owns this verification. */
+export function activityLifetimeSignal(lifetime?: AbortSignal): AbortSignal {
+  const activity = Context.current().cancellationSignal;
+  return lifetime ? AbortSignal.any([activity, lifetime]) : activity;
+}
+
 export async function withActivityHeartbeats<T>(
   detail: string,
   action: (options: SandboxRunOptions & { readonly signal: AbortSignal }) => Promise<T>,
+  lifetime?: AbortSignal,
 ): Promise<T> {
   const context = Context.current();
+  const signal = activityLifetimeSignal(lifetime);
   let outputBytes = 0;
   let lastOutputAt: string | undefined;
   const heartbeatDetail = (): {
@@ -72,11 +83,15 @@ export async function withActivityHeartbeats<T>(
   context.heartbeat(heartbeatDetail());
   const heartbeat = setInterval(() => context.heartbeat(heartbeatDetail()), 60_000);
   heartbeat.unref();
+  const stopHeartbeat = () => clearInterval(heartbeat);
+  signal.addEventListener("abort", stopHeartbeat, { once: true });
   try {
     try {
+      signal.throwIfAborted();
       const result = await action({
-        signal: context.cancellationSignal,
+        signal,
         onProgress: (progress) => {
+          if (signal.aborted) return;
           outputBytes += progress.bytes;
           lastOutputAt = new Date().toISOString();
         },
@@ -84,32 +99,45 @@ export async function withActivityHeartbeats<T>(
       if (context.cancellationSignal.aborted) {
         throw new CancelledFailure("activity cancellation requested");
       }
+      signal.throwIfAborted();
       return result;
     } catch (error) {
-      if (context.cancellationSignal.aborted && !(error instanceof CancelledFailure)) {
-        throw new CancelledFailure("activity cancellation requested");
+      if (context.cancellationSignal.aborted) {
+        throw error instanceof CancelledFailure
+          ? error
+          : new CancelledFailure("activity cancellation requested");
       }
+      signal.throwIfAborted();
       throw error;
     }
   } finally {
     clearInterval(heartbeat);
+    signal.removeEventListener("abort", stopHeartbeat);
   }
 }
 export async function withTaskBundle<T>(
   store: ArtifactStore,
   task: AuthoredTask,
   action: (taskDirectory: string, root: string) => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  signal?.throwIfAborted();
   return await withTemporaryDirectory(`selfbench-${task.taskId}-`, async (root) => {
+    signal?.throwIfAborted();
     const archive = join(root, "task.tar.gz");
     await writeFile(archive, await store.get(task.bundle));
-    await extractRegularArchive(archive, root);
+    signal?.throwIfAborted();
+    await extractRegularArchive(archive, root, signal ? { signal } : {});
     const taskDirectory = join(root, "harbor-task");
     const definition = taskDefinitionSchema.parse(
       JSON.parse(Buffer.from(await store.get(task.definition)).toString("utf8")),
     );
+    signal?.throwIfAborted();
     await refreshHarborTask(taskDirectory, definition);
-    return await action(taskDirectory, root);
+    signal?.throwIfAborted();
+    const result = await action(taskDirectory, root);
+    signal?.throwIfAborted();
+    return result;
   });
 }
 export async function withTemporaryDirectory<T>(
@@ -189,4 +217,14 @@ export async function readTaskPatches(
     ),
   ]);
   return { testPatch, goldPatch };
+}
+
+function hasCancellationCause(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  while (error instanceof Error && !seen.has(error)) {
+    if (error instanceof CancelledFailure) return true;
+    seen.add(error);
+    error = error.cause;
+  }
+  return false;
 }

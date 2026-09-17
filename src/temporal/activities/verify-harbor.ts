@@ -4,7 +4,10 @@ import { CancelledFailure } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { SelfBenchConfig } from "../../config.js";
 import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts.js";
+import { executionEnvironment } from "../../execution-environment.js";
+import { harborChildEnvironment } from "../../harbor-environment.js";
 import type { HarborJobResult } from "../../harbor-results.js";
+import { runCommand } from "../../process.js";
 import { nopGatePassed, oracleGatePassed } from "../../verify-report.js";
 import { composeDiagnostics, isUnhealthyServiceFailure, storeGateLog } from "./gate-logs.js";
 import {
@@ -16,23 +19,15 @@ import {
   verifierOutput,
 } from "./harbor.js";
 import { modalBuildLogTail } from "./modal-build-log.js";
-import { withActivityHeartbeats, withTaskBundle } from "./runtime.js";
+import { activityLifetimeSignal, withActivityHeartbeats, withTaskBundle } from "./runtime.js";
+import {
+  NOP_MARKER,
+  NOP_REWARD_KEYS,
+  SMOKE_MARKER,
+  smokeAndNopScript,
+} from "./verify-harbor-script.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
-
-const NOP_REWARD_KEYS = [
-  "structured_results",
-  "patch_applied",
-  "fail_to_pass",
-  "pass_to_pass",
-  "deterministic",
-  "setup_completed",
-  "fail_to_pass_exit_code",
-  "fail_to_pass_repeat_exit_code",
-  "pass_to_pass_exit_code",
-] as const;
-const SMOKE_MARKER = "--- selfbench smoke ---";
-const NOP_MARKER = "--- selfbench nop ---";
 
 export function notRunGates(): HarborGates {
   const gate = { ran: false, ok: false, logTail: "" };
@@ -55,81 +50,109 @@ export async function runHarborGates(
   task: AuthoredTask,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   prefix: string,
+  lifetime?: AbortSignal,
 ): Promise<HarborGates> {
-  return await withTaskBundle(store, task, async (taskDirectory, root) => {
-    const gates = notRunGates();
-    await writeFile(join(taskDirectory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
-    const first = await harborRun(taskDirectory, root, task.taskId, "nop", harborEnvironment);
-    if ("infrastructure" in first) {
-      const log = await storeGateLog(store, `${prefix}/build.log`, first.infrastructure);
-      return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
-    }
-    await storeHarborResult(store, `${prefix}/smoke-nop`, first);
-    const trialError = exceptionMessage(first.trial);
-    if (trialError !== undefined) {
-      const log = await storeGateLog(
-        store,
-        `${prefix}/build.log`,
-        await failureLog(trialError, first, harborEnvironment),
+  const signal = activityLifetimeSignal(lifetime);
+  signal.throwIfAborted();
+  const storeLog = async (key: string, raw: string) => {
+    signal.throwIfAborted();
+    const log = await storeGateLog(store, key, raw);
+    signal.throwIfAborted();
+    return log;
+  };
+  return await withTaskBundle(
+    store,
+    task,
+    async (taskDirectory, root) => {
+      signal.throwIfAborted();
+      const gates = notRunGates();
+      await writeFile(join(taskDirectory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
+      const first = await harborRun(
+        taskDirectory,
+        root,
+        task.taskId,
+        "nop",
+        harborEnvironment,
+        signal,
       );
-      return { ...gates, build: { ran: true, ok: false, infrastructure: false, ...log } };
-    }
-    const firstRewards = rewards(first.trial);
-    const output = verifierOutput(first) ?? "";
-    const smokeOk = numberOf(firstRewards.smoke_exit_code) === 0;
-    gates.build = { ran: true, ok: true, infrastructure: false, logTail: "" };
-    gates.smoke = {
-      ran: true,
-      ok: smokeOk,
-      ...(await storeGateLog(
-        store,
-        `${prefix}/smoke.log`,
-        section(output, SMOKE_MARKER, NOP_MARKER),
-      )),
-    };
-    if (!smokeOk) {
-      return gates;
-    }
-    const nopRewards = nopRewardsFrom(firstRewards);
-    gates.nop = {
-      ran: true,
-      ok: nopGatePassed(nopRewards),
-      rewards: nopRewards,
-      ...(await storeGateLog(store, `${prefix}/nop.log`, section(output, NOP_MARKER))),
-    };
-    if (!gates.nop.ok) {
-      return gates;
-    }
-    await copyFile(join(taskDirectory, "tests/task-test.sh"), join(taskDirectory, "tests/test.sh"));
-    const oracle = await harborRun(taskDirectory, root, task.taskId, "oracle", harborEnvironment);
-    if ("infrastructure" in oracle) {
-      const log = await storeGateLog(
-        store,
-        `${prefix}/oracle-build.log`,
-        `during oracle run: ${oracle.infrastructure}`,
+      signal.throwIfAborted();
+      if ("infrastructure" in first) {
+        const log = await storeLog(`${prefix}/build.log`, first.infrastructure);
+        return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
+      }
+      await storeHarborResult(store, `${prefix}/smoke-nop`, first, signal);
+      const trialError = exceptionMessage(first.trial);
+      if (trialError !== undefined) {
+        const log = await storeLog(
+          `${prefix}/build.log`,
+          await failureLog(trialError, first, harborEnvironment, signal),
+        );
+        return { ...gates, build: { ran: true, ok: false, infrastructure: false, ...log } };
+      }
+      const firstRewards = rewards(first.trial);
+      const output = verifierOutput(first) ?? "";
+      const smokeOk = numberOf(firstRewards.smoke_exit_code) === 0;
+      gates.build = { ran: true, ok: true, infrastructure: false, logTail: "" };
+      gates.smoke = {
+        ran: true,
+        ok: smokeOk,
+        ...(await storeLog(`${prefix}/smoke.log`, section(output, SMOKE_MARKER, NOP_MARKER))),
+      };
+      if (!smokeOk) {
+        return gates;
+      }
+      const nopRewards = nopRewardsFrom(firstRewards);
+      gates.nop = {
+        ran: true,
+        ok: nopGatePassed(nopRewards),
+        rewards: nopRewards,
+        ...(await storeLog(`${prefix}/nop.log`, section(output, NOP_MARKER))),
+      };
+      if (!gates.nop.ok) {
+        return gates;
+      }
+      signal.throwIfAborted();
+      await copyFile(
+        join(taskDirectory, "tests/task-test.sh"),
+        join(taskDirectory, "tests/test.sh"),
       );
-      return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
-    }
-    await storeHarborResult(store, `${prefix}/oracle`, oracle);
-    const oracleError = exceptionMessage(oracle.trial);
-    if (oracleError !== undefined) {
-      const log = await storeGateLog(
-        store,
-        `${prefix}/oracle.log`,
-        await failureLog(oracleError, oracle, harborEnvironment),
+      const oracle = await harborRun(
+        taskDirectory,
+        root,
+        task.taskId,
+        "oracle",
+        harborEnvironment,
+        signal,
       );
-      gates.oracle = { ran: true, ok: false, rewards: {}, ...log };
+      signal.throwIfAborted();
+      if ("infrastructure" in oracle) {
+        const log = await storeLog(
+          `${prefix}/oracle-build.log`,
+          `during oracle run: ${oracle.infrastructure}`,
+        );
+        return { ...gates, build: { ran: true, ok: false, infrastructure: true, ...log } };
+      }
+      await storeHarborResult(store, `${prefix}/oracle`, oracle, signal);
+      const oracleError = exceptionMessage(oracle.trial);
+      if (oracleError !== undefined) {
+        const log = await storeLog(
+          `${prefix}/oracle.log`,
+          await failureLog(oracleError, oracle, harborEnvironment, signal),
+        );
+        gates.oracle = { ran: true, ok: false, rewards: {}, ...log };
+        return gates;
+      }
+      const oracleRewards = numericRewards(rewards(oracle.trial));
+      gates.oracle = {
+        ran: true,
+        ok: oracleGatePassed(oracleRewards),
+        rewards: oracleRewards,
+        ...(await storeLog(`${prefix}/oracle.log`, verifierOutput(oracle) ?? "")),
+      };
       return gates;
-    }
-    const oracleRewards = numericRewards(rewards(oracle.trial));
-    gates.oracle = {
-      ran: true,
-      ok: oracleGatePassed(oracleRewards),
-      rewards: oracleRewards,
-      ...(await storeGateLog(store, `${prefix}/oracle.log`, verifierOutput(oracle) ?? "")),
-    };
-    return gates;
-  });
+    },
+    signal,
+  );
 }
 
 /** Raw failure log: the trial exception, Harbor's trial.log, and compose diagnostics when relevant. */
@@ -137,11 +160,19 @@ async function failureLog(
   message: string,
   result: HarborJobResult,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
+  signal: AbortSignal,
 ): Promise<string> {
+  signal.throwIfAborted();
   const parts = [message, result.trialLog ?? "", verifierOutput(result) ?? ""];
   if (isUnhealthyServiceFailure(`${message}\n${result.trialLog ?? ""}`)) {
-    parts.push(await composeDiagnostics(result.trial, harborEnvironment));
+    parts.push(
+      await composeDiagnostics(result.trial, harborEnvironment, (command, args, options) => {
+        signal.throwIfAborted();
+        return runCommand(command, args, { ...options, signal });
+      }),
+    );
   }
+  signal.throwIfAborted();
   return parts.filter((part) => part.trim().length > 0).join("\n\n");
 }
 
@@ -151,25 +182,39 @@ async function harborRun(
   taskId: string,
   agent: "nop" | "oracle",
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
+  signal: AbortSignal,
 ): Promise<HarborJobResult | { readonly infrastructure: string }> {
   try {
-    return await withActivityHeartbeats(`running Harbor ${agent} for ${taskId}`, (options) =>
-      runHarborGate(
-        taskDirectory,
-        join(root, "jobs"),
-        agent,
-        taskId,
-        harborEnvironment,
-        options.signal,
-        false,
-      ),
+    return await withActivityHeartbeats(
+      `running Harbor ${agent} for ${taskId}`,
+      (options) =>
+        runHarborGate(
+          taskDirectory,
+          join(root, "jobs"),
+          agent,
+          taskId,
+          harborEnvironment,
+          options.signal,
+          false,
+        ),
+      signal,
     );
   } catch (error) {
+    signal.throwIfAborted();
     if (error instanceof CancelledFailure || !isHarborInfrastructureApplicationFailure(error)) {
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    const buildLog = await modalBuildLogTail(message);
+    const buildLog = await modalBuildLogTail(message, (command, args) => {
+      signal.throwIfAborted();
+      return runCommand(command, args, {
+        allowFailure: true,
+        env: harborChildEnvironment(executionEnvironment()),
+        timeoutMs: 60_000,
+        signal,
+      });
+    });
+    signal.throwIfAborted();
     return {
       infrastructure: buildLog ? `${boundedTail(message)}\n\n${buildLog}` : boundedTail(message),
     };
@@ -180,16 +225,18 @@ async function storeHarborResult(
   store: ArtifactStore,
   prefix: string,
   result: HarborJobResult,
+  signal: AbortSignal,
 ): Promise<void> {
+  signal.throwIfAborted();
   const output = verifierOutput(result);
-  await Promise.all([
-    store.put(
-      `${prefix}.json`,
-      Buffer.from(`${JSON.stringify({ job: result.job, trial: result.trial }, null, 2)}\n`),
-      "application/json",
-    ),
-    output ? store.put(`${prefix}-verifier.log`, Buffer.from(output), "text/plain") : undefined,
-  ]);
+  await store.put(
+    `${prefix}.json`,
+    Buffer.from(`${JSON.stringify({ job: result.job, trial: result.trial }, null, 2)}\n`),
+    "application/json",
+  );
+  signal.throwIfAborted();
+  if (output) await store.put(`${prefix}-verifier.log`, Buffer.from(output), "text/plain");
+  signal.throwIfAborted();
 }
 
 function exceptionMessage(trial: unknown): string | undefined {
@@ -233,37 +280,4 @@ function section(output: string, start: string, end?: string): string {
   const body = output.slice(from + start.length);
   const to = end ? body.indexOf(end) : -1;
   return (to >= 0 ? body.slice(0, to) : body).trim();
-}
-
-/** Verifier script for the smoke+nop run; nop rewards are re-emitted under `nop_*` keys. */
-function smokeAndNopScript(): string {
-  const fields = NOP_REWARD_KEYS.map(
-    (key) => `printf ', "nop_${key}": %s' "$(field ${key} ${key.endsWith("_code") ? "-1" : "0"})"`,
-  ).join("\n");
-  return `#!/bin/bash
-set -uo pipefail
-mkdir -p /logs/verifier
-# Image post-processing after our Dockerfile (Modal runs as root with HOME=/home/verifier) can leave
-# root-owned files in the verifier's caches; the runtime user must own its home before it runs.
-chown -R verifier:verifier /home/verifier 2>/dev/null || true
-echo '${SMOKE_MARKER}'
-smoke_status=0
-runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier /opt/selfbench-environment/smoke.sh 2>&1 || smoke_status=$?
-echo "smoke exit code: $smoke_status"
-nop_ran=0
-nop_rewards='{}'
-if [ "$smoke_status" -eq 0 ]; then
-  echo '${NOP_MARKER}'
-  nop_ran=1
-  /tests/task-test.sh 2>&1 || true
-  nop_rewards="$(cat /logs/verifier/reward.json 2>/dev/null || printf '{}')"
-fi
-field() { printf '%s' "$nop_rewards" | sed -n 's/.*"'"$1"'": *\\(-\\{0,1\\}[0-9]\\{1,\\}\\).*/\\1/p' | head -n 1 | grep . || printf '%s' "$2"; }
-{
-  printf '{"reward": 0, "smoke_exit_code": %s, "nop_ran": %s' "$smoke_status" "$nop_ran"
-${fields}
-  printf '}\\n'
-} > /logs/verifier/reward.json
-exit 0
-`;
 }

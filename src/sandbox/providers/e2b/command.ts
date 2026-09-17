@@ -3,6 +3,7 @@ import { InactivityTimeoutError, type RollingOutput } from "../../../process.js"
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { supervisionFailure } from "../../ownership.js";
 import { raceWithTermination } from "./lifecycle.js";
 import type { E2BSandboxHandle } from "./types.js";
 
@@ -83,14 +84,28 @@ export async function executeE2BCommand(input: {
       completed = await raceWithTermination(command.wait(), termination);
     } catch (error) {
       if (!isCommandResult(error)) {
-        await supervision?.finish().catch(() => undefined);
+        try {
+          await supervision?.finish();
+        } catch (supervisionError) {
+          throw supervisionFailure(error, supervisionError);
+        }
         throw error;
       }
       completed = error;
     }
     clearInactivityTimer();
     if (supervision) {
-      await raceWithTermination(supervision.finish(), termination);
+      const finishing = supervision.finish();
+      try {
+        await raceWithTermination(finishing, termination);
+      } catch (primary) {
+        try {
+          await finishing; // Registry owns a bounded grace independent of the command deadline.
+        } catch (supervisionError) {
+          throw supervisionFailure(primary, supervisionError);
+        }
+        throw primary;
+      }
     }
     captureUnstreamedCommandOutput(completed, stdout, stderr);
 

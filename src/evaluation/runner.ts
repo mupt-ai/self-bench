@@ -3,9 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractRegularArchive } from "../archive.js";
 import type { ArtifactStore } from "../artifacts.js";
-import { harborEnvironmentName, harborPythonPath } from "../harbor-environment.js";
+import {
+  assertHarborVersion,
+  HARBOR_PROCESS_TIMEOUT_MS,
+  harborProcessEnvironment,
+  harborRunArguments,
+} from "../harbor-command.js";
 import { runCommand } from "../process.js";
-import { HARBOR_VERSION, solverEnvironment } from "./config.js";
+import type { HarborEnvironment } from "../providers.js";
+import { solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
@@ -29,33 +35,17 @@ export function solverArguments(
   jobs: string,
   harness: Harness,
   model: string,
-  sandbox: string,
+  sandbox: HarborEnvironment,
   thinking?: ThinkingLevel,
 ): string[] {
-  return [
-    "run",
-    "--path",
+  return harborRunArguments({
     taskPath,
-    "--agent",
-    solverAgent(harness, model),
-    "--model",
-    model,
-    "--env",
-    harborEnvironmentName(sandbox),
-    "--jobs-dir",
-    jobs,
-    "--job-name",
-    "solver",
-    "--n-attempts",
-    "1",
-    "--n-concurrent",
-    "1",
-    "--max-retries",
-    "0",
-    "--delete",
-    "--yes",
-    ...thinkingArguments(harness, thinking),
-  ];
+    jobsPath: jobs,
+    jobName: "solver",
+    agent: solverAgent(harness, model),
+    environment: sandbox,
+    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+  });
 }
 export interface RunnerOptions {
   command?: typeof runCommand;
@@ -103,11 +93,10 @@ export async function executeEvaluation(
         ? await credentialExecution(input, home, environment, options.records)
         : { ...solverEnvironment(input, home, resolved), secrets: [] };
     secrets.push(...execution.secrets);
-    const { profile, child } = execution;
-    child.PYTHONPATH = harborPythonPath();
+    const { profile } = execution;
+    const child = harborProcessEnvironment(execution.child);
     const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
-    if (version.stdout.trim() !== HARBOR_VERSION)
-      throw new Error("Worker Harbor version does not match the supported version");
+    assertHarborVersion(version.stdout);
     for (const [index, trial] of run.trials.entries()) {
       options.signal?.throwIfAborted();
       const task = input.tasks.find(
@@ -272,7 +261,7 @@ async function runTrial(context: {
       {
         env: child,
         cwd: taskPath,
-        timeoutMs: 2 * 60 * 60 * 1000,
+        timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
         allowFailure: true,
         ...(options.signal ? { signal: options.signal } : {}),
         onOutput: (_stream, chunk) => {

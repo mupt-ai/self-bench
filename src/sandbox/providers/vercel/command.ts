@@ -3,6 +3,7 @@ import { InactivityTimeoutError, type RollingOutput } from "../../../process.js"
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { supervisionFailure } from "../../ownership.js";
 import { VercelCommandStartError } from "./fetch.js";
 
 export const VERCEL_WORK_DIRECTORY = "/work";
@@ -65,10 +66,18 @@ export async function executeVercelCommand(input: {
         signal: AbortSignal.any([signal, AbortSignal.timeout(COMPLETION_REQUEST_TIMEOUT_MS)]),
       });
     } catch (error) {
-      await supervision?.finish().catch(() => undefined);
+      try {
+        await supervision?.finish();
+      } catch (supervisionError) {
+        throw supervisionFailure(signal.reason ?? error, supervisionError);
+      }
       throw error;
     }
-    await supervision?.finish();
+    try {
+      await supervision?.finish();
+    } catch (supervisionError) {
+      throw supervisionFailure(signal.reason ?? supervisionError, supervisionError);
+    }
 
     const outputs: Record<string, Uint8Array> = {};
     for (const path of request.outputPaths ?? []) {

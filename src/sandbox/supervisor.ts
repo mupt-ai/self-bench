@@ -53,24 +53,39 @@ export async function superviseMailbox(
   const interval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   let handled = 0;
   while (true) {
+    if (exited.aborted) return { handled, stoppedBy: "exited" };
+    let handling = false;
     let done = false;
     try {
-      for (const id of await listRequests(sandbox)) {
+      const requests = await listRequests(sandbox);
+      if (exited.aborted) return { handled, stoppedBy: "exited" };
+      for (const id of requests) {
         if (seen.has(id) || exited.aborted) {
           continue;
         }
         seen.add(id);
         const bytes = await sandbox.readFile(`${MAILBOX_REQUESTS}/${id}.json`);
+        if (exited.aborted) return { handled, stoppedBy: "exited" };
         if (!bytes) {
           continue;
         }
+        handling = true;
         const response = await respond(id, bytes, options);
+        handling = false;
+        if (exited.aborted) return { handled, stoppedBy: "exited" };
         handled += 1;
-        await writeResponse(sandbox, response);
+        await writeResponse(sandbox, response, exited);
       }
+      if (exited.aborted) return { handled, stoppedBy: "exited" };
       done = (await sandbox.readFile(MAILBOX_DONE)) !== undefined;
+      if (exited.aborted) return { handled, stoppedBy: "exited" };
       options.onPoll?.();
     } catch (error) {
+      // Once exited, idle transport failures may come from sandbox disposal. An active handler
+      // owns work whose failure must still reach the provider.
+      if (!handling && exited.aborted) {
+        return { handled, stoppedBy: "exited" };
+      }
       if (options.isFatal?.(error)) {
         throw error;
       }
@@ -122,10 +137,16 @@ async function listRequests(sandbox: LiveSandbox): Promise<string[]> {
     .sort();
 }
 
-async function writeResponse(sandbox: LiveSandbox, response: MailboxResponse): Promise<void> {
+async function writeResponse(
+  sandbox: LiveSandbox,
+  response: MailboxResponse,
+  exited: AbortSignal,
+): Promise<void> {
+  exited.throwIfAborted();
   const final = `${MAILBOX_RESPONSES}/${response.id}.json`;
   const temporary = `${final}.tmp`;
   await sandbox.writeFile(temporary, `${JSON.stringify(response)}\n`);
+  exited.throwIfAborted();
   const moved = await sandbox.execute(["sh", "-c", `mv -f ${temporary} ${final}`]);
   if (moved.exitCode !== 0) {
     throw new Error(`could not deliver verify response ${response.id}: ${moved.stderr}`);

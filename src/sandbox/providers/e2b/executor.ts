@@ -8,18 +8,23 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { selectSandboxFailure } from "../../ownership.js";
 import { E2BCleanup } from "./cleanup.js";
 import { e2bBacking, executeE2BCommand } from "./command.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings, E2BSleep } from "./config.js";
-import { abortReason, createTerminationGate, raceWithTermination } from "./lifecycle.js";
 import {
   abortableDelay,
+  abortReason,
+  createTerminationGate,
+  raceWithTermination,
+  waitForCommandKill,
+} from "./lifecycle.js";
+import {
   attachCleanupError,
   collectPartialOutputs,
   createErrorConfirmsNoAllocation,
   sandboxExecutionError,
   sanitizeCleanupError,
-  waitForCommandKill,
 } from "./outcome.js";
 import { stageRequestFiles } from "./stage-files.js";
 import type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
@@ -208,7 +213,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             this.#timings.diagnosticTimeoutMs,
           )
         : {};
-      const failure = terminationError ?? error;
+      const failure = selectSandboxFailure(error, terminationError);
       if (failure instanceof E2BHardTimeoutError) {
         outcome = {
           ok: true,

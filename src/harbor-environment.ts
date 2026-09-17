@@ -28,7 +28,54 @@ export function harborChildEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
   harborEnvironment?: HarborEnvironment,
 ): NodeJS.ProcessEnv {
-  const child = { ...environment };
+  const selected = harborEnvironment ?? "modal";
+  const runtimeKeys = [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "REQUESTS_CA_BUNDLE",
+    "PYTHONUNBUFFERED",
+  ];
+  const providerKeys: Record<HarborEnvironment, readonly string[]> = {
+    docker: [
+      "DOCKER_HOST",
+      "DOCKER_CONTEXT",
+      "DOCKER_CONFIG",
+      "DOCKER_TLS_VERIFY",
+      "DOCKER_CERT_PATH",
+    ],
+    modal: [
+      "MODAL_TOKEN_ID",
+      "MODAL_TOKEN_SECRET",
+      "MODAL_ENVIRONMENT",
+      "MODAL_PROFILE",
+      "MODAL_CONFIG_PATH",
+    ],
+    e2b: E2B_HARBOR_SETTINGS,
+    vercel: VERCEL_HARBOR_SETTINGS,
+    daytona: ["DAYTONA_API_KEY", "DAYTONA_API_URL", "DAYTONA_TARGET"],
+  };
+  const allowed = new Set([
+    ...runtimeKeys,
+    ...providerKeys[selected],
+    HARBOR_E2B_API_KEY,
+    ...Object.values(HARBOR_VERCEL_CREDENTIALS),
+  ]);
+  const child = Object.fromEntries(Object.entries(environment).filter(([key]) => allowed.has(key)));
+  const dedicatedVercel = Object.values(HARBOR_VERCEL_CREDENTIALS).map((key) => environment[key]);
+  if (
+    selected === "vercel" &&
+    dedicatedVercel.some((value) => value !== undefined) &&
+    !dedicatedVercel.every((value) => value?.trim())
+  ) {
+    throw new Error("Harbor Vercel credentials must include token, team, and project");
+  }
   const harborVercel = Object.entries(HARBOR_VERCEL_CREDENTIALS).map(
     ([target, source]) => [target, child[source]] as const,
   );
@@ -56,10 +103,10 @@ export function harborChildEnvironment(
 }
 
 /** Use the same account-compatible E2B lifetime for generation gates and evaluations. */
-export function harborEnvironmentName(environment: string): string {
+export function harborEnvironmentName(environment: HarborEnvironment): string {
   return environment === "e2b" ? "harbor_e2b:SelfBenchE2BEnvironment" : environment;
 }
 
 export function harborPythonPath(): string {
-  return fileURLToPath(new URL("./evaluation/", import.meta.url));
+  return fileURLToPath(new URL("./harbor-runtime/", import.meta.url));
 }

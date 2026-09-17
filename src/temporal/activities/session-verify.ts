@@ -17,6 +17,7 @@ import {
 import { matchingGreenVerify, submissionHash } from "../../submission-hash.js";
 import { renderVerifyReport, verifyReportSummary } from "../../verify-report.js";
 import { materializeDraft } from "./drafts.js";
+import { activityLifetimeSignal } from "./runtime.js";
 import { compileAndVerify } from "./verify.js";
 
 export interface SessionVerifyContext {
@@ -58,14 +59,37 @@ export class SessionVerifier {
 
   /** Supervises the live sandbox mailbox for the duration of the agent command. */
   supervise(sandbox: LiveSandbox, exited: AbortSignal): Promise<void> {
-    return superviseMailbox(sandbox, exited, {
-      handle: (request) => this.handle(request),
-      isFatal: (error) => error instanceof CancelledFailure,
+    const signal = activityLifetimeSignal(exited);
+    // The mailbox has awaits between handler completion and response publication.
+    const activeSandbox: LiveSandbox = {
+      sandboxId: sandbox.sandboxId,
+      execute: (command) => {
+        signal.throwIfAborted();
+        return sandbox.execute(command);
+      },
+      readFile: (path) => {
+        signal.throwIfAborted();
+        return sandbox.readFile(path);
+      },
+      writeFile: (path, contents) => {
+        signal.throwIfAborted();
+        return sandbox.writeFile(path, contents);
+      },
+    };
+    return superviseMailbox(activeSandbox, signal, {
+      handle: (request) => this.handle(request, signal),
+      isFatal: (error) => signal.aborted || error instanceof CancelledFailure,
       onPoll: () => Context.current().heartbeat(`mailbox ${this.records.length} verifies`),
-    }).then(() => undefined);
+    }).then(() => {
+      if (Context.current().cancellationSignal.aborted) {
+        throw new CancelledFailure("activity cancellation requested");
+      }
+    });
   }
 
-  async handle(request: MailboxRequest): Promise<MailboxResponse> {
+  async handle(request: MailboxRequest, lifetime?: AbortSignal): Promise<MailboxResponse> {
+    const signal = activityLifetimeSignal(lifetime);
+    signal.throwIfAborted();
     const { store, run, candidate, stage, round } = this.#context;
     const index = this.records.length + 1;
     const prefix = `${this.#context.prefix}/verify-${index}`;
@@ -79,6 +103,7 @@ export class SessionVerifier {
       Buffer.from(`${JSON.stringify(request)}\n`),
       "application/json",
     );
+    signal.throwIfAborted();
     const draft = await materializeDraft(
       store,
       prefix,
@@ -87,12 +112,15 @@ export class SessionVerifier {
       request.testPatch,
       goldPatch,
     );
+    signal.throwIfAborted();
     const outcome = await compileAndVerify(
       store,
       this.#context.harborEnvironment,
       { run, candidate, task: draft, stage, round },
       prefix,
+      signal,
     );
+    signal.throwIfAborted();
     this.records.push({
       index,
       hash: submissionHash({

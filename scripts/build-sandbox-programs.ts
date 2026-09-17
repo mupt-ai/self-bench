@@ -9,14 +9,14 @@ const programs = ["author", "check", "verifier"] as const;
 const extensions = ["authoring", "verifier"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
-await mkdir(join(outputDirectory, "evaluation"), { recursive: true });
+await mkdir(join(outputDirectory, "harbor-runtime"), { recursive: true });
 await copyFile(
-  join(root, "src/evaluation/harbor_e2b.py"),
-  join(outputDirectory, "evaluation/harbor_e2b.py"),
+  join(root, "src/harbor-runtime/harbor_e2b.py"),
+  join(outputDirectory, "harbor-runtime/harbor_e2b.py"),
 );
 await copyFile(
-  join(root, "src/evaluation/harbor_gateway.py"),
-  join(outputDirectory, "evaluation/harbor_gateway.py"),
+  join(root, "src/harbor-runtime/harbor_gateway.py"),
+  join(outputDirectory, "harbor-runtime/harbor_gateway.py"),
 );
 await Promise.all([
   ...extensions.map(async (extension) => {

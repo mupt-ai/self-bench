@@ -8,6 +8,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
+import { attachCleanupFailure, selectSandboxFailure } from "../../ownership.js";
 import { materializeRemoteFiles } from "../../remote-files.js";
 import { executeVercelCommand, VERCEL_WORK_DIRECTORY, vercelBacking } from "./command.js";
 import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
@@ -153,7 +154,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: { sandboxId: sandbox.name, ...outputs } };
     } catch (error) {
-      const failure = terminationError ?? error;
+      const failure = selectSandboxFailure(error, terminationError);
       outcome =
         failure instanceof VercelHardTimeoutError
           ? {
@@ -219,29 +220,10 @@ function abortReason(signal: AbortSignal | undefined): unknown {
 }
 
 function attachCleanupError(primaryError: unknown, cleanupError: unknown): unknown {
-  if (primaryError instanceof Error) {
-    const cleanupMessage = errorMessage(cleanupError).slice(0, 500);
-    const message = `${primaryError.message}; Vercel sandbox cleanup also failed: ${cleanupMessage}`;
-    try {
-      Object.defineProperties(primaryError, {
-        cleanupError: { configurable: true, value: cleanupError },
-        message: { configurable: true, value: message, writable: true },
-      });
-      return primaryError;
-    } catch {
-      const wrapped = new Error(message, { cause: primaryError });
-      wrapped.name = primaryError.name;
-      Object.defineProperty(wrapped, "cleanupError", {
-        configurable: true,
-        value: cleanupError,
-      });
-      return wrapped;
-    }
-  }
-  return new AggregateError(
-    [primaryError, cleanupError],
-    "Vercel sandbox execution and cleanup both failed",
-  );
+  return attachCleanupFailure(primaryError, cleanupError, {
+    detail: `Vercel sandbox cleanup also failed: ${errorMessage(cleanupError).slice(0, 500)}`,
+    aggregateMessage: "Vercel sandbox execution and cleanup both failed",
+  });
 }
 
 function sanitizeCleanupError(error: unknown, redactedValue: string): Error {

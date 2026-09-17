@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts.js";
 import { toolCallNames } from "../src/pi-session.js";
 import { SandboxExecutionError } from "../src/sandbox/index.js";
+import { attachCleanupError } from "../src/sandbox/providers/e2b/outcome.js";
 import {
   archiveSandboxResult,
   classifyRound,
@@ -169,6 +170,15 @@ describe("round classification", () => {
         "provider failed after the wrapper finished with status 0",
       );
       expect(await store.getByKey("runs/r/log")).toBeUndefined();
+      await expect(
+        runSandboxWithFailureLog(store, "runs/r/cleanup-log", async () => {
+          throw attachCleanupError(
+            new SandboxExecutionError("stream failed", partial),
+            new Error("disposal unconfirmed"),
+          );
+        }),
+      ).rejects.toThrow("cleanup also failed");
+      expect(await store.getByKey("runs/r/cleanup-log")).toBeDefined();
       await expect(
         runSandboxWithFailureLog(store, "runs/r/log", async () => {
           throw new SandboxExecutionError("died", { ...partial, outputs: {} });

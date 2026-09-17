@@ -25,6 +25,7 @@ export interface SandboxRequest {
   readonly stage: string;
   readonly command: readonly string[];
   readonly files?: readonly SandboxFile[];
+  /** Required after exit zero; best-effort diagnostic outputs after nonzero/failure. */
   readonly outputPaths?: readonly string[];
   readonly environment?: Readonly<Record<string, string>>;
   readonly secrets?: Readonly<Record<string, string>>;
@@ -84,6 +85,15 @@ export class SandboxExecutionError extends Error {
   }
 }
 
+/**
+ * Provider-independent ownership contract:
+ * - required outputs must exist after successful execution;
+ * - cleanup/ownership failures reject, regardless of wrapper exit status;
+ * - partial diagnostics may accompany SandboxExecutionError, never proof of disposal.
+ * E2B/Vercel hard deadlines return124 only after ownership settles. Docker/Modal
+ * deadlines throw; callers must not interpret a thrown timeout as success.
+ * Provider-specific absence proofs and late-allocation recovery stay in adapters.
+ */
 export interface SandboxExecutor {
   run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult>;
   /** The following act on a sandbox whose run() is in progress. */

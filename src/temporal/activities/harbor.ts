@@ -2,10 +2,12 @@ import { ApplicationFailure } from "@temporalio/common";
 import type { SelfBenchConfig } from "../../config.js";
 import { executionEnvironment } from "../../execution-environment.js";
 import {
-  harborChildEnvironment,
-  harborEnvironmentName,
-  harborPythonPath,
-} from "../../harbor-environment.js";
+  assertHarborVersion,
+  HARBOR_PROCESS_TIMEOUT_MS,
+  harborProcessEnvironment,
+  harborRunArguments,
+} from "../../harbor-command.js";
+import { harborChildEnvironment } from "../../harbor-environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -36,31 +38,43 @@ export async function runHarborGate(
   quiet = true,
 ): Promise<HarborJobResult> {
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
+  const environmentVariables = harborProcessEnvironment(
+    harborChildEnvironment(executionEnvironment(), environment),
+  );
+  const version = await runCommand("harbor", ["--version"], {
+    env: environmentVariables,
+    timeoutMs: 15_000,
+    signal,
+    allowFailure: true,
+  });
+  if (version.exitCode !== 0) {
+    throw ApplicationFailure.create({
+      message: `Harbor version check failed for ${agent}: ${version.stderr || version.stdout}`,
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
+  }
+  try {
+    assertHarborVersion(version.stdout);
+  } catch (error) {
+    throw ApplicationFailure.create({
+      message: error instanceof Error ? error.message : String(error),
+      type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
+    });
+  }
   const result = await runCommand(
     "harbor",
-    [
-      "run",
-      "--path",
-      taskDirectory,
-      "--agent",
-      agent,
-      "--env",
-      harborEnvironmentName(environment),
-      "--job-name",
+    harborRunArguments({
+      taskPath: taskDirectory,
+      jobsPath: jobsDirectory,
       jobName,
-      "--jobs-dir",
-      jobsDirectory,
-      "--delete",
-      "--yes",
-      ...(quiet ? ["--quiet"] : []),
-    ],
+      agent,
+      environment,
+      quiet,
+    }),
     {
       allowFailure: true,
-      env: {
-        ...harborChildEnvironment(executionEnvironment(), environment),
-        PYTHONPATH: harborPythonPath(),
-      },
-      timeoutMs: 3 * 60 * 60 * 1000,
+      env: environmentVariables,
+      timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
       signal,
     },
   );

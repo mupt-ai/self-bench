@@ -39,12 +39,17 @@ export async function loadPiSubscriptionAuth(): Promise<string> {
   return JSON.stringify({ "openai-codex": credential });
 }
 
-export async function githubToken(): Promise<string | undefined> {
+export async function githubToken(signal?: AbortSignal): Promise<string | undefined> {
+  signal?.throwIfAborted();
   const token = executionEnvironment().GH_TOKEN;
   if (token) {
     return token;
   }
-  const result = await runCommand("gh", ["auth", "token"], { allowFailure: true });
+  const result = await runCommand("gh", ["auth", "token"], {
+    allowFailure: true,
+    ...(signal ? { signal } : {}),
+  });
+  signal?.throwIfAborted();
   return result.exitCode === 0 && result.stdout.trim() ? result.stdout.trim() : undefined;
 }
 
