@@ -124,3 +124,16 @@ test("cleanup attachment preserves dynamic supervision evidence and the primary 
   expect(owned.supervisionError).toBe(late);
   expect(hasOwnershipFailure(combined)).toBe(true);
 });
+
+test("ownership selection preserves fatal errors but retains ordinary termination precedence", async () => {
+  const { selectSandboxFailure } = await import("../../src/sandbox/ownership.js");
+  const ordinary = Object.freeze(new Error("operation"));
+  const deadline = new Error("deadline");
+  expect(selectSandboxFailure(ordinary, deadline)).toBe(deadline);
+  expect(selectSandboxFailure(ordinary, undefined)).toBe(ordinary);
+  const fatal = supervisionFailure(ordinary, new Error("supervision"));
+  expect(selectSandboxFailure(fatal, deadline)).toBe(fatal);
+  const aggregate = new AggregateError([fatal]);
+  aggregate.cause = aggregate;
+  expect(selectSandboxFailure(aggregate, deadline)).toBe(aggregate);
+});

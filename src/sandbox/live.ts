@@ -11,7 +11,7 @@ export class SandboxSupervisionError extends Error {
   }
 }
 
-export type SupervisionSettlement =
+type SupervisionSettlement =
   | { readonly status: "pending" }
   | { readonly status: "succeeded" }
   | { readonly status: "failed"; readonly error: unknown; readonly lateError?: unknown };
