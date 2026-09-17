@@ -104,10 +104,13 @@ async function cleanupCommand(
   try {
     // The local race also bounds an unresponsive runner. runCommand handles process
     // termination on abort, including its existing SIGKILL grace after SIGTERM.
-    return await Promise.race([
-      run("docker", args, { allowFailure: true, timeoutMs, signal: controller.signal }),
-      deadline,
-    ]);
+    const command = run("docker", args, {
+      allowFailure: true,
+      timeoutMs,
+      signal: controller.signal,
+    });
+    void command.catch(() => undefined);
+    return await Promise.race([command, deadline]);
   } finally {
     clearTimeout(timer);
   }
