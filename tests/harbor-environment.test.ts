@@ -104,7 +104,7 @@ describe("Harbor child environment", () => {
 
 test("Harbor E2B gates and evaluations resolve the packaged one-hour environment", async () => {
   expect(harborEnvironmentName("e2b")).toBe("harbor_e2b:SelfBenchE2BEnvironment");
-  for (const provider of ["modal", "docker", "vercel", "daytona"])
+  for (const provider of ["modal", "docker", "vercel", "daytona"] as const)
     expect(harborEnvironmentName(provider)).toBe(provider);
   expect(await Bun.file(`${harborPythonPath()}/harbor_e2b.py`).exists()).toBe(true);
 });

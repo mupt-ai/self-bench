@@ -24,7 +24,8 @@ import { wrapperStatusFrom } from "./round-outcome.js";
 /**
  * Runs a round sandbox. A provider failure after the wrapper already finished (its status file
  * was collected) is downgraded to a result carrying the wrapper's status, with the provider's
- * complaint appended to stderr; any other provider failure stores the partial log and rethrows.
+ * complaint appended to stderr. Cleanup-bearing failures are never recovered: a completed
+ * workload does not prove resource disposal. Other execution failures persist partial logs.
  */
 export async function runSandboxWithFailureLog(
   store: ArtifactStore,
@@ -38,7 +39,7 @@ export async function runSandboxWithFailureLog(
       throw error;
     }
     const status = wrapperStatusFrom(error.result.outputs);
-    if (status !== undefined) {
+    if (status !== undefined && !("cleanupError" in error)) {
       return {
         ...error.result,
         exitCode: status,

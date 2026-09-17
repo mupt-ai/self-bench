@@ -67,3 +67,21 @@ describe("LiveSandboxRegistry", () => {
     await registry.start("sb-3", backing(new Map()), {}).finish();
   });
 });
+
+test("callback handles use the same validation and lifetime as registry operations", async () => {
+  const registry = new LiveSandboxRegistry();
+  let captured: LiveSandbox | undefined;
+  const supervision = registry.start("guarded", backing(new Map()), {
+    onLive: async (live) => {
+      captured = live;
+      expect(() => live.readFile("/etc/passwd")).toThrow("must be beneath /work");
+      expect(() => live.writeFile("/work/../outside", "x")).toThrow();
+      expect(() => live.execute([])).toThrow("must not be empty");
+    },
+  });
+  await supervision.finish();
+  expect(captured).toBeDefined();
+  expect(() => captured?.readFile("/work/file")).toThrow("not running");
+  expect(() => captured?.writeFile("/work/file", "x")).toThrow("not running");
+  expect(() => captured?.execute(["true"])).toThrow("not running");
+});

@@ -56,7 +56,7 @@ export function harborChildEnvironment(
 }
 
 /** Use the same account-compatible E2B lifetime for generation gates and evaluations. */
-export function harborEnvironmentName(environment: string): string {
+export function harborEnvironmentName(environment: HarborEnvironment): string {
   return environment === "e2b" ? "harbor_e2b:SelfBenchE2BEnvironment" : environment;
 }
 
