@@ -2,7 +2,7 @@
  * In-process ownership evidence. Providers may preserve SDK-specific causes and messages, but
  * every ownership failure must expose one of these markers before recovery can classify it.
  */
-export type OwnershipEvidence =
+type OwnershipEvidence =
   | { readonly kind: "cleanup"; readonly error: unknown }
   | { readonly kind: "supervision"; readonly error: unknown };
 
