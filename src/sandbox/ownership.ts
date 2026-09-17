@@ -1,5 +1,13 @@
-/** Resource ownership is distinct from workload exit status: never recover these as success. */
+/**
+ * In-process ownership evidence. Providers may preserve SDK-specific causes and messages, but
+ * every ownership failure must expose one of these markers before recovery can classify it.
+ */
+export type OwnershipEvidence =
+  | { readonly kind: "cleanup"; readonly error: unknown }
+  | { readonly kind: "supervision"; readonly error: unknown };
+
 export interface OwnershipFailure {
+  readonly ownership: OwnershipEvidence;
   readonly ownershipFailure: true;
   readonly supervisionError?: unknown;
 }
@@ -33,6 +41,7 @@ export function supervisionFailure(
 
 export interface CleanupFailure {
   readonly cleanupError: unknown;
+  readonly ownership: Extract<OwnershipEvidence, { kind: "cleanup" }>;
 }
 
 /** Annotated providers preserve the error name and aggregate non-Error rejections. */
@@ -55,6 +64,7 @@ export function attachCleanupFailure(
     primary,
     {
       cleanupError: { configurable: true, value: cleanupError },
+      ownership: { configurable: true, value: { kind: "cleanup", error: cleanupError } },
       ...(message === undefined
         ? {}
         : {
@@ -84,6 +94,10 @@ export function markOwnershipFailure(
     primary,
     {
       ownershipFailure: { configurable: true, value: true },
+      ownership: {
+        configurable: true,
+        get: () => ({ kind: "supervision", error: supervisionError() }),
+      },
       supervisionError: { configurable: true, get: supervisionError },
     },
     () => {

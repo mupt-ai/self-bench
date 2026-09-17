@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -9,6 +10,12 @@ if (options.length > 0 && !dockerBuild) {
 }
 const root = resolve(import.meta.dir, "..");
 const temporary = await mkdtemp(join(tmpdir(), "self-bench-package-"));
+
+async function digest(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  hash.update(await readFile(path));
+  return hash.digest("hex");
+}
 
 async function run(command: string, args: string[], cwd = root): Promise<string> {
   const child = Bun.spawn([command, ...args], {
@@ -73,6 +80,13 @@ try {
     "dist/review/index.html",
   ]) {
     await readFile(join(installedRoot, asset));
+  }
+  for (const asset of ["harbor_e2b.py", "harbor_gateway.py"]) {
+    const source = join(root, "src/harbor-runtime", asset);
+    const packed = join(installedRoot, "dist/harbor-runtime", asset);
+    if ((await digest(source)) !== (await digest(packed))) {
+      throw new Error(`packed Harbor runtime asset differs from source: ${asset}`);
+    }
   }
   const runtimeModule = join(installedRoot, "dist/harbor-task/runtime-assets.js");
   const assets = await run(
