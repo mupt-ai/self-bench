@@ -83,7 +83,18 @@ export async function executeE2BCommand(input: {
       completed = await raceWithTermination(command.wait(), termination);
     } catch (error) {
       if (!isCommandResult(error)) {
-        await supervision?.finish().catch(() => undefined);
+        try {
+          await supervision?.finish();
+        } catch (supervisionError) {
+          const failure = new Error("E2B command failed with unresolved supervision", {
+            cause: error,
+          });
+          Object.defineProperties(failure, {
+            ownershipFailure: { value: true },
+            supervisionError: { value: supervisionError },
+          });
+          throw failure;
+        }
         throw error;
       }
       completed = error;

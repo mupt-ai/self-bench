@@ -16,7 +16,12 @@ import {
 import { assertEnvironmentPolicy } from "../../environment.js";
 import { githubToken } from "../../subscription-auth.js";
 import { isGreen, renderVerifyReport } from "../../verify-report.js";
-import { readTaskPatches, withActivityHeartbeats, withTemporaryDirectory } from "./runtime.js";
+import {
+  activityLifetimeSignal,
+  readTaskPatches,
+  withActivityHeartbeats,
+  withTemporaryDirectory,
+} from "./runtime.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "./task-compiler.js";
 import type { CompileAndVerifyInput } from "./types.js";
 import { notRunGates, runHarborGates } from "./verify-harbor.js";
@@ -31,20 +36,25 @@ export async function compileAndVerify(
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: CompileAndVerifyInput,
   artifactPrefix?: string,
+  lifetime?: AbortSignal,
 ): Promise<VerifyOutcome> {
+  const signal = activityLifetimeSignal(lifetime);
+  signal.throwIfAborted();
   const { run, candidate, stage, round } = input;
   const prefix =
     artifactPrefix ?? `runs/${run.runId}/verify/${candidate.candidateId}/${stage}-round-${round}`;
   const checkpoint = await store.getByKey(`${prefix}/report.json`);
+  signal.throwIfAborted();
   if (checkpoint) {
-    return await restoreCheckpoint(store, prefix, input, checkpoint);
+    return await restoreCheckpoint(store, prefix, input, checkpoint, signal);
   }
   Context.current().heartbeat(`verifying ${input.task.taskId} (${stage} round ${round})`);
   const [definitionBytes, sourceBundle, ghToken] = await Promise.all([
     store.get(input.task.definition),
     store.get(input.task.sourceBundle),
-    githubToken(),
+    githubToken(signal),
   ]);
+  signal.throwIfAborted();
   const errors: string[] = [];
   const definition = parseDefinition(definitionBytes, errors);
   if (definition) {
@@ -60,12 +70,14 @@ export async function compileAndVerify(
     const authored = join(root, "authored");
     await mkdir(authored);
     await writeFile(archive, sourceBundle);
-    await extractRegularArchive(archive, authored);
+    signal.throwIfAborted();
+    await extractRegularArchive(archive, authored, { signal });
     return await readTaskPatches(authored).catch((error: unknown) => {
       errors.push(`submission bundle is incomplete: ${message(error)}`);
       return undefined;
     });
   });
+  signal.throwIfAborted();
   const audit =
     definition && patches
       ? auditTaskDefinition(definition, patches.goldPatch, patches.testPatch)
@@ -77,19 +89,25 @@ export async function compileAndVerify(
   let task: AuthoredTask | undefined;
   if (errors.length === 0 && definition) {
     try {
-      const bundle = await withActivityHeartbeats(`compiling ${definition.taskId}`, ({ signal }) =>
-        compileSubmittedTask({
-          taskId: definition.taskId,
-          repositoryUrl: run.repository.url,
-          definitionBytes,
-          sourceBundle,
-          ...(ghToken ? { token: ghToken } : {}),
-          signal,
-        }),
+      const bundle = await withActivityHeartbeats(
+        `compiling ${definition.taskId}`,
+        ({ signal }) =>
+          compileSubmittedTask({
+            taskId: definition.taskId,
+            repositoryUrl: run.repository.url,
+            definitionBytes,
+            sourceBundle,
+            ...(ghToken ? { token: ghToken } : {}),
+            signal,
+          }),
+        signal,
       );
+      signal.throwIfAborted();
       const bundleRef = await store.put(`${prefix}/harbor-task.tar.gz`, bundle, "application/gzip");
+      signal.throwIfAborted();
       task = { ...input.task, taskId: definition.taskId, bundle: bundleRef };
     } catch (error) {
+      signal.throwIfAborted();
       if (error instanceof CancelledFailure || error instanceof TaskCompilerInfrastructureError) {
         throw error;
       }
@@ -98,8 +116,9 @@ export async function compileAndVerify(
   }
   const gates =
     task && audit.accepted
-      ? await runHarborGates(store, task, harborEnvironment, prefix)
+      ? await runHarborGates(store, task, harborEnvironment, prefix, signal)
       : notRunGates();
+  signal.throwIfAborted();
   const partial = {
     schemaVersion: 1 as const,
     stage,
@@ -110,14 +129,15 @@ export async function compileAndVerify(
     ...gates,
   };
   const report: VerifyReport = { ...partial, green: isGreen(partial) };
-  const [reportRef] = await Promise.all([
-    store.put(
-      `${prefix}/report.json`,
-      Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
-      "application/json",
-    ),
-    store.put(`${prefix}/report.md`, Buffer.from(renderVerifyReport(report)), "text/markdown"),
-  ]);
+  // Publish the reusable checkpoint last, after all diagnostic writes have settled.
+  await store.put(`${prefix}/report.md`, Buffer.from(renderVerifyReport(report)), "text/markdown");
+  signal.throwIfAborted();
+  const reportRef = await store.put(
+    `${prefix}/report.json`,
+    Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
+    "application/json",
+  );
+  signal.throwIfAborted();
   return { report, reportRef, ...(task ? { task } : {}) };
 }
 
@@ -126,9 +146,12 @@ async function restoreCheckpoint(
   prefix: string,
   input: CompileAndVerifyInput,
   checkpoint: Uint8Array,
+  signal: AbortSignal,
 ): Promise<VerifyOutcome> {
+  signal.throwIfAborted();
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(checkpoint).toString("utf8")));
   const reportRef = await store.put(`${prefix}/report.json`, checkpoint, "application/json");
+  signal.throwIfAborted();
   if (!report.compile.ok) {
     return { report, reportRef };
   }
@@ -136,7 +159,9 @@ async function restoreCheckpoint(
   if (!bundle) {
     throw new Error(`incomplete verify checkpoint for ${input.task.taskId} (${prefix})`);
   }
+  signal.throwIfAborted();
   const bundleRef = await store.put(`${prefix}/harbor-task.tar.gz`, bundle, "application/gzip");
+  signal.throwIfAborted();
   return { report, reportRef, task: { ...input.task, taskId: report.taskId, bundle: bundleRef } };
 }
 

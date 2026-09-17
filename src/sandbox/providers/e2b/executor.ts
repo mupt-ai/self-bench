@@ -208,7 +208,9 @@ export class E2BSandboxExecutor implements SandboxExecutor {
             this.#timings.diagnosticTimeoutMs,
           )
         : {};
-      const failure = terminationError ?? error;
+      const ownershipFailure =
+        error instanceof Error && "ownershipFailure" in error && error.ownershipFailure === true;
+      const failure = ownershipFailure ? error : (terminationError ?? error);
       if (failure instanceof E2BHardTimeoutError) {
         outcome = {
           ok: true,

@@ -2,6 +2,8 @@ import { harborEnvironmentName, harborPythonPath } from "./harbor-environment.js
 import type { HarborEnvironment } from "./providers.js";
 
 /** Process policy shared by generation gates and solver trials, not provider lifetimes. */
+export const HARBOR_VERSION = "0.23.0";
+
 export const HARBOR_PROCESS_TIMEOUT_MS = {
   gate: 3 * 60 * 60 * 1000,
   solver: 2 * 60 * 60 * 1000,
@@ -32,7 +34,12 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     input.jobsPath,
     "--job-name",
     input.jobName,
-    ...(input.solver ? ["--n-attempts", "1", "--n-concurrent", "1", "--max-retries", "0"] : []),
+    "--n-attempts",
+    "1",
+    "--n-concurrent",
+    "1",
+    "--max-retries",
+    "0",
     "--delete",
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
@@ -41,6 +48,14 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
 }
 
 /** Callers must first resolve their distinct generation/solver credential boundaries. */
+export function assertHarborVersion(actual: string): void {
+  if (actual.trim() !== HARBOR_VERSION) {
+    throw new Error(
+      `Harbor version ${actual.trim() || "unknown"} does not match supported ${HARBOR_VERSION}`,
+    );
+  }
+}
+
 export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...resolved, PYTHONPATH: harborPythonPath() };
 }

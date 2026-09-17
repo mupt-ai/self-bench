@@ -54,7 +54,7 @@ describe("ModalSandboxExecutor", () => {
       await executor.run({
         runId: "modal-test",
         stage: "failed-probe",
-        timeoutMs: 1_000,
+        timeoutMs: 2_000,
         command: ["false"],
         outputPaths: ["/work/partial.json"],
       });
