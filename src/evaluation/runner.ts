@@ -1,9 +1,9 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { extractRegularArchive } from "../archive.js";
 import type { ArtifactStore } from "../artifacts.js";
+import { harborEnvironmentName, harborPythonPath } from "../harbor-environment.js";
 import { runCommand } from "../process.js";
 import { HARBOR_VERSION, solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
@@ -41,7 +41,7 @@ export function solverArguments(
     "--model",
     model,
     "--env",
-    sandbox === "e2b" ? "harbor_e2b:SelfBenchE2BEnvironment" : sandbox,
+    harborEnvironmentName(sandbox),
     "--jobs-dir",
     jobs,
     "--job-name",
@@ -104,7 +104,7 @@ export async function executeEvaluation(
         : { ...solverEnvironment(input, home, resolved), secrets: [] };
     secrets.push(...execution.secrets);
     const { profile, child } = execution;
-    child.PYTHONPATH = dirname(fileURLToPath(import.meta.url));
+    child.PYTHONPATH = harborPythonPath();
     const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
     if (version.stdout.trim() !== HARBOR_VERSION)
       throw new Error("Worker Harbor version does not match the supported version");

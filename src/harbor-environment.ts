@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "./providers.js";
 
 /** Vercel settings a Vercel Harbor environment needs; Harbor resolves team and project from them. */
@@ -52,4 +53,13 @@ export function harborChildEnvironment(
   }
   if (harborEnvironment === "e2b" && harborE2BKey) child.E2B_API_KEY = harborE2BKey;
   return child;
+}
+
+/** Use the same account-compatible E2B lifetime for generation gates and evaluations. */
+export function harborEnvironmentName(environment: string): string {
+  return environment === "e2b" ? "harbor_e2b:SelfBenchE2BEnvironment" : environment;
+}
+
+export function harborPythonPath(): string {
+  return fileURLToPath(new URL("./evaluation/", import.meta.url));
 }
