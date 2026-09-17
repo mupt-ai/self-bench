@@ -11,9 +11,16 @@ export class SandboxSupervisionError extends Error {
   }
 }
 
+export type SupervisionSettlement =
+  | { readonly status: "pending" }
+  | { readonly status: "succeeded" }
+  | { readonly status: "failed"; readonly error: unknown; readonly lateError?: unknown };
+
 export interface Supervision {
-  /** Signals command exit, waits for the onLive hook, and unregisters the sandbox. */
+  /** Signals command exit once; every call returns the same bounded settlement promise. */
   finish(): Promise<void>;
+  /** Read current finish state, including a hook rejection arriving after the grace expired. */
+  settlement(): SupervisionSettlement;
 }
 
 /**
@@ -54,26 +61,52 @@ export class LiveSandboxRegistry {
     const hook = options.onLive
       ? Promise.resolve().then(() => options.onLive?.(live, exited.signal))
       : Promise.resolve();
-    hook.catch(() => undefined);
+    let settlement: SupervisionSettlement = { status: "pending" };
+    let finishing: Promise<void> | undefined;
+    void hook.catch((error: unknown) => {
+      if (settlement.status === "failed" && error !== settlement.error) {
+        // Keep the authoritative finish failure while retaining late hook diagnostics.
+        settlement = { ...settlement, lateError: error };
+      }
+    });
+    const settle = async (): Promise<void> => {
+      exited.abort(new Error("sandbox command exited"));
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          hook,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new SandboxSupervisionError(sandboxId)),
+              this.finishTimeoutMs,
+            );
+          }),
+        ]);
+        settlement = { status: "succeeded" };
+      } catch (error) {
+        settlement = { status: "failed", error };
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        active = false;
+        if (this.#entries.get(sandboxId) === backing) this.#entries.delete(sandboxId);
+      }
+    };
     return {
-      finish: async () => {
-        exited.abort(new Error("sandbox command exited"));
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([
-            hook,
-            new Promise<never>((_, reject) => {
-              timer = setTimeout(
-                () => reject(new SandboxSupervisionError(sandboxId)),
-                this.finishTimeoutMs,
-              );
-            }),
-          ]);
-        } finally {
-          clearTimeout(timer);
-          active = false;
-          if (this.#entries.get(sandboxId) === backing) this.#entries.delete(sandboxId);
+      settlement: () => settlement,
+      finish: () => {
+        if (!finishing) {
+          let resolveFinish!: () => void;
+          let rejectFinish!: (error: unknown) => void;
+          finishing = new Promise<void>((resolve, reject) => {
+            resolveFinish = resolve;
+            rejectFinish = reject;
+          });
+          // Cache before abort dispatch: an abort listener may reenter finish().
+          void settle().then(resolveFinish, rejectFinish);
+          void finishing.catch(() => undefined);
         }
+        return finishing;
       },
     };
   }

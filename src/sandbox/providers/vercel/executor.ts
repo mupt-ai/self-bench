@@ -8,7 +8,7 @@ import type {
   SandboxRunOptions,
 } from "../../contracts.js";
 import { LiveSandboxRegistry } from "../../live.js";
-import { attachCleanupFailure } from "../../ownership.js";
+import { attachCleanupFailure, selectSandboxFailure } from "../../ownership.js";
 import { materializeRemoteFiles } from "../../remote-files.js";
 import { executeVercelCommand, VERCEL_WORK_DIRECTORY, vercelBacking } from "./command.js";
 import { preventAmbiguousVercelCommandStartRetries } from "./fetch.js";
@@ -154,7 +154,7 @@ export class VercelSandboxExecutor implements SandboxExecutor {
       throwIfTerminated(terminationError);
       outcome = { ok: true, result: { sandboxId: sandbox.name, ...outputs } };
     } catch (error) {
-      const failure = terminationError ?? error;
+      const failure = selectSandboxFailure(error, terminationError);
       outcome =
         failure instanceof VercelHardTimeoutError
           ? {

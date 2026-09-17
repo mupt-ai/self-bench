@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { AuthenticationError, InvalidArgumentError } from "e2b";
 import type { RollingOutput } from "../../../process.js";
 import { SandboxExecutionError, type SandboxRequest, type SandboxResult } from "../../contracts.js";
@@ -52,24 +51,6 @@ export function sandboxExecutionError(
 
 export function createErrorConfirmsNoAllocation(error: unknown): boolean {
   return error instanceof AuthenticationError || error instanceof InvalidArgumentError;
-}
-
-export async function waitForCommandKill(
-  commandKill: Promise<boolean> | undefined,
-  diagnosticSignal: AbortSignal,
-  graceMs: number,
-): Promise<void> {
-  if (!commandKill) return;
-  const signal = AbortSignal.any([diagnosticSignal, AbortSignal.timeout(graceMs)]);
-  try {
-    await raceWithSignal(commandKill, signal);
-  } catch {
-    // Sandbox cleanup remains the authoritative process/resource stop.
-  }
-}
-
-export async function abortableDelay(delayMs: number, signal: AbortSignal): Promise<void> {
-  await delay(delayMs, undefined, { signal });
 }
 
 export function attachCleanupError(primaryError: unknown, cleanupError: unknown): unknown {
