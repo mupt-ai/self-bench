@@ -20,9 +20,9 @@ export class LiveSandboxRegistry {
     const exited = new AbortController();
     const live: LiveSandbox = {
       sandboxId,
-      execute: (command) => backing.execute(command),
-      readFile: (path) => backing.readFile(path),
-      writeFile: (path, contents) => backing.writeFile(path, contents),
+      execute: (command) => this.execute(sandboxId, command),
+      readFile: (path) => this.readFile(sandboxId, path),
+      writeFile: (path, contents) => this.writeFile(sandboxId, path, contents),
     };
     const hook = options.onLive
       ? Promise.resolve().then(() => options.onLive?.(live, exited.signal))
