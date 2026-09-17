@@ -1,4 +1,5 @@
 import type { ModalClient, Sandbox } from "modal";
+import { attachCleanupFailure } from "../../ownership.js";
 
 /** A local bound: Modal create/exec/filesystem calls do not accept AbortSignal. */
 export class ModalDeadline {
@@ -149,15 +150,7 @@ export class ModalAllocation {
 }
 
 export function withCleanupFailure(primary: unknown, cleanupError: unknown): Error {
-  if (primary instanceof Error && Object.isExtensible(primary)) {
-    try {
-      Object.defineProperty(primary, "cleanupError", { value: cleanupError, configurable: true });
-      return primary;
-    } catch {
-      /* Fall back without replacing the primary cause. */
-    }
-  }
-  const error = new Error("Modal execution and cleanup failed", { cause: primary });
-  Object.defineProperty(error, "cleanupError", { value: cleanupError });
-  return error;
+  return attachCleanupFailure(primary, cleanupError, {
+    fallbackMessage: "Modal execution and cleanup failed",
+  });
 }

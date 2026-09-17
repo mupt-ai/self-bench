@@ -28,5 +28,93 @@ export function supervisionFailure(
   supervisionError: unknown,
 ): Error & OwnershipFailure {
   const error = new Error("Sandbox command failed with unresolved supervision", { cause: primary });
-  return Object.assign(error, { ownershipFailure: true as const, supervisionError });
+  return markOwnershipFailure(error, () => supervisionError);
+}
+
+export interface CleanupFailure {
+  readonly cleanupError: unknown;
+}
+
+/** Annotated providers preserve the error name and aggregate non-Error rejections. */
+type CleanupPresentation =
+  | { readonly detail: string; readonly aggregateMessage: string }
+  | { readonly fallbackMessage: string };
+
+/** Providers supply already-sanitized presentation; attachment and fallback stay shared. */
+export function attachCleanupFailure(
+  primary: unknown,
+  cleanupError: unknown,
+  presentation: CleanupPresentation,
+): Error & CleanupFailure {
+  const annotated = "detail" in presentation;
+  const message =
+    annotated && primary instanceof Error
+      ? `${primary.message}; ${presentation.detail}`
+      : undefined;
+  return attachProperties(
+    primary,
+    {
+      cleanupError: { configurable: true, value: cleanupError },
+      ...(message === undefined
+        ? {}
+        : {
+            message: { configurable: true, value: message, writable: true },
+          }),
+    },
+    () => {
+      if (annotated && !(primary instanceof Error)) {
+        return new AggregateError([primary, cleanupError], presentation.aggregateMessage);
+      }
+      const wrapped = new Error(
+        "fallbackMessage" in presentation ? presentation.fallbackMessage : message,
+        { cause: primary },
+      );
+      if (annotated && primary instanceof Error) wrapped.name = primary.name;
+      return wrapped;
+    },
+  ) as Error & CleanupFailure;
+}
+
+/** The getter is deliberately lazy: a detached SDK/hook may fail after local settlement. */
+export function markOwnershipFailure(
+  primary: Error,
+  supervisionError: () => unknown,
+): Error & OwnershipFailure {
+  return attachProperties(
+    primary,
+    {
+      ownershipFailure: { configurable: true, value: true },
+      supervisionError: { configurable: true, get: supervisionError },
+    },
+    () => {
+      const wrapped = new Error(primary.message, { cause: primary });
+      wrapped.name = primary.name;
+      return wrapped;
+    },
+  ) as Error & OwnershipFailure;
+}
+
+function attachProperties(
+  primary: unknown,
+  properties: PropertyDescriptorMap,
+  fallback: () => Error,
+): Error {
+  if (primary instanceof Error && Object.isExtensible(primary)) {
+    try {
+      // Preflight avoids partially mutating the primary when another descriptor conflicts.
+      if (
+        Object.keys(properties).every(
+          (key) => Object.getOwnPropertyDescriptor(primary, key)?.configurable !== false,
+        )
+      ) {
+        Object.defineProperties(primary, properties);
+        return primary;
+      }
+    } catch {
+      // Frozen or otherwise protected provider errors still retain their original cause.
+    }
+  }
+  const wrapped = fallback();
+  Object.defineProperties(wrapped, properties);
+  return wrapped;
 }

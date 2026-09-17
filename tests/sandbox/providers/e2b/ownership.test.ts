@@ -28,8 +28,10 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
         undefined,
         fastLifecycleTimings,
       );
-      await expect(
-        runSandboxWithFailureLog(new LocalArtifactStore(root), "failure.log", () =>
+      const failure = await runSandboxWithFailureLog(
+        new LocalArtifactStore(root),
+        "failure.log",
+        () =>
           executor.run(
             {
               runId: "ownership",
@@ -47,8 +49,32 @@ for (const mode of ["transport", "inactivity", "hard-timeout", "abort"] as const
               },
             },
           ),
-        ),
-      ).rejects.toThrow("unresolved supervision");
+      ).catch((error) => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure.message).toContain("unresolved supervision");
+      const causes: Error[] = [];
+      for (
+        let cause = failure;
+        cause instanceof Error && !causes.includes(cause);
+        cause = cause.cause
+      )
+        causes.push(cause);
+      const ownership = causes.find(
+        (cause) => "ownershipFailure" in cause && cause.ownershipFailure === true,
+      );
+      expect(ownership).toBeDefined();
+      expect(
+        ownership && "supervisionError" in ownership && ownership.supervisionError,
+      ).toBeInstanceOf(Error);
+      if (mode === "abort") expect(causes).toContain(abortReason);
+      if (mode === "transport")
+        expect(causes.some((cause) => cause === fixture.waitError)).toBe(true);
+      if (mode === "inactivity")
+        expect(causes.some((cause) => cause.name === "InactivityTimeoutError")).toBe(true);
+      const log = await new LocalArtifactStore(root).getByKey("failure.log");
+      if (mode === "abort")
+        expect(log).toBeUndefined(); // Caller cancellation propagates without diagnostic recovery.
+      else expect(log).toBeDefined();
       expect(fixture.allocationExists).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });

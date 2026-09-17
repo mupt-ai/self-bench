@@ -9,6 +9,7 @@ import {
 } from "../../contracts.js";
 import type { LiveSandboxRegistry, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
+import { markOwnershipFailure } from "../../ownership.js";
 import type { ModalDeadline } from "./lifecycle.js";
 import { modalBacking } from "./live.js";
 
@@ -175,10 +176,7 @@ export async function runModalCommand(
       if (!supervisionSucceeded) {
         // Keep the primary cause, but never recover wrapper success while owned
         // work failed or remains unsettled. The getter retains late hook failure.
-        Object.defineProperties(failure, {
-          ownershipFailure: { value: true },
-          supervisionError: { get: () => supervisionError },
-        });
+        throw markOwnershipFailure(failure, () => supervisionError);
       }
     }
     throw failure;
