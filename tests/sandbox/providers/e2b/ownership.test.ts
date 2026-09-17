@@ -79,6 +79,8 @@ for (const mode of [
         expect(causes.some((cause) => cause === fixture.waitError)).toBe(true);
       if (mode === "inactivity")
         expect(causes.some((cause) => cause.name === "InactivityTimeoutError")).toBe(true);
+      if (mode.endsWith("timeout"))
+        expect(causes.some((cause) => cause.name === "TimeoutError")).toBe(true);
       const log = await new LocalArtifactStore(root).getByKey("failure.log");
       if (mode.endsWith("abort"))
         expect(log).toBeUndefined(); // Caller cancellation propagates without diagnostic recovery.

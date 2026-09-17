@@ -29,6 +29,8 @@ for (const mode of ["timeout", "abort", "held-timeout", "held-abort"] as const)
       .catch((error) => error);
     expect(error).toBeInstanceOf(Error);
     expect(hasOwnershipFailure(error)).toBe(true);
+    expect(error.supervisionError).toBeInstanceOf(Error);
+    if (mode.endsWith("timeout")) expect(error.cause.name).toBe("TimeoutError");
     expect(fixture.sandboxExists).toBe(false);
     if (mode.endsWith("abort")) expect(error.cause).toBe(reason);
   }, 15000);
