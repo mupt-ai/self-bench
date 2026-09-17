@@ -12,7 +12,7 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
         candidates: Type.Array(
           Type.Object(
             {
-              candidateId: Type.String({ minLength: 1 }),
+              candidateId: Type.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }),
               difficulty: Type.Union([
                 Type.Literal("easy"),
                 Type.Literal("medium"),
@@ -49,6 +49,13 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
       const candidates = input.candidates;
       if (!candidates) {
         throw new Error("submit_discovery received no candidates");
+      }
+      for (const candidate of candidates) {
+        if (!candidate.candidateId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(candidate.candidateId)) {
+          throw new Error(
+            "candidateId must start with a letter or digit and contain only letters, digits, dots, underscores, or hyphens",
+          );
+        }
       }
       const exclusionsPath = process.env.SELFBENCH_DISCOVERY_EXCLUSIONS;
       if (!exclusionsPath) {
