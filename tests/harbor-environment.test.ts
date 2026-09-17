@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { harborChildEnvironment } from "../src/harbor-environment.js";
+import {
+  harborChildEnvironment,
+  harborEnvironmentName,
+  harborPythonPath,
+} from "../src/harbor-environment.js";
 
 describe("Harbor child environment", () => {
   test("removes hosted sandbox control credentials while preserving selected Harbor credentials", () => {
@@ -96,4 +100,11 @@ describe("Harbor child environment", () => {
         ),
       ).toEqual([]);
   });
+});
+
+test("Harbor E2B gates and evaluations resolve the packaged one-hour environment", async () => {
+  expect(harborEnvironmentName("e2b")).toBe("harbor_e2b:SelfBenchE2BEnvironment");
+  for (const provider of ["modal", "docker", "vercel", "daytona"])
+    expect(harborEnvironmentName(provider)).toBe(provider);
+  expect(await Bun.file(`${harborPythonPath()}/harbor_e2b.py`).exists()).toBe(true);
 });

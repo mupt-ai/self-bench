@@ -1,7 +1,11 @@
 import { ApplicationFailure } from "@temporalio/common";
 import type { SelfBenchConfig } from "../../config.js";
 import { executionEnvironment } from "../../execution-environment.js";
-import { harborChildEnvironment } from "../../harbor-environment.js";
+import {
+  harborChildEnvironment,
+  harborEnvironmentName,
+  harborPythonPath,
+} from "../../harbor-environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -41,7 +45,7 @@ export async function runHarborGate(
       "--agent",
       agent,
       "--env",
-      environment,
+      harborEnvironmentName(environment),
       "--job-name",
       jobName,
       "--jobs-dir",
@@ -52,7 +56,10 @@ export async function runHarborGate(
     ],
     {
       allowFailure: true,
-      env: harborChildEnvironment(executionEnvironment(), environment),
+      env: {
+        ...harborChildEnvironment(executionEnvironment(), environment),
+        PYTHONPATH: harborPythonPath(),
+      },
       timeoutMs: 3 * 60 * 60 * 1000,
       signal,
     },
