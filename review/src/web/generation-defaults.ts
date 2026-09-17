@@ -17,7 +17,12 @@ export function readGenerationSettings(key: string): GenerationSettings | undefi
     const parsed = generationSettingsSchema.safeParse(
       JSON.parse(window.localStorage.getItem(key) ?? "null"),
     );
-    return parsed.success ? parsed.data : undefined;
+    if (!parsed.success) return undefined;
+    // The hosted E2B UI now manages templates automatically. Old saved overrides
+    // are no longer editable and must not silently override the managed template.
+    return parsed.data.sandbox === "e2b"
+      ? { ...parsed.data, sandboxImage: undefined }
+      : parsed.data;
   } catch {
     return undefined;
   }

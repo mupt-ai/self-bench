@@ -120,6 +120,27 @@ test("generation defaults select compatible credentials and remember choices wit
     );
     await render();
     expect(current.settings.reasoning).toBe("medium");
+    // Legacy E2B template overrides must not survive reopening the hosted UI.
+    browser.localStorage.setItem(
+      "selfbench-generation:legacy:owner/repo",
+      JSON.stringify({
+        ...chosen,
+        sandbox: "e2b",
+        sandboxImage: "test",
+        sandboxCredentialId: id(6),
+        harborEnvironment: "e2b",
+        harborCredentialId: id(6),
+      }),
+    );
+    await render("legacy");
+    expect(current.settings.sandboxImage).toBeUndefined();
+    expect(current.settings.sandboxCredentialId).toBe(id(6));
+    expect(current.valid).toBe(true);
+    expect(
+      JSON.parse(browser.localStorage.getItem("selfbench-generation:legacy:owner/repo") ?? "{}")
+        .sandboxImage,
+    ).toBeUndefined();
+    await render();
     empty = true;
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));
     expect(current.valid).toBe(false);
