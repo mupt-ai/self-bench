@@ -58,10 +58,16 @@ test.each(["e2b", "vercel"] as const)(
     // The E2B template is managed (built on first use); only Vercel asks for a runtime image.
     expect(html).toContain(
       sandbox === "e2b"
-        ? "The E2B template is built automatically in your account on first use."
+        ? 'title="The E2B template is built automatically in your account on first use."'
         : "Vercel Runtime Image",
     );
-    expect(html).not.toContain(sandbox === "e2b" ? "Vercel Runtime Image" : "E2B Template");
+    if (sandbox === "e2b") {
+      expect(html).not.toContain(
+        '<p class="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-1">The E2B template',
+      );
+    } else {
+      expect(html).not.toContain("E2B Template");
+    }
     expect(html).toContain("Harbor Verification");
     expect(html).not.toContain('value="docker"');
     for (const environment of ["modal", "vercel", "e2b", "daytona"])
@@ -85,6 +91,19 @@ test("Modal generation requires a credential and has no separate Harbor settings
   expect(modal).toContain("Modal Credential");
   expect(modal).toContain("modal-credential");
   expect(modal).not.toContain("Harbor Verification");
+});
+
+test("generation popup keeps helper descriptions in tooltips", () => {
+  const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });
+  expect(html).toContain(
+    'title="The E2B template is built automatically in your account on first use."',
+  );
+  expect(html).toContain(
+    'title="Each PR starts a separate workflow. Model and sandbox usage may incur charges."',
+  );
+  expect(html).toContain(
+    'title="Generation runs in E2B; Harbor verification runs in your Modal, Vercel, E2B, or Daytona account."',
+  );
 });
 
 test("Vercel credential editor exposes token, team and project fields", () => {

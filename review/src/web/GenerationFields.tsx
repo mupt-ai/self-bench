@@ -175,9 +175,10 @@ export function GenerationFields({
             </label>
           )}
           {value.sandbox === "e2b" && (
-            <p className="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-1">
-              The E2B template is built automatically in your account on first use.
-            </p>
+            <div className="flex items-center gap-1.5 self-start pt-1 font-mono text-[13px] text-muted-foreground">
+              E2B Template
+              <Hint text="The E2B template is built automatically in your account on first use." />
+            </div>
           )}
           <label
             className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
@@ -240,17 +241,17 @@ export function GenerationFields({
         </label>
       ))}
       <div className="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-2">
-        <Link
-          className="text-brand hover:text-brand"
-          to="/settings/credentials"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Manage Credentials
-        </Link>
-        <p className="mt-3">
-          Each PR starts a separate workflow. Model and sandbox usage may incur charges.
-        </p>
+        <span className="inline-flex items-center gap-1.5">
+          <Link
+            className="text-brand hover:text-brand"
+            to="/settings/credentials"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Manage Credentials
+          </Link>
+          <Hint text="Each PR starts a separate workflow. Model and sandbox usage may incur charges." />
+        </span>
       </div>
     </fieldset>
   );
