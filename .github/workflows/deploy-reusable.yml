@@ -93,6 +93,9 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+      # Reconfigure gcloud as well as ADC so OS Login uses the apply account.
+      - name: Configure gcloud for Apply
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
       - name: Apply the Approved Saved Plan
         if: steps.plan.outputs.has_changes == 'true'
         env:
