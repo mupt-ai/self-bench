@@ -1,10 +1,16 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import type { SandboxExecutor, SandboxRequest } from "../src/sandbox/contracts.js";
 import { taskSandbox, withTaskSandbox } from "../src/sandbox/task-context.js";
+import * as runtime from "../src/temporal/activities/runtime.js";
 import {
   compileSubmittedTask,
   TaskCompilerInfrastructureError,
 } from "../src/temporal/activities/task-compiler.js";
+
+beforeEach(() => {
+  spyOn(runtime, "readAsset").mockResolvedValue(Buffer.from("trusted compiler fixture"));
+});
+afterEach(() => mock.restore());
 
 const input = {
   taskId: "task",
