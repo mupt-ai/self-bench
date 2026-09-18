@@ -1,8 +1,10 @@
 import type { ArtifactStore } from "../artifacts.js";
 import { loadWorkerConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { orgRecords } from "../evaluation/org-records.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
+import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../site/generation-config.js";
 import { generationEnvironment } from "../site/generation-credentials.js";
 import { buildExport } from "../temporal/activities/export.js";
@@ -25,6 +27,17 @@ export async function exportBatch(
     );
   }
   const config = loadWorkerConfig(env);
+  if (config.execution.kind === "e2b" && config.execution.image === managedE2BTemplateReference()) {
+    const generation = batch.run.generation;
+    if (!records || !generation?.settings.sandboxCredentialId)
+      throw new Error("Managed export template credentials unavailable");
+    await ensureManagedE2BTemplate({
+      reference: config.execution.image,
+      credentials: config.execution.credentials,
+      records: orgRecords(records, generation.orgId),
+      credentialId: generation.settings.sandboxCredentialId,
+    });
+  }
   const executor = createSandboxExecutor(config.execution, env);
   try {
     return await withTaskSandbox(executor, () =>

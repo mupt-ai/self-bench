@@ -11,17 +11,21 @@ export interface SubmissionFiles {
 export async function readSubmission(
   definitionBytes: Uint8Array,
   sourceBundle: Uint8Array,
+  signal?: AbortSignal,
 ): Promise<SubmissionFiles | undefined> {
+  signal?.throwIfAborted();
+  let definition: unknown;
   try {
-    const definition = JSON.parse(Buffer.from(definitionBytes).toString("utf8")) as unknown;
-    const patches = await submissionPatches(sourceBundle);
-    const taskId = (definition as { taskId?: unknown } | null)?.taskId;
-    return {
-      taskId: typeof taskId === "string" && taskId ? taskId : undefined,
-      definition,
-      ...patches,
-    };
+    definition = JSON.parse(Buffer.from(definitionBytes).toString("utf8"));
   } catch {
     return undefined;
   }
+  const patches = await submissionPatches(sourceBundle, signal);
+  signal?.throwIfAborted();
+  const taskId = (definition as { taskId?: unknown } | null)?.taskId;
+  return {
+    taskId: typeof taskId === "string" && taskId ? taskId : undefined,
+    definition,
+    ...patches,
+  };
 }

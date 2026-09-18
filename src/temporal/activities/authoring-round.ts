@@ -214,7 +214,9 @@ export async function runAuthoringRound(
       store.put(`${prefix}/definition.json`, definitionBytes, "application/json"),
       store.put(`${prefix}/source-task.tar.gz`, bundle, "application/gzip"),
     ]);
-    const submission = await readSubmission(definitionBytes, bundle);
+    const submission = await withActivityHeartbeats("reading author submission", ({ signal }) =>
+      readSubmission(definitionBytes, bundle, signal),
+    );
     const verified = submission
       ? verifier.verified(submission.definition, submission.testPatch, submission.goldPatch)
       : undefined;
