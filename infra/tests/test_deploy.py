@@ -79,6 +79,10 @@ class DeployTests(unittest.TestCase):
         self.assertNotIn('if:',protection)
         apply_auth=workflow.split('      - name: Authenticate Terraform Apply\n')[1].split('      - name: Apply the Approved Saved Plan')[0]
         self.assertNotIn('if:',apply_auth)
+        # Updating ADC alone leaves gcloud's active account on the planner, breaking OS Login.
+        self.assertIn('uses: google-github-actions/setup-gcloud@',apply_auth)
+        self.assertLess(apply_auth.index('vars.GCP_APPLY_SERVICE_ACCOUNT'),
+                        apply_auth.index('uses: google-github-actions/setup-gcloud@'))
         self.assertIn('steps.plan.outputs.manifest_generation',workflow)
         self.assertIn('steps.plan.outputs.manifest_sha256',workflow)
         config=json.loads((root/'infra/bootstrap/terraform-ci.json.example').read_text())
