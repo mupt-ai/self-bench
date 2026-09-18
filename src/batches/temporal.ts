@@ -27,7 +27,7 @@ export interface BatchExecutions {
     input: CandidateWorkflowInput,
     queue: string,
   ): Promise<ExecutionSnapshot<CandidateWorkflowResult>>;
-  cancel(id: string): Promise<boolean>;
+  cancel(id: string, queue: string): Promise<boolean>;
 }
 
 /** Ordinary client starts: no Temporal parent/child relationship or waiting activity slot. */
@@ -75,7 +75,7 @@ export function batchExecutions(client: Client): BatchExecutions {
     shard: (id, input, queue) =>
       observe(id, "selfBenchDiscoveryShardWorkflow", input, queue, false),
     candidate: (id, input, queue) => observe(id, "selfBenchAuthorWorkflow", input, queue, true),
-    async cancel(id) {
+    async cancel(id, queue) {
       return client.connection.withDeadline(Date.now() + 10_000, async () => {
         const handle = client.workflow.getHandle(id);
         try {
@@ -83,7 +83,24 @@ export function batchExecutions(client: Client): BatchExecutions {
           await handle.cancel();
           return (await handle.describe()).status.name !== "RUNNING";
         } catch (error) {
-          if (error instanceof WorkflowNotFoundError) return false; // A timed-out start may still arrive.
+          if (error instanceof WorkflowNotFoundError) {
+            // Reserve the ID with a no-op tombstone. Whichever start wins is then
+            // cancelled; REJECT_DUPLICATE prevents a late paid start after the fence.
+            try {
+              await client.workflow.start("selfBenchCancelledDispatchWorkflow", {
+                workflowId: id,
+                taskQueue: queue,
+                args: [],
+                workflowExecutionTimeout: "1 minute",
+                workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+              });
+            } catch (startError) {
+              if (!(startError instanceof WorkflowExecutionAlreadyStartedError)) throw startError;
+            }
+            const reserved = client.workflow.getHandle(id);
+            if ((await reserved.describe()).status.name === "RUNNING") await reserved.cancel();
+            return (await reserved.describe()).status.name !== "RUNNING";
+          }
           throw error;
         }
       });

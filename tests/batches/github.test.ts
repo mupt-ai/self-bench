@@ -73,3 +73,17 @@ test("pre-abort never sends credentials or a request", async () => {
   ).rejects.toThrow();
   expect(calls).toBe(0);
 });
+
+test("null descriptions and unavailable diff stats do not discard unrelated PRs", async () => {
+  const result = await fetchBatchPullRequests({
+    repositoryUrl: "https://github.com/o/r",
+    token: "test",
+    fetchImpl: async () =>
+      page([
+        { ...pr(1), body: null },
+        { ...pr(2), additions: null, deletions: null, changedFiles: null },
+        pr(3),
+      ]),
+  });
+  expect(result.map((row) => row.sourcePr)).toEqual([1, 3]);
+});

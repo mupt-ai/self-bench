@@ -5,7 +5,7 @@ import { CancelledFailure, Context } from "@temporalio/activity";
 import { extractRegularArchive } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
 import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../../contracts.js";
-import { refreshHarborTask } from "../../harbor-task.js";
+
 import {
   assertPiSessionFile,
   finalAssistantMessage,
@@ -133,7 +133,7 @@ export async function withTaskBundle<T>(
       JSON.parse(Buffer.from(await store.get(task.definition)).toString("utf8")),
     );
     signal?.throwIfAborted();
-    await refreshHarborTask(taskDirectory, definition);
+    if (definition.taskId !== task.taskId) throw new Error("Bundle task identity mismatch");
     signal?.throwIfAborted();
     const result = await action(taskDirectory, root);
     signal?.throwIfAborted();

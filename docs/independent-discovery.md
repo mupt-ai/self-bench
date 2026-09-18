@@ -17,3 +17,13 @@ Existing parent/child workflow implementations remain registered only for histor
 ## Validation Boundary
 
 Local tests cover GraphQL pagination/errors, deterministic partitioning, persisted plans, database rollback, lost-start-response recovery, cancellation without allocation, and aggregation. These are not a substitute for a live Temporal replay/integration test or an actual deployed end-to-end run. This refactor is not deployed by editing local source.
+
+## Repository Execution Boundary
+
+The generation worker dispatches trusted preparation programs to fresh allocations using the selected sandbox provider. Repository clone/fetch/checkout, task compilation and repository snapshot creation run in the compiler sandbox—not on the worker and not in the author's mutable session. Draft packaging, submission unpacking, base-repository coupling scans, and batch archive creation likewise run in preparation sandboxes. The worker transports opaque artifacts and small JSON reports.
+
+Harbor's control client still stages compiled task bundles on the worker before handing them to its chosen environment. That staging is not a repository checkout or test execution; model/test execution and dependency installation run in Harbor-managed environments. This change does not yet eliminate local Harbor bundle staging or all artifact buffering. The local Docker provider remains local containers, not remote capacity. Do not infer an unlimited worker-concurrency budget.
+
+Compiler sandboxes receive only the run's GitHub credential, not model credentials. Other preparation sandboxes receive no workload credentials. Export preserves the exact accepted bundle bytes instead of regenerating tests after verification.
+
+Cancellation before dispatch reserves a no-op Temporal execution under the intended ID. Reject-duplicate start policy prevents a delayed paid start from winning after that reservation; if the real start won first, normal cancellation waits for it to settle.

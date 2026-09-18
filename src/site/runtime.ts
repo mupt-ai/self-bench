@@ -60,6 +60,7 @@ export async function openSite(
     client,
     artifacts,
     generationQueue ?? config.temporal.taskQueue,
+    generationRecords,
   );
   return {
     users,

@@ -1,9 +1,10 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Client } from "@temporalio/client";
 import { LocalArtifactStore } from "../../src/artifacts.js";
+import * as exporter from "../../src/batches/export.js";
 import { createGenerationBatches } from "../../src/batches/service.js";
 import { createBatchStore } from "../../src/batches/store.js";
 import { testDatabase } from "../support/site-fixture.js";
@@ -52,6 +53,9 @@ test("application resumes a persisted candidate plan and exports without a batch
     shards: [],
     candidates: [{ workflowId: id, dispatchAttempted: true, candidate: candidate("one", 1) }],
   });
+  const exportMock = spyOn(exporter, "exportBatch").mockImplementation(async (_batch, store) =>
+    store.put("export.tar.gz", Buffer.from("opaque sandbox archive"), "application/gzip"),
+  );
   const service = createGenerationBatches(database.db, client, artifacts, "generation");
   try {
     const deadline = Date.now() + 5_000;
@@ -66,6 +70,7 @@ test("application resumes a persisted candidate plan and exports without a batch
     expect(observed.every((value) => value === id)).toBe(true);
   } finally {
     await service.close();
+    exportMock.mockRestore();
     await database.close();
     await rm(directory, { recursive: true, force: true });
   }

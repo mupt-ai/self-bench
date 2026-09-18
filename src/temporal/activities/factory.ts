@@ -68,6 +68,9 @@ export function createActivities(
         sandbox,
         (executor, _environment, run) => runVerifierRound(store, executor, { ...input, run }),
       ),
-    buildExport: (input) => buildExport(store, input),
+    buildExport: (input) =>
+      withGenerationRuntime(config, records, input.run, "author", sandbox, () =>
+        buildExport(store, input),
+      ),
   };
 }

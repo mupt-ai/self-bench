@@ -20,12 +20,28 @@ const pageSchema = z.object({
           z.object({
             number: z.number().int().positive(),
             title: z.string(),
-            body: z.string(),
+            body: z
+              .string()
+              .nullish()
+              .transform((value) => value ?? ""),
             url: z.string().url(),
             isDraft: z.boolean(),
-            additions: z.number().nonnegative(),
-            deletions: z.number().nonnegative(),
-            changedFiles: z.number().int().nonnegative(),
+            additions: z
+              .number()
+              .nonnegative()
+              .nullish()
+              .transform((value) => value ?? 0),
+            deletions: z
+              .number()
+              .nonnegative()
+              .nullish()
+              .transform((value) => value ?? 0),
+            changedFiles: z
+              .number()
+              .int()
+              .nonnegative()
+              .nullish()
+              .transform((value) => value ?? 0),
             author: z.object({ login: z.string(), __typename: z.string() }).nullable(),
           }),
         ),

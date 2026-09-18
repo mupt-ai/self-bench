@@ -10,7 +10,10 @@ export async function advanceBatch(
     const pending = [...batch.shards, ...batch.candidates].filter((item) => !item.cancelled);
     const item = pending[(batch.cursor ?? 0) % Math.max(1, pending.length)];
     batch.cursor = (batch.cursor ?? 0) + 1;
-    if (item && (!item.dispatchAttempted || (await executions.cancel(item.workflowId))))
+    if (
+      item &&
+      (!item.dispatchAttempted || (await executions.cancel(item.workflowId, batch.taskQueue)))
+    )
       item.cancelled = true;
     if ([...batch.shards, ...batch.candidates].every((item) => item.cancelled))
       batch.phase = "cancelled";

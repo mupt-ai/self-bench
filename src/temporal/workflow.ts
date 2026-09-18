@@ -90,3 +90,6 @@ export async function selfBenchAuthorWorkflow(
     current = progress;
   });
 }
+
+/** Cancellation tombstone: reserves a never-started dispatch ID without any paid activities. */
+export async function selfBenchCancelledDispatchWorkflow(): Promise<void> {}

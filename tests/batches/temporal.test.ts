@@ -80,8 +80,9 @@ test("top-level discovery start is restart safe after lost start response", asyn
   expect((await restarted.shard("batch/discovery/0", input, "queue")).state).toBe("completed");
   expect(f.starts()).toBe(1);
 });
-test("cancel of an ambiguously dispatched ID stays unresolved and never creates a workflow", async () => {
+test("cancellation fences an undispatched ID with a no-op workflow", async () => {
   const f = fixture();
-  expect(await batchExecutions(f.client).cancel("batch/discovery/0")).toBe(false);
-  expect(f.starts()).toBe(0);
+  expect(await batchExecutions(f.client).cancel("batch/discovery/0", "queue")).toBe(true);
+  expect(f.starts()).toBe(1);
+  expect(f.seen()).toMatchObject({ type: "selfBenchCancelledDispatchWorkflow" });
 });

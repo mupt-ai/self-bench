@@ -2,9 +2,10 @@ import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts.js";
 import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
+import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { liveBatchStatus } from "../site/batch-activity.js";
-import { buildExport } from "../temporal/activities/export.js";
 import { advanceBatch } from "./advance.js";
+import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { prepareReplayBatch } from "./replay.js";
 import { batchStatus } from "./status.js";
@@ -18,6 +19,7 @@ export function createGenerationBatches(
   client: Client,
   artifacts: ArtifactStore,
   taskQueue: string,
+  records?: EncryptedRecordStore,
 ) {
   const store = createBatchStore(db);
   const executions = batchExecutions(client);
@@ -32,16 +34,7 @@ export function createGenerationBatches(
     // No DB transaction is held while rendering/downloading bundles. Immutable export writes
     // can be resumed after a crash; completion is conditional on still being exporting.
     if (exporting) {
-      const reference = await buildExport(
-        artifacts,
-        {
-          run: exporting.run,
-          tasks: exporting.candidates.flatMap((item) =>
-            item.result?.task ? [item.result.task] : [],
-          ),
-        },
-        `application-${crypto.randomUUID()}`,
-      );
+      const reference = await exportBatch(exporting, artifacts, records);
       await store.completeExport(exporting.run.runId, reference);
     }
   };

@@ -1,7 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { CancelledFailure, Context } from "@temporalio/activity";
-import { extractRegularArchive } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
 import { auditTaskDefinition } from "../../audit.js";
 import type { SelfBenchConfig } from "../../config.js";
@@ -14,14 +11,10 @@ import {
   verifyReportSchema,
 } from "../../contracts.js";
 import { assertEnvironmentPolicy } from "../../environment.js";
+import { submissionPatches } from "../../sandbox/submission.js";
 import { githubToken } from "../../subscription-auth.js";
 import { isGreen, renderVerifyReport } from "../../verify-report.js";
-import {
-  activityLifetimeSignal,
-  readTaskPatches,
-  withActivityHeartbeats,
-  withTemporaryDirectory,
-} from "./runtime.js";
+import { activityLifetimeSignal, withActivityHeartbeats } from "./runtime.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "./task-compiler.js";
 import type { CompileAndVerifyInput } from "./types.js";
 import { notRunGates, runHarborGates } from "./verify-harbor.js";
@@ -65,17 +58,10 @@ export async function compileAndVerify(
       errors.push(message(error));
     }
   }
-  const patches = await withTemporaryDirectory("selfbench-submission-", async (root) => {
-    const archive = join(root, "source-task.tar.gz");
-    const authored = join(root, "authored");
-    await mkdir(authored);
-    await writeFile(archive, sourceBundle);
+  const patches = await submissionPatches(sourceBundle, signal).catch((error: unknown) => {
     signal.throwIfAborted();
-    await extractRegularArchive(archive, authored, { signal });
-    return await readTaskPatches(authored).catch((error: unknown) => {
-      errors.push(`submission bundle is incomplete: ${message(error)}`);
-      return undefined;
-    });
+    errors.push(`submission bundle is incomplete: ${message(error)}`);
+    return undefined;
   });
   signal.throwIfAborted();
   const audit =

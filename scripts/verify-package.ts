@@ -76,6 +76,8 @@ try {
     "dist/extension-verifier.bundle.js",
     "dist/sandbox-author.bundle.js",
     "dist/sandbox-check.bundle.js",
+    "dist/sandbox-compiler.bundle.js",
+    "dist/sandbox-task-operation.bundle.js",
     "dist/sandbox-verifier.bundle.js",
     "dist/review/index.html",
   ]) {
