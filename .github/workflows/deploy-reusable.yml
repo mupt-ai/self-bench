@@ -70,7 +70,6 @@ jobs:
           python3 -m infra.ci.source
           python3 -c 'import os; from infra.ci.deploy import preflight; preflight(os.environ)'
       - name: Verify Apply Approval Protection
-        if: inputs.target_environment == 'prod'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m infra.ci.approval

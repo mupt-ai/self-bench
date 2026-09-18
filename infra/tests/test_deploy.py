@@ -75,6 +75,8 @@ class DeployTests(unittest.TestCase):
         for phase in ('PLAN','APPLY'):
             self.assertIn('vars.GCP_'+phase+'_SERVICE_ACCOUNT',workflow)
             self.assertIn('vars.GCP_'+phase+'_WORKLOAD_IDENTITY_PROVIDER',workflow)
+        protection=workflow.split('      - name: Verify Apply Approval Protection\n')[1].split('      - name: Authenticate Terraform Plan')[0]
+        self.assertNotIn('if:',protection)
         apply_auth=workflow.split('      - name: Authenticate Terraform Apply\n')[1].split('      - name: Apply the Approved Saved Plan')[0]
         self.assertNotIn('if:',apply_auth)
         self.assertIn('steps.plan.outputs.manifest_generation',workflow)
