@@ -36,6 +36,11 @@ export function bearerMatches(request: IncomingMessage, token: string): boolean 
   );
 }
 
+/** Paths of the built review app that are served without authentication. */
+export function isReviewAssetPath(pathname: string): boolean {
+  return pathname === "/" || pathname === "/dari-logo.svg" || pathname.startsWith("/assets/");
+}
+
 export async function sendReviewAsset(response: ServerResponse, pathname: string): Promise<void> {
   const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
   const root = resolve(projectRoot(import.meta.url), "dist/review");
@@ -49,7 +54,10 @@ export async function sendReviewAsset(response: ServerResponse, pathname: string
     response.writeHead(200, {
       "content-type": contentType(path),
       "content-length": body.byteLength,
-      "cache-control": pathname === "/" ? "no-cache" : "public, max-age=31536000, immutable",
+      // Only files under /assets/ carry a content hash in their name.
+      "cache-control": pathname.startsWith("/assets/")
+        ? "public, max-age=31536000, immutable"
+        : "no-cache",
       "x-content-type-options": "nosniff",
     });
     response.end(body);
@@ -96,6 +104,7 @@ function contentType(path: string): string {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
   if (path.endsWith(".css")) return "text/css; charset=utf-8";
   if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".svg")) return "image/svg+xml";
   return "application/octet-stream";
 }
 

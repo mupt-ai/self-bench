@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { resolve } from "node:path";
-import { sendApiError, sendJson, sendReviewAsset } from "../api/http.js";
+import { isReviewAssetPath, sendApiError, sendJson, sendReviewAsset } from "../api/http.js";
 import { readTaskDirectory, resolveTaskDirectory, scanHarborTasks } from "./task-files.js";
 import type { ViewerInfo } from "./types.js";
 
@@ -24,7 +24,7 @@ export async function startViewServer(options: ViewServerOptions): Promise<ViewS
         sendJson(response, 405, { error: "method not allowed" });
         return;
       }
-      if (url.pathname === "/" || url.pathname.startsWith("/assets/")) {
+      if (isReviewAssetPath(url.pathname)) {
         await sendReviewAsset(response, url.pathname);
         return;
       }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   authorized,
   bearerMatches,
+  isReviewAssetPath,
   readBody,
   sendApiError,
   sendJson,
@@ -68,10 +69,7 @@ export async function startApi(
           return;
         }
       }
-      if (
-        request.method === "GET" &&
-        (url.pathname === "/" || url.pathname.startsWith("/assets/"))
-      ) {
+      if (request.method === "GET" && isReviewAssetPath(url.pathname)) {
         await sendReviewAsset(response, url.pathname);
         return;
       }
