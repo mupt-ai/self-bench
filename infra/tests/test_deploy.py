@@ -66,20 +66,23 @@ class DeployTests(unittest.TestCase):
         self.assertIn('deploy-prod.yml@',policy)
         self.assertNotIn('pull_request',policy)
 
-    def test_phase_specific_deployment_environments_and_identities(self):
+    def test_single_deployment_environment_with_phase_specific_identities(self):
         from infra.bootstrap import terraform_ci, terraform_github
         root=Path(__file__).parents[2]
         workflow=(root/'.github/workflows/deploy-reusable.yml').read_text()
         self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),1)
-        self.assertIn("environment: ${{ inputs.target_environment == 'prod' && 'prod-plan' || inputs.target_environment }}",workflow)
-        self.assertNotIn('target_environment }}-plan',workflow)
-        self.assertNotIn('target_environment }}-apply',workflow)
+        self.assertNotIn('prod-plan',workflow)
         for phase in ('PLAN','APPLY'):
             self.assertIn('vars.GCP_'+phase+'_SERVICE_ACCOUNT',workflow)
             self.assertIn('vars.GCP_'+phase+'_WORKLOAD_IDENTITY_PROVIDER',workflow)
+        apply_auth=workflow.split('      - name: Authenticate Terraform Apply\n')[1].split('      - name: Apply the Approved Saved Plan')[0]
+        self.assertNotIn('if:',apply_auth)
+        self.assertIn('steps.plan.outputs.manifest_generation',workflow)
+        self.assertIn('steps.plan.outputs.manifest_sha256',workflow)
         config=json.loads((root/'infra/bootstrap/terraform-ci.json.example').read_text())
+        config['environment']='prod'
         for phase in ('plan','apply'):
-            self.assertEqual(terraform_ci.identity(config,phase)['environment'],'dev')
+            self.assertEqual(terraform_ci.github_environment(config,phase),'prod')
             values=terraform_github.variables(config,{},phase)
             self.assertIn('GCP_'+phase.upper()+'_SERVICE_ACCOUNT',values)
 
@@ -103,7 +106,7 @@ class DeployTests(unittest.TestCase):
         root=Path(__file__).parents[2]/'.github/workflows'
         shared=(root/'deploy-reusable.yml').read_text()
         self.assertIn('if: ${{ !inputs.infrastructure_only }}',shared)
-        self.assertIn('if: needs.plan.outputs.has_changes',shared)
+        self.assertIn('if: steps.plan.outputs.has_changes',shared)
         self.assertIn('Infrastructure Bootstrap Complete',shared)
         self.assertNotIn('infrastructure_only',(root/'deploy-prod.yml').read_text())
 

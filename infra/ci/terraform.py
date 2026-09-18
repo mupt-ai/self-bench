@@ -78,10 +78,10 @@ def write_summary(ctx, summary, generation=None, text_generation=None):
         # Values are extracted from the plan, not guessed from requested inputs.
         output.write("Capacity (not a price quote): `" + json.dumps(summary["sizing"], sort_keys=True) + "`\n\n")
         if generation:
-            output.write("Review the full plan in private GCS before approving Apply:\n\n````text\n")
+            output.write("Full saved plan and manifest in private GCS:\n\n````text\n")
             output.write(contracts.object_uri(ctx, "plan.txt", text_generation) + "\n")
             output.write(contracts.object_uri(ctx, "manifest.json", generation) + "\n````\n\n")
-            output.write("Approval provisions billed infrastructure; it does not deploy the SelfBench application.\n")
+            output.write("The deployment applies this saved plan if it has changes, then rolls out the application unless infrastructure-only mode was selected.\n")
 
 
 def plan(runner, inputs):

@@ -31,8 +31,10 @@ def validate_config(config):
         "provider_id": r"[a-z][a-z0-9-]{2,30}[a-z0-9]",
         "service_account_id": r"[a-z][a-z0-9-]{4,28}[a-z0-9]",
     }
-    if set(config) != set(patterns):
+    if set(config) - {"immutable_subject"} != set(patterns):
         raise ValueError("Configuration keys must match github-auth.json.example exactly.")
+    if not isinstance(config.get("immutable_subject", False), bool):
+        raise ValueError("immutable_subject must be a boolean.")
     for key, pattern in patterns.items():
         if not isinstance(config[key], str) or not re.fullmatch(pattern, config[key]):
             raise ValueError(f"Invalid configuration field: {key}")
@@ -44,11 +46,15 @@ def validate_config(config):
 
 
 def claims(config):
+    repository = config["repository"]
+    if config.get("immutable_subject", False):
+        owner, repo = repository.split("/")
+        repository = f"{owner}@{config['repository_owner_id']}/{repo}@{config['repository_id']}"
     return {
         "repository_id": config["repository_id"],
         "repository_owner_id": config["repository_owner_id"],
         "repository": config["repository"],
-        "sub": f"repo:{config['repository']}:environment:{config['environment']}",
+        "sub": f"repo:{repository}:environment:{config['environment']}",
         "ref": f"refs/heads/{config['branch']}",
         "workflow_ref": f"{config['repository']}/{config['workflow_path']}@refs/heads/{config['branch']}",
         "event_name": "workflow_dispatch",

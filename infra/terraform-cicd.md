@@ -17,8 +17,10 @@ roll out the API and worker, and verify service health. No manual SSH rollout sh
 Production builds the release commit; it does not promote the exact dev image digest.
 
 Production checks the actual release event, immutable triggering SHA and tag ancestry from main
-before cloud authentication. Production planning uses an ungated `prod-plan` environment;
-apply and deployment remain protected by the `prod` environment review.
+before cloud authentication. Planning and apply use the same protected `prod` environment, so
+production configuration and approval have one source of truth. The plan and apply steps still use
+separate least-privilege GCP identities. Approval happens once, before planning, apply, and the
+application rollout, rather than between plan and apply.
 
 ## Prerequisites and Transition
 
@@ -77,7 +79,11 @@ controlled dev deployment. **No live deployment was run while implementing this 
 Each environment holds common project/state/runtime settings plus two named identity pairs:
 `GCP_PLAN_SERVICE_ACCOUNT`, `GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER`,
 `GCP_APPLY_SERVICE_ACCOUNT`, `GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER`.
-Production planning uses `prod-plan`; apply uses `prod`.
+Both production phases use the `prod` GitHub environment. The plan identity is read-only and the
+apply identity is privileged; this is intentionally four identity variables rather than one broad
+credential shared by both phases. `GCP_PROJECT_ID`, `TF_STATE_BUCKET`, `TF_PLAN_BUCKET`,
+`TF_INPUTS_JSON`, `RUNTIME_SECRET_VERSIONS`, and `SELFBENCH_PUBLIC_URL` are the shared deployment
+coordinates for that environment.
 The original `GCP_SERVICE_ACCOUNT` and `GCP_WORKLOAD_IDENTITY_PROVIDER` remain for the manual
 non-provisioning auth check. Production now permits release tags, so its old main-only auth check
 is intentionally not a release test; use the production deployment workflow's authenticated jobs.
@@ -99,3 +105,13 @@ pushes and stable production releases always use the full deployment path.
 ## User-Owned Generation Credentials
 
 Generation uses the user-selected encrypted model and sandbox credentials from the application database. The VM worker must not be configured with global `OPENAI_API_KEY`, `SELFBENCH_PI_AUTH_JSON`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `E2B_API_KEY`, `VERCEL_TOKEN`, or `GH_TOKEN` values for generation. `generationEnvironment()` resolves the selected user credentials and the submitting user's GitHub OAuth token server-side and injects them only into that run's activities and isolated sandbox. The deploy preflight therefore requires only the worker runtime token, not provider credentials.
+
+### Migrating Existing Releases
+
+Existing release tags retain their original workflow and may still require `prod-plan`. Keep that
+environment until those deployments finish and the cleanup is merged. During transition the plan
+provider must explicitly trust the environment used by the selected workflow; afterwards restrict
+it to `prod` and remove `prod-plan`. Preserve the repository's immutable OIDC subject prefix (check
+`gh api repos/OWNER/REPO/actions/oidc/customization/sub`); numeric IDs in that prefix are intentional.
+Set optional `"immutable_subject": true` in the authentication/Terraform bootstrap JSON when
+that API reports `use_immutable_subject: true`; omit it for legacy name-only subjects.
