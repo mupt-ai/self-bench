@@ -71,14 +71,16 @@ export class E2BSandboxExecutor implements SandboxExecutor {
   readonly #api: E2BSandboxApi;
   readonly #sleep: E2BSleep;
   readonly #timings: E2BLifecycleTimings;
-  readonly #live = new LiveSandboxRegistry();
+  readonly #live: LiveSandboxRegistry;
 
   constructor(
     config: E2BExecutionConfig,
     api?: E2BSandboxApi,
     sleep: E2BSleep = abortableDelay,
     timings: Partial<E2BLifecycleTimings> = {},
+    live = new LiveSandboxRegistry(),
   ) {
+    this.#live = live;
     this.#config = validateConfig(config);
     this.#api = api ?? new E2B(this.#config.credentials).Sandbox;
     this.#sleep = sleep;

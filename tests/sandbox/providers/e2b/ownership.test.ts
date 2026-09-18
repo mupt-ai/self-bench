@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../../../src/artifacts.js";
+import { LiveSandboxRegistry } from "../../../../src/sandbox/live.js";
 import { E2BSandboxExecutor } from "../../../../src/sandbox/providers/e2b/executor.js";
 import { WRAPPER_STATUS_PATH } from "../../../../src/temporal/activities/round-outcome.js";
 import { runSandboxWithFailureLog } from "../../../../src/temporal/activities/runtime.js";
@@ -34,6 +35,8 @@ for (const mode of [
         fixture.api,
         undefined,
         fastLifecycleTimings,
+        // Keep grace longer than command deadlines without waiting the production 5s.
+        new LiveSandboxRegistry(400),
       );
       const failure = await runSandboxWithFailureLog(
         new LocalArtifactStore(root),

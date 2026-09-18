@@ -1,10 +1,10 @@
 FROM oven/bun:1.3.14-debian AS build
 
 WORKDIR /app
-ARG SELFBENCH_BUILD_COMMIT
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
+ARG SELFBENCH_BUILD_COMMIT
 RUN if [ -f tsconfig.build.json ]; then bun run build; else test -f dist/api-main.js; fi
 RUN rm -rf node_modules && bun install --frozen-lockfile --production
 

@@ -141,6 +141,16 @@ jobs:
       - name: Infrastructure Bootstrap Complete
         if: inputs.infrastructure_only
         run: echo 'Infrastructure-only run complete. Configure DB login, secrets, Temporal, OAuth, DNS and TLS before a full deployment.' >> "$GITHUB_STEP_SUMMARY"
+      # Cache only build layers, never runtime credentials or private Terraform logs.
+      - name: Restore Docker Build Cache
+        if: ${{ !inputs.infrastructure_only }}
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: /tmp/selfbench-build-cache
+          key: docker-${{ runner.os }}-${{ inputs.target_environment }}-${{ hashFiles('Dockerfile', 'bun.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            docker-${{ runner.os }}-${{ inputs.target_environment }}-${{ hashFiles('Dockerfile', 'bun.lock') }}-
+            docker-${{ runner.os }}-${{ inputs.target_environment }}-
       - name: Build, Back Up, Migrate, Deploy, and Verify
         if: ${{ !inputs.infrastructure_only }}
         env:

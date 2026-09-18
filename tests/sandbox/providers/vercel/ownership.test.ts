@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { LiveSandboxRegistry } from "../../../../src/sandbox/live.js";
 import { hasOwnershipFailure } from "../../../../src/sandbox/ownership.js";
 import { VercelSandboxExecutor } from "../../../../src/sandbox/providers/vercel/executor.js";
 import { VercelSdkFixture, vercelFixtureConfig } from "../../../support/vercel-sdk-fixture.js";
@@ -10,7 +11,13 @@ for (const mode of ["timeout", "abort", "held-timeout", "held-abort"] as const)
     if (mode.startsWith("held")) fixture.logsMode = "hold";
     const controller = new AbortController();
     const reason = new Error("caller abort");
-    const error = await new VercelSandboxExecutor(vercelFixtureConfig, fixture.fetch)
+    const error = await new VercelSandboxExecutor(
+      vercelFixtureConfig,
+      fixture.fetch,
+      undefined,
+      // Keep grace longer than command deadlines without waiting the production 5s.
+      new LiveSandboxRegistry(400),
+    )
       .run(
         {
           runId: "ownership",
