@@ -5,12 +5,11 @@ import { createApiKeyStore } from "../auth/api-keys.js";
 import type { AuthConfig } from "../auth/config.js";
 import { createSiteAuth, type SiteAuth } from "../auth/routes.js";
 import { createUserStore } from "../auth/users.js";
+import { createGenerationBatches } from "../batches/service.js";
 import type { SelfBenchConfig } from "../config.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
-import { selfBenchRunWorkflow } from "../temporal/workflow.js";
-import { liveBatchStatus } from "./batch-activity.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
 import { evaluationStarter } from "./evaluation-start.js";
@@ -23,6 +22,7 @@ import { createTaskRoutes, type TaskRoutes } from "./tasks.js";
 import { temporalStarter, temporalStatus } from "./temporal-status.js";
 
 interface Site {
+  users: ReturnType<typeof createUserStore>;
   readonly auth: SiteAuth;
   readonly apiKeys: ApiKeyRoutes;
   readonly github: GitHubRepoRoutes;
@@ -32,6 +32,8 @@ interface Site {
   readonly pullRequests: PullRequestRoutes;
   readonly evaluations: ReturnType<typeof createEvaluationRoutes>;
   readonly database: OpenDatabase;
+  generationBatches: ReturnType<typeof createGenerationBatches>;
+  close(): Promise<void>;
 }
 
 export async function openSite(
@@ -53,7 +55,17 @@ export async function openSite(
     process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && generationQueue
       ? createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
       : undefined;
+  const batches = createGenerationBatches(
+    database.db,
+    client,
+    artifacts,
+    generationQueue ?? config.temporal.taskQueue,
+    generationRecords,
+  );
   return {
+    users,
+    close: () => batches.close(),
+    generationBatches: batches,
     auth: createSiteAuth({ config: auth, users, apiKeys }),
     apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),
     evaluations: createEvaluationRoutes({
@@ -80,20 +92,9 @@ export async function openSite(
       runs,
       tasks,
       artifacts,
-      start: async (input) => {
-        await client.workflow.start(selfBenchRunWorkflow, {
-          workflowId: input.runId,
-          taskQueue: input.generation
-            ? (generationQueue ?? config.temporal.taskQueue)
-            : config.temporal.taskQueue,
-          args: [input],
-          workflowExecutionTimeout: "14 days",
-        });
-      },
-      status: (runId) => liveBatchStatus(client, runId),
-      cancel: async (runId) => {
-        await client.workflow.getHandle(runId).cancel();
-      },
+      start: (input, token) => batches.start(input, token),
+      status: (runId) => batches.status(runId),
+      cancel: (runId) => batches.cancel(runId),
     }),
     tasks: createTaskRoutes({
       users,

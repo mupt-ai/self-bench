@@ -10,7 +10,7 @@
     "src/temporal/workflow.ts!",
     "src/evaluation/workflow.ts!",
     "src/extensions/{authoring,verifier,discovery}.ts!",
-    "src/sandbox/programs/{author,check,verifier}.ts!",
+    "src/sandbox/programs/{author,check,verifier,compiler,task-operation}.ts!",
     "review/src/main.tsx!",
     "scripts/*.ts!",
     "tests/**/*.test.ts",

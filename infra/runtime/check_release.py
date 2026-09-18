@@ -78,8 +78,10 @@ def validate(environment, project, release_path):
     if (not re.fullmatch(rf"selfbench-{environment}(?:\.[a-z0-9-]+)?", shared["SELFBENCH_TEMPORAL_NAMESPACE"])
             or not shared["SELFBENCH_TEMPORAL_ADDRESS"].endswith(":7233")):
         raise ValueError("Choose this environment's Temporal namespace and gRPC endpoint on port 7233.")
-    if shared["SELFBENCH_ACTIVITY_CONCURRENCY"] != "1":
-        raise ValueError("Initial deployment concurrency is one; raise only after measured validation.")
+    concurrency = shared["SELFBENCH_ACTIVITY_CONCURRENCY"]
+    # Dev may trial the measured sandbox-preparation ceiling. Prod remains unchanged.
+    if not re.fullmatch(r"[1-8]" if environment == "dev" else r"1", concurrency):
+        raise ValueError("Activity concurrency must be 1-8 on dev and 1 on production.")
     origin = urlsplit(api["SELFBENCH_PUBLIC_URL"])
     if (origin.scheme != "https" or not origin.hostname or origin.username or origin.password
             or origin.path not in ("", "/") or origin.query or origin.fragment):

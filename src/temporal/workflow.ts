@@ -72,3 +72,24 @@ export async function selfBenchCandidateWorkflow(
 
 export { selfBenchEvaluationWorkflow } from "../evaluation/workflow.js";
 export { executeRun } from "./workflow/run.js";
+
+/** Independent discovery unit. Fetching PR metadata and dispatch happen in the application. */
+export async function selfBenchDiscoveryShardWorkflow(
+  input: import("./activities.js").DiscoveryShardInput,
+): Promise<import("../contracts.js").DiscoveryResult> {
+  return workflowActivities.discoverCandidateShard(input);
+}
+
+/** Independent author/reviewer loop: no parent progress signals or parent-close policy. */
+export async function selfBenchAuthorWorkflow(
+  input: CandidateWorkflowInput,
+): Promise<CandidateWorkflowResult> {
+  let current = initialProgress(input.candidate);
+  setHandler(candidateStatusQuery, () => current);
+  return executeCandidate(input, workflowActivities, (progress) => {
+    current = progress;
+  });
+}
+
+/** Cancellation tombstone: reserves a never-started dispatch ID without any paid activities. */
+export async function selfBenchCancelledDispatchWorkflow(): Promise<void> {}

@@ -6,6 +6,7 @@ import { Context } from "@temporalio/activity";
 import { LocalArtifactStore } from "../../src/artifacts.js";
 import type { HarborJobResult } from "../../src/harbor-results.js";
 import type { MailboxRequest } from "../../src/sandbox/supervisor.js";
+import * as operations from "../../src/sandbox/task-operation.js";
 import * as auth from "../../src/subscription-auth.js";
 import * as harbor from "../../src/temporal/activities/harbor.js";
 import * as runtime from "../../src/temporal/activities/runtime.js";
@@ -98,6 +99,17 @@ export async function fixture() {
   spyOn(store, "put").mockImplementation(async (key, bytes, contentType) => {
     writes.push(key);
     return put(key, bytes, contentType);
+  });
+  spyOn(operations, "taskOperation").mockImplementation(async (operation) => {
+    if (operation === "draft")
+      return { "/work/source-task.tar.gz": Buffer.from("mock submission") };
+    if (operation === "unpack")
+      return {
+        "/work/patches.json": Buffer.from(
+          JSON.stringify({ testPatch: request.testPatch, goldPatch: request.goldPatch }),
+        ),
+      };
+    throw Error(`Unexpected task operation ${operation}`);
   });
   const compilation = spyOn(compiler, "compileSubmittedTask").mockResolvedValue(
     Buffer.from("mock compiled bundle"),

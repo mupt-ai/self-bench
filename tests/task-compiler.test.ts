@@ -6,7 +6,7 @@ import { runCommand } from "../src/process.js";
 import {
   compileSubmittedTask,
   TaskCompilerInfrastructureError,
-} from "../src/temporal/activities/task-compiler.js";
+} from "../src/sandbox/task-compiler.js";
 
 const roots: string[] = [];
 

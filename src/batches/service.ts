@@ -1,0 +1,82 @@
+import type { Client } from "@temporalio/client";
+import type { ArtifactStore } from "../artifacts.js";
+import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
+import type { Database } from "../db/client.js";
+import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { liveBatchStatus } from "../site/batch-activity.js";
+import { advanceBatch } from "./advance.js";
+import { exportBatch } from "./export.js";
+import { prepareGenerationBatch } from "./prepare.js";
+import { prepareReplayBatch } from "./replay.js";
+import { batchStatus } from "./status.js";
+import { createBatchStore } from "./store.js";
+import { batchExecutions } from "./temporal.js";
+import type { GenerationBatch } from "./types.js";
+
+/** A restartable application reconciler, not a Temporal orchestration workflow. */
+export function createGenerationBatches(
+  db: Database,
+  client: Client,
+  artifacts: ArtifactStore,
+  taskQueue: string,
+  records?: EncryptedRecordStore,
+) {
+  const store = createBatchStore(db);
+  const executions = batchExecutions(client);
+  let stopped = false;
+  let pending: Promise<void> | undefined;
+  const tick = async () => {
+    let exporting: GenerationBatch | undefined;
+    await store.reconcile(async (state) => {
+      await advanceBatch(state, executions);
+      if (state.phase === "exporting") exporting = structuredClone(state);
+    });
+    // No DB transaction is held while rendering/downloading bundles. Immutable export writes
+    // can be resumed after a crash; completion is conditional on still being exporting.
+    if (exporting) {
+      const reference = await exportBatch(exporting, artifacts, records);
+      await store.completeExport(exporting.run.runId, reference);
+    }
+  };
+  const poll = () => {
+    if (stopped || pending) return;
+    pending = tick()
+      .catch(() => {
+        // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
+        console.error("Batch reconciliation failed; persisted batch will be retried");
+      })
+      .finally(() => {
+        pending = undefined;
+      });
+  };
+  const timer = setInterval(poll, 5_000);
+  timer.unref();
+  poll();
+  return {
+    async start(run: WorkflowRunInput, token: string) {
+      if (await store.read(run.runId))
+        throw new Error(
+          "Batch ID already exists; inspect it rather than starting another execution",
+        );
+      const state = isReplayRunRequest(run)
+        ? await prepareReplayBatch(run, token, artifacts, taskQueue)
+        : await prepareGenerationBatch({ run, token, artifacts, taskQueue });
+      await store.create(state);
+      poll();
+    },
+    list: () => store.list(),
+    async status(runId: string) {
+      const batch = await store.read(runId);
+      return batch ? batchStatus(batch) : liveBatchStatus(client, runId);
+    },
+    async cancel(runId: string) {
+      if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
+      else poll();
+    },
+    async close() {
+      stopped = true;
+      clearInterval(timer);
+      await pending;
+    },
+  };
+}

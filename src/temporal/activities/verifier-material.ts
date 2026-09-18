@@ -1,18 +1,7 @@
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
-import { type AuthoredTask, type TaskDefinition, taskDefinitionSchema } from "../../contracts.js";
-import {
-  buildCouplingEvidence,
-  type CouplingEvidence,
-  discoverContractArtifacts,
-  scanBaseContractArtifacts,
-} from "../../coupling.js";
-import { repositoryRelativePath } from "../../harbor-task/paths.js";
-import { patchPaths } from "../../repair.js";
-import { withTaskBundle } from "./runtime.js";
-
+import type { AuthoredTask, TaskDefinition } from "../../contracts.js";
+import type { CouplingEvidence } from "../../coupling.js";
+import { taskOperation } from "../../sandbox/task-operation.js";
 export interface VerifierMaterial {
   readonly definition: TaskDefinition;
   readonly instruction: string;
@@ -22,52 +11,22 @@ export interface VerifierMaterial {
   readonly heldOutPaths: readonly string[];
 }
 
-/**
- * Everything the verification agent judges, gathered from the green bundle on the worker: the
- * instruction, both patches, the environment contract, and the deterministic coupling evidence
- * computed against the exact base snapshot.
- */
+/** Repository hydration and coupling scans run in a fresh preparation sandbox. */
 export async function buildVerifierMaterial(
   store: ArtifactStore,
   task: AuthoredTask,
+  signal?: AbortSignal,
 ): Promise<VerifierMaterial> {
-  return await withTaskBundle(store, task, async (taskDirectory, root) => {
-    const [definitionBytes, instruction, testPatch, goldPatch] = await Promise.all([
-      store.get(task.definition),
-      readFile(join(taskDirectory, "instruction.md"), "utf8"),
-      readFile(join(taskDirectory, "tests/test.patch"), "utf8"),
-      readFile(join(taskDirectory, "solution/gold.patch"), "utf8"),
-    ]);
-    const definition = taskDefinitionSchema.parse(
-      JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
-    );
-    const baseDirectory = join(root, "verifier-base");
-    await mkdir(baseDirectory);
-    await extractRegularArchive(
-      join(taskDirectory, "environment/repo.tar.gz"),
-      baseDirectory,
-      REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS,
-    );
-    const candidates = discoverContractArtifacts(testPatch);
-    const baseArtifacts = await scanBaseContractArtifacts(baseDirectory, root, candidates);
-    const couplingEvidence = buildCouplingEvidence({
-      prompt: definition.prompt,
-      testPatch,
-      goldPatch,
-      baseArtifacts,
-    });
-    return {
-      definition,
-      instruction,
-      testPatch,
-      goldPatch,
-      couplingEvidence,
-      heldOutPaths: [
-        ...new Set([
-          ...patchPaths(testPatch),
-          ...definition.testPaths.map((path) => repositoryRelativePath(definition, path)),
-        ]),
-      ],
-    };
-  });
+  const files = await taskOperation(
+    "material",
+    [
+      { path: "/work/task.tar.gz", contents: await store.get(task.bundle) },
+      { path: "/work/definition.json", contents: await store.get(task.definition) },
+    ],
+    ["/work/material.json"],
+    signal,
+  );
+  const bytes = files["/work/material.json"];
+  if (!bytes) throw new Error("Sandbox returned no verifier material");
+  return JSON.parse(Buffer.from(bytes).toString()) as VerifierMaterial;
 }

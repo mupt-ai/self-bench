@@ -1,9 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { AuthoredTaskDraft } from "../../contracts.js";
-import { runCommand } from "../../process.js";
-import { withTemporaryDirectory } from "./runtime.js";
+import { taskOperation } from "../../sandbox/task-operation.js";
 
 /**
  * Stores a submission (definition.json, test.patch, gold.patch) as the definition artifact plus
@@ -16,22 +13,23 @@ export async function materializeDraft(
   definitionJson: string,
   testPatch: string,
   goldPatch: string,
+  signal?: AbortSignal,
 ): Promise<AuthoredTaskDraft> {
   const definitionBytes = Buffer.from(
     definitionJson.endsWith("\n") ? definitionJson : `${definitionJson}\n`,
   );
-  const sourceBundle = await withTemporaryDirectory("selfbench-draft-", async (root) => {
-    const authored = join(root, "authored");
-    await mkdir(authored);
-    await Promise.all([
-      writeFile(join(authored, "definition.json"), definitionBytes),
-      writeFile(join(authored, "test.patch"), testPatch),
-      writeFile(join(authored, "gold.patch"), goldPatch),
-    ]);
-    const archive = join(root, "source-task.tar.gz");
-    await runCommand("tar", ["-czf", archive, "-C", authored, "."]);
-    return await readFile(archive);
-  });
+  const outputs = await taskOperation(
+    "draft",
+    [
+      { path: "/work/definition.json", contents: definitionBytes },
+      { path: "/work/test.patch", contents: testPatch },
+      { path: "/work/gold.patch", contents: goldPatch },
+    ],
+    ["/work/source-task.tar.gz"],
+    signal,
+  );
+  const sourceBundle = outputs["/work/source-task.tar.gz"];
+  if (!sourceBundle) throw new Error("Draft sandbox returned no archive");
   const [definitionRef, bundleRef] = await Promise.all([
     store.put(`${prefix}/definition.json`, definitionBytes, "application/json"),
     store.put(`${prefix}/source-task.tar.gz`, sourceBundle, "application/gzip"),

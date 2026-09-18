@@ -111,6 +111,7 @@ export class SessionVerifier {
       definitionJson,
       request.testPatch,
       goldPatch,
+      signal,
     );
     signal.throwIfAborted();
     const outcome = await compileAndVerify(

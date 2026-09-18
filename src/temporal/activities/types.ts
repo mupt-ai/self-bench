@@ -15,6 +15,8 @@ import type {
 } from "../../contracts.js";
 
 export interface DiscoveryShardInput {
+  /** The application already grouped this immutable PR chunk. No worker-side repartitioning. */
+  readonly partitioned?: boolean;
   readonly run: RunRequest;
   readonly wave: number;
   readonly shardIndex: number;

@@ -84,6 +84,8 @@ services:
         condition: service_healthy
     environment:
       <<: *selfbench-environment
+      # Local CLI batches fetch PR metadata here, before Temporal dispatch.
+      GH_TOKEN: ${GH_TOKEN:-}
       # selfbench.dev sign-in. Set the GitHub OAuth app in .env to serve the signed-in site;
       # leave GITHUB_OAUTH_CLIENT_ID unset to keep the bearer-token Ledger.
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}

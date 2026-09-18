@@ -11,6 +11,7 @@ export type RunPhase =
   | "complete"
   | "blocked"
   | "failed"
+  | "cancelling"
   | "cancelled";
 
 /**
@@ -23,6 +24,7 @@ export interface TaskProgress {
   candidateId: string;
   difficulty: Difficulty;
   status:
+    | "queued"
     | "authoring"
     | "verifying"
     | "reviewing"

@@ -112,7 +112,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           await saveGenerationRecords(options.records, input.runId, generation, token);
         const run = await runs.attachRun(repo.id, input.runId, user.id);
         try {
-          await options.start(input);
+          await options.start(input, token);
         } catch {
           sendJson(response, 503, {
             runId: input.runId,

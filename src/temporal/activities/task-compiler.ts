@@ -1,10 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { extractRegularArchive } from "../../archive.js";
-import { taskDefinitionSchema } from "../../contracts.js";
-import { compileHarborTask } from "../../harbor-task.js";
-import { runCommand } from "../../process.js";
-import { withTemporaryDirectory } from "./runtime.js";
+import { z } from "zod";
+import { verifierRuntimeFiles } from "../../harbor-task/runtime-assets.js";
+import type { SandboxExecutor } from "../../sandbox/contracts.js";
+import { taskSandbox } from "../../sandbox/task-context.js";
+import { readAsset } from "./runtime.js";
 
 export class TaskCompilerInfrastructureError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -12,12 +10,6 @@ export class TaskCompilerInfrastructureError extends Error {
     this.name = "TaskCompilerInfrastructureError";
   }
 }
-
-/**
- * Trusted compiler: unpacks a sandbox submission (definition.json, test.patch, gold.patch),
- * clones the pinned repository on the worker, and renders the native Harbor task bundle.
- * Models never hand-write task.toml, Dockerfiles, or scripts.
- */
 export interface TaskCompilerInput {
   readonly taskId: string;
   readonly repositoryUrl: string;
@@ -26,88 +18,52 @@ export interface TaskCompilerInput {
   readonly token?: string;
   readonly signal?: AbortSignal;
 }
+const resultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }),
+  z.object({ ok: z.literal(false), infrastructure: z.boolean(), message: z.string() }),
+]);
 
-export interface TaskCompilerServices {
-  cloneRepository(
-    repositoryUrl: string,
-    commit: string,
-    destination: string,
-    token?: string,
-    signal?: AbortSignal,
-  ): Promise<void>;
-}
-
+/** Orchestration only: the worker never clones, checks out, or compiles repository content. */
 export async function compileSubmittedTask(
   input: TaskCompilerInput,
-  services: TaskCompilerServices = defaultCompilerServices,
+  executor: SandboxExecutor = taskSandbox(),
 ): Promise<Uint8Array> {
-  return await withTemporaryDirectory(`selfbench-compile-${input.taskId}-`, async (root) => {
-    const authored = join(root, "authored");
-    const repository = join(root, "repository");
-    const output = join(root, "harbor-task");
-    const archive = join(root, "source-task.tar.gz");
-    await mkdir(authored);
-    await writeFile(archive, input.sourceBundle);
-    await extractRegularArchive(archive, authored, input.signal ? { signal: input.signal } : {});
-    await writeFile(join(authored, "definition.json"), input.definitionBytes);
-
-    const definition = taskDefinitionSchema.parse(
-      JSON.parse(Buffer.from(input.definitionBytes).toString("utf8")),
-    );
-    await services
-      .cloneRepository(
-        input.repositoryUrl,
-        definition.baseCommit,
-        repository,
-        input.token,
-        input.signal,
-      )
-      .catch((error: unknown) => {
-        throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
-          cause: error,
-        });
-      });
-    await compileHarborTask(authored, repository, output);
-    const bundle = join(root, "harbor-task.tar.gz");
-    await runCommand(
-      "tar",
-      ["-czf", bundle, "-C", root, "harbor-task"],
-      input.signal ? { signal: input.signal } : {},
-    );
-    return await readFile(bundle);
-  });
+  input.signal?.throwIfAborted();
+  const result = await executor.run(
+    {
+      runId: input.taskId,
+      stage: "trusted-compile",
+      timeoutMs: 30 * 60_000,
+      command: ["node", "/work/compiler.js"],
+      files: [
+        { path: "/work/compiler.js", contents: await readAsset("dist/sandbox-compiler.bundle.js") },
+        ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
+          path: `/work/${path}`,
+          contents,
+        })),
+        {
+          path: "/work/input.json",
+          contents: JSON.stringify({ taskId: input.taskId, repositoryUrl: input.repositoryUrl }),
+        },
+        { path: "/work/definition.json", contents: input.definitionBytes },
+        { path: "/work/source-task.tar.gz", contents: input.sourceBundle },
+      ],
+      secrets: input.token ? { GH_TOKEN: input.token } : {},
+      outputPaths: ["/work/result.json", "/work/compiled.tar.gz"],
+    },
+    input.signal ? { signal: input.signal } : {},
+  );
+  input.signal?.throwIfAborted();
+  if (result.exitCode !== 0) throw new TaskCompilerInfrastructureError("Compiler sandbox failed");
+  const bytes = result.outputs["/work/result.json"];
+  if (!bytes) throw new TaskCompilerInfrastructureError("Compiler sandbox returned no report");
+  const report = resultSchema.parse(JSON.parse(Buffer.from(bytes).toString()));
+  if (!report.ok) {
+    if (report.infrastructure) throw new TaskCompilerInfrastructureError(report.message);
+    throw new Error(report.message);
+  }
+  const compiled = result.outputs["/work/compiled.tar.gz"];
+  if (!compiled?.length)
+    throw new TaskCompilerInfrastructureError("Compiler sandbox returned no bundle");
+  return compiled;
 }
-
-const defaultCompilerServices: TaskCompilerServices = {
-  async cloneRepository(repositoryUrl, commit, destination, token, signal): Promise<void> {
-    const environment: NodeJS.ProcessEnv = {
-      ...process.env,
-      ...(token ? { GH_TOKEN: token } : {}),
-    };
-    await withTemporaryDirectory("selfbench-git-auth-", async (root) => {
-      if (token) {
-        const askpass = join(root, "git-askpass.sh");
-        await writeFile(
-          askpass,
-          '#!/bin/sh\ncase "$1" in *Username*) printf x-access-token;; *) printf %s "$GH_TOKEN";; esac\n',
-          { mode: 0o700 },
-        );
-        environment.GIT_ASKPASS = askpass;
-        environment.GIT_TERMINAL_PROMPT = "0";
-      }
-      await runCommand(
-        "git",
-        ["clone", "--no-checkout", "--filter=blob:none", repositoryUrl, destination],
-        { env: environment, ...(signal ? { signal } : {}) },
-      );
-      await runCommand("git", ["-C", destination, "fetch", "origin", commit], {
-        env: environment,
-        ...(signal ? { signal } : {}),
-      });
-      await runCommand("git", ["-C", destination, "checkout", "--detach", commit], {
-        env: environment,
-        ...(signal ? { signal } : {}),
-      });
-    });
-  },
-};

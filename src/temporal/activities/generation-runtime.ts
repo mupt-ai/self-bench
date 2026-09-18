@@ -6,6 +6,7 @@ import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js
 import { orgRecords } from "../../evaluation/org-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
+import { withTaskSandbox } from "../../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../../site/generation-config.js";
 import { generationEnvironment } from "../../site/generation-credentials.js";
@@ -23,7 +24,10 @@ export async function withGenerationRuntime<T>(
     configuredRun: RunRequest,
   ) => Promise<T>,
 ) {
-  if (!run.generation) return action(legacySandbox, config.harborEnvironment, run);
+  if (!run.generation)
+    return withTaskSandbox(legacySandbox, () =>
+      action(legacySandbox, config.harborEnvironment, run),
+    );
   let env: NodeJS.ProcessEnv;
   try {
     if (!records) throw new Error("Generation credentials are not configured on this worker.");
@@ -106,7 +110,9 @@ export async function withGenerationRuntime<T>(
   return withExecutionEnvironment(env, async () => {
     const sandbox = createSandboxExecutor(execution, env);
     try {
-      return await action(sandbox, selected.harborEnvironment, configuredRun);
+      return await withTaskSandbox(sandbox, () =>
+        action(sandbox, selected.harborEnvironment, configuredRun),
+      );
     } finally {
       sandbox.close();
     }

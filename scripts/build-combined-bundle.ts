@@ -10,8 +10,8 @@ import { extractRegularArchive } from "../src/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
 import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts.js";
 import { runCommand } from "../src/process.js";
-import type { TaskCompilerServices } from "../src/temporal/activities/task-compiler.js";
-import { compileSubmittedTask } from "../src/temporal/activities/task-compiler.js";
+import type { TaskCompilerServices } from "../src/sandbox/task-compiler.js";
+import { compileSubmittedTask } from "../src/sandbox/task-compiler.js";
 
 const [listPath, outDir, name, mirror] = process.argv.slice(2);
 if (!listPath || !outDir || !name)

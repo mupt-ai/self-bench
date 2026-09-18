@@ -4,7 +4,7 @@ import type {
   CandidateWorkflowResult,
   TaskProgress,
 } from "../contracts.js";
-import { candidateStatusQuery, selfBenchCandidateWorkflow } from "../temporal/workflow.js";
+import { candidateStatusQuery, selfBenchAuthorWorkflow } from "../temporal/workflow.js";
 import type { WorkflowStarter } from "./task-start.js";
 import type { TaskStatusSource, WorkflowSnapshot } from "./task-status.js";
 
@@ -13,7 +13,7 @@ const QUERY_TIMEOUT_MS = 5_000;
 /** Starts candidate workflows top-level on the configured task queue. */
 export function temporalStarter(client: Client, taskQueue: string): WorkflowStarter {
   return async (workflowId: string, input: CandidateWorkflowInput) => {
-    await client.workflow.start(selfBenchCandidateWorkflow, {
+    await client.workflow.start(selfBenchAuthorWorkflow, {
       workflowId,
       taskQueue,
       args: [input],

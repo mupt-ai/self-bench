@@ -68,9 +68,9 @@ export async function discoverCandidateShard(
   );
   const provenanceBytes = await store.get(run.provenance);
   const provenance = parseProvenance(provenanceBytes);
-  const shard = provenance.filter(
-    (_message, index) => index % input.shardCount === input.shardIndex,
-  );
+  const shard = input.partitioned
+    ? provenance
+    : provenance.filter((_message, index) => index % input.shardCount === input.shardIndex);
   const shardBytes = Buffer.from(`${shard.map((message) => JSON.stringify(message)).join("\n")}\n`);
   const shardPrefix = `runs/${run.runId}/discovery/wave-${input.wave}/shard-${input.shardIndex}`;
   const attemptPrefix = `${shardPrefix}/attempt-${Context.current().info.attempt}`;

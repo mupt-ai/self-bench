@@ -18,10 +18,11 @@ import { apiKeyDenies } from "./auth/api-keys.js";
 import type { AuthConfig } from "./auth/config.js";
 import { sendIdentityError } from "./auth/routes.js";
 import { sendExpiredSession } from "./auth/session-expired.js";
+import { createGenerationBatches } from "./batches/service.js";
 import type { SelfBenchConfig } from "./config.js";
+import { openDatabase } from "./db/client.js";
 import { openSite } from "./site/runtime.js";
 import { connectTemporalClient } from "./temporal/connection.js";
-import { selfBenchRunWorkflow } from "./temporal/workflow.js";
 import { listArchivedRuns } from "./viewer/archived.js";
 import type { ViewerInfo } from "./viewer/types.js";
 
@@ -38,6 +39,17 @@ export async function startApi(
   const client = new Client({ connection, namespace: config.temporal.namespace });
   const artifacts = createArtifactStore(config.artifact);
   const site = options.auth ? await openSite(options.auth, config, client, artifacts) : undefined;
+  const localDatabase =
+    !site && process.env.SELFBENCH_DATABASE_URL
+      ? await openDatabase(process.env.SELFBENCH_DATABASE_URL)
+      : undefined;
+  const batches =
+    site?.generationBatches ??
+    (localDatabase
+      ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
+      : undefined);
+  const runStatus = (runId: string) =>
+    batches ? batches.status(runId) : queryStatus(client.workflow.getHandle(runId));
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -106,19 +118,18 @@ export async function startApi(
           config,
           JSON.parse((await readBody(request)).toString("utf8")),
         );
-        await client.workflow.start(selfBenchRunWorkflow, {
-          workflowId: workflowInput.runId,
-          taskQueue: config.temporal.taskQueue,
-          args: [workflowInput],
-          workflowExecutionTimeout: "14 days",
-        });
+        if (!batches) throw new Error("Batch persistence requires SELFBENCH_DATABASE_URL");
+        const token =
+          user && site ? await site.users.gitHubToken(user.githubId) : process.env.GH_TOKEN;
+        if (!token) throw new Error("A GitHub token is required for batch discovery");
+        await batches.start(workflowInput, token);
         sendJson(response, 202, { runId: workflowInput.runId });
         return;
       }
       if (
         await handleViewerRoute(request, url, response, {
           store: artifacts,
-          statusFor: (runId) => queryStatus(client.workflow.getHandle(runId)),
+          statusFor: runStatus,
         })
       ) {
         return;
@@ -127,7 +138,7 @@ export async function startApi(
         url.pathname,
       );
       if (runMatch?.[1] && request.method === "GET" && runMatch[2] === "export") {
-        const status = await queryStatus(client.workflow.getHandle(runMatch[1]));
+        const status = await runStatus(runMatch[1]);
         if (!("export" in status) || !status.export) {
           sendJson(response, 409, { error: "run export is not ready" });
           return;
@@ -143,13 +154,13 @@ export async function startApi(
         return;
       }
       if (runMatch?.[1] && request.method === "GET" && !runMatch[2]) {
-        const handle = client.workflow.getHandle(runMatch[1]);
-        const status = await queryStatus(handle);
+        const status = await runStatus(runMatch[1]);
         sendJson(response, 200, status);
         return;
       }
       if (runMatch?.[1] && request.method === "POST" && runMatch[2] === "cancel") {
-        await client.workflow.getHandle(runMatch[1]).cancel();
+        if (batches) await batches.cancel(runMatch[1]);
+        else await client.workflow.getHandle(runMatch[1]).cancel();
         sendJson(response, 202, { runId: runMatch[1], cancellationRequested: true });
         return;
       }
@@ -166,6 +177,8 @@ export async function startApi(
           });
           if (runs.length >= 1_000) break;
         }
+        for (const batch of (await batches?.list()) ?? [])
+          runs.push({ runId: batch.run.runId, status: batch.phase });
         const known = new Set(runs.map((run) => (run as { runId: string }).runId));
         for (const archived of await listArchivedRuns(artifacts)) {
           if (!known.has(archived.runId)) runs.push(archived);
@@ -193,6 +206,8 @@ export async function startApi(
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
+    await batches?.close();
+    await localDatabase?.close();
     await connection.close();
     await site?.database.close();
   };

@@ -57,6 +57,14 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result["project"], "selfbench-dev-test")
         self.assertNotIn("fake-model", json.dumps(result))
 
+    def test_dev_concurrency_trial_is_bounded(self):
+        for value in ("1", "4", "8"):
+            self.values["shared"]["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
+            self.assertEqual(self.validate()["environment"], "dev")
+        for value in ("0", "9", "100", "-1", "8.0", "08"):
+            self.values["shared"]["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
+            with self.assertRaises(ValueError): self.validate()
+
     def test_cross_environment_image_rejected(self):
         self.coordinates["SELFBENCH_IMAGE"] = self.coordinates["SELFBENCH_IMAGE"].replace("selfbench-dev-test", "selfbench-prod-test")
         with self.assertRaises(ValueError): self.validate()

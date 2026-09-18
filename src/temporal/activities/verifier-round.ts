@@ -50,7 +50,9 @@ export async function runVerifierRound(
   ]);
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8")));
   if (!report.green) throw new Error("Read-only verification requires green mechanical checks");
-  const material = await buildVerifierMaterial(store, task);
+  const material = await withActivityHeartbeats(`preparing verifier ${task.taskId}`, ({ signal }) =>
+    buildVerifierMaterial(store, task, signal),
+  );
   await store.put(
     `${attemptPrefix}/coupling-evidence.json`,
     Buffer.from(JSON.stringify(material.couplingEvidence)),
