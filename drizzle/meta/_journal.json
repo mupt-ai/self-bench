@@ -50,6 +50,13 @@
       "when": 1789606741939,
       "tag": "0006_scope_repo_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789684884011,
+      "tag": "0007_independent_discovery_batches",
+      "breakpoints": true
     }
   ]
 }

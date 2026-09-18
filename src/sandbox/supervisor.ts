@@ -49,6 +49,7 @@ export async function superviseMailbox(
   options: SuperviseOptions,
 ): Promise<SupervisionSummary> {
   const seen = new Set<string>();
+  const responses = new Map<string, MailboxResponse>();
   const sleep = options.sleep ?? abortableSleep;
   const interval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   let handled = 0;
@@ -63,18 +64,21 @@ export async function superviseMailbox(
         if (seen.has(id) || exited.aborted) {
           continue;
         }
-        seen.add(id);
-        const bytes = await sandbox.readFile(`${MAILBOX_REQUESTS}/${id}.json`);
-        if (exited.aborted) return { handled, stoppedBy: "exited" };
-        if (!bytes) {
-          continue;
+        let response = responses.get(id);
+        if (!response) {
+          const bytes = await sandbox.readFile(`${MAILBOX_REQUESTS}/${id}.json`);
+          if (exited.aborted) return { handled, stoppedBy: "exited" };
+          if (!bytes) continue;
+          handling = true;
+          response = await respond(id, bytes, options);
+          handling = false;
+          responses.set(id, response);
         }
-        handling = true;
-        const response = await respond(id, bytes, options);
-        handling = false;
         if (exited.aborted) return { handled, stoppedBy: "exited" };
-        handled += 1;
         await writeResponse(sandbox, response, exited);
+        seen.add(id);
+        responses.delete(id);
+        handled += 1;
       }
       if (exited.aborted) return { handled, stoppedBy: "exited" };
       done = (await sandbox.readFile(MAILBOX_DONE)) !== undefined;

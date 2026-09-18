@@ -33,7 +33,11 @@ export interface ExportManifest {
   readonly droppedDuplicates: readonly DroppedDuplicate[];
 }
 
-export async function buildExport(store: ArtifactStore, input: ExportInput): Promise<ArtifactRef> {
+export async function buildExport(
+  store: ArtifactStore,
+  input: ExportInput,
+  attempt: string | number = Context.current().info.attempt,
+): Promise<ArtifactRef> {
   return await withTemporaryDirectory("selfbench-export-", async (root) => {
     const tasksRoot = join(root, "tasks");
     await mkdir(tasksRoot, { recursive: true });
@@ -62,7 +66,7 @@ export async function buildExport(store: ArtifactStore, input: ExportInput): Pro
     const archive = join(root, "export.tar.gz");
     await runCommand("tar", ["-czf", archive, "-C", root, "manifest.json", "tasks"]);
     return await store.putFile(
-      `runs/${input.run.runId}/export/attempt-${Context.current().info.attempt}/selfbench-${input.run.runId}.tar.gz`,
+      `runs/${input.run.runId}/export/attempt-${attempt}/selfbench-${input.run.runId}.tar.gz`,
       archive,
       "application/gzip",
     );

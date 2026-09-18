@@ -20,6 +20,7 @@ const labels: Record<BatchStatus["phase"], string> = {
   blocked: "Blocked",
   failed: "Failed",
   cancelled: "Cancelled",
+  cancelling: "Cancelling",
 };
 export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
   return (
@@ -46,6 +47,8 @@ export function batchMessage(status: BatchStatus) {
       return "Discovery ended before finding enough candidates. This batch has stopped.";
     case "failed":
       return "This batch stopped before completing.";
+    case "cancelling":
+      return "Waiting for this batch’s independent workflows to stop.";
     case "cancelled":
       return "This batch was cancelled. Any generated tasks remain in the dataset.";
     case "complete":

@@ -213,3 +213,54 @@ describe("mailbox supervisor", () => {
     expect(errors).toHaveLength(2);
   });
 });
+
+for (const failure of ["missing", "read", "write", "move"] as const)
+  test(`mailbox retries transient ${failure} without dropping requests or rerunning verification`, async () => {
+    const sandbox = new FakeSandbox();
+    sandbox.request("retry", { kind: "task", definition: {}, testPatch: "x", goldPatch: "y" });
+    let failed = false,
+      calls = 0,
+      polls = 0;
+    const flaky: LiveSandbox = {
+      sandboxId: "flaky",
+      execute: async (command) => {
+        if (failure === "move" && !failed && command[2]?.startsWith("mv")) {
+          failed = true;
+          return { exitCode: 1, stdout: "", stderr: "transient" };
+        }
+        return sandbox.execute(command);
+      },
+      readFile: async (path) => {
+        if (path.includes("/requests/") && !failed && ["missing", "read"].includes(failure)) {
+          failed = true;
+          if (failure === "read") throw Error("transient");
+          return undefined;
+        }
+        return sandbox.readFile(path);
+      },
+      writeFile: async (path, contents) => {
+        if (failure === "write" && !failed) {
+          failed = true;
+          throw Error("transient");
+        }
+        return sandbox.writeFile(path, contents);
+      },
+    };
+    const result = await superviseMailbox(flaky, new AbortController().signal, {
+      sleep: immediate,
+      pollIntervalMs: 1,
+      handle: async (request) => {
+        calls++;
+        return { id: request.id, kind: "report", green: true, summary: "ok", rendered: "ok" };
+      },
+      onPoll: () => {
+        polls++;
+        if (polls > 10) throw Error("request stranded");
+        if (sandbox.response("retry")) sandbox.files.set(MAILBOX_DONE, "");
+      },
+    });
+    expect(result.handled).toBe(1);
+    expect(calls).toBe(1);
+    expect(failed).toBe(true);
+    expect(sandbox.response("retry")?.green).toBe(true);
+  });

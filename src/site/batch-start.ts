@@ -17,7 +17,7 @@ export const batchSubmissionSchema = z
   })
   .strict();
 
-export type BatchStarter = (input: RunRequest) => Promise<void>;
+export type BatchStarter = (input: RunRequest, githubToken: string) => Promise<void>;
 
 /** Resolve an immutable repository revision; workers collect merged-PR provenance, not the browser. */
 export async function prepareBatch(options: {

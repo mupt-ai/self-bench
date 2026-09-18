@@ -6,6 +6,7 @@ import { taskTitle } from "../task/task-title";
 import { EmptyState, SectionHeader } from "../ui";
 
 const taskLabels = {
+  queued: "Queued",
   authoring: "Authoring",
   verifying: "Verifying",
   reviewing: "Reviewing",
