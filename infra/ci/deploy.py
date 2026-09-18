@@ -58,7 +58,10 @@ def settings(env):
         raise ValueError('Configure exact shared/api/worker Secret Manager versions before deploying')
     origin = env.get('SELFBENCH_PUBLIC_URL','')
     if not re.fullmatch(r'https://[a-zA-Z0-9.-]+(?::[0-9]+)?',origin): raise ValueError('Configure public HTTPS origin')
-    return versions, origin
+    concurrency = env.get('SELFBENCH_ACTIVITY_CONCURRENCY', '')
+    if not re.fullmatch(r'[1-8]', concurrency):
+        raise ValueError('Configure activity concurrency as an integer from 1 to 8')
+    return versions, origin, concurrency
 
 
 def preflight(env):
@@ -72,7 +75,7 @@ def main():
     os.umask(0o077)
     ctx, inputs = contracts.context(os.environ)
     if ctx["infrastructure_only"]: raise ValueError("App deployment is forbidden in infrastructure-only mode")
-    versions, origin = settings(os.environ)
+    versions, origin, concurrency = settings(os.environ)
     with tempfile.TemporaryDirectory(prefix='selfbench-deploy-') as directory:
         runner = Runner(ctx,Path(directory))
         try:
@@ -96,7 +99,8 @@ def main():
                 runner.run(['gcloud','sql','backups','create','--instance='+instance,'--project='+ctx['project'],'--quiet'])
             request={'project':ctx['project'],'environment':ctx['environment'],'sha':ctx['source_sha'],
                      'release_id':ctx['source_sha']+'-'+ctx['run_id']+'-'+ctx['run_attempt'],
-                     'image':image_ref,'registry':registry,'secret_versions':versions}
+                     'image':image_ref,'registry':registry,'secret_versions':versions,
+                     'activity_concurrency':concurrency}
             folder=Path(directory)/'runtime'; folder.mkdir()
             for name in ('deploy-host.py','deploy-check.mjs','compose.yaml','check_release.py'):
                 (folder/name).write_bytes((Path('infra/runtime')/name).read_bytes())

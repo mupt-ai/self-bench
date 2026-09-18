@@ -11,7 +11,17 @@ class DeployTests(unittest.TestCase):
         for value in ('{}', '{"shared":"latest","api":1,"worker":2}'):
             with self.assertRaises(ValueError): deploy.settings({'RUNTIME_SECRET_VERSIONS':value,'SELFBENCH_PUBLIC_URL':'https://example.com'})
         self.assertEqual(deploy.settings({'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
-                                         'SELFBENCH_PUBLIC_URL':'https://example.com'})[0]['worker'],3)
+                                         'SELFBENCH_PUBLIC_URL':'https://example.com',
+                                         'SELFBENCH_ACTIVITY_CONCURRENCY':'8'})[0]['worker'],3)
+
+    def test_runtime_concurrency_required_and_bounded_before_cloud_auth(self):
+        env={**context_env(),'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
+             'SELFBENCH_PUBLIC_URL':'https://example.com'}
+        for value in ('', '0', '9', '-1', '8.0', '08'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})
+        for value in ('1','4','8'):
+            self.assertEqual(deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})[2],value)
 
     def test_prerelease_or_draft_cannot_deploy_prod(self):
         base={**context_env(),'TF_ENVIRONMENT':'prod','GITHUB_EVENT_NAME':'release','GITHUB_REF':'refs/tags/v1',

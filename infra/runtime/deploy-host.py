@@ -27,6 +27,9 @@ def main():
     os.umask(0o077)
     config = json.loads(Path(sys.argv[1]).read_text())
     project, env, sha = config['project'], config['environment'], config['sha']
+    concurrency = config.get('activity_concurrency', '')
+    if not isinstance(concurrency, str) or not re.fullmatch(r'[1-8]', concurrency):
+        raise ValueError('Activity concurrency must be an integer from 1 to 8')
     if not re.fullmatch('[0-9a-f]{40}', sha) or env not in ('dev', 'prod'): raise ValueError('Invalid release identity')
     if metadata('project/project-id').decode() != project: raise ValueError('Wrong VM project')
     if not re.fullmatch(r'[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*',config['release_id']): raise ValueError('Invalid release directory')
@@ -51,7 +54,8 @@ def main():
     with tempfile.TemporaryDirectory() as authdir:
         os.environ['DOCKER_CONFIG'] = authdir
         run(['docker','login','--username','oauth2accesstoken','--password-stdin',config['registry']], input=token.encode(), stdout=subprocess.DEVNULL)
-        values = {'SELFBENCH_ENVIRONMENT':env,'SELFBENCH_IMAGE':config['image']}
+        values = {'SELFBENCH_ENVIRONMENT':env,'SELFBENCH_IMAGE':config['image'],
+                  'SELFBENCH_ACTIVITY_CONCURRENCY':concurrency}
         values.update({f'SELFBENCH_{role.upper()}_ENV_FILE':str(release/f'{role}.env') for role in ('shared','api','worker')})
         release_env = release/'release.env'; release_env.write_text(''.join(f'{k}={v}\n' for k,v in values.items()))
         run(['python3',str(release/'check_release.py'),'--environment',env,'--project',project,'--release-env',str(release_env)])

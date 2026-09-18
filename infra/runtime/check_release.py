@@ -37,7 +37,7 @@ def validate(environment, project, release_path):
         raise ValueError("Project must belong to the requested SelfBench environment.")
     release = read_env(release_path)
     release_keys = {"SELFBENCH_ENVIRONMENT", "SELFBENCH_IMAGE", "SELFBENCH_SHARED_ENV_FILE",
-                    "SELFBENCH_API_ENV_FILE", "SELFBENCH_WORKER_ENV_FILE"}
+                    "SELFBENCH_API_ENV_FILE", "SELFBENCH_WORKER_ENV_FILE", "SELFBENCH_ACTIVITY_CONCURRENCY"}
     if set(release) != release_keys or release["SELFBENCH_ENVIRONMENT"] != environment:
         raise ValueError("Release coordinate keys/environment do not match.")
     match = re.fullmatch(
@@ -58,8 +58,9 @@ def validate(environment, project, release_path):
         "SELFBENCH_EXECUTION_BACKEND": "modal", "SELFBENCH_HARBOR_ENVIRONMENT": "modal",
     }
     required_shared = set(expected) | {"SELFBENCH_DATABASE_URL", "SELFBENCH_EVAL_CREDENTIAL_KEY",
-        "SELFBENCH_TEMPORAL_ADDRESS", "SELFBENCH_TEMPORAL_NAMESPACE", "SELFBENCH_TEMPORAL_API_KEY",
-        "SELFBENCH_ACTIVITY_CONCURRENCY"}
+        "SELFBENCH_TEMPORAL_ADDRESS", "SELFBENCH_TEMPORAL_NAMESPACE", "SELFBENCH_TEMPORAL_API_KEY"}
+    # Historical secret versions may contain this nonsecret setting. Compose overrides it.
+    shared.pop("SELFBENCH_ACTIVITY_CONCURRENCY", None)
     required_api = {"SELFBENCH_API_TOKEN", "GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET",
                     "SELFBENCH_SESSION_SECRET", "SELFBENCH_PUBLIC_URL"}
     # Model and sandbox credentials are selected per user and loaded from the
@@ -78,10 +79,9 @@ def validate(environment, project, release_path):
     if (not re.fullmatch(rf"selfbench-{environment}(?:\.[a-z0-9-]+)?", shared["SELFBENCH_TEMPORAL_NAMESPACE"])
             or not shared["SELFBENCH_TEMPORAL_ADDRESS"].endswith(":7233")):
         raise ValueError("Choose this environment's Temporal namespace and gRPC endpoint on port 7233.")
-    concurrency = shared["SELFBENCH_ACTIVITY_CONCURRENCY"]
-    # Dev may trial the measured sandbox-preparation ceiling. Prod remains unchanged.
-    if not re.fullmatch(r"[1-8]" if environment == "dev" else r"1", concurrency):
-        raise ValueError("Activity concurrency must be 1-8 on dev and 1 on production.")
+    concurrency = release["SELFBENCH_ACTIVITY_CONCURRENCY"]
+    if not re.fullmatch(r"[1-8]", concurrency):
+        raise ValueError("Activity concurrency must be an integer from 1 to 8.")
     origin = urlsplit(api["SELFBENCH_PUBLIC_URL"])
     if (origin.scheme != "https" or not origin.hostname or origin.username or origin.password
             or origin.path not in ("", "/") or origin.query or origin.fragment):

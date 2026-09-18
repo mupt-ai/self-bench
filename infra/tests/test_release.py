@@ -28,14 +28,14 @@ class ReleaseTests(unittest.TestCase):
                 "SELFBENCH_GENERATION_TASK_QUEUE": "selfbench-dev",
                 "SELFBENCH_EXECUTION_BACKEND": "modal", "SELFBENCH_HARBOR_ENVIRONMENT": "modal",
                 "SELFBENCH_DATABASE_URL": "postgres://test:fake@db.test/selfbench?sslmode=require",
-                "SELFBENCH_EVAL_CREDENTIAL_KEY": "a" * 64, "SELFBENCH_ACTIVITY_CONCURRENCY": "1",
+                "SELFBENCH_EVAL_CREDENTIAL_KEY": "a" * 64,
             },
             "api": {"SELFBENCH_API_TOKEN": "a" * 40, "GITHUB_OAUTH_CLIENT_ID": "fake-client",
                     "GITHUB_OAUTH_CLIENT_SECRET": "fake-client-secret", "SELFBENCH_SESSION_SECRET": "b" * 40,
                     "SELFBENCH_PUBLIC_URL": "https://dev.example.com"},
             "worker": {"SELFBENCH_API_TOKEN": "c" * 40},
         }
-        self.coordinates = {"SELFBENCH_ENVIRONMENT": "dev",
+        self.coordinates = {"SELFBENCH_ENVIRONMENT": "dev", "SELFBENCH_ACTIVITY_CONCURRENCY": "8",
                             "SELFBENCH_IMAGE": "us-central1-docker.pkg.dev/selfbench-dev-test/selfbench/selfbench@sha256:" + "a" * 64}
         for role in self.values:
             self.coordinates[f"SELFBENCH_{role.upper()}_ENV_FILE"] = str(self.directory / f"{role}.env")
@@ -57,13 +57,30 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result["project"], "selfbench-dev-test")
         self.assertNotIn("fake-model", json.dumps(result))
 
-    def test_dev_concurrency_trial_is_bounded(self):
+    def test_release_concurrency_is_bounded(self):
         for value in ("1", "4", "8"):
-            self.values["shared"]["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
+            self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
             self.assertEqual(self.validate()["environment"], "dev")
         for value in ("0", "9", "100", "-1", "8.0", "08"):
-            self.values["shared"]["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
+            self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
             with self.assertRaises(ValueError): self.validate()
+
+    def test_production_accepts_eight_without_secret_concurrency(self):
+        self.coordinates = {key:value.replace('selfbench-dev', 'selfbench-prod')
+                            for key,value in self.coordinates.items()}
+        self.coordinates['SELFBENCH_ENVIRONMENT'] = 'prod'
+        self.values['shared'] = {key:value.replace('selfbench-dev', 'selfbench-prod')
+                                 for key,value in self.values['shared'].items()}
+        self.write()
+        self.assertEqual(release.validate('prod','selfbench-prod-test',self.release_path)['environment'],'prod')
+        self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY'] = '9'
+        self.write()
+        with self.assertRaises(ValueError):release.validate('prod','selfbench-prod-test',self.release_path)
+
+    def test_missing_runtime_setting_cannot_fall_back_to_legacy_secret(self):
+        self.values['shared']['SELFBENCH_ACTIVITY_CONCURRENCY'] = '1'
+        del self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY']
+        with self.assertRaises(ValueError):self.validate()
 
     def test_cross_environment_image_rejected(self):
         self.coordinates["SELFBENCH_IMAGE"] = self.coordinates["SELFBENCH_IMAGE"].replace("selfbench-dev-test", "selfbench-prod-test")
@@ -130,6 +147,9 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate()
 
     def test_compose_shape_and_literal_secret_values(self):
+        # Existing pinned secret versions must not silently override new runtime configuration.
+        self.values['shared']['SELFBENCH_ACTIVITY_CONCURRENCY'] = '1'
+        self.validate()
         result = subprocess.run(["docker", "compose", "--env-file", str(self.release_path),
                                  "-f", str(ROOT / "runtime/compose.yaml"), "config", "--format=json"],
                                 check=True, capture_output=True, text=True,
@@ -138,6 +158,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(set(config["services"]), {"api", "worker"})
         api, worker = config["services"]["api"], config["services"]["worker"]
         self.assertEqual(api["image"], worker["image"])
+        self.assertEqual(worker["environment"]["SELFBENCH_ACTIVITY_CONCURRENCY"], "8")
         # Compose escapes dollars in its serialized output so round-tripping is safe.
         self.assertNotIn("OPENAI_API_KEY", worker["environment"])
         self.assertNotIn("MODAL_TOKEN_ID", worker["environment"])

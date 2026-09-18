@@ -30,7 +30,8 @@ application rollout, rather than between plan and apply.
    An operator must review and update these existing objects explicitly.
 2. Configure the `prod` GitHub environment branch rules to allow release tags; retain required apply review.
    The source ancestry check is mandatory because tag policy alone does not establish trusted code.
-3. Configure `RUNTIME_SECRET_VERSIONS` (JSON shared/api/worker numeric versions) and
+3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-8) as an ordinary GitHub environment
+   variable in `dev` and `prod`. Then configure `RUNTIME_SECRET_VERSIONS` (JSON shared/api/worker numeric versions) and
    `SELFBENCH_PUBLIC_URL` in `dev` and `prod`. Populate secrets, DB login, Temporal namespace,
    provider credentials, GitHub OAuth and a host TLS proxy. Bootstrap creates empty secret containers,
    not these values. The current runtime preflight supports the documented Modal generation pairing.
@@ -115,3 +116,17 @@ it to `prod` and remove `prod-plan`. Preserve the repository's immutable OIDC su
 `gh api repos/OWNER/REPO/actions/oidc/customization/sub`); numeric IDs in that prefix are intentional.
 Set optional `"immutable_subject": true` in the authentication/Terraform bootstrap JSON when
 that API reports `use_immutable_subject: true`; omit it for legacy name-only subjects.
+
+### Worker Concurrency
+
+`SELFBENCH_ACTIVITY_CONCURRENCY` is ordinary configuration, not a secret. Set it on the GitHub
+`dev` or `prod` environment; the full deployment preflight rejects missing or out-of-range values
+before cloud authentication. The deployment records it in its request and nonsecret `release.env`.
+Compose explicitly supplies that value to the worker, overriding the legacy entry if it still
+exists in an older shared-secret version. New shared-secret payloads should omit it.
+
+For example, `gh variable set SELFBENCH_ACTIVITY_CONCURRENCY --repo OWNER/REPO --env prod --body 8`
+configures eight concurrent worker activities for the next deployment. No secret version change
+is needed. This is a per-worker activity limit, shared by discovery, authoring, and evaluation;
+it is not a live setting. The worker must be recreated through deployment to take effect, and the
+existing idle-workflow check continues to protect active work.
