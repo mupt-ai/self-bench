@@ -1,15 +1,55 @@
 """Shared deploy stage: image -> DB backup -> VM migration/rollout -> HTTPS verification."""
+from contextlib import contextmanager
+import time
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import tempfile
 import urllib.error
 import urllib.request
 
 from infra.ci import contracts
 from infra.ci.terraform import Runner
+
+
+@contextmanager
+def stage(name):
+    """Publish only fixed stage names and durations, never command output or secrets."""
+    started = time.monotonic()
+    print(f"Starting {name}", flush=True)
+    outcome = "failed"
+    try:
+        yield
+        outcome = "passed"
+    finally:
+        elapsed = time.monotonic() - started
+        print(f"{name}: {outcome} ({elapsed:.1f}s)", flush=True)
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+            summary.write(f"\n- {name}: {outcome} ({elapsed:.1f}s)\n")
+
+
+def build_image(runner, tag, source_sha):
+    # Restored/saved by Actions; release registry tags remain immutable.
+    cache = '/tmp/selfbench-build-cache'
+    runner.run(['docker', 'buildx', 'create', '--name', 'selfbench-ci',
+                '--driver', 'docker-container', '--use'])
+    with runner.log.open('ab') as log:
+        with stage('Build Image'):
+            runner.run(['docker', 'buildx', 'build', '--builder', 'selfbench-ci',
+                        '--platform', 'linux/amd64', '--load',
+                        '--cache-from', 'type=local,src=' + cache,
+                        '--cache-to', 'type=local,dest=' + cache + '-next,mode=max',
+                        '--build-arg', 'SELFBENCH_BUILD_COMMIT=' + source_sha,
+                        '-t', tag, '.'], stdout=log)
+        # Replace the old store instead of accumulating unreachable blobs each run.
+        if Path(cache + '-next/index.json').is_file():
+            shutil.rmtree(cache, ignore_errors=True)
+            Path(cache + '-next').rename(cache)
+        with stage('Push Image'):
+            runner.run(['docker', 'push', tag], stdout=log)
 
 
 def settings(env):
@@ -43,9 +83,7 @@ def main():
             registry = output['image_prefix'].split('/')[0]
             runner.run(['gcloud','auth','configure-docker',registry,'--quiet'])
             tag = output['image_prefix']+':'+ctx['source_sha']+'-'+ctx['run_id']+'-'+ctx['run_attempt']
-            with runner.log.open('ab') as log:
-                runner.run(['docker','build','--platform','linux/amd64','--build-arg','SELFBENCH_BUILD_COMMIT='+ctx['source_sha'],'-t',tag,'.'],stdout=log)
-                runner.run(['docker','push',tag],stdout=log)
+            build_image(runner, tag, ctx['source_sha'])
             inspect = json.loads(runner.run(['docker','image','inspect',tag]))
             digest = next((ref.rsplit('@',1)[-1] for ref in inspect[0].get('RepoDigests') or [] if ref.startswith(output['image_prefix']+'@')), '')
             if not re.fullmatch('sha256:[0-9a-f]{64}',digest): raise ValueError('Registry digest not confirmed')
@@ -54,7 +92,8 @@ def main():
             if not database: raise ValueError('External DB requires a reviewed backup adapter')
             instance=database['instance'].split(':')[-1]
             # Synchronous provider backup before any schema changes. Failure blocks rollout.
-            runner.run(['gcloud','sql','backups','create','--instance='+instance,'--project='+ctx['project'],'--quiet'])
+            with stage('Back Up Database'):
+                runner.run(['gcloud','sql','backups','create','--instance='+instance,'--project='+ctx['project'],'--quiet'])
             request={'project':ctx['project'],'environment':ctx['environment'],'sha':ctx['source_sha'],
                      'release_id':ctx['source_sha']+'-'+ctx['run_id']+'-'+ctx['run_attempt'],
                      'image':image_ref,'registry':registry,'secret_versions':versions}
@@ -74,7 +113,8 @@ def main():
                   f'sudo chown -R root:root {shlex.quote(dest)} && '
                   f'sudo chmod -R go-rwx {shlex.quote(dest)} && '
                   'sudo bash -c '+shlex.quote(f'cd {dest} && python3 deploy-host.py request.json > deploy.log 2>&1'))
-            runner.run(['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
+            with stage('Migrate and Roll Out'):
+                runner.run(['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
             with urllib.request.urlopen(origin+'/healthz',timeout=30) as response:
                 if response.status != 200: raise ValueError('Public health check failed')
             try:

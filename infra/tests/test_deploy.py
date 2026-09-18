@@ -106,3 +106,55 @@ class DeployTests(unittest.TestCase):
         self.assertIn('if: needs.plan.outputs.has_changes',shared)
         self.assertIn('Infrastructure Bootstrap Complete',shared)
         self.assertNotIn('infrastructure_only',(root/'deploy-prod.yml').read_text())
+
+
+class BuildTimingTests(unittest.TestCase):
+    def test_local_cache_keeps_release_registry_immutable_and_image_pushed(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            runner = Mock(log=Path(directory)/'build.log')
+            summary = Path(directory)/'summary.md'
+            with patch.dict('os.environ', {'GITHUB_STEP_SUMMARY': str(summary)}):
+                deploy.build_image(runner, 'registry/project/app:release', 'a'*40)
+            build = runner.run.call_args_list[1].args[0]
+            self.assertIn('--load', build)
+            self.assertIn('type=local,src=/tmp/selfbench-build-cache', build)
+            self.assertIn('type=local,dest=/tmp/selfbench-build-cache-next,mode=max', build)
+            self.assertEqual(runner.run.call_args_list[2].args[0], ['docker', 'push', 'registry/project/app:release'])
+            self.assertIn('Build Image: passed', summary.read_text())
+            self.assertIn('Push Image: passed', summary.read_text())
+
+    def test_failed_build_is_reported_without_pushing_or_leaking_error(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            runner = Mock(log=Path(directory)/'build.log')
+            runner.run.side_effect = [None, RuntimeError('private diagnostic')]
+            summary = Path(directory)/'summary.md'
+            with patch.dict('os.environ', {'GITHUB_STEP_SUMMARY': str(summary)}):
+                with self.assertRaises(RuntimeError):
+                    deploy.build_image(runner, 'registry/project/app:release', 'a'*40)
+            self.assertEqual(runner.run.call_count, 2)
+            self.assertIn('Build Image: failed', summary.read_text())
+            self.assertNotIn('private diagnostic', summary.read_text())
+
+    def test_commit_metadata_does_not_invalidate_dependency_layer(self):
+        dockerfile = (Path(__file__).parents[2]/'Dockerfile').read_text()
+        self.assertLess(dockerfile.index('RUN bun install --frozen-lockfile'),
+                        dockerfile.index('ARG SELFBENCH_BUILD_COMMIT'))
+
+    def test_workflow_cache_excludes_runtime_state_and_is_environment_scoped(self):
+        workflow = (Path(__file__).parents[2]/'.github/workflows/deploy-reusable.yml').read_text()
+        cache = workflow.split('      - name: Restore Docker Build Cache')[1].split('      - name: Build,')[0]
+        self.assertIn('path: /tmp/selfbench-build-cache', cache)
+        self.assertIn('inputs.target_environment', cache)
+        self.assertIn('github.run_attempt', cache)
+        self.assertIn('!inputs.infrastructure_only', cache)
+        self.assertNotIn('terraform-data', cache)
+
+    def test_ci_preserves_checks_without_duplicate_package_verification(self):
+        workflow = (Path(__file__).parents[2]/'.github/workflows/ci.yml').read_text()
+        for command in ('check', 'test', 'build', 'verify:package:docker'):
+            self.assertIn('bun run ' + command, workflow)
+        self.assertNotIn('bun run validate', workflow)

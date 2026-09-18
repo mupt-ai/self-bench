@@ -41,13 +41,15 @@ export class VercelSandboxExecutor implements SandboxExecutor {
   readonly #config: VercelExecutionConfig;
   readonly #fetch: typeof globalThis.fetch;
   readonly #sleep: Sleep;
-  readonly #live = new LiveSandboxRegistry();
+  readonly #live: LiveSandboxRegistry;
 
   constructor(
     config: VercelExecutionConfig,
     fetch = globalThis.fetch,
     sleep: Sleep = abortableDelay,
+    live = new LiveSandboxRegistry(),
   ) {
+    this.#live = live;
     this.#config = validateConfig(config);
     this.#fetch = preventAmbiguousVercelCommandStartRetries(fetch);
     this.#sleep = sleep;
