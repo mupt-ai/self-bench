@@ -37,42 +37,43 @@ export function RepositoryList({
         {repos.map((repo) => {
           const values = stats[repo.fullName];
           return (
-            <li
-              key={repo.fullName}
-              className={`${columns} items-center px-4 py-4 transition-colors hover:bg-muted/40`}
-            >
-              <div className="min-w-0">
-                <Link
-                  className="inline-flex max-w-full items-center gap-2 font-medium text-foreground hover:text-brand"
-                  to={`/repos/${repo.fullName}`}
-                >
-                  <FolderGit2
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
+            <li key={repo.fullName} className="relative">
+              <Link
+                aria-label={`Open ${repo.fullName}`}
+                className={`${columns} items-center px-4 py-4 pr-14 transition-colors hover:bg-muted/40 md:pr-4`}
+                to={`/repos/${repo.fullName}`}
+              >
+                <div className="min-w-0 pr-10 md:pr-0">
+                  <span className="inline-flex max-w-full items-center gap-2 font-medium text-foreground hover:text-brand">
+                    <FolderGit2
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{repo.fullName}</span>
+                  </span>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {repo.defaultBranch} · {repo.private ? "Private" : "Public"} · connected{" "}
+                    {formatAgo(repo.connectedAt)}
+                  </p>
+                </div>
+                <div className="col-span-2 grid grid-cols-3 gap-4 text-sm tabular-nums md:contents">
+                  <Stat label="Tasks" value={values?.tasks} />
+                  <Stat
+                    label="Needs Review"
+                    value={values?.needsReview}
+                    attention={!!values?.needsReview}
                   />
-                  <span className="truncate">{repo.fullName}</span>
-                </Link>
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {repo.defaultBranch} · {repo.private ? "Private" : "Public"} · connected{" "}
-                  {formatAgo(repo.connectedAt)}
-                </p>
-              </div>
-              <div className="col-span-2 grid grid-cols-3 gap-4 text-sm tabular-nums md:contents">
-                <Stat label="Tasks" value={values?.tasks} />
-                <Stat
-                  label="Needs Review"
-                  value={values?.needsReview}
-                  attention={!!values?.needsReview}
-                />
-                <Stat
-                  label="Last PR"
-                  value={values ? (values.lastPr ? `#${values.lastPr}` : "—") : undefined}
-                />
-              </div>
+                  <Stat
+                    label="Last PR"
+                    value={values ? (values.lastPr ? `#${values.lastPr}` : "—") : undefined}
+                  />
+                </div>
+                <span aria-hidden="true" className="hidden md:block" />
+              </Link>
               <Button
                 size="icon"
                 variant="ghost"
-                className="col-start-2 row-start-1 text-muted-foreground hover:text-destructive md:col-start-5"
+                className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-destructive md:top-1/2 md:-translate-y-1/2"
                 aria-label={`Disconnect ${repo.fullName}`}
                 title="Disconnect"
                 onClick={() => onDisconnect(repo)}

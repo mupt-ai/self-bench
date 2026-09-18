@@ -42,10 +42,26 @@ test("destructive fill and foreground are defined separately from red text", () 
 test("repository action track accommodates the compact icon button", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter>
-      <RepositoryList repos={[]} stats={{}} onDisconnect={() => {}} />
+      <RepositoryList
+        repos={[
+          {
+            fullName: "example/repo",
+            defaultBranch: "main",
+            private: false,
+            continuous: false,
+            connectedBy: "example",
+            connectedAt: "2026-09-18T00:00:00.000Z",
+          },
+        ]}
+        stats={{}}
+        onDisconnect={() => {}}
+      />
     </MemoryRouter>,
   );
   expect(html).toContain("md:grid-cols-[minmax(0,1fr)_5rem_8rem_5rem_2.5rem]");
+  expect(html).toContain('href="/repos/example/repo"');
+  expect(html).toContain("px-4 py-4 pr-14");
+  expect(html).toContain('aria-label="Open example/repo"');
   const icon = renderToStaticMarkup(<Button size="icon" aria-label="Disconnect" />);
   expect(icon).toContain("h-9 w-9");
 });
