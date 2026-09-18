@@ -43,7 +43,9 @@ def execute(config, inputs, reviewer_ids):
     for phase in ("plan", "apply"):
         name = terraform_ci.github_environment(config, phase)
         endpoint = f"repos/{repo}/environments/{name}"
-        required = reviewer_ids if config["environment"] == "prod" and phase == "apply" else []
+        # Plan and apply share one environment, so production approval and configuration have one
+        # source of truth while the GCP identities remain phase-specific.
+        required = reviewer_ids if config["environment"] == "prod" else []
         if name not in names:
             api(endpoint, "PUT", {"deployment_branch_policy": branch_policy, "wait_timer": 0,
                                   "prevent_self_review": False,
@@ -100,7 +102,7 @@ def main():
     else:
         print(json.dumps({"dry_run": True, "environments": {
             phase: {"environment": terraform_ci.github_environment(config, phase), "variables": variables(config, inputs, phase),
-                                               "reviewers": args.reviewer_id if config["environment"] == "prod" and phase == "apply" else []}
+                    "reviewers": args.reviewer_id if config["environment"] == "prod" else []}
             for phase in ("plan", "apply")}}, indent=2))
 
 

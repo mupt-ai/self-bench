@@ -106,6 +106,15 @@ class BootstrapPolicyTests(unittest.TestCase):
         self.assertEqual(plan['environment'], 'dev')
         self.assertEqual(apply['environment'], 'dev')
 
+    def test_prod_phases_share_environment_and_preserve_immutable_subject(self):
+        self.config.update(environment="prod", immutable_subject=True)
+        bootstrap.validate_config(self.config)
+        for phase in ("plan", "apply"):
+            identity = bootstrap.identity(self.config, phase)
+            self.assertEqual(identity["environment"], "prod")
+            self.assertTrue(identity["immutable_subject"])
+            self.assertIn(":environment:prod'", github_auth.condition(identity, ("release",)))
+
     def test_trust_events_exclude_prs_and_prod_push(self):
         self.assertEqual(bootstrap.events(self.config), ('push', 'workflow_dispatch'))
         self.config['environment'] = 'prod'

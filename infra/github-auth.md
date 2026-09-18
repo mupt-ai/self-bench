@@ -117,3 +117,8 @@ or remove its exact workload-identity binding after reviewing the target. This d
 already issued; the auth-check workflow requests five-minute tokens. Do not delete the project, state
 bucket, unrelated environments or unrelated IAM policies to undo authentication bootstrap. Record the
 pre/post policies and preserve existing protections when making changes.
+
+For repositories using immutable OIDC subjects, set optional `"immutable_subject": true` in
+the bootstrap config. Verify the format with
+`gh api repos/OWNER/REPO/actions/oidc/customization/sub`; `use_immutable_subject: true` means
+the subject includes owner and repository IDs. Omit the option for legacy name-only subjects.

@@ -18,7 +18,7 @@ ROLE_IDS = {"plan": "selfbenchTerraformPlan", "apply": "selfbenchTerraformApply"
 def github_environment(config, phase):
     if phase not in ("plan", "apply"):
         raise ValueError("Unknown deployment phase.")
-    return "prod-plan" if config["environment"] == "prod" and phase == "plan" else config["environment"]
+    return config["environment"]
 
 
 def identity(config, phase):
@@ -26,13 +26,14 @@ def identity(config, phase):
         "account", "project_id", "project_number", "repository", "repository_id", "repository_owner_id", "branch"
     )} | {"environment": github_environment(config, phase), "workflow_path": f".github/workflows/deploy-{config['environment']}.yml",
           "pool_id": f"{config['identity_prefix']}-{phase}", "provider_id": "github",
-          "service_account_id": f"{config['identity_prefix']}-{phase}"})
+          "service_account_id": f"{config['identity_prefix']}-{phase}",
+          "immutable_subject": config.get("immutable_subject", False)})
 
 
 def validate_config(config):
     expected = {"account", "project_id", "project_number", "repository", "repository_id", "repository_owner_id",
                 "branch", "environment", "identity_prefix", "state_bucket", "plan_bucket", "region"}
-    if set(config) != expected or config.get("environment") not in ("dev", "prod"):
+    if set(config) - {"immutable_subject"} != expected or config.get("environment") not in ("dev", "prod"):
         raise ValueError("Use terraform-ci.json.example and select one existing dev/prod root.")
     for field in ("state_bucket", "plan_bucket"):
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", config[field]):

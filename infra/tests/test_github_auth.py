@@ -59,6 +59,17 @@ class GitHubAuthTests(unittest.TestCase):
             self.assertIn(f"assertion.{key} == '{value}'", condition)
         self.assertNotIn(" || ", condition)
 
+    def test_immutable_subject_preserves_repository_and_environment(self):
+        self.config["immutable_subject"] = True
+        auth.validate_config(self.config)
+        subject = "repo:your-org@1234567/your-repository@12345678:environment:dev"
+        self.assertEqual(auth.claims(self.config)["sub"], subject)
+        for events in (("workflow_dispatch",), ("release",)):
+            self.assertIn(f"assertion.sub == '{subject}'", auth.condition(self.config, events))
+        self.config["immutable_subject"] = "true"
+        with self.assertRaises(ValueError):
+            auth.validate_config(self.config)
+
     def test_cel_injection_and_unknown_fields_rejected(self):
         for key in ("environment", "repository", "branch"):
             config = copy.deepcopy(self.config)
