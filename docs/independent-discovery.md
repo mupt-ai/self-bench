@@ -27,3 +27,7 @@ Harbor's control client still stages compiled task bundles on the worker before 
 Compiler sandboxes receive only the run's GitHub credential, not model credentials. Other preparation sandboxes receive no workload credentials. Export preserves the exact accepted bundle bytes instead of regenerating tests after verification.
 
 Cancellation before dispatch reserves a no-op Temporal execution under the intended ID. Reject-duplicate start policy prevents a delayed paid start from winning after that reservation; if the real start won first, normal cancellation waits for it to settle.
+
+## Concurrency Trial
+
+The next dev trial is 8 activity slots, after deploying this sandbox-preparation build. Production remains at 1; local Docker defaults remain conservative. A local eight-way compiler/material test completed all jobs in 7.7 seconds with 133 MiB coordinator RSS. This is preparation-path evidence, not a cloud capacity guarantee or an eight-way agent benchmark. An author activity can keep an author sandbox plus a preparation or Harbor sandbox alive concurrently, so reserve provider capacity above the activity limit and measure model throttling, Harbor-client memory, and artifact traffic. Runtime dev configuration must be updated separately after rollout; this PR does not mutate cloud secrets or running workers.
