@@ -33,6 +33,9 @@ services:
   worker:
     <<: *app
     command: [node, dist/temporal/worker-main.js]
+    environment:
+      # Ordinary release configuration overrides any legacy value in shared secrets.
+      SELFBENCH_ACTIVITY_CONCURRENCY: ${SELFBENCH_ACTIVITY_CONCURRENCY:?Set worker activity concurrency}
     env_file:
       - path: ${SELFBENCH_SHARED_ENV_FILE:?Set protected shared env-file path}
         format: raw

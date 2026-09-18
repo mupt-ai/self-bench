@@ -26,7 +26,8 @@ All names in `*.example` are placeholders. Do not copy production secrets into d
                     +--------- Modal / E2B / Daytona ----------+
 ```
 
-The initial generation configuration is **Modal + Modal Harbor**, with concurrency one.
+The initial generation configuration is **Modal + Modal Harbor**. Worker activity concurrency is
+ordinary release configuration (`SELFBENCH_ACTIVITY_CONCURRENCY`, integer 1-8), not a secret.
 Hosted solver choices use selected saved credentials. The Dockerfile includes the pinned Harbor
 extras for Modal, E2B and Daytona. Switching generation to E2B requires a prepared template and a
 reviewed extension to the runtime preflight contract; it is not an implicit fallback.
@@ -184,7 +185,8 @@ remain live-plan/apply risks. Review whether public VM IPs are permitted in your
    owned by the deployment user with mode `0600` in a restricted directory. Never run `source` on them.
    Protect/clean any temporary copies. Production's encryption key must be backed up separately.
 6. Build/test the app on CI, publish an immutable digest to the dev registry, and prepare the nonsecret
-   `release.env`. Use the full commit SHA as an immutable tag. CI needs a separately reviewed scoped
+   `release.env`, including `SELFBENCH_ACTIVITY_CONCURRENCY`. CI reads this setting from the
+   GitHub deployment environment variable of the same name. Use the full commit SHA as an immutable tag. CI needs a separately reviewed scoped
    publisher identity; the runtime account is deliberately read-only. Cloud VMs are x86, so an ARM
    workstation build must explicitly target `linux/amd64`. No published image is supplied by this change.
 7. Install/validate Caddy on the host using `runtime/Caddyfile.example`, configure DNS, and open web

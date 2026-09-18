@@ -57,6 +57,7 @@ jobs:
       TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
       RUNTIME_SECRET_VERSIONS: ${{ vars.RUNTIME_SECRET_VERSIONS }}
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+      SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
       RELEASE_PRERELEASE: ${{ toJSON(github.event.release.prerelease) }}
       RELEASE_DRAFT: ${{ toJSON(github.event.release.draft) }}
     steps:
