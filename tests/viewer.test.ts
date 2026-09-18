@@ -280,6 +280,10 @@ describe("harbor task directories and bundles", () => {
       };
       expect(files.files.map((file) => file.path)).toContain("environment/Dockerfile");
       expect((await fetch(`${server.url}/v1/local/task?id=../x`)).status).toBe(400);
+      // The favicon is routed to the review build, which may not exist when tests run.
+      const favicon = await fetch(`${server.url}/dari-logo.svg`);
+      if (favicon.ok) expect(favicon.headers.get("content-type")).toBe("image/svg+xml");
+      else expect(await favicon.json()).toEqual({ error: "asset not found" });
     } finally {
       await server.stop();
     }
