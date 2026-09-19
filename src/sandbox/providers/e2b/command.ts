@@ -5,6 +5,8 @@ import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
 import { supervisionFailure } from "../../ownership.js";
 import { raceWithTermination } from "./lifecycle.js";
+import { readOutputThroughCommand } from "./output.js";
+import { readE2BOutput } from "./output-read.js";
 import type { E2BSandboxHandle } from "./types.js";
 
 const E2B_WORK_DIRECTORY = "/work";
@@ -187,15 +189,25 @@ async function collectOutputs(
   const outputs: Record<string, Uint8Array> = {};
   for (const path of request.outputPaths ?? []) {
     const { value, lastError } = await readOutputWithRetry(
-      () => sandbox.files.read(path, { format: "bytes", signal }),
+      () => readE2BOutput(sandbox, path, signal),
       { signal, ...(sleep ? { sleep: (ms) => sleep(ms, signal) } : {}) },
     );
     if (value !== undefined) {
       outputs[path] = value;
     } else if (exitCode === 0) {
-      throw new Error(`sandbox ${sandbox.sandboxId} exited successfully without output ${path}`, {
-        cause: lastError,
-      });
+      signal.throwIfAborted();
+      try {
+        outputs[path] = await readOutputThroughCommand(sandbox, path, signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        throw new Error(`sandbox ${sandbox.sandboxId} could not retrieve declared output ${path}`, {
+          cause: new AggregateError(
+            [lastError, error].filter((cause) => cause !== undefined),
+            "file API retries and bounded command read failed",
+            { cause: lastError },
+          ),
+        });
+      }
     }
   }
   return outputs;

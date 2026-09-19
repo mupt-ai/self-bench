@@ -11,6 +11,7 @@ import {
   verifyReportSchema,
 } from "../../contracts.js";
 import { assertEnvironmentPolicy } from "../../environment.js";
+import { SandboxExecutionError } from "../../sandbox/contracts.js";
 import { submissionPatches } from "../../sandbox/submission.js";
 import { githubToken } from "../../subscription-auth.js";
 import { isGreen, renderVerifyReport } from "../../verify-report.js";
@@ -60,6 +61,7 @@ export async function compileAndVerify(
   }
   const patches = await submissionPatches(sourceBundle, signal).catch((error: unknown) => {
     signal.throwIfAborted();
+    if (isVerificationInfrastructureFailure(error)) throw error;
     errors.push(`submission bundle is incomplete: ${message(error)}`);
     return undefined;
   });
@@ -94,7 +96,7 @@ export async function compileAndVerify(
       task = { ...input.task, taskId: definition.taskId, bundle: bundleRef };
     } catch (error) {
       signal.throwIfAborted();
-      if (error instanceof CancelledFailure || error instanceof TaskCompilerInfrastructureError) {
+      if (error instanceof CancelledFailure || isVerificationInfrastructureFailure(error)) {
         throw error;
       }
       errors.push(message(error));
@@ -125,6 +127,11 @@ export async function compileAndVerify(
   );
   signal.throwIfAborted();
   return { report, reportRef, ...(task ? { task } : {}) };
+}
+
+/** A transport/allocation failure says nothing about the quality of the submitted task. */
+export function isVerificationInfrastructureFailure(error: unknown): boolean {
+  return error instanceof SandboxExecutionError || error instanceof TaskCompilerInfrastructureError;
 }
 
 async function restoreCheckpoint(

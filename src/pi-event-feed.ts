@@ -18,6 +18,7 @@ export class PiEventFeed {
   private buffer = "";
   private dropping = false;
   private rows: { id: string; event: AgentFeedEvent }[] = [];
+  private snapshot: AgentFeedEvent[] | undefined;
   private turn = 0;
   constructor(private readonly secrets: readonly string[] = []) {}
 
@@ -45,7 +46,7 @@ export class PiEventFeed {
 
   events(): AgentFeedEvent[] {
     // Sanitize at the snapshot boundary, after fragmented deltas have been assembled.
-    return this.rows.map(({ event }) => ({
+    this.snapshot ??= this.rows.map(({ event }) => ({
       ...event,
       text:
         agentFeedEvents(
@@ -55,6 +56,7 @@ export class PiEventFeed {
           this.secrets,
         )[0]?.text ?? "",
     }));
+    return this.snapshot.map((event) => ({ ...event }));
   }
 
   private put(
@@ -64,6 +66,7 @@ export class PiEventFeed {
     append = false,
     timestamp?: string,
   ) {
+    this.snapshot = undefined;
     const existing = this.rows.find((row) => row.id === id);
     if (existing) {
       existing.event.text = (append ? existing.event.text + text : text).slice(-8000);

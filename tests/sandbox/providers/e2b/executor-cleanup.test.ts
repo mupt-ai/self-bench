@@ -139,7 +139,7 @@ describe("E2BSandboxExecutor cleanup", () => {
         outputPaths: ["/work/required.json"],
         timeoutMs: 1_000,
       }),
-    ).rejects.toThrow("exited successfully without output /work/required.json");
+    ).rejects.toThrow("could not retrieve declared output /work/required.json");
     expect(fixture.calls).toContain("sandbox.kill");
     expect(fixture.calls.at(-1)).toBe("Sandbox.getInfo:sb-e2b-test");
   });

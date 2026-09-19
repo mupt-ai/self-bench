@@ -18,7 +18,7 @@ import { matchingGreenVerify, submissionHash } from "../../submission-hash.js";
 import { renderVerifyReport, verifyReportSummary } from "../../verify-report.js";
 import { materializeDraft } from "./drafts.js";
 import { activityLifetimeSignal } from "./runtime.js";
-import { compileAndVerify } from "./verify.js";
+import { compileAndVerify, isVerificationInfrastructureFailure } from "./verify.js";
 
 export interface SessionVerifyContext {
   readonly store: ArtifactStore;
@@ -78,7 +78,10 @@ export class SessionVerifier {
     };
     return superviseMailbox(activeSandbox, signal, {
       handle: (request) => this.handle(request, signal),
-      isFatal: (error) => signal.aborted || error instanceof CancelledFailure,
+      isFatal: (error) =>
+        signal.aborted ||
+        error instanceof CancelledFailure ||
+        isVerificationInfrastructureFailure(error),
       onPoll: () => Context.current().heartbeat(`mailbox ${this.records.length} verifies`),
     }).then(() => {
       if (Context.current().cancellationSignal.aborted) {
