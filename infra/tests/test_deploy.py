@@ -14,14 +14,24 @@ class DeployTests(unittest.TestCase):
                                          'SELFBENCH_PUBLIC_URL':'https://example.com',
                                          'SELFBENCH_ACTIVITY_CONCURRENCY':'8'})[0]['worker'],3)
 
-    def test_runtime_concurrency_required_and_bounded_before_cloud_auth(self):
+    def test_runtime_setting_required_but_application_owns_numeric_validation(self):
         env={**context_env(),'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
              'SELFBENCH_PUBLIC_URL':'https://example.com'}
-        for value in ('', '0', '9', '-1', '8.0', '08'):
+        for value in ('', '8\nOTHER=value', '8\r', '8\x00'):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})
-        for value in ('1','4','8'):
+        for value in ('1','8','100','256'):
             self.assertEqual(deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})[2],value)
+
+    def test_service_selection_is_explicit_and_validated(self):
+        env={**context_env(),'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
+             'SELFBENCH_PUBLIC_URL':'https://example.com','SELFBENCH_ACTIVITY_CONCURRENCY':'100'}
+        for service in ('api', 'worker', 'all'):
+            deploy.preflight({**env, 'DEPLOY_SERVICE':service})
+        with self.assertRaises(ValueError):
+            deploy.preflight({**env, 'DEPLOY_SERVICE':'other'})
+        workflow=(Path(__file__).parents[2]/'.github/workflows/deploy-reusable.yml').read_text()
+        self.assertIn("DEPLOY_SERVICE: ${{ inputs.service || vars.SELFBENCH_DEPLOY_SERVICE || 'all' }}",workflow)
 
     def test_prerelease_or_draft_cannot_deploy_prod(self):
         base={**context_env(),'TF_ENVIRONMENT':'prod','GITHUB_EVENT_NAME':'release','GITHUB_REF':'refs/tags/v1',

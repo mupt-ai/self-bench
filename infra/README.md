@@ -27,7 +27,7 @@ All names in `*.example` are placeholders. Do not copy production secrets into d
 ```
 
 The initial generation configuration is **Modal + Modal Harbor**. Worker activity concurrency is
-ordinary release configuration (`SELFBENCH_ACTIVITY_CONCURRENCY`, integer 1-8), not a secret.
+ordinary release configuration (`SELFBENCH_ACTIVITY_CONCURRENCY`, positive integer), not a secret.
 Hosted solver choices use selected saved credentials. The Dockerfile includes the pinned Harbor
 extras for Modal, E2B and Daytona. Switching generation to E2B requires a prepared template and a
 reviewed extension to the runtime preflight contract; it is not an implicit fallback.
@@ -196,7 +196,7 @@ remain live-plan/apply risks. Review whether public VM IPs are permitted in your
 Preflight on the VM (local reads only, never prints secrets):
 
 ```sh
-python3 /opt/selfbench/releases/RELEASE/infra/runtime/check_release.py \
+python3 /var/lib/selfbench-deploy/RUN-ATTEMPT/check_release.py \
   --environment dev --project selfbench-dev-YOUR-SUFFIX \
   --release-env /opt/selfbench/releases/RELEASE/release.env
 ```
@@ -207,20 +207,16 @@ It does **not** prove that credentials work or that a database URL belongs to th
 Record and independently verify those identities before deployment. Unknown env keys fail closed;
 extend the reviewed contract when adding another generation backend or feature.
 
-Authenticate Docker to only the target registry using an approved short-lived identity/credential
-helper. Then, **after suspending new submissions and verifying there are no incompatible in-flight
-workflows**, use the standalone runtime (not the development Compose file):
+The CI deployment performs image pull, application configuration validation, and a backed-up
+migration before replacing the selected services with `docker compose up -d --no-deps --wait`.
+It preserves the API health check and verifies the new worker's Temporal poller identity. Use the
+`api`, `worker`, or `all` target as described in [Rollout Behavior](terraform-cicd.md#rollout-behavior).
 
-```sh
-docker compose --env-file /ABSOLUTE/release.env -f /ABSOLUTE/infra/runtime/compose.yaml pull
-docker compose --env-file /ABSOLUTE/release.env -f /ABSOLUTE/infra/runtime/compose.yaml up -d --wait
-```
+Do not print `docker compose config` with real secrets: it expands env-files. Independent service
+updates require backward-compatible migrations and Temporal workflow code. A worker replacement
+may retry interrupted activities; a single API replacement has brief downtime. There is no
+automatic schema rollback. Use per-service release pointers for recovery after partial updates.
 
-Do not print `docker compose config` with real secrets: it expands env-files. API startup precedes
-worker startup to reduce concurrent migration risk, but this is not a substitute for a migration
-rehearsal or coordination with older containers. Startup runs migrations; there is no automatic down
-migration. The worker also opens the database. Drain/compatibility checks are an operator gate, not
-implemented by Compose or by the local preflight. Upgrades may interrupt the single API VM.
 
 ## 5. Promotion and Verification Gates
 

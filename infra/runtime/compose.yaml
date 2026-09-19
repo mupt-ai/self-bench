@@ -41,9 +41,5 @@ services:
         format: raw
       - path: ${SELFBENCH_WORKER_ENV_FILE:?Set protected worker env-file path}
         format: raw
-    # Serializes initial startup/migrations. Does not prove worker registration or DB readiness.
-    depends_on:
-      api:
-        condition: service_healthy
 # No Docker socket, model secrets on the API, local artifacts, or local Postgres/Temporal.
 # Host TLS proxy is configured separately; only its 80/443 listeners may be public.

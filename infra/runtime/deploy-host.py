@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Run only as root on the selected VM with a reviewed release JSON argument."""
+"""Deploy selected Compose services on the VM; invoked by CI over IAP."""
+import argparse
 import base64
 import fcntl
 import json
@@ -7,9 +8,11 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import sys
+import tempfile
 import time
 import urllib.request
+
+from check_release import read_env, validate
 
 
 def run(args, **kwargs):
@@ -19,73 +22,94 @@ def run(args, **kwargs):
 def metadata(path):
     request = urllib.request.Request('http://metadata.google.internal/computeMetadata/v1/' + path,
                                      headers={'Metadata-Flavor': 'Google'})
-    with urllib.request.urlopen(request, timeout=15) as response: return response.read()
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return response.read()
+
+
+def rollout(compose, check_script, service, release, state):
+    services = ['api', 'worker'] if service == 'all' else [service]
+    run(compose + ['pull', *services])
+    # Validate with the image's application code before migrations or container replacement.
+    def check(role, *args):
+        return compose + ['run', '--rm', '--no-deps', '-T', '--entrypoint', 'node',
+                          '-v', f'{check_script}:/app/deploy-check.mjs:ro', role,
+                          '/app/deploy-check.mjs', *args]
+    for role in services:
+        run(check(role, 'config'))
+    # CI has completed a DB backup. Migrations must support the still-running old services.
+    run(check(services[0], 'migrate'))
+    for role in services:
+        run(compose + ['up', '-d', '--no-deps', '--wait', '--wait-timeout', '180', role])
+        if role == 'worker':
+            container = run(compose + ['ps', '-q', 'worker'], capture_output=True, text=True).stdout.strip()
+            hostname = run(['docker', 'inspect', '--format', '{{.Config.Hostname}}', container],
+                           capture_output=True, text=True).stdout.strip()
+            if not hostname:
+                raise ValueError('Missing new worker identity')
+            for attempt in range(12):
+                try:
+                    run(check('worker', 'worker', hostname))
+                    break
+                except subprocess.CalledProcessError:
+                    if attempt == 11:
+                        raise
+                    time.sleep(5)
+        # A partial release never claims that the other service was upgraded.
+        (state / f'current-{role}-release').write_text(str(release) + '\n')
+    if service == 'all':
+        (state / 'current-release').write_text(str(release) + '\n')
 
 
 def main():
-    if os.geteuid() != 0: raise ValueError('Run as root')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('release_env', type=Path)
+    parser.add_argument('--project', required=True)
+    parser.add_argument('--release-id', required=True)
+    parser.add_argument('--service', choices=['api', 'worker', 'all'], default='all')
+    for role in ('shared', 'api', 'worker'):
+        parser.add_argument(f'--{role}-version', required=True)
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise ValueError('Run as root')
     os.umask(0o077)
-    config = json.loads(Path(sys.argv[1]).read_text())
-    project, env, sha = config['project'], config['environment'], config['sha']
-    concurrency = config.get('activity_concurrency', '')
-    if not isinstance(concurrency, str) or not re.fullmatch(r'[1-8]', concurrency):
-        raise ValueError('Activity concurrency must be an integer from 1 to 8')
-    if not re.fullmatch('[0-9a-f]{40}', sha) or env not in ('dev', 'prod'): raise ValueError('Invalid release identity')
-    if metadata('project/project-id').decode() != project: raise ValueError('Wrong VM project')
-    if not re.fullmatch(r'[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*',config['release_id']): raise ValueError('Invalid release directory')
+    if not re.fullmatch(r'[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*', args.release_id):
+        raise ValueError('Invalid release directory')
+    if metadata('project/project-id').decode() != args.project:
+        raise ValueError('Wrong VM project')
     state = Path('/opt/selfbench'); state.mkdir(exist_ok=True)
-    lock = (state / 'deploy.lock').open('w'); fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    # Unique immutable release directory; old release and secrets retained for explicit recovery.
-    release = state / 'releases' / config['release_id']; release.mkdir(parents=True, exist_ok=False)
+    lock = (state / 'deploy.lock').open('w')
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    release = state / 'releases' / args.release_id
+    release.mkdir(parents=True, exist_ok=False)
     source = Path(__file__).resolve().parent
-    for name in ('compose.yaml', 'check_release.py', 'deploy-check.mjs'):
+    for name in ('compose.yaml', 'deploy-check.mjs'):
         (release / name).write_bytes((source / name).read_bytes())
-        if name == 'deploy-check.mjs': (release / name).chmod(0o644)
+    (release / 'deploy-check.mjs').chmod(0o644)
+    release_env = release / 'release.env'
+    release_env.write_bytes(args.release_env.read_bytes())
+    coordinates = read_env(release_env)
     token = json.loads(metadata('instance/service-accounts/default/token'))['access_token']
-    for role, version in config['secret_versions'].items():
-        if role not in ('shared', 'api', 'worker') or not re.fullmatch('[1-9][0-9]*', str(version)):
+    for role in ('shared', 'api', 'worker'):
+        version = getattr(args, f'{role}_version')
+        if not re.fullmatch('[1-9][0-9]*', version):
             raise ValueError('Pin numeric secret versions')
-        url = f'https://secretmanager.googleapis.com/v1/projects/{project}/secrets/selfbench-{role}-env/versions/{version}:access'
-        with urllib.request.urlopen(urllib.request.Request(url, headers={'Authorization': 'Bearer '+token}), timeout=30) as response:
-            payload = base64.b64decode(json.load(response)['payload']['data'], validate=True)
-        (release / f'{role}.env').write_bytes(payload)
-    # Temporary registry login; no durable access token or Docker config retained.
-    import tempfile
+        if coordinates[f'SELFBENCH_{role.upper()}_ENV_FILE'] != str(release / f'{role}.env'):
+            raise ValueError('Secret paths must belong to this release')
+        url = f'https://secretmanager.googleapis.com/v1/projects/{args.project}/secrets/selfbench-{role}-env/versions/{version}:access'
+        with urllib.request.urlopen(urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token}), timeout=30) as response:
+            (release / f'{role}.env').write_bytes(base64.b64decode(json.load(response)['payload']['data'], validate=True))
+    checked = validate(coordinates['SELFBENCH_ENVIRONMENT'], args.project, release_env)
     with tempfile.TemporaryDirectory() as authdir:
         os.environ['DOCKER_CONFIG'] = authdir
-        run(['docker','login','--username','oauth2accesstoken','--password-stdin',config['registry']], input=token.encode(), stdout=subprocess.DEVNULL)
-        values = {'SELFBENCH_ENVIRONMENT':env,'SELFBENCH_IMAGE':config['image'],
-                  'SELFBENCH_ACTIVITY_CONCURRENCY':concurrency}
-        values.update({f'SELFBENCH_{role.upper()}_ENV_FILE':str(release/f'{role}.env') for role in ('shared','api','worker')})
-        release_env = release/'release.env'; release_env.write_text(''.join(f'{k}={v}\n' for k,v in values.items()))
-        run(['python3',str(release/'check_release.py'),'--environment',env,'--project',project,'--release-env',str(release_env)])
-        compose=['docker','compose','--env-file',str(release_env),'-f',str(release/'compose.yaml')]
-        run(compose+['pull'])
-        check=['docker','run','--rm','--env-file',str(release/'shared.env'),'--env-file',str(release/'worker.env'),
-               '-v',f'{release}/deploy-check.mjs:/app/deploy-check.mjs:ro',config['image'],'node','/app/deploy-check.mjs']
-        # Stop ingress first, check quiescence, then stop worker. Never retry/cancel active workflows.
-        run(compose+['stop','api'])
-        try: run(check+['idle'])
-        except Exception:
-            run(compose+['start','api'])  # Restore old existing service, not a new image.
-            raise
-        run(compose+['stop','worker'])
-        # Backup was created by CI before stopping the service. This migration reuses maintained app code.
-        migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
-        run(['docker','run','--rm','--env-file',str(release/'shared.env'),config['image'],'node','--input-type=module','-e',migration])
-        run(compose+['up','-d','--wait','--wait-timeout','180'])
-        for attempt in range(12):
-            try:
-                run(check+['worker']); break
-            except subprocess.CalledProcessError:
-                if attempt == 11: raise
-                time.sleep(5)
-        with urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=15) as response:
-            if response.status != 200: raise ValueError('API health failed')
-        (state/'current-release').write_text(str(release)+'\n')
-        print('Release, migrations, API health and recent worker polling verified.')
+        run(['docker', 'login', '--username', 'oauth2accesstoken', '--password-stdin', checked['registry']],
+            input=token.encode(), stdout=subprocess.DEVNULL)
+        compose = ['docker', 'compose', '--env-file', str(release_env), '-f', str(release / 'compose.yaml')]
+        rollout(compose, release / 'deploy-check.mjs', args.service, release, state)
+    print(f'{args.service} deployment verified.')
 
 
 if __name__ == '__main__':
-    try: main()
-    except Exception: raise SystemExit('VM deployment failed; inspect protected deployment log. No schema rollback attempted.') from None
+    try:
+        main()
+    except Exception:
+        raise SystemExit('VM deployment failed; inspect protected deployment log. No schema rollback attempted.') from None

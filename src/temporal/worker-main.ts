@@ -27,6 +27,8 @@ const worker = await Worker.create({
   namespace: config.temporal.namespace,
   taskQueue: config.temporal.taskQueue,
   workflowsPath,
+  // Leave time for cancellation/cleanup inside Compose's two-minute stop window.
+  shutdownGraceTime: "90 seconds",
   activities: {
     ...createActivities(config, credentials?.records),
     ...createEvaluationActivities(createArtifactStore(config.artifact), credentials?.records),

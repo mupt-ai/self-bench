@@ -49,7 +49,7 @@ const environmentSchema = z.object({
   ),
   SELFBENCH_ACTIVITY_CONCURRENCY: z.preprocess(
     emptyStringAsUndefined,
-    z.coerce.number().int().min(1).max(100).optional(),
+    z.coerce.number().int().min(1).optional(),
   ),
   SELFBENCH_TASK_QUEUE: z.string().default("selfbench-dev"),
   SELFBENCH_TEMPORAL_ADDRESS: z.string().default("127.0.0.1:7233"),
