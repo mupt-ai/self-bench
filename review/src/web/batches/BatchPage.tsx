@@ -67,10 +67,9 @@ export function BatchPage() {
       )}
       {run && !status && !statusError && <ListSkeleton label="Loading Batch Status" />}
       {run && status && repeated && (
-        <Notice className="mb-4" aria-label="Repeated Task Failure">
-          <span className="min-w-0 break-words">
-            {repeated.count} tasks are retrying the same error: {repeated.failure}
-          </span>
+        <Notice className="mb-4 flex-col items-start gap-1" aria-label="Repeated Task Failure">
+          <span className="font-medium">{repeated.count} tasks are retrying the same error</span>
+          <span className="min-w-0 break-words text-xs">{repeated.failure}</span>
         </Notice>
       )}
       {run && status && (

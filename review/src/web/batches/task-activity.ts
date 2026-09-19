@@ -39,6 +39,10 @@ export function activityCounts(status: BatchStatus) {
   return counts;
 }
 
+/** The round prefix repeats the row's Stage column; the rest is what actually went wrong. */
+const failureCause = (failure: string) =>
+  failure.replace(/^(authoring|verifier) round \d+:\s*/, "");
+
 /** "Attempt 3 of 4 · <failure>" for a candidate whose previous attempt failed. */
 export function retryDetail(status: BatchStatus, task: BatchTask): string | undefined {
   const detail = status.activity?.[task.candidateId];
@@ -47,7 +51,7 @@ export function retryDetail(status: BatchStatus, task: BatchTask): string | unde
     detail.attempt !== undefined
       ? `Attempt ${detail.attempt}${detail.maximumAttempts ? ` of ${detail.maximumAttempts}` : ""} · `
       : "";
-  return `${attempt}${detail.lastFailure}`;
+  return `${attempt}${failureCause(detail.lastFailure)}`;
 }
 
 const REPEATED_FAILURE_THRESHOLD = 3;
@@ -61,7 +65,10 @@ export function repeatedFailure(
   for (const task of status.tasks ?? []) {
     if (taskActivity(status, task) === "running" || taskActivity(status, task) === "queued") {
       const failure = status.activity?.[task.candidateId]?.lastFailure;
-      if (failure) counts.set(failure, (counts.get(failure) ?? 0) + 1);
+      if (failure) {
+        const cause = failureCause(failure);
+        counts.set(cause, (counts.get(cause) ?? 0) + 1);
+      }
     }
   }
   let top: { count: number; failure: string } | undefined;

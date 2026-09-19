@@ -54,7 +54,12 @@ test("a retrying candidate shows its attempt and last failure", () => {
     phase: "authoring",
     tasks: [task("retrying", "authoring"), task("fresh", "authoring")],
     activity: {
-      retrying: { state: "queued", attempt: 3, maximumAttempts: 4, lastFailure: "quota reached" },
+      retrying: {
+        state: "queued",
+        attempt: 3,
+        maximumAttempts: 4,
+        lastFailure: "authoring round 2: quota reached",
+      },
       fresh: { state: "running", attempt: 1 },
     },
   };
@@ -65,6 +70,7 @@ test("a retrying candidate shows its attempt and last failure", () => {
 
 test("a failure shared by enough in-flight candidates is reported once for the batch", () => {
   const quota = { state: "queued" as const, attempt: 2, lastFailure: "quota reached" };
+  const verifierQuota = { ...quota, lastFailure: "verifier round 1: quota reached" };
   const status: BatchStatus = {
     runId: "batch-one",
     phase: "authoring",
@@ -75,7 +81,12 @@ test("a failure shared by enough in-flight candidates is reported once for the b
       task("d", "authoring"),
       { ...task("done", "infrastructure_failed"), reason: "quota reached" },
     ],
-    activity: { a: quota, b: quota, c: quota, d: { state: "running", lastFailure: "other" } },
+    activity: {
+      a: quota,
+      b: quota,
+      c: verifierQuota,
+      d: { state: "running", lastFailure: "other" },
+    },
   };
   expect(repeatedFailure(status)).toEqual({ count: 3, failure: "quota reached" });
   expect(repeatedFailure({ ...status, activity: { a: quota, b: quota } })).toBeUndefined();
