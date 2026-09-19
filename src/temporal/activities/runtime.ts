@@ -1,6 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { CancelledFailure, Context } from "@temporalio/activity";
 import { extractRegularArchive } from "../../archive.js";
 import type { ArtifactStore } from "../../artifacts.js";
@@ -125,7 +127,12 @@ export async function withTaskBundle<T>(
   return await withTemporaryDirectory(`selfbench-${task.taskId}-`, async (root) => {
     signal?.throwIfAborted();
     const archive = join(root, "task.tar.gz");
-    await writeFile(archive, await store.get(task.bundle));
+    // openRead verifies size and digest at EOF; do not extract until the pipeline succeeds.
+    await pipeline(
+      await store.openRead(task.bundle),
+      createWriteStream(archive, { flags: "wx", mode: 0o600 }),
+      { signal },
+    );
     signal?.throwIfAborted();
     await extractRegularArchive(archive, root, signal ? { signal } : {});
     const taskDirectory = join(root, "harbor-task");
