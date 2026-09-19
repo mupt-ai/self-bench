@@ -42,10 +42,14 @@ application rollout, rather than between plan and apply.
 
 ## Rollout Behavior
 
-Build and publish a source-SHA/run-tagged image, resolve its digest, create a synchronous Cloud SQL
-backup, transfer only code/nonsecret release coordinates through IAP, and retrieve exact secret
-versions on the VM using its identity. Secret payloads are not placed in GitHub logs or artifacts.
-The release files and logs are root-owned and retained on the VM for explicit recovery.
+Each release stage is a named step in `deploy-reusable.yml`: verify the deploy source and runtime
+settings (`infra/ci/verify-source.sh`), read nonsecret Terraform coordinates (Terraform CLI + jq),
+build and push a source-SHA/run-tagged image with `docker/build-push-action` (GHA layer cache scoped
+per environment; the step's digest output is the only image reference used afterwards), create a
+synchronous Cloud SQL backup, then ship the reviewed `infra/runtime` bundle plus a `request.json`
+through one IAP SSH session (`tar` over `gcloud compute ssh`). The VM retrieves exact secret
+versions using its own identity. Secret payloads are not placed in GitHub logs or artifacts. The
+release files and logs are root-owned and retained on the VM for explicit recovery.
 
 Stop the API, reject deployment if the dedicated Temporal namespace has running workflows, then
 stop the old worker and run the maintained database migration code from the new image. Start API
