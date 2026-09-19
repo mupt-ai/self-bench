@@ -35,6 +35,8 @@ test("destructive fill and foreground are defined separately from red text", () 
   expect(theme).toContain("--color-destructive: var(--bad-fg)");
   expect(theme).toContain("--color-destructive-background: var(--bad)");
   expect(theme).toContain("--color-destructive-foreground: hsl(0 0% 98%)");
+  expect(theme).not.toContain("html:has(.sb)");
+  expect(theme).not.toContain("font-size: 87.5%");
   expect(buttonStyles.destructive).toContain("bg-destructive-background");
   expect(buttonStyles.destructive).toContain("text-destructive-foreground");
 });

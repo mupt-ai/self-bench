@@ -2,7 +2,7 @@ export function GenerationSteps({ step, firstStep }: { step: 1 | 2; firstStep: s
   return (
     <ol
       aria-label="Generation Steps"
-      className="mx-4 mb-6 flex gap-6 border-b border-border py-4 text-xs sm:mx-6"
+      className="mx-4 mb-6 flex gap-6 border-b border-border py-4 text-sm sm:mx-6"
     >
       {[firstStep, "Configure Generation"].map((label, index) => (
         <li
