@@ -7,6 +7,10 @@ on:
         type: string
         required: true
 
+      service:
+        type: string
+        default: ''
+
       infrastructure_only:
         type: boolean
         default: false
@@ -48,6 +52,7 @@ jobs:
       deployments: read
       id-token: write
     env:
+      DEPLOY_SERVICE: ${{ inputs.service || vars.SELFBENCH_DEPLOY_SERVICE || 'all' }}
       TF_ENVIRONMENT: ${{ inputs.target_environment }}
       INFRASTRUCTURE_ONLY: ${{ inputs.infrastructure_only }}
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

@@ -33,6 +33,12 @@ services:
   worker:
     <<: *app
     command: [node, dist/temporal/worker-main.js]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
     environment:
       # Ordinary release configuration overrides any legacy value in shared secrets.
       SELFBENCH_ACTIVITY_CONCURRENCY: ${SELFBENCH_ACTIVITY_CONCURRENCY:?Set worker activity concurrency}
@@ -41,9 +47,5 @@ services:
         format: raw
       - path: ${SELFBENCH_WORKER_ENV_FILE:?Set protected worker env-file path}
         format: raw
-    # Serializes initial startup/migrations. Does not prove worker registration or DB readiness.
-    depends_on:
-      api:
-        condition: service_healthy
 # No Docker socket, model secrets on the API, local artifacts, or local Postgres/Temporal.
 # Host TLS proxy is configured separately; only its 80/443 listeners may be public.

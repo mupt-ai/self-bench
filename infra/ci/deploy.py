@@ -59,8 +59,10 @@ def settings(env):
     origin = env.get('SELFBENCH_PUBLIC_URL','')
     if not re.fullmatch(r'https://[a-zA-Z0-9.-]+(?::[0-9]+)?',origin): raise ValueError('Configure public HTTPS origin')
     concurrency = env.get('SELFBENCH_ACTIVITY_CONCURRENCY', '')
-    if not re.fullmatch(r'[1-8]', concurrency):
-        raise ValueError('Configure activity concurrency as an integer from 1 to 8')
+    if not concurrency or any(c in concurrency for c in '\r\n\x00'):
+        raise ValueError('Configure activity concurrency; the application validates its value')
+    if env.get('DEPLOY_SERVICE', 'all') not in ('api', 'worker', 'all'):
+        raise ValueError('Choose api, worker, or all')
     return versions, origin, concurrency
 
 
@@ -97,14 +99,21 @@ def main():
             # Synchronous provider backup before any schema changes. Failure blocks rollout.
             with stage('Back Up Database'):
                 runner.run(['gcloud','sql','backups','create','--instance='+instance,'--project='+ctx['project'],'--quiet'])
-            request={'project':ctx['project'],'environment':ctx['environment'],'sha':ctx['source_sha'],
-                     'release_id':ctx['source_sha']+'-'+ctx['run_id']+'-'+ctx['run_attempt'],
-                     'image':image_ref,'registry':registry,'secret_versions':versions,
-                     'activity_concurrency':concurrency}
+            release_id = ctx['source_sha']+'-'+ctx['run_id']+'-'+ctx['run_attempt']
+            release = '/opt/selfbench/releases/' + release_id
+            coordinates = {'SELFBENCH_ENVIRONMENT': ctx['environment'], 'SELFBENCH_IMAGE': image_ref,
+                           'SELFBENCH_ACTIVITY_CONCURRENCY': concurrency}
+            coordinates.update({f'SELFBENCH_{role.upper()}_ENV_FILE': f'{release}/{role}.env'
+                                for role in ('shared', 'api', 'worker')})
             folder=Path(directory)/'runtime'; folder.mkdir()
-            for name in ('deploy-host.py','deploy-check.mjs','compose.yaml','check_release.py'):
+            for name in ('deploy-host.py','compose.yaml','check_release.py'):
                 (folder/name).write_bytes((Path('infra/runtime')/name).read_bytes())
-            (folder/'request.json').write_bytes(contracts.canonical(request))
+            (folder/'release.env').write_text(''.join(f'{key}={value}\n' for key,value in coordinates.items()))
+            service = os.environ.get('DEPLOY_SERVICE', 'all')
+            deploy_command = ['python3', 'deploy-host.py', 'release.env', '--project', ctx['project'],
+                              '--release-id', release_id, '--service', service]
+            for role, version in versions.items():
+                deploy_command += [f'--{role}-version', str(version)]
             remote='/tmp/selfbench-release-'+ctx['run_id']+'-'+ctx['run_attempt']
             dest=f'/var/lib/selfbench-deploy/{ctx["run_id"]}-{ctx["run_attempt"]}'
             common=['--project='+ctx['project'],'--zone='+output['zone'],'--tunnel-through-iap','--quiet']
@@ -116,7 +125,7 @@ def main():
                   f'sudo cp -r {shlex.quote(remote)} {shlex.quote(dest)} && '
                   f'sudo chown -R root:root {shlex.quote(dest)} && '
                   f'sudo chmod -R go-rwx {shlex.quote(dest)} && '
-                  'sudo bash -c '+shlex.quote(f'cd {dest} && python3 deploy-host.py request.json > deploy.log 2>&1'))
+                  'sudo bash -c '+shlex.quote(f'cd {dest} && {shlex.join(deploy_command)} > deploy.log 2>&1'))
             with stage('Migrate and Roll Out'):
                 runner.run(['gcloud','compute','ssh',output['instance'],*common,'--command='+host,'--','-T'], payload=archive)
             with urllib.request.urlopen(origin+'/healthz',timeout=30) as response:
@@ -127,7 +136,7 @@ def main():
                 if error.code != 401: raise
             else: raise ValueError('Anonymous session was not rejected')
             with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
-                summary.write(f'\n## Deployed {ctx["environment"]}\nImage: `{image_ref}`\n\nHTTPS health, anonymous auth rejection and VM worker checks passed.\n')
+                summary.write(f'\n## Deployed {ctx["environment"]} ({service})\nImage: `{image_ref}`\n\nHTTPS health, anonymous auth rejection and selected service checks passed.\n')
         finally:
             if runner.log.exists():
                 log=Path(directory)/'snapshot.log';log.write_bytes(runner.log.read_bytes())

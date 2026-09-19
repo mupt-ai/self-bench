@@ -57,25 +57,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result["project"], "selfbench-dev-test")
         self.assertNotIn("fake-model", json.dumps(result))
 
-    def test_release_concurrency_is_bounded(self):
-        for value in ("1", "4", "8"):
+    def test_application_owns_concurrency_validation(self):
+        for value in ("1", "8", "100", "256"):
             self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
             self.assertEqual(self.validate()["environment"], "dev")
-        for value in ("0", "9", "100", "-1", "8.0", "08"):
-            self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
-            with self.assertRaises(ValueError): self.validate()
-
-    def test_production_accepts_eight_without_secret_concurrency(self):
-        self.coordinates = {key:value.replace('selfbench-dev', 'selfbench-prod')
-                            for key,value in self.coordinates.items()}
-        self.coordinates['SELFBENCH_ENVIRONMENT'] = 'prod'
-        self.values['shared'] = {key:value.replace('selfbench-dev', 'selfbench-prod')
-                                 for key,value in self.values['shared'].items()}
-        self.write()
-        self.assertEqual(release.validate('prod','selfbench-prod-test',self.release_path)['environment'],'prod')
-        self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY'] = '9'
-        self.write()
-        with self.assertRaises(ValueError):release.validate('prod','selfbench-prod-test',self.release_path)
 
     def test_missing_runtime_setting_cannot_fall_back_to_legacy_secret(self):
         self.values['shared']['SELFBENCH_ACTIVITY_CONCURRENCY'] = '1'
@@ -164,6 +149,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("MODAL_TOKEN_ID", worker["environment"])
         self.assertNotIn("GH_TOKEN", worker["environment"])
         self.assertNotIn("GITHUB_OAUTH_CLIENT_SECRET", worker["environment"])
+        self.assertIn("http://127.0.0.1:8081/healthz", worker["healthcheck"]["test"][-1])
+        self.assertFalse(worker.get("depends_on"))
         self.assertFalse(worker.get("ports"))
         self.assertFalse(worker.get("volumes"))
         self.assertEqual(api["ports"][0]["host_ip"], "127.0.0.1")

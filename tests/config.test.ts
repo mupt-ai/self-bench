@@ -269,3 +269,14 @@ describe("SelfBench configuration", () => {
     ).toThrow("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
   });
 });
+
+test("activity concurrency has one positive-integer contract without a deployment cap", () => {
+  for (const value of ["1", "8", "100", "256"]) {
+    expect(loadConfig({ SELFBENCH_ACTIVITY_CONCURRENCY: value }).activityConcurrency).toBe(
+      Number(value),
+    );
+  }
+  for (const value of ["0", "-1", "1.5", "Infinity", "invalid", "9007199254740992"]) {
+    expect(() => loadConfig({ SELFBENCH_ACTIVITY_CONCURRENCY: value })).toThrow();
+  }
+});

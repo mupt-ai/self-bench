@@ -4,6 +4,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      service:
+        description: Service to Deploy
+        type: choice
+        options: [all, api, worker]
+        default: all
       infrastructure_only:
         description: Provision dev infrastructure without runtime secrets or app rollout (billed resources)
         type: boolean
@@ -19,4 +24,5 @@ jobs:
     uses: ./.github/workflows/deploy-reusable.yml
     with:
       target_environment: dev
+      service: ${{ github.event_name == 'workflow_dispatch' && inputs.service || 'all' }}
       infrastructure_only: ${{ github.event_name == 'workflow_dispatch' && inputs.infrastructure_only }}

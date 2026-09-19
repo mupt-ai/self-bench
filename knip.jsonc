@@ -3,6 +3,7 @@
   "entry": [
     "src/cli.ts!",
     "src/api-main.ts!",
+    "src/deploy-main.ts!",
     "src/temporal/worker-main.ts!",
     // Documented standalone worker, separate from the combined worker.
     "src/evaluation/worker-main.ts!",

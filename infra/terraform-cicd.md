@@ -30,7 +30,7 @@ application rollout, rather than between plan and apply.
    An operator must review and update these existing objects explicitly.
 2. Configure the `prod` GitHub environment branch rules to allow release tags; retain required apply review.
    The source ancestry check is mandatory because tag policy alone does not establish trusted code.
-3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-8) as an ordinary GitHub environment
+3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (positive integer) as an ordinary GitHub environment
    variable in `dev` and `prod`. Then configure `RUNTIME_SECRET_VERSIONS` (JSON shared/api/worker numeric versions) and
    `SELFBENCH_PUBLIC_URL` in `dev` and `prod`. Populate secrets, DB login, Temporal namespace,
    provider credentials, GitHub OAuth and a host TLS proxy. Bootstrap creates empty secret containers,
@@ -47,12 +47,31 @@ backup, transfer only code/nonsecret release coordinates through IAP, and retrie
 versions on the VM using its identity. Secret payloads are not placed in GitHub logs or artifacts.
 The release files and logs are root-owned and retained on the VM for explicit recovery.
 
-Stop the API, reject deployment if the dedicated Temporal namespace has running workflows, then
-stop the old worker and run the maintained database migration code from the new image. Start API
-and worker, verify local API health and recent workflow/activity pollers, then verify public HTTPS.
-If quiescence fails, restart the existing API. Do not cancel jobs or automatically roll back schema
-changes. The single-VM rollout entails downtime; external producers must not submit directly to the
-namespace during maintenance. Poller recency is a smoke check, not full solver E2E proof.
+The host receives a standard Compose `release.env` and explicit service/secret-version arguments;
+there is no separate release JSON schema or mounted deployment JavaScript. The image packages
+`dist/deploy-main.js config` and `dist/deploy-main.js migrate`. Pull the selected image, validate configuration using
+that image's application code, run migrations once, then use `docker compose up -d --no-deps --wait`
+for the selected services. API-only deployments do not restart the worker; worker-only deployments
+do not restart the API. Full deployments update the API first, then the worker. Compose waits for
+each container's own health check. The worker exposes a loopback-only health endpoint on port 8081
+that returns success while its Temporal SDK worker is RUNNING; it does not mistake a full worker's
+lack of recent polls for failure. This is process readiness, not an end-to-end Temporal connectivity
+probe. Public HTTPS health and anonymous-session rejection are checked.
+
+Deployments do not wait for every workflow in the namespace to finish. The worker receives SIGTERM
+and has 90 seconds to finish activities before SDK cancellation, within Compose's two-minute stop
+window. Interrupted activities may retry; no workflows are cancelled or terminated by deployment.
+Migrations must be backward-compatible with the running old services, and workflow changes must
+preserve Temporal replay compatibility. Incompatible schema/workflow changes need a separate
+maintenance or versioning procedure. A single API container still has brief replacement downtime.
+
+Manual dev deployments offer `all`, `api`, and `worker` targets. Production releases default to
+`all`; set the GitHub `prod` environment variable `SELFBENCH_DEPLOY_SERVICE` to `api` or `worker`
+for a targeted release, then clear it to restore full releases. Each successful service check updates
+`/opt/selfbench/current-api-release` or `current-worker-release`; `current-release` records only the
+last successful full deployment. For recovery after a partial deployment, use the per-service path
+and the explicit service name with `--no-deps`; the full-release pointer may be older. Recovery
+must use a schema-compatible image; neither the pipeline nor Compose rolls back schema changes.
 
 Cloud SQL backup is required; external databases need an explicit backup adapter. Runtime secrets,
 OAuth and DNS are one-time operator prerequisites, not generated placeholders. Credentials remain
@@ -120,13 +139,14 @@ that API reports `use_immutable_subject: true`; omit it for legacy name-only sub
 ### Worker Concurrency
 
 `SELFBENCH_ACTIVITY_CONCURRENCY` is ordinary configuration, not a secret. Set it on the GitHub
-`dev` or `prod` environment; the full deployment preflight rejects missing or out-of-range values
-before cloud authentication. The deployment records it in its request and nonsecret `release.env`.
+`dev` or `prod` environment; CI requires it before cloud authentication. Its positive-integer validation lives in the application
+and runs inside the selected image before migrations or replacement. The deployment records it
+in the nonsecret `release.env`; there is no deployment-specific ceiling of eight.
 Compose explicitly supplies that value to the worker, overriding the legacy entry if it still
 exists in an older shared-secret version. New shared-secret payloads should omit it.
 
 For example, `gh variable set SELFBENCH_ACTIVITY_CONCURRENCY --repo OWNER/REPO --env prod --body 8`
 configures eight concurrent worker activities for the next deployment. No secret version change
 is needed. This is a per-worker activity limit, shared by discovery, authoring, and evaluation;
-it is not a live setting. The worker must be recreated through deployment to take effect, and the
-existing idle-workflow check continues to protect active work.
+it is not a live setting. The worker must be recreated through deployment to take effect. A higher
+configured value is not proof of capacity: size it against measured memory, CPU, and sandbox quota.
