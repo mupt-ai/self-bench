@@ -63,12 +63,9 @@ def main():
         run(compose+['pull'])
         check=['docker','run','--rm','--env-file',str(release/'shared.env'),'--env-file',str(release/'worker.env'),
                '-v',f'{release}/deploy-check.mjs:/app/deploy-check.mjs:ro',config['image'],'node','/app/deploy-check.mjs']
-        # Stop ingress first, check quiescence, then stop worker. Never retry/cancel active workflows.
+        # Stop ingress and gracefully stop the worker; running workflows do not block rollout.
+        # Do not cancel or terminate workflows. In-flight activities may retry after restart.
         run(compose+['stop','api'])
-        try: run(check+['idle'])
-        except Exception:
-            run(compose+['start','api'])  # Restore old existing service, not a new image.
-            raise
         run(compose+['stop','worker'])
         # Backup was created by CI before stopping the service. This migration reuses maintained app code.
         migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
