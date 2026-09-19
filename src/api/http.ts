@@ -126,3 +126,14 @@ export function trustedMutation(
     request.headers["transfer-encoding"] !== undefined;
   return !hasBody || (request.headers["content-type"]?.startsWith("application/json") ?? false);
 }
+
+/**
+ * Repository paths belong to the SPA even when names or IDs contain dots.
+ * API/auth routes and static assets keep their own handlers.
+ */
+export function isSitePage(pathname: string): boolean {
+  if (/^\/(v1|api|auth|assets)(\/|$)/.test(pathname)) return false;
+  if (/^\/repos\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
+  const last = pathname.split("/").pop() ?? "";
+  return !last.includes(".");
+}
