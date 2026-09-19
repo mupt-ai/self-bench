@@ -151,7 +151,7 @@ export function GenerateBatch({
                       </label>
                     ))}
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">1–10,000 candidates total.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">1–10,000 candidates total.</p>
                 </fieldset>
               ) : (
                 <div>

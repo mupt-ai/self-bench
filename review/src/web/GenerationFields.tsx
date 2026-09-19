@@ -9,7 +9,7 @@ import {
   harborEnvironmentLabels,
 } from "../../../src/providers";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
-import { Input, Select } from "./ui";
+import { fieldStyles, Input, Select } from "./ui";
 
 export interface GenerationOptions {
   models: string[];
@@ -68,7 +68,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
+          className={`${fieldStyles} content-start`}
         >
           {field === "authorModel" ? "Author Model" : "Verifier Model"}
           <Select
@@ -85,10 +85,7 @@ export function GenerationFields({
           </Select>
         </label>
       ))}
-      <label
-        htmlFor="generation-reasoning"
-        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-      >
+      <label htmlFor="generation-reasoning" className={`${fieldStyles} content-start`}>
         Reasoning
         <Select
           id="generation-reasoning"
@@ -103,10 +100,7 @@ export function GenerationFields({
           <option value="high">High</option>
         </Select>
       </label>
-      <label
-        htmlFor="generation-sandbox"
-        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-      >
+      <label htmlFor="generation-sandbox" className={`${fieldStyles} content-start`}>
         Sandbox
         <Select
           id="generation-sandbox"
@@ -131,10 +125,7 @@ export function GenerationFields({
           ))}
         </Select>
       </label>
-      <label
-        htmlFor="generation-model-key"
-        className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-      >
+      <label htmlFor="generation-model-key" className={`${fieldStyles} content-start`}>
         OpenAI Credential
         <Select
           id="generation-model-key"
@@ -157,10 +148,7 @@ export function GenerationFields({
       {hosted && (
         <>
           {value.sandbox === "vercel" && (
-            <label
-              className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-              htmlFor="generation-image"
-            >
+            <label className={`${fieldStyles} content-start`} htmlFor="generation-image">
               <span className="flex items-center gap-1.5">
                 Vercel Runtime Image
                 <Hint text="Use the digest-pinned image from self-bench setup vercel." />
@@ -175,15 +163,12 @@ export function GenerationFields({
             </label>
           )}
           {value.sandbox === "e2b" && (
-            <div className="flex items-center gap-1.5 self-start pt-1 font-mono text-[13px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 self-start pt-1 text-sm font-medium text-foreground">
               E2B Template
               <Hint text="The E2B template is built automatically in your account on first use." />
             </div>
           )}
-          <label
-            className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
-            htmlFor="generation-harbor"
-          >
+          <label className={`${fieldStyles} content-start`} htmlFor="generation-harbor">
             <span className="flex items-center gap-1.5">
               Harbor Verification
               <Hint
@@ -216,7 +201,7 @@ export function GenerationFields({
         <label
           key={field}
           htmlFor={`generation-${field}`}
-          className="grid content-start gap-2 font-mono text-[13px] text-muted-foreground"
+          className={`${fieldStyles} content-start`}
         >
           {label}
           <Select
@@ -240,7 +225,7 @@ export function GenerationFields({
           </Select>
         </label>
       ))}
-      <div className="font-mono text-[13px] leading-6 text-muted-foreground sm:col-span-2">
+      <div className="text-sm leading-6 text-muted-foreground sm:col-span-2">
         <span className="inline-flex items-center gap-1.5">
           <Link
             className="text-brand hover:text-brand"

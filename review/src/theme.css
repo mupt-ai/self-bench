@@ -37,10 +37,6 @@
 
 @custom-variant site (&:where(.sb, .sb *));
 
-html:has(.sb) {
-  font-size: 87.5%;
-}
-
 :root {
   color-scheme: dark;
   --background: hsl(30 6% 4%);
