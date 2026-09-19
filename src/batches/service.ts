@@ -3,7 +3,7 @@ import type { ArtifactStore } from "../artifacts.js";
 import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
-import { liveBatchStatus } from "../site/batch-activity.js";
+import { liveBatchStatus, overlayCandidateActivity } from "../site/batch-activity.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
@@ -67,7 +67,9 @@ export function createGenerationBatches(
     list: () => store.list(),
     async status(runId: string) {
       const batch = await store.read(runId);
-      return batch ? batchStatus(batch) : liveBatchStatus(client, runId);
+      return batch
+        ? overlayCandidateActivity(client, batchStatus(batch))
+        : liveBatchStatus(client, runId);
     },
     async cancel(runId: string) {
       if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();

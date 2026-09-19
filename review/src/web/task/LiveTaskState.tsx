@@ -37,7 +37,7 @@ export function LiveTaskState({
   if (!task.runId.startsWith("batch-") || task.state !== "in_progress")
     return <StateStamp state={task.state} />;
   const progress = status?.tasks?.find((entry) => entry.candidateId === task.candidateId);
-  const activity = status?.activity?.[task.candidateId];
+  const activity = status?.activity?.[task.candidateId]?.state;
   const stage =
     progress?.status === "reviewing" || progress?.status === "verifying"
       ? "Verification"

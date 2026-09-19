@@ -22,7 +22,7 @@ export function taskActivity(status: BatchStatus, task: BatchTask): TaskActivity
     return task.status;
   if (batchIsTerminal(status.phase)) return "stopped";
   if (task.status === "queued") return "queued";
-  return status.activity?.[task.candidateId] ?? "unknown";
+  return status.activity?.[task.candidateId]?.state ?? "unknown";
 }
 
 export function activityCounts(status: BatchStatus) {
@@ -37,4 +37,34 @@ export function activityCounts(status: BatchStatus) {
   };
   for (const task of status.tasks ?? []) counts[taskActivity(status, task)]++;
   return counts;
+}
+
+/** "Attempt 3 of 4 · <failure>" for a candidate whose previous attempt failed. */
+export function retryDetail(status: BatchStatus, task: BatchTask): string | undefined {
+  const detail = status.activity?.[task.candidateId];
+  if (!detail?.lastFailure) return undefined;
+  const attempt =
+    detail.attempt !== undefined
+      ? `Attempt ${detail.attempt}${detail.maximumAttempts ? ` of ${detail.maximumAttempts}` : ""} · `
+      : "";
+  return `${attempt}${detail.lastFailure}`;
+}
+
+const REPEATED_FAILURE_THRESHOLD = 3;
+
+/** The failure most in-flight candidates are retrying, when enough share it to suggest one cause. */
+export function repeatedFailure(
+  status: BatchStatus,
+): { count: number; failure: string } | undefined {
+  if (batchIsTerminal(status.phase)) return undefined;
+  const counts = new Map<string, number>();
+  for (const task of status.tasks ?? []) {
+    if (taskActivity(status, task) === "running" || taskActivity(status, task) === "queued") {
+      const failure = status.activity?.[task.candidateId]?.lastFailure;
+      if (failure) counts.set(failure, (counts.get(failure) ?? 0) + 1);
+    }
+  }
+  let top: { count: number; failure: string } | undefined;
+  for (const [failure, count] of counts) if (!top || count > top.count) top = { count, failure };
+  return top && top.count >= REPEATED_FAILURE_THRESHOLD ? top : undefined;
 }

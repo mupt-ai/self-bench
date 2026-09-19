@@ -8,6 +8,7 @@ import { runCommand } from "../process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { createActivities } from "./activities.js";
+import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 
 removeEmptyModalCredentialOverrides();
@@ -32,6 +33,7 @@ const worker = await Worker.create({
     ...createEvaluationActivities(createArtifactStore(config.artifact), credentials?.records),
   },
   maxConcurrentActivityTaskExecutions: config.activityConcurrency,
+  interceptors: { activity: [activityEventInterceptor()] },
 });
 console.log(
   `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency}`,

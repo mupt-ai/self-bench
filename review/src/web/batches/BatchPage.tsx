@@ -9,6 +9,7 @@ import { useBatches } from "./BatchProvider";
 import { BatchTasks } from "./BatchTasks";
 import { CancelBatch } from "./CancelBatch";
 import { BatchState, batchDate, batchName, batchPath } from "./presentation";
+import { repeatedFailure } from "./task-activity";
 
 export function BatchPage() {
   const { batchId = "" } = useParams();
@@ -17,6 +18,7 @@ export function BatchPage() {
   const run = runs?.find((item) => item.runId === batchId);
   const status = statuses[batchId];
   const statusError = errors[batchId];
+  const repeated = status ? repeatedFailure(status) : undefined;
   useDocumentTitle(`${batchName(batchId)} · ${repoId.fullName} · self-bench`);
   return (
     <PageContent>
@@ -64,6 +66,13 @@ export function BatchPage() {
         <EmptyState title="Batch Not Found">This batch is not in this repository.</EmptyState>
       )}
       {run && !status && !statusError && <ListSkeleton label="Loading Batch Status" />}
+      {run && status && repeated && (
+        <Notice className="mb-4" aria-label="Repeated Task Failure">
+          <span className="min-w-0 break-words">
+            {repeated.count} tasks are retrying the same error: {repeated.failure}
+          </span>
+        </Notice>
+      )}
       {run && status && (
         <>
           <BatchProgress status={status} />
