@@ -84,6 +84,6 @@ class RolloutTests(unittest.TestCase):
 class ReadinessTests(unittest.TestCase):
     def test_application_checks_with_isolated_temporal_and_database(self):
         result = subprocess.run(['node', '--experimental-vm-modules', '--test',
-                                 str(Path(__file__).with_name('deploy-check.test.mjs'))],
+                                 str(Path(__file__).with_name('deploy-check-cases.mjs'))],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
