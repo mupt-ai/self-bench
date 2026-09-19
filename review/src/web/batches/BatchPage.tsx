@@ -66,17 +66,8 @@ export function BatchPage() {
       {run && !status && !statusError && <ListSkeleton label="Loading Batch Status" />}
       {run && status && (
         <>
-          {status.activity && (
-            <div
-              className="mb-4 border-l-2 border-brand bg-brand/5 px-4 py-3 text-sm"
-              role="status"
-            >
-              {Object.values(status.activity).filter((state) => state === "running").length} running
-              · {Object.values(status.activity).filter((state) => state === "queued").length} queued
-            </div>
-          )}
           <BatchProgress status={status} />
-          <BatchTasks status={status} fullName={repoId.fullName} />
+          <BatchTasks key={batchId} status={status} fullName={repoId.fullName} />
         </>
       )}
       {run && (

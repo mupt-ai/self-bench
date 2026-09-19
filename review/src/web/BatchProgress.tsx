@@ -1,65 +1,117 @@
-import type { BatchStatus } from "./batch-api";
+import { type BatchStatus, batchIsTerminal } from "./batch-api";
 import { batchMessage } from "./batches/presentation";
+import { activityCounts } from "./batches/task-activity";
 import { cn } from "./primitives/cn";
 
 /** Progress belongs on the batch page; creation only collects the next batch's settings. */
 export function BatchProgress({ status }: { status: BatchStatus }) {
   const discovery = status.discovery;
+  const counts = activityCounts(status);
+  const terminal = batchIsTerminal(status.phase);
   const stopped = status.phase === "blocked" || status.phase === "failed";
-  const finished = discovery
+  const finishedDiscovery = discovery
     ? Math.min(discovery.totalShards, discovery.completedShards + discovery.failedShards)
     : 0;
+  const accepted = status.accepted ?? 0;
+  const requested = status.requested ?? 0;
+  const metrics = [
+    ["Verified", status.accepted, "text-success"],
+    ...(terminal
+      ? [["Stopped", status.tasks ? counts.stopped : undefined, ""]]
+      : [
+          ["Running", status.tasks ? counts.running : undefined, "text-brand"],
+          ["Queued", status.tasks ? counts.queued : undefined, ""],
+        ]),
+    ["Rejected", status.rejected, ""],
+    ["Failed", status.tasks ? counts.infrastructure_failed : undefined, "text-destructive"],
+  ] as const;
   return (
     <section className="border border-border bg-card" aria-label="Batch Progress">
-      <div className="border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h2 className="text-sm font-medium">Batch Progress</h2>
+        <span className="text-xs text-muted-foreground">
+          {status.discovered ?? "—"} Candidates Discovered
+        </span>
+      </div>
+      <dl className={cn("grid", terminal ? "grid-cols-4" : "grid-cols-5")}>
+        {metrics.map(([label, count, color]) => (
+          <div
+            key={label}
+            className="border-r border-border px-2 py-3 last:border-r-0 sm:px-4 sm:py-4"
+          >
+            <dt className="text-[10px] text-muted-foreground sm:text-xs">{label}</dt>
+            <dd
+              className={cn(
+                "mt-2 text-2xl leading-none font-medium tabular-nums",
+                count ? color : "text-muted-foreground",
+              )}
+            >
+              {count ?? "—"}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <div className="border-t border-border px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span>
+            {status.accepted ?? "—"} of {status.requested ?? "—"} requested tasks verified
+          </span>
+          {status.requestedByDifficulty && (
+            <span className="text-muted-foreground">
+              Target: {status.requestedByDifficulty.easy} easy ·{" "}
+              {status.requestedByDifficulty.medium} medium · {status.requestedByDifficulty.hard}{" "}
+              hard
+            </span>
+          )}
+        </div>
+        {requested > 0 && status.accepted !== undefined && (
+          <div
+            role="progressbar"
+            aria-label="Verified Task Target"
+            aria-valuemin={0}
+            aria-valuemax={requested}
+            aria-valuenow={Math.min(requested, accepted)}
+            className="mt-3 h-1 overflow-hidden bg-muted"
+          >
+            <div
+              className="h-full bg-success"
+              style={{ width: `${Math.min(100, (accepted / requested) * 100)}%` }}
+            />
+          </div>
+        )}
         <p
           className={cn(
-            "max-w-3xl break-words text-sm leading-6",
+            "mt-3 text-xs leading-5",
             stopped ? "text-destructive" : "text-muted-foreground",
           )}
         >
           {batchMessage(status)}
+          {!terminal &&
+            (!status.tasks || counts.unknown > 0) &&
+            " Some task activity is unavailable; last known stages appear below."}
         </p>
       </div>
-      <dl className="grid grid-cols-2 border-b border-border md:grid-cols-4">
-        {(
-          [
-            ["Requested", status.requested],
-            ["Discovered", status.discovered],
-            ["Verified", status.accepted],
-            ["Rejected", status.rejected],
-          ] as const
-        ).map(([label, count], index) => (
-          <div
-            key={label}
-            className={cn(
-              "min-w-0 border-border px-4 py-4",
-              index % 2 === 0 && "border-r border-border",
-              index < 2 && "max-md:border-b",
-              index === 1 && "md:border-r",
-            )}
-          >
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-2 text-2xl font-medium tabular-nums">{count ?? "—"}</dd>
-          </div>
-        ))}
-      </dl>
+
       {discovery && (
-        <div className="p-4 sm:p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <h2 className="font-medium">Discovery · Wave {discovery.wave + 1}</h2>
-            <span className="text-muted-foreground">
-              {finished} / {discovery.totalShards} Shards Finished
+        <details className="border-t border-border px-4 py-3" open={status.phase === "discovering"}>
+          <summary className="cursor-pointer text-xs">
+            <span className="font-medium">Candidate Discovery · Wave {discovery.wave + 1}</span>
+            <span className="mt-1 block text-muted-foreground sm:ml-3 sm:mt-0 sm:inline">
+              {finishedDiscovery} / {discovery.totalShards} Searches Finished
             </span>
-          </div>
+          </summary>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Searching repository changes for task candidates. This is discovery progress, not
+            overall batch completion.
+          </p>
           {discovery.totalShards > 0 && (
             <div
               role="progressbar"
-              aria-label="Discovery Shards Finished"
+              aria-label="Discovery Searches Finished"
               aria-valuemin={0}
               aria-valuemax={discovery.totalShards}
-              aria-valuenow={finished}
-              className="flex h-1.5 overflow-hidden bg-muted"
+              aria-valuenow={finishedDiscovery}
+              className="mt-3 flex h-1.5 overflow-hidden bg-muted"
             >
               <span
                 className="bg-success"
@@ -71,20 +123,14 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
               />
             </div>
           )}
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
             <span>{discovery.completedShards} Complete</span>
             <span className={discovery.failedShards ? "text-destructive" : undefined}>
               {discovery.failedShards} Failed
             </span>
-            <span>{Math.max(0, discovery.totalShards - finished)} Pending</span>
+            <span>{Math.max(0, discovery.totalShards - finishedDiscovery)} Pending</span>
           </div>
-        </div>
-      )}
-      {status.requestedByDifficulty && (
-        <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
-          Requested: {status.requestedByDifficulty.easy} easy ·{" "}
-          {status.requestedByDifficulty.medium} medium · {status.requestedByDifficulty.hard} hard
-        </p>
+        </details>
       )}
     </section>
   );
