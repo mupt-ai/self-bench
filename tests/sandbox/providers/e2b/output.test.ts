@@ -34,6 +34,15 @@ async function outputFile(bytes: Uint8Array): Promise<string> {
 }
 
 describe("E2B output recovery", () => {
+  test("node -e places the first supplied argument at argv[1]", async () => {
+    const result = await runCommand("node", [
+      "-e",
+      "process.stdout.write(JSON.stringify(process.argv.slice(1)))",
+      "/work/material.json",
+    ]);
+    expect(JSON.parse(result.stdout)).toEqual(["/work/material.json"]);
+  });
+
   test("retrieves exact binary bytes and empty files through the command channel", async () => {
     const bytes = Uint8Array.from({ length: 20_000 }, (_, i) => i % 256);
     expect(await readOutputThroughCommand(local, await outputFile(bytes), signal)).toEqual(

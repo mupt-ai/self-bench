@@ -20,6 +20,7 @@ export async function readOutputThroughCommand(
   signal.throwIfAborted();
   // Bound the read itself, including a file that grows after open. Never print a large archive
   // through the command stream. The digest and length make truncated replies fail closed.
+  // `node -e script path` puts path at argv[1]; [eval] is a stack-trace label, not an argv entry.
   const script = `
 const fs = require("node:fs"), crypto = require("node:crypto");
 const fd = fs.openSync(process.argv[1], "r");
