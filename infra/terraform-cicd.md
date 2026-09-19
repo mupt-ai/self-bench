@@ -47,11 +47,11 @@ backup, transfer only code/nonsecret release coordinates through IAP, and retrie
 versions on the VM using its identity. Secret payloads are not placed in GitHub logs or artifacts.
 The release files and logs are root-owned and retained on the VM for explicit recovery.
 
-Stop the API, reject deployment if the dedicated Temporal namespace has running workflows, then
-stop the old worker and run the maintained database migration code from the new image. Start API
+Stop the API and gracefully stop the old worker, even when Temporal workflows are running, and run the maintained database migration code from the new image. Start API
 and worker, verify local API health and recent workflow/activity pollers, then verify public HTTPS.
-If quiescence fails, restart the existing API. Do not cancel jobs or automatically roll back schema
-changes. The single-VM rollout entails downtime; external producers must not submit directly to the
+Do not cancel or terminate workflows or automatically roll back schema changes. Compose allows
+two minutes for shutdown before forcing the container to stop; in-flight activities may be
+interrupted and retry according to their retry policies. This is not zero-downtime execution. The single-VM rollout entails downtime; external producers must not submit directly to the
 namespace during maintenance. Poller recency is a smoke check, not full solver E2E proof.
 
 Cloud SQL backup is required; external databases need an explicit backup adapter. Runtime secrets,
@@ -129,4 +129,4 @@ For example, `gh variable set SELFBENCH_ACTIVITY_CONCURRENCY --repo OWNER/REPO -
 configures eight concurrent worker activities for the next deployment. No secret version change
 is needed. This is a per-worker activity limit, shared by discovery, authoring, and evaluation;
 it is not a live setting. The worker must be recreated through deployment to take effect, and the
-existing idle-workflow check continues to protect active work.
+rollout does not require an idle namespace.
