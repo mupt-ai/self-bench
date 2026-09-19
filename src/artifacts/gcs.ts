@@ -6,10 +6,11 @@ import { Storage } from "@google-cloud/storage";
 import type { ArtifactRef } from "../contracts.js";
 import { sha256 } from "../hash.js";
 import { copyWithDigest, verifiedArtifactReadStream, verifyArtifact } from "./common.js";
+import { createCrc32cValidator } from "./crc32c.js";
 import type { ArtifactEntry, ArtifactStore } from "./types.js";
 
 export class GcsArtifactStore implements ArtifactStore {
-  readonly #storage = new Storage();
+  readonly #storage = new Storage({ crc32cGenerator: createCrc32cValidator });
   readonly #bucket: string;
   readonly #prefix: string;
 
