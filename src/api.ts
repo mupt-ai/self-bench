@@ -6,6 +6,7 @@ import {
   authorized,
   bearerMatches,
   isReviewAssetPath,
+  isSitePage,
   readBody,
   sendApiError,
   sendJson,
@@ -209,16 +210,6 @@ export async function startApi(
     await connection.close();
     await site?.database.close();
   };
-}
-
-/**
- * Page paths load the SPA shell and let the router decide; API prefixes and anything that
- * looks like a file (assets, favicons) are left to the handlers below.
- */
-function isSitePage(pathname: string): boolean {
-  if (/^\/(v1|api|auth)(\/|$)/.test(pathname)) return false;
-  const last = pathname.split("/").pop() ?? "";
-  return !last.includes(".");
 }
 
 export { buildRunRequest } from "./api/run-request.js";
