@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export TF_IN_AUTOMATION=true
 terraform fmt -check -recursive infra/terraform
+bash -n infra/ci/verify-source.sh
 bash -n infra/terraform/modules/selfbench-environment/startup.sh
 python3 -m unittest discover -s infra/tests -v
 scratch=$(mktemp -d)

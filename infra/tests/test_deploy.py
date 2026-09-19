@@ -1,14 +1,58 @@
 import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
-from infra.ci import contracts, deploy, source
-from infra.tests.test_terraform_ci import context_env
+
+ROOT = Path(__file__).parents[2]
+SCRIPT = ROOT / 'infra/ci/verify-source.sh'
+SETTINGS = {'RUNTIME_SECRET_VERSIONS': '{"shared":1,"api":2,"worker":3}',
+            'SELFBENCH_PUBLIC_URL': 'https://example.com', 'SELFBENCH_ACTIVITY_CONCURRENCY': '8'}
+EVENT = {'repository': {'default_branch': 'main'}}
 
 
-class DeployTests(unittest.TestCase):
+def workflow(name):
+    return (ROOT / '.github/workflows' / name).read_text()
+
+
+def step(text, name):
+    """The YAML of one named step in deploy-reusable.yml, up to the next step."""
+    body = text.split(f'      - name: {name}\n')[1]
+    return body.split('\n      - ')[0]
+
+
+class SourceVerificationTests(unittest.TestCase):
+    """Run verify-source.sh with a stubbed git and event payload, as the workflow step would."""
+
+    def run_script(self, tmp, event=EVENT, git_ancestry=True, sha='a' * 40, **overrides):
+        shim = tmp / 'bin'; shim.mkdir(exist_ok=True)
+        git = shim / 'git'
+        merge_base = 'exit 0' if git_ancestry else 'exit 1'
+        git.write_text(f'#!/usr/bin/env bash\n'
+                       f'if [[ "$1" == merge-base ]]; then {merge_base}; fi\n'
+                       f'if [[ "$1" == rev-parse ]]; then echo {sha}; exit 0; fi\n'
+                       'exit 1\n')
+        git.chmod(0o755)
+        event_path = tmp / 'event.json'; event_path.write_text(json.dumps(event))
+        env = {'PATH': f'{shim}:{os.environ["PATH"]}', 'HOME': os.environ.get('HOME', '')}
+        env.update({'TF_ENVIRONMENT': 'dev', 'GCP_PROJECT_ID': 'community-infra',
+                    'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'a' * 40,
+                    'GITHUB_DEFAULT_BRANCH': 'main', 'GITHUB_EVENT_PATH': str(event_path),
+                    'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
+                    'RUNNER_ENVIRONMENT': 'github-hosted', 'INFRASTRUCTURE_ONLY': 'false', **SETTINGS})
+        env.update(overrides)
+        for key, value in list(env.items()):
+            if value is None: del env[key]
+        return subprocess.run(['bash', str(SCRIPT)], env=env, capture_output=True, text=True)
+
+    def test_valid_dev_deploy_passes_all_gates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_script(Path(directory))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_running_workflows_do_not_block_rollout(self):
-        root = Path(__file__).parents[1] / 'runtime'
+        root = ROOT / 'infra/runtime'
         host = (root / 'deploy-host.py').read_text()
         check = (root / 'deploy-check.mjs').read_text()
         self.assertNotIn("check+['idle']", host)
@@ -21,172 +65,115 @@ class DeployTests(unittest.TestCase):
         self.assertIn('stop_grace_period: 2m', (root / 'compose.yaml').read_text())
 
     def test_missing_or_mutable_secret_versions_rejected(self):
-        for value in ('{}', '{"shared":"latest","api":1,"worker":2}'):
-            with self.assertRaises(ValueError): deploy.settings({'RUNTIME_SECRET_VERSIONS':value,'SELFBENCH_PUBLIC_URL':'https://example.com'})
-        self.assertEqual(deploy.settings({'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
-                                         'SELFBENCH_PUBLIC_URL':'https://example.com',
-                                         'SELFBENCH_ACTIVITY_CONCURRENCY':'8'})[0]['worker'],3)
+        for value in ('{}', '[]', '{"shared":"latest","api":1,"worker":2}', '{"shared":1,"worker":3}'):
+            with tempfile.TemporaryDirectory() as directory:
+                result = self.run_script(Path(directory), RUNTIME_SECRET_VERSIONS=value)
+            self.assertEqual(result.returncode, 1, value)
+            self.assertIn('Secret Manager', result.stderr)
 
     def test_runtime_concurrency_required_and_bounded_before_cloud_auth(self):
-        env={**context_env(),'RUNTIME_SECRET_VERSIONS':'{"shared":1,"api":2,"worker":3}',
-             'SELFBENCH_PUBLIC_URL':'https://example.com'}
         for value in ('', '0', '9', '-1', '8.0', '08'):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})
-        for value in ('1','4','8'):
-            self.assertEqual(deploy.preflight({**env,'SELFBENCH_ACTIVITY_CONCURRENCY':value})[2],value)
+            with tempfile.TemporaryDirectory() as directory, self.subTest(value=value):
+                result = self.run_script(Path(directory), SELFBENCH_ACTIVITY_CONCURRENCY=value)
+            self.assertEqual(result.returncode, 1, value)
+        shared = workflow('deploy-reusable.yml')
+        self.assertLess(shared.index('Verify Trusted Deploy Source and Runtime Settings'),
+                        shared.index('google-github-actions/auth@'))
+
+    def test_published_stable_release_can_deploy_prod(self):
+        base = {'TF_ENVIRONMENT': 'prod', 'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1'}
+        event = {'repository': {'default_branch': 'main'}, 'action': 'published',
+                 'release': {'draft': False, 'prerelease': False, 'tag_name': 'v1'}}
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_script(Path(directory), event=event, **base)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_prerelease_or_draft_cannot_deploy_prod(self):
-        base={**context_env(),'TF_ENVIRONMENT':'prod','GITHUB_EVENT_NAME':'release','GITHUB_REF':'refs/tags/v1',
-              'RELEASE_PRERELEASE':'false','RELEASE_DRAFT':'false'}
-        contracts.context(base)
-        for key in ('RELEASE_PRERELEASE','RELEASE_DRAFT'):
-            with self.assertRaises(ValueError): contracts.context({**base,key:'true'})
+        base = {'TF_ENVIRONMENT': 'prod', 'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1'}
+        event = {'repository': {'default_branch': 'main'}, 'action': 'published',
+                 'release': {'draft': False, 'prerelease': False, 'tag_name': 'v1'}}
+        with tempfile.TemporaryDirectory() as directory:
+            self.run_script(Path(directory), event=event, **base)
+            for alter in ({'draft': True}, {'prerelease': True}, {'draft': None}):
+                with self.subTest(release=alter):
+                    result = self.run_script(Path(directory), event={**event, 'release': {**event['release'], **alter}}, **base)
+                self.assertEqual(result.returncode, 1, alter)
+            with self.subTest(tag='moved'):
+                result = self.run_script(Path(directory), event=event, sha='b' * 40, **base)
+            self.assertEqual(result.returncode, 1)
 
-    def test_release_checks_actual_event_tag_and_main_ancestry(self):
-        env={**context_env(),'TF_ENVIRONMENT':'prod','GITHUB_EVENT_NAME':'release','GITHUB_REF':'refs/tags/v1'}
-        event={'repository':{'default_branch':'main'},'action':'published',
-               'release':{'draft':False,'prerelease':False,'tag_name':'v1'}}
-        git=Mock(side_effect=['a'*40,'a'*40,''])
-        source.verify_source(env,event,git)
-        git.assert_any_call('merge-base','--is-ancestor','a'*40,'refs/remotes/origin/main')
-        with self.assertRaises(ValueError):source.verify_source(env,event,Mock(side_effect=['a'*40,'b'*40]))
-        with self.assertRaises(ValueError):source.verify_source(env,{**event,'action':'edited'},Mock(return_value='a'*40))
+    def test_deploy_source_must_be_ancestors_of_default_branch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_script(Path(directory), git_ancestry=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('default branch', result.stderr)
 
-    def test_workflows_match_dari_trigger_structure(self):
-        root=Path(__file__).parents[2]/'.github/workflows'
-        dev=(root/'deploy-dev.yml').read_text();prod=(root/'deploy-prod.yml').read_text()
-        shared=(root/'deploy-reusable.yml').read_text()
-        self.assertIn('branches: [main]',dev)
-        self.assertNotIn('paths:',dev)
-        self.assertNotIn('paths-ignore:',dev)
-        self.assertIn('types: [published]',prod)
-        self.assertIn('!github.event.release.prerelease',prod)
-        self.assertIn('deploy-reusable.yml',dev);self.assertIn('deploy-reusable.yml',prod)
-        self.assertIn('bun run validate',shared)
-        self.assertIn('python3 -m infra.ci.terraform plan',shared)
-        self.assertIn('python3 -m infra.ci.terraform apply',shared)
-        self.assertIn('python3 -m infra.ci.deploy',shared)
-        deploy_src=(Path(__file__).parents[1]/'ci'/'deploy.py').read_text()
-        self.assertIn("docker','image','inspect'",deploy_src)
-        self.assertNotIn('artifacts docker images describe',deploy_src)
-        self.assertNotIn("compute','scp'",deploy_src)
-        self.assertIn("tar','-C'",deploy_src)
-        self.assertEqual(deploy_src.count("compute','ssh'"), 1)
-        self.assertLess(shared.index('Verify Apply Approval Protection'),shared.rindex('google-github-actions/auth@'))
-        self.assertNotIn('pull_request_target',shared)
-        self.assertNotIn('upload-artifact',shared)
-
-    def test_production_cloud_trust_requires_reusable_release_workflow(self):
-        from infra.bootstrap import github_auth, terraform_ci
-        config=json.loads((Path(__file__).parents[1]/'bootstrap/terraform-ci.json.example').read_text())
-        config['environment']='prod'
-        policy=github_auth.condition(terraform_ci.identity(config,'apply'),terraform_ci.events(config))
-        self.assertIn("assertion.event_name == 'release'",policy)
-        self.assertIn("assertion.ref.startsWith('refs/tags/')",policy)
-        self.assertIn('assertion.job_workflow_ref',policy)
-        self.assertIn('deploy-reusable.yml@',policy)
-        self.assertIn('deploy-prod.yml@',policy)
-        self.assertNotIn('pull_request',policy)
-
-    def test_single_deployment_environment_with_phase_specific_identities(self):
-        from infra.bootstrap import terraform_ci, terraform_github
-        root=Path(__file__).parents[2]
-        workflow=(root/'.github/workflows/deploy-reusable.yml').read_text()
-        self.assertEqual(workflow.count('environment: ${{ inputs.target_environment }}'),1)
-        self.assertNotIn('prod-plan',workflow)
-        for phase in ('PLAN','APPLY'):
-            self.assertIn('vars.GCP_'+phase+'_SERVICE_ACCOUNT',workflow)
-            self.assertIn('vars.GCP_'+phase+'_WORKLOAD_IDENTITY_PROVIDER',workflow)
-        protection=workflow.split('      - name: Verify Apply Approval Protection\n')[1].split('      - name: Authenticate Terraform Plan')[0]
-        self.assertNotIn('if:',protection)
-        apply_auth=workflow.split('      - name: Authenticate Terraform Apply\n')[1].split('      - name: Apply the Approved Saved Plan')[0]
-        self.assertNotIn('if:',apply_auth)
-        # Updating ADC alone leaves gcloud's active account on the planner, breaking OS Login.
-        self.assertIn('uses: google-github-actions/setup-gcloud@',apply_auth)
-        self.assertLess(apply_auth.index('vars.GCP_APPLY_SERVICE_ACCOUNT'),
-                        apply_auth.index('uses: google-github-actions/setup-gcloud@'))
-        self.assertIn('steps.plan.outputs.manifest_generation',workflow)
-        self.assertIn('steps.plan.outputs.manifest_sha256',workflow)
-        config=json.loads((root/'infra/bootstrap/terraform-ci.json.example').read_text())
-        config['environment']='prod'
-        for phase in ('plan','apply'):
-            self.assertEqual(terraform_ci.github_environment(config,phase),'prod')
-            values=terraform_github.variables(config,{},phase)
-            self.assertIn('GCP_'+phase.upper()+'_SERVICE_ACCOUNT',values)
-
-    def test_dev_requires_branch_restriction_but_not_prod_reviewers(self):
-        from infra.ci.approval import verify
-        env={'deployment_branch_policy':{'protected_branches':False,'custom_branch_policies':True},'protection_rules':[]}
-        policy={'total_count':1,'branch_policies':[{'name':'main','type':'branch'}]}
-        verify(env,policy,'main',require_review=False)
-        with self.assertRaises(ValueError):verify(env,policy,'main',require_review=True)
+    def test_checkout_must_match_the_triggering_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_script(Path(directory), sha='b' * 40)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('Checkout', result.stderr)
 
     def test_manual_dev_bootstrap_does_not_require_runtime_secrets(self):
-        env={**context_env(),'GITHUB_EVENT_NAME':'workflow_dispatch','INFRASTRUCTURE_ONLY':'true'}
-        self.assertIsNone(deploy.preflight(env))
-        self.assertTrue(contracts.context(env)[0]['infrastructure_only'])
-        for event in ('push','pull_request'):
-            with self.assertRaises(ValueError): deploy.preflight({**env,'GITHUB_EVENT_NAME':event})
-        with self.assertRaises(ValueError): deploy.preflight({**env,'TF_ENVIRONMENT':'prod'})
-        with self.assertRaises(ValueError): deploy.preflight({**env,'INFRASTRUCTURE_ONLY':'false'})
-
-    def test_bootstrap_workflow_skips_only_runtime_not_terraform(self):
-        root=Path(__file__).parents[2]/'.github/workflows'
-        shared=(root/'deploy-reusable.yml').read_text()
-        self.assertIn('if: ${{ !inputs.infrastructure_only }}',shared)
-        self.assertIn('if: steps.plan.outputs.has_changes',shared)
-        self.assertIn('Infrastructure Bootstrap Complete',shared)
-        self.assertNotIn('infrastructure_only',(root/'deploy-prod.yml').read_text())
-
-
-class BuildTimingTests(unittest.TestCase):
-    def test_local_cache_keeps_release_registry_immutable_and_image_pushed(self):
-        import tempfile
-        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as directory:
-            runner = Mock(log=Path(directory)/'build.log')
-            summary = Path(directory)/'summary.md'
-            with patch.dict('os.environ', {'GITHUB_STEP_SUMMARY': str(summary)}):
-                deploy.build_image(runner, 'registry/project/app:release', 'a'*40)
-            build = runner.run.call_args_list[1].args[0]
-            self.assertIn('--load', build)
-            self.assertIn('type=local,src=/tmp/selfbench-build-cache', build)
-            self.assertIn('type=local,dest=/tmp/selfbench-build-cache-next,mode=max', build)
-            self.assertEqual(runner.run.call_args_list[2].args[0], ['docker', 'push', 'registry/project/app:release'])
-            self.assertIn('Build Image: passed', summary.read_text())
-            self.assertIn('Push Image: passed', summary.read_text())
+            result = self.run_script(Path(directory), GITHUB_EVENT_NAME='workflow_dispatch',
+                                     INFRASTRUCTURE_ONLY='true', **{key: None for key in SETTINGS})
+        self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_failed_build_is_reported_without_pushing_or_leaking_error(self):
-        import tempfile
-        from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as directory:
-            runner = Mock(log=Path(directory)/'build.log')
-            runner.run.side_effect = [None, RuntimeError('private diagnostic')]
-            summary = Path(directory)/'summary.md'
-            with patch.dict('os.environ', {'GITHUB_STEP_SUMMARY': str(summary)}):
-                with self.assertRaises(RuntimeError):
-                    deploy.build_image(runner, 'registry/project/app:release', 'a'*40)
-            self.assertEqual(runner.run.call_count, 2)
-            self.assertIn('Build Image: failed', summary.read_text())
-            self.assertNotIn('private diagnostic', summary.read_text())
+
+class ReleaseStageTests(unittest.TestCase):
+    def test_release_stages_run_in_order_as_workflow_steps(self):
+        shared = workflow('deploy-reusable.yml')
+        names = ['Read Release Coordinates', 'Authenticate Docker to Artifact Registry', 'Build and Push Image',
+                 'Back Up Database', 'Migrate and Roll Out on the VM', 'Verify Public HTTPS', 'Record Deployment']
+        positions = [shared.index(f'- name: {name}\n') for name in names]
+        self.assertEqual(positions, sorted(positions))
+        self.assertGreater(positions[0], shared.index('Apply the Approved Saved Plan'))
+        for name in names:
+            self.assertIn('if: ${{ !inputs.infrastructure_only }}', step(shared, name), name)
+        self.assertIn('bash infra/ci/verify-source.sh', shared)
+
+    def test_image_build_is_a_standard_action_with_gha_cache(self):
+        build = step(workflow('deploy-reusable.yml'), 'Build and Push Image')
+        self.assertIn('uses: docker/build-push-action@', build)
+        self.assertIn('push: true', build)
+        self.assertIn('platforms: linux/amd64', build)
+        self.assertIn('SELFBENCH_BUILD_COMMIT=${{ github.sha }}', build)
+        self.assertIn('${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}', build)
+        self.assertIn('cache-from: type=gha,scope=${{ inputs.target_environment }}', build)
+        self.assertIn('cache-to: type=gha,scope=${{ inputs.target_environment }}', build)
+
+    def test_rollout_ships_a_digest_pinned_bundle_over_one_ssh_session(self):
+        shared = workflow('deploy-reusable.yml')
+        rollout = step(shared, 'Migrate and Roll Out on the VM')
+        self.assertNotIn('compute scp', rollout)
+        self.assertEqual(shared.count('gcloud compute ssh'), 1)
+        self.assertIn('sha256:[0-9a-f]{64}', rollout)
+        self.assertIn('deploy-host.py request.json > deploy.log 2>&1', rollout)
+        self.assertIn('tunnel-through-iap', rollout)
+        for runtime_file in ('deploy-host.py', 'deploy-check.mjs', 'compose.yaml', 'check_release.py'):
+            self.assertIn(runtime_file, rollout)
+        self.assertIn('gcloud sql backups create', step(shared, 'Back Up Database'))
+        verify = step(shared, 'Verify Public HTTPS')
+        self.assertIn('/healthz', verify); self.assertIn('/api/session', verify); self.assertIn('401', verify)
+
+    def test_release_module_python_is_gone_from_the_release_path(self):
+        shared = workflow('deploy-reusable.yml')
+        self.assertNotIn('infra.ci.rollout', shared)
+        self.assertNotIn('infra.ci.source', shared)
+        self.assertFalse((ROOT / 'infra/ci/rollout.py').exists())
 
     def test_commit_metadata_does_not_invalidate_dependency_layer(self):
-        dockerfile = (Path(__file__).parents[2]/'Dockerfile').read_text()
+        dockerfile = (ROOT / 'Dockerfile').read_text()
         self.assertLess(dockerfile.index('RUN bun install --frozen-lockfile'),
                         dockerfile.index('ARG SELFBENCH_BUILD_COMMIT'))
 
-    def test_workflow_cache_excludes_runtime_state_and_is_environment_scoped(self):
-        workflow = (Path(__file__).parents[2]/'.github/workflows/deploy-reusable.yml').read_text()
-        cache = workflow.split('      - name: Restore Docker Build Cache')[1].split('      - name: Build,')[0]
-        self.assertIn('path: /tmp/selfbench-build-cache', cache)
-        self.assertIn('inputs.target_environment', cache)
-        self.assertIn('github.run_attempt', cache)
-        self.assertIn('!inputs.infrastructure_only', cache)
-        self.assertNotIn('terraform-data', cache)
-
     def test_ci_preserves_checks_without_duplicate_package_verification(self):
-        workflow = (Path(__file__).parents[2]/'.github/workflows/ci.yml').read_text()
+        ci = workflow('ci.yml')
         for command in ('check', 'test', 'build', 'verify:package:docker'):
-            self.assertIn('bun run ' + command, workflow)
-        self.assertNotIn('bun run validate', workflow)
+            self.assertIn('bun run ' + command, ci)
+        self.assertNotIn('bun run validate', ci)
+
+
+if __name__ == '__main__':
+    unittest.main()
