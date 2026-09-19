@@ -9,6 +9,27 @@ import { withAgentFeed } from "../src/temporal/activities/agent-feed.js";
 
 const line = (event: unknown) => Buffer.from(`${JSON.stringify(event)}\n`);
 
+test("cached snapshots refresh after deltas and cannot be changed by readers", () => {
+  const feed = new PiEventFeed(["sensitive-secret"]);
+  const push = (delta: string) =>
+    feed.push(
+      line({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta },
+      }),
+    );
+  push("sensitive-");
+  const first = feed.events();
+  expect(first[0]?.text).toBe("sensitive-");
+  const event = first[0];
+  if (!event) throw new Error("expected a feed event");
+  event.text = "modified by reader";
+  expect(feed.events()[0]?.text).toBe("sensitive-");
+  push("secret");
+  expect(feed.events()[0]?.text).toBe("[REDACTED]");
+  expect(feed.events()[0]?.text).toBe("[REDACTED]");
+});
+
 test("native Pi deltas survive chunk boundaries, replace cumulative tool output and omit reasoning", () => {
   const feed = new PiEventFeed(["sensitive-secret"]);
   const bytes = Buffer.concat([

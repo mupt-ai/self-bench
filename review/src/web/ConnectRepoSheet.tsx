@@ -188,17 +188,17 @@ export function ConnectRepoSheet({
               <span className="truncate font-mono text-sm font-medium">{repo.name}</span>
               <span className="flex max-w-full flex-wrap gap-2 text-xs text-muted-foreground">
                 {connected.has(repo.fullName.toLowerCase()) && (
-                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
                     Connected
                   </span>
                 )}
                 {repo.private && (
-                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
                     Private
                   </span>
                 )}
                 {repo.archived && (
-                  <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
                     Archived
                   </span>
                 )}

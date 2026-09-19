@@ -51,6 +51,19 @@ class SourceVerificationTests(unittest.TestCase):
             result = self.run_script(Path(directory))
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_running_workflows_do_not_block_rollout(self):
+        root = ROOT / 'infra/runtime'
+        host = (root / 'deploy-host.py').read_text()
+        check = (root / 'deploy-check.mjs').read_text()
+        self.assertNotIn("check+['idle']", host)
+        self.assertNotIn('workflow.count', check)
+        self.assertNotIn('.terminate(', check)
+        self.assertNotIn('.cancel(', check)
+        self.assertLess(host.index("run(compose+['stop','api'])"),
+                        host.index("run(compose+['stop','worker'])"))
+        self.assertIn("run(check+['worker'])", host)
+        self.assertIn('stop_grace_period: 2m', (root / 'compose.yaml').read_text())
+
     def test_missing_or_mutable_secret_versions_rejected(self):
         for value in ('{}', '[]', '{"shared":"latest","api":1,"worker":2}', '{"shared":1,"worker":3}'):
             with tempfile.TemporaryDirectory() as directory:

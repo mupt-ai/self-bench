@@ -33,7 +33,7 @@ export function Lockup({
       <span
         className={
           compact
-            ? "inline-flex size-6 shrink-0 items-center justify-center rounded-[50%] border border-white/40 text-foreground [&>svg]:size-4"
+            ? "inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-white/40 text-foreground [&>svg]:size-4"
             : "size-9 shrink-0 text-foreground"
         }
       >

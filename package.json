@@ -61,6 +61,7 @@
   "dependencies": {
     "@clack/prompts": "1.7.0",
     "@google-cloud/storage": "^7.22.0",
+    "@node-rs/crc32": "1.10.6",
     "@openai/codex": "0.153.4",
     "@sinclair/typebox": "0.34.41",
     "@temporalio/activity": "^1.23.0",
