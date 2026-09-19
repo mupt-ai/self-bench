@@ -106,7 +106,7 @@ def main():
             coordinates.update({f'SELFBENCH_{role.upper()}_ENV_FILE': f'{release}/{role}.env'
                                 for role in ('shared', 'api', 'worker')})
             folder=Path(directory)/'runtime'; folder.mkdir()
-            for name in ('deploy-host.py','deploy-check.mjs','compose.yaml','check_release.py'):
+            for name in ('deploy-host.py','compose.yaml','check_release.py'):
                 (folder/name).write_bytes((Path('infra/runtime')/name).read_bytes())
             (folder/'release.env').write_text(''.join(f'{key}={value}\n' for key,value in coordinates.items()))
             service = os.environ.get('DEPLOY_SERVICE', 'all')

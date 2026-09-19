@@ -48,12 +48,15 @@ versions on the VM using its identity. Secret payloads are not placed in GitHub 
 The release files and logs are root-owned and retained on the VM for explicit recovery.
 
 The host receives a standard Compose `release.env` and explicit service/secret-version arguments;
-there is no separate release JSON schema. Pull the selected image, validate configuration using
+there is no separate release JSON schema or mounted deployment JavaScript. The image packages
+`dist/deploy-main.js config` and `dist/deploy-main.js migrate`. Pull the selected image, validate configuration using
 that image's application code, run migrations once, then use `docker compose up -d --no-deps --wait`
 for the selected services. API-only deployments do not restart the worker; worker-only deployments
-do not restart the API. Full deployments update the API first, then the worker. The worker check
-requires recent workflow and activity polls from the newly created container's hostname, not an
-old worker's cached poller record. Public HTTPS health and anonymous-session rejection are checked.
+do not restart the API. Full deployments update the API first, then the worker. Compose waits for
+each container's own health check. The worker exposes a loopback-only health endpoint on port 8081
+that returns success while its Temporal SDK worker is RUNNING; it does not mistake a full worker's
+lack of recent polls for failure. This is process readiness, not an end-to-end Temporal connectivity
+probe. Public HTTPS health and anonymous-session rejection are checked.
 
 Deployments do not wait for every workflow in the namespace to finish. The worker receives SIGTERM
 and has 90 seconds to finish activities before SDK cancellation, within Compose's two-minute stop

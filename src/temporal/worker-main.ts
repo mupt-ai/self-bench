@@ -9,6 +9,7 @@ import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { createActivities } from "./activities.js";
 import { connectTemporalWorker } from "./connection.js";
+import { createWorkerHealthServer } from "./worker-health.js";
 
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
@@ -38,8 +39,11 @@ const worker = await Worker.create({
 console.log(
   `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency}`,
 );
+const health = createWorkerHealthServer(() => worker.getState());
+health.listen(8081, "127.0.0.1");
 try {
   await worker.run();
 } finally {
+  health.close();
   await credentials?.close();
 }

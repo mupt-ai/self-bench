@@ -209,7 +209,7 @@ extend the reviewed contract when adding another generation backend or feature.
 
 The CI deployment performs image pull, application configuration validation, and a backed-up
 migration before replacing the selected services with `docker compose up -d --no-deps --wait`.
-It preserves the API health check and verifies the new worker's Temporal poller identity. Use the
+Compose checks API health and the new worker's own runtime health endpoint. Use the
 `api`, `worker`, or `all` target as described in [Rollout Behavior](terraform-cicd.md#rollout-behavior).
 
 Do not print `docker compose config` with real secrets: it expands env-files. Independent service

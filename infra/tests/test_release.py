@@ -149,6 +149,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("MODAL_TOKEN_ID", worker["environment"])
         self.assertNotIn("GH_TOKEN", worker["environment"])
         self.assertNotIn("GITHUB_OAUTH_CLIENT_SECRET", worker["environment"])
+        self.assertIn("http://127.0.0.1:8081/healthz", worker["healthcheck"]["test"][-1])
         self.assertFalse(worker.get("depends_on"))
         self.assertFalse(worker.get("ports"))
         self.assertFalse(worker.get("volumes"))
