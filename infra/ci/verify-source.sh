@@ -23,7 +23,8 @@ case "$TF_ENVIRONMENT" in
   prod)
     [[ "$GITHUB_EVENT_NAME" == release ]] || die 'Production requires a published stable release tag.'
     [[ $(jq -r '.action // ""' "$event_path") == published ]] || die 'Only published stable releases may deploy production.'
-    [[ $(jq -r '.release.draft // ""' "$event_path") == false && $(jq -r '.release.prerelease // ""' "$event_path") == false ]] \
+    # jq's // also replaces false, so compare the raw booleans and fail closed on missing keys.
+    [[ $(jq -r '.release.draft' "$event_path") == false && $(jq -r '.release.prerelease' "$event_path") == false ]] \
       || die 'Only published stable releases may deploy production.'
     tag=$(jq -r '.release.tag_name // ""' "$event_path")
     [[ "$GITHUB_REF" == "refs/tags/$tag" ]] || die 'Only published stable releases may deploy production.'

@@ -80,6 +80,14 @@ class SourceVerificationTests(unittest.TestCase):
         self.assertLess(shared.index('Verify Trusted Deploy Source and Runtime Settings'),
                         shared.index('google-github-actions/auth@'))
 
+    def test_published_stable_release_can_deploy_prod(self):
+        base = {'TF_ENVIRONMENT': 'prod', 'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1'}
+        event = {'repository': {'default_branch': 'main'}, 'action': 'published',
+                 'release': {'draft': False, 'prerelease': False, 'tag_name': 'v1'}}
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.run_script(Path(directory), event=event, **base)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_prerelease_or_draft_cannot_deploy_prod(self):
         base = {'TF_ENVIRONMENT': 'prod', 'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1'}
         event = {'repository': {'default_branch': 'main'}, 'action': 'published',
