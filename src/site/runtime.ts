@@ -10,10 +10,12 @@ import type { SelfBenchConfig } from "../config.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
+import { createUsageStore } from "../managed/usage-store.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
 import { evaluationStarter } from "./evaluation-start.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./github-repos.js";
+import { managedOffer } from "./managed-generation.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./pr-routes.js";
 import { createRepoStore } from "./repo-store.js";
 import { createRunStore } from "./run-store.js";
@@ -95,6 +97,8 @@ export async function openSite(
       start: (input, token) => batches.start(input, token),
       status: (runId) => batches.status(runId),
       cancel: (runId) => batches.cancel(runId),
+      managed: managedOffer().models || managedOffer().sandbox,
+      usage: createUsageStore(database.db),
     }),
     tasks: createTaskRoutes({
       users,
@@ -111,6 +115,7 @@ export async function openSite(
       repos,
       tasks,
       artifacts,
+      managed: managedOffer().models || managedOffer().sandbox,
       start: (workflowId, input) =>
         temporalStarter(
           client,

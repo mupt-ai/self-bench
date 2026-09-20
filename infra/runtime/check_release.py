@@ -68,9 +68,21 @@ def validate(environment, project, release_path):
     # secrets. GH_TOKEN is also resolved from the signed-in user's credential
     # where generation needs repository access.
     required_worker = {"SELFBENCH_API_TOKEN"}
-    for data, keys in ((shared, required_shared), (api, required_api), (worker, required_worker)):
-        if set(data) != keys:
+    # Managed generation: platform-owned model/sandbox access. The offer flags and the E2B
+    # key (the API runs managed export sandboxes) are shared; the OpenRouter key is
+    # worker-only, and never counts as a user model credential.
+    optional_shared = {"SELFBENCH_MANAGED_MODELS", "SELFBENCH_MANAGED_SANDBOX",
+                       "SELFBENCH_MANAGED_E2B_API_KEY", "SELFBENCH_MANAGED_E2B_DOMAIN"}
+    optional_worker = {"SELFBENCH_MANAGED_OPENROUTER_API_KEY"}
+    for data, keys, extras in ((shared, required_shared, optional_shared),
+                               (api, required_api, set()),
+                               (worker, required_worker, optional_worker)):
+        if not set(data) <= keys | extras or not set(data) & keys == keys:
             raise ValueError("Env-file keys differ from this initial Modal deployment contract.")
+    if shared.get("SELFBENCH_MANAGED_MODELS") == "true" and not worker.get("SELFBENCH_MANAGED_OPENROUTER_API_KEY"):
+        raise ValueError("Managed models require the managed OpenRouter key on the worker.")
+    if shared.get("SELFBENCH_MANAGED_SANDBOX") == "true" and not shared.get("SELFBENCH_MANAGED_E2B_API_KEY"):
+        raise ValueError("Managed sandboxes require the managed E2B key.")
     for key, value in expected.items():
         if shared[key] != value:
             raise ValueError(f"Environment mismatch for {key}.")

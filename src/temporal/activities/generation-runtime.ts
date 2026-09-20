@@ -5,11 +5,16 @@ import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
 import { orgRecords } from "../../evaluation/org-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
+import { meteredSandboxExecutor } from "../../managed/metered-sandbox.js";
+import { withUsageLedger } from "../../managed/usage.js";
+import type { UsageLedger } from "../../managed/usage-store.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../../site/generation-config.js";
-import { generationEnvironment } from "../../site/generation-credentials.js";
+import { generationStageEnvironment, stageAuthoring } from "../../site/generation-credentials.js";
+import { generationExecutionBackend } from "../../site/generation-settings.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../../site/managed-generation.js";
 import { safeHeartbeat } from "./runtime.js";
 
 export async function withGenerationRuntime<T>(
@@ -23,6 +28,7 @@ export async function withGenerationRuntime<T>(
     environment: SelfBenchWorkerConfig["harborEnvironment"],
     configuredRun: RunRequest,
   ) => Promise<T>,
+  usage?: UsageLedger,
 ) {
   if (!run.generation)
     return withTaskSandbox(legacySandbox, () =>
@@ -31,7 +37,7 @@ export async function withGenerationRuntime<T>(
   let env: NodeJS.ProcessEnv;
   try {
     if (!records) throw new Error("Generation credentials are not configured on this worker.");
-    env = await generationEnvironment(records, run.runId, run.generation, process.env);
+    env = await generationStageEnvironment(records, run.runId, run.generation, process.env);
   } catch (error) {
     throw ApplicationFailure.nonRetryable(
       error instanceof Error ? error.message : "Generation credentials unavailable",
@@ -39,10 +45,20 @@ export async function withGenerationRuntime<T>(
     );
   }
   const settings = run.generation.settings;
+  const scoped = run.generation.orgId ? orgRecords(records, run.generation.orgId) : records;
+  let authoring: { provider: string; model: string; reasoningEffort: string };
+  try {
+    authoring = await stageAuthoring(scoped, run.generation, stage);
+  } catch (error) {
+    throw ApplicationFailure.nonRetryable(
+      error instanceof Error ? error.message : "Generation credentials unavailable",
+      "GenerationConfiguration",
+    );
+  }
   let selected: SelfBenchWorkerConfig;
   try {
     if (
-      run.version.executionBackend !== settings.sandbox ||
+      run.version.executionBackend !== generationExecutionBackend(settings.sandbox) ||
       (settings.sandboxImage && settings.sandboxImage !== run.version.sandboxImage)
     )
       throw new Error("Generation runtime does not match its saved configuration.");
@@ -58,13 +74,15 @@ export async function withGenerationRuntime<T>(
     );
   }
   // A managed E2B run stamped by the API must use this build's template; build it in the
-  // user's account before the first sandbox request if the account does not have it yet.
+  // run's E2B account — the platform's own for managed sandboxes — before the first
+  // sandbox request if the account does not have it yet.
   if (
     selected.execution.kind === "e2b" &&
     selected.execution.image === managedE2BTemplateReference() &&
     run.version.sandboxImage === selected.execution.image
   ) {
-    const credentialId = settings.sandboxCredentialId;
+    const managed = settings.sandbox === "managed";
+    const credentialId = managed ? MANAGED_E2B_TEMPLATE_OWNER : settings.sandboxCredentialId;
     if (!credentialId || !records)
       throw ApplicationFailure.nonRetryable(
         "Managed E2B template build is not configured on this worker.",
@@ -74,7 +92,8 @@ export async function withGenerationRuntime<T>(
       await ensureManagedE2BTemplate({
         reference: selected.execution.image,
         credentials: selected.execution.credentials,
-        records: orgRecords(records, run.generation.orgId),
+        // A platform template is shared across organizations, so its build lock is global.
+        records: managed ? records : orgRecords(records, run.generation.orgId),
         credentialId,
         onLog: safeHeartbeat,
         signal: Context.current().cancellationSignal,
@@ -103,18 +122,34 @@ export async function withGenerationRuntime<T>(
     ...run,
     authoring: {
       ...run.authoring,
-      model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
-      reasoningEffort: settings.reasoning,
+      provider: authoring.provider as RunRequest["authoring"]["provider"],
+      model: authoring.model,
+      reasoningEffort: authoring.reasoningEffort as RunRequest["authoring"]["reasoningEffort"],
     },
   };
-  return withExecutionEnvironment(env, async () => {
-    const sandbox = createSandboxExecutor(execution, env);
-    try {
-      return await withTaskSandbox(sandbox, () =>
-        action(sandbox, selected.harborEnvironment, configuredRun),
-      );
-    } finally {
-      sandbox.close();
-    }
+  const generation = run.generation;
+  const metered = meteredSandboxExecutor(createSandboxExecutor(execution, env), {
+    managedModel: settings.modelAccess === "managed",
+    managedSandbox: settings.sandbox === "managed",
+    model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
   });
+  return withExecutionEnvironment(env, async () =>
+    withUsageLedger(
+      async (entry) =>
+        usage?.record({
+          ...entry,
+          runId: run.runId,
+          orgId: generation.orgId ?? generation.ownerId,
+        }),
+      async () => {
+        try {
+          return await withTaskSandbox(metered, () =>
+            action(metered, selected.harborEnvironment, configuredRun),
+          );
+        } finally {
+          metered.close();
+        }
+      },
+    ),
+  );
 }

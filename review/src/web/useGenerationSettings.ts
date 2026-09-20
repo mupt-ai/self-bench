@@ -7,6 +7,7 @@ import { fetchGenerationOptions } from "./api";
 import type { GenerationOptions } from "./GenerationFields";
 import {
   defaultGenerationSettings,
+  modelCredentialMatches,
   readGenerationSettings,
   rememberGenerationSettings,
   withDefaultCredentials,
@@ -33,7 +34,9 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
     }
     if (
       options &&
-      (value.sandbox !== previous.sandbox || value.harborEnvironment !== previous.harborEnvironment)
+      (value.sandbox !== previous.sandbox ||
+        value.harborEnvironment !== previous.harborEnvironment ||
+        value.modelAccess !== previous.modelAccess)
     )
       value = withDefaultCredentials(value, options);
     selection.current = { key, settings: value };
@@ -82,25 +85,30 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
       window.removeEventListener("focus", refresh);
     };
   }, [org, fullName, enabled, retry, key]);
+  const managedModels = options?.managed?.models === true;
+  const managedSandbox = options?.managed?.sandbox === true;
   const valid =
     !!options?.available &&
     !error &&
     generationSettingsSchema.safeParse(settings).success &&
     options.models.includes(settings.authorModel) &&
     options.models.includes(settings.verifierModel) &&
-    options.sandboxes.includes(settings.sandbox) &&
-    options.credentials.some(
-      (item) =>
-        item.id === settings.modelCredentialId &&
-        item.kind === "openai" &&
-        ["api-key", "codex-login"].includes(item.auth),
-    ) &&
-    options.credentials.some(
-      (item) =>
-        item.id === settings.sandboxCredentialId &&
-        item.kind === settings.sandbox &&
-        item.auth === "api-key",
-    ) &&
+    (managedSandbox || options.sandboxes.includes(settings.sandbox)) &&
+    (settings.modelAccess === "managed"
+      ? managedModels
+      : options.credentials.some(
+          (item) =>
+            item.id === settings.modelCredentialId &&
+            modelCredentialMatches(item, settings.authorModel, settings.verifierModel),
+        )) &&
+    (settings.sandbox !== "managed"
+      ? options.credentials.some(
+          (item) =>
+            item.id === settings.sandboxCredentialId &&
+            item.kind === settings.sandbox &&
+            item.auth === "api-key",
+        )
+      : managedSandbox) &&
     (!(settings.sandbox === "e2b" || settings.sandbox === "vercel") ||
       options.credentials.some(
         (item) =>

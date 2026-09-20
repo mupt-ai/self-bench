@@ -13,7 +13,7 @@ import {
 import { assertPullRequestBelongsToRepository } from "../../github.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../../provenance.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
-import { githubToken, loadPiModelAuth } from "../../subscription-auth.js";
+import { githubToken, loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { discoveryShardPrompt, modalAgentScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, DISCOVERY_TIMEOUT_MS } from "./constants.js";
 import {
@@ -113,14 +113,14 @@ export async function discoverCandidateShard(
               ],
               outputPaths: ["/work/discovery.json"],
               secrets: {
-                ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-                ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
+                ...piModelAuthSecrets(piAuth),
                 ...(ghToken ? { GH_TOKEN: ghToken } : {}),
               },
               environment: {
                 SOURCE_REPO_URL: run.repository.url,
                 SOURCE_COMMIT: run.repository.commit,
                 AUTHOR_MODEL: run.authoring.model,
+                AUTHOR_PROVIDER: piAuth.provider,
                 AUTHOR_THINKING: run.authoring.reasoningEffort,
                 SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
                 SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",

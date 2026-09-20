@@ -23,6 +23,14 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
   SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
   SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+  # Managed generation: the site can offer model access and sandboxes on SelfBench's own
+  # OpenRouter/E2B accounts. Keys go only to the service that uses them (worker, plus the
+  # API for managed exports).
+  SELFBENCH_MANAGED_MODELS: ${SELFBENCH_MANAGED_MODELS:-}
+  SELFBENCH_MANAGED_SANDBOX: ${SELFBENCH_MANAGED_SANDBOX:-}
+  SELFBENCH_MANAGED_OPENROUTER_API_KEY: ${SELFBENCH_MANAGED_OPENROUTER_API_KEY:-}
+  SELFBENCH_MANAGED_E2B_API_KEY: ${SELFBENCH_MANAGED_E2B_API_KEY:-}
+  SELFBENCH_MANAGED_E2B_DOMAIN: ${SELFBENCH_MANAGED_E2B_DOMAIN:-}
   # The site database: users, connected repos, and evaluation records. Migrations run at startup.
   SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
   SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}

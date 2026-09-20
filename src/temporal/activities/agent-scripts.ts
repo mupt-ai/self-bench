@@ -134,7 +134,7 @@ if [ -n "\${SELFBENCH_PI_AUTH_JSON:-}" ]; then
 fi
 printf '%s\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
 chmod 600 "$HOME/.pi/agent/settings.json"
-model_provider() { [ -n "\${OPENAI_API_KEY:-}" ] && printf openai || printf openai-codex; }
+model_provider() { [ -n "\${AUTHOR_PROVIDER:-}" ] && printf %s "$AUTHOR_PROVIDER" || { [ -n "\${OPENAI_API_KEY:-}" ] && printf openai || printf openai-codex; }; }
 run_with_heartbeat() {
   "$@" 2>&1 &
   local command_pid=$!

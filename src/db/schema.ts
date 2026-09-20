@@ -2,6 +2,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -183,3 +184,30 @@ export const generationBatches = pgTable("generation_batches", {
   state: jsonb("state").$type<import("../batches/types.js").GenerationBatch>().notNull(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * One metered generation stage's platform usage (model tokens, sandbox seconds, estimated
+ * cost). Only managed resources are recorded: usage on an organization's own credentials is
+ * billed by the provider, not by SelfBench.
+ */
+export const generationUsage = pgTable(
+  "generation_usage",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    runId: text("run_id").notNull(),
+    orgId: bigint("org_id", { mode: "number" }).notNull(),
+    stage: text("stage").notNull(),
+    managed: boolean("managed").notNull(),
+    provider: text("provider"),
+    model: text("model"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    modelCostUsd: doublePrecision("model_cost_usd"),
+    sandboxSeconds: integer("sandbox_seconds").notNull(),
+    sandboxCostUsd: doublePrecision("sandbox_cost_usd"),
+    recordedAt: timestamptz("recorded_at").notNull().defaultNow(),
+  },
+  (table) => [index("generation_usage_run_id").on(table.runId)],
+);

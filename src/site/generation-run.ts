@@ -11,8 +11,10 @@ export function configureGenerationRun(
   config: SelfBenchConfig,
 ) {
   run.generation = generation;
+  // Provisional: the worker re-resolves the provider and the provider-specific model id
+  // from the selected credential per stage before each agent invocation.
   run.authoring = {
-    provider: "openai",
+    provider: generation.settings.modelAccess === "managed" ? "openrouter" : "openai",
     model: generation.settings.authorModel,
     reasoningEffort: generation.settings.reasoning,
   };
@@ -22,8 +24,10 @@ export function configureGenerationRun(
       settings,
       process.env,
       settings.sandboxImage ??
-        (settings.sandbox === config.execution.kind ? config.execution.image : undefined) ??
-        (settings.sandbox === "e2b" ? managedE2BTemplateReference() : undefined),
+        (settings.sandbox !== "managed" && settings.sandbox === config.execution.kind
+          ? config.execution.image
+          : undefined) ??
+        (settings.sandbox === "managed" ? managedE2BTemplateReference() : undefined),
     ),
   );
   run.version.executionBackend = selected.execution.kind;

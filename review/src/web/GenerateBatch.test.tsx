@@ -11,6 +11,10 @@ test("batch creation advances without starting, then closes and opens the submit
     window: browser,
     document: browser.document,
     HTMLElement: browser.HTMLElement,
+    // Radix Tooltip dispatches a CustomEvent on open, which happy-dom's EventTarget
+    // only accepts when it was constructed in happy-dom's own realm.
+    Event: browser.Event,
+    CustomEvent: browser.CustomEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
   };
   const previous = Object.keys(globals).map(
@@ -35,9 +39,10 @@ test("batch creation advances without starting, then closes and opens the submit
       return optionsFail
         ? Response.json({ error: "Settings unavailable" }, { status: 503 })
         : Response.json({
-            models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
+            models: ["gpt-5.6-sol", "gpt-6-astra"],
             sandboxes: ["modal", "e2b"],
             available: optionsAvailable,
+            managed: { models: false, sandbox: false },
             credentials: [
               { id: modelId, kind: "openai", auth: "api-key", name: "Model" },
               ...(hasSandbox
@@ -88,16 +93,17 @@ test("batch creation advances without starting, then closes and opens the submit
     };
     expect(button("Generate").disabled).toBe(false);
     expect(
-      container.querySelector<HTMLSelectElement>('select[aria-label="OpenAI Credential"]')?.value,
+      container.querySelector<HTMLSelectElement>('select[aria-label="Model Credential"]')?.value,
     ).toBe(modelId);
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Modal Credential"]')?.value,
     ).toBe(sandboxId);
     await select("Author Model", "gpt-6-astra");
-    await select("Verifier Model", "gpt-5.6-luna");
+    await select("Verifier Model", "gpt-5.6-sol");
+    await select("Model Access", "credential");
     await select("Reasoning", "low");
     await select("Modal Credential", "");
-    await select("OpenAI Credential", modelId);
+    await select("Model Credential", modelId);
     expect(button("Generate").disabled).toBe(true);
     expect(
       container.querySelector('select[aria-label="Sandbox"] option[value="docker"]'),
@@ -136,8 +142,9 @@ test("batch creation advances without starting, then closes and opens the submit
         candidateCounts: { easy: 1, medium: 1, hard: 1 },
         generation: {
           authorModel: "gpt-6-astra",
-          verifierModel: "gpt-5.6-luna",
+          verifierModel: "gpt-5.6-sol",
           reasoning: "low",
+          modelAccess: "credential",
           sandbox: "modal",
           modelCredentialId: modelId,
           sandboxCredentialId: sandboxId,

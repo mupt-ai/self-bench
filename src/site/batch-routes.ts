@@ -7,9 +7,11 @@ import type { User, UserStore } from "../auth/users.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
+import type { UsageLedger } from "../managed/usage-store.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
+import { managedGenerationOffer } from "./managed-generation.js";
 import type { RepoStore } from "./repo-store.js";
 import type { RunStore } from "./run-store.js";
 import type { TaskStore } from "./task-store.js";
@@ -30,6 +32,10 @@ export interface BatchRoutesOptions {
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
   records?: EncryptedRecordStore;
+  /** Whether this deployment offers managed model access and sandboxes. */
+  managed?: boolean;
+  /** Sums a run's metered platform usage into its status response, when metering is on. */
+  usage?: UsageLedger;
 }
 export interface BatchRoutes {
   handle(
@@ -88,6 +94,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
               orgRecords(options.records, tenant.id),
               tenant.id,
               generation.settings,
+              managedGenerationOffer(options.managed),
             );
           } catch (error) {
             sendJson(response, 400, {
@@ -142,7 +149,11 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
       if (!match[5] && request.method === "GET") {
         const status = await options.status(runId);
         await syncBatchProgress({ repo, tasks, artifacts, status });
-        sendJson(response, 200, status);
+        const usage = await options.usage?.summary(runId);
+        sendJson(response, 200, {
+          ...status,
+          ...(usage && (usage.tokens > 0 || usage.sandboxSeconds > 0) ? { usage } : {}),
+        });
         return true;
       }
       return false;

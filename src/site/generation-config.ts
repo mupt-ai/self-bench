@@ -1,5 +1,6 @@
-import { matchingHarborEnvironment } from "../providers.js";
+import { managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import type { GenerationSettings } from "./generation-settings.js";
+import { generationExecutionBackend, generationHarborEnvironment } from "./generation-settings.js";
 
 const imageVariables = {
   modal: "SELFBENCH_MODAL_IMAGE",
@@ -13,11 +14,15 @@ export function generationConfigEnvironment(
   base: NodeJS.ProcessEnv,
   image = settings.sandboxImage,
 ): NodeJS.ProcessEnv {
+  const backend = generationExecutionBackend(settings.sandbox);
   return {
     ...base,
-    SELFBENCH_EXECUTION_BACKEND: settings.sandbox,
-    SELFBENCH_HARBOR_ENVIRONMENT:
-      settings.harborEnvironment ?? matchingHarborEnvironment(settings.sandbox),
-    ...(image ? { [imageVariables[settings.sandbox]]: image } : {}),
+    SELFBENCH_EXECUTION_BACKEND: backend,
+    SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(settings),
+    ...(backend === "e2b"
+      ? { SELFBENCH_E2B_TEMPLATE: image ?? managedE2BTemplateReference() }
+      : image
+        ? { [imageVariables[backend]]: image }
+        : {}),
   };
 }

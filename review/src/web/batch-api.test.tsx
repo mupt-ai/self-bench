@@ -35,6 +35,7 @@ test("unconfirmed batch starts retain the run ID for navigation without resubmit
         authorModel: "gpt-5.6-sol",
         verifierModel: "gpt-5.6-sol",
         reasoning: "high",
+        modelAccess: "credential",
         sandbox: "modal",
         modelCredentialId: "00000000-0000-4000-8000-000000000001",
         sandboxCredentialId: "00000000-0000-4000-8000-000000000002",

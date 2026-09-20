@@ -5,6 +5,7 @@ import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
+import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
@@ -212,24 +213,27 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
                 {draft.models.length} of 12 configurations
               </p>
             </div>
-            <Button
-              type="button"
-              size="icon"
-              aria-label="Add Model"
-              title="Add Model"
-              disabled={draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)}
-              onClick={() =>
-                setState({
-                  draft: {
-                    ...draft,
-                    models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
-                  },
-                  submitted: false,
-                })
-              }
-            >
-              <Plus className="size-4" aria-hidden="true" />
-            </Button>
+            <InfoTooltip label="Add Model">
+              <Button
+                type="button"
+                size="icon"
+                aria-label="Add Model"
+                disabled={
+                  draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)
+                }
+                onClick={() =>
+                  setState({
+                    draft: {
+                      ...draft,
+                      models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
+                    },
+                    submitted: false,
+                  })
+                }
+              >
+                <Plus className="size-4" aria-hidden="true" />
+              </Button>
+            </InfoTooltip>
           </div>
           <RunModelTable
             models={[...models, custom]}

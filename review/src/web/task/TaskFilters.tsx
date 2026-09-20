@@ -34,7 +34,6 @@ export function TaskFilters({
           disabled={disabled}
           onChange={(event) => onQuery(event.target.value)}
           aria-label="Search Tasks"
-          title="Search by task, PR, or run"
         />
         <label
           htmlFor={statusId}

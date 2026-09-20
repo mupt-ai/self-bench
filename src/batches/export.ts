@@ -7,6 +7,7 @@ import { withTaskSandbox } from "../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import { generationConfigEnvironment } from "../site/generation-config.js";
 import { generationEnvironment } from "../site/generation-credentials.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../site/managed-generation.js";
 import { buildExport } from "../temporal/activities/export.js";
 import type { GenerationBatch } from "./types.js";
 
@@ -29,13 +30,17 @@ export async function exportBatch(
   const config = loadWorkerConfig(env);
   if (config.execution.kind === "e2b" && config.execution.image === managedE2BTemplateReference()) {
     const generation = batch.run.generation;
-    if (!records || !generation?.settings.sandboxCredentialId)
+    const managed = generation?.settings.sandbox === "managed";
+    const credentialId = managed
+      ? MANAGED_E2B_TEMPLATE_OWNER
+      : generation?.settings.sandboxCredentialId;
+    if (!records || !generation || !credentialId)
       throw new Error("Managed export template credentials unavailable");
     await ensureManagedE2BTemplate({
       reference: config.execution.image,
       credentials: config.execution.credentials,
-      records: orgRecords(records, generation.orgId),
-      credentialId: generation.settings.sandboxCredentialId,
+      records: managed ? records : orgRecords(records, generation.orgId),
+      credentialId,
     });
   }
   const executor = createSandboxExecutor(config.execution, env);

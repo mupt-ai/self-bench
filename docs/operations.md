@@ -68,6 +68,10 @@ self-bench up --backend modal --harbor-environment docker
 self-bench up --backend modal --harbor-environment daytona
 ```
 
+### Managed generation
+
+When `SELFBENCH_MANAGED_MODELS=true` and/or `SELFBENCH_MANAGED_SANDBOX=true`, the site offers managed model access and managed sandboxes: generation runs on SelfBench's own OpenRouter and E2B accounts instead of an organization credential, and every stage's token usage and sandbox seconds are metered into the `generation_usage` table with an estimated cost. The platform keys are `SELFBENCH_MANAGED_OPENROUTER_API_KEY` (worker only) and `SELFBENCH_MANAGED_E2B_API_KEY` plus optional `SELFBENCH_MANAGED_E2B_DOMAIN` (shared, since the API runs managed export sandboxes). Managed E2B templates are built on first use under the `platform` lock and shared across organizations. Users can still select their own credentials under Advanced Settings; metering then records usage without a cost figure.
+
 The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider. The hosted worker has no `GH_TOKEN`: when a signed-in user starts a batch or PR task, the API stores that user's GitHub OAuth token in the encrypted record store beside the run's generation settings, and `generationEnvironment()` injects it as `GH_TOKEN` for provenance collection, discovery, authoring, and verification of that run only.
 
 Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.

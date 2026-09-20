@@ -41,7 +41,7 @@ const runVersionSchema = z
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 
 const authoringSchema = z.object({
-  provider: z.enum(["openai-codex", "openai"]),
+  provider: z.enum(["openai-codex", "openai", "anthropic", "openrouter"]),
   model: z.string().min(1),
   reasoningEffort: z.enum(["low", "medium", "high"]),
 });

@@ -24,9 +24,10 @@ test("generation defaults select compatible credentials and remember choices wit
     _input: Parameters<typeof globalThis.fetch>[0],
   ) =>
     Response.json({
-      models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
+      models: ["gpt-5.6-sol", "gpt-6-astra"],
       sandboxes: ["modal", "e2b"],
       available: true,
+      managed: { models: false, sandbox: false },
       credentials: empty
         ? []
         : [
@@ -54,6 +55,7 @@ test("generation defaults select compatible credentials and remember choices wit
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-5.6-sol",
       reasoning: "high",
+      modelAccess: "credential",
       sandbox: "modal",
       modelCredentialId: id(3),
       sandboxCredentialId: id(4),
@@ -94,8 +96,9 @@ test("generation defaults select compatible credentials and remember choices wit
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",
-      verifierModel: "gpt-5.6-luna",
+      verifierModel: "gpt-5.6-sol",
       reasoning: "low" as const,
+      modelAccess: "credential" as const,
       sandbox: "modal" as const,
       modelCredentialId: id(5),
       sandboxCredentialId: id(4),
@@ -147,7 +150,7 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.settings.modelCredentialId).toBe(id(5));
     await render("empty-team");
     expect(current.valid).toBe(false);
-    expect(current.settings.modelCredentialId).toBe("");
+    expect(current.settings.modelCredentialId ?? "").toBe("");
     empty = false;
     browser.localStorage.setItem("selfbench-generation:corrupt:owner/repo", "{invalid");
     await render("corrupt");

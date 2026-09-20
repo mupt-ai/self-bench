@@ -84,7 +84,6 @@ export function ReviewTaskList({
             <Button
               variant="destructive"
               size="small"
-              title="Delete Selected Tasks"
               aria-busy={deleting}
               disabled={deleting}
               onClick={() => requestDelete(selectedTasks)}

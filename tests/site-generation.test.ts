@@ -57,6 +57,7 @@ describe("generation submissions", () => {
       authorModel: "gpt-6-astra",
       verifierModel: "gpt-5.6-sol",
       reasoning: "medium",
+      modelAccess: "credential",
       sandbox: "modal",
       modelCredentialId: model.id,
       sandboxCredentialId: sandbox.id,

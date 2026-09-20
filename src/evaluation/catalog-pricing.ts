@@ -1,4 +1,5 @@
 import type { CatalogModel } from "./catalog.js";
+import type { EvaluationPricing } from "./types.js";
 
 const rates: Record<string, [number, number, number, number]> = {
   "openai-astra6": [10, 50, 1, 12.5],
@@ -15,7 +16,27 @@ const rates: Record<string, [number, number, number, number]> = {
   "router-opus5": [5, 25, 0.5, 6.25],
   "router-fable51": [10, 50, 0.25, 12.5],
   "router-sonnet5": [2, 10, 0.2, 2.5],
+  "router-glm53": [0.896, 2.816, 0.1664, 0.896],
+  "router-kimi3": [1.7, 8.5, 0.17, 1.7],
 };
+
+/** Reference pricing for a rate-table id (e.g. "router-sol56"), independent of the catalog. */
+export function referencePricing(id: string): EvaluationPricing | undefined {
+  const rate = rates[id];
+  if (!rate) return undefined;
+  const [input, output, cacheRead, cacheWrite] = rate;
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    source: id.startsWith("anthropic-")
+      ? "https://platform.claude.com/docs/en/about-claude/pricing"
+      : "https://openrouter.ai",
+    asOf: "2026-09-06",
+    maxInputTokens: 200_000,
+  };
+}
 
 export function withReferencePricing(model: CatalogModel): CatalogModel {
   const rate = rates[model.id];
