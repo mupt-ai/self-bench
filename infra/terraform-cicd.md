@@ -129,8 +129,8 @@ before cloud authentication. The deployment records it in its request and nonsec
 Compose explicitly supplies that value to the worker, overriding the legacy entry if it still
 exists in an older shared-secret version. New shared-secret payloads should omit it.
 
-For example, `gh variable set SELFBENCH_ACTIVITY_CONCURRENCY --repo OWNER/REPO --env prod --body 100`
-configures one hundred concurrent worker activities for the next deployment. No secret version change
+For example, `gh variable set SELFBENCH_ACTIVITY_CONCURRENCY --repo OWNER/REPO --env prod --body 8`
+configures eight concurrent worker activities for the next deployment. No secret version change
 is needed. This is a per-worker activity limit, shared by discovery, authoring, and evaluation;
 it is not a live setting. The worker must be recreated through deployment to take effect, and the
 rollout does not require an idle namespace.
