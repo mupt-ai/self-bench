@@ -97,7 +97,7 @@ self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 
 When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
+Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Whatever the slot count, a worker runs at most 16 `harbor run` processes at once (gates and solver trials); each is a Python client peaking near 200 MiB, and activities past that limit wait in-process while continuing to heartbeat. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 

@@ -27,7 +27,7 @@ All names in `*.example` are placeholders. Do not copy production secrets into d
 ```
 
 The initial generation configuration is **Modal + Modal Harbor**. Worker activity concurrency is
-ordinary release configuration (`SELFBENCH_ACTIVITY_CONCURRENCY`, integer 1-8), not a secret.
+ordinary release configuration (`SELFBENCH_ACTIVITY_CONCURRENCY`, integer 1-100), not a secret.
 Hosted solver choices use selected saved credentials. The Dockerfile includes the pinned Harbor
 extras for Modal, E2B and Daytona. Switching generation to E2B requires a prepared template and a
 reviewed extension to the runtime preflight contract; it is not an implicit fallback.

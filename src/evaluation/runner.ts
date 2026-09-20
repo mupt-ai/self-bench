@@ -9,6 +9,7 @@ import {
   harborProcessEnvironment,
   harborRunArguments,
 } from "../harbor-command.js";
+import { withHarborProcess } from "../harbor-processes.js";
 import { runCommand } from "../process.js";
 import type { HarborEnvironment } from "../providers.js";
 import { solverEnvironment } from "./config.js";
@@ -255,19 +256,21 @@ async function runTrial(context: {
       });
   }, options.pollMs ?? 3000);
   try {
-    const result = await command(
-      "harbor",
-      solverArguments(taskPath, jobs, trial.harness, model, run.sandbox, run.thinking),
-      {
-        env: child,
-        cwd: taskPath,
-        timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
-        allowFailure: true,
-        ...(options.signal ? { signal: options.signal } : {}),
-        onOutput: (_stream, chunk) => {
-          stdout = `${stdout}${Buffer.from(chunk).toString("utf8")}`.slice(-200_000);
+    const result = await withHarborProcess(options.signal, () =>
+      command(
+        "harbor",
+        solverArguments(taskPath, jobs, trial.harness, model, run.sandbox, run.thinking),
+        {
+          env: child,
+          cwd: taskPath,
+          timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
+          allowFailure: true,
+          ...(options.signal ? { signal: options.signal } : {}),
+          onOutput: (_stream, chunk) => {
+            stdout = `${stdout}${Buffer.from(chunk).toString("utf8")}`.slice(-200_000);
+          },
         },
-      },
+      ),
     );
     clearInterval(timer);
     await polling;

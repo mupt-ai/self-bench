@@ -72,7 +72,7 @@ class SourceVerificationTests(unittest.TestCase):
             self.assertIn('Secret Manager', result.stderr)
 
     def test_runtime_concurrency_required_and_bounded_before_cloud_auth(self):
-        for value in ('', '0', '9', '-1', '8.0', '08'):
+        for value in ('', '0', '101', '-1', '8.0', '08', '010'):
             with tempfile.TemporaryDirectory() as directory, self.subTest(value=value):
                 result = self.run_script(Path(directory), SELFBENCH_ACTIVITY_CONCURRENCY=value)
             self.assertEqual(result.returncode, 1, value)
