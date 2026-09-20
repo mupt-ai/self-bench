@@ -1,5 +1,8 @@
 import type { CredentialInfo } from "../../../src/evaluation/account";
-import { generationModelCredentialKinds } from "../../../src/site/generation-models";
+import {
+  generationModelCredentialKinds,
+  generationModelLabel,
+} from "../../../src/site/generation-models";
 import {
   type GenerationSettings,
   generationSandboxLabels,
@@ -88,12 +91,17 @@ export function withDefaultCredentials(
 
 /** The one-line summary shown while the advanced panel is collapsed. */
 export function generationSettingsSummary(value: GenerationSettings): string {
-  const parts = [`${value.authorModel} → ${value.verifierModel}`, `${value.reasoning} reasoning`];
-  parts.push(value.modelAccess === "managed" ? "managed model access" : "your model credential");
-  parts.push(
+  const models =
+    value.authorModel === value.verifierModel
+      ? `${generationModelLabel(value.authorModel)} both authors and verifies each task`
+      : `${generationModelLabel(value.authorModel)} authors and ${generationModelLabel(value.verifierModel)} verifies each task`;
+  const access =
+    value.modelAccess === "managed"
+      ? "model calls run on SelfBench's OpenRouter account"
+      : "model calls run on your stored credential";
+  const sandbox =
     value.sandbox === "managed"
-      ? `${generationSandboxLabels.managed} sandbox`
-      : `your ${generationSandboxLabels[value.sandbox]} sandbox`,
-  );
-  return parts.join(" · ");
+      ? "sandboxes run on SelfBench's own E2B account"
+      : `sandboxes run on your stored ${generationSandboxLabels[value.sandbox]} credential`;
+  return `${models} at ${value.reasoning} reasoning. ${access.charAt(0).toUpperCase()}${access.slice(1)} and ${sandbox}. Usage is metered per run.`;
 }

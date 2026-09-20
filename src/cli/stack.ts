@@ -138,6 +138,37 @@ export async function up(args: string[]): Promise<void> {
       `GitHub sign-in callback: ${stack.SELFBENCH_PUBLIC_URL}/auth/github/callback (register it on the OAuth app)`,
     );
   }
+  await registerTunnelRoute(stack);
+}
+
+/**
+ * With a dev domain, the stack's public URL is the tunnel proxy's hostname, so it must be
+ * registered there. The route is best effort: without the `tunnel` tool, or for stacks that
+ * are not worktree-derived, the loopback URL keeps working.
+ */
+async function registerTunnelRoute(stack: ReturnType<typeof stackEnvironment>): Promise<void> {
+  if (stack.SELFBENCH_SITE_HOSTNAME === "127.0.0.1") return;
+  const route = await runCommand(
+    "tunnel",
+    [
+      "up",
+      "--local",
+      "--name",
+      stack.COMPOSE_PROJECT_NAME,
+      "--port",
+      stack.SELFBENCH_SITE_PORT,
+      process.cwd(),
+    ],
+    { allowFailure: true },
+  );
+  const registered = route.exitCode === 0 && route.stdout.trim().length > 0;
+  if (registered) {
+    console.log(`Dev proxy route: ${route.stdout.trim().split("\n")[0]}`);
+    return;
+  }
+  console.log(
+    `Tunnel route was not registered (install the tunnel tool, or run: tunnel up --local --name ${stack.COMPOSE_PROJECT_NAME} --port ${stack.SELFBENCH_SITE_PORT})`,
+  );
 }
 
 export async function down(): Promise<void> {
@@ -146,6 +177,9 @@ export async function down(): Promise<void> {
   await runCommand("docker", ["compose", "--file", resolve(root, "compose.yaml"), "down"], {
     env: { ...process.env, ...stack },
   });
+  // The stack was started by this CLI, so its dev-proxy route (if any) is ours to drop.
+  if (stack.SELFBENCH_SITE_HOSTNAME !== "127.0.0.1")
+    await runCommand("tunnel", ["down", stack.COMPOSE_PROJECT_NAME], { allowFailure: true });
 }
 
 /** What Compose will see: the checkout's `.env` under the process environment. */

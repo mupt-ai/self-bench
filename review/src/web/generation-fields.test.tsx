@@ -116,7 +116,8 @@ test("Modal generation requires a credential and has no separate Harbor settings
 test("generation popup keeps helper descriptions in tooltips", () => {
   const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });
   // Tooltips are Radix (shadcn) triggers; the hint is the trigger's accessible label.
-  expect(html).toContain('aria-label="Managed model access runs on SelfBench');
+  expect(html).toContain('aria-label="Managed means SelfBench');
+  expect(html).toContain('aria-label="Managed sandboxes run on SelfBench');
   expect(html).toContain(
     'aria-label="Each PR starts a separate workflow. Managed model and sandbox usage is tracked per run',
   );

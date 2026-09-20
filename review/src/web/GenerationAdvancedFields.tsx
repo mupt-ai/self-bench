@@ -80,7 +80,7 @@ export function AdvancedFields({
       <label htmlFor="generation-model-access" className={`${fieldStyles} content-start`}>
         <span className="flex items-center gap-1.5">
           Model Access
-          <InfoTooltip label="Managed model access runs on SelfBench's own OpenRouter account; usage is tracked per run. A stored credential runs the models on your own account." />
+          <InfoTooltip label="Managed means SelfBench's own OpenRouter account serves every model — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store." />
         </span>
         <Select
           id="generation-model-access"
@@ -95,7 +95,7 @@ export function AdvancedFields({
           }
         >
           {managed && <option value="managed">Managed (OpenRouter)</option>}
-          <option value="credential">Stored Credential</option>
+          <option value="credential">My Credentials</option>
         </Select>
       </label>
       {value.modelAccess === "credential" && (
@@ -122,7 +122,10 @@ export function AdvancedFields({
         </label>
       )}
       <label htmlFor="generation-sandbox" className={`${fieldStyles} content-start`}>
-        Sandbox
+        <span className="flex items-center gap-1.5">
+          Sandbox
+          <InfoTooltip label="Managed sandboxes run on SelfBench's own E2B account — nothing to configure, usage tracked per run. The other options run on a credential you store." />
+        </span>
         <Select
           id="generation-sandbox"
           aria-label="Sandbox"

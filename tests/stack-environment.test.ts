@@ -102,6 +102,25 @@ describe("stackEnvironment", () => {
     expect(stack.SELFBENCH_SITE_PORT).toBe("8281");
   });
 
+  test("a dev domain gives worktree stacks a stable public URL on the proxy port", () => {
+    const stack = stackEnvironment("/Users/me/.avyay-worktrees/avyay-managed-mode", {
+      SELFBENCH_DEV_DOMAIN: "stack.avyayv.com",
+      SELFBENCH_DEV_PROXY_PORT: "8000",
+    });
+    expect(stack.SELFBENCH_SITE_HOSTNAME).toBe("avyay-managed-mode.stack.avyayv.com");
+    expect(stack.SELFBENCH_PUBLIC_URL).toBe("http://avyay-managed-mode.stack.avyayv.com:8000");
+    expect(stack.SELFBENCH_SITE_BIND).toBe("0.0.0.0");
+    // The canonical checkout keeps its loopback URL even with a dev domain.
+    const canonical = stackEnvironment("/code/self-bench", {
+      SELFBENCH_DEV_DOMAIN: "stack.avyayv.com",
+      SELFBENCH_DEV_PROXY_PORT: "8000",
+    });
+    expect(canonical.SELFBENCH_SITE_HOSTNAME).toBe("127.0.0.1");
+    expect(canonical.SELFBENCH_PUBLIC_URL).toBe(
+      `http://127.0.0.1:${canonical.SELFBENCH_SITE_PORT}`,
+    );
+  });
+
   test("project names are valid Compose names", () => {
     expect(projectNameFor("/w/Feature X.2")).toBe("feature-x-2");
     expect(projectNameFor("/w/.hidden")).toBe("hidden");

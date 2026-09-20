@@ -11,7 +11,6 @@ import {
 import { batchPath } from "./batches/presentation";
 import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
-import { GenerationSteps } from "./GenerationSteps";
 import { Button, fieldStyles, Input } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 
@@ -23,7 +22,7 @@ export interface GenerateBatchProps {
   onStarted?: (runId: string, warning?: string) => void;
 }
 
-/** Two-step creation only; submitted batches are tracked in the repository history. */
+/** One dialog: candidate counts and generation settings, submitted together. */
 export function GenerateBatch({
   repoId,
   onStarted,
@@ -31,7 +30,6 @@ export function GenerateBatch({
   variant = "secondary",
 }: GenerateBatchProps) {
   const [open, setOpen] = React.useState(false);
-  const [step, setStep] = React.useState<1 | 2>(1);
   const [counts, setCounts] = React.useState<CandidateCounts>({ easy: 1, medium: 1, hard: 1 });
   const [error, setError] = React.useState<string>();
   const [busy, setBusy] = React.useState(false);
@@ -48,8 +46,7 @@ export function GenerateBatch({
     reload,
   } = useGenerationSettings(org, fullName, open);
   const submit = async () => {
-    if (step !== 2 || submitting.current || unconfirmed || !valid || !validCandidateCounts(counts))
-      return;
+    if (submitting.current || unconfirmed || !valid || !validCandidateCounts(counts)) return;
     submitting.current = true;
     setBusy(true);
     setError(undefined);
@@ -82,7 +79,6 @@ export function GenerateBatch({
         variant={variant}
         disabled={disabled}
         onClick={() => {
-          setStep(1);
           setError(undefined);
           setUnconfirmed(false);
           setOpen(true);
@@ -107,75 +103,69 @@ export function GenerateBatch({
             closeRef={closeButton}
             busy={busy}
           />
-          <GenerationSteps step={step} firstStep="Set Counts" />
           <form
             className="min-w-0"
             onSubmit={(event) => {
               event.preventDefault();
-              if (step === 1) {
-                if (validCandidateCounts(counts)) setStep(2);
-              } else void submit();
+              void submit();
             }}
           >
             <div className="px-4 pb-6 sm:px-6">
-              {step === 1 ? (
-                <fieldset className="m-0 min-w-0 border-0 p-0">
-                  <legend className="mb-4 text-sm font-medium">Candidates</legend>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(
-                      [
-                        { tier: "easy", label: "Easy" },
-                        { tier: "medium", label: "Medium" },
-                        { tier: "hard", label: "Hard" },
-                      ] as const
-                    ).map(({ tier, label }) => (
-                      <label key={tier} htmlFor={`batch-${tier}`} className={fieldStyles}>
-                        {label}
-                        <Input
-                          id={`batch-${tier}`}
-                          aria-label={`${label} Candidates`}
-                          type="number"
-                          min="0"
-                          max="10000"
-                          step="1"
-                          required
-                          value={Number.isNaN(counts[tier]) ? "" : counts[tier]}
-                          disabled={busy}
-                          onChange={(event) =>
-                            setCounts((current) => ({
-                              ...current,
-                              [tier]: event.target.valueAsNumber,
-                            }))
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">1–10,000 candidates total.</p>
-                </fieldset>
-              ) : (
-                <div>
-                  {optionsError ? (
-                    <div role="alert" className="space-y-3 text-sm text-destructive">
-                      <p>{optionsError}</p>
-                      <Button type="button" onClick={reload}>
-                        Try Again
-                      </Button>
-                    </div>
-                  ) : !options ? (
-                    <p role="status" className="text-sm text-muted-foreground">
-                      Loading generation settings…
-                    </p>
-                  ) : (
-                    <GenerationFields
-                      value={settings}
-                      onChange={setSettings}
-                      options={options}
-                      disabled={busy}
-                    />
-                  )}
+              <fieldset className="m-0 min-w-0 border-0 p-0">
+                <legend className="mb-4 text-sm font-medium">Candidates</legend>
+                <div className="grid grid-cols-3 gap-3">
+                  {(
+                    [
+                      { tier: "easy", label: "Easy" },
+                      { tier: "medium", label: "Medium" },
+                      { tier: "hard", label: "Hard" },
+                    ] as const
+                  ).map(({ tier, label }) => (
+                    <label key={tier} htmlFor={`batch-${tier}`} className={fieldStyles}>
+                      {label}
+                      <Input
+                        id={`batch-${tier}`}
+                        aria-label={`${label} Candidates`}
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="1"
+                        required
+                        value={Number.isNaN(counts[tier]) ? "" : counts[tier]}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setCounts((current) => ({
+                            ...current,
+                            [tier]: event.target.valueAsNumber,
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
                 </div>
-              )}
+                <p className="mt-3 text-sm text-muted-foreground">1–10,000 candidates total.</p>
+              </fieldset>
+              <div className="mt-8">
+                {optionsError ? (
+                  <div role="alert" className="space-y-3 text-sm text-destructive">
+                    <p>{optionsError}</p>
+                    <Button type="button" onClick={reload}>
+                      Try Again
+                    </Button>
+                  </div>
+                ) : !options ? (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    Loading generation settings…
+                  </p>
+                ) : (
+                  <GenerationFields
+                    value={settings}
+                    onChange={setSettings}
+                    options={options}
+                    disabled={busy}
+                  />
+                )}
+              </div>
             </div>
             <DialogFooter className="sticky bottom-0 justify-between bg-card">
               <span className="text-sm text-muted-foreground">
@@ -183,22 +173,13 @@ export function GenerateBatch({
                   ? `${counts.easy + counts.medium + counts.hard} Candidates`
                   : "Set Candidate Counts"}
               </span>
-              <div className="ml-auto flex gap-3">
-                {step === 2 && (
-                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setStep(1)}>
-                    Back
-                  </Button>
-                )}
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={
-                    busy || unconfirmed || !validCandidateCounts(counts) || (step === 2 && !valid)
-                  }
-                >
-                  {busy ? "Starting…" : step === 1 ? "Continue" : "Generate"}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={busy || unconfirmed || !validCandidateCounts(counts) || !valid}
+              >
+                {busy ? "Starting…" : "Generate"}
+              </Button>
             </DialogFooter>
           </form>
           {error && (

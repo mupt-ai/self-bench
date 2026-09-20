@@ -37,14 +37,22 @@ export function stackEnvironment(
   const environment = { ...readEnvFile(resolve(root, ".env")), ...defined(processEnvironment) };
   const project = environment.COMPOSE_PROJECT_NAME || projectNameFor(root);
   const derived = project !== DEFAULT_STACK;
-  const hostname = environment.SELFBENCH_SITE_HOSTNAME || "127.0.0.1";
+  // A machine-wide dev domain (e.g. the tunnel proxy's *.stack.avyayv.com) gives every
+  // worktree stack a stable public hostname, so GitHub OAuth callbacks work per stack.
+  const devDomain = environment.SELFBENCH_DEV_DOMAIN;
+  const devProxyPort = environment.SELFBENCH_DEV_PROXY_PORT;
+  const explicitHostname = environment.SELFBENCH_SITE_HOSTNAME || undefined;
+  const devHost = devDomain && derived && !explicitHostname ? `${project}.${devDomain}` : undefined;
+  const hostname = explicitHostname || devHost || "127.0.0.1";
   const sitePort =
     environment.SELFBENCH_SITE_PORT ||
     String(derived ? derivePort(project, DERIVED_SITE_PORTS) : DEFAULT_SITE_PORT);
-  const publicUrl = (environment.SELFBENCH_PUBLIC_URL || `http://${hostname}:${sitePort}`).replace(
-    /\/+$/,
-    "",
-  );
+  const publicUrl = (
+    environment.SELFBENCH_PUBLIC_URL ||
+    (devHost && devProxyPort
+      ? `http://${devHost}:${devProxyPort}`
+      : `http://${hostname}:${sitePort}`)
+  ).replace(/\/+$/, "");
   return {
     COMPOSE_PROJECT_NAME: project,
     SELFBENCH_SITE_HOSTNAME: hostname,
