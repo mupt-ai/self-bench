@@ -55,7 +55,7 @@ export function GenerationFields({
               className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180"
             />
           </span>
-          <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+          <span className="hidden min-w-0 flex-1 truncate text-right text-xs text-muted-foreground group-open:hidden sm:block">
             {options ? generationSettingsSummary(value) : "Loading generation settings…"}
           </span>
         </summary>

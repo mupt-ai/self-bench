@@ -1,7 +1,6 @@
 import { X } from "lucide-react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 import { cn } from "./primitives/cn";
-import { InfoTooltip } from "./primitives/tooltip";
 import { Button } from "./ui";
 import { useModalDialog } from "./useModalDialog";
 
@@ -87,18 +86,16 @@ export function DialogHeader({
           </p>
         )}
       </div>
-      <InfoTooltip label="Close">
-        <Button
-          ref={closeRef}
-          size="icon"
-          variant="ghost"
-          aria-label="Close"
-          disabled={busy}
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </Button>
-      </InfoTooltip>
+      <Button
+        ref={closeRef}
+        size="icon"
+        variant="ghost"
+        aria-label="Close"
+        disabled={busy}
+        onClick={onClose}
+      >
+        <X aria-hidden="true" />
+      </Button>
     </header>
   );
 }
