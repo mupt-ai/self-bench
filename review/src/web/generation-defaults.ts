@@ -105,3 +105,48 @@ export function generationSettingsSummary(value: GenerationSettings): string {
       : `sandboxes run on your stored ${generationSandboxLabels[value.sandbox]} credential`;
   return `${models} at ${value.reasoning} reasoning. ${access.charAt(0).toUpperCase()}${access.slice(1)} and ${sandbox}. Usage is metered per run.`;
 }
+
+/** Why the current selection cannot be submitted yet, for the panel's auto-expand and validity. */
+export function generationSelectionProblem(
+  value: GenerationSettings,
+  options: GenerationOptions,
+): string | undefined {
+  if (!options.available) return "Generation is not available.";
+  if (!generationSettingsSchema.safeParse(value).success) return "Settings are incomplete.";
+  if (!options.models.includes(value.authorModel)) return "Choose an author model.";
+  if (!options.models.includes(value.verifierModel)) return "Choose a verifier model.";
+  if (value.modelAccess === "managed") {
+    if (options.managed?.models !== true) return "Choose a model credential.";
+  } else if (
+    !options.credentials.some(
+      (item) =>
+        item.id === value.modelCredentialId &&
+        modelCredentialMatches(item, value.authorModel, value.verifierModel),
+    )
+  )
+    return "Choose a model credential.";
+  if (value.sandbox === "managed") {
+    if (options.managed?.sandbox !== true) return "Choose a sandbox and its credential.";
+  } else {
+    if (
+      !options.credentials.some(
+        (item) =>
+          item.id === value.sandboxCredentialId &&
+          item.kind === value.sandbox &&
+          item.auth === "api-key",
+      )
+    )
+      return `Choose a ${generationSandboxLabels[value.sandbox]} credential.`;
+    if (
+      (value.sandbox === "e2b" || value.sandbox === "vercel") &&
+      !options.credentials.some(
+        (item) =>
+          item.id === value.harborCredentialId &&
+          item.kind === value.harborEnvironment &&
+          item.auth === "api-key",
+      )
+    )
+      return "Choose a Harbor verification credential.";
+  }
+  return undefined;
+}

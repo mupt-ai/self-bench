@@ -1,13 +1,10 @@
 import React from "react";
-import {
-  type GenerationSettings,
-  generationSettingsSchema,
-} from "../../../src/site/generation-settings";
+import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { fetchGenerationOptions } from "./api";
 import type { GenerationOptions } from "./GenerationFields";
 import {
   defaultGenerationSettings,
-  modelCredentialMatches,
+  generationSelectionProblem,
   readGenerationSettings,
   rememberGenerationSettings,
   withDefaultCredentials,
@@ -85,37 +82,8 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
       window.removeEventListener("focus", refresh);
     };
   }, [org, fullName, enabled, retry, key]);
-  const managedModels = options?.managed?.models === true;
-  const managedSandbox = options?.managed?.sandbox === true;
   const valid =
-    !!options?.available &&
-    !error &&
-    generationSettingsSchema.safeParse(settings).success &&
-    options.models.includes(settings.authorModel) &&
-    options.models.includes(settings.verifierModel) &&
-    (managedSandbox || options.sandboxes.includes(settings.sandbox)) &&
-    (settings.modelAccess === "managed"
-      ? managedModels
-      : options.credentials.some(
-          (item) =>
-            item.id === settings.modelCredentialId &&
-            modelCredentialMatches(item, settings.authorModel, settings.verifierModel),
-        )) &&
-    (settings.sandbox !== "managed"
-      ? options.credentials.some(
-          (item) =>
-            item.id === settings.sandboxCredentialId &&
-            item.kind === settings.sandbox &&
-            item.auth === "api-key",
-        )
-      : managedSandbox) &&
-    (!(settings.sandbox === "e2b" || settings.sandbox === "vercel") ||
-      options.credentials.some(
-        (item) =>
-          item.id === settings.harborCredentialId &&
-          item.kind === settings.harborEnvironment &&
-          item.auth === "api-key",
-      ));
+    !!options?.available && !error && generationSelectionProblem(settings, options) === undefined;
   return {
     settings,
     setSettings,

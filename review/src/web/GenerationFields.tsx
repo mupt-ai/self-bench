@@ -1,10 +1,12 @@
 import { ChevronDown } from "lucide-react";
-import React from "react";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { AdvancedFields } from "./GenerationAdvancedFields";
-import { defaultGenerationSettings, generationSettingsSummary } from "./generation-defaults";
-import { cn } from "./primitives/cn";
+import {
+  defaultGenerationSettings,
+  generationSelectionProblem,
+  generationSettingsSummary,
+} from "./generation-defaults";
 
 export interface GenerationOptions {
   models: string[];
@@ -20,8 +22,9 @@ function managedAvailable(options: GenerationOptions): boolean {
 }
 
 /**
- * Generation settings. With everything managed, the panel is one summary card; the fields
- * hide behind its Advanced Settings toggle and reopen automatically for custom settings.
+ * Generation settings as one collapsible: the summary line describes what will run, and
+ * every field hides under Advanced Settings. It opens itself while the current selection
+ * cannot be submitted yet (for example, when this deployment offers nothing managed).
  */
 export function GenerationFields({
   value,
@@ -35,45 +38,29 @@ export function GenerationFields({
   disabled: boolean;
 }) {
   const managed = options ? managedAvailable(options) : true;
-  const atDefaults =
-    options?.available === true &&
-    managed &&
-    value.modelAccess === "managed" &&
-    value.sandbox === "managed";
-  const [advanced, setAdvanced] = React.useState(!options || value !== defaultGenerationSettings);
-  if (!atDefaults)
-    return (
-      <fieldset disabled={disabled} className="min-w-0 border-0 p-0">
-        <AdvancedFields {...{ value, onChange, options, managed }} />
-      </fieldset>
-    );
+  const problem = options ? generationSelectionProblem(value, options) : undefined;
+  const customized = value !== defaultGenerationSettings;
+  const fields = <AdvancedFields {...{ value, onChange, options, managed }} />;
   return (
     <fieldset disabled={disabled} className="min-w-0 border-0 p-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border border-border bg-muted/20 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">Managed Generation</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {generationSettingsSummary(value)}
-          </p>
-        </div>
-        <button
-          type="button"
-          aria-expanded={advanced}
-          onClick={() => setAdvanced((current) => !current)}
-          className="inline-flex shrink-0 items-center gap-1 text-sm text-brand hover:text-brand"
-        >
-          {advanced ? "Hide Advanced Settings" : "Advanced Settings"}
-          <ChevronDown
-            aria-hidden="true"
-            className={cn("size-3.5 transition-transform", advanced && "rotate-180")}
-          />
-        </button>
-      </div>
-      {advanced && (
-        <div className="mt-6">
-          <AdvancedFields {...{ value, onChange, options, managed }} />
-        </div>
-      )}
+      <details
+        className="group border border-border bg-muted/20"
+        {...(problem !== undefined && !customized ? { open: true } : {})}
+      >
+        <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            Advanced Settings
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180"
+            />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+            {options ? generationSettingsSummary(value) : "Loading generation settings…"}
+          </span>
+        </summary>
+        <div className="border-t border-border p-4 sm:p-6">{fields}</div>
+      </details>
     </fieldset>
   );
 }
