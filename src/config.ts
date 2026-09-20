@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   EXECUTION_BACKENDS,
-  type ExecutionBackend,
   HARBOR_ENVIRONMENTS,
   type HarborEnvironment,
   matchingHarborEnvironment,
@@ -13,6 +12,7 @@ import {
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "./sandbox/timeout.js";
 import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./setup/e2b/template.js";
+import { workerConcurrency } from "./worker-capacity.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -48,6 +48,10 @@ const environmentSchema = z.object({
       .optional(),
   ),
   SELFBENCH_ACTIVITY_CONCURRENCY: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().int().min(1).max(100).optional(),
+  ),
+  SELFBENCH_HARBOR_CONCURRENCY: z.preprocess(
     emptyStringAsUndefined,
     z.coerce.number().int().min(1).max(100).optional(),
   ),
@@ -99,19 +103,14 @@ type WorkerExecutionConfig =
       readonly credentials: E2BCredentials;
     };
 
-const DEFAULT_ACTIVITY_CONCURRENCY = {
-  docker: 1,
-  modal: 20,
-  vercel: 4,
-  e2b: 4,
-} as const satisfies Record<ExecutionBackend, number>;
-
 export interface SelfBenchConfig {
   readonly apiHost: string;
   readonly apiPort: number;
   readonly apiToken?: string;
   readonly buildCommit?: string;
   readonly activityConcurrency: number;
+  /** Slots for activities that spawn `harbor run`; sized to worker memory unless overridden. */
+  readonly harborConcurrency: number;
   readonly artifact:
     | { readonly kind: "local"; readonly directory: string }
     | { readonly kind: "gcs"; readonly bucket: string; readonly prefix: string };
@@ -214,9 +213,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
     ...(value.SELFBENCH_BUILD_COMMIT
       ? { buildCommit: value.SELFBENCH_BUILD_COMMIT.toLowerCase() }
       : {}),
-    activityConcurrency:
-      value.SELFBENCH_ACTIVITY_CONCURRENCY ??
-      DEFAULT_ACTIVITY_CONCURRENCY[value.SELFBENCH_EXECUTION_BACKEND],
+    ...workerConcurrency(
+      value.SELFBENCH_EXECUTION_BACKEND,
+      value.SELFBENCH_ACTIVITY_CONCURRENCY,
+      value.SELFBENCH_HARBOR_CONCURRENCY,
+    ),
     artifact,
     harborEnvironment,
     execution,

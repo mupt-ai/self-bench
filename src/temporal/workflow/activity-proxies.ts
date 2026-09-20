@@ -1,12 +1,8 @@
-import { proxyActivities } from "@temporalio/workflow";
+import { type ActivityOptions, proxyActivities, workflowInfo } from "@temporalio/workflow";
 import type { SelfBenchActivities } from "../activities.js";
+import { harborTaskQueue } from "../task-queues.js";
 
-const candidateActivities = proxyActivities<
-  Pick<
-    SelfBenchActivities,
-    "runAuthoringRound" | "compileAndVerify" | "runVerifierRound" | "buildExport"
-  >
->({
+const candidateOptions: ActivityOptions = {
   startToCloseTimeout: "7 hours",
   heartbeatTimeout: "10 minutes",
   cancellationType: "WAIT_CANCELLATION_COMPLETED",
@@ -16,7 +12,19 @@ const candidateActivities = proxyActivities<
     maximumInterval: "2 minutes",
     maximumAttempts: 4,
   },
-});
+};
+
+const candidateActivities =
+  proxyActivities<
+    Pick<SelfBenchActivities, "runAuthoringRound" | "runVerifierRound" | "buildExport">
+  >(candidateOptions);
+
+// The queue name depends on the running workflow, so the proxy is created per call.
+const compileAndVerify: SelfBenchActivities["compileAndVerify"] = (input) =>
+  proxyActivities<Pick<SelfBenchActivities, "compileAndVerify">>({
+    ...candidateOptions,
+    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+  }).compileAndVerify(input);
 
 const provenanceActivities = proxyActivities<
   Pick<
@@ -53,7 +61,7 @@ export const workflowActivities: SelfBenchActivities = {
   rebuildReplayCandidates: provenanceActivities.rebuildReplayCandidates,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   runAuthoringRound: candidateActivities.runAuthoringRound,
-  compileAndVerify: candidateActivities.compileAndVerify,
+  compileAndVerify,
   runVerifierRound: candidateActivities.runVerifierRound,
   buildExport: candidateActivities.buildExport,
 };

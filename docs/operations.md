@@ -97,7 +97,7 @@ self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
 
 When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Whatever the slot count, a worker runs at most 16 `harbor run` processes at once (gates and solver trials); each is a Python client peaking near 200 MiB, and activities past that limit wait in-process while continuing to heartbeat. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
+Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` defaults to `(worker memory - 2.25 GiB) / 256 MiB` (23 on 8 GiB, 119 on 32 GiB) and never takes an ordinary slot from authoring or verifier sessions. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 
@@ -451,6 +451,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_DOCKER_IMAGE` | per checkout | Docker worker; sandbox image tag built by `self-bench up` |
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
+| `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |

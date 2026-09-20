@@ -8,7 +8,6 @@ import {
   harborRunArguments,
 } from "../../harbor-command.js";
 import { harborChildEnvironment } from "../../harbor-environment.js";
-import { withHarborProcess } from "../../harbor-processes.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -62,24 +61,22 @@ export async function runHarborGate(
       type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
     });
   }
-  const result = await withHarborProcess(signal, () =>
-    runCommand(
-      "harbor",
-      harborRunArguments({
-        taskPath: taskDirectory,
-        jobsPath: jobsDirectory,
-        jobName,
-        agent,
-        environment,
-        quiet,
-      }),
-      {
-        allowFailure: true,
-        env: environmentVariables,
-        timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
-        signal,
-      },
-    ),
+  const result = await runCommand(
+    "harbor",
+    harborRunArguments({
+      taskPath: taskDirectory,
+      jobsPath: jobsDirectory,
+      jobName,
+      agent,
+      environment,
+      quiet,
+    }),
+    {
+      allowFailure: true,
+      env: environmentVariables,
+      timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
+      signal,
+    },
   );
   if (result.exitCode !== 0) {
     throw ApplicationFailure.create({
