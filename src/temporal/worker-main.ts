@@ -10,6 +10,7 @@ import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/
 import { createActivities } from "./activities.js";
 import { connectTemporalWorker } from "./connection.js";
 import { harborTaskQueue } from "./task-queues.js";
+import { resolveHarborConcurrency } from "./worker-memory.js";
 
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
@@ -33,6 +34,7 @@ const { executeSolverEvaluation, ...evaluationActivities } = createEvaluationAct
 // memory. Activity retries stay on the queue recorded in history, so the ordinary worker keeps
 // them registered for workflows that scheduled a Harbor activity before this split was deployed.
 const harborActivities = { compileAndVerify, executeSolverEvaluation };
+const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const worker = await Worker.create({
   connection,
   namespace: config.temporal.namespace,
@@ -46,10 +48,10 @@ const harborWorker = await Worker.create({
   namespace: config.temporal.namespace,
   taskQueue: harborTaskQueue(config.temporal.taskQueue),
   activities: harborActivities,
-  maxConcurrentActivityTaskExecutions: config.harborConcurrency,
+  maxConcurrentActivityTaskExecutions: harborConcurrency,
 });
 console.log(
-  `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency} and Harbor concurrency ${config.harborConcurrency}`,
+  `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency} and Harbor concurrency ${harborConcurrency}`,
 );
 try {
   await Promise.all([worker.run(), harborWorker.run()]);

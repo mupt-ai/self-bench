@@ -12,7 +12,7 @@ test("Harbor slots follow worker memory with a floor of two", () => {
   expect(harborSlotsForMemory(32 * GiB)).toBe(119);
 });
 
-test("an explicit Harbor concurrency overrides the memory-derived default", () => {
+test("an explicit Harbor concurrency is validated and otherwise left to the worker", () => {
   const base = {
     SELFBENCH_EXECUTION_BACKEND: "modal",
     SELFBENCH_HARBOR_ENVIRONMENT: "modal",
@@ -21,7 +21,7 @@ test("an explicit Harbor concurrency overrides the memory-derived default", () =
   expect(loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "16" }).harborConcurrency).toBe(
     16,
   );
-  expect(loadWorkerConfig(base).harborConcurrency).toBeGreaterThanOrEqual(2);
+  expect(loadWorkerConfig(base).harborConcurrency).toBeUndefined();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "0" })).toThrow();
 });
 

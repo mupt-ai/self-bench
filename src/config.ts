@@ -12,7 +12,7 @@ import {
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "./sandbox/timeout.js";
 import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./setup/e2b/template.js";
-import { workerConcurrency } from "./worker-capacity.js";
+import { defaultActivityConcurrency } from "./worker-capacity.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -109,8 +109,7 @@ export interface SelfBenchConfig {
   readonly apiToken?: string;
   readonly buildCommit?: string;
   readonly activityConcurrency: number;
-  /** Slots for activities that spawn `harbor run`; sized to worker memory unless overridden. */
-  readonly harborConcurrency: number;
+  readonly harborConcurrency?: number; // Harbor slots; the worker sizes to memory when unset.
   readonly artifact:
     | { readonly kind: "local"; readonly directory: string }
     | { readonly kind: "gcs"; readonly bucket: string; readonly prefix: string };
@@ -213,11 +212,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
     ...(value.SELFBENCH_BUILD_COMMIT
       ? { buildCommit: value.SELFBENCH_BUILD_COMMIT.toLowerCase() }
       : {}),
-    ...workerConcurrency(
-      value.SELFBENCH_EXECUTION_BACKEND,
-      value.SELFBENCH_ACTIVITY_CONCURRENCY,
-      value.SELFBENCH_HARBOR_CONCURRENCY,
-    ),
+    activityConcurrency:
+      value.SELFBENCH_ACTIVITY_CONCURRENCY ??
+      defaultActivityConcurrency(value.SELFBENCH_EXECUTION_BACKEND),
+    ...(value.SELFBENCH_HARBOR_CONCURRENCY
+      ? { harborConcurrency: value.SELFBENCH_HARBOR_CONCURRENCY }
+      : {}),
     artifact,
     harborEnvironment,
     execution,
