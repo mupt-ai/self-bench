@@ -30,7 +30,7 @@ application rollout, rather than between plan and apply.
    An operator must review and update these existing objects explicitly.
 2. Configure the `prod` GitHub environment branch rules to allow release tags; retain required apply review.
    The source ancestry check is mandatory because tag policy alone does not establish trusted code.
-3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-8) as an ordinary GitHub environment
+3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-100) as an ordinary GitHub environment
    variable in `dev` and `prod`. Then configure `RUNTIME_SECRET_VERSIONS` (JSON shared/api/worker numeric versions) and
    `SELFBENCH_PUBLIC_URL` in `dev` and `prod`. Populate secrets, DB login, Temporal namespace,
    provider credentials, GitHub OAuth and a host TLS proxy. Bootstrap creates empty secret containers,

@@ -28,8 +28,8 @@ def main():
     config = json.loads(Path(sys.argv[1]).read_text())
     project, env, sha = config['project'], config['environment'], config['sha']
     concurrency = config.get('activity_concurrency', '')
-    if not isinstance(concurrency, str) or not re.fullmatch(r'[1-8]', concurrency):
-        raise ValueError('Activity concurrency must be an integer from 1 to 8')
+    if not isinstance(concurrency, str) or not re.fullmatch(r'[1-9][0-9]?|100', concurrency):
+        raise ValueError('Activity concurrency must be an integer from 1 to 100')
     if not re.fullmatch('[0-9a-f]{40}', sha) or env not in ('dev', 'prod'): raise ValueError('Invalid release identity')
     if metadata('project/project-id').decode() != project: raise ValueError('Wrong VM project')
     if not re.fullmatch(r'[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*',config['release_id']): raise ValueError('Invalid release directory')

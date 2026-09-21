@@ -50,5 +50,5 @@ jq -e 'type=="object" and keys==["api","shared","worker"]
     <<<"${RUNTIME_SECRET_VERSIONS:-}" >/dev/null \
   || die 'Configure exact shared/api/worker Secret Manager versions before deploying.'
 [[ "${SELFBENCH_PUBLIC_URL:-}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || die 'Configure the public HTTPS origin.'
-[[ "${SELFBENCH_ACTIVITY_CONCURRENCY:-}" =~ ^[1-8]$ ]] || die 'Configure activity concurrency as an integer from 1 to 8.'
+[[ "${SELFBENCH_ACTIVITY_CONCURRENCY:-}" =~ ^([1-9][0-9]?|100)$ ]] || die 'Configure activity concurrency as an integer from 1 to 100.'
 echo "Verified deploy source $GITHUB_SHA and runtime settings."
