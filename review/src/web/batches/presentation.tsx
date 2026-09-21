@@ -42,26 +42,3 @@ export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
     </span>
   );
 }
-export function batchMessage(status: BatchStatus) {
-  if (status.error) return status.error;
-  switch (status.phase) {
-    case "blocked":
-      return "Discovery ended before finding enough candidates. This batch has stopped.";
-    case "failed":
-      return "This batch stopped before completing.";
-    case "cancelling":
-      return "Waiting for this batch’s independent workflows to stop.";
-    case "cancelled":
-      return "This batch was cancelled. Any generated tasks remain in the dataset.";
-    case "complete":
-      return "Generation is complete. Review the generated tasks in your dataset.";
-    case "discovering":
-      return "Finding repository changes to turn into tasks.";
-    case "authoring":
-      return "Authoring and verifying the discovered tasks.";
-    case "exporting":
-      return "Preparing the generated tasks for export.";
-    case "queued":
-      return "Waiting for the generation worker.";
-  }
-}
