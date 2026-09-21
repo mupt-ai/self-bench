@@ -4,7 +4,7 @@ This document covers SelfBench configuration, persistence, authentication, the H
 
 ## Local stack
 
-`self-bench up` (or `bun run cli up --backend docker` from a checkout) starts:
+`docker compose up -d --build` from a checkout starts:
 
 - Postgres for Temporal state;
 - Postgres for the site (`site-postgres`: users, connected repos, evaluation records);
@@ -13,27 +13,15 @@ This document covers SelfBench configuration, persistence, authentication, the H
 - the SelfBench worker;
 - a persistent artifact volume.
 
-The worker mounts the host Docker socket for local sandboxes. The API never receives the Docker socket or model credentials; the worker never receives the GitHub OAuth secret or session secret. The local Postgres users and passwords are development defaults (`temporal`/`temporal` and `selfbench`/`selfbench`).
+Add `--profile sandbox` when using Docker generation so Compose also builds `selfbench-sandbox:local`. The worker mounts the host Docker socket for local sandboxes. The API never receives the Docker socket or model credentials; the worker never receives the GitHub OAuth secret or session secret. The local Postgres users and passwords are development defaults (`temporal`/`temporal` and `selfbench`/`selfbench`).
 
-### One stack per checkout
+Compose names the project after the checkout directory, so several worktrees run side by side with their own containers, volumes, and image tags. Host ports are ephemeral (`127.0.0.1::<container port>`); resolve them with `docker compose port api 8080` and `docker compose port temporal 7233`. Set `SELFBENCH_PUBLIC_URL` to the origin browsers open **before** `up` — a reverse-proxy or tunnel hostname, not the ephemeral compose port. Recreating the API to pick up a `docker compose port` value would assign a new host port, so that value cannot stay correct. GitHub loopback OAuth can list `http://127.0.0.1/auth/github/callback` (no port).
 
-Several checkouts (for example git worktrees) can run at once. `self-bench up` derives a Compose project from the checkout directory name and, from that, stable host ports and image tags, so two worktrees never share containers, volumes, ports, or images. Explicit environment always wins:
+Older local stacks used the fixed project name `selfbench` and volumes `selfbench_temporal-postgres`, `selfbench_site-postgres`, and `selfbench_artifacts`. A checkout directory named `self-bench` now becomes project `self-bench` and would otherwise start empty. Keep the existing volumes with `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
 
-| Value | Default for the canonical `self-bench` checkout and packaged installs | Default for any other checkout |
-| --- | --- | --- |
-| `COMPOSE_PROJECT_NAME` | `selfbench` | directory name, lowercased |
-| `SELFBENCH_SITE_PORT` | `8080` | stable hash of the project in 8100-8899 |
-| `SELFBENCH_TEMPORAL_PORT` | `7233` | stable hash of the project in 7300-8099 |
-| `SELFBENCH_IMAGE` | `selfbench:local` | `<project>-selfbench:local` |
-| `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | `<project>-sandbox:local` |
-| `SELFBENCH_PUBLIC_URL` | `http://<SELFBENCH_SITE_HOSTNAME or 127.0.0.1>:<site port>` | same |
-| `SELFBENCH_SITE_BIND` | `127.0.0.1`, or `0.0.0.0` when the hostname is not loopback | same |
+Compose reads `.env` from the checkout; copy `.env.example` to start. Keep `.env` free of per-stack values (public URL) when it is shared between worktrees, and export those in the shell instead. With `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` set, the API serves the signed-in selfbench.dev site (see [Site sign-in](#site-sign-in-selfbenchdev)); without them it serves the bearer-token Harbor Ledger.
 
-`self-bench up` prints the resulting URL, project, and OAuth callback; `self-bench down` resolves the same project. Plain `docker compose up` uses the `selfbench` project on 8080 and 7233 unless those variables are exported, so it suits a single stack only.
-
-Compose and `self-bench up` both read `.env` from the checkout; copy `.env.example` to start. Keep `.env` free of per-stack values (project, ports, public URL) when it is shared between worktrees, and export those in the shell instead. With `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` set, the API serves the signed-in selfbench.dev site (see [Site sign-in](#site-sign-in-selfbenchdev)); without them it serves the bearer-token Harbor Ledger. `SELFBENCH_SITE_HOSTNAME` is the name browsers open: leave it unset to stay on loopback, or set a tailnet or LAN name to reach the site from another machine.
-
-Manage development DNS and reverse proxies with your local tooling. Set `SELFBENCH_PUBLIC_URL` to the externally reachable origin and `SELFBENCH_SITE_BIND` / `SELFBENCH_SITE_PORT` to the address and port the proxy should reach.
+Manage development DNS and reverse proxies with your local tooling. Set `SELFBENCH_PUBLIC_URL` to the externally reachable origin.
 
 Temporal, site, and artifact state live in the `<project>_temporal-postgres`, `<project>_site-postgres`, and `<project>_artifacts` volumes. Back up those volumes before an upgrade when workflow history, users, or generated artifacts must be retained. Site database migrations (`drizzle/`) run automatically when the API or worker starts.
 
@@ -50,34 +38,34 @@ Sandbox-provider credentials are separate. Modal accepts its mounted profile or 
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `--harbor-environment docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
+SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
 
 ```bash
-self-bench up --backend docker                         # Docker + Docker
-self-bench up --backend modal                          # Modal + Modal
-self-bench up --backend vercel --harbor-environment docker
-self-bench up --backend vercel --harbor-environment modal
-self-bench up --backend vercel                         # Vercel + Vercel
-self-bench up --backend vercel --harbor-environment e2b
-self-bench up --backend vercel --harbor-environment daytona
-self-bench up --backend e2b                            # E2B + E2B
-self-bench up --backend e2b --harbor-environment docker
-self-bench up --backend e2b --harbor-environment modal
-self-bench up --backend docker --harbor-environment modal
-self-bench up --backend modal --harbor-environment docker
-self-bench up --backend modal --harbor-environment daytona
+SELFBENCH_EXECUTION_BACKEND=docker docker compose --profile sandbox up -d --build   # Docker + Docker
+SELFBENCH_EXECUTION_BACKEND=modal docker compose up -d --build                      # Modal + Modal
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel docker compose up -d --build                     # Vercel + Vercel
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=e2b docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=daytona docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=e2b docker compose up -d --build                        # E2B + E2B
+SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=docker SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose --profile sandbox up -d --build
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=daytona docker compose up -d --build
 ```
 
 The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider. The hosted worker has no `GH_TOKEN`: when a signed-in user starts a batch or PR task, the API stores that user's GitHub OAuth token in the encrypted record store beside the run's generation settings, and `generationEnvironment()` injects it as `GH_TOKEN` for provenance collection, discovery, authoring, and verification of that run only.
 
-Use `--modal-config` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
+Set `SELFBENCH_MODAL_CONFIG_PATH` whenever either side uses Modal. A worker has one fixed pairing; do not run workers with different provider settings on the same Temporal task queue. Run and export metadata record both choices, plus the configured hosted-provider timeout cap when applicable.
 
 ### Docker
 
 Build the worker's sandbox image once:
 
 ```bash
-self-bench up --backend docker
+docker compose --profile sandbox up -d --build
 ```
 
 Docker defaults to one activity at a time because sandboxes share the host. Each candidate defaults to 4 CPUs, 8,192 MB RAM, and 20,480 MB storage. Authored tasks may request other positive limits.
@@ -89,19 +77,19 @@ Authenticate Modal and mount its profile into the worker:
 ```bash
 modal token new
 
-self-bench up --backend modal
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml" docker compose up -d --build
 
 # If your profile is not at ~/.modal.toml:
-self-bench up --backend modal --modal-config /absolute/path/to/.modal.toml
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/.modal.toml docker compose up -d --build
 ```
 
-When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `--modal-config` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
+Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
 Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 
-E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `--harbor-environment`. Sandboxes must run a custom SelfBench template: stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects. Hosted generation manages this automatically — the worker builds a template named `selfbench-runtime:<dockerfile-hash>` in the run's E2B account from the packaged `Dockerfile.sandbox` the first time a run needs it, and reuses it after (an encrypted record serialises concurrent builds, and a lock left by a crashed worker is taken over after 45 minutes). Self-hosted stacks can rely on the same managed template or build their own with `self-bench setup e2b` and export `SELFBENCH_E2B_TEMPLATE`; SelfBench never installs runtime dependencies while allocating a sandbox.
+E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. Sandboxes must run a custom SelfBench template: stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects. Hosted generation manages this automatically — the worker builds a template named `selfbench-runtime:<dockerfile-hash>` in the run's E2B account from the packaged `Dockerfile.sandbox` the first time a run needs it, and reuses it after (an encrypted record serialises concurrent builds, and a lock left by a crashed worker is taken over after 45 minutes). Self-hosted stacks can rely on the same managed template or build their own with `self-bench setup e2b` and export `SELFBENCH_E2B_TEMPLATE`; SelfBench never installs runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
@@ -128,7 +116,7 @@ self-bench setup e2b \
 
 The executor verifies E2B's allocated CPU and memory before uploading source files and fails with a resource-mismatch diagnostic if the configured template differs from the request. Change the setup resource flags only for a custom caller that also sets matching `SandboxRequest` resources; ordinary SelfBench activities use the standard values. Disk size is likewise template/platform controlled and cannot be mapped per create by this SDK version.
 
-E2B templates are durable account resources and are not removed by `self-bench down`. Build a new versioned template for runtime changes and retire old templates according to your E2B retention policy. Each workflow stage still gets a fresh sandbox from that template.
+E2B templates are durable account resources and are not removed by `docker compose down`. Build a new versioned template for runtime changes and retire old templates according to your E2B retention policy. Each workflow stage still gets a fresh sandbox from that template.
 
 #### Start a worker
 
@@ -140,9 +128,9 @@ export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
 # Optional; defaults to the Hobby-compatible one-hour ceiling:
 export SELFBENCH_E2B_TIMEOUT_CAP=1h
 
-self-bench up --backend e2b --harbor-environment docker
+SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
 # Or, with Modal credentials/profile configured:
-# self-bench up --backend e2b --harbor-environment modal
+# SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
 ```
 
 Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
@@ -166,7 +154,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `--harbor-environment`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 
@@ -195,10 +183,9 @@ Profiles live in `~/.selfbench/config.json`; tokens live separately in `~/.selfb
 
 ```bash
 self-bench setup vercel --profile secondary
-self-bench up --backend vercel --vercel-profile secondary --harbor-environment modal
 ```
 
-Without `--vercel-profile`, `self-bench up` uses the active profile most recently saved by setup. Rerunning setup revalidates the existing project and token by default. It fingerprints the exact Dockerfile—including its digest-pinned base and pinned tool defaults—plus the fingerprint schema and target platform; if the matching immutable VCR image is already ready, publication is skipped. A changed runtime produces a new content-derived tag and digest. The final image reference is always digest-pinned, and existing digests are not deleted automatically. If the default VCR repository contains unrelated images, setup leaves it untouched and asks for another name.
+Export the saved profile's `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, and `SELFBENCH_VERCEL_IMAGE` into the environment Compose reads. Rerunning setup revalidates the existing project and token by default. It fingerprints the exact Dockerfile—including its digest-pinned base and pinned tool defaults—plus the fingerprint schema and target platform; if the matching immutable VCR image is already ready, publication is skipped. A changed runtime produces a new content-derived tag and digest. The final image reference is always digest-pinned, and existing digests are not deleted automatically. If the default VCR repository contains unrelated images, setup leaves it untouched and asks for another name.
 
 When rerunning setup for a named profile, the available actions are:
 
@@ -206,16 +193,16 @@ When rerunning setup for a named profile, the available actions are:
 - **Replace the access token** keeps the saved team and project, requests a new project-scoped token, and activates it only after verification succeeds. It replaces only the locally stored credential; revoke the old token separately in Vercel if necessary.
 - **Choose another team or project** repoints the same local profile name after the new project, image, and token pass verification. It does not delete the previous Vercel project or images. Use a different `--profile` name instead when both configurations should remain available.
 
-If setup is interrupted after creating a project or VCR repository, it reports the failure and leaves the durable resource in place; rerun setup to continue. It never activates a partial profile. Vercel projects and VCR images are reusable across SelfBench runs and persist after `self-bench down`.
+If setup is interrupted after creating a project or VCR repository, it reports the failure and leaves the durable resource in place; rerun setup to continue. It never activates a partial profile. Vercel projects and VCR images are reusable across SelfBench runs and persist after `docker compose down`.
 
 #### Start the local worker
 
 ```bash
-self-bench up --backend vercel --harbor-environment modal
-# self-bench up --backend vercel --harbor-environment docker
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
+# SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
 ```
 
-Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. `self-bench up` resolves the profile, then validates the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
+Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. Export the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
 
 The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and verification rounds then run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
 
@@ -230,7 +217,7 @@ export VERCEL_PROJECT_ID=prj_...
 export SELFBENCH_VERCEL_IMAGE='selfbench-runtime@sha256:...'
 export SELFBENCH_VERCEL_TIMEOUT_CAP=2h  # use 45m when that is the verified ceiling
 
-self-bench up --backend vercel --harbor-environment modal
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
 ```
 
 The image must already have been published from `Dockerfile.sandbox` to the same project's VCR as `linux/amd64`. Use the bare repository-plus-digest form shown above; tags and rolling aliases are rejected. VCR repositories are project-scoped by default, so a sandbox in another project cannot use the image unless the repository is explicitly shared. Explicit token and image values take precedence over profile values, and a lower timeout cap may be supplied; an override cannot exceed the profile's verified ceiling. Supplying a complete credential/image environment requires no local profile; partial team or project overrides are rejected rather than combined across scopes.
@@ -448,13 +435,13 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_GCS_BUCKET` | — | GCS artifact store |
 | `SELFBENCH_GCS_PREFIX` | `selfbench` | GCS artifact store |
 | `SELFBENCH_EXECUTION_BACKEND` | `docker` | Worker; `docker`, `modal`, `vercel`, or `e2b` |
-| `SELFBENCH_DOCKER_IMAGE` | per checkout | Docker worker; sandbox image tag built by `self-bench up` |
+| `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | Docker worker; sandbox image tag built by `docker compose --profile sandbox` |
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
-| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set by `self-bench up --modal-config` locally |
+| `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |
 | `SELFBENCH_VERCEL_IMAGE` | profile or — | Required digest-pinned VCR image for Vercel execution |
 | `SELFBENCH_VERCEL_TIMEOUT_CAP` | `2h` | Vercel worker and API; accepts integer milliseconds or `ms`, `s`, `m`, `h` units |
 | `SELFBENCH_E2B_TEMPLATE` | — | Required E2B template name/tag/ID for API and worker |
@@ -472,13 +459,9 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
-| `SELFBENCH_PUBLIC_URL` | `http://<hostname>:<site port>` | API; public origin, forms the OAuth callback URL |
-| `SELFBENCH_SITE_HOSTNAME` | `127.0.0.1` | `self-bench up`; hostname in the public URL, non-loopback binds `0.0.0.0` |
+| `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` | API; public origin, forms the OAuth callback URL. Set to the assigned host port (`docker compose port api 8080`) or a reverse-proxy hostname |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
-| `SELFBENCH_SITE_PORT` / `SELFBENCH_SITE_BIND` | per checkout / `127.0.0.1` | Compose host port and bind address for the API |
-| `SELFBENCH_TEMPORAL_PORT` | per checkout | Compose host port for Temporal |
-| `COMPOSE_PROJECT_NAME` / `SELFBENCH_IMAGE` | per checkout | Compose project and API/worker image tag |
 | `OPENAI_API_KEY` | — | Worker sandboxes |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
 | `GH_TOKEN` | — | Worker GitHub reads; hosted generation uses the submitter's GitHub token instead |

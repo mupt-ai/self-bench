@@ -4,10 +4,6 @@ export function printHelp(): void {
 Usage:
   self-bench setup vercel [--profile NAME] [--verbose]
   self-bench setup e2b --name NAME[:TAG] [--cpus N] [--memory-mib N]
-  self-bench up [--backend docker|modal|vercel|e2b]
-                [--harbor-environment docker|modal|vercel|e2b|daytona]
-                [--modal-config PATH] [--vercel-profile NAME]
-  self-bench down
   self-bench associate --repo PATH --list-sessions
   self-bench associate --repo PATH --pr NUMBER --session TYPE:SESSION_ID [...]
                        --output ASSOCIATION.json
@@ -22,10 +18,11 @@ Usage:
   self-bench list
   self-bench view TASKS_DIR [--port N] [--host HOST]
 
-The up command starts the local stack, one Compose project per checkout so worktrees run side by
-side. Every generation backend defaults Harbor to the matching environment; --harbor-environment
-picks a different one, and Daytona is Harbor-only. Modal generation or Harbor uses
-~/.modal.toml unless --modal-config overrides it. Run self-bench setup vercel once to create or select a
+Start the local stack with docker compose from a checkout: each directory is its own Compose
+project, so worktrees run side by side. Host ports are ephemeral (docker compose port api 8080).
+Generation and Harbor backends are environment variables (SELFBENCH_EXECUTION_BACKEND,
+SELFBENCH_HARBOR_ENVIRONMENT); Daytona is Harbor-only. Modal generation or Harbor needs
+SELFBENCH_MODAL_CONFIG_PATH set to an absolute .modal.toml (Compose mounts /dev/null otherwise). Run self-bench setup vercel once to create or select a
 project, publish the pinned runtime image, verify access, and save an owner-only local profile. E2B setup
 is noninteractive: with E2B_API_KEY set, it builds Dockerfile.sandbox under the requested versioned name;
 set SELFBENCH_E2B_TEMPLATE to the printed template before starting the stack.

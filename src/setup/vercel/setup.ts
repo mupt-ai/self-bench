@@ -187,7 +187,7 @@ export async function setupVercel(
     `  ${imageDigest(profile.image)}`,
     `Vercel tier: ${timeoutTier(capability.timeoutClass)}`,
     `Timeout cap: ${formatDuration(profile.timeoutCapMs)}`,
-    "Resources: Project and runtime image remain reusable after self-bench down.",
+    "Resources: Project and runtime image remain reusable after docker compose down.",
   ]);
 
   return {
