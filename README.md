@@ -55,11 +55,11 @@ export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 ### 1. Start self-bench
 
 ```bash
-self-bench up --backend docker
-export SELFBENCH_API_URL=http://127.0.0.1:8080
+docker compose --profile sandbox up -d --build
+export SELFBENCH_API_URL="http://$(docker compose port api 8080)"
 ```
 
-This starts Postgres, Temporal, the self-bench API, and a worker. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. From a git worktree or any checkout not named `self-bench`, `up` gives the stack its own Compose project and ports and prints the URL, so several checkouts run side by side (see [Operations](docs/operations.md#one-stack-per-checkout)).
+This starts Postgres, Temporal, the self-bench API, and a worker, and builds the local sandbox image. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. Compose names the project after the checkout directory and publishes ephemeral host ports, so several worktrees run side by side (see [Operations](docs/operations.md#local-stack)).
 
 ### 2. Build a benchmark
 
@@ -129,49 +129,49 @@ self-bench download RUN_ID ./self-bench-evals.tar.gz
 Stop the local stack with:
 
 ```bash
-self-bench down
+docker compose down
 ```
 
 Named Docker volumes retain Temporal history and generated artifacts.
 
 ## Choose a sandbox backend
 
-The quickstart uses local Docker sandboxes so it works without a hosted sandbox account. For more concurrency or unattended runs, generation can use Modal, Vercel Sandbox, or E2B instead:
+The quickstart uses local Docker sandboxes so it works without a hosted sandbox account. For more concurrency or unattended runs, generation can use Modal, Vercel Sandbox, or E2B instead. Set the pairing in `.env` (or the shell) and start Compose:
 
-- **Docker:** `self-bench up --backend docker` keeps generation and validation on your machine.
-- **Modal:** authenticate with `modal token new`, then run `self-bench up --backend modal`.
-- **Vercel Sandbox:** run `self-bench setup vercel`; Harbor validation defaults to Vercel too.
+- **Docker:** `SELFBENCH_EXECUTION_BACKEND=docker` keeps generation and validation on your machine. Include `--profile sandbox` so Compose builds the sandbox image.
+- **Modal:** authenticate with `modal token new`, then set `SELFBENCH_EXECUTION_BACKEND=modal`.
+- **Vercel Sandbox:** run `self-bench setup vercel`; Harbor validation defaults to Vercel too. Export the saved `VERCEL_*` and `SELFBENCH_VERCEL_IMAGE` values into the environment Compose reads.
 - **E2B:** build the pinned SelfBench runtime with `self-bench setup e2b --name NAME[:TAG]`; Harbor validation defaults to E2B too.
 - **Temporal Cloud + Modal/E2B:** use a persistent worker for unattended runs and large repositories.
 
 See [Operations and deployment](docs/operations.md) for provider setup, credentials, persistence, object storage, and Temporal Cloud deployment.
 
-Generation sandboxes and Harbor validation are independent choices. Every generation backend defaults to the matching Harbor environment, and `--harbor-environment` picks a different one. Daytona is available for Harbor only:
+Generation sandboxes and Harbor validation are independent choices. Every generation backend defaults to the matching Harbor environment, and `SELFBENCH_HARBOR_ENVIRONMENT` picks a different one. Daytona is available for Harbor only:
 
 ```bash
 # Matching defaults
-self-bench up --backend docker
-self-bench up --backend modal
+SELFBENCH_EXECUTION_BACKEND=docker docker compose --profile sandbox up -d --build
+SELFBENCH_EXECUTION_BACKEND=modal docker compose up -d --build
 
 # Vercel generation, with Vercel Harbor by default or any other environment
 self-bench setup vercel
-self-bench up --backend vercel                           # Vercel + Vercel
-self-bench up --backend vercel --harbor-environment docker
-self-bench up --backend vercel --harbor-environment modal
-self-bench up --backend vercel --harbor-environment e2b
-DAYTONA_API_KEY=... self-bench up --backend vercel --harbor-environment daytona
+SELFBENCH_EXECUTION_BACKEND=vercel docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=e2b docker compose up -d --build
+DAYTONA_API_KEY=... SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=daytona docker compose up -d --build
 
 # E2B generation uses a required prebuilt template; setup never installs at runtime
 export E2B_API_KEY=...
 self-bench setup e2b --name selfbench-runtime:v1
 export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
-self-bench up --backend e2b                              # E2B + E2B
-# self-bench up --backend e2b --harbor-environment docker
-# self-bench up --backend e2b --harbor-environment modal
+SELFBENCH_EXECUTION_BACKEND=e2b docker compose up -d --build
+# SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
+# SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
 
 # Explicit cross-provider combinations are also supported
-self-bench up --backend docker --harbor-environment modal
-self-bench up --backend modal --harbor-environment docker
+SELFBENCH_EXECUTION_BACKEND=docker SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose --profile sandbox up -d --build
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
 ```
 
 Provider selection belongs to the worker, so all runs on one task queue use the same pairing. See [Operations and deployment](docs/operations.md) for Vercel and [E2B setup](docs/operations.md#e2b) for template builds, credentials, plan limits, resources, cleanup, and unattended deployment.
