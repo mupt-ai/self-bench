@@ -103,11 +103,14 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
               aria-hidden="true"
               className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
             />
-            <span className="min-w-0">
-              <span className="font-medium">Candidate Discovery · Wave {discovery.wave + 1}</span>
-              <span className="mt-1 block text-muted-foreground sm:mt-0 sm:ml-2 sm:inline">
-                {finishedDiscovery} / {discovery.totalShards} Searches Finished
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">Finding Task Candidates</span>
+              <span className="mt-1 block text-muted-foreground">
+                Scanning repository history · Wave {discovery.wave + 1}
               </span>
+            </span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {finishedDiscovery} of {discovery.totalShards} complete
             </span>
           </summary>
           <p className="mt-4 pl-5 text-xs leading-5 text-muted-foreground">
@@ -117,7 +120,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
           {discovery.totalShards > 0 && (
             <div
               role="progressbar"
-              aria-label="Discovery Searches Finished"
+              aria-label="Task Candidate Discovery Progress"
               aria-valuemin={0}
               aria-valuemax={discovery.totalShards}
               aria-valuenow={finishedDiscovery}
@@ -134,11 +137,11 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
             </div>
           )}
           <div className="mt-3 ml-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-            <span>{discovery.completedShards} Complete</span>
+            <span>{discovery.completedShards} complete</span>
             <span className={discovery.failedShards ? "text-destructive" : undefined}>
-              {discovery.failedShards} Failed
+              {discovery.failedShards} failed
             </span>
-            <span>{Math.max(0, discovery.totalShards - finishedDiscovery)} Pending</span>
+            <span>{Math.max(0, discovery.totalShards - finishedDiscovery)} pending</span>
           </div>
         </details>
       )}
