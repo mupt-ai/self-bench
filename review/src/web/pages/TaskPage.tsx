@@ -39,6 +39,7 @@ export function TaskPage() {
     () => (task ? siteTaskSource(org.login, fullName, task) : null),
     [org.login, fullName, task],
   );
+  const technicalDetails = task ? taskTechnicalDetails(task.reason, task.reasonSummary) : undefined;
 
   const onReview = (updated: TaskItem) => setTask(updated);
 
@@ -94,11 +95,11 @@ export function TaskPage() {
           {task.pipelineStatus === "infrastructure_failed" &&
           (task.reason || task.reasonSummary) ? (
             <div className="mt-3 font-mono text-sm leading-6 text-muted-foreground">
-              <p>{task.reasonSummary}</p>
-              {task.reason && (
+              {task.reasonSummary && <p>{task.reasonSummary}</p>}
+              {technicalDetails && (
                 <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
                   <summary>Technical Details</summary>
-                  <pre>{task.reason.replace(`${task.reasonSummary}\n\n`, "")}</pre>
+                  <pre>{technicalDetails}</pre>
                 </details>
               )}
             </div>
@@ -118,4 +119,21 @@ export function TaskPage() {
       <TaskView source={source} row={rowFor(task)} />
     </div>
   );
+}
+
+function taskTechnicalDetails(
+  reason: string | undefined,
+  summary: string | undefined,
+): string | undefined {
+  if (!reason) return undefined;
+  const normalizedReason = reason.trim();
+  if (!summary) return normalizedReason || undefined;
+
+  const normalizedSummary = summary.trim();
+  if (normalizedReason === normalizedSummary) return undefined;
+  if (normalizedReason.startsWith(normalizedSummary)) {
+    const remainder = normalizedReason.slice(normalizedSummary.length).trim();
+    return remainder || undefined;
+  }
+  return normalizedReason || undefined;
 }
