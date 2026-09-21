@@ -1,7 +1,8 @@
 # Compose names the project after this directory, so each worktree gets its own
 # containers, volumes, and image tags. Host ports are ephemeral; resolve them with
 # `docker compose port api 8080`. Docker generation also needs the sandbox image:
-# `docker compose --profile sandbox up -d --build`.
+# `docker compose --profile sandbox up -d --build`. Local Stripe webhooks:
+# `docker compose --profile stripe up -d`.
 #
 # Older checkouts used the fixed project name `selfbench` (volumes `selfbench_*`).
 # To keep that data: `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
@@ -162,7 +163,29 @@ services:
     restart: "no"
     entrypoint: ["true"]
 
+  # Forwards Stripe events to the API. The tunnel is not a public Stripe webhook
+  # target, so local billing needs this instead of a Dashboard endpoint. Keep this
+  # listener running after copying its whsec from `docker compose logs stripe`.
+  stripe:
+    image: stripe/stripe-cli:v1.51.0
+    profiles: ["stripe"]
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      STRIPE_API_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
+    command:
+      [
+        "listen",
+        "--forward-to",
+        "http://api:8080/api/stripe/webhook",
+      ]
+    volumes:
+      - stripe-cli:/root/.config/stripe
+    restart: on-failure
+
 volumes:
   artifacts:
   site-postgres:
   temporal-postgres:
+  stripe-cli:

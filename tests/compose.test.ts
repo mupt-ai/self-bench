@@ -33,6 +33,11 @@ describe("Compose provider credential boundary", () => {
       image: `\${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}`,
       profiles: ["sandbox"],
     });
+    expect(compose.services.stripe).toMatchObject({
+      image: "stripe/stripe-cli:v1.51.0",
+      profiles: ["stripe"],
+      environment: { STRIPE_API_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY") },
+    });
   });
 
   test("shares E2B run metadata with the API but gives control credentials only to the worker", async () => {
@@ -70,6 +75,12 @@ describe("Compose provider credential boundary", () => {
     expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_SECRET_KEY");
     expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_WEBHOOK_SECRET");
     expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_PRICE_ID");
+    expect(compose.services.stripe?.environment).toMatchObject({
+      STRIPE_API_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY"),
+    });
+    expect(compose.services.stripe?.environment).not.toHaveProperty(
+      "SELFBENCH_STRIPE_WEBHOOK_SECRET",
+    );
   });
 
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {
