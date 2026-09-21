@@ -1,5 +1,4 @@
 import { type BatchStatus, batchIsTerminal } from "./batch-api";
-import { batchMessage } from "./batches/presentation";
 import { activityCounts } from "./batches/task-activity";
 import { cn } from "./primitives/cn";
 
@@ -7,9 +6,6 @@ import { cn } from "./primitives/cn";
 export function BatchProgress({ status }: { status: BatchStatus }) {
   const counts = activityCounts(status);
   const terminal = batchIsTerminal(status.phase);
-  const stopped = status.phase === "blocked" || status.phase === "failed";
-  const accepted = status.accepted ?? 0;
-  const requested = status.requested ?? 0;
   const metrics = [
     ["Verified", status.accepted, "text-success"],
     ...(terminal
@@ -46,47 +42,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
             </dd>
           </div>
         ))}
-      </dl>
-      <div className="border-t border-border px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span>
-            {status.accepted ?? "—"} of {status.requested ?? "—"} requested tasks verified
-          </span>
-          {status.requestedByDifficulty && (
-            <span className="text-muted-foreground">
-              Target: {status.requestedByDifficulty.easy} easy ·{" "}
-              {status.requestedByDifficulty.medium} medium · {status.requestedByDifficulty.hard}{" "}
-              hard
-            </span>
-          )}
-        </div>
-        {requested > 0 && status.accepted !== undefined && (
-          <div
-            role="progressbar"
-            aria-label="Verified Task Target"
-            aria-valuemin={0}
-            aria-valuemax={requested}
-            aria-valuenow={Math.min(requested, accepted)}
-            className="mt-3 h-1 overflow-hidden bg-muted"
-          >
-            <div
-              className="h-full bg-success"
-              style={{ width: `${Math.min(100, (accepted / requested) * 100)}%` }}
-            />
-          </div>
-        )}
-        <p
-          className={cn(
-            "mt-3 text-xs leading-5",
-            stopped ? "text-destructive" : "text-muted-foreground",
-          )}
-        >
-          {batchMessage(status)}
-          {!terminal &&
-            (!status.tasks || counts.unknown > 0) &&
-            " Some task activity is unavailable; last known stages appear below."}
-        </p>
-      </div>
+      </dl>{" "}
     </section>
   );
 }
