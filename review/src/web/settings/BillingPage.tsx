@@ -91,31 +91,65 @@ function BillingContent({ org }: { org: string }) {
   );
 }
 
-function BillingStatusCard({ data }: { data: BillingStatus }) {
+export function BillingStatusCard({ data }: { data: BillingStatus }) {
+  const periodEnd = data.currentPeriodEnd
+    ? new Date(data.currentPeriodEnd).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "Not Available";
   return (
-    <section className="grid gap-2 border border-border bg-card p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-foreground">Subscription</h2>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">Stripe</span>
+    <section aria-label="Subscription">
+      <div className="mb-3">
+        <h2 className="text-sm font-medium">Subscription</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Stripe status and access to managed resources.
+        </p>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Status: {statusLabels[data.status] ?? data.status}
-        {data.eligible
-          ? " · managed runs are allowed"
-          : data.configured
-            ? " · managed runs are blocked"
-            : ""}
-        {data.currentPeriodEnd
-          ? ` · current period ends ${new Date(data.currentPeriodEnd).toLocaleDateString()}`
-          : ""}
-        {data.cancelAtPeriodEnd ? " · cancels at period end" : ""}
-      </p>
+      <dl className="grid border border-border bg-card md:grid-cols-3 md:divide-x md:divide-border [&>div]:border-b [&>div]:border-border [&>div]:p-4 md:[&>div]:border-b-0">
+        <StatusMetric
+          label="Status"
+          value={statusLabels[data.status] ?? data.status}
+          active={data.eligible}
+        />
+        <StatusMetric
+          label="Managed Usage"
+          value={data.eligible ? "Allowed" : data.configured ? "Blocked" : "Not Enforced"}
+        />
+        <StatusMetric label="Current Period Ends" value={periodEnd} />
+      </dl>
+      {data.cancelAtPeriodEnd && (
+        <p className="border-x border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+          This subscription cancels at the end of the current period.
+        </p>
+      )}
       {!data.configured && (
-        <p className="text-sm text-muted-foreground">
-          Stripe is not configured on this deployment, so managed usage is recorded but not
-          invoiced.
+        <p className="mt-3 text-xs text-muted-foreground">
+          Stripe is not configured. Managed usage is recorded but not invoiced.
         </p>
       )}
     </section>
+  );
+}
+
+function StatusMetric({
+  label,
+  value,
+  active = false,
+}: {
+  label: string;
+  value: string;
+  active?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dd className="mt-1.5 flex items-center gap-2 text-sm text-foreground">
+        {active && <span className="size-1.5 bg-success" aria-hidden="true" />}
+        {value}
+      </dd>
+    </div>
   );
 }
