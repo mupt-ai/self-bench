@@ -1,7 +1,7 @@
 import { fetchOrgMemberships, type OrgMembership } from "./github.js";
 
 /** How long a membership answer stays trusted before GitHub is asked again. */
-export const ALLOWED_ORGS_TTL_MS = 5 * 60 * 1000;
+const ALLOWED_ORGS_TTL_MS = 5 * 60 * 1000;
 
 /** The session cannot outlive the allowlist: a removed member is denied, not just signed out. */
 export class OrgAccessError extends Error {
