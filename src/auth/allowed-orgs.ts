@@ -35,7 +35,11 @@ export function createOrgGate(options: {
       if (allowedOrgs.length === 0) return true;
       const cached = cache.get(githubId);
       if (cached && now().getTime() - cached.at < ALLOWED_ORGS_TTL_MS) return cached.allowed;
-      const orgs = await fetchOrgMemberships({ githubApiUrl: options.githubApiUrl }, token, fetchImpl);
+      const orgs = await fetchOrgMemberships(
+        { githubApiUrl: options.githubApiUrl },
+        token,
+        fetchImpl,
+      );
       const allowed = isMember(orgs);
       cache.set(githubId, { at: now().getTime(), allowed });
       return allowed;

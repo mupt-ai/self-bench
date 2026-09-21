@@ -157,10 +157,13 @@ describe("organization allowlist", () => {
   });
 
   test("membership matches case-insensitively", async () => {
-    const { server: site, users } = await boot({}, {
-      ...testAuthConfig,
-      allowedOrgs: ["Mupt-AI", " mupt-ai "].map((login) => login.trim().toLowerCase()),
-    });
+    const { server: site, users } = await boot(
+      {},
+      {
+        ...testAuthConfig,
+        allowedOrgs: ["Mupt-AI", " mupt-ai "].map((login) => login.trim().toLowerCase()),
+      },
+    );
     const response = await signIn(site);
     expect(response.headers.get("location")).toBe("/");
     expect(await users.findByGitHubId(42)).toBeDefined();
