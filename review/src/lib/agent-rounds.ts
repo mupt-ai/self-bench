@@ -6,6 +6,8 @@ export interface AgentRound {
   stage: "authoring" | "verification";
   round: number;
   attempt: number;
+  /** The canonical round result belongs to the attempt that ultimately decided the round. */
+  status?: "finished" | "failed";
   live?: ArtifactEntry;
   session?: ArtifactEntry;
   result?: ArtifactEntry;
@@ -38,6 +40,27 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
       rounds.set(id, item);
     }
   }
+  const grouped = new Map<string, AgentRound[]>();
+  for (const round of rounds.values()) {
+    const key = `${round.stage}-${round.round}`;
+    const group = grouped.get(key) ?? [];
+    group.push(round);
+    grouped.set(key, group);
+  }
+  for (const group of grouped.values()) {
+    const attempts = group.toSorted((a, b) => a.attempt - b.attempt);
+    const resultAttempt = attempts.some((round) => round.result)
+      ? (attempts.filter((round) => round.session).at(-1) ?? attempts.at(-1))
+      : undefined;
+    for (const round of attempts) {
+      if (resultAttempt) {
+        round.status = round === resultAttempt ? "finished" : "failed";
+      } else if (round.attempt < (attempts.at(-1)?.attempt ?? round.attempt)) {
+        round.status = "failed";
+      }
+    }
+  }
+
   return [...rounds.values()].sort(
     (a, b) =>
       a.round - b.round ||

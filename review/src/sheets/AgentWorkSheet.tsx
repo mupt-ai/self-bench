@@ -52,6 +52,7 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
           active={
             row.status === "in_progress" || row.status === "authoring" || row.status === "verifying"
           }
+          failed={row.status === "infrastructure_failed"}
         />
       ))}
     </div>
@@ -62,10 +63,12 @@ function AgentPart({
   round,
   source,
   active,
+  failed,
 }: {
   round: AgentRound;
   source: TaskSource;
   active: boolean;
+  failed: boolean;
 }) {
   const [events, setEvents] = React.useState<AgentFeedEvent[]>([]);
   const [error, setError] = React.useState(false);
@@ -97,13 +100,21 @@ function AgentPart({
     };
   }, [entry, source, round.live, round.session]);
   const done = Boolean(round.session || round.result);
+  const status =
+    round.status === "failed" || (failed && !round.status && !active)
+      ? "Failed"
+      : round.status === "finished" || done
+        ? "Finished"
+        : active
+          ? "In Progress"
+          : "Stopped";
   return (
     <details className="group/part border border-border [&+&]:mt-3">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 font-mono text-sm font-medium text-foreground before:text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾'] [&::-webkit-details-marker]:hidden site:text-sm site:leading-normal">
-        <span>{round.title}</span>
-        <span className="font-mono text-xs text-muted-foreground site:text-sm site:leading-normal">
+      <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 font-mono text-sm font-medium text-foreground before:justify-self-start before:text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾'] [&::-webkit-details-marker]:hidden site:text-sm site:leading-normal">
+        <span className="text-center">{round.title}</span>
+        <span className="justify-self-end font-mono text-xs text-muted-foreground site:text-sm site:leading-normal">
           {round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}
-          {done ? "Finished" : active ? "In Progress" : "Stopped"}
+          {status}
         </span>
       </summary>
       <div className="border-t border-border">
