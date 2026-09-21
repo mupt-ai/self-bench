@@ -12,10 +12,13 @@ const columns =
 export function BatchesPage() {
   const { repoId, runs, statuses, errors, error, refreshing, refresh } = useBatches();
   const navigate = useNavigate();
-  useDocumentTitle(`Batches · ${repoId.fullName} · self-bench`);
+  useDocumentTitle(`Batch Generation · ${repoId.fullName} · self-bench`);
   return (
     <PageContent>
-      <PageHeader title="Batches" description="Track task generation and revisit past batches.">
+      <PageHeader
+        title="Batch Generation"
+        description="Track task generation and revisit past batches."
+      >
         <GenerateBatch
           variant="primary"
           repoId={repoId}
@@ -35,7 +38,7 @@ export function BatchesPage() {
           </Button>
         </Notice>
       )}
-      {!runs && !error && <ListSkeleton label="Loading Batches" />}
+      {!runs && !error && <ListSkeleton label="Loading Batch Generation" />}
       {runs?.length === 0 && (
         <EmptyState title="No Batches Yet">
           Generate a batch to create tasks from repository changes.

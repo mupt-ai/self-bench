@@ -187,7 +187,7 @@ export function GenerateBatch({
               {error}
               {unconfirmed && (
                 <Link to={batchPath(fullName)} className="mt-2 block text-foreground underline">
-                  View Batches
+                  View Batch Generation
                 </Link>
               )}
             </p>
