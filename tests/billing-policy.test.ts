@@ -18,7 +18,15 @@ import {
 
 test("Stripe config is all-or-nothing and policy defaults are pass-through", () => {
   expect(loadStripeConfig({})).toBeUndefined();
-  expect(() => loadStripeConfig({ SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toThrow(/together/);
+  expect(() => loadStripeConfig({ SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toThrow(
+    /requires SELFBENCH_STRIPE_SECRET_KEY/,
+  );
+  const fileStripe = loadStripeConfig({
+    SELFBENCH_STRIPE_SECRET_KEY: "sk_test",
+    SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/stripe/webhook-secret",
+    SELFBENCH_STRIPE_PRICE_ID: "price_1",
+  });
+  expect(fileStripe?.webhookSecretFile).toBe("/run/stripe/webhook-secret");
   const stripe = loadStripeConfig({
     SELFBENCH_STRIPE_SECRET_KEY: "sk_test",
     SELFBENCH_STRIPE_WEBHOOK_SECRET: "whsec",

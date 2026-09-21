@@ -6,6 +6,7 @@ import type { StripeConfig } from "./config.js";
 import type { BillingStore } from "./store.js";
 import { createCheckoutSession, createPortalSession, createStripeCustomer } from "./stripe.js";
 import { applyStripeWebhook, verifyStripeWebhook } from "./webhook.js";
+import { stripeWebhookSecret } from "./webhook-secret.js";
 
 const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/billing(?:\/(checkout|portal))?$/;
 
@@ -100,7 +101,7 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           Array.isArray(request.headers["stripe-signature"])
             ? request.headers["stripe-signature"][0]
             : request.headers["stripe-signature"],
-          options.config.webhookSecret,
+          stripeWebhookSecret(options.config),
         );
         await applyStripeWebhook(options.store, body);
         sendJson(response, 200, { received: true });

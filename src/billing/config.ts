@@ -50,12 +50,17 @@ const stripeSchema = z.object({
     emptyStringAsUndefined,
     z.string().min(1).optional(),
   ),
+  SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().min(1).optional(),
+  ),
   SELFBENCH_STRIPE_PRICE_ID: z.preprocess(emptyStringAsUndefined, z.string().min(1).optional()),
 });
 
 export interface StripeConfig {
   readonly secretKey: string;
-  readonly webhookSecret: string;
+  readonly webhookSecret?: string;
+  readonly webhookSecretFile?: string;
   readonly priceId: string;
   readonly apiVersion: typeof STRIPE_API_VERSION;
 }
@@ -70,13 +75,20 @@ export function loadStripeConfig(
   const value = stripeSchema.parse(environment);
   const secretKey = value.SELFBENCH_STRIPE_SECRET_KEY;
   const webhookSecret = value.SELFBENCH_STRIPE_WEBHOOK_SECRET;
+  const webhookSecretFile = value.SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE;
   const priceId = value.SELFBENCH_STRIPE_PRICE_ID;
-  const set = [secretKey, webhookSecret, priceId].filter(Boolean);
+  const set = [secretKey, webhookSecret, webhookSecretFile, priceId].filter(Boolean);
   if (set.length === 0) return undefined;
-  if (!secretKey || !webhookSecret || !priceId) {
+  if (!secretKey || !priceId || (!webhookSecret && !webhookSecretFile)) {
     throw new Error(
-      "Stripe billing requires SELFBENCH_STRIPE_SECRET_KEY, SELFBENCH_STRIPE_WEBHOOK_SECRET, and SELFBENCH_STRIPE_PRICE_ID together",
+      "Stripe billing requires SELFBENCH_STRIPE_SECRET_KEY, SELFBENCH_STRIPE_PRICE_ID, and either SELFBENCH_STRIPE_WEBHOOK_SECRET or SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE",
     );
   }
-  return { secretKey, webhookSecret, priceId, apiVersion: STRIPE_API_VERSION };
+  return {
+    secretKey,
+    priceId,
+    apiVersion: STRIPE_API_VERSION,
+    ...(webhookSecret ? { webhookSecret } : {}),
+    ...(webhookSecretFile ? { webhookSecretFile } : {}),
+  };
 }

@@ -115,10 +115,12 @@ services:
       SELFBENCH_STRIPE_SECRET_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
       SELFBENCH_STRIPE_WEBHOOK_SECRET: ${SELFBENCH_STRIPE_WEBHOOK_SECRET:-}
       SELFBENCH_STRIPE_PRICE_ID: ${SELFBENCH_STRIPE_PRICE_ID:-}
+      SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: /run/selfbench-stripe/webhook-secret
     ports:
       - "127.0.0.1::8080"
     volumes:
       - artifacts:/var/lib/selfbench/artifacts
+      - stripe-secrets:/run/selfbench-stripe:ro
     restart: on-failure
 
   worker:
@@ -164,8 +166,8 @@ services:
     entrypoint: ["true"]
 
   # Forwards Stripe events to the API. The tunnel is not a public Stripe webhook
-  # target, so local billing needs this instead of a Dashboard endpoint. Keep this
-  # listener running after copying its whsec from `docker compose logs stripe`.
+  # target, so local billing needs this instead of a Dashboard endpoint. The
+  # wrapper stores the generated signing secret for the API automatically.
   stripe:
     image: stripe/stripe-cli:v1.51.0
     profiles: ["stripe"]
@@ -174,18 +176,14 @@ services:
         condition: service_started
     environment:
       STRIPE_API_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
-    command:
-      [
-        "listen",
-        "--forward-to",
-        "http://api:8080/api/stripe/webhook",
-      ]
+    command: ["/usr/local/bin/selfbench-stripe-listen"]
     volumes:
-      - stripe-cli:/root/.config/stripe
+      - ./scripts/stripe-listen.sh:/usr/local/bin/selfbench-stripe-listen:ro
+      - stripe-secrets:/run/selfbench-stripe
     restart: on-failure
 
 volumes:
   artifacts:
   site-postgres:
   temporal-postgres:
-  stripe-cli:
+  stripe-secrets:

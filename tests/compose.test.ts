@@ -81,6 +81,9 @@ describe("Compose provider credential boundary", () => {
     expect(compose.services.stripe?.environment).not.toHaveProperty(
       "SELFBENCH_STRIPE_WEBHOOK_SECRET",
     );
+    expect(compose.services.api?.environment).toMatchObject({
+      SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/selfbench-stripe/webhook-secret",
+    });
   });
 
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {
