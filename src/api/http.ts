@@ -57,7 +57,7 @@ export async function sendReviewAsset(response: ServerResponse, pathname: string
       // Only files under /assets/ carry a content hash in their name.
       "cache-control": pathname.startsWith("/assets/")
         ? "public, max-age=31536000, immutable"
-        : "no-cache",
+        : "no-store",
       "x-content-type-options": "nosniff",
     });
     response.end(body);
