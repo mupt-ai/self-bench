@@ -36,12 +36,22 @@ export interface TaskProgress {
   reason?: string;
 }
 
+export interface DiscoveryShardProgress {
+  readonly wave: number;
+  readonly shardIndex: number;
+  readonly attempt?: number;
+  readonly liveKey?: string;
+  readonly logKey?: string;
+  readonly error?: string;
+}
+
 export interface DiscoveryProgress {
   readonly wave: number;
   readonly totalShards: number;
   readonly completedShards: number;
   readonly failedShards: number;
   readonly candidates: number;
+  readonly shards?: readonly DiscoveryShardProgress[];
 }
 
 export interface RunStatus {

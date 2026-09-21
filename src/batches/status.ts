@@ -38,6 +38,11 @@ export function batchStatus(batch: GenerationBatch): RunStatus {
         (count, shard) => count + (shard.result?.candidates.length ?? 0),
         0,
       ),
+      shards: batch.shards.map((shard) => ({
+        wave: shard.input.wave,
+        shardIndex: shard.input.shardIndex,
+        ...(shard.error ? { error: shard.error } : {}),
+      })),
     },
     ...(batch.export ? { export: batch.export } : {}),
     ...(batch.error ? { error: batch.error } : {}),

@@ -90,6 +90,39 @@ test("final messages replace streamed text and oversized input cannot poison the
   expect(feed.events()).toEqual([{ kind: "message", text: "complete" }]);
 });
 
+test("provider failures become public error events", () => {
+  const text = JSON.stringify({
+    type: "message_end",
+    timestamp: "2026-09-21T19:45:38.508Z",
+    message: {
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorMessage: '401: {"message":"User not found.","code":401}',
+    },
+  });
+  expect(agentFeedEvents(text)).toEqual([
+    {
+      kind: "error",
+      text: '401: {"message":"User not found.","code":401}',
+      timestamp: "2026-09-21T19:45:38.508Z",
+    },
+  ]);
+  const feed = new PiEventFeed();
+  feed.push(
+    line({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        errorMessage: "401: User not found.",
+      },
+    }),
+  );
+  expect(feed.events()).toEqual([{ kind: "error", text: "401: User not found." }]);
+});
+
 test("archived conversations redact credentials and omit prompts and reasoning", () => {
   const text = [
     { message: { role: "user", content: [{ type: "text", text: "prompt" }] } },

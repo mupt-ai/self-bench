@@ -3,7 +3,12 @@ import { type AgentFeedEvent, agentFeedEvents } from "./agent-feed.js";
 interface PiEvent {
   type: string;
   timestamp?: string;
-  message?: { role: string; content?: { type: string; text: string }[] };
+  message?: {
+    role: string;
+    content?: { type: string; text: string }[];
+    stopReason?: string;
+    errorMessage?: string;
+  };
   assistantMessageEvent?: { type: string; delta: string; contentIndex?: number };
   toolCallId?: string;
   toolName?: string;
@@ -97,6 +102,15 @@ export class PiEventFeed {
       for (const [index, block] of (event.message.content ?? []).entries()) {
         if (block.type === "text")
           this.put(`message-${this.turn}-${index}`, "message", block.text, false, event.timestamp);
+      }
+      if (event.message.stopReason === "error" || event.message.errorMessage) {
+        this.put(
+          `error-${this.turn}`,
+          "error",
+          event.message.errorMessage?.trim() || "provider error",
+          false,
+          event.timestamp,
+        );
       }
     }
     if (event.type === "tool_execution_start") {

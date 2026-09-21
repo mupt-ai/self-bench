@@ -8,6 +8,7 @@ import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { useBatches } from "./BatchProvider";
 import { BatchTasks } from "./BatchTasks";
 import { CancelBatch } from "./CancelBatch";
+import { Discovery } from "./Discovery";
 import { BatchState, batchDate, batchName, batchPath } from "./presentation";
 
 export function BatchPage() {
@@ -71,6 +72,7 @@ export function BatchPage() {
       {run && status && (
         <>
           <BatchProgress status={status} />
+          <Discovery status={status} />
           <BatchTasks key={batchId} status={status} fullName={repoId.fullName} />
         </>
       )}

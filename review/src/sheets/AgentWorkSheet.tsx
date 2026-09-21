@@ -125,13 +125,15 @@ function AgentPart({
         <div className="max-h-[560px] overflow-auto">
           {events.map((event, eventIndex) => {
             const key = `${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`;
-            return event.kind === "message" ? (
+            return event.kind === "message" || event.kind === "error" ? (
               <div
                 className="border-t border-border px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-foreground site:[&_pre]:text-base [&_time]:float-right [&_time]:font-mono [&_time]:text-xs [&_time]:text-muted-foreground site:[&_time]:text-sm site:[&_time]:leading-normal"
                 key={key}
               >
-                <span className="mb-2 block font-mono text-xs leading-[normal] text-brand site:text-sm site:leading-normal">
-                  Agent Message
+                <span
+                  className={`mb-2 block font-mono text-xs leading-[normal] site:text-sm site:leading-normal ${event.kind === "error" ? "text-destructive" : "text-brand"}`}
+                >
+                  {event.kind === "error" ? "Provider Error" : "Agent Message"}
                 </span>
                 {event.timestamp && (
                   <time dateTime={event.timestamp}>{formatEventTime(event.timestamp)}</time>
