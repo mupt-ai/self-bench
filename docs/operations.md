@@ -17,6 +17,8 @@ Add `--profile sandbox` when using Docker generation so Compose also builds `sel
 
 Compose names the project after the checkout directory, so several worktrees run side by side with their own containers, volumes, and image tags. Host ports are ephemeral (`127.0.0.1::<container port>`); resolve them with `docker compose port api 8080` and `docker compose port temporal 7233`. Set `SELFBENCH_PUBLIC_URL` to the origin browsers open (the assigned host port, or a reverse-proxy hostname) so GitHub OAuth callbacks match.
 
+Older local stacks used the fixed project name `selfbench` and volumes `selfbench_temporal-postgres`, `selfbench_site-postgres`, and `selfbench_artifacts`. A checkout directory named `self-bench` now becomes project `self-bench` and would otherwise start empty. Keep the existing volumes with `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
+
 Compose reads `.env` from the checkout; copy `.env.example` to start. Keep `.env` free of per-stack values (public URL) when it is shared between worktrees, and export those in the shell instead. With `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` set, the API serves the signed-in selfbench.dev site (see [Site sign-in](#site-sign-in-selfbenchdev)); without them it serves the bearer-token Harbor Ledger.
 
 Manage development DNS and reverse proxies with your local tooling. Set `SELFBENCH_PUBLIC_URL` to the externally reachable origin.

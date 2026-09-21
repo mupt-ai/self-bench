@@ -3,6 +3,9 @@
 # `docker compose port api 8080`. Docker generation also needs the sandbox image:
 # `docker compose --profile sandbox up -d --build`.
 #
+# Older checkouts used the fixed project name `selfbench` (volumes `selfbench_*`).
+# To keep that data: `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
+#
 # Shared by the API and the worker. Provider control credentials and the GitHub OAuth secret
 # are deliberately not here: they go only to the service that needs them.
 x-selfbench-environment: &selfbench-environment
