@@ -28,7 +28,12 @@ export function BatchPage() {
         Back to Batches
       </Link>
       <PageHeader
-        title={batchName(batchId)}
+        title={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {batchName(batchId)}
+            {status && <BatchState phase={status.phase} />}
+          </span>
+        }
         description={
           run ? (
             <>
@@ -38,7 +43,6 @@ export function BatchPage() {
           ) : undefined
         }
       >
-        {status && <BatchState phase={status.phase} />}
         {status && !batchIsTerminal(status.phase) && (
           <CancelBatch key={batchId} repoId={repoId} runId={batchId} onCancelled={refresh} />
         )}
