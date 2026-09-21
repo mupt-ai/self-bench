@@ -3,7 +3,7 @@ import { associate } from "./associate.js";
 import { printHelp } from "./help.js";
 import { replay } from "./replay.js";
 import { run } from "./run.js";
-import { down, setup, up } from "./stack.js";
+import { setup } from "./setup.js";
 import { fail, requiredArgument } from "./values.js";
 import { view } from "./view.js";
 
@@ -13,9 +13,6 @@ export async function runCli(args: string[]): Promise<void> {
     case "setup":
       await setup(rest);
       break;
-    case "up":
-      await up(rest);
-      break;
     case "run":
       await run(rest);
       break;
@@ -24,9 +21,6 @@ export async function runCli(args: string[]): Promise<void> {
       break;
     case "replay":
       await replay(rest);
-      break;
-    case "down":
-      await down();
       break;
     case "status":
       await passthrough("GET", `/v1/runs/${requiredArgument(rest, "run ID")}`);

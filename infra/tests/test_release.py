@@ -58,14 +58,14 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("fake-model", json.dumps(result))
 
     def test_release_concurrency_is_bounded(self):
-        for value in ("1", "4", "8"):
+        for value in ("1", "8", "20", "99", "100"):
             self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
             self.assertEqual(self.validate()["environment"], "dev")
-        for value in ("0", "9", "100", "-1", "8.0", "08"):
+        for value in ("0", "101", "1000", "-1", "8.0", "08", "010"):
             self.coordinates["SELFBENCH_ACTIVITY_CONCURRENCY"] = value
             with self.assertRaises(ValueError): self.validate()
 
-    def test_production_accepts_eight_without_secret_concurrency(self):
+    def test_production_accepts_one_hundred_without_secret_concurrency(self):
         self.coordinates = {key:value.replace('selfbench-dev', 'selfbench-prod')
                             for key,value in self.coordinates.items()}
         self.coordinates['SELFBENCH_ENVIRONMENT'] = 'prod'
@@ -73,7 +73,10 @@ class ReleaseTests(unittest.TestCase):
                                  for key,value in self.values['shared'].items()}
         self.write()
         self.assertEqual(release.validate('prod','selfbench-prod-test',self.release_path)['environment'],'prod')
-        self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY'] = '9'
+        self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY'] = '100'
+        self.write()
+        self.assertEqual(release.validate('prod','selfbench-prod-test',self.release_path)['environment'],'prod')
+        self.coordinates['SELFBENCH_ACTIVITY_CONCURRENCY'] = '101'
         self.write()
         with self.assertRaises(ValueError):release.validate('prod','selfbench-prod-test',self.release_path)
 

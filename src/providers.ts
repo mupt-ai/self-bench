@@ -28,14 +28,9 @@ export type HostedExecutionBackend = (typeof HOSTED_EXECUTION_BACKENDS)[number];
 export const HOSTED_HARBOR_ENVIRONMENTS = ["modal", "vercel", "e2b", "daytona"] as const;
 export type HostedHarborEnvironment = (typeof HOSTED_HARBOR_ENVIRONMENTS)[number];
 
-const executionBackends: ReadonlySet<string> = new Set(EXECUTION_BACKENDS);
 const harborEnvironments: ReadonlySet<string> = new Set(HARBOR_ENVIRONMENTS);
 
-export function isExecutionBackend(value: string): value is ExecutionBackend {
-  return executionBackends.has(value);
-}
-
-export function isHarborEnvironment(value: string): value is HarborEnvironment {
+function isHarborEnvironment(value: string): value is HarborEnvironment {
   return harborEnvironments.has(value);
 }
 

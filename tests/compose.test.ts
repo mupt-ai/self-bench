@@ -5,9 +5,13 @@ const composeEmpty = (name: string): string => `\${${name}:-}`;
 
 type ComposeService = {
   readonly environment?: Readonly<Record<string, string>>;
+  readonly image?: string;
+  readonly profiles?: readonly string[];
+  readonly ports?: readonly string[];
 };
 
 type ComposeDocument = {
+  readonly name?: string;
   readonly services: Readonly<Record<string, ComposeService>>;
 };
 
@@ -16,11 +20,19 @@ describe("Compose provider credential boundary", () => {
     const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
     expect(source.match(/^x-selfbench-environment:/gm)).toHaveLength(1);
     const compose = Bun.YAML.parse(source) as ComposeDocument;
+    expect(compose.name).toBeUndefined();
     for (const service of ["api", "worker"]) {
       expect(compose.services[service]?.environment).toMatchObject({
         SELFBENCH_DOCKER_IMAGE: `\${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}`,
       });
+      expect(compose.services[service]?.image).toBe(`\${COMPOSE_PROJECT_NAME}-selfbench`);
     }
+    expect(compose.services.api?.ports).toEqual(["127.0.0.1::8080"]);
+    expect(compose.services.temporal?.ports).toEqual(["127.0.0.1::7233"]);
+    expect(compose.services.sandbox).toMatchObject({
+      image: `\${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}`,
+      profiles: ["sandbox"],
+    });
   });
 
   test("shares E2B run metadata with the API but gives control credentials only to the worker", async () => {
