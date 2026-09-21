@@ -13,8 +13,6 @@ import { generationModelCredentialKinds, generationModelRoute } from "./generati
 import type { GenerationReference, GenerationSettings } from "./generation-settings.js";
 import { generationSubscriptionAuth } from "./generation-subscription.js";
 import {
-  MANAGED_MODEL_KEY,
-  MANAGED_SANDBOX_KEY,
   type ManagedOffer,
   managedModelKey,
   managedOffer,
@@ -144,14 +142,12 @@ export async function generationStageEnvironment(
   if (!saved || !isDeepStrictEqual(saved.value, reference))
     throw new Error("Generation does not match its saved configuration.");
   const scoped = reference.orgId ? orgRecords(records, reference.orgId) : records;
-  // On the worker, a present platform key is what makes managed access work; the offer
-  // flags are the API's advertisement of the same configuration.
-  const offer = managedOffer(base);
-  const workerOffer = {
-    models: offer.models || !!base[MANAGED_MODEL_KEY]?.trim(),
-    sandbox: offer.sandbox || !!base[MANAGED_SANDBOX_KEY]?.trim(),
-  };
-  await checkGenerationCredentials(scoped, reference.ownerId, reference.settings, workerOffer);
+  await checkGenerationCredentials(
+    scoped,
+    reference.ownerId,
+    reference.settings,
+    managedOffer(base),
+  );
   const settings = reference.settings;
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;

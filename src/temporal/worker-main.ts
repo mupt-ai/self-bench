@@ -8,11 +8,7 @@ import { createUsageStore } from "../managed/usage-store.js";
 import { runCommand } from "../process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
-import {
-  MANAGED_MODEL_KEY,
-  MANAGED_SANDBOX_KEY,
-  managedOffer,
-} from "../site/managed-generation.js";
+
 import { createActivities } from "./activities.js";
 import { connectTemporalWorker } from "./connection.js";
 
@@ -27,11 +23,6 @@ if (config.execution.kind === "e2b") {
 }
 const connection = await connectTemporalWorker(config.temporal);
 const credentials = await openWorkerRecords();
-const offer = managedOffer();
-if (offer.models && !process.env[MANAGED_MODEL_KEY])
-  throw new Error("SELFBENCH_MANAGED_MODELS is set without a managed model key");
-if (offer.sandbox && !process.env[MANAGED_SANDBOX_KEY])
-  throw new Error("SELFBENCH_MANAGED_SANDBOX is set without a managed sandbox key");
 const workflowsPath = fileURLToPath(new URL("./workflow.js", import.meta.url));
 const worker = await Worker.create({
   connection,

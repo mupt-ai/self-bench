@@ -12,7 +12,7 @@ import { HOSTED_EXECUTION_BACKENDS } from "../providers.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
 import { generationModels } from "./generation-models.js";
 import { generationSettingsSchema } from "./generation-settings.js";
-import { managedGenerationOffer } from "./managed-generation.js";
+import { managedOffer } from "./managed-generation.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
 import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
 import type { RepoStore } from "./repo-store.js";
@@ -34,8 +34,6 @@ export interface PullRequestRoutesOptions {
   readonly start: WorkflowStarter;
   readonly fetchImpl?: typeof fetch;
   readonly records?: EncryptedRecordStore;
-  /** Deployment flags deciding whether managed model access and sandboxes are offered. */
-  readonly managed?: boolean;
 }
 
 export interface PullRequestRoutes {
@@ -84,7 +82,6 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
           credentials: options.records
             ? await listCredentials(orgRecords(options.records, tenant.id), tenant.id)
             : [],
-          managed: managedGenerationOffer(options.managed),
           available: !!options.records,
         });
         return true;
@@ -116,7 +113,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             orgRecords(options.records, tenant.id),
             tenant.id,
             generation.settings,
-            managedGenerationOffer(options.managed),
+            managedOffer(),
           );
         } catch (error) {
           sendJson(response, 400, {

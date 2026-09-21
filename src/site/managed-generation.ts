@@ -1,28 +1,23 @@
 /**
  * Managed generation runs model calls and sandboxes on SelfBench's own provider accounts
- * instead of an organization's credentials. The API only advertises what the deployment
- * offers via SELFBENCH_MANAGED_MODELS / SELFBENCH_MANAGED_SANDBOX; the worker (and, for
- * exports, the API itself) hold the matching platform keys.
+ * instead of an organization's credentials. What the deployment offers follows directly
+ * from which platform keys are set; there is no separate flag to keep in sync.
  */
 export interface ManagedOffer {
   readonly models: boolean;
   readonly sandbox: boolean;
 }
 
-export const MANAGED_MODEL_KEY = "SELFBENCH_MANAGED_OPENROUTER_API_KEY";
-export const MANAGED_SANDBOX_KEY = "SELFBENCH_MANAGED_E2B_API_KEY";
+const MANAGED_MODEL_KEY = "SELFBENCH_MANAGED_OPENROUTER_API_KEY";
+const MANAGED_SANDBOX_KEY = "SELFBENCH_MANAGED_E2B_API_KEY";
 const MANAGED_SANDBOX_DOMAIN = "SELFBENCH_MANAGED_E2B_DOMAIN";
 
+/** Managed access is supported exactly when the matching platform key is configured. */
 export function managedOffer(env: NodeJS.ProcessEnv = process.env): ManagedOffer {
   return {
-    models: env.SELFBENCH_MANAGED_MODELS === "true",
-    sandbox: env.SELFBENCH_MANAGED_SANDBOX === "true",
+    models: !!env[MANAGED_MODEL_KEY]?.trim(),
+    sandbox: !!env[MANAGED_SANDBOX_KEY]?.trim(),
   };
-}
-
-/** The offer a route advertises/validates against, from its deployment flag. */
-export function managedGenerationOffer(enabled?: boolean): ManagedOffer {
-  return { models: !!enabled, sandbox: !!enabled };
 }
 
 export function managedModelKey(env: NodeJS.ProcessEnv): string {

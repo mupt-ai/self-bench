@@ -8,11 +8,7 @@ import { generationEnvironment } from "../src/site/generation-credentials.js";
 import { generationModelRoute } from "../src/site/generation-models.js";
 import type { GenerationReference } from "../src/site/generation-settings.js";
 import { generationSettingsSchema } from "../src/site/generation-settings.js";
-import {
-  managedGenerationOffer,
-  managedModelKey,
-  managedOffer,
-} from "../src/site/managed-generation.js";
+import { managedModelKey, managedOffer } from "../src/site/managed-generation.js";
 import { loadPiModelAuth } from "../src/subscription-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 
@@ -132,8 +128,9 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
   expect(managedEnv.OPENROUTER_API_KEY).toBe("platform-openrouter");
   expect(managedEnv.E2B_API_KEY).toBe("platform-e2b");
   expect(managedEnv.E2B_DOMAIN).toBeUndefined();
-  expect(managedGenerationOffer(true)).toEqual(offer);
-  expect(managedOffer({ SELFBENCH_MANAGED_MODELS: "true" })).toEqual({
+  expect(offer).toEqual({ models: true, sandbox: true });
+  // The offer follows key presence: one key set, one capability offered.
+  expect(managedOffer({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toEqual({
     models: true,
     sandbox: false,
   });

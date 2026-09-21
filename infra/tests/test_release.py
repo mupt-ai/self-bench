@@ -119,15 +119,9 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate()
 
     def test_optional_managed_keys_accepted(self):
-        self.values["shared"]["SELFBENCH_MANAGED_MODELS"] = "true"
-        self.values["shared"]["SELFBENCH_MANAGED_SANDBOX"] = "true"
         self.values["shared"]["SELFBENCH_MANAGED_E2B_API_KEY"] = "fake-e2b"
         self.values["worker"]["SELFBENCH_MANAGED_OPENROUTER_API_KEY"] = "fake-openrouter"
         self.validate()
-
-    def test_managed_models_without_worker_key_rejected(self):
-        self.values["shared"]["SELFBENCH_MANAGED_MODELS"] = "true"
-        with self.assertRaises(ValueError): self.validate()
 
     def test_managed_e2b_key_on_api_rejected(self):
         self.values["api"]["SELFBENCH_MANAGED_E2B_API_KEY"] = "fake-e2b"
