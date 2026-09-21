@@ -76,8 +76,14 @@ export function createActivities(
         usage,
       ),
     buildExport: (input) =>
-      withGenerationRuntime(config, records, input.run, "author", sandbox, () =>
-        buildExport(store, input),
+      withGenerationRuntime(
+        config,
+        records,
+        input.run,
+        "author",
+        sandbox,
+        () => buildExport(store, input),
+        usage,
       ),
   };
 }
