@@ -42,7 +42,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
   const visible = tasks.filter((task) => filter === "all" || taskActivity(status, task) === filter);
   return (
     <section className="mt-6">
-      <SectionHeader title="Tasks" description="Running tasks first.">
+      <SectionHeader title="Tasks">
         <Link
           to={`/repos/${fullName}`}
           className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"

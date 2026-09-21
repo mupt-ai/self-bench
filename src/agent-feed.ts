@@ -1,7 +1,7 @@
 import { redactSecrets } from "./provenance/redact.js";
 
 export interface AgentFeedEvent {
-  kind: "message" | "tool" | "result";
+  kind: "message" | "tool" | "result" | "error";
   text: string;
   timestamp?: string;
 }
@@ -32,6 +32,20 @@ export function agentFeedEvents(jsonl: string, secrets: readonly string[] = []):
       const entry = JSON.parse(line);
       const message = entry.message;
       if (!message || !["assistant", "toolResult"].includes(message.role)) continue;
+      if (
+        message.role === "assistant" &&
+        (message.stopReason === "error" || typeof message.errorMessage === "string")
+      ) {
+        const text =
+          typeof message.errorMessage === "string" && message.errorMessage.trim()
+            ? message.errorMessage.trim()
+            : "provider error";
+        events.push({
+          kind: "error",
+          text: clean(text),
+          ...(typeof entry.timestamp === "string" ? { timestamp: entry.timestamp } : {}),
+        });
+      }
       const content = Array.isArray(message.content) ? message.content : [];
       for (const block of content) {
         if (block.type === "text" && typeof block.text === "string") {

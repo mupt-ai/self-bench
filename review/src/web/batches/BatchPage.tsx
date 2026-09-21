@@ -8,6 +8,7 @@ import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { useBatches } from "./BatchProvider";
 import { BatchTasks } from "./BatchTasks";
 import { CancelBatch } from "./CancelBatch";
+import { Discovery } from "./Discovery";
 import { BatchState, batchDate, batchName, batchPath } from "./presentation";
 import { repeatedFailure } from "./task-activity";
 
@@ -30,7 +31,12 @@ export function BatchPage() {
         Back to Batches
       </Link>
       <PageHeader
-        title={batchName(batchId)}
+        title={
+          <span className="inline-flex flex-wrap items-center gap-3">
+            {batchName(batchId)}
+            {status && <BatchState phase={status.phase} />}
+          </span>
+        }
         description={
           run ? (
             <>
@@ -40,7 +46,6 @@ export function BatchPage() {
           ) : undefined
         }
       >
-        {status && <BatchState phase={status.phase} />}
         {status && !batchIsTerminal(status.phase) && (
           <CancelBatch key={batchId} repoId={repoId} runId={batchId} onCancelled={refresh} />
         )}
@@ -75,14 +80,9 @@ export function BatchPage() {
       {run && status && (
         <>
           <BatchProgress status={status} />
+          <Discovery status={status} />
           <BatchTasks key={batchId} status={status} fullName={repoId.fullName} />
         </>
-      )}
-      {run && (
-        <dl className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
-          <dt className="mb-1">Batch ID</dt>
-          <dd className="break-all select-all">{run.runId}</dd>
-        </dl>
       )}
     </PageContent>
   );

@@ -1,7 +1,8 @@
 # Compose names the project after this directory, so each worktree gets its own
 # containers, volumes, and image tags. Host ports are ephemeral; resolve them with
 # `docker compose port api 8080`. Docker generation also needs the sandbox image:
-# `docker compose --profile sandbox up -d --build`.
+# `docker compose --profile sandbox up -d --build`. Local Stripe webhooks:
+# `docker compose --profile stripe up -d`.
 #
 # Older checkouts used the fixed project name `selfbench` (volumes `selfbench_*`).
 # To keep that data: `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
@@ -26,6 +27,16 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
   SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
   SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+  # Managed generation: offering model access and sandboxes on SelfBench's own accounts
+  # follows from which keys are set. The OpenRouter key is worker-only; the E2B key is
+  # shared because the API runs managed export sandboxes.
+  SELFBENCH_MANAGED_OPENROUTER_API_KEY: ${SELFBENCH_MANAGED_OPENROUTER_API_KEY:-}
+  SELFBENCH_MANAGED_E2B_API_KEY: ${SELFBENCH_MANAGED_E2B_API_KEY:-}
+  SELFBENCH_MANAGED_E2B_DOMAIN: ${SELFBENCH_MANAGED_E2B_DOMAIN:-}
+  # Shared billing policy. Stripe secrets stay on the API so generation never talks to Stripe.
+  SELFBENCH_BILLING_UNIT_SCALE: ${SELFBENCH_BILLING_UNIT_SCALE:-}
+  SELFBENCH_BILLING_MARKUP_BPS: ${SELFBENCH_BILLING_MARKUP_BPS:-}
+  SELFBENCH_STRIPE_METER_EVENT_NAME: ${SELFBENCH_STRIPE_METER_EVENT_NAME:-}
   # The site database: users, connected repos, and evaluation records. Migrations run at startup.
   SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
   SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
@@ -101,10 +112,15 @@ services:
       # Browser origin / OAuth callback. Set this to the tunnel or reverse-proxy URL
       # before `up`; do not use the ephemeral host port from `docker compose port`.
       SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
+      SELFBENCH_STRIPE_SECRET_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
+      SELFBENCH_STRIPE_WEBHOOK_SECRET: ${SELFBENCH_STRIPE_WEBHOOK_SECRET:-}
+      SELFBENCH_STRIPE_PRICE_ID: ${SELFBENCH_STRIPE_PRICE_ID:-}
+      SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: /run/selfbench-stripe/webhook-secret
     ports:
       - "127.0.0.1::8080"
     volumes:
       - artifacts:/var/lib/selfbench/artifacts
+      - stripe-secrets:/run/selfbench-stripe:ro
     restart: on-failure
 
   worker:
@@ -122,7 +138,6 @@ services:
     environment:
       <<: *selfbench-environment
       GH_TOKEN: ${GH_TOKEN:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MODAL_TOKEN_ID: ${MODAL_TOKEN_ID:-}
       MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET:-}
       VERCEL_TOKEN: ${VERCEL_TOKEN:-}
@@ -132,13 +147,12 @@ services:
       E2B_DOMAIN: ${E2B_DOMAIN:-}
       DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${SELFBENCH_ACTIVITY_CONCURRENCY:-}
-      SELFBENCH_PI_AUTH_JSON: ${SELFBENCH_PI_AUTH_JSON:-}
-    user: root
+    # Keep artifact ownership compatible with the API's node user while retaining Docker access.
     group_add:
       - ${DOCKER_GID:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/root/.modal.toml:ro
+      - ${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/home/node/.modal.toml:ro
       - artifacts:/var/lib/selfbench/artifacts
     restart: on-failure
 
@@ -151,7 +165,25 @@ services:
     restart: "no"
     entrypoint: ["true"]
 
+  # Forwards Stripe events to the API. The tunnel is not a public Stripe webhook
+  # target, so local billing needs this instead of a Dashboard endpoint. The
+  # wrapper stores the generated signing secret for the API automatically.
+  stripe:
+    image: stripe/stripe-cli:v1.51.0
+    profiles: ["stripe"]
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      STRIPE_API_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
+    entrypoint: ["/usr/local/bin/selfbench-stripe-listen"]
+    volumes:
+      - ./scripts/stripe-listen.sh:/usr/local/bin/selfbench-stripe-listen:ro
+      - stripe-secrets:/run/selfbench-stripe
+    restart: on-failure
+
 volumes:
   artifacts:
   site-postgres:
   temporal-postgres:
+  stripe-secrets:

@@ -36,7 +36,9 @@ test("server stages complete PR chunks before dispatch, without retaining the lo
           },
         }),
     });
-    expect(batch.shards).toHaveLength(2);
+    expect(batch.shards).toHaveLength(1);
+    expect(batch.shards[0]?.input.shardCount).toBe(1);
+    expect(batch.shards[0]?.input.targetCounts).toEqual({ easy: 0, medium: 0, hard: 1 });
     expect(batch.candidates).toEqual([]);
     expect(JSON.stringify(batch)).not.toContain("secret-lookup-token");
     const sizes = [];
@@ -50,7 +52,7 @@ test("server stages complete PR chunks before dispatch, without retaining the lo
         .map((line) => JSON.parse(line));
       sizes.push(records.length);
     }
-    expect(sizes).toEqual([25, 1]);
+    expect(sizes).toEqual([25]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

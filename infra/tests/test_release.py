@@ -121,6 +121,43 @@ class ReleaseTests(unittest.TestCase):
         self.values["shared"]["SELFBENCH_TEMPORAL_NAMESPACE"] = "selfbench-prod.test"
         with self.assertRaises(ValueError): self.validate()
 
+    def test_optional_managed_keys_accepted(self):
+        self.values["shared"]["SELFBENCH_MANAGED_E2B_API_KEY"] = "fake-e2b"
+        self.values["shared"]["SELFBENCH_MANAGED_OPENROUTER_API_KEY"] = "fake-openrouter"
+        self.validate()
+
+    def test_billing_policy_keys_accepted_shared(self):
+        self.values["shared"]["SELFBENCH_BILLING_UNIT_SCALE"] = "10000000"
+        self.values["shared"]["SELFBENCH_BILLING_MARKUP_BPS"] = "0"
+        self.values["shared"]["SELFBENCH_STRIPE_METER_EVENT_NAME"] = "selfbench_managed_usage"
+        self.validate()
+
+    def test_stripe_billing_secrets_accepted_together(self):
+        self.values["api"]["SELFBENCH_STRIPE_SECRET_KEY"] = "sk_live_fake"
+        self.values["api"]["SELFBENCH_STRIPE_PRICE_ID"] = "price_fake"
+        self.values["api"]["SELFBENCH_STRIPE_WEBHOOK_SECRET"] = "whsec_fake"
+        self.validate()
+
+    def test_partial_stripe_billing_secrets_rejected(self):
+        self.values["api"]["SELFBENCH_STRIPE_SECRET_KEY"] = "sk_live_fake"
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_stripe_secrets_rejected_on_worker(self):
+        self.values["worker"]["SELFBENCH_STRIPE_SECRET_KEY"] = "sk_live_fake"
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_allowed_github_orgs_accepted_on_api(self):
+        self.values["api"]["SELFBENCH_ALLOWED_GITHUB_ORGS"] = "mupt-ai"
+        self.validate()
+
+    def test_allowed_github_orgs_rejected_on_worker(self):
+        self.values["worker"]["SELFBENCH_ALLOWED_GITHUB_ORGS"] = "mupt-ai"
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_managed_e2b_key_on_api_rejected(self):
+        self.values["api"]["SELFBENCH_MANAGED_E2B_API_KEY"] = "fake-e2b"
+        with self.assertRaises(ValueError): self.validate()
+
     def test_api_cannot_receive_model_credentials(self):
         self.values["api"]["OPENAI_API_KEY"] = "fake-model"
         with self.assertRaises(ValueError): self.validate()

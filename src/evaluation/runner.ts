@@ -37,6 +37,7 @@ export function solverArguments(
   model: string,
   sandbox: HarborEnvironment,
   thinking?: ThinkingLevel,
+  extraAllowedHosts: readonly string[] = [],
 ): string[] {
   return harborRunArguments({
     taskPath,
@@ -45,6 +46,7 @@ export function solverArguments(
     agent: solverAgent(harness, model),
     environment: sandbox,
     solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    extraAllowedHosts,
   });
 }
 export interface RunnerOptions {
@@ -173,6 +175,7 @@ async function runTrial(context: {
   jobs: string;
   model: string;
   child: NodeJS.ProcessEnv;
+  extraAllowedHosts?: readonly string[];
   command: typeof runCommand;
   redact: (text: string) => string;
   options: RunnerOptions;
@@ -257,7 +260,15 @@ async function runTrial(context: {
   try {
     const result = await command(
       "harbor",
-      solverArguments(taskPath, jobs, trial.harness, model, run.sandbox, run.thinking),
+      solverArguments(
+        taskPath,
+        jobs,
+        trial.harness,
+        model,
+        run.sandbox,
+        run.thinking,
+        context.extraAllowedHosts,
+      ),
       {
         env: child,
         cwd: taskPath,

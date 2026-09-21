@@ -23,43 +23,22 @@ const labels: Record<BatchStatus["phase"], string> = {
   cancelling: "Cancelling",
 };
 export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
+  const tone =
+    phase === "failed" || phase === "blocked"
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      : phase === "complete"
+        ? "border-success/40 bg-success/10 text-success"
+        : phase === "cancelled" || !phase
+          ? "border-border bg-muted/30 text-muted-foreground"
+          : "border-brand/40 bg-brand/10 text-brand";
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 whitespace-nowrap text-xs before:size-1.5 before:shrink-0 before:bg-current",
-        phase === "failed" || phase === "blocked"
-          ? "text-destructive"
-          : phase === "complete"
-            ? "text-success"
-            : phase === "cancelled" || !phase
-              ? "text-muted-foreground"
-              : "text-brand",
+        "inline-flex items-center border px-1.5 py-0.5 text-[10px] leading-none font-medium",
+        tone,
       )}
     >
       {phase ? labels[phase] : "Loading Status…"}
     </span>
   );
-}
-export function batchMessage(status: BatchStatus) {
-  if (status.error) return status.error;
-  switch (status.phase) {
-    case "blocked":
-      return "Discovery ended before finding enough candidates. This batch has stopped.";
-    case "failed":
-      return "This batch stopped before completing.";
-    case "cancelling":
-      return "Waiting for this batch’s independent workflows to stop.";
-    case "cancelled":
-      return "This batch was cancelled. Any generated tasks remain in the dataset.";
-    case "complete":
-      return "Generation is complete. Review the generated tasks in your dataset.";
-    case "discovering":
-      return "Finding repository changes to turn into tasks.";
-    case "authoring":
-      return "Authoring and verifying the discovered tasks.";
-    case "exporting":
-      return "Preparing the generated tasks for export.";
-    case "queued":
-      return "Waiting for the generation worker.";
-  }
 }

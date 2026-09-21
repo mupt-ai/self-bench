@@ -1,12 +1,10 @@
 import React from "react";
-import {
-  type GenerationSettings,
-  generationSettingsSchema,
-} from "../../../src/site/generation-settings";
+import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { fetchGenerationOptions } from "./api";
 import type { GenerationOptions } from "./GenerationFields";
 import {
   defaultGenerationSettings,
+  generationSelectionProblem,
   readGenerationSettings,
   rememberGenerationSettings,
   withDefaultCredentials,
@@ -21,19 +19,19 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
   const setSettings = (value: GenerationSettings) => {
     const previous = selection.current.settings;
     if (options && value.sandbox !== previous.sandbox) {
-      value = { ...value, sandboxCredentialId: undefined };
-      if (value.sandbox !== "e2b" && value.sandbox !== "vercel") {
-        value = {
-          ...value,
-          sandboxImage: undefined,
-          harborEnvironment: undefined,
-          harborCredentialId: undefined,
-        };
-      }
+      value = {
+        ...value,
+        sandboxCredentialId: undefined,
+        harborEnvironment: value.sandbox === "managed" ? undefined : value.sandbox,
+        harborCredentialId: undefined,
+      };
+      if (value.sandbox !== "vercel") value = { ...value, sandboxImage: undefined };
     }
     if (
       options &&
-      (value.sandbox !== previous.sandbox || value.harborEnvironment !== previous.harborEnvironment)
+      (value.sandbox !== previous.sandbox ||
+        value.harborEnvironment !== previous.harborEnvironment ||
+        value.modelAccess !== previous.modelAccess)
     )
       value = withDefaultCredentials(value, options);
     selection.current = { key, settings: value };
@@ -83,31 +81,7 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
     };
   }, [org, fullName, enabled, retry, key]);
   const valid =
-    !!options?.available &&
-    !error &&
-    generationSettingsSchema.safeParse(settings).success &&
-    options.models.includes(settings.authorModel) &&
-    options.models.includes(settings.verifierModel) &&
-    options.sandboxes.includes(settings.sandbox) &&
-    options.credentials.some(
-      (item) =>
-        item.id === settings.modelCredentialId &&
-        item.kind === "openai" &&
-        ["api-key", "codex-login"].includes(item.auth),
-    ) &&
-    options.credentials.some(
-      (item) =>
-        item.id === settings.sandboxCredentialId &&
-        item.kind === settings.sandbox &&
-        item.auth === "api-key",
-    ) &&
-    (!(settings.sandbox === "e2b" || settings.sandbox === "vercel") ||
-      options.credentials.some(
-        (item) =>
-          item.id === settings.harborCredentialId &&
-          item.kind === settings.harborEnvironment &&
-          item.auth === "api-key",
-      ));
+    !!options?.available && !error && generationSelectionProblem(settings, options) === undefined;
   return {
     settings,
     setSettings,

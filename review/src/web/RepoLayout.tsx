@@ -25,7 +25,7 @@ export function RepoLayout() {
             <NavLink to={base} end>
               Dataset
             </NavLink>
-            <NavLink to={`${base}/batches`}>Batches</NavLink>
+            <NavLink to={`${base}/batches`}>Batch Generation</NavLink>
             <NavLink to={`${base}/run`}>Run</NavLink>
             <NavLink to={`${base}/results`}>Results</NavLink>
           </nav>

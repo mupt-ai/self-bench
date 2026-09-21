@@ -24,9 +24,10 @@ test("generation defaults select compatible credentials and remember choices wit
     _input: Parameters<typeof globalThis.fetch>[0],
   ) =>
     Response.json({
-      models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
+      models: ["gpt-5.6-sol", "gpt-6-astra"],
       sandboxes: ["modal", "e2b"],
       available: true,
+      managed: { models: false, sandbox: false },
       credentials: empty
         ? []
         : [
@@ -54,9 +55,12 @@ test("generation defaults select compatible credentials and remember choices wit
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-5.6-sol",
       reasoning: "high",
+      modelAccess: "credential",
       sandbox: "modal",
       modelCredentialId: id(3),
       sandboxCredentialId: id(4),
+      harborEnvironment: "modal",
+      harborCredentialId: id(4),
     });
     await act(async () =>
       current.setSettings({
@@ -67,6 +71,15 @@ test("generation defaults select compatible credentials and remember choices wit
       }),
     );
     expect(current.settings.sandboxCredentialId).toBe(id(6));
+    expect(current.settings.harborCredentialId).toBe(id(6));
+    expect(current.valid).toBe(true);
+    await act(async () =>
+      current.setSettings({
+        ...current.settings,
+        harborEnvironment: "modal",
+        harborCredentialId: undefined,
+      }),
+    );
     expect(current.settings.harborCredentialId).toBe(id(4));
     expect(current.valid).toBe(true);
     await act(async () =>
@@ -89,13 +102,14 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.valid).toBe(false);
     await act(async () => current.setSettings({ ...current.settings, sandbox: "modal" }));
     expect(current.settings.sandboxCredentialId).toBe(id(4));
-    expect(current.settings.harborEnvironment).toBeUndefined();
-    expect(current.settings.harborCredentialId).toBeUndefined();
+    expect(current.settings.harborEnvironment).toBe("modal");
+    expect(current.settings.harborCredentialId).toBe(id(4));
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",
-      verifierModel: "gpt-5.6-luna",
+      verifierModel: "gpt-5.6-sol",
       reasoning: "low" as const,
+      modelAccess: "credential" as const,
       sandbox: "modal" as const,
       modelCredentialId: id(5),
       sandboxCredentialId: id(4),
@@ -147,7 +161,7 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.settings.modelCredentialId).toBe(id(5));
     await render("empty-team");
     expect(current.valid).toBe(false);
-    expect(current.settings.modelCredentialId).toBe("");
+    expect(current.settings.modelCredentialId ?? "").toBe("");
     empty = false;
     browser.localStorage.setItem("selfbench-generation:corrupt:owner/repo", "{invalid");
     await render("corrupt");

@@ -60,6 +60,7 @@ export async function startApi(
         return;
       }
       if (site) {
+        if (await site.billing.webhook(request, url, response)) return;
         if (await site.auth.handle(request, url, response)) return;
         if (request.method === "GET" && url.pathname === "/v1/viewer") {
           sendJson(response, 200, { modes: ["runs"], auth: "github" } satisfies ViewerInfo);
@@ -91,6 +92,7 @@ export async function startApi(
       }
       if (site && user && url.pathname.startsWith("/api/")) {
         if (await site.apiKeys.handle(request, url, response, user)) return;
+        if (await site.billing.handle(request, url, response, user)) return;
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
@@ -205,7 +207,8 @@ export async function startApi(
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
-    await batches?.close();
+    if (site) await site.close();
+    else await batches?.close();
     await localDatabase?.close();
     await connection.close();
     await site?.database.close();

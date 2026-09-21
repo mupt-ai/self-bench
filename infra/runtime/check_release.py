@@ -68,8 +68,25 @@ def validate(environment, project, release_path):
     # secrets. GH_TOKEN is also resolved from the signed-in user's credential
     # where generation needs repository access.
     required_worker = {"SELFBENCH_API_TOKEN"}
-    for data, keys in ((shared, required_shared), (api, required_api), (worker, required_worker)):
-        if set(data) != keys:
+    # Managed generation: platform-owned model/sandbox access follows from which platform
+    # keys are provisioned. Both platform keys are shared; runs inject them per sandbox
+    # and they never count as user model credentials.
+    optional_shared = {"SELFBENCH_MANAGED_E2B_API_KEY", "SELFBENCH_MANAGED_E2B_DOMAIN",
+                       "SELFBENCH_MANAGED_OPENROUTER_API_KEY",
+                       "SELFBENCH_BILLING_UNIT_SCALE", "SELFBENCH_BILLING_MARKUP_BPS",
+                       "SELFBENCH_STRIPE_METER_EVENT_NAME"}
+    optional_worker = set()
+    # Stripe metered billing is all-or-nothing and API-only; fail the release before
+    # stopping services rather than letting the API crash at startup.
+    stripe_api = {"SELFBENCH_STRIPE_SECRET_KEY", "SELFBENCH_STRIPE_PRICE_ID",
+                  "SELFBENCH_STRIPE_WEBHOOK_SECRET"}
+    if len(stripe_api & set(api)) not in (0, 3):
+        raise ValueError("Stripe billing requires the secret key, price id, and webhook secret together.")
+    optional_api = stripe_api | {"SELFBENCH_ALLOWED_GITHUB_ORGS"}
+    for data, keys, extras in ((shared, required_shared, optional_shared),
+                               (api, required_api, optional_api),
+                               (worker, required_worker, optional_worker)):
+        if not set(data) <= keys | extras or not set(data) & keys == keys:
             raise ValueError("Env-file keys differ from this initial Modal deployment contract.")
     for key, value in expected.items():
         if shared[key] != value:

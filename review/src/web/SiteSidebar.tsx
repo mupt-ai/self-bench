@@ -1,4 +1,4 @@
-import { FolderGit2, KeyRound, LockKeyhole, X } from "lucide-react";
+import { CreditCard, FolderGit2, KeyRound, LockKeyhole, X } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "./primitives/sidebar";
+import { InfoTooltip } from "./primitives/tooltip";
 import { SidebarOrgPicker } from "./SidebarOrgPicker";
 import type { SiteOrg, SiteUser } from "./session";
 import { Button } from "./ui";
@@ -42,49 +43,54 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === "/" || pathname.startsWith("/repos/")}
-                  >
-                    <Link
-                      to="/"
-                      onClick={onNavigate}
-                      aria-label="Repositories"
-                      title="Repositories"
+                  <NavTooltip collapsed={collapsed} label="Repositories">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === "/" || pathname.startsWith("/repos/")}
                     >
-                      <FolderGit2 />
-                      {!collapsed && <span>Repositories</span>}
-                    </Link>
-                  </SidebarMenuButton>
+                      <Link to="/" onClick={onNavigate} aria-label="Repositories">
+                        <FolderGit2 />
+                        {!collapsed && <span>Repositories</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </NavTooltip>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith("/settings/credentials")}
-                  >
-                    <Link
-                      to="/settings/credentials"
-                      onClick={onNavigate}
-                      aria-label="Credentials"
-                      title="Credentials"
+                  <NavTooltip collapsed={collapsed} label="Credentials">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname.startsWith("/settings/credentials")}
                     >
-                      <LockKeyhole />
-                      {!collapsed && <span>Credentials</span>}
-                    </Link>
-                  </SidebarMenuButton>
+                      <Link
+                        to="/settings/credentials"
+                        onClick={onNavigate}
+                        aria-label="Credentials"
+                      >
+                        <LockKeyhole />
+                        {!collapsed && <span>Credentials</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </NavTooltip>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/api-keys")}>
-                    <Link
-                      to="/settings/api-keys"
-                      onClick={onNavigate}
-                      aria-label="API Keys"
-                      title="API Keys"
-                    >
-                      <KeyRound />
-                      {!collapsed && <span>API Keys</span>}
-                    </Link>
-                  </SidebarMenuButton>
+                  <NavTooltip collapsed={collapsed} label="API Keys">
+                    <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/api-keys")}>
+                      <Link to="/settings/api-keys" onClick={onNavigate} aria-label="API Keys">
+                        <KeyRound />
+                        {!collapsed && <span>API Keys</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </NavTooltip>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <NavTooltip collapsed={collapsed} label="Billing">
+                    <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/billing")}>
+                      <Link to="/settings/billing" onClick={onNavigate} aria-label="Billing">
+                        <CreditCard />
+                        {!collapsed && <span>Billing</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </NavTooltip>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -96,6 +102,20 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
       </SidebarFooter>
     </aside>
   );
+}
+
+/** The collapsed sidebar's icon buttons are labeled by a hover tooltip, like the shadcn primitive. */
+function NavTooltip({
+  collapsed,
+  label,
+  children,
+}: {
+  collapsed: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  if (!collapsed) return <>{children}</>;
+  return <InfoTooltip label={label}>{children}</InfoTooltip>;
 }
 
 export function MobileSidebar(props: SidebarProps & { onClose: () => void }) {

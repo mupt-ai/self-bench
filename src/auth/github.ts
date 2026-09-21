@@ -155,10 +155,20 @@ export async function fetchOrgMemberships(
 ): Promise<OrgMembership[]> {
   const memberships: OrgMembership[] = [];
   for (let page = 1; page <= 10; page += 1) {
-    const response = await fetchImpl(
-      `${config.githubApiUrl}/user/memberships/orgs?state=active&per_page=100&page=${page}`,
-      { headers: apiHeaders(token) },
-    );
+    let response: Response;
+    try {
+      response = await fetchImpl(
+        `${config.githubApiUrl}/user/memberships/orgs?state=active&per_page=100&page=${page}`,
+        {
+          headers: apiHeaders(token),
+          signal: AbortSignal.timeout(10_000),
+          redirect: "error",
+          cache: "no-store",
+        },
+      );
+    } catch {
+      throw new GitHubOAuthError("GitHub organization memberships are unavailable", 503);
+    }
     if (!response.ok) {
       throw new GitHubOAuthError(
         `GitHub /user/memberships/orgs failed (${response.status})`,

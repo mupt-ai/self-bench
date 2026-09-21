@@ -13,7 +13,8 @@ import {
 import { assertPullRequestBelongsToRepository } from "../../github.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../../provenance.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
-import { githubToken, loadPiModelAuth } from "../../subscription-auth.js";
+import { githubToken, loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
+import { withAgentFeed } from "./agent-feed.js";
 import { discoveryShardPrompt, modalAgentScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, DISCOVERY_TIMEOUT_MS } from "./constants.js";
 import {
@@ -92,44 +93,53 @@ export async function discoverCandidateShard(
     Context.current().heartbeat(
       `starting discovery wave ${input.wave} shard ${input.shardIndex} over ${shard.length} messages`,
     );
-    const result = await runSandboxWithFailureLog(store, `${attemptPrefix}/modal.log`, () =>
-      withActivityHeartbeats(
-        `running discovery wave ${input.wave} shard ${input.shardIndex}`,
-        (options) =>
-          sandbox.run(
-            {
-              runId: run.runId,
-              stage: `discover-${input.wave}-${input.shardIndex}`,
-              timeoutMs: DISCOVERY_TIMEOUT_MS,
-              inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
-              files: [
-                { path: "/work/discovery.ts", contents: extension },
+    const result = await withAgentFeed(
+      store,
+      attemptPrefix,
+      [piAuth.apiKey ?? "", piAuth.authJson ?? "", ghToken ?? ""],
+      (onOutput) =>
+        runSandboxWithFailureLog(store, `${attemptPrefix}/modal.log`, () =>
+          withActivityHeartbeats(
+            `running discovery wave ${input.wave} shard ${input.shardIndex}`,
+            (options) =>
+              sandbox.run(
                 {
-                  path: "/work/excluded-source-prs.json",
-                  contents: JSON.stringify(input.excludedSourcePrs),
+                  runId: run.runId,
+                  stage: `discover-${input.wave}-${input.shardIndex}`,
+                  timeoutMs: DISCOVERY_TIMEOUT_MS,
+                  inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
+                  files: [
+                    { path: "/work/discovery.ts", contents: extension },
+                    {
+                      path: "/work/excluded-source-prs.json",
+                      contents: JSON.stringify(input.excludedSourcePrs),
+                    },
+                    { path: "/work/provenance.jsonl", contents: shardBytes },
+                    {
+                      path: "/work/prompt.txt",
+                      contents: discoveryShardPrompt(input, shard.length),
+                    },
+                  ],
+                  outputPaths: ["/work/discovery.json"],
+                  secrets: {
+                    ...piModelAuthSecrets(piAuth),
+                    ...(ghToken ? { GH_TOKEN: ghToken } : {}),
+                  },
+                  environment: {
+                    SOURCE_REPO_URL: run.repository.url,
+                    SOURCE_COMMIT: run.repository.commit,
+                    AUTHOR_MODEL: run.authoring.model,
+                    AUTHOR_PROVIDER: piAuth.provider,
+                    AUTHOR_THINKING: run.authoring.reasoningEffort,
+                    SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
+                    SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
+                  },
+                  command: ["bash", "-lc", modalAgentScript("discovery.ts", "submit_discovery")],
                 },
-                { path: "/work/provenance.jsonl", contents: shardBytes },
-                { path: "/work/prompt.txt", contents: discoveryShardPrompt(input, shard.length) },
-              ],
-              outputPaths: ["/work/discovery.json"],
-              secrets: {
-                ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-                ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
-                ...(ghToken ? { GH_TOKEN: ghToken } : {}),
-              },
-              environment: {
-                SOURCE_REPO_URL: run.repository.url,
-                SOURCE_COMMIT: run.repository.commit,
-                AUTHOR_MODEL: run.authoring.model,
-                AUTHOR_THINKING: run.authoring.reasoningEffort,
-                SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
-                SELFBENCH_DISCOVERY_OUTPUT: "/work/discovery.json",
-              },
-              command: ["bash", "-lc", modalAgentScript("discovery.ts", "submit_discovery")],
-            },
-            options,
+                { ...options, onOutput },
+              ),
           ),
-      ),
+        ),
     );
     planBytes = result.outputs["/work/discovery.json"];
     logs = await store.put(

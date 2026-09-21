@@ -45,10 +45,18 @@ case "${INFRASTRUCTURE_ONLY:-false}" in
   *) die 'Invalid infrastructure-only flag.' ;;
 esac
 
-jq -e 'type=="object" and keys==["api","shared","worker"]
-       and ([.[] | tostring | test("^[1-9][0-9]*$")] | all)' \
-    <<<"${RUNTIME_SECRET_VERSIONS:-}" >/dev/null \
-  || die 'Configure exact shared/api/worker Secret Manager versions before deploying.'
+secret_versions_file="${RUNTIME_SECRET_VERSIONS_FILE:-infra/runtime/secret-versions/$TF_ENVIRONMENT.json}"
+[[ -f "$secret_versions_file" ]] || die "Missing runtime secret version manifest: $secret_versions_file"
+RUNTIME_SECRET_VERSIONS=$(jq -ce '
+  if type=="object" and keys==["api","shared","worker"]
+     and ([.[] | tostring | test("^[1-9][0-9]*$")] | all)
+  then .
+  else error("invalid runtime secret version manifest")
+  end
+' "$secret_versions_file") || die "Invalid runtime secret version manifest: $secret_versions_file"
+if [[ -n "${GITHUB_ENV:-}" ]]; then
+  printf 'RUNTIME_SECRET_VERSIONS=%s\n' "$RUNTIME_SECRET_VERSIONS" >> "$GITHUB_ENV"
+fi
 [[ "${SELFBENCH_PUBLIC_URL:-}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || die 'Configure the public HTTPS origin.'
 [[ "${SELFBENCH_ACTIVITY_CONCURRENCY:-}" =~ ^([1-9][0-9]?|100)$ ]] || die 'Configure activity concurrency as an integer from 1 to 100.'
 echo "Verified deploy source $GITHUB_SHA and runtime settings."

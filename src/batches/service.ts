@@ -3,7 +3,9 @@ import type { ArtifactStore } from "../artifacts.js";
 import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { createUsageStore } from "../managed/usage-store.js";
 import { liveBatchStatus, overlayCandidateActivity } from "../site/batch-activity.js";
+import { loadDiscoveryShards, mergeDiscoveryShards } from "../viewer/discovery.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
@@ -22,6 +24,7 @@ export function createGenerationBatches(
   records?: EncryptedRecordStore,
 ) {
   const store = createBatchStore(db);
+  const usage = createUsageStore(db);
   const executions = batchExecutions(client);
   let stopped = false;
   let pending: Promise<void> | undefined;
@@ -34,7 +37,7 @@ export function createGenerationBatches(
     // No DB transaction is held while rendering/downloading bundles. Immutable export writes
     // can be resumed after a crash; completion is conditional on still being exporting.
     if (exporting) {
-      const reference = await exportBatch(exporting, artifacts, records);
+      const reference = await exportBatch(exporting, artifacts, records, usage);
       await store.completeExport(exporting.run.runId, reference);
     }
   };
@@ -67,9 +70,22 @@ export function createGenerationBatches(
     list: () => store.list(),
     async status(runId: string) {
       const batch = await store.read(runId);
-      return batch
-        ? overlayCandidateActivity(client, batchStatus(batch))
-        : liveBatchStatus(client, runId);
+      const base = batch
+        ? await overlayCandidateActivity(client, batchStatus(batch))
+        : await liveBatchStatus(client, runId);
+      const listed = await loadDiscoveryShards(artifacts, runId);
+      if (!listed.length && !base.discovery?.shards?.length) return base;
+      return {
+        ...base,
+        discovery: {
+          wave: base.discovery?.wave ?? 0,
+          totalShards: base.discovery?.totalShards ?? listed.length,
+          completedShards: base.discovery?.completedShards ?? 0,
+          failedShards: base.discovery?.failedShards ?? 0,
+          candidates: base.discovery?.candidates ?? base.discovered ?? 0,
+          shards: mergeDiscoveryShards(base.discovery?.shards, listed),
+        },
+      };
     },
     async cancel(runId: string) {
       if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();

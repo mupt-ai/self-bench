@@ -1,11 +1,8 @@
 import { GitBranch, LockKeyhole, Plus } from "lucide-react";
 import React from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
-import { BatchActivity } from "../batches/BatchActivity";
 import { useBatches } from "../batches/BatchProvider";
-import { batchPath } from "../batches/presentation";
-import { GenerateBatch } from "../GenerateBatch";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { ReviewTaskList } from "../task/ReviewTaskList";
@@ -21,7 +18,6 @@ export function RepoPage() {
 }
 
 function RepoTasksPage() {
-  const navigate = useNavigate();
   const batches = useBatches();
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
@@ -148,14 +144,6 @@ function RepoTasksPage() {
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <GenerateBatch
-            repoId={{ org: org.login, fullName }}
-            onStarted={(runId, warning) => {
-              batches.refresh();
-              void navigate(batchPath(fullName, runId), { state: { batchStartWarning: warning } });
-            }}
-            disabled={deleting}
-          />
           <Link
             className={buttonStyles.primary}
             to={`/repos/${fullName}/add-prs`}
@@ -169,7 +157,6 @@ function RepoTasksPage() {
           </Link>
         </div>
       </PageHeader>
-      <BatchActivity />
       {error && tasks !== null && <Notice className="mb-4">{error}</Notice>}
       <section className="overflow-clip border border-border bg-card" aria-label="Dataset">
         <TaskFilters
@@ -198,31 +185,6 @@ function RepoTasksPage() {
             </EmptyState>
           </div>
         )}
-        {tasks !== null && tasks.length === 0 && (
-          <EmptyState title="No Tasks Yet" className="border-0 bg-transparent">
-            Add a PR to generate your first task.
-          </EmptyState>
-        )}
-        {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-          <EmptyState
-            title="No Matching Tasks"
-            className="border-0 bg-transparent"
-            action={
-              <Button
-                variant="ghost"
-                disabled={deleting}
-                onClick={() => {
-                  setFilter("all");
-                  setQuery("");
-                }}
-              >
-                Clear Filters
-              </Button>
-            }
-          >
-            Try a different search or task state.
-          </EmptyState>
-        )}
         <ReviewTaskList
           actionsTarget={actionsTarget}
           org={org.login}
@@ -237,7 +199,7 @@ function RepoTasksPage() {
             setTasks((current) => current?.filter((task) => !deleted.has(taskKey(task))) ?? null)
           }
         />
-        {tasks !== null && tasks.length > 0 && (
+        {tasks !== null && (
           <p
             className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
             role="status"

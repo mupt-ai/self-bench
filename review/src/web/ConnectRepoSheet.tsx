@@ -4,11 +4,9 @@ import {
   connectRepo,
   fetchGitHubRepoDetail,
   fetchGitHubRepos,
-  formatAgo,
   type Repo,
-  type RepoDetail,
 } from "./api";
-import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
+import { Dialog, DialogHeader } from "./Dialog";
 import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
 import { Button, EmptyState, Input, Notice, SearchInput } from "./ui";
@@ -28,7 +26,7 @@ type Loaded<T> =
   | { status: "error"; message: string }
   | { status: "ok"; value: T };
 
-/** Connect a repository: pick it from GitHub, see its merged-PR count, confirm. */
+/** Connect a repository from the org list or a public owner/name lookup. */
 export function ConnectRepoSheet({
   org,
   mode,
@@ -38,9 +36,10 @@ export function ConnectRepoSheet({
 }: ConnectRepoSheetProps) {
   const [repos, setRepos] = React.useState<Loaded<Repo[]>>({ status: "loading" });
   const [query, setQuery] = React.useState("");
-  const [selected, setSelected] = React.useState<Repo | null>(null);
-  const [detail, setDetail] = React.useState<Loaded<RepoDetail> | null>(null);
-  const [submit, setSubmit] = React.useState<{ busy: boolean; error?: string }>({ busy: false });
+  const [publicRepo, setPublicRepo] = React.useState<Loaded<Repo> | null>(null);
+  const [submit, setSubmit] = React.useState<{ busy: boolean; error?: string; fullName?: string }>({
+    busy: false,
+  });
   const search = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -56,39 +55,24 @@ export function ConnectRepoSheet({
     };
   }, [org.login, mode]);
 
-  const choose = (repo: Repo) => {
-    setSelected(repo);
-    setDetail({ status: "loading" });
-    fetchGitHubRepoDetail(repo.fullName).then(
-      (value) =>
-        setDetail((current) => (current?.status === "loading" ? { status: "ok", value } : current)),
-      (error: Error) => setDetail({ status: "error", message: error.message }),
-    );
-  };
-
   const typedName = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(query.trim()) ? query.trim() : null;
   const lookup = () => {
     if (!typedName) return;
-    setSelected(null);
-    setDetail({ status: "loading" });
+    setPublicRepo({ status: "loading" });
     fetchGitHubRepoDetail(typedName).then(
-      (value) => {
-        setSelected(value.repo);
-        setDetail({ status: "ok", value });
-      },
-      (error: Error) => setDetail({ status: "error", message: error.message }),
+      (value) => setPublicRepo({ status: "ok", value: value.repo }),
+      (error: Error) => setPublicRepo({ status: "error", message: error.message }),
     );
   };
 
-  const connect = () => {
-    if (!selected) return;
-    setSubmit({ busy: true });
-    connectRepo(org.login, selected.fullName).then(
-      (repo) => {
+  const connect = (repo: Repo) => {
+    setSubmit({ busy: true, fullName: repo.fullName });
+    connectRepo(org.login, repo.fullName).then(
+      (connectedRepo) => {
         setSubmit({ busy: false });
-        onConnected(repo);
+        onConnected(connectedRepo);
       },
-      (error: Error) => setSubmit({ busy: false, error: error.message }),
+      (error: Error) => setSubmit({ busy: false, error: error.message, fullName: repo.fullName }),
     );
   };
 
@@ -96,7 +80,9 @@ export function ConnectRepoSheet({
   const visible =
     mode === "mine" && repos.status === "ok"
       ? repos.value.filter((repo) => !needle || repo.fullName.toLowerCase().includes(needle))
-      : [];
+      : publicRepo?.status === "ok"
+        ? [publicRepo.value]
+        : [];
 
   return (
     <Dialog
@@ -154,10 +140,8 @@ export function ConnectRepoSheet({
             aria-label="Search Repositories"
           />
         )}
-        <fieldset
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 px-4 pb-4 sm:px-6 sm:pb-6"
-          aria-label="Repositories"
-        >
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 sm:pb-6">
+          {submit.error && <Notice className="mb-4">{submit.error}</Notice>}
           {mode === "mine" && repos.status === "loading" && (
             <ListSkeleton label="Loading Repositories" />
           )}
@@ -167,75 +151,81 @@ export function ConnectRepoSheet({
               Try another search or connect a public repository.
             </EmptyState>
           )}
-          {mode === "public" && detail?.status === "loading" && (
+          {mode === "public" && publicRepo?.status === "loading" && (
             <ListSkeleton label="Looking Up Repository" rows={1} />
           )}
-          {mode === "public" && detail?.status === "error" && <Notice>{detail.message}</Notice>}
-          {mode === "public" && !detail && (
-            <p className="py-4 text-muted-foreground">
+          {mode === "public" && publicRepo?.status === "error" && (
+            <Notice>{publicRepo.message}</Notice>
+          )}
+          {mode === "public" && !publicRepo && (
+            <p className="py-4 text-sm text-muted-foreground">
               Type the repository as it appears on GitHub, then look it up.
             </p>
           )}
-          {visible.map((repo) => (
-            <button
-              type="button"
-              key={repo.githubId}
-              aria-pressed={selected?.githubId === repo.githubId}
-              disabled={connected.has(repo.fullName.toLowerCase())}
-              className={`flex w-full flex-wrap items-center justify-between gap-2 border border-transparent border-b-border px-3 py-2.5 text-left text-foreground hover:bg-muted disabled:cursor-default disabled:opacity-55 ${selected?.githubId === repo.githubId ? "border-brand bg-muted" : ""}`}
-              onClick={() => choose(repo)}
-            >
-              <span className="truncate font-mono text-sm font-medium">{repo.name}</span>
-              <span className="flex max-w-full flex-wrap gap-2 text-xs text-muted-foreground">
-                {connected.has(repo.fullName.toLowerCase()) && (
-                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                    Connected
-                  </span>
-                )}
-                {repo.private && (
-                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                    Private
-                  </span>
-                )}
-                {repo.archived && (
-                  <span className="text-xs tracking-wide text-muted-foreground uppercase">
-                    Archived
-                  </span>
-                )}
-                {repo.language && <span>{repo.language}</span>}
-                <span>{formatAgo(repo.pushedAt)}</span>
-              </span>
-            </button>
-          ))}
-        </fieldset>
-        {selected && (
-          <DialogFooter className="justify-between">
-            <div className="min-w-0">
-              <div className="text-sm text-foreground font-mono">{selected.fullName}</div>
-              <div className="mt-1 flex gap-2 text-sm text-muted-foreground">
-                <span className="font-mono">{selected.defaultBranch}</span>
-                <span className="text-input" aria-hidden="true">
-                  ·
-                </span>
-                <span>{detailText(detail)}</span>
-              </div>
-              {submit.error && (
-                <div className="mt-1.5 font-mono text-sm text-destructive">{submit.error}</div>
-              )}
-            </div>
-            <Button variant="primary" disabled={submit.busy} onClick={connect}>
-              {submit.busy ? "Connecting…" : "Connect"}
-            </Button>
-          </DialogFooter>
-        )}
+          {visible.length > 0 && (
+            <ul className="border border-border bg-card" aria-label="Repositories">
+              {visible.map((repo) => (
+                <li key={repo.githubId} className="border-t border-border first:border-t-0">
+                  <RepoRow
+                    repo={repo}
+                    connected={connected.has(repo.fullName.toLowerCase())}
+                    busy={submit.busy}
+                    connecting={submit.busy && submit.fullName === repo.fullName}
+                    onConnect={connect}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </Dialog>
   );
 }
 
-function detailText(detail: Loaded<RepoDetail> | null): string {
-  if (!detail || detail.status === "loading") return "counting merged pull requests…";
-  if (detail.status === "error") return "could not count merged pull requests";
-  const count = detail.value.mergedPullRequests;
-  return `${count} merged pull request${count === 1 ? "" : "s"} in the last 12 months`;
+function RepoRow({
+  repo,
+  connected,
+  busy,
+  connecting,
+  onConnect,
+}: {
+  repo: Repo;
+  connected: boolean;
+  busy: boolean;
+  connecting: boolean;
+  onConnect: (repo: Repo) => void;
+}) {
+  const meta = [
+    repo.defaultBranch,
+    repo.private ? "Private" : undefined,
+    repo.archived ? "Archived" : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-4 py-4"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{repo.fullName}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+      </div>
+      {connected ? (
+        <span className="shrink-0 text-xs tracking-wide text-muted-foreground uppercase">
+          Connected
+        </span>
+      ) : (
+        <Button
+          variant="primary"
+          className="shrink-0"
+          disabled={busy}
+          onClick={() => onConnect(repo)}
+        >
+          {connecting ? "Connecting…" : "Connect"}
+        </Button>
+      )}
+    </div>
+  );
 }

@@ -8,6 +8,7 @@ type ComposeService = {
   readonly image?: string;
   readonly profiles?: readonly string[];
   readonly ports?: readonly string[];
+  readonly volumes?: readonly string[];
 };
 
 type ComposeDocument = {
@@ -33,6 +34,11 @@ describe("Compose provider credential boundary", () => {
       image: `\${SELFBENCH_DOCKER_IMAGE:-selfbench-sandbox:local}`,
       profiles: ["sandbox"],
     });
+    expect(compose.services.stripe).toMatchObject({
+      image: "stripe/stripe-cli:v1.51.0",
+      profiles: ["stripe"],
+      environment: { STRIPE_API_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY") },
+    });
   });
 
   test("shares E2B run metadata with the API but gives control credentials only to the worker", async () => {
@@ -53,6 +59,35 @@ describe("Compose provider credential boundary", () => {
       E2B_API_KEY: composeEmpty("E2B_API_KEY"),
       E2B_DOMAIN: composeEmpty("E2B_DOMAIN"),
     });
+  });
+
+  test("workers get no host model or Stripe credentials", async () => {
+    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
+    const compose = Bun.YAML.parse(source) as ComposeDocument;
+    const api = compose.services.api?.environment ?? {};
+    const worker = compose.services.worker?.environment ?? {};
+    expect(worker).not.toHaveProperty("OPENAI_API_KEY");
+    expect(worker).not.toHaveProperty("SELFBENCH_PI_AUTH_JSON");
+    expect(api).toMatchObject({
+      SELFBENCH_STRIPE_SECRET_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY"),
+      SELFBENCH_STRIPE_WEBHOOK_SECRET: composeEmpty("SELFBENCH_STRIPE_WEBHOOK_SECRET"),
+      SELFBENCH_STRIPE_PRICE_ID: composeEmpty("SELFBENCH_STRIPE_PRICE_ID"),
+    });
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_SECRET_KEY");
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_WEBHOOK_SECRET");
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_PRICE_ID");
+    expect(compose.services.stripe?.environment).toMatchObject({
+      STRIPE_API_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY"),
+    });
+    expect(compose.services.stripe?.environment).not.toHaveProperty(
+      "SELFBENCH_STRIPE_WEBHOOK_SECRET",
+    );
+    expect(compose.services.api?.environment).toMatchObject({
+      SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/selfbench-stripe/webhook-secret",
+    });
+    expect(compose.services.worker?.volumes).toContain(
+      `\${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/home/node/.modal.toml:ro`,
+    );
   });
 
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {

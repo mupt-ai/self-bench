@@ -39,7 +39,10 @@ export function managedE2BTemplateReference(root = projectRoot(import.meta.url))
 }
 
 export function managedE2BTemplateRecordPath(credentialId: string, reference: string) {
-  if (!/^[a-f0-9-]{36}$/.test(credentialId)) throw new Error("Invalid credential ID");
+  // "platform" is the managed account SelfBench itself owns; anything else must be a
+  // real credential whose account the template is built (and locked) in.
+  if (credentialId !== "platform")
+    if (!/^[a-f0-9-]{36}$/.test(credentialId)) throw new Error("Invalid credential ID");
   return `e2b-templates/${credentialId}/${reference.replace(":", "/")}`;
 }
 

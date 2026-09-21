@@ -66,3 +66,15 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--brand);
 }
+
+/* Native number-input spinners clash with the square mono controls; the keyboard
+   arrows still step the value. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}

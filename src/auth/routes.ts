@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { bearerMatches, sendJson } from "../api/http.js";
+import { createOrgGate, OrgAccessError } from "./allowed-orgs.js";
 import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "./api-keys.js";
 import type { AuthConfig } from "./config.js";
 import { clearCookie, parseCookies, sendRedirect, setCookie } from "./cookies.js";
@@ -20,7 +21,7 @@ export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
 const STATE_TTL_SECONDS = 10 * 60;
 
 /** Why a sign-in attempt bounced back to /login; the page renders one line per code. */
-type LoginError = "state" | "denied" | "github";
+type LoginError = "state" | "denied" | "github" | "organization";
 
 export interface SiteAuthOptions {
   readonly config: AuthConfig;
@@ -47,6 +48,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
   const now = options.now ?? (() => new Date());
   const signer = createSessionSigner(config.sessionSecret, { now });
   const secure = config.publicUrl.startsWith("https://");
+  const gate = createOrgGate({
+    githubApiUrl: config.githubApiUrl,
+    allowedOrgs: config.allowedOrgs,
+    fetchImpl,
+    now,
+  });
 
   const authenticate = async (
     request: IncomingMessage,
@@ -64,6 +71,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     const token = await users.gitHubToken(claims.githubId);
     if (!token) throw new GitHubIdentityError(401);
     await validateGitHubIdentity(config, token, claims.githubId, fetchImpl);
+    if (!(await gate.permits(claims.githubId, token))) throw new OrgAccessError();
     return users.findByGitHubId(claims.githubId);
   };
 
@@ -99,7 +107,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
       const { token, scopes } = await exchangeCode(config, code, fetchImpl);
       const profile = await fetchProfile(config, token, fetchImpl);
       const orgs = await fetchOrgMemberships(config, token, fetchImpl);
-      signedIn = { user: await users.upsert({ ...profile, token, scopes, orgs }) };
+      if (!gate.admits(profile.githubId, orgs)) {
+        console.warn(`Sign-in refused for ${profile.login}: no allowed organization membership`);
+        signedIn = { error: "organization" };
+      } else {
+        signedIn = { user: await users.upsert({ ...profile, token, scopes, orgs }) };
+      }
     } catch (error) {
       if (!(error instanceof GitHubOAuthError)) throw error;
       console.error(`GitHub sign-in failed: ${error.message}`);
@@ -195,6 +208,12 @@ export function sendIdentityError(
   if (error instanceof ApiKeyError) {
     response.setHeader("cache-control", "no-store");
     sendJson(response, error.status, { error: error.message, code: "invalid_api_key" });
+    return true;
+  }
+  if (error instanceof OrgAccessError) {
+    clearCookie(response, SESSION_COOKIE, { secure: publicUrl.startsWith("https://") });
+    response.setHeader("cache-control", "no-store");
+    sendJson(response, 403, { error: error.message, code: "organization_required" });
     return true;
   }
   if (!(error instanceof GitHubIdentityError)) return false;

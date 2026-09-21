@@ -8,7 +8,7 @@ import {
 } from "../../contracts.js";
 import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi-session.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
-import { loadPiModelAuth } from "../../subscription-auth.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { withAgentFeed } from "./agent-feed.js";
 import { verifierRoundScript } from "./agent-scripts.js";
@@ -96,12 +96,10 @@ export async function runVerifierRound(
                   { path: "/work/prompt.txt", contents: prompt },
                 ],
                 outputPaths: [VERDICT_PATH, PI_SESSION_OUTPUT_PATH, WRAPPER_STATUS_PATH],
-                secrets: {
-                  ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-                  ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
-                },
+                secrets: piModelAuthSecrets(piAuth),
                 environment: {
                   AUTHOR_MODEL: run.authoring.model,
+                  AUTHOR_PROVIDER: piAuth.provider,
                   AUTHOR_THINKING: run.authoring.reasoningEffort,
                   SELFBENCH_TASK_DIRECTORY: "/work/task/harbor-task",
                   SELFBENCH_REPO_DIRECTORY: "/work/repo",

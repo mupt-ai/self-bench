@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import type { ComponentProps } from "react";
 import { cn } from "./primitives/cn";
 
@@ -77,14 +77,10 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <span className="relative block min-w-0">
       <select {...props} className={cn(controlStyles, "appearance-none pr-9", className)} />
-      <svg
+      <ChevronDown
         aria-hidden="true"
-        viewBox="0 0 12 12"
-        className="pointer-events-none absolute top-1/2 right-3 size-3 -translate-y-1/2 fill-none stroke-muted-foreground"
-        strokeWidth="1.25"
-      >
-        <path d="m3 4.5 3 3 3-3" />
-      </svg>
+        className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+      />
     </span>
   );
 }

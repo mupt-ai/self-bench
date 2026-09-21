@@ -5,12 +5,16 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { GenerateBatch } from "./GenerateBatch";
 
-test("batch creation advances without starting, then closes and opens the submitted batch once", async () => {
+test("batch creation is one dialog that closes and opens the submitted batch once", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
   const globals = {
     window: browser,
     document: browser.document,
     HTMLElement: browser.HTMLElement,
+    // Radix Tooltip dispatches a CustomEvent on open, which happy-dom's EventTarget
+    // only accepts when it was constructed in happy-dom's own realm.
+    Event: browser.Event,
+    CustomEvent: browser.CustomEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
   };
   const previous = Object.keys(globals).map(
@@ -35,9 +39,10 @@ test("batch creation advances without starting, then closes and opens the submit
       return optionsFail
         ? Response.json({ error: "Settings unavailable" }, { status: 503 })
         : Response.json({
-            models: ["gpt-5.6-sol", "gpt-6-astra", "gpt-5.6-luna"],
+            models: ["gpt-5.6-sol", "gpt-6-astra"],
             sandboxes: ["modal", "e2b"],
             available: optionsAvailable,
+            managed: { models: false, sandbox: false },
             credentials: [
               { id: modelId, kind: "openai", auth: "api-key", name: "Model" },
               ...(hasSandbox
@@ -58,6 +63,20 @@ test("batch creation advances without starting, then closes and opens the submit
     if (!found) throw new Error(`Missing button: ${label}`);
     return found;
   };
+  const select = async (label: string, value: string) => {
+    await act(async () => {
+      const field = container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+      if (!field) throw new Error(`Missing field ${label}`);
+      field.value = value;
+      field.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
+    });
+  };
+  const submitForm = () =>
+    act(async () => {
+      browser.document
+        .querySelector("form")
+        ?.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+    });
   try {
     await act(async () => {
       root.render(
@@ -70,34 +89,21 @@ test("batch creation advances without starting, then closes and opens the submit
     expect(container.querySelector("dialog")?.open).toBe(true);
     for (const label of ["Easy Candidates", "Medium Candidates", "Hard Candidates"])
       expect(container.querySelector(`input[aria-label="${label}"]`)).not.toBeNull();
-    expect(container.querySelector("select")).toBeNull();
-    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("Set Counts");
-    await act(async () => button("Continue").click());
-    expect(submissions).toHaveLength(0);
-    expect(container.querySelector("input[type=number]")).toBeNull();
-    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain(
-      "Configure Generation",
-    );
-    const select = async (label: string, value: string) => {
-      await act(async () => {
-        const field = container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
-        if (!field) throw new Error(`Missing field ${label}`);
-        field.value = value;
-        field.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
-      });
-    };
+    // One dialog: the generation settings sit beside the counts with no wizard step.
+    expect(container.querySelector("select[aria-label='Author Model']")).not.toBeNull();
+    expect(container.textContent).not.toContain("Configure Generation");
     expect(button("Generate").disabled).toBe(false);
     expect(
-      container.querySelector<HTMLSelectElement>('select[aria-label="OpenAI Credential"]')?.value,
+      container.querySelector<HTMLSelectElement>('select[aria-label="Model Credential"]')?.value,
     ).toBe(modelId);
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Modal Credential"]')?.value,
     ).toBe(sandboxId);
     await select("Author Model", "gpt-6-astra");
-    await select("Verifier Model", "gpt-5.6-luna");
+    await select("Verifier Model", "gpt-5.6-sol");
     await select("Reasoning", "low");
     await select("Modal Credential", "");
-    await select("OpenAI Credential", modelId);
+    await select("Model Credential", modelId);
     expect(button("Generate").disabled).toBe(true);
     expect(
       container.querySelector('select[aria-label="Sandbox"] option[value="docker"]'),
@@ -114,56 +120,33 @@ test("batch creation advances without starting, then closes and opens the submit
     expect(button("Generate").disabled).toBe(false);
     await select("Modal Credential", sandboxId);
     expect(button("Generate").disabled).toBe(false);
-    await act(async () => button("Back").click());
-    expect(container.querySelector("select")).toBeNull();
-    // Enter on the counts form only advances, even with valid saved settings.
-    await act(async () =>
-      browser.document
-        .querySelector("form")
-        ?.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })),
-    );
-    expect(submissions).toHaveLength(0);
-    expect(
-      container.querySelector<HTMLSelectElement>('select[aria-label="Author Model"]')?.value,
-    ).toBe("gpt-6-astra");
-    await act(async () => {
-      browser.document
-        .querySelector("form")
-        ?.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
-    });
+    await submitForm();
     expect(submissions).toEqual([
       {
         candidateCounts: { easy: 1, medium: 1, hard: 1 },
         generation: {
           authorModel: "gpt-6-astra",
-          verifierModel: "gpt-5.6-luna",
+          verifierModel: "gpt-5.6-sol",
           reasoning: "low",
+          modelAccess: "credential",
           sandbox: "modal",
           modelCredentialId: modelId,
           sandboxCredentialId: sandboxId,
+          harborEnvironment: "modal",
+          harborCredentialId: sandboxId,
         },
       },
     ]);
-    await act(async () =>
-      browser.document
-        .querySelector("form")
-        ?.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })),
-    );
-    expect(submissions).toHaveLength(1);
-    expect(button("Close").disabled).toBe(true);
-    expect(button("Back").disabled).toBe(true);
-    const cancel = new browser.Event("cancel", { cancelable: true });
-    await act(async () => browser.document.querySelector("dialog")?.dispatchEvent(cancel));
-    expect(cancel.defaultPrevented).toBe(true);
-    expect(container.querySelector("dialog")?.open).toBe(true);
     await act(async () => start.resolve(Response.json({ runId: "batch-test" })));
     expect(onStarted).toHaveBeenCalledWith("batch-test");
     expect(container.querySelector("dialog")).toBeNull();
+    // Reopening starts from the counts with the saved settings still applied.
     await act(async () => button("Generate Batch").click());
     expect(container.textContent).not.toContain("batch-test");
     expect(submissions).toHaveLength(1);
-    expect(container.querySelector("select")).toBeNull();
-    await act(async () => button("Continue").click());
+    expect(
+      container.querySelector<HTMLSelectElement>('select[aria-label="Author Model"]')?.value,
+    ).toBe("gpt-6-astra");
     hasSandbox = false;
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));
     expect(button("Generate").disabled).toBe(true);

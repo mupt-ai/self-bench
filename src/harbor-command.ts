@@ -16,6 +16,8 @@ export interface HarborRunCommand {
   environment: HarborEnvironment;
   agent: string;
   solver?: { model: string; agentArguments: readonly string[] };
+  /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
+  extraAllowedHosts?: readonly string[];
   quiet?: boolean;
 }
 
@@ -43,6 +45,7 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     "--delete",
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
+    ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
     ...(input.solver?.agentArguments ?? []),
   ];
 }

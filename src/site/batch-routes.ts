@@ -4,12 +4,15 @@ import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
 import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
+import { managedBillingRefusal } from "../billing/eligibility.js";
+import type { BillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
+import { managedOffer } from "./managed-generation.js";
 import type { RepoStore } from "./repo-store.js";
 import type { RunStore } from "./run-store.js";
 import type { TaskStore } from "./task-store.js";
@@ -30,6 +33,9 @@ export interface BatchRoutesOptions {
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
   records?: EncryptedRecordStore;
+  /** Whether this deployment offers managed model access and sandboxes. */
+  managed?: boolean;
+  billing?: BillingStore;
 }
 export interface BatchRoutes {
   handle(
@@ -88,11 +94,20 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
               orgRecords(options.records, tenant.id),
               tenant.id,
               generation.settings,
+              managedOffer(),
             );
           } catch (error) {
             sendJson(response, 400, {
               error: error instanceof Error ? error.message : "Credential unavailable",
             });
+            return true;
+          }
+          const refusal = managedBillingRefusal(
+            generation.settings,
+            options.billing ? await options.billing.status(tenant.id) : undefined,
+          );
+          if (refusal) {
+            sendJson(response, 403, refusal);
             return true;
           }
         }

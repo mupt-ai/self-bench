@@ -29,10 +29,10 @@ Temporal, site, and artifact state live in the `<project>_temporal-postgres`, `<
 
 self-bench requires GitHub and model credentials:
 
-- `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required.
-- `OPENAI_API_KEY` powers discovery, authoring rounds, and verification rounds. This is the recommended model-authentication path.
+- `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required. Site generation instead uses the submitter's GitHub OAuth token per run; hosted workers have no `GH_TOKEN` of their own.
+- Model credentials come from the site: managed platform access (`SELFBENCH_MANAGED_OPENROUTER_API_KEY`) or a stored organization credential chosen under Advanced Settings → My Credentials. Generation sandboxes never see the worker's own provider environment.
 
-For ChatGPT subscription authentication, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when `OPENAI_API_KEY` is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
+Self-managed workers (started outside Compose, e.g. the cloud topology below) may instead hold `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY` in their own environment; a managed platform key is the last resort before the host's ChatGPT subscription. For ChatGPT subscription authentication on such a worker, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when a key variable is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
 
 Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended Vercel workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; E2B setup reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
 
@@ -55,6 +55,18 @@ SELFBENCH_EXECUTION_BACKEND=docker SELFBENCH_HARBOR_ENVIRONMENT=modal docker com
 SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
 SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=daytona docker compose up -d --build
 ```
+
+### Managed generation
+
+Setting `SELFBENCH_MANAGED_OPENROUTER_API_KEY` and `SELFBENCH_MANAGED_E2B_API_KEY` plus optional `SELFBENCH_MANAGED_E2B_DOMAIN` (all shared between the API and worker) offers managed model access and managed sandboxes: generation runs on SelfBench's own accounts instead of an organization credential, and every stage's token usage and sandbox seconds are metered into the `generation_usage` table. USD columns are estimates for the UI. Invoice quantities are integer billable units computed from a frozen rate snapshot (token counts and sandbox seconds × snapshot rates), never from those floats. Each managed capability is offered exactly when its platform key is set; there is no separate flag. Managed E2B templates are built on first use under the `platform` lock and shared across organizations. Users can still select their own credentials under Advanced Settings; metering then records usage without billable units or a cost figure.
+
+### Stripe metered billing
+
+Managed usage is the only SelfBench-billable usage. Organization credentials stay provider-billed. Billing is optional: leave `SELFBENCH_STRIPE_SECRET_KEY`, `SELFBENCH_STRIPE_WEBHOOK_SECRET`, and `SELFBENCH_STRIPE_PRICE_ID` unset to keep managed runs available without invoicing. Setting only some of those three fails API startup. Compose keeps the Stripe secrets on the API; generation and export never call Stripe. They write `generation_usage` and, when the org already has a Stripe customer, a `billing_outbox` row in the same transaction. The API delivers [Billing Meter Events v2](https://docs.stripe.com/api/v2/billing/meter-event) with identifier `selfbench-usage-{usage id}`.
+
+Create a Stripe Billing Meter whose event name matches `SELFBENCH_STRIPE_METER_EVENT_NAME` (default `selfbench_managed_usage`) and a metered price on that meter. Point `SELFBENCH_STRIPE_PRICE_ID` at that price. The webhook endpoint is `POST /api/stripe/webhook` (signature-verified, unauthenticated). Local Compose stacks are not reachable from Stripe, so webhooks go through the `stripe` profile (`docker compose --profile stripe up -d`), which runs Stripe CLI, stores its generated signing secret in a private Compose volume, and forwards to `http://api:8080/api/stripe/webhook`; no manual webhook-secret copy is needed. Production should register a Dashboard endpoint at the public origin instead of the CLI. Org admins start Checkout and the Customer Portal from **Settings → Billing**. New managed runs require an `active` or `trialing` subscription when Stripe is configured; `past_due` and missing subscriptions are refused. In-flight usage still enqueues if a customer id already exists.
+
+Pricing policy is explicit and integer: `SELFBENCH_BILLING_UNIT_SCALE` (default `10000000`, so one unit is $1e-7) and `SELFBENCH_BILLING_MARKUP_BPS` (default `0`, pass-through of published OpenRouter/E2B rates). There is no free allowance and no spending cap. Model and sandbox units share one meter. Historical usage recorded while Stripe was off is never backfilled.
 
 The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider. The hosted worker has no `GH_TOKEN`: when a signed-in user starts a batch or PR task, the API stores that user's GitHub OAuth token in the encrypted record store beside the run's generation settings, and `generationEnvironment()` injects it as `GH_TOKEN` for provenance collection, discovery, authoring, and verification of that run only.
 
@@ -405,6 +417,8 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 
 The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
 
+Set `SELFBENCH_ALLOWED_GITHUB_ORGS` (comma-separated logins, case-insensitive) to limit sign-in to active members of those organizations. Non-members are refused at the callback and land on `/login?error=organization`; existing sessions re-verify membership against GitHub with a five-minute cache, and a removed member is denied with `organization_required` instead of waiting for the 30-day cookie to expire. Without the setting, sign-in stays open to everyone.
+
 Compose: put the three sign-in variables in `.env` and set `SELFBENCH_PUBLIC_URL` to the browser-facing origin. Register that origin with `/auth/github/callback` as the GitHub OAuth callback.
 
 Hot-reload loop: `bun run dev:site` starts a Postgres container (`selfbench-site-postgres`, 127.0.0.1:5433), the API on 8087 with `SELFBENCH_TEMPORAL_CONNECT=lazy`, and Vite on 5173 proxying `/v1`, `/api`, and `/auth`. Register a GitHub OAuth app with callback `http://127.0.0.1/auth/github/callback` (GitHub lets loopback redirects use any port, so browse to `http://127.0.0.1:5173`) and put `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` in `.env.site`.
@@ -460,12 +474,20 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
+| `SELFBENCH_ALLOWED_GITHUB_ORGS` | unset | API; comma-separated GitHub org logins whose active members may sign in |
 | `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` | API; public origin, forms the OAuth callback URL. Set to the assigned host port (`docker compose port api 8080`) or a reverse-proxy hostname |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
-| `OPENAI_API_KEY` | — | Worker sandboxes |
-| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
+| `SELFBENCH_STRIPE_SECRET_KEY` | unset | API; with webhook secret and price id enables metered billing |
+| `SELFBENCH_STRIPE_WEBHOOK_SECRET` | unset | API; required with the secret key |
+| `SELFBENCH_STRIPE_PRICE_ID` | unset | API; metered Stripe price attached to the usage meter |
+| `SELFBENCH_STRIPE_METER_EVENT_NAME` | `selfbench_managed_usage` | API and worker; Stripe Billing Meter event name |
+| `SELFBENCH_BILLING_UNIT_SCALE` | `10000000` | API and worker; integer units per USD |
+| `SELFBENCH_BILLING_MARKUP_BPS` | `0` | API and worker; integer basis points added to published rates |
+| `OPENAI_API_KEY` | — | Self-managed workers only; Compose stacks authenticate models through managed keys or stored credentials |
+| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential on self-managed workers |
 | `GH_TOKEN` | — | Worker GitHub reads; hosted generation uses the submitter's GitHub token instead |
+| `DOCKER_GID` | `0` | Compose; group added to the worker so it may use the mounted `/var/run/docker.sock` for Docker sandboxes |
 
 ## Cloud topology
 

@@ -6,6 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../primitives/dropdown-menu";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
 
 export function CredentialActions({
@@ -26,16 +27,11 @@ export function CredentialActions({
       }}
     >
       <DropdownMenuTrigger asChild>
-        <Button
-          ref={trigger}
-          variant="ghost"
-          size="icon"
-          aria-label={`Actions for ${name}`}
-          title="Credential Actions"
-          className="shrink-0"
-        >
-          <Ellipsis aria-hidden="true" />
-        </Button>
+        <InfoTooltip label={`Actions for ${name}`} className="shrink-0">
+          <Button ref={trigger} variant="ghost" size="icon" aria-label={`Actions for ${name}`}>
+            <Ellipsis aria-hidden="true" />
+          </Button>
+        </InfoTooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

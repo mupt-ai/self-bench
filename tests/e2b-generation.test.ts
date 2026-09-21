@@ -92,6 +92,7 @@ test.each(["batch", "pr"] as const)(
         authorModel: "gpt-5.6-sol",
         verifierModel: "gpt-6-astra",
         reasoning: "high",
+        modelAccess: "credential",
         sandbox: "e2b",
         sandboxImage: "selfbench-test",
         harborEnvironment: "e2b",

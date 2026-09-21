@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import React from "react";
 
 export interface DropdownProps {
@@ -56,13 +57,10 @@ export function Dropdown({
         onClick={() => setOpen((value) => !value)}
       >
         {trigger}
-        <svg
-          className="h-1.5 w-2.5 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-180 group-aria-expanded/trigger:text-brand"
-          viewBox="0 0 10 6"
+        <ChevronDown
+          className="size-3.5 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-180 group-aria-expanded/trigger:text-brand"
           aria-hidden="true"
-        >
-          <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
+        />
       </button>
       {open && (
         <div

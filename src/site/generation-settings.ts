@@ -1,26 +1,51 @@
 import { z } from "zod";
 import { isDigestPinnedOciImage } from "../config.js";
 import {
-  executionBackendLabels,
   HOSTED_EXECUTION_BACKENDS,
   HOSTED_HARBOR_ENVIRONMENTS,
+  type HostedExecutionBackend,
+  type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../providers.js";
 import { normalizeE2BTemplateReference } from "../setup/e2b/template.js";
+import { generationModels } from "./generation-models.js";
 
-export const generationModels = [
-  "gpt-5.6-sol",
-  "gpt-6-astra",
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-] as const;
+/** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
+const generationSandboxes = ["managed", ...HOSTED_EXECUTION_BACKENDS] as const;
+export type GenerationSandbox = (typeof generationSandboxes)[number];
+export const generationSandboxLabels: Record<GenerationSandbox, string> = {
+  managed: "Managed",
+  modal: "Modal",
+  vercel: "Vercel",
+  e2b: "E2B",
+};
+
+/** The execution backend a sandbox choice runs on; managed sandboxes run on our E2B account. */
+export function generationExecutionBackend(sandbox: GenerationSandbox): HostedExecutionBackend {
+  return sandbox === "managed" ? "e2b" : sandbox;
+}
+
+/** The Harbor environment verification runs in for a sandbox choice. */
+export function generationHarborEnvironment(
+  settings: Pick<GenerationSettings, "sandbox" | "harborEnvironment">,
+): HostedHarborEnvironment {
+  return settings.sandbox === "managed"
+    ? "e2b"
+    : (settings.harborEnvironment ?? (settings.sandbox as HostedHarborEnvironment));
+}
+
 export const generationSettingsSchema = z
   .object({
     authorModel: z.enum(generationModels),
     verifierModel: z.enum(generationModels),
     reasoning: z.enum(["low", "medium", "high"]),
-    sandbox: z.enum(HOSTED_EXECUTION_BACKENDS),
-    modelCredentialId: z.uuid(),
+    /**
+     * "managed" routes model calls through OpenRouter behind a platform key the server
+     * holds; "credential" runs the models on the organization's own stored credential.
+     */
+    modelAccess: z.enum(["managed", "credential"]),
+    modelCredentialId: z.uuid().optional(),
+    sandbox: z.enum(generationSandboxes),
     sandboxCredentialId: z.uuid().optional(),
     sandboxImage: z.string().trim().min(1).max(512).optional(),
     harborEnvironment: z.enum(HOSTED_HARBOR_ENVIRONMENTS).optional(),
@@ -28,33 +53,41 @@ export const generationSettingsSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.modelAccess === "managed") {
+      if (value.modelCredentialId)
+        context.addIssue({
+          code: "custom",
+          path: ["modelCredentialId"],
+          message: "Managed model access does not use a credential.",
+        });
+    } else {
+      if (!value.modelCredentialId)
+        context.addIssue({
+          code: "custom",
+          path: ["modelCredentialId"],
+          message: "Choose a model credential.",
+        });
+    }
+    if (value.sandbox === "managed") {
+      for (const field of [
+        "sandboxCredentialId",
+        "sandboxImage",
+        "harborEnvironment",
+        "harborCredentialId",
+      ] as const)
+        if (value[field] !== undefined)
+          context.addIssue({
+            code: "custom",
+            path: [field],
+            message: "Managed sandboxes do not use separate credentials or verification.",
+          });
+      return;
+    }
     if (!value.sandboxCredentialId)
       context.addIssue({
         code: "custom",
         path: ["sandboxCredentialId"],
-        message: `Choose a ${executionBackendLabels[value.sandbox]} credential.`,
-      });
-    const hosted = value.sandbox === "e2b" || value.sandbox === "vercel";
-    if (!hosted) {
-      if (value.harborEnvironment || value.harborCredentialId || value.sandboxImage)
-        context.addIssue({
-          code: "custom",
-          message:
-            "Separate verification and runtime settings are only supported for E2B and Vercel generation.",
-        });
-      return;
-    }
-    if (!value.harborEnvironment)
-      context.addIssue({
-        code: "custom",
-        path: ["harborEnvironment"],
-        message: "Choose a Harbor verification environment.",
-      });
-    else if (!value.harborCredentialId)
-      context.addIssue({
-        code: "custom",
-        path: ["harborCredentialId"],
-        message: `Choose a ${harborEnvironmentLabels[value.harborEnvironment]} credential for Harbor verification.`,
+        message: `Choose a ${generationSandboxLabels[value.sandbox]} credential.`,
       });
     if (value.sandbox === "vercel" && !isDigestPinnedOciImage(value.sandboxImage ?? ""))
       context.addIssue({
@@ -75,7 +108,25 @@ export const generationSettingsSchema = z
           message: "E2B requires a prebuilt SelfBench template, not base.",
         });
       }
+    } else if (value.sandbox === "modal" && value.sandboxImage !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["sandboxImage"],
+        message: "Modal does not use a runtime image.",
+      });
     }
+    if (!value.harborEnvironment)
+      context.addIssue({
+        code: "custom",
+        path: ["harborEnvironment"],
+        message: "Choose a Harbor verification environment.",
+      });
+    else if (!value.harborCredentialId)
+      context.addIssue({
+        code: "custom",
+        path: ["harborCredentialId"],
+        message: `Choose a ${harborEnvironmentLabels[value.harborEnvironment]} credential for Harbor verification.`,
+      });
   });
 export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 

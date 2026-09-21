@@ -31,14 +31,16 @@ export function Dialog({
         event.preventDefault();
         if (!busy) onDismiss();
       }}
+      closedby="none"
       onPointerDown={(event) => {
         if (busy || event.target !== event.currentTarget) return;
         const bounds = event.currentTarget.getBoundingClientRect();
+        const slop = 2;
         if (
-          event.clientX < bounds.left ||
-          event.clientX > bounds.right ||
-          event.clientY < bounds.top ||
-          event.clientY > bounds.bottom
+          event.clientX < bounds.left - slop ||
+          event.clientX > bounds.right + slop ||
+          event.clientY < bounds.top - slop ||
+          event.clientY > bounds.bottom + slop
         )
           onDismiss();
       }}
@@ -91,7 +93,6 @@ export function DialogHeader({
         size="icon"
         variant="ghost"
         aria-label="Close"
-        title="Close"
         disabled={busy}
         onClick={onClose}
       >

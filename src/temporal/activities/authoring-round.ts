@@ -16,7 +16,7 @@ import {
 } from "../../pi-session.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
-import { githubToken, loadPiModelAuth } from "../../subscription-auth.js";
+import { githubToken, loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { withAgentFeed } from "./agent-feed.js";
 import { authoringRoundScript } from "./agent-scripts.js";
@@ -148,14 +148,14 @@ export async function runAuthoringRound(
                   WRAPPER_STATUS_PATH,
                 ],
                 secrets: {
-                  ...(piAuth.apiKey ? { OPENAI_API_KEY: piAuth.apiKey } : {}),
-                  ...(piAuth.authJson ? { SELFBENCH_PI_AUTH_JSON: piAuth.authJson } : {}),
+                  ...piModelAuthSecrets(piAuth),
                   ...(ghToken ? { GH_TOKEN: ghToken } : {}),
                 },
                 environment: {
                   SOURCE_REPO_URL: run.repository.url,
                   SOURCE_COMMIT: candidate.baseCommit,
                   AUTHOR_MODEL: run.authoring.model,
+                  AUTHOR_PROVIDER: piAuth.provider,
                   AUTHOR_THINKING: run.authoring.reasoningEffort,
                   SELFBENCH_TASK_OUTPUT: "/work/tasks",
                   SELFBENCH_DELIVERABLE: "/work/task",

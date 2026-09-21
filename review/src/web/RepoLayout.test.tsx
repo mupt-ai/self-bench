@@ -44,6 +44,8 @@ for (const section of [
     expect(html).toContain("Page content for mupt-ai");
     expect(html).not.toContain('href="/repos/mupt-ai/self-bench/dataset"');
     expect(html.match(/>Dataset<\/a>/g)).toHaveLength(1);
+    expect(html.match(/>Batch Generation<\/a>/g)).toHaveLength(1);
+    expect(html).not.toContain(">Batches</a>");
     expect(html).not.toContain(">Review</a>");
   });
 }

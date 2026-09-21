@@ -6,5 +6,9 @@ export async function openWorkerRecords(env: NodeJS.ProcessEnv = process.env) {
   const url = env.SELFBENCH_DATABASE_URL;
   if (!key || !url) return undefined;
   const connection = await openDatabase(url);
-  return { records: createEncryptedRecords(connection.db, key), close: () => connection.close() };
+  return {
+    records: createEncryptedRecords(connection.db, key),
+    db: connection.db,
+    close: () => connection.close(),
+  };
 }

@@ -6,6 +6,10 @@ import type { AuthConfig } from "../auth/config.js";
 import { createSiteAuth, type SiteAuth } from "../auth/routes.js";
 import { createUserStore } from "../auth/users.js";
 import { createGenerationBatches } from "../batches/service.js";
+import { loadStripeConfig } from "../billing/config.js";
+import { startBillingDispatcher } from "../billing/outbox.js";
+import { type BillingRoutes, createBillingRoutes } from "../billing/routes.js";
+import { createBillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
@@ -31,6 +35,7 @@ interface Site {
   readonly batches: BatchRoutes;
   readonly pullRequests: PullRequestRoutes;
   readonly evaluations: ReturnType<typeof createEvaluationRoutes>;
+  readonly billing: BillingRoutes;
   readonly database: OpenDatabase;
   generationBatches: ReturnType<typeof createGenerationBatches>;
   close(): Promise<void>;
@@ -45,8 +50,10 @@ export async function openSite(
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
-  /** The origin browsers send; a separate frontend URL wins when the site is served from one. */
-  const publicUrl = process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl;
+  const stripe = loadStripeConfig();
+  const billingStore = createBillingStore(database.db, !!stripe);
+  const billingDispatcher = stripe ? startBillingDispatcher(billingStore, stripe) : undefined;
+  const publicUrl = auth.publicUrl;
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
@@ -64,8 +71,17 @@ export async function openSite(
   );
   return {
     users,
-    close: () => batches.close(),
+    close: async () => {
+      await batches.close();
+      await billingDispatcher?.close();
+    },
     generationBatches: batches,
+    billing: createBillingRoutes({
+      users,
+      store: billingStore,
+      ...(stripe ? { config: stripe } : {}),
+      publicUrl,
+    }),
     auth: createSiteAuth({ config: auth, users, apiKeys }),
     apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),
     evaluations: createEvaluationRoutes({
@@ -95,6 +111,7 @@ export async function openSite(
       start: (input, token) => batches.start(input, token),
       status: (runId) => batches.status(runId),
       cancel: (runId) => batches.cancel(runId),
+      billing: billingStore,
     }),
     tasks: createTaskRoutes({
       users,
@@ -111,6 +128,7 @@ export async function openSite(
       repos,
       tasks,
       artifacts,
+      billing: billingStore,
       start: (workflowId, input) =>
         temporalStarter(
           client,

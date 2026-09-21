@@ -42,13 +42,18 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-5.6-sol",
       reasoning: "high",
+      modelAccess: "credential",
       sandbox: "modal",
       modelCredentialId: credential.id,
       sandboxCredentialId: sandbox.id,
     },
   };
   await records.write(generationRecordPath("codex-run"), reference, 0);
-  const base = { OPENAI_API_KEY: "host-key", SELFBENCH_PI_AUTH_JSON: "host-subscription" };
+  const base = {
+    OPENAI_API_KEY: "host-key",
+    SELFBENCH_PI_AUTH_JSON: "host-subscription",
+    SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
+  };
   const env = await generationEnvironment(records, "codex-run", reference, base);
   expect(env.OPENAI_API_KEY).toBeUndefined();
   expect(base.OPENAI_API_KEY).toBe("host-key");
@@ -94,6 +99,7 @@ test("generation credentials cannot be substituted and concurrent activity envir
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-6-astra",
       reasoning: "low",
+      modelAccess: "credential",
       sandbox: "modal",
       modelCredentialId: model.id,
       sandboxCredentialId: sandbox.id,

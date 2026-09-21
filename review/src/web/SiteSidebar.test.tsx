@@ -23,12 +23,14 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(3);
+  expect(links).toHaveLength(4);
   expect(html).toContain('aria-label="Organization Navigation"');
   expect(html).toContain('aria-label="Credentials"');
   expect(html).toContain("Credentials");
   expect(html).toContain('aria-label="API Keys"');
   expect(html).toContain(">API Keys</span>");
+  expect(html).toContain('aria-label="Billing"');
+  expect(html).toContain(">Billing</span>");
   expect(html).toContain('aria-label="self-bench by dari.dev Home"');
   expect(html).toContain("by dari.dev</span>");
 });
@@ -49,6 +51,7 @@ test("sidebar supports the compact icon mode", () => {
   expect(html).not.toContain(">Repositories</span>");
   expect(html).not.toContain(">Credentials</span>");
   expect(html).not.toContain(">API Keys</span>");
+  expect(html).not.toContain(">Billing</span>");
 });
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
@@ -57,6 +60,7 @@ test("sidebar preserves active navigation across repository and settings routes"
     ["/repos/example-account/example-repo", "/"],
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
+    ["/settings/billing", "/settings/billing"],
   ]) {
     const html = renderSidebar(path);
     const active = html.match(/<a[^>]*data-active="true"[^>]*>/g) ?? [];
