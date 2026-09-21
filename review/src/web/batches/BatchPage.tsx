@@ -2,12 +2,12 @@ import { ArrowLeft } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
 import { BatchProgress } from "../BatchProgress";
 import { batchIsTerminal } from "../batch-api";
-import { dollars } from "../evaluation/benchmark";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { useBatches } from "./BatchProvider";
 import { BatchTasks } from "./BatchTasks";
+import { BatchUsage } from "./BatchUsage";
 import { CancelBatch } from "./CancelBatch";
 import { BatchState, batchDate, batchName, batchPath } from "./presentation";
 
@@ -72,24 +72,15 @@ export function BatchPage() {
         </>
       )}
       {run && (
-        <dl className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
-          <dt className="mb-1">Batch ID</dt>
-          <dd className="break-all select-all">{run.runId}</dd>
+        <>
+          <dl className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
+            <dt className="mb-1">Batch ID</dt>
+            <dd className="break-all select-all">{run.runId}</dd>
+          </dl>
           {status?.usage && (status.usage.tokens > 0 || status.usage.sandboxSeconds > 0) && (
-            <>
-              <dt className="mt-3 mb-1">Estimated Model Cost</dt>
-              <dd>
-                {dollars(status.usage.modelCostUsd)} · {status.usage.tokens.toLocaleString()} tokens
-              </dd>
-              <dt className="mt-3 mb-1">Estimated Sandbox Cost</dt>
-              <dd>
-                {status.usage.sandboxCostUsd === undefined
-                  ? `${Math.round(status.usage.sandboxSeconds / 60)} min`
-                  : `${dollars(status.usage.sandboxCostUsd)} · ${Math.round(status.usage.sandboxSeconds / 60)} min`}
-              </dd>
-            </>
+            <BatchUsage usage={status.usage} />
           )}
-        </dl>
+        </>
       )}
     </PageContent>
   );

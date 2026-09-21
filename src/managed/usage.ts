@@ -30,10 +30,13 @@ export interface StageUsage {
 export type UsageRow = StageUsage & { readonly runId: string; readonly orgId: number };
 
 export interface RunUsageSummary {
-  readonly modelCostUsd: number;
-  /** Undefined when no sandbox second had a cost: unmetered credential sandboxes record only time. */
+  /** Undefined when no model cost was available, such as user-owned model credentials. */
+  readonly modelCostUsd: number | undefined;
+  /** Undefined when no sandbox second had a cost: credential sandboxes record only time. */
   readonly sandboxCostUsd: number | undefined;
   readonly managedCostUsd: number;
+  /** Total input, output, and cache tokens consumed by model stages. */
+  readonly modelTokens: TokenUsage;
   readonly tokens: number;
   readonly sandboxSeconds: number;
 }

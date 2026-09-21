@@ -84,20 +84,37 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
     async summary(runId) {
       const [row] = await db
         .select({
-          modelCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}), 0)::float8`,
+          modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
           sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
           managedCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}) filter (where ${generationUsage.managed}) + coalesce(sum(${generationUsage.sandboxCostUsd}) filter (where ${generationUsage.managed}), 0), 0)::float8`,
+          modelInputTokens: sql<number>`coalesce(sum(${generationUsage.inputTokens}), 0)::int`,
+          modelOutputTokens: sql<number>`coalesce(sum(${generationUsage.outputTokens}), 0)::int`,
+          modelCacheReadTokens: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}), 0)::int`,
+          modelCacheWriteTokens: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}), 0)::int`,
           tokens: sql<number>`coalesce(sum(${generationUsage.inputTokens} + ${generationUsage.outputTokens} + ${generationUsage.cacheReadTokens} + ${generationUsage.cacheWriteTokens}), 0)::int`,
           sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
         })
         .from(generationUsage)
         .where(eq(generationUsage.runId, runId));
       return row
-        ? { ...row, sandboxCostUsd: row.sandboxCostUsd ?? undefined }
+        ? {
+            modelCostUsd: row.modelCostUsd ?? undefined,
+            sandboxCostUsd: row.sandboxCostUsd ?? undefined,
+            managedCostUsd: row.managedCostUsd,
+            modelTokens: {
+              input: row.modelInputTokens,
+              output: row.modelOutputTokens,
+              cacheRead: row.modelCacheReadTokens,
+              cacheWrite: row.modelCacheWriteTokens,
+            },
+            tokens: row.tokens,
+            sandboxSeconds: row.sandboxSeconds,
+          }
         : {
-            modelCostUsd: 0,
+            modelCostUsd: undefined,
             sandboxCostUsd: undefined,
             managedCostUsd: 0,
+            modelTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             tokens: 0,
             sandboxSeconds: 0,
           };
