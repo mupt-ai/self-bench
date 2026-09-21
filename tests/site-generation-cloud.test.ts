@@ -211,6 +211,8 @@ test("cloud generation validates runtime artifacts and never offers worker-local
     sandbox: "modal",
     modelCredentialId: crypto.randomUUID(),
     sandboxCredentialId: crypto.randomUUID(),
+    harborEnvironment: "modal",
+    harborCredentialId: crypto.randomUUID(),
   };
   expect(generationSettingsSchema.safeParse(base).success).toBe(true);
   expect(generationSettingsSchema.safeParse({ ...base, sandbox: "docker" }).success).toBe(false);

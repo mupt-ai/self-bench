@@ -59,6 +59,8 @@ test("generation defaults select compatible credentials and remember choices wit
       sandbox: "modal",
       modelCredentialId: id(3),
       sandboxCredentialId: id(4),
+      harborEnvironment: "modal",
+      harborCredentialId: id(4),
     });
     await act(async () =>
       current.setSettings({
@@ -69,6 +71,15 @@ test("generation defaults select compatible credentials and remember choices wit
       }),
     );
     expect(current.settings.sandboxCredentialId).toBe(id(6));
+    expect(current.settings.harborCredentialId).toBe(id(6));
+    expect(current.valid).toBe(true);
+    await act(async () =>
+      current.setSettings({
+        ...current.settings,
+        harborEnvironment: "modal",
+        harborCredentialId: undefined,
+      }),
+    );
     expect(current.settings.harborCredentialId).toBe(id(4));
     expect(current.valid).toBe(true);
     await act(async () =>
@@ -91,8 +102,8 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.valid).toBe(false);
     await act(async () => current.setSettings({ ...current.settings, sandbox: "modal" }));
     expect(current.settings.sandboxCredentialId).toBe(id(4));
-    expect(current.settings.harborEnvironment).toBeUndefined();
-    expect(current.settings.harborCredentialId).toBeUndefined();
+    expect(current.settings.harborEnvironment).toBe("modal");
+    expect(current.settings.harborCredentialId).toBe(id(4));
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",

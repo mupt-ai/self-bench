@@ -132,6 +132,8 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
           sandbox: "modal",
           modelCredentialId: modelId,
           sandboxCredentialId: sandboxId,
+          harborEnvironment: "modal",
+          harborCredentialId: sandboxId,
         },
       },
     ]);

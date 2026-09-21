@@ -40,6 +40,8 @@ async function configured() {
     sandbox: "modal",
     modelCredentialId: model.id,
     sandboxCredentialId: sandbox.id,
+    harborEnvironment: "modal",
+    harborCredentialId: sandbox.id,
   } as const;
   const post = (settings: unknown = generation) =>
     f.request(ROOT, {

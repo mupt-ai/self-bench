@@ -62,6 +62,8 @@ describe("generation submissions", () => {
       sandbox: "modal",
       modelCredentialId: model.id,
       sandboxCredentialId: sandbox.id,
+      harborEnvironment: "modal",
+      harborCredentialId: sandbox.id,
     };
     const options = await (await site.request(`${REPO}/generation-options`, { headers })).json();
     expect(options.available).toBe(true);

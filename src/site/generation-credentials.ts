@@ -30,12 +30,12 @@ const VERCEL_SANDBOX_CREDENTIALS = {
   VERCEL_PROJECT_ID: "VERCEL_PROJECT_ID",
 } as const;
 
-/** The generation sandbox credential plus, for hosted-only backends, the separate Harbor credential. */
+/** The generation sandbox credential plus its separate Harbor credential. */
 function sandboxCredentials(settings: GenerationSettings): ProviderCredential[] {
   const credentials: ProviderCredential[] = [];
   if (settings.sandbox !== "managed")
     credentials.push({ role: "sandbox", id: settings.sandboxCredentialId, kind: settings.sandbox });
-  if ((settings.sandbox === "e2b" || settings.sandbox === "vercel") && settings.harborEnvironment)
+  if (settings.sandbox !== "managed" && settings.harborEnvironment)
     credentials.push({
       role: "harbor",
       id: settings.harborCredentialId,

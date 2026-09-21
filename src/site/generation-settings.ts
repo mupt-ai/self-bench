@@ -108,16 +108,12 @@ export const generationSettingsSchema = z
           message: "E2B requires a prebuilt SelfBench template, not base.",
         });
       }
-    }
-    const hosted = value.sandbox === "e2b" || value.sandbox === "vercel";
-    if (!hosted) {
-      if (value.harborEnvironment || value.harborCredentialId || value.sandboxImage)
-        context.addIssue({
-          code: "custom",
-          message:
-            "Separate verification and runtime settings are only supported for E2B and Vercel generation.",
-        });
-      return;
+    } else if (value.sandbox === "modal" && value.sandboxImage !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["sandboxImage"],
+        message: "Modal does not use a runtime image.",
+      });
     }
     if (!value.harborEnvironment)
       context.addIssue({

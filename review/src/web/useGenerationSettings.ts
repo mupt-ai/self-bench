@@ -19,15 +19,13 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
   const setSettings = (value: GenerationSettings) => {
     const previous = selection.current.settings;
     if (options && value.sandbox !== previous.sandbox) {
-      value = { ...value, sandboxCredentialId: undefined };
-      if (value.sandbox !== "e2b" && value.sandbox !== "vercel") {
-        value = {
-          ...value,
-          sandboxImage: undefined,
-          harborEnvironment: undefined,
-          harborCredentialId: undefined,
-        };
-      }
+      value = {
+        ...value,
+        sandboxCredentialId: undefined,
+        harborEnvironment: value.sandbox === "managed" ? undefined : value.sandbox,
+        harborCredentialId: undefined,
+      };
+      if (value.sandbox !== "vercel") value = { ...value, sandboxImage: undefined };
     }
     if (
       options &&

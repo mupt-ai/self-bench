@@ -78,8 +78,12 @@ export function withDefaultCredentials(
     return options.credentials.find((item) => item.kind === kind && item.auth === "api-key")?.id;
   };
   if (next.sandbox !== "managed")
-    next = { ...next, sandboxCredentialId: fill(next.sandbox, next.sandboxCredentialId) };
-  if (next.sandbox === "e2b" || next.sandbox === "vercel")
+    next = {
+      ...next,
+      harborEnvironment: next.harborEnvironment ?? next.sandbox,
+      sandboxCredentialId: fill(next.sandbox, next.sandboxCredentialId),
+    };
+  if (next.sandbox !== "managed")
     next = {
       ...next,
       harborCredentialId: next.harborEnvironment
@@ -136,7 +140,6 @@ export function generationSelectionProblem(
     )
       return `Choose a ${generationSandboxLabels[value.sandbox]} credential.`;
     if (
-      (value.sandbox === "e2b" || value.sandbox === "vercel") &&
       !options.credentials.some(
         (item) =>
           item.id === value.harborCredentialId &&

@@ -51,7 +51,10 @@ test("generation sandbox options come from the API and use the shared provider l
     expect(html).toContain(`>${executionBackendLabels[sandbox]}</option>`);
   expect(html).not.toContain('value="docker"');
   expect(html).not.toContain('value="managed"');
-  expect(render(base, ["modal"])).not.toContain('value="vercel"');
+  const modalOnly = render(base, ["modal"]);
+  expect(modalOnly.match(/<select[^>]+id="generation-sandbox"[\s\S]*?<\/select>/)?.[0]).not.toContain(
+    'value="vercel"',
+  );
 });
 
 test("managed model access and sandbox are offered only when the deployment flags them", () => {
@@ -131,7 +134,7 @@ test("collapsed generation summary is a short fact line", () => {
   ).toBe("GPT-5.6 Sol / GPT-6 Astra · Medium Reasoning · My Credentials · Modal");
 });
 
-test.each(["e2b", "vercel"] as const)(
+test.each(["modal", "e2b", "vercel"] as const)(
   "%s generation exposes separate Harbor settings with only matching credentials",
   (sandbox) => {
     const html = render({ ...base, sandbox, sandboxCredentialId: undefined });
@@ -143,7 +146,7 @@ test.each(["e2b", "vercel"] as const)(
       expect(html).toContain(`value="${environment}"`);
     expect(html).toContain(`${sandbox}-credential`);
     expect(html).not.toContain(`${sandbox === "e2b" ? "vercel" : "e2b"}-credential`);
-    expect(html).not.toContain("modal-credential");
+    if (sandbox !== "modal") expect(html).not.toContain("modal-credential");
     expect(html).not.toContain("daytona-credential");
     const modal = render({ ...base, sandbox, harborEnvironment: "modal" });
     expect(modal).toContain("Harbor Modal Credential");
@@ -151,15 +154,16 @@ test.each(["e2b", "vercel"] as const)(
     const daytona = render({ ...base, sandbox, harborEnvironment: "daytona" });
     expect(daytona).toContain("Harbor Daytona Credential");
     expect(daytona).toContain("daytona-credential");
-    expect(daytona).not.toContain("modal-credential");
+    if (sandbox !== "modal") expect(daytona).not.toContain("modal-credential");
   },
 );
 
-test("Modal generation requires a credential and has no separate Harbor settings", () => {
-  const modal = render(base);
+test("Modal generation exposes separate Harbor settings", () => {
+  const modal = render({ ...base, harborEnvironment: "modal", harborCredentialId: undefined });
   expect(modal).toContain("Modal Credential");
   expect(modal).toContain("modal-credential");
-  expect(modal).not.toContain("Harbor Verification");
+  expect(modal).toContain("Harbor Verification");
+  expect(modal).toContain("Harbor Modal Credential");
 });
 
 test("generation popup keeps helper descriptions in tooltips", () => {
