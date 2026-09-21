@@ -7,8 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / 'infra/ci/verify-source.sh'
-SETTINGS = {'RUNTIME_SECRET_VERSIONS': '{"shared":1,"api":2,"worker":3}',
-            'SELFBENCH_PUBLIC_URL': 'https://example.com', 'SELFBENCH_ACTIVITY_CONCURRENCY': '8'}
+SETTINGS = {'SELFBENCH_PUBLIC_URL': 'https://example.com',
+            'SELFBENCH_ACTIVITY_CONCURRENCY': '8'}
 EVENT = {'repository': {'default_branch': 'main'}}
 
 
@@ -42,6 +42,11 @@ class SourceVerificationTests(unittest.TestCase):
                     'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
                     'RUNNER_ENVIRONMENT': 'github-hosted', 'INFRASTRUCTURE_ONLY': 'false', **SETTINGS})
         env.update(overrides)
+        if 'RUNTIME_SECRET_VERSIONS' in env:
+            versions = env.pop('RUNTIME_SECRET_VERSIONS')
+            versions_path = tmp / 'runtime-secret-versions.json'
+            versions_path.write_text(versions)
+            env['RUNTIME_SECRET_VERSIONS_FILE'] = str(versions_path)
         for key, value in list(env.items()):
             if value is None: del env[key]
         return subprocess.run(['bash', str(SCRIPT)], env=env, capture_output=True, text=True)
@@ -69,7 +74,7 @@ class SourceVerificationTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 result = self.run_script(Path(directory), RUNTIME_SECRET_VERSIONS=value)
             self.assertEqual(result.returncode, 1, value)
-            self.assertIn('Secret Manager', result.stderr)
+            self.assertIn('runtime secret version manifest', result.stderr)
 
     def test_runtime_concurrency_required_and_bounded_before_cloud_auth(self):
         for value in ('', '0', '101', '-1', '8.0', '08', '010'):

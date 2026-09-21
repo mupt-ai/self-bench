@@ -30,11 +30,12 @@ application rollout, rather than between plan and apply.
    An operator must review and update these existing objects explicitly.
 2. Configure the `prod` GitHub environment branch rules to allow release tags; retain required apply review.
    The source ancestry check is mandatory because tag policy alone does not establish trusted code.
-3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-100) as an ordinary GitHub environment
-   variable in `dev` and `prod`. Then configure `RUNTIME_SECRET_VERSIONS` (JSON shared/api/worker numeric versions) and
-   `SELFBENCH_PUBLIC_URL` in `dev` and `prod`. Populate secrets, DB login, Temporal namespace,
-   provider credentials, GitHub OAuth and a host TLS proxy. Bootstrap creates empty secret containers,
-   not these values. The current runtime preflight supports the documented Modal generation pairing.
+3. Configure `SELFBENCH_ACTIVITY_CONCURRENCY` (integer 1-100) and `SELFBENCH_PUBLIC_URL` as ordinary
+   GitHub environment variables in `dev` and `prod`. Commit reviewed numeric Secret Manager version
+   pins in `infra/runtime/secret-versions/{dev,prod}.json`; the deploy validation loads the manifest
+   for the target environment. Populate secrets, DB login, Temporal namespace, provider credentials,
+   GitHub OAuth and a host TLS proxy. Bootstrap creates empty secret containers, not these values.
+   The current runtime preflight supports the documented Modal generation pairing.
 4. Review DNS/TLS and set `enable_public_web=true` in the environment inputs when ready. Deployment
    refuses to claim success without reachable HTTPS health and anonymous-session rejection.
 5. Set `GCP_DEPLOY_ENABLED=true` only after these prerequisites, then merge the reviewed workflow.
@@ -87,8 +88,8 @@ Each environment holds common project/state/runtime settings plus two named iden
 Both production phases use the `prod` GitHub environment. The plan identity is read-only and the
 apply identity is privileged; this is intentionally four identity variables rather than one broad
 credential shared by both phases. `GCP_PROJECT_ID`, `TF_STATE_BUCKET`, `TF_PLAN_BUCKET`,
-`TF_INPUTS_JSON`, `RUNTIME_SECRET_VERSIONS`, and `SELFBENCH_PUBLIC_URL` are the shared deployment
-coordinates for that environment.
+`TF_INPUTS_JSON` and `SELFBENCH_PUBLIC_URL` are the shared deployment coordinates for that environment.
+Secret version pins are reviewed in `infra/runtime/secret-versions/`, alongside the runtime bundle.
 The original `GCP_SERVICE_ACCOUNT` and `GCP_WORKLOAD_IDENTITY_PROVIDER` remain for the manual
 non-provisioning auth check. Production now permits release tags, so its old main-only auth check
 is intentionally not a release test; use the production deployment workflow's authenticated jobs.
