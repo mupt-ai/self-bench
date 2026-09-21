@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import { type BatchStatus, batchIsTerminal } from "./batch-api";
 import { batchMessage } from "./batches/presentation";
 import { activityCounts } from "./batches/task-activity";
@@ -6,13 +5,9 @@ import { cn } from "./primitives/cn";
 
 /** Progress belongs on the batch page; creation only collects the next batch's settings. */
 export function BatchProgress({ status }: { status: BatchStatus }) {
-  const discovery = status.discovery;
   const counts = activityCounts(status);
   const terminal = batchIsTerminal(status.phase);
   const stopped = status.phase === "blocked" || status.phase === "failed";
-  const finishedDiscovery = discovery
-    ? Math.min(discovery.totalShards, discovery.completedShards + discovery.failedShards)
-    : 0;
   const accepted = status.accepted ?? 0;
   const requested = status.requested ?? 0;
   const metrics = [
@@ -92,59 +87,6 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
             " Some task activity is unavailable; last known stages appear below."}
         </p>
       </div>
-
-      {discovery && (
-        <details
-          className="group border-t border-border px-4 py-3"
-          open={status.phase === "discovering"}
-        >
-          <summary className="flex cursor-pointer list-none items-start gap-2 text-xs [&::-webkit-details-marker]:hidden">
-            <ChevronDown
-              aria-hidden="true"
-              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-            />
-            <span className="min-w-0 flex-1">
-              <span className="font-medium">Finding Task Candidates</span>
-              <span className="mt-1 block text-muted-foreground">
-                Scanning repository history · Wave {discovery.wave + 1}
-              </span>
-            </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">
-              {finishedDiscovery} of {discovery.totalShards} complete
-            </span>
-          </summary>
-          <p className="mt-4 pl-5 text-xs leading-5 text-muted-foreground">
-            Searching repository changes for task candidates. This is discovery progress, not
-            overall batch completion.
-          </p>
-          {discovery.totalShards > 0 && (
-            <div
-              role="progressbar"
-              aria-label="Task Candidate Discovery Progress"
-              aria-valuemin={0}
-              aria-valuemax={discovery.totalShards}
-              aria-valuenow={finishedDiscovery}
-              className="mt-3 ml-5 flex h-1.5 overflow-hidden bg-muted"
-            >
-              <span
-                className="bg-success"
-                style={{ width: `${(discovery.completedShards / discovery.totalShards) * 100}%` }}
-              />
-              <span
-                className="bg-destructive"
-                style={{ width: `${(discovery.failedShards / discovery.totalShards) * 100}%` }}
-              />
-            </div>
-          )}
-          <div className="mt-3 ml-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-            <span>{discovery.completedShards} complete</span>
-            <span className={discovery.failedShards ? "text-destructive" : undefined}>
-              {discovery.failedShards} failed
-            </span>
-            <span>{Math.max(0, discovery.totalShards - finishedDiscovery)} pending</span>
-          </div>
-        </details>
-      )}
     </section>
   );
 }
