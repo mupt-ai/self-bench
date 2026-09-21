@@ -64,6 +64,7 @@ describe("generation submissions", () => {
     };
     const options = await (await site.request(`${REPO}/generation-options`, { headers })).json();
     expect(options.available).toBe(true);
+    expect(options.managed).toEqual({ models: false, sandbox: false });
     expect(options.credentials.map((item: { id: string }) => item.id)).toEqual([
       model.id,
       sandbox.id,

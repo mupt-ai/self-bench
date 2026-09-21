@@ -83,6 +83,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             ? await listCredentials(orgRecords(options.records, tenant.id), tenant.id)
             : [],
           available: !!options.records,
+          managed: managedOffer(),
         });
         return true;
       }
