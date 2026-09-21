@@ -1,4 +1,5 @@
 import { Ellipsis, Plus } from "lucide-react";
+import { useRef } from "react";
 import { Link } from "react-router";
 import { type ConnectedRepo, formatAgo } from "../api";
 import { Skeleton } from "../LoadingSkeleton";
@@ -50,11 +51,13 @@ function RepositoryCard({
   stats?: RepoStats;
   onDisconnect(repo: ConnectedRepo): void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const pendingDisconnect = useRef(false);
   return (
     <article className="group relative flex h-full min-h-36 flex-col border border-border bg-card transition-colors hover:border-brand hover:[&_[data-card-title]]:text-brand">
       <Link
         aria-label={`Open ${repo.fullName}`}
-        className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="absolute inset-0 z-0"
         to={`/repos/${repo.fullName}`}
       />
       <header className="pointer-events-none relative z-10 flex items-start justify-between gap-2 p-4 pb-3">
@@ -70,9 +73,14 @@ function RepositoryCard({
             {formatAgo(repo.connectedAt)}
           </p>
         </div>
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) pendingDisconnect.current = false;
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
+              ref={trigger}
               size="icon"
               variant="ghost"
               className="pointer-events-auto -mt-1 -mr-1 h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -81,10 +89,21 @@ function RepositoryCard({
               <Ellipsis aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(event) => {
+              if (!pendingDisconnect.current) return;
+              event.preventDefault();
+              pendingDisconnect.current = false;
+              trigger.current?.focus();
+              onDisconnect(repo);
+            }}
+          >
             <DropdownMenuItem
               className="text-destructive data-[highlighted]:text-destructive"
-              onSelect={() => onDisconnect(repo)}
+              onSelect={() => {
+                pendingDisconnect.current = true;
+              }}
             >
               Disconnect
             </DropdownMenuItem>
@@ -109,7 +128,7 @@ function ConnectRepositoryCard({ onConnect }: { onConnect(): void }) {
       type="button"
       onClick={onConnect}
       aria-label="Connect a Repository"
-      className="group flex h-full min-h-36 w-full flex-col items-center justify-center border border-dashed border-border transition-colors hover:border-brand hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="group flex h-full min-h-36 w-full flex-col items-center justify-center border border-dashed border-border transition-colors hover:border-brand hover:bg-muted/20"
     >
       <Plus className="h-6 w-6 text-muted-foreground group-hover:text-brand" aria-hidden="true" />
     </button>
