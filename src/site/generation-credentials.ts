@@ -154,6 +154,9 @@ export async function generationStageEnvironment(
   delete env.ANTHROPIC_API_KEY;
   delete env.OPENROUTER_API_KEY;
   delete env.SELFBENCH_PI_AUTH_JSON;
+  // The platform OpenRouter key is not a run credential: managed runs re-inject it under
+  // its sandbox name below, and credential runs must resolve their own subscription auth.
+  delete env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
   const github = await records.read<{ value: string }>(generationGitHubTokenPath(runId));
   if (github?.value.value) env.GH_TOKEN = github.value.value;
   // A worker's own provider credentials must never reach a generation sandbox.
