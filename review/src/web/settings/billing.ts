@@ -8,9 +8,9 @@ export interface BillingUsageSummary {
     cacheWrite: number;
   };
   tokens: number;
-  modelCostUsd?: number;
+  modelBillableUsd: number;
   sandboxSeconds: number;
-  sandboxCostUsd?: number;
+  sandboxBillableUsd: number;
 }
 
 import { requestJson } from "../api";

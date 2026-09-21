@@ -9,10 +9,6 @@ function duration(seconds: number): string {
   return remainder === 0 ? `${minutes}m` : `${minutes}m ${remainder}s`;
 }
 
-function metricCost(value: number | undefined): string {
-  return value === undefined ? "Not Available" : dollars(value);
-}
-
 export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
   const cache = usage.modelTokens.cacheRead + usage.modelTokens.cacheWrite;
   return (
@@ -25,7 +21,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
         <UsagePanel title="LLM Usage">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Metric label="Tokens" value={usage.tokens.toLocaleString()} />
-            <Metric label="Estimated Cost" value={metricCost(usage.modelCostUsd)} />
+            <Metric label="Billable Amount" value={dollars(usage.modelBillableUsd)} />
             <Metric label="Input" value={usage.modelTokens.input.toLocaleString()} />
             <Metric label="Output" value={usage.modelTokens.output.toLocaleString()} />
             <Metric label="Cache" value={cache.toLocaleString()} />
@@ -34,14 +30,14 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
         <UsagePanel title="Sandbox Usage">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Metric label="Runtime" value={duration(usage.sandboxSeconds)} />
-            <Metric label="Estimated Cost" value={metricCost(usage.sandboxCostUsd)} />
+            <Metric label="Billable Amount" value={dollars(usage.sandboxBillableUsd)} />
             <Metric label="Minutes" value={(usage.sandboxSeconds / 60).toFixed(1)} />
           </div>
         </UsagePanel>
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Costs are estimates from recorded token and sandbox usage. Provider credentials are billed
-        by their providers; managed usage is billed through SelfBench.
+        Billable amounts use the frozen rate recorded with each managed usage event. Usage on
+        provider credentials is billed directly by those providers and is not included.
       </p>
     </section>
   );

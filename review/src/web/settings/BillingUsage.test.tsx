@@ -5,9 +5,9 @@ import { BillingUsage } from "./BillingUsage";
 const usage = {
   modelTokens: { input: 1200, output: 300, cacheRead: 80, cacheWrite: 20 },
   tokens: 1600,
-  modelCostUsd: 1.25,
+  modelBillableUsd: 1.25,
   sandboxSeconds: 125,
-  sandboxCostUsd: 0.08,
+  sandboxBillableUsd: 0.08,
 };
 
 test("billing usage makes model and sandbox consumption visible", () => {
@@ -20,4 +20,7 @@ test("billing usage makes model and sandbox consumption visible", () => {
   expect(html).toContain("2m 5s");
   expect(html).toContain("$1.25");
   expect(html).toContain("$0.080");
+  expect(html.match(/Billable Amount/g)).toHaveLength(2);
+  expect(html).toContain("frozen rate recorded with each managed usage event");
+  expect(html).not.toContain("estimates");
 });

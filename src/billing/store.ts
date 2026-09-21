@@ -1,6 +1,12 @@
 import { and, eq, lte, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client.js";
-import { billingOutbox, billingWebhookEvents, generationUsage, orgBilling } from "../db/schema.js";
+import {
+  billingOutbox,
+  billingRateSnapshots,
+  billingWebhookEvents,
+  generationUsage,
+  orgBilling,
+} from "../db/schema.js";
 import { type BillingEligibility, eligibilityFrom } from "./eligibility.js";
 
 export interface BillingUsageSummary {
@@ -11,9 +17,9 @@ export interface BillingUsageSummary {
     readonly cacheWrite: number;
   };
   readonly tokens: number;
-  readonly modelCostUsd: number | undefined;
+  readonly modelBillableUsd: number;
   readonly sandboxSeconds: number;
-  readonly sandboxCostUsd: number | undefined;
+  readonly sandboxBillableUsd: number;
 }
 
 export interface SubscriptionState {
@@ -33,15 +39,16 @@ export function createBillingStore(db: Database, configured: boolean) {
     async usage(orgId: number): Promise<BillingUsageSummary> {
       const [row] = await db
         .select({
-          input: sql<number>`coalesce(sum(${generationUsage.inputTokens}), 0)::int`,
-          output: sql<number>`coalesce(sum(${generationUsage.outputTokens}), 0)::int`,
-          cacheRead: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}), 0)::int`,
-          cacheWrite: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}), 0)::int`,
-          modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
-          sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
-          sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
+          input: sql<number>`coalesce(sum(${generationUsage.inputTokens}) filter (where ${generationUsage.managedModel}), 0)::int`,
+          output: sql<number>`coalesce(sum(${generationUsage.outputTokens}) filter (where ${generationUsage.managedModel}), 0)::int`,
+          cacheRead: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}) filter (where ${generationUsage.managedModel}), 0)::int`,
+          cacheWrite: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}) filter (where ${generationUsage.managedModel}), 0)::int`,
+          modelBillableUsd: sql<number>`coalesce(sum(${generationUsage.modelBillableUnits}::float8 / nullif(${billingRateSnapshots.unitScale}, 0)) filter (where ${generationUsage.managedModel}), 0)::float8`,
+          sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}) filter (where ${generationUsage.managedSandbox}), 0)::int`,
+          sandboxBillableUsd: sql<number>`coalesce(sum(${generationUsage.sandboxBillableUnits}::float8 / nullif(${billingRateSnapshots.unitScale}, 0)) filter (where ${generationUsage.managedSandbox}), 0)::float8`,
         })
         .from(generationUsage)
+        .leftJoin(billingRateSnapshots, eq(generationUsage.rateSnapshotId, billingRateSnapshots.id))
         .where(eq(generationUsage.orgId, orgId));
       const modelTokens = {
         input: row?.input ?? 0,
@@ -52,9 +59,9 @@ export function createBillingStore(db: Database, configured: boolean) {
       return {
         modelTokens,
         tokens: Object.values(modelTokens).reduce((total, value) => total + value, 0),
-        modelCostUsd: row?.modelCostUsd ?? undefined,
+        modelBillableUsd: row?.modelBillableUsd ?? 0,
         sandboxSeconds: row?.sandboxSeconds ?? 0,
-        sandboxCostUsd: row?.sandboxCostUsd ?? undefined,
+        sandboxBillableUsd: row?.sandboxBillableUsd ?? 0,
       };
     },
     async customerId(orgId: number): Promise<string | undefined> {
