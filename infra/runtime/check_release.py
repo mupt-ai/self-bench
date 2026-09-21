@@ -72,10 +72,18 @@ def validate(environment, project, release_path):
     # keys are provisioned. Both platform keys are shared; runs inject them per sandbox
     # and they never count as user model credentials.
     optional_shared = {"SELFBENCH_MANAGED_E2B_API_KEY", "SELFBENCH_MANAGED_E2B_DOMAIN",
-                       "SELFBENCH_MANAGED_OPENROUTER_API_KEY"}
+                       "SELFBENCH_MANAGED_OPENROUTER_API_KEY",
+                       "SELFBENCH_BILLING_UNIT_SCALE", "SELFBENCH_BILLING_MARKUP_BPS",
+                       "SELFBENCH_STRIPE_METER_EVENT_NAME"}
     optional_worker = set()
+    # Stripe metered billing is all-or-nothing and API-only; fail the release before
+    # stopping services rather than letting the API crash at startup.
+    optional_api = {"SELFBENCH_STRIPE_SECRET_KEY", "SELFBENCH_STRIPE_PRICE_ID",
+                    "SELFBENCH_STRIPE_WEBHOOK_SECRET"}
+    if len(optional_api & set(api)) not in (0, 3):
+        raise ValueError("Stripe billing requires the secret key, price id, and webhook secret together.")
     for data, keys, extras in ((shared, required_shared, optional_shared),
-                               (api, required_api, set()),
+                               (api, required_api, optional_api),
                                (worker, required_worker, optional_worker)):
         if not set(data) <= keys | extras or not set(data) & keys == keys:
             raise ValueError("Env-file keys differ from this initial Modal deployment contract.")
