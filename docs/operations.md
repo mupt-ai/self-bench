@@ -58,7 +58,15 @@ SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_HARBOR_ENVIRONMENT=daytona docker co
 
 ### Managed generation
 
-Setting `SELFBENCH_MANAGED_OPENROUTER_API_KEY` and `SELFBENCH_MANAGED_E2B_API_KEY` plus optional `SELFBENCH_MANAGED_E2B_DOMAIN` (all shared between the API and worker) offers managed model access and managed sandboxes: generation runs on SelfBench's own accounts instead of an organization credential, and every stage's token usage and sandbox seconds are metered into the `generation_usage` table with an estimated cost. Each managed capability is offered exactly when its platform key is set; there is no separate flag. Managed E2B templates are built on first use under the `platform` lock and shared across organizations. Users can still select their own credentials under Advanced Settings; metering then records usage without a cost figure.
+Setting `SELFBENCH_MANAGED_OPENROUTER_API_KEY` and `SELFBENCH_MANAGED_E2B_API_KEY` plus optional `SELFBENCH_MANAGED_E2B_DOMAIN` (all shared between the API and worker) offers managed model access and managed sandboxes: generation runs on SelfBench's own accounts instead of an organization credential, and every stage's token usage and sandbox seconds are metered into the `generation_usage` table. USD columns are estimates for the UI. Invoice quantities are integer billable units computed from a frozen rate snapshot (token counts and sandbox seconds × snapshot rates), never from those floats. Each managed capability is offered exactly when its platform key is set; there is no separate flag. Managed E2B templates are built on first use under the `platform` lock and shared across organizations. Users can still select their own credentials under Advanced Settings; metering then records usage without billable units or a cost figure.
+
+### Stripe metered billing
+
+Managed usage is the only SelfBench-billable usage. Organization credentials stay provider-billed. Billing is optional: leave `SELFBENCH_STRIPE_SECRET_KEY`, `SELFBENCH_STRIPE_WEBHOOK_SECRET`, and `SELFBENCH_STRIPE_PRICE_ID` unset to keep managed runs available without invoicing. Setting only some of those three fails API startup. Compose keeps the Stripe secrets on the API; generation and export never call Stripe. They write `generation_usage` and, when the org already has a Stripe customer, a `billing_outbox` row in the same transaction. The API delivers [Billing Meter Events v2](https://docs.stripe.com/api/v2/billing/meter-event) with identifier `selfbench-usage-{usage id}`.
+
+Create a Stripe Billing Meter whose event name matches `SELFBENCH_STRIPE_METER_EVENT_NAME` (default `selfbench_managed_usage`) and a metered price on that meter. Point `SELFBENCH_STRIPE_PRICE_ID` at that price. The webhook endpoint is `POST /api/stripe/webhook` (signature-verified, unauthenticated). Org admins start Checkout and the Customer Portal from **Settings → Billing**. New managed runs require an `active` or `trialing` subscription when Stripe is configured; `past_due` and missing subscriptions are refused. In-flight usage still enqueues if a customer id already exists.
+
+Pricing policy is explicit and integer: `SELFBENCH_BILLING_UNIT_SCALE` (default `10000000`, so one unit is $1e-7) and `SELFBENCH_BILLING_MARKUP_BPS` (default `0`, pass-through of published OpenRouter/E2B rates). There is no free allowance and no spending cap. Model and sandbox units share one meter. Historical usage recorded while Stripe was off is never backfilled.
 
 The hosted site offers only Modal, Vercel, and E2B generation with Modal, Vercel, E2B, or Daytona Harbor, each backed by an organization credential. Docker is not offered there because Docker generation and Docker Harbor both run on the shared worker. Hosted Harbor credentials travel as `SELFBENCH_HARBOR_E2B_API_KEY` and `SELFBENCH_HARBOR_VERCEL_TOKEN`, `SELFBENCH_HARBOR_VERCEL_TEAM_ID`, and `SELFBENCH_HARBOR_VERCEL_PROJECT_ID`, and take their provider names only inside Harbor's process, so generation and verification may use different accounts of the same provider. The hosted worker has no `GH_TOKEN`: when a signed-in user starts a batch or PR task, the API stores that user's GitHub OAuth token in the encrypted record store beside the run's generation settings, and `generationEnvironment()` injects it as `GH_TOKEN` for provenance collection, discovery, authoring, and verification of that run only.
 
@@ -467,6 +475,12 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` | API; public origin, forms the OAuth callback URL. Set to the assigned host port (`docker compose port api 8080`) or a reverse-proxy hostname |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
+| `SELFBENCH_STRIPE_SECRET_KEY` | unset | API; with webhook secret and price id enables metered billing |
+| `SELFBENCH_STRIPE_WEBHOOK_SECRET` | unset | API; required with the secret key |
+| `SELFBENCH_STRIPE_PRICE_ID` | unset | API; metered Stripe price attached to the usage meter |
+| `SELFBENCH_STRIPE_METER_EVENT_NAME` | `selfbench_managed_usage` | API and worker; Stripe Billing Meter event name |
+| `SELFBENCH_BILLING_UNIT_SCALE` | `10000000` | API and worker; integer units per USD |
+| `SELFBENCH_BILLING_MARKUP_BPS` | `0` | API and worker; integer basis points added to published rates |
 | `OPENAI_API_KEY` | — | Self-managed workers only; Compose stacks authenticate models through managed keys or stored credentials |
 | `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential on self-managed workers |
 | `GH_TOKEN` | — | Worker GitHub reads; hosted generation uses the submitter's GitHub token instead |

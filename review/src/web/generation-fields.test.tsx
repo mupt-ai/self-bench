@@ -7,7 +7,7 @@ import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";
-import { generationSettingsSummary } from "./generation-defaults";
+import { generationSelectionProblem, generationSettingsSummary } from "./generation-defaults";
 
 const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel", "daytona"].map(
   (kind) => ({
@@ -52,9 +52,9 @@ test("generation sandbox options come from the API and use the shared provider l
   expect(html).not.toContain('value="docker"');
   expect(html).not.toContain('value="managed"');
   const modalOnly = render(base, ["modal"]);
-  expect(modalOnly.match(/<select[^>]+id="generation-sandbox"[\s\S]*?<\/select>/)?.[0]).not.toContain(
-    'value="vercel"',
-  );
+  expect(
+    modalOnly.match(/<select[^>]+id="generation-sandbox"[\s\S]*?<\/select>/)?.[0],
+  ).not.toContain('value="vercel"');
 });
 
 test("managed model access and sandbox are offered only when the deployment flags them", () => {
@@ -200,4 +200,39 @@ test("Vercel credential editor exposes token, team and project fields", () => {
 test("Vercel credentials appear in the sandbox group with the provider label", () => {
   expect(isSandbox("vercel")).toBe(true);
   expect(credentialProvider({ kind: "vercel", auth: "api-key" })).toBe("Vercel");
+});
+
+test("managed generation cannot be submitted until billing is eligible", () => {
+  const value: GenerationSettings = {
+    ...base,
+    modelAccess: "managed",
+    modelCredentialId: undefined,
+    sandbox: "managed",
+    sandboxCredentialId: undefined,
+  };
+  const options = {
+    available: true,
+    sandboxes: [...HOSTED_EXECUTION_BACKENDS],
+    models: [base.authorModel, base.verifierModel],
+    credentials,
+    managed: { models: true, sandbox: true },
+  };
+  expect(generationSelectionProblem(value, options)).toBeUndefined();
+  expect(
+    generationSelectionProblem(value, {
+      ...options,
+      billing: { configured: true, eligible: false },
+    }),
+  ).toBe("Set up billing to use managed models or sandboxes.");
+  expect(
+    generationSelectionProblem(
+      {
+        ...base,
+        sandbox: "modal",
+        harborEnvironment: "modal",
+        harborCredentialId: credentials[1]?.id,
+      },
+      { ...options, billing: { configured: true, eligible: false } },
+    ),
+  ).toBeUndefined();
 });

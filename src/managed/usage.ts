@@ -11,7 +11,10 @@ export interface TokenUsage {
 /** Usage one sandbox stage consumed, as recorded by the metered sandbox executor. */
 export interface StageUsage {
   readonly stage: string;
+  /** True when either component uses SelfBench's provider account. */
   readonly managed: boolean;
+  readonly managedModel: boolean;
+  readonly managedSandbox: boolean;
   /** Pi's provider/model for agent stages; absent for pure compute stages. */
   readonly provider?: string;
   readonly model?: string;

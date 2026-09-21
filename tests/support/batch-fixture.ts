@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { sendApiError, sendJson } from "../../src/api/http.js";
 import { LocalArtifactStore } from "../../src/artifacts.js";
 import { createUserStore } from "../../src/auth/users.js";
+import { createBillingStore } from "../../src/billing/store.js";
 import { loadConfig } from "../../src/config.js";
 import type { RunRequest } from "../../src/contracts.js";
 import type { EncryptedRecordStore } from "../../src/evaluation/encrypted-records.js";
@@ -28,6 +29,7 @@ export async function fixture(
     failAttach?: boolean;
     sha?: string;
     records?: EncryptedRecordStore;
+    billing?: boolean;
   } = {},
 ) {
   const database = await testDatabase();
@@ -99,6 +101,7 @@ export async function fixture(
     cancel: async (runId) => {
       cancelled.push(runId);
     },
+    ...(options.billing ? { billing: createBillingStore(database.db, true) } : {}),
   });
   const taskRoutes = createTaskRoutes({ users, repos, tasks, artifacts });
   const server = createServer(async (request, response) => {
@@ -157,6 +160,7 @@ export async function fixture(
     runs,
     repo,
     tasks,
+    db: database.db,
     setStatus: (status: BatchStatus) => {
       snapshot = status;
     },

@@ -149,5 +149,11 @@ export function generationSelectionProblem(
     )
       return "Choose a Harbor verification credential.";
   }
+  if (
+    (value.modelAccess === "managed" || value.sandbox === "managed") &&
+    options.billing?.configured === true &&
+    options.billing.eligible === false
+  )
+    return "Set up billing to use managed models or sandboxes.";
   return undefined;
 }

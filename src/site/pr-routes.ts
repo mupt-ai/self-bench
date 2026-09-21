@@ -4,6 +4,8 @@ import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
 import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
+import { managedBillingRefusal } from "../billing/eligibility.js";
+import type { BillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import { listCredentials } from "../evaluation/credentials.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
@@ -34,6 +36,7 @@ export interface PullRequestRoutesOptions {
   readonly start: WorkflowStarter;
   readonly fetchImpl?: typeof fetch;
   readonly records?: EncryptedRecordStore;
+  readonly billing?: BillingStore;
 }
 
 export interface PullRequestRoutes {
@@ -76,6 +79,9 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         return true;
       }
       if (configuring) {
+        const billing = options.billing
+          ? await options.billing.status(tenant.id)
+          : { configured: false, eligible: true, status: "disabled", cancelAtPeriodEnd: false };
         sendJson(response, 200, {
           models: generationModels,
           sandboxes: HOSTED_EXECUTION_BACKENDS,
@@ -84,6 +90,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             : [],
           available: !!options.records,
           managed: managedOffer(),
+          billing: { ...billing, canManage: tenant.role === "admin" },
         });
         return true;
       }
@@ -120,6 +127,14 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
           sendJson(response, 400, {
             error: error instanceof Error ? error.message : "Credential unavailable",
           });
+          return true;
+        }
+        const refusal = managedBillingRefusal(
+          generation.settings,
+          options.billing ? await options.billing.status(tenant.id) : undefined,
+        );
+        if (refusal) {
+          sendJson(response, 403, refusal);
           return true;
         }
       }

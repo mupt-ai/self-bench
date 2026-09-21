@@ -55,12 +55,21 @@ describe("Compose provider credential boundary", () => {
     });
   });
 
-  test("workers get no host model credentials; runs inject managed or stored ones", async () => {
+  test("workers get no host model or Stripe credentials", async () => {
     const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
     const compose = Bun.YAML.parse(source) as ComposeDocument;
+    const api = compose.services.api?.environment ?? {};
     const worker = compose.services.worker?.environment ?? {};
     expect(worker).not.toHaveProperty("OPENAI_API_KEY");
     expect(worker).not.toHaveProperty("SELFBENCH_PI_AUTH_JSON");
+    expect(api).toMatchObject({
+      SELFBENCH_STRIPE_SECRET_KEY: composeEmpty("SELFBENCH_STRIPE_SECRET_KEY"),
+      SELFBENCH_STRIPE_WEBHOOK_SECRET: composeEmpty("SELFBENCH_STRIPE_WEBHOOK_SECRET"),
+      SELFBENCH_STRIPE_PRICE_ID: composeEmpty("SELFBENCH_STRIPE_PRICE_ID"),
+    });
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_SECRET_KEY");
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_WEBHOOK_SECRET");
+    expect(worker).not.toHaveProperty("SELFBENCH_STRIPE_PRICE_ID");
   });
 
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {

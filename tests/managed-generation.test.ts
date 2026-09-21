@@ -53,6 +53,8 @@ test("managed defaults are valid and every model is servable through managed Ope
       modelAccess: "credential",
       modelCredentialId: crypto.randomUUID(),
       sandboxCredentialId: crypto.randomUUID(),
+      harborEnvironment: "modal",
+      harborCredentialId: crypto.randomUUID(),
     }).success,
   ).toBe(true);
 });

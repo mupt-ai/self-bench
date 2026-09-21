@@ -64,6 +64,13 @@
       "when": 1789892397234,
       "tag": "0008_managed_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789968553131,
+      "tag": "0009_stripe_billing",
+      "breakpoints": true
     }
   ]
 }

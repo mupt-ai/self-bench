@@ -15,6 +15,7 @@ export interface GenerationOptions {
   available: boolean;
   /** Which managed capabilities this deployment offers; they are independent keys. */
   managed?: { models: boolean; sandbox: boolean };
+  billing?: { configured: boolean; eligible: boolean };
 }
 
 /**

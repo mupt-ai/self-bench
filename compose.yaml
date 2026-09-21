@@ -32,6 +32,10 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_MANAGED_OPENROUTER_API_KEY: ${SELFBENCH_MANAGED_OPENROUTER_API_KEY:-}
   SELFBENCH_MANAGED_E2B_API_KEY: ${SELFBENCH_MANAGED_E2B_API_KEY:-}
   SELFBENCH_MANAGED_E2B_DOMAIN: ${SELFBENCH_MANAGED_E2B_DOMAIN:-}
+  # Shared billing policy. Stripe secrets stay on the API so generation never talks to Stripe.
+  SELFBENCH_BILLING_UNIT_SCALE: ${SELFBENCH_BILLING_UNIT_SCALE:-}
+  SELFBENCH_BILLING_MARKUP_BPS: ${SELFBENCH_BILLING_MARKUP_BPS:-}
+  SELFBENCH_STRIPE_METER_EVENT_NAME: ${SELFBENCH_STRIPE_METER_EVENT_NAME:-}
   # The site database: users, connected repos, and evaluation records. Migrations run at startup.
   SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
   SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
@@ -107,6 +111,9 @@ services:
       # Browser origin / OAuth callback. Set this to the tunnel or reverse-proxy URL
       # before `up`; do not use the ephemeral host port from `docker compose port`.
       SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
+      SELFBENCH_STRIPE_SECRET_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
+      SELFBENCH_STRIPE_WEBHOOK_SECRET: ${SELFBENCH_STRIPE_WEBHOOK_SECRET:-}
+      SELFBENCH_STRIPE_PRICE_ID: ${SELFBENCH_STRIPE_PRICE_ID:-}
     ports:
       - "127.0.0.1::8080"
     volumes:

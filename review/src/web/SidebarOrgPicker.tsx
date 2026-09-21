@@ -50,7 +50,9 @@ export function SidebarOrgPicker({
               <Avatar login={org.login} url={org.avatarUrl} size={20} />
             </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{org.login}</span>}
-            {!collapsed && <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+            {!collapsed && (
+              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            )}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

@@ -59,7 +59,9 @@ async function runMetered(
     const usage = meter.usage();
     const entry: StageUsage = {
       stage: request.stage,
-      managed: options.managedSandbox,
+      managed: options.managedModel || options.managedSandbox,
+      managedModel: options.managedModel,
+      managedSandbox: options.managedSandbox,
       sandboxSeconds: seconds,
       ...(request.cpu !== undefined ? { cpu: request.cpu } : {}),
       ...(request.memoryMiB !== undefined ? { memoryMiB: request.memoryMiB } : {}),
@@ -68,6 +70,7 @@ async function runMetered(
         : {}),
       ...(usage.messages > 0
         ? {
+            ...(options.model ? { model: options.model } : {}),
             tokens: {
               input: usage.input,
               output: usage.output,

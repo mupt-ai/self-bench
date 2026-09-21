@@ -4,6 +4,8 @@ import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
 import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
+import { managedBillingRefusal } from "../billing/eligibility.js";
+import type { BillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
@@ -36,6 +38,7 @@ export interface BatchRoutesOptions {
   managed?: boolean;
   /** Sums a run's metered platform usage into its status response, when metering is on. */
   usage?: UsageLedger;
+  billing?: BillingStore;
 }
 export interface BatchRoutes {
   handle(
@@ -100,6 +103,14 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
             sendJson(response, 400, {
               error: error instanceof Error ? error.message : "Credential unavailable",
             });
+            return true;
+          }
+          const refusal = managedBillingRefusal(
+            generation.settings,
+            options.billing ? await options.billing.status(tenant.id) : undefined,
+          );
+          if (refusal) {
+            sendJson(response, 403, refusal);
             return true;
           }
         }

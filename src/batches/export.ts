@@ -59,7 +59,9 @@ export async function exportBatch(
           artifacts,
           {
             run: batch.run,
-            tasks: batch.candidates.flatMap((item) => (item.result?.task ? [item.result.task] : [])),
+            tasks: batch.candidates.flatMap((item) =>
+              item.result?.task ? [item.result.task] : [],
+            ),
           },
           `application-${crypto.randomUUID()}`,
         ),

@@ -6,7 +6,7 @@ All responses are JSON unless noted. Errors carry `{ "error": "message" }` and s
 
 ## Authentication
 
-There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `/v1/viewer` are open.
+There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz`, `/v1/viewer`, and `POST /api/stripe/webhook` are open.
 
 | Method | Header | Reaches |
 | --- | --- | --- |
@@ -137,6 +137,19 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 | `GET` | `/api/orgs/:org/credentials/codex-login/:id` | Sign-in status |
 | `POST` | `/api/orgs/:org/credentials/codex-login/:id/complete` | Stores the resulting credential once the browser side has approved |
 | `POST` | `/api/orgs/:org/credentials/codex-login/:id/cancel` | Abandons the sign-in |
+
+## Billing
+
+Metered Stripe billing applies only to managed model and sandbox usage. Organization credentials are never invoiced by SelfBench. When the three Stripe env vars are unset, billing is disabled and managed runs stay available. Reads need membership; Checkout and the Customer Portal need the `admin` role and a browser session.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/orgs/:org/billing` | Subscription status: `configured`, `eligible`, `status`, `canManage`, and optional customer/period fields |
+| `POST` | `/api/orgs/:org/billing/checkout` | Creates a Stripe Checkout session; `200 { url }`. Browser session, admin only |
+| `POST` | `/api/orgs/:org/billing/portal` | Creates a Stripe Customer Portal session; `200 { url }`. Browser session, admin only |
+| `POST` | `/api/stripe/webhook` | Stripe webhook (unauthenticated, `Stripe-Signature` verified) |
+
+`GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 
 ## Run artifacts and CLI routes
 
