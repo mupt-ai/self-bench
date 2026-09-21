@@ -77,8 +77,9 @@ export function loadStripeConfig(
   const webhookSecret = value.SELFBENCH_STRIPE_WEBHOOK_SECRET;
   const webhookSecretFile = value.SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE;
   const priceId = value.SELFBENCH_STRIPE_PRICE_ID;
-  const set = [secretKey, webhookSecret, webhookSecretFile, priceId].filter(Boolean);
-  if (set.length === 0) return undefined;
+  // Compose always provides the conventional webhook file path so the Stripe CLI can
+  // populate it later. A path by itself does not enable billing.
+  if (!secretKey && !webhookSecret && !priceId) return undefined;
   if (!secretKey || !priceId || (!webhookSecret && !webhookSecretFile)) {
     throw new Error(
       "Stripe billing requires SELFBENCH_STRIPE_SECRET_KEY, SELFBENCH_STRIPE_PRICE_ID, and either SELFBENCH_STRIPE_WEBHOOK_SECRET or SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE",

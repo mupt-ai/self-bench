@@ -8,6 +8,7 @@ type ComposeService = {
   readonly image?: string;
   readonly profiles?: readonly string[];
   readonly ports?: readonly string[];
+  readonly volumes?: readonly string[];
 };
 
 type ComposeDocument = {
@@ -84,6 +85,9 @@ describe("Compose provider credential boundary", () => {
     expect(compose.services.api?.environment).toMatchObject({
       SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/selfbench-stripe/webhook-secret",
     });
+    expect(compose.services.worker?.volumes).toContain(
+      `\${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/home/node/.modal.toml:ro`,
+    );
   });
 
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {

@@ -69,6 +69,20 @@ class SourceVerificationTests(unittest.TestCase):
         self.assertIn("run(check+['worker'])", host)
         self.assertIn('stop_grace_period: 2m', (root / 'compose.yaml').read_text())
 
+    def test_secret_versions_are_exported_as_manifest_json(self):
+        versions = {'shared': 2, 'api': 3, 'worker': 1}
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            github_env = tmp / 'github-env'
+            result = self.run_script(
+                tmp,
+                RUNTIME_SECRET_VERSIONS=json.dumps(versions),
+                GITHUB_ENV=str(github_env),
+            )
+            exported = github_env.read_text().strip().partition('=')[2]
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(exported), versions)
+
     def test_missing_or_mutable_secret_versions_rejected(self):
         for value in ('{}', '[]', '{"shared":"latest","api":1,"worker":2}', '{"shared":1,"worker":3}'):
             with tempfile.TemporaryDirectory() as directory:

@@ -107,7 +107,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
       const { token, scopes } = await exchangeCode(config, code, fetchImpl);
       const profile = await fetchProfile(config, token, fetchImpl);
       const orgs = await fetchOrgMemberships(config, token, fetchImpl);
-      if (!gate.admits(orgs)) {
+      if (!gate.admits(profile.githubId, orgs)) {
         console.warn(`Sign-in refused for ${profile.login}: no allowed organization membership`);
         signedIn = { error: "organization" };
       } else {

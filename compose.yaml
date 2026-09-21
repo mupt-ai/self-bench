@@ -152,7 +152,7 @@ services:
       - ${DOCKER_GID:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/root/.modal.toml:ro
+      - ${SELFBENCH_MODAL_CONFIG_PATH:-/dev/null}:/home/node/.modal.toml:ro
       - artifacts:/var/lib/selfbench/artifacts
     restart: on-failure
 

@@ -18,6 +18,11 @@ import {
 
 test("Stripe config is all-or-nothing and policy defaults are pass-through", () => {
   expect(loadStripeConfig({})).toBeUndefined();
+  expect(
+    loadStripeConfig({
+      SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/stripe/webhook-secret",
+    }),
+  ).toBeUndefined();
   expect(() => loadStripeConfig({ SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toThrow(
     /requires SELFBENCH_STRIPE_SECRET_KEY/,
   );

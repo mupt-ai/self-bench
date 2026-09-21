@@ -1,4 +1,9 @@
-import { fetchOrgMemberships, type OrgMembership } from "./github.js";
+import {
+  fetchOrgMemberships,
+  GitHubIdentityError,
+  GitHubOAuthError,
+  type OrgMembership,
+} from "./github.js";
 
 /** How long a membership answer stays trusted before GitHub is asked again. */
 const ALLOWED_ORGS_TTL_MS = 5 * 60 * 1000;
@@ -12,7 +17,7 @@ export class OrgAccessError extends Error {
 
 export interface OrgGate {
   /** True when sign-in may proceed: open when no allowlist is configured. */
-  admits(orgs: readonly OrgMembership[]): boolean;
+  admits(githubId: number, orgs: readonly OrgMembership[]): boolean;
   /** Membership for an existing session, cached briefly so removals do not wait for expiry. */
   permits(githubId: number, token: string): Promise<boolean>;
 }
@@ -29,20 +34,30 @@ export function createOrgGate(options: {
   const cache = new Map<number, { at: number; allowed: boolean }>();
   const isMember = (orgs: readonly OrgMembership[]): boolean =>
     orgs.some((org) => allowedOrgs.includes(org.login.toLowerCase()));
+  const remember = (githubId: number, orgs: readonly OrgMembership[]): boolean => {
+    const allowed = allowedOrgs.length === 0 || isMember(orgs);
+    cache.set(githubId, { at: now().getTime(), allowed });
+    return allowed;
+  };
   return {
-    admits: (orgs) => allowedOrgs.length === 0 || isMember(orgs),
+    admits: remember,
     async permits(githubId, token) {
       if (allowedOrgs.length === 0) return true;
       const cached = cache.get(githubId);
       if (cached && now().getTime() - cached.at < ALLOWED_ORGS_TTL_MS) return cached.allowed;
-      const orgs = await fetchOrgMemberships(
-        { githubApiUrl: options.githubApiUrl },
-        token,
-        fetchImpl,
-      );
-      const allowed = isMember(orgs);
-      cache.set(githubId, { at: now().getTime(), allowed });
-      return allowed;
+      try {
+        const orgs = await fetchOrgMemberships(
+          { githubApiUrl: options.githubApiUrl },
+          token,
+          fetchImpl,
+        );
+        return remember(githubId, orgs);
+      } catch (error) {
+        const status = error instanceof GitHubOAuthError ? error.status : undefined;
+        throw new GitHubIdentityError(
+          status === 401 || status === 403 || status === 429 ? status : 503,
+        );
+      }
     },
   };
 }

@@ -47,9 +47,13 @@ esac
 
 secret_versions_file="${RUNTIME_SECRET_VERSIONS_FILE:-infra/runtime/secret-versions/$TF_ENVIRONMENT.json}"
 [[ -f "$secret_versions_file" ]] || die "Missing runtime secret version manifest: $secret_versions_file"
-RUNTIME_SECRET_VERSIONS=$(jq -ce 'type=="object" and keys==["api","shared","worker"]
-       and ([.[] | tostring | test("^[1-9][0-9]*$")] | all)' "$secret_versions_file") \
-  || die "Invalid runtime secret version manifest: $secret_versions_file"
+RUNTIME_SECRET_VERSIONS=$(jq -ce '
+  if type=="object" and keys==["api","shared","worker"]
+     and ([.[] | tostring | test("^[1-9][0-9]*$")] | all)
+  then .
+  else error("invalid runtime secret version manifest")
+  end
+' "$secret_versions_file") || die "Invalid runtime secret version manifest: $secret_versions_file"
 if [[ -n "${GITHUB_ENV:-}" ]]; then
   printf 'RUNTIME_SECRET_VERSIONS=%s\n' "$RUNTIME_SECRET_VERSIONS" >> "$GITHUB_ENV"
 fi
