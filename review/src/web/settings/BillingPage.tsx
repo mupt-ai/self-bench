@@ -2,6 +2,7 @@ import React from "react";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageFrame, PageHeader } from "../ui";
+import { BillingUsage } from "./BillingUsage";
 import { type BillingStatus, fetchBilling, startBillingSession } from "./billing";
 
 const statusLabels: Record<string, string> = {
@@ -80,7 +81,12 @@ function BillingContent({ org }: { org: string }) {
           <p>{error}</p>
         </Notice>
       )}
-      {data && <BillingStatusCard data={data} />}
+      {data && (
+        <div className="grid gap-8">
+          <BillingStatusCard data={data} />
+          <BillingUsage usage={data.usage} />
+        </div>
+      )}
     </PageFrame>
   );
 }
@@ -88,7 +94,10 @@ function BillingContent({ org }: { org: string }) {
 function BillingStatusCard({ data }: { data: BillingStatus }) {
   return (
     <section className="grid gap-2 border border-border bg-card p-4">
-      <h2 className="text-sm font-medium text-foreground">Subscription</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-medium text-foreground">Subscription</h2>
+        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">Stripe</span>
+      </div>
       <p className="text-sm text-muted-foreground">
         Status: {statusLabels[data.status] ?? data.status}
         {data.eligible

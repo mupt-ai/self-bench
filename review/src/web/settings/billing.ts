@@ -1,8 +1,23 @@
 import type { BillingEligibility } from "../../../../src/billing/eligibility";
+
+export interface BillingUsageSummary {
+  modelTokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+  tokens: number;
+  modelCostUsd?: number;
+  sandboxSeconds: number;
+  sandboxCostUsd?: number;
+}
+
 import { requestJson } from "../api";
 
 export interface BillingStatus extends BillingEligibility {
   canManage: boolean;
+  usage: BillingUsageSummary;
 }
 
 export function fetchBilling(org: string): Promise<BillingStatus> {

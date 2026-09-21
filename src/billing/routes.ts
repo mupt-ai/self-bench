@@ -38,6 +38,7 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
       if (!match[2] && request.method === "GET") {
         sendJson(response, 200, {
           ...(await options.store.status(org.id)),
+          usage: await options.store.usage(org.id),
           canManage: org.role === "admin" && !user.apiKey,
         });
         return true;

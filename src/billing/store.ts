@@ -1,7 +1,20 @@
 import { and, eq, lte, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client.js";
-import { billingOutbox, billingWebhookEvents, orgBilling } from "../db/schema.js";
+import { billingOutbox, billingWebhookEvents, generationUsage, orgBilling } from "../db/schema.js";
 import { type BillingEligibility, eligibilityFrom } from "./eligibility.js";
+
+export interface BillingUsageSummary {
+  readonly modelTokens: {
+    readonly input: number;
+    readonly output: number;
+    readonly cacheRead: number;
+    readonly cacheWrite: number;
+  };
+  readonly tokens: number;
+  readonly modelCostUsd: number | undefined;
+  readonly sandboxSeconds: number;
+  readonly sandboxCostUsd: number | undefined;
+}
 
 export interface SubscriptionState {
   readonly customerId: string;
@@ -16,6 +29,33 @@ export function createBillingStore(db: Database, configured: boolean) {
     async status(orgId: number): Promise<BillingEligibility> {
       const [row] = await db.select().from(orgBilling).where(eq(orgBilling.orgId, orgId));
       return eligibilityFrom(configured, row);
+    },
+    async usage(orgId: number): Promise<BillingUsageSummary> {
+      const [row] = await db
+        .select({
+          input: sql<number>`coalesce(sum(${generationUsage.inputTokens}), 0)::int`,
+          output: sql<number>`coalesce(sum(${generationUsage.outputTokens}), 0)::int`,
+          cacheRead: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}), 0)::int`,
+          cacheWrite: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}), 0)::int`,
+          modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
+          sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
+          sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
+        })
+        .from(generationUsage)
+        .where(eq(generationUsage.orgId, orgId));
+      const modelTokens = {
+        input: row?.input ?? 0,
+        output: row?.output ?? 0,
+        cacheRead: row?.cacheRead ?? 0,
+        cacheWrite: row?.cacheWrite ?? 0,
+      };
+      return {
+        modelTokens,
+        tokens: Object.values(modelTokens).reduce((total, value) => total + value, 0),
+        modelCostUsd: row?.modelCostUsd ?? undefined,
+        sandboxSeconds: row?.sandboxSeconds ?? 0,
+        sandboxCostUsd: row?.sandboxCostUsd ?? undefined,
+      };
     },
     async customerId(orgId: number): Promise<string | undefined> {
       const [row] = await db
