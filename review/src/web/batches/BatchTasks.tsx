@@ -6,7 +6,13 @@ import { cn } from "../primitives/cn";
 import { DifficultyStamp } from "../task/state";
 import { taskTitle } from "../task/task-title";
 import { Button, EmptyState, SectionHeader } from "../ui";
-import { activityCounts, activityLabels, type TaskActivity, taskActivity } from "./task-activity";
+import {
+  activityCounts,
+  activityLabels,
+  retryDetail,
+  type TaskActivity,
+  taskActivity,
+} from "./task-activity";
 
 const taskLabels = {
   queued: "Not Started",
@@ -79,6 +85,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
           >
             {visible.map((task) => {
               const activity = taskActivity(status, task);
+              const retry = retryDetail(status, task);
               return (
                 <li key={task.candidateId}>
                   <Link
@@ -92,6 +99,11 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                       {task.reason && (
                         <span className="mt-1 block break-words text-xs text-muted-foreground">
                           {task.reason}
+                        </span>
+                      )}
+                      {retry && (
+                        <span className="mt-1 block break-words text-xs text-destructive">
+                          {retry.length > 160 ? `${retry.slice(0, 160)}…` : retry}
                         </span>
                       )}
                     </span>

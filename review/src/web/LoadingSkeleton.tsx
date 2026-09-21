@@ -7,6 +7,25 @@ export function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
+export function CardGridSkeleton({ label, cards = 4 }: { label: string; cards?: number }) {
+  return (
+    <div role="status" aria-label={label} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <span className="sr-only">{label}</span>
+      {(["first", "second", "third", "fourth"] as const).slice(0, cards).map((key) => (
+        <div key={key} className="border border-border bg-card p-4" aria-hidden="true">
+          <Skeleton className="h-4 w-40 max-w-full" />
+          <Skeleton className="mt-2 h-3 w-56 max-w-full" />
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
     <div

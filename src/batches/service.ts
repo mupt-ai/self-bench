@@ -4,7 +4,7 @@ import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { createUsageStore } from "../managed/usage-store.js";
-import { liveBatchStatus } from "../site/batch-activity.js";
+import { liveBatchStatus, overlayCandidateActivity } from "../site/batch-activity.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../viewer/discovery.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";
@@ -70,18 +70,20 @@ export function createGenerationBatches(
     list: () => store.list(),
     async status(runId: string) {
       const batch = await store.read(runId);
-      const status = batch ? batchStatus(batch) : await liveBatchStatus(client, runId);
+      const base = batch
+        ? await overlayCandidateActivity(client, batchStatus(batch))
+        : await liveBatchStatus(client, runId);
       const listed = await loadDiscoveryShards(artifacts, runId);
-      if (!listed.length && !status.discovery?.shards?.length) return status;
+      if (!listed.length && !base.discovery?.shards?.length) return base;
       return {
-        ...status,
+        ...base,
         discovery: {
-          wave: status.discovery?.wave ?? 0,
-          totalShards: status.discovery?.totalShards ?? listed.length,
-          completedShards: status.discovery?.completedShards ?? 0,
-          failedShards: status.discovery?.failedShards ?? 0,
-          candidates: status.discovery?.candidates ?? status.discovered ?? 0,
-          shards: mergeDiscoveryShards(status.discovery?.shards, listed),
+          wave: base.discovery?.wave ?? 0,
+          totalShards: base.discovery?.totalShards ?? listed.length,
+          completedShards: base.discovery?.completedShards ?? 0,
+          failedShards: base.discovery?.failedShards ?? 0,
+          candidates: base.discovery?.candidates ?? base.discovered ?? 0,
+          shards: mergeDiscoveryShards(base.discovery?.shards, listed),
         },
       };
     },

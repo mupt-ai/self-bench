@@ -75,3 +75,69 @@ test("application resumes a persisted candidate plan and exports without a batch
     await rm(directory, { recursive: true, force: true });
   }
 }, 10_000);
+
+test("a persisted authoring batch reports each candidate's live activity", async () => {
+  const database = await testDatabase();
+  const directory = await mkdtemp(join(tmpdir(), "batch-service-"));
+  const artifacts = new LocalArtifactStore(directory);
+  const id = `${run.runId}/candidate/one`;
+  const client = {
+    options: { namespace: "default" },
+    connection: {
+      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
+    },
+    workflow: {
+      getHandle: () => ({
+        describe: async () => ({
+          type: "selfBenchAuthorWorkflow",
+          runId: "execution",
+          status: { name: "RUNNING" },
+        }),
+        query: async () => ({
+          candidateId: "one",
+          taskId: "one",
+          difficulty: "hard",
+          status: "authoring",
+          round: 1,
+        }),
+      }),
+    },
+    workflowService: {
+      describeWorkflowExecution: async ({ execution }: { execution: { workflowId: string } }) => {
+        expect(execution.workflowId).toBe(id);
+        return {
+          pendingActivities: [
+            { state: 1, attempt: 2, maximumAttempts: 4, lastFailure: { message: "quota; log: x" } },
+          ],
+        };
+      },
+    },
+  } as unknown as Client;
+  const store = createBatchStore(database.db);
+  await store.create({
+    run,
+    taskQueue: "generation",
+    phase: "authoring",
+    shards: [],
+    candidates: [
+      {
+        workflowId: id,
+        dispatchAttempted: true,
+        candidate: candidate("one", 1),
+        progress: { candidateId: "one", taskId: "one", difficulty: "hard", status: "authoring" },
+      },
+    ],
+  });
+  const service = createGenerationBatches(database.db, client, artifacts, "generation");
+  try {
+    const status = await service.status(run.runId);
+    expect(status.phase).toBe("authoring");
+    expect(status.activity).toEqual({
+      one: { state: "queued", attempt: 2, maximumAttempts: 4, lastFailure: "quota" },
+    });
+  } finally {
+    await service.close();
+    await database.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10_000);
