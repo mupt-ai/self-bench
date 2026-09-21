@@ -29,7 +29,7 @@ export function BatchPage() {
       </Link>
       <PageHeader
         title={
-          <span className="inline-flex flex-wrap items-center gap-2">
+          <span className="inline-flex flex-wrap items-center gap-3">
             {batchName(batchId)}
             {status && <BatchState phase={status.phase} />}
           </span>

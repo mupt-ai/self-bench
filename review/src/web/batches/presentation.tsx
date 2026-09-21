@@ -23,17 +23,19 @@ const labels: Record<BatchStatus["phase"], string> = {
   cancelling: "Cancelling",
 };
 export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
+  const tone =
+    phase === "failed" || phase === "blocked"
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      : phase === "complete"
+        ? "border-success/40 bg-success/10 text-success"
+        : phase === "cancelled" || !phase
+          ? "border-border bg-muted/30 text-muted-foreground"
+          : "border-brand/40 bg-brand/10 text-brand";
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 whitespace-nowrap text-xs font-normal before:size-1.5 before:shrink-0 before:bg-current",
-        phase === "failed" || phase === "blocked"
-          ? "text-destructive"
-          : phase === "complete"
-            ? "text-success"
-            : phase === "cancelled" || !phase
-              ? "text-muted-foreground"
-              : "text-brand",
+        "inline-flex items-center border px-1.5 py-0.5 text-[10px] leading-none font-medium",
+        tone,
       )}
     >
       {phase ? labels[phase] : "Loading Status…"}
