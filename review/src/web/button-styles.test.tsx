@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { LoginPage } from "./pages/LoginPage";
-import { RepositoryList } from "./pages/RepositoryList";
 import { Button, buttonStyles } from "./ui";
 
 test("standalone button styles retain geometry without overriding Button icon sizing", () => {
@@ -39,31 +38,4 @@ test("destructive fill and foreground are defined separately from red text", () 
   expect(theme).not.toContain("font-size: 87.5%");
   expect(buttonStyles.destructive).toContain("bg-destructive-background");
   expect(buttonStyles.destructive).toContain("text-destructive-foreground");
-});
-
-test("repository action track accommodates the compact icon button", () => {
-  const html = renderToStaticMarkup(
-    <MemoryRouter>
-      <RepositoryList
-        repos={[
-          {
-            fullName: "example/repo",
-            defaultBranch: "main",
-            private: false,
-            continuous: false,
-            connectedBy: "example",
-            connectedAt: "2026-09-18T00:00:00.000Z",
-          },
-        ]}
-        stats={{}}
-        onDisconnect={() => {}}
-      />
-    </MemoryRouter>,
-  );
-  expect(html).toContain("md:grid-cols-[minmax(0,1fr)_5rem_8rem_5rem_2.5rem]");
-  expect(html).toContain('href="/repos/example/repo"');
-  expect(html).toContain("px-4 py-4 pr-14");
-  expect(html).toContain('aria-label="Open example/repo"');
-  const icon = renderToStaticMarkup(<Button size="icon" aria-label="Disconnect" />);
-  expect(icon).toContain("h-9 w-9");
 });

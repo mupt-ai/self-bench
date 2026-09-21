@@ -8,10 +8,10 @@ import {
   type RepoTaskCounts,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
-import { ListSkeleton } from "../LoadingSkeleton";
+import { CardGridSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, EmptyState, Notice, PageFrame, PageHeader } from "../ui";
+import { Button, Notice, PageFrame, PageHeader } from "../ui";
 import { type RepoStats, RepositoryList } from "./RepositoryList";
 
 type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
@@ -95,22 +95,14 @@ export function ReposPage() {
         </Button>
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
-      {repos.status === "loading" && !error && <ListSkeleton label="Loading Repositories" />}
-      {repos.status === "ok" && repos.repos.length === 0 && (
-        <EmptyState
-          title="Connect a Repository to Get Started"
-          action={
-            <Button size="small" variant="primary" onClick={() => setConnecting("mine")}>
-              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-              Connect My Repo
-            </Button>
-          }
-        >
-          Choose a repository to turn merged pull requests into reviewable tasks.
-        </EmptyState>
-      )}
-      {repos.status === "ok" && repos.repos.length > 0 && (
-        <RepositoryList repos={repos.repos} stats={stats} onDisconnect={disconnect} />
+      {repos.status === "loading" && !error && <CardGridSkeleton label="Loading Repositories" />}
+      {repos.status === "ok" && (
+        <RepositoryList
+          repos={repos.repos}
+          stats={stats}
+          onDisconnect={disconnect}
+          onConnect={() => setConnecting("mine")}
+        />
       )}
       {connecting && (
         <ConnectRepoSheet
