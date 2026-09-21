@@ -43,6 +43,14 @@ describe("Compose provider credential boundary", () => {
     });
   });
 
+  test("workers get no host model credentials; runs inject managed or stored ones", async () => {
+    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
+    const compose = Bun.YAML.parse(source) as ComposeDocument;
+    const worker = compose.services.worker?.environment ?? {};
+    expect(worker).not.toHaveProperty("OPENAI_API_KEY");
+    expect(worker).not.toHaveProperty("SELFBENCH_PI_AUTH_JSON");
+  });
+
   test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {
     const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
     const compose = Bun.YAML.parse(source) as ComposeDocument;

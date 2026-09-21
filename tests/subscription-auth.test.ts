@@ -4,6 +4,7 @@ import { loadPiModelAuth, loadPiSubscriptionAuth } from "../src/subscription-aut
 afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.SELFBENCH_PI_AUTH_JSON;
+  delete process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
 });
 
 describe("subscription authentication", () => {
@@ -11,6 +12,23 @@ describe("subscription authentication", () => {
     process.env.OPENAI_API_KEY = "  api-key  ";
 
     expect(await loadPiModelAuth()).toEqual({ provider: "openai", apiKey: "api-key" });
+  });
+
+  test("falls back to the managed platform key for Compose workers without a model key", async () => {
+    const ambient = {
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    };
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY = "managed-key";
+      expect(await loadPiModelAuth()).toEqual({ provider: "openrouter", apiKey: "managed-key" });
+    } finally {
+      for (const [key, value] of Object.entries(ambient))
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
   });
 
   test("passes only the OpenAI subscription credential to sandboxes", async () => {

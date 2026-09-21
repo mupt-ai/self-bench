@@ -34,7 +34,8 @@ export function piModelAuthSecrets(auth: PiModelAuth): Record<string, string> {
 /**
  * Resolves the credentials a sandbox's Pi invocation should authenticate with. Generation
  * runs place exactly one provider credential in the environment, so the key variables are
- * checked in a fixed order; without any of them, the host's ChatGPT subscription applies.
+ * checked in a fixed order; a self-managed worker's platform key applies next, and without
+ * any of them, the host's ChatGPT subscription applies.
  */
 export async function loadPiModelAuth(): Promise<PiModelAuth> {
   const env = environment();
@@ -44,6 +45,8 @@ export async function loadPiModelAuth(): Promise<PiModelAuth> {
   if (anthropic) return { provider: "anthropic", apiKey: anthropic };
   const openRouter = env.OPENROUTER_API_KEY?.trim();
   if (openRouter) return { provider: "openrouter", apiKey: openRouter };
+  const managed = env.SELFBENCH_MANAGED_OPENROUTER_API_KEY?.trim();
+  if (managed) return { provider: "openrouter", apiKey: managed };
   return { provider: "openai-codex", authJson: await loadPiSubscriptionAuth() };
 }
 

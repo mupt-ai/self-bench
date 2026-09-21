@@ -44,13 +44,14 @@ bun add --global self-bench
 gh auth login
 ```
 
-Set the model and GitHub credentials used by the local worker, plus a random token that protects the local self-bench API:
+Set the GitHub credential used by the local worker, plus a random token that protects the local self-bench API:
 
 ```bash
-export OPENAI_API_KEY=...
 export GH_TOKEN="$(gh auth token)"
 export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 ```
+
+Model access for generation comes from managed platform keys or stored organization credentials (see [Credentials](docs/operations.md#credentials)); copy `.env.example` to `.env` and set `SELFBENCH_MANAGED_OPENROUTER_API_KEY` and `SELFBENCH_MANAGED_E2B_API_KEY` to use the platform's accounts.
 
 ### 1. Start self-bench
 

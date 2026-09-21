@@ -41,10 +41,10 @@ Temporal, site, and artifact state live in the `<project>_temporal-postgres`, `<
 
 self-bench requires GitHub and model credentials:
 
-- `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required.
-- `OPENAI_API_KEY` powers discovery, authoring rounds, and verification rounds. This is the recommended model-authentication path.
+- `gh auth login` supplies read access to merged pull requests. Export `GH_TOKEN="$(gh auth token)"` for the worker. Write access is not required. Site generation instead uses the submitter's GitHub OAuth token per run; hosted workers have no `GH_TOKEN` of their own.
+- Model credentials come from the site: managed platform access (`SELFBENCH_MANAGED_OPENROUTER_API_KEY`, worker-only in hosted deployments) or a stored organization credential chosen under Advanced Settings → My Credentials. Generation sandboxes never see the worker's own provider environment.
 
-For ChatGPT subscription authentication, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when `OPENAI_API_KEY` is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
+Self-managed workers (started outside Compose, e.g. the cloud topology below) may instead hold `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY` in their own environment; a managed platform key is the last resort before the host's ChatGPT subscription. For ChatGPT subscription authentication on such a worker, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when a key variable is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
 
 Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended Vercel workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; E2B setup reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
 
@@ -483,9 +483,10 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_SITE_PORT` / `SELFBENCH_SITE_BIND` | per checkout / `127.0.0.1` | Compose host port and bind address for the API |
 | `SELFBENCH_TEMPORAL_PORT` | per checkout | Compose host port for Temporal |
 | `COMPOSE_PROJECT_NAME` / `SELFBENCH_IMAGE` | per checkout | Compose project and API/worker image tag |
-| `OPENAI_API_KEY` | — | Worker sandboxes |
-| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential |
+| `OPENAI_API_KEY` | — | Self-managed workers only; Compose stacks authenticate models through managed keys or stored credentials |
+| `SELFBENCH_PI_AUTH_JSON` | — | Optional Pi `openai-codex` subscription credential on self-managed workers |
 | `GH_TOKEN` | — | Worker GitHub reads; hosted generation uses the submitter's GitHub token instead |
+| `DOCKER_GID` | `0` | Compose; group added to the worker so it may use the mounted `/var/run/docker.sock` for Docker sandboxes |
 
 ## Cloud topology
 

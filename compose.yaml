@@ -121,7 +121,6 @@ services:
     environment:
       <<: *selfbench-environment
       GH_TOKEN: ${GH_TOKEN:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MODAL_TOKEN_ID: ${MODAL_TOKEN_ID:-}
       MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET:-}
       VERCEL_TOKEN: ${VERCEL_TOKEN:-}
@@ -131,7 +130,6 @@ services:
       E2B_DOMAIN: ${E2B_DOMAIN:-}
       DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${SELFBENCH_ACTIVITY_CONCURRENCY:-}
-      SELFBENCH_PI_AUTH_JSON: ${SELFBENCH_PI_AUTH_JSON:-}
     user: root
     group_add:
       - ${DOCKER_GID:-0}
