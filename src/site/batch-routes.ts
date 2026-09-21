@@ -9,7 +9,6 @@ import type { BillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import type { UsageLedger } from "../managed/usage-store.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
@@ -36,8 +35,6 @@ export interface BatchRoutesOptions {
   records?: EncryptedRecordStore;
   /** Whether this deployment offers managed model access and sandboxes. */
   managed?: boolean;
-  /** Sums a run's metered platform usage into its status response, when metering is on. */
-  usage?: UsageLedger;
   billing?: BillingStore;
 }
 export interface BatchRoutes {
@@ -160,11 +157,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
       if (!match[5] && request.method === "GET") {
         const status = await options.status(runId);
         await syncBatchProgress({ repo, tasks, artifacts, status });
-        const usage = await options.usage?.summary(runId);
-        sendJson(response, 200, {
-          ...status,
-          ...(usage && (usage.tokens > 0 || usage.sandboxSeconds > 0) ? { usage } : {}),
-        });
+        sendJson(response, 200, status);
         return true;
       }
       return false;

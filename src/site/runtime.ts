@@ -14,7 +14,6 @@ import type { SelfBenchConfig } from "../config.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
-import { createUsageStore } from "../managed/usage-store.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
 import { evaluationStarter } from "./evaluation-start.js";
@@ -112,7 +111,6 @@ export async function openSite(
       start: (input, token) => batches.start(input, token),
       status: (runId) => batches.status(runId),
       cancel: (runId) => batches.cancel(runId),
-      usage: createUsageStore(database.db),
       billing: billingStore,
     }),
     tasks: createTaskRoutes({

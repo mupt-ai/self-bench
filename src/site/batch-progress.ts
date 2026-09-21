@@ -1,6 +1,5 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { RunPhase, RunStatus } from "../contracts.js";
-import type { RunUsageSummary } from "../managed/usage.js";
 import type { ConnectedRepo } from "./repo-store.js";
 import type { TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
@@ -8,8 +7,6 @@ import { syncRun } from "./task-sync.js";
 export type BatchStatus = Pick<RunStatus, "runId" | "phase"> &
   Partial<Omit<RunStatus, "runId" | "phase">> & {
     activity?: Record<string, "running" | "queued" | "unknown">;
-    /** Metered platform usage for this run, attached by the status route when metering is on. */
-    usage?: RunUsageSummary;
   };
 const terminalBatch = (phase: RunPhase): boolean =>
   ["complete", "failed", "blocked", "cancelled"].includes(phase);

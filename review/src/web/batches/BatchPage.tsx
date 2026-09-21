@@ -7,7 +7,6 @@ import { useDocumentTitle } from "../session";
 import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { useBatches } from "./BatchProvider";
 import { BatchTasks } from "./BatchTasks";
-import { BatchUsage } from "./BatchUsage";
 import { CancelBatch } from "./CancelBatch";
 import { BatchState, batchDate, batchName, batchPath } from "./presentation";
 
@@ -69,13 +68,6 @@ export function BatchPage() {
         <>
           <BatchProgress status={status} />
           <BatchTasks key={batchId} status={status} fullName={repoId.fullName} />
-        </>
-      )}
-      {run && (
-        <>
-          {status?.usage && (status.usage.tokens > 0 || status.usage.sandboxSeconds > 0) && (
-            <BatchUsage usage={status.usage} />
-          )}
         </>
       )}
     </PageContent>
