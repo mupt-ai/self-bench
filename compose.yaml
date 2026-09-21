@@ -176,7 +176,7 @@ services:
         condition: service_started
     environment:
       STRIPE_API_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
-    command: ["/usr/local/bin/selfbench-stripe-listen"]
+    entrypoint: ["/usr/local/bin/selfbench-stripe-listen"]
     volumes:
       - ./scripts/stripe-listen.sh:/usr/local/bin/selfbench-stripe-listen:ro
       - stripe-secrets:/run/selfbench-stripe
