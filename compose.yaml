@@ -30,6 +30,9 @@ x-selfbench-environment: &selfbench-environment
 services:
   postgres:
     image: postgres:17.6-bookworm
+    # Match the app services, so a Docker daemon restart brings the database back with
+    # the stack instead of leaving Temporal and the API crash-looping without it.
+    restart: on-failure
     environment:
       POSTGRES_DB: temporal
       POSTGRES_USER: temporal
@@ -44,6 +47,7 @@ services:
 
   site-postgres:
     image: postgres:17.6-bookworm
+    restart: on-failure
     environment:
       POSTGRES_DB: selfbench
       POSTGRES_USER: selfbench
