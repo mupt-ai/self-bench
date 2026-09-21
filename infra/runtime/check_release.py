@@ -69,10 +69,11 @@ def validate(environment, project, release_path):
     # where generation needs repository access.
     required_worker = {"SELFBENCH_API_TOKEN"}
     # Managed generation: platform-owned model/sandbox access follows from which platform
-    # keys are provisioned. The E2B key (the API runs managed export sandboxes) is shared;
-    # the OpenRouter key is worker-only, and never counts as a user model credential.
-    optional_shared = {"SELFBENCH_MANAGED_E2B_API_KEY", "SELFBENCH_MANAGED_E2B_DOMAIN"}
-    optional_worker = {"SELFBENCH_MANAGED_OPENROUTER_API_KEY"}
+    # keys are provisioned. Both platform keys are shared; runs inject them per sandbox
+    # and they never count as user model credentials.
+    optional_shared = {"SELFBENCH_MANAGED_E2B_API_KEY", "SELFBENCH_MANAGED_E2B_DOMAIN",
+                       "SELFBENCH_MANAGED_OPENROUTER_API_KEY"}
+    optional_worker = set()
     for data, keys, extras in ((shared, required_shared, optional_shared),
                                (api, required_api, set()),
                                (worker, required_worker, optional_worker)):

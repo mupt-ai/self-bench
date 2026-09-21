@@ -36,24 +36,24 @@ export function createUsageStore(db: Database): UsageLedger {
       const [row] = await db
         .select({
           modelCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}), 0)::float8`,
-          // Unmetered credential sandboxes record seconds without a cost; an absent figure
-          // is the batch page's cue to show time only.
-          sandboxCostUsd: sql<number | undefined>`sum(${generationUsage.sandboxCostUsd})::float8`,
+          // Unmetered credential sandboxes record seconds without a cost; a null sum is the
+          // batch page's cue to show time only. postgres-js yields null, never undefined.
+          sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
           managedCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}) filter (where ${generationUsage.managed}) + coalesce(sum(${generationUsage.sandboxCostUsd}) filter (where ${generationUsage.managed}), 0), 0)::float8`,
           tokens: sql<number>`coalesce(sum(${generationUsage.inputTokens} + ${generationUsage.outputTokens} + ${generationUsage.cacheReadTokens} + ${generationUsage.cacheWriteTokens}), 0)::int`,
           sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
         })
         .from(generationUsage)
         .where(eq(generationUsage.runId, runId));
-      return (
-        row ?? {
-          modelCostUsd: 0,
-          sandboxCostUsd: undefined,
-          managedCostUsd: 0,
-          tokens: 0,
-          sandboxSeconds: 0,
-        }
-      );
+      return row
+        ? { ...row, sandboxCostUsd: row.sandboxCostUsd ?? undefined }
+        : {
+            modelCostUsd: 0,
+            sandboxCostUsd: undefined,
+            managedCostUsd: 0,
+            tokens: 0,
+            sandboxSeconds: 0,
+          };
     },
   };
 }
