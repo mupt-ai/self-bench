@@ -144,6 +144,61 @@ describe("org memberships", () => {
   });
 });
 
+describe("organization allowlist", () => {
+  test("a non-member is refused without creating a user or a session", async () => {
+    const { server: site, users } = await boot(
+      { orgs: ["some-other-org"] },
+      { ...testAuthConfig, allowedOrgs: ["mupt-ai"] },
+    );
+    const response = await signIn(site);
+    expect(response.headers.get("location")).toBe("/login?error=organization");
+    expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
+    expect(await users.findByGitHubId(42)).toBeUndefined();
+  });
+
+  test("membership matches case-insensitively", async () => {
+    const { server: site, users } = await boot({}, {
+      ...testAuthConfig,
+      allowedOrgs: ["Mupt-AI", " mupt-ai "].map((login) => login.trim().toLowerCase()),
+    });
+    const response = await signIn(site);
+    expect(response.headers.get("location")).toBe("/");
+    expect(await users.findByGitHubId(42)).toBeDefined();
+  });
+
+  test("an empty allowlist keeps sign-in open to everyone", async () => {
+    const { server: site } = await boot({ orgs: [] });
+    expect((await signIn(site)).headers.get("location")).toBe("/");
+  });
+
+  test("a removed member is denied once the membership cache expires", async () => {
+    const orgs: string[] = ["Mupt-AI"];
+    const clock = { now: new Date("2026-09-21T00:00:00Z") };
+    const advance = (minutes: number) => {
+      clock.now = new Date(clock.now.getTime() + minutes * 60_000);
+    };
+    const site = await startAuthServer({
+      config: { ...testAuthConfig, allowedOrgs: ["mupt-ai"] },
+      fetchImpl: fakeGitHub({ orgs }).fetch,
+      now: () => clock.now,
+    });
+    server = site;
+    const signedIn = await signIn(site);
+    expect(signedIn.headers.get("location")).toBe("/");
+    const session = cookieValue(signedIn, SESSION_COOKIE) ?? "";
+    const me = () =>
+      site.request("/api/me", { headers: { cookie: `${SESSION_COOKIE}=${session}` } });
+    expect((await me()).status).toBe(200);
+    orgs.length = 0;
+    expect((await me()).status).toBe(200); // cached membership still permits
+    advance(6);
+    const denied = await me();
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ code: "organization_required" });
+    expect(cookieAttributes(denied, SESSION_COOKIE)).toContain("Max-Age=0");
+  });
+});
+
 describe("/api/me and logout", () => {
   test("answers 401 without a valid session and the display fields with one", async () => {
     const { server: site } = await boot();
@@ -196,7 +251,11 @@ describe("auth config", () => {
     expect(loadAuthConfig(base)).toMatchObject({
       publicUrl: "https://selfbench.dev",
       githubUrl: "https://github.com",
+      allowedOrgs: [],
     });
+    expect(
+      loadAuthConfig({ ...base, SELFBENCH_ALLOWED_GITHUB_ORGS: " Mupt-AI, dari " }),
+    ).toMatchObject({ allowedOrgs: ["mupt-ai", "dari"] });
     expect(() => loadAuthConfig({ ...base, SELFBENCH_SESSION_SECRET: "short" })).toThrow(
       "SELFBENCH_SESSION_SECRET",
     );

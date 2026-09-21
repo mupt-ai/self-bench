@@ -146,6 +146,14 @@ class ReleaseTests(unittest.TestCase):
         self.values["worker"]["SELFBENCH_STRIPE_SECRET_KEY"] = "sk_live_fake"
         with self.assertRaises(ValueError): self.validate()
 
+    def test_allowed_github_orgs_accepted_on_api(self):
+        self.values["api"]["SELFBENCH_ALLOWED_GITHUB_ORGS"] = "mupt-ai"
+        self.validate()
+
+    def test_allowed_github_orgs_rejected_on_worker(self):
+        self.values["worker"]["SELFBENCH_ALLOWED_GITHUB_ORGS"] = "mupt-ai"
+        with self.assertRaises(ValueError): self.validate()
+
     def test_managed_e2b_key_on_api_rejected(self):
         self.values["api"]["SELFBENCH_MANAGED_E2B_API_KEY"] = "fake-e2b"
         with self.assertRaises(ValueError): self.validate()

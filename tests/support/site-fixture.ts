@@ -44,6 +44,7 @@ export const testAuthConfig: AuthConfig = {
   databaseUrl: "postgres://unused",
   githubUrl: "https://github.example",
   githubApiUrl: "https://api.github.example",
+  allowedOrgs: [],
 };
 
 export interface FakeGitHubOptions {
@@ -161,6 +162,7 @@ export interface AuthServerOptions {
   readonly artifacts?: ArtifactStore;
   readonly start?: WorkflowStarter;
   readonly status?: TaskStatusSource;
+  readonly now?: () => Date;
 }
 
 /** The site's routes over a fresh PGlite database on a real loopback server; other paths 404. */
@@ -172,7 +174,13 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const fetchImpl = options.fetchImpl ?? fetch;
-  const auth = createSiteAuth({ config, users, apiKeys, fetchImpl });
+  const auth = createSiteAuth({
+    config,
+    users,
+    apiKeys,
+    fetchImpl,
+    ...(options.now ? { now: options.now } : {}),
+  });
   let origin = "";
   const keyRoutes = createApiKeyRoutes({
     keys: apiKeys,

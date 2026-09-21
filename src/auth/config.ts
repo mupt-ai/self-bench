@@ -11,6 +11,7 @@ const environmentSchema = z.object({
   SELFBENCH_DATABASE_URL: z.preprocess(emptyStringAsUndefined, z.string().min(1).optional()),
   GITHUB_URL: z.string().url().default("https://github.com"),
   GITHUB_API_URL: z.string().url().default("https://api.github.com"),
+  SELFBENCH_ALLOWED_GITHUB_ORGS: z.preprocess(emptyStringAsUndefined, z.string().optional()),
 });
 
 export interface AuthConfig {
@@ -23,6 +24,8 @@ export interface AuthConfig {
   readonly databaseUrl: string;
   readonly githubUrl: string;
   readonly githubApiUrl: string;
+  /** Lowercased GitHub org logins allowed to sign in; empty keeps sign-in open to everyone. */
+  readonly allowedOrgs: string[];
 }
 
 /**
@@ -51,6 +54,10 @@ export function loadAuthConfig(
       value.SELFBENCH_DATABASE_URL ?? fail("SELFBENCH_DATABASE_URL is required for GitHub sign-in"),
     githubUrl: value.GITHUB_URL.replace(/\/+$/, ""),
     githubApiUrl: value.GITHUB_API_URL.replace(/\/+$/, ""),
+    allowedOrgs: (value.SELFBENCH_ALLOWED_GITHUB_ORGS ?? "")
+      .split(",")
+      .map((login) => login.trim().toLowerCase())
+      .filter(Boolean),
   };
 }
 

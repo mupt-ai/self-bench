@@ -8,6 +8,7 @@ const ERRORS: Record<string, string> = {
   state: "That sign-in attempt expired. Try again.",
   denied: "GitHub sign-in was cancelled.",
   github: "GitHub sign-in failed. Try again.",
+  organization: "This deployment is limited to members of approved GitHub organizations.",
 };
 
 export function LoginPage() {

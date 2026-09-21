@@ -78,10 +78,11 @@ def validate(environment, project, release_path):
     optional_worker = set()
     # Stripe metered billing is all-or-nothing and API-only; fail the release before
     # stopping services rather than letting the API crash at startup.
-    optional_api = {"SELFBENCH_STRIPE_SECRET_KEY", "SELFBENCH_STRIPE_PRICE_ID",
-                    "SELFBENCH_STRIPE_WEBHOOK_SECRET"}
-    if len(optional_api & set(api)) not in (0, 3):
+    stripe_api = {"SELFBENCH_STRIPE_SECRET_KEY", "SELFBENCH_STRIPE_PRICE_ID",
+                  "SELFBENCH_STRIPE_WEBHOOK_SECRET"}
+    if len(stripe_api & set(api)) not in (0, 3):
         raise ValueError("Stripe billing requires the secret key, price id, and webhook secret together.")
+    optional_api = stripe_api | {"SELFBENCH_ALLOWED_GITHUB_ORGS"}
     for data, keys, extras in ((shared, required_shared, optional_shared),
                                (api, required_api, optional_api),
                                (worker, required_worker, optional_worker)):

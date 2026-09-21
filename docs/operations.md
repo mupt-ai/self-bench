@@ -417,6 +417,8 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 
 The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
 
+Set `SELFBENCH_ALLOWED_GITHUB_ORGS` (comma-separated logins, case-insensitive) to limit sign-in to active members of those organizations. Non-members are refused at the callback and land on `/login?error=organization`; existing sessions re-verify membership against GitHub with a five-minute cache, and a removed member is denied with `organization_required` instead of waiting for the 30-day cookie to expire. Without the setting, sign-in stays open to everyone.
+
 Compose: put the three sign-in variables in `.env` and set `SELFBENCH_PUBLIC_URL` to the browser-facing origin. Register that origin with `/auth/github/callback` as the GitHub OAuth callback.
 
 Hot-reload loop: `bun run dev:site` starts a Postgres container (`selfbench-site-postgres`, 127.0.0.1:5433), the API on 8087 with `SELFBENCH_TEMPORAL_CONNECT=lazy`, and Vite on 5173 proxying `/v1`, `/api`, and `/auth`. Register a GitHub OAuth app with callback `http://127.0.0.1/auth/github/callback` (GitHub lets loopback redirects use any port, so browse to `http://127.0.0.1:5173`) and put `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` in `.env.site`.
@@ -472,6 +474,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `GITHUB_OAUTH_CLIENT_ID` | unset | API; enables site sign-in |
 | `GITHUB_OAUTH_CLIENT_SECRET` | — | API; required with the client id |
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
+| `SELFBENCH_ALLOWED_GITHUB_ORGS` | unset | API; comma-separated GitHub org logins whose active members may sign in |
 | `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` | API; public origin, forms the OAuth callback URL. Set to the assigned host port (`docker compose port api 8080`) or a reverse-proxy hostname |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
