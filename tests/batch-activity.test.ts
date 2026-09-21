@@ -10,6 +10,9 @@ import {
 test("batch progress distinguishes running, queued and unavailable activity state", async () => {
   const client = {
     options: { namespace: "default" },
+    connection: {
+      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
+    },
     workflow: {
       getHandle: () => ({
         query: async () => ({
@@ -43,6 +46,9 @@ test("a persisted batch status gains the same activity overlay as a live one", a
   const described: string[] = [];
   const client = {
     options: { namespace: "default" },
+    connection: {
+      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
+    },
     workflowService: {
       describeWorkflowExecution: async ({ execution }: { execution: { workflowId: string } }) => {
         described.push(execution.workflowId);
@@ -119,4 +125,24 @@ test("failure normalization removes artifact references and blank messages", () 
   expect(normalizeFailure("sandbox died; partial log: gs://b/x.log")).toBe("sandbox died");
   expect(normalizeFailure("   ")).toBeUndefined();
   expect(normalizeFailure(undefined)).toBeUndefined();
+});
+
+test("a Temporal deadline returns unknown activity instead of hanging the poll", async () => {
+  const client = {
+    options: { namespace: "default" },
+    connection: {
+      withDeadline: async () => {
+        throw new Error("DEADLINE_EXCEEDED");
+      },
+    },
+    workflowService: {
+      describeWorkflowExecution: async () => await new Promise(() => undefined),
+    },
+  } as unknown as Client;
+  const status = await overlayCandidateActivity(client, {
+    runId: "batch-one",
+    phase: "authoring",
+    tasks: [{ candidateId: "one", taskId: "one", difficulty: "easy", status: "authoring" }],
+  });
+  expect(status.activity).toEqual({ one: { state: "unknown" } });
 });

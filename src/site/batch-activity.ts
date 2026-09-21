@@ -37,21 +37,33 @@ export async function overlayCandidateActivity(
     ["authoring", "verifying", "reviewing"].includes(task.status),
   );
   const activity: NonNullable<BatchStatus["activity"]> = {};
-  // Generation admits at most 100 candidate workflows concurrently; limit each refresh's reads.
-  for (let index = 0; index < Math.min(tasks.length, 100); index += 8) {
-    await Promise.all(
-      tasks.slice(index, Math.min(index + 8, 100)).map(async (task) => {
-        try {
-          const description = await client.workflowService.describeWorkflowExecution({
-            namespace: client.options.namespace,
-            execution: { workflowId: `${status.runId}/candidate/${task.candidateId}` },
-          });
-          activity[task.candidateId] = activityDetail(description.pendingActivities ?? []);
-        } catch {
-          activity[task.candidateId] = { state: "unknown" };
-        }
-      }),
-    );
+  const markUnknown = () => {
+    for (const task of tasks.slice(0, 100)) {
+      if (!activity[task.candidateId]) activity[task.candidateId] = { state: "unknown" };
+    }
+  };
+  try {
+    // Same 10s budget as other batch Temporal calls so one hung describe cannot stall the poll.
+    await client.connection.withDeadline(Date.now() + 10_000, async () => {
+      // Generation admits at most 100 candidate workflows concurrently; limit each refresh's reads.
+      for (let index = 0; index < Math.min(tasks.length, 100); index += 8) {
+        await Promise.all(
+          tasks.slice(index, Math.min(index + 8, 100)).map(async (task) => {
+            try {
+              const description = await client.workflowService.describeWorkflowExecution({
+                namespace: client.options.namespace,
+                execution: { workflowId: `${status.runId}/candidate/${task.candidateId}` },
+              });
+              activity[task.candidateId] = activityDetail(description.pendingActivities ?? []);
+            } catch {
+              activity[task.candidateId] = { state: "unknown" };
+            }
+          }),
+        );
+      }
+    });
+  } catch {
+    markUnknown();
   }
   return { ...status, activity };
 }
