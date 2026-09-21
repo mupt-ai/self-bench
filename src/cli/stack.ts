@@ -148,6 +148,8 @@ export async function up(args: string[]): Promise<void> {
  */
 async function registerTunnelRoute(stack: ReturnType<typeof stackEnvironment>): Promise<void> {
   if (stack.SELFBENCH_SITE_HOSTNAME === "127.0.0.1") return;
+  // A missing tunnel binary (CI, bare hosts) is the common not-registered case, and spawn
+  // errors reject where a non-zero exit would only trip allowFailure.
   const route = await runCommand(
     "tunnel",
     [
@@ -160,7 +162,7 @@ async function registerTunnelRoute(stack: ReturnType<typeof stackEnvironment>): 
       process.cwd(),
     ],
     { allowFailure: true },
-  );
+  ).catch(() => ({ exitCode: 1, stdout: "", stderr: "" }));
   const registered = route.exitCode === 0 && route.stdout.trim().length > 0;
   if (registered) {
     console.log(`Dev proxy route: ${route.stdout.trim().split("\n")[0]}`);
@@ -179,7 +181,9 @@ export async function down(): Promise<void> {
   });
   // The stack was started by this CLI, so its dev-proxy route (if any) is ours to drop.
   if (stack.SELFBENCH_SITE_HOSTNAME !== "127.0.0.1")
-    await runCommand("tunnel", ["down", stack.COMPOSE_PROJECT_NAME], { allowFailure: true });
+    await runCommand("tunnel", ["down", stack.COMPOSE_PROJECT_NAME], { allowFailure: true }).catch(
+      () => undefined,
+    );
 }
 
 /** What Compose will see: the checkout's `.env` under the process environment. */
