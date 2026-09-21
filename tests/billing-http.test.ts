@@ -13,7 +13,7 @@ const stripe = {
   secretKey: "sk_test",
   webhookSecret: "whsec_test",
   priceId: "price_metered",
-  apiVersion: "2025-03-31.basil" as const,
+  apiVersion: "2025-09-30.clover" as const,
 };
 
 function sign(body: Buffer) {

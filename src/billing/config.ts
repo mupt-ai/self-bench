@@ -9,7 +9,7 @@ const BILLING_POLICY_VERSION = "v1";
 export const DEFAULT_BILLING_UNIT_SCALE = 10_000_000;
 const DEFAULT_METER_EVENT_NAME = "selfbench_managed_usage";
 /** Stripe API version that includes Billing Meter Events v2. */
-const STRIPE_API_VERSION = "2025-03-31.basil";
+const STRIPE_API_VERSION = "2025-09-30.clover";
 
 const policySchema = z.object({
   SELFBENCH_BILLING_UNIT_SCALE: z.preprocess(

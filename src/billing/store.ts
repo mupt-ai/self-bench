@@ -92,11 +92,17 @@ export function createBillingStore(db: Database, configured: boolean) {
         return claimed;
       });
     },
-    async delivered(id: number) {
+    async delivered(id: number, attempts: number) {
       await db
         .update(billingOutbox)
         .set({ status: "sent", sentAt: new Date(), lastError: null })
-        .where(eq(billingOutbox.id, id));
+        .where(
+          and(
+            eq(billingOutbox.id, id),
+            eq(billingOutbox.status, "delivering"),
+            eq(billingOutbox.attempts, attempts),
+          ),
+        );
     },
     async failed(id: number, attempts: number, error: unknown) {
       const delaySeconds = Math.min(3600, 2 ** Math.min(attempts, 10));
@@ -107,7 +113,13 @@ export function createBillingStore(db: Database, configured: boolean) {
           lastError: String(error instanceof Error ? error.message : error).slice(0, 1000),
           nextAttemptAt: new Date(Date.now() + delaySeconds * 1000),
         })
-        .where(eq(billingOutbox.id, id));
+        .where(
+          and(
+            eq(billingOutbox.id, id),
+            eq(billingOutbox.status, "delivering"),
+            eq(billingOutbox.attempts, attempts),
+          ),
+        );
     },
   };
 }

@@ -34,7 +34,7 @@ export function startBillingDispatcher(
           },
           { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) },
         );
-        await store.delivered(event.id);
+        await store.delivered(event.id, event.attempts);
       } catch (error) {
         await store.failed(event.id, event.attempts, error);
       }

@@ -99,7 +99,7 @@ test("user-credential usage is never billed and Stripe delivery is independent o
         secretKey: "sk_test",
         webhookSecret: "whsec",
         priceId: "price_1",
-        apiVersion: "2025-03-31.basil",
+        apiVersion: "2025-09-30.clover",
       },
       {
         intervalMs: 60_000,
@@ -139,7 +139,7 @@ test("failed meter delivery is retried without duplicating the Stripe identifier
         secretKey: "sk_test",
         webhookSecret: "whsec",
         priceId: "price_1",
-        apiVersion: "2025-03-31.basil",
+        apiVersion: "2025-09-30.clover",
       },
       {
         intervalMs: 60_000,
@@ -165,7 +165,7 @@ test("failed meter delivery is retried without duplicating the Stripe identifier
         secretKey: "sk_test",
         webhookSecret: "whsec",
         priceId: "price_1",
-        apiVersion: "2025-03-31.basil",
+        apiVersion: "2025-09-30.clover",
       },
       {
         intervalMs: 60_000,
