@@ -21,8 +21,8 @@ Usage:
 Start the local stack with docker compose from a checkout: each directory is its own Compose
 project, so worktrees run side by side. Host ports are ephemeral (docker compose port api 8080).
 Generation and Harbor backends are environment variables (SELFBENCH_EXECUTION_BACKEND,
-SELFBENCH_HARBOR_ENVIRONMENT); Daytona is Harbor-only. Modal generation or Harbor mounts
-~/.modal.toml unless SELFBENCH_MODAL_CONFIG_PATH overrides it. Run self-bench setup vercel once to create or select a
+SELFBENCH_HARBOR_ENVIRONMENT); Daytona is Harbor-only. Modal generation or Harbor needs
+SELFBENCH_MODAL_CONFIG_PATH set to an absolute .modal.toml (Compose mounts /dev/null otherwise). Run self-bench setup vercel once to create or select a
 project, publish the pinned runtime image, verify access, and save an owner-only local profile. E2B setup
 is noninteractive: with E2B_API_KEY set, it builds Dockerfile.sandbox under the requested versioned name;
 set SELFBENCH_E2B_TEMPLATE to the printed template before starting the stack.

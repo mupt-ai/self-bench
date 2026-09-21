@@ -98,7 +98,8 @@ services:
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
       SELFBENCH_SESSION_SECRET: ${SELFBENCH_SESSION_SECRET:-}
-      # The origin browsers use; it forms the OAuth callback URL, so it must match the OAuth app.
+      # Browser origin / OAuth callback. Set this to the tunnel or reverse-proxy URL
+      # before `up`; do not use the ephemeral host port from `docker compose port`.
       SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
     ports:
       - "127.0.0.1::8080"

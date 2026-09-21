@@ -15,7 +15,7 @@ This document covers SelfBench configuration, persistence, authentication, the H
 
 Add `--profile sandbox` when using Docker generation so Compose also builds `selfbench-sandbox:local`. The worker mounts the host Docker socket for local sandboxes. The API never receives the Docker socket or model credentials; the worker never receives the GitHub OAuth secret or session secret. The local Postgres users and passwords are development defaults (`temporal`/`temporal` and `selfbench`/`selfbench`).
 
-Compose names the project after the checkout directory, so several worktrees run side by side with their own containers, volumes, and image tags. Host ports are ephemeral (`127.0.0.1::<container port>`); resolve them with `docker compose port api 8080` and `docker compose port temporal 7233`. Set `SELFBENCH_PUBLIC_URL` to the origin browsers open (the assigned host port, or a reverse-proxy hostname) so GitHub OAuth callbacks match.
+Compose names the project after the checkout directory, so several worktrees run side by side with their own containers, volumes, and image tags. Host ports are ephemeral (`127.0.0.1::<container port>`); resolve them with `docker compose port api 8080` and `docker compose port temporal 7233`. Set `SELFBENCH_PUBLIC_URL` to the origin browsers open **before** `up` — a reverse-proxy or tunnel hostname, not the ephemeral compose port. Recreating the API to pick up a `docker compose port` value would assign a new host port, so that value cannot stay correct. GitHub loopback OAuth can list `http://127.0.0.1/auth/github/callback` (no port).
 
 Older local stacks used the fixed project name `selfbench` and volumes `selfbench_temporal-postgres`, `selfbench_site-postgres`, and `selfbench_artifacts`. A checkout directory named `self-bench` now becomes project `self-bench` and would otherwise start empty. Keep the existing volumes with `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
 
@@ -77,13 +77,13 @@ Authenticate Modal and mount its profile into the worker:
 ```bash
 modal token new
 
-SELFBENCH_EXECUTION_BACKEND=modal docker compose up -d --build
+SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml" docker compose up -d --build
 
 # If your profile is not at ~/.modal.toml:
 SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/.modal.toml docker compose up -d --build
 ```
 
-When Modal is used for generation or Harbor, SelfBench mounts `~/.modal.toml` by default; `SELFBENCH_MODAL_CONFIG_PATH` overrides that path. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
+Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
 Modal defaults to 20 concurrent worker activities. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 

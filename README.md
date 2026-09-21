@@ -59,7 +59,7 @@ docker compose --profile sandbox up -d --build
 export SELFBENCH_API_URL="http://$(docker compose port api 8080)"
 ```
 
-This starts Postgres, Temporal, the self-bench API, and a worker, and builds the local sandbox image. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. Compose names the project after the checkout directory and publishes ephemeral host ports, so several worktrees run side by side (see [Operations](docs/operations.md#local-stack)).
+This starts Postgres, Temporal, the self-bench API, and a worker, and builds the local sandbox image. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. Compose names the project after the checkout directory and publishes ephemeral host ports, so several worktrees run side by side (see [Operations](docs/operations.md#local-stack)). Existing volumes from the old `selfbench` project name keep working with `COMPOSE_PROJECT_NAME=selfbench docker compose --profile sandbox up -d --build`. Set `SELFBENCH_PUBLIC_URL` to the tunnel origin before `up` when serving the signed-in site.
 
 ### 2. Build a benchmark
 
