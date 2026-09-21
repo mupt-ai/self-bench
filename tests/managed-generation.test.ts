@@ -8,7 +8,7 @@ import { generationEnvironment } from "../src/site/generation-credentials.js";
 import { generationModelRoute } from "../src/site/generation-models.js";
 import type { GenerationReference } from "../src/site/generation-settings.js";
 import { generationSettingsSchema } from "../src/site/generation-settings.js";
-import { managedModelKey, managedOffer } from "../src/site/managed-generation.js";
+import { managedModelKey, managedOffer, submissionOffer } from "../src/site/managed-generation.js";
 import { loadPiModelAuth } from "../src/subscription-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 
@@ -163,4 +163,18 @@ test("managed usage metering records tokens and sandbox seconds with costs", asy
   expect(
     managedModelCostUsd("unknown-model", { input: 1, output: 0, cacheRead: 0, cacheWrite: 0 }),
   ).toBeUndefined();
+});
+
+test("the API validates submissions without the worker-only OpenRouter key", () => {
+  // Hosted keeps the managed OpenRouter key on the worker; the shared E2B key is visible.
+  expect(submissionOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b" })).toEqual({
+    models: true,
+    sandbox: true,
+  });
+  expect(submissionOffer({})).toEqual({ models: true, sandbox: false });
+  // The advertised offer still follows key presence so the UI can hide unavailable options.
+  expect(managedOffer({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toEqual({
+    models: true,
+    sandbox: false,
+  });
 });

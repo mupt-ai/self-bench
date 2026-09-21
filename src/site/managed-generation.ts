@@ -20,6 +20,15 @@ export function managedOffer(env: NodeJS.ProcessEnv = process.env): ManagedOffer
   };
 }
 
+/**
+ * What the submission API validates against. The OpenRouter key is worker-only in hosted
+ * deployments, so the API cannot see it; the worker re-validates managed models against
+ * its own environment at runtime, and the shared E2B key is visible here.
+ */
+export function submissionOffer(env: NodeJS.ProcessEnv = process.env): ManagedOffer {
+  return { models: true, sandbox: managedOffer(env).sandbox };
+}
+
 export function managedModelKey(env: NodeJS.ProcessEnv): string {
   const key = env[MANAGED_MODEL_KEY]?.trim();
   if (!key)

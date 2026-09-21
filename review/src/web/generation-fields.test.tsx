@@ -78,11 +78,36 @@ test("managed model access and sandbox are offered only when the deployment flag
     </MemoryRouter>,
   );
   expect(html).toContain('value="managed"');
-  expect(html).toContain("Managed (OpenRouter)");
+  expect(html).toContain(">Managed</option>");
   expect(html).toContain("Generation");
   expect(html).toContain("GPT-5.6 Sol / GPT-6 Astra · High Reasoning · Managed");
   expect(html).not.toContain("Model Credential");
   expect(html).not.toContain("both authors and verifies");
+});
+
+test("managed capabilities are gated independently by the deployment's keys", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <GenerationFields
+        value={{ ...base, sandbox: "managed", sandboxCredentialId: undefined }}
+        options={{
+          available: true,
+          sandboxes: [...HOSTED_EXECUTION_BACKENDS],
+          models: [base.authorModel, base.verifierModel],
+          credentials,
+          managed: { models: false, sandbox: true },
+        }}
+        disabled={false}
+        onChange={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  // Only the sandbox's managed option appears; the model-access select offers no managed
+  // entry, and the credential select appears because the offer cannot serve the models.
+  expect(html).not.toContain('<option value="managed">Managed</option>');
+  expect(html).toContain('value="credential" selected');
+  expect(html).toContain("Model Credential");
+  expect(html).toContain('<option value="managed" selected="">Managed</option>');
 });
 
 test("collapsed generation summary is a short fact line", () => {
@@ -140,7 +165,7 @@ test("Modal generation requires a credential and has no separate Harbor settings
 test("generation popup keeps helper descriptions in tooltips", () => {
   const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });
   // Tooltips are Radix (shadcn) triggers; the hint is the trigger's accessible label.
-  expect(html).toContain('aria-label="Managed means SelfBench');
+  expect(html).toContain('aria-label="Managed runs on SelfBench');
   expect(html).toContain('aria-label="Managed sandboxes run on SelfBench');
   expect(html).toContain(
     'aria-label="Each PR starts a separate workflow. Managed model and sandbox usage is tracked per run',

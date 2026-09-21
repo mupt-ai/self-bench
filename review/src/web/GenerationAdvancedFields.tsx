@@ -28,7 +28,8 @@ export function AdvancedFields({
   value: GenerationSettings;
   onChange: (value: GenerationSettings) => void;
   options: GenerationOptions | null;
-  managed: boolean;
+  /** Managed models and managed sandboxes are gated by independent platform keys. */
+  managed: { models: boolean; sandbox: boolean };
 }) {
   const hosted = value.sandbox === "e2b" || value.sandbox === "vercel";
   const compatible = (credential: CredentialInfo) =>
@@ -80,7 +81,7 @@ export function AdvancedFields({
       <label htmlFor="generation-model-access" className={`${fieldStyles} content-start`}>
         <span className="flex items-center gap-1.5">
           Model Access
-          <InfoTooltip label="Managed means SelfBench's own OpenRouter account serves every model — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store." />
+          <InfoTooltip label="Managed runs on SelfBench's account — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store." />
         </span>
         <Select
           id="generation-model-access"
@@ -94,7 +95,7 @@ export function AdvancedFields({
             })
           }
         >
-          {managed && <option value="managed">Managed (OpenRouter)</option>}
+          {managed.models && <option value="managed">Managed</option>}
           <option value="credential">My Credentials</option>
         </Select>
       </label>
@@ -124,7 +125,7 @@ export function AdvancedFields({
       <label htmlFor="generation-sandbox" className={`${fieldStyles} content-start`}>
         <span className="flex items-center gap-1.5">
           Sandbox
-          <InfoTooltip label="Managed sandboxes run on SelfBench's own E2B account — nothing to configure, usage tracked per run. The other options run on a credential you store." />
+          <InfoTooltip label="Managed sandboxes run on SelfBench's account — nothing to configure, usage tracked per run. The other options run on a credential you store." />
         </span>
         <Select
           id="generation-sandbox"
@@ -142,7 +143,7 @@ export function AdvancedFields({
             });
           }}
         >
-          {managed && <option value="managed">{generationSandboxLabels.managed}</option>}
+          {managed.sandbox && <option value="managed">{generationSandboxLabels.managed}</option>}
           {options?.sandboxes
             .filter((sandbox) => sandbox !== "managed")
             .map((sandbox) => (

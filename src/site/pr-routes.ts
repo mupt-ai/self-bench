@@ -12,7 +12,7 @@ import { HOSTED_EXECUTION_BACKENDS } from "../providers.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
 import { generationModels } from "./generation-models.js";
 import { generationSettingsSchema } from "./generation-settings.js";
-import { managedOffer } from "./managed-generation.js";
+import { managedOffer, submissionOffer } from "./managed-generation.js";
 import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
 import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
 import type { RepoStore } from "./repo-store.js";
@@ -114,7 +114,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             orgRecords(options.records, tenant.id),
             tenant.id,
             generation.settings,
-            managedOffer(),
+            submissionOffer(),
           );
         } catch (error) {
           sendJson(response, 400, {

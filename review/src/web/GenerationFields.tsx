@@ -13,12 +13,8 @@ export interface GenerationOptions {
   sandboxes: string[];
   credentials: CredentialInfo[];
   available: boolean;
-  /** Whether this deployment offers managed model access and managed sandboxes. */
+  /** Which managed capabilities this deployment offers; they are independent keys. */
   managed?: { models: boolean; sandbox: boolean };
-}
-
-function managedAvailable(options: GenerationOptions): boolean {
-  return options.managed?.models === true && options.managed?.sandbox === true;
 }
 
 /**
@@ -37,7 +33,11 @@ export function GenerationFields({
   options: GenerationOptions | null;
   disabled: boolean;
 }) {
-  const managed = options ? managedAvailable(options) : true;
+  // Each managed option is gated by its own flag; while options load, both appear offered
+  // so the summary stays stable until the deployment's keys are known.
+  const managed = options
+    ? (options.managed ?? { models: false, sandbox: false })
+    : { models: true, sandbox: true };
   const problem = options ? generationSelectionProblem(value, options) : undefined;
   const customized = value !== defaultGenerationSettings;
   const fields = <AdvancedFields {...{ value, onChange, options, managed }} />;

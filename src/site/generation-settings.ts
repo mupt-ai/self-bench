@@ -14,7 +14,7 @@ import { generationModels } from "./generation-models.js";
 const generationSandboxes = ["managed", ...HOSTED_EXECUTION_BACKENDS] as const;
 export type GenerationSandbox = (typeof generationSandboxes)[number];
 export const generationSandboxLabels: Record<GenerationSandbox, string> = {
-  managed: "Managed (E2B)",
+  managed: "Managed",
   modal: "Modal",
   vercel: "Vercel",
   e2b: "E2B",

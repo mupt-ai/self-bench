@@ -28,7 +28,8 @@ export type UsageRow = StageUsage & { readonly runId: string; readonly orgId: nu
 
 export interface RunUsageSummary {
   readonly modelCostUsd: number;
-  readonly sandboxCostUsd: number;
+  /** Undefined when no sandbox second had a cost: unmetered credential sandboxes record only time. */
+  readonly sandboxCostUsd: number | undefined;
   readonly managedCostUsd: number;
   readonly tokens: number;
   readonly sandboxSeconds: number;

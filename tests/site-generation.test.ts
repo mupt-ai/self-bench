@@ -4,6 +4,7 @@ import { tasks as taskRows } from "../src/db/schema.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
+import { managedOffer } from "../src/site/managed-generation.js";
 import { createTaskStore } from "../src/site/task-store.js";
 import { loadPiModelAuth } from "../src/subscription-auth.js";
 import { withGenerationRuntime } from "../src/temporal/activities/generation-runtime.js";
@@ -64,7 +65,8 @@ describe("generation submissions", () => {
     };
     const options = await (await site.request(`${REPO}/generation-options`, { headers })).json();
     expect(options.available).toBe(true);
-    expect(options.managed).toEqual({ models: false, sandbox: false });
+    // Bun tests auto-load the checkout .env, so the offer may legitimately show keys.
+    expect(options.managed).toEqual(managedOffer());
     expect(options.credentials.map((item: { id: string }) => item.id)).toEqual([
       model.id,
       sandbox.id,
