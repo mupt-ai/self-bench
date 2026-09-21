@@ -8,6 +8,7 @@ import { runCommand } from "../process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { createActivities } from "./activities.js";
+import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 import { harborTaskQueue } from "./task-queues.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
@@ -42,6 +43,7 @@ const worker = await Worker.create({
   workflowsPath,
   activities: { ...sandboxActivities, ...evaluationActivities, ...harborActivities },
   maxConcurrentActivityTaskExecutions: config.activityConcurrency,
+  interceptors: { activity: [activityEventInterceptor()] },
 });
 const harborWorker = await Worker.create({
   connection,
