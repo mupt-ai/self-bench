@@ -185,31 +185,6 @@ function RepoTasksPage() {
             </EmptyState>
           </div>
         )}
-        {tasks !== null && tasks.length === 0 && (
-          <EmptyState title="No Tasks Yet" className="border-0 bg-transparent">
-            Add a PR to generate your first task.
-          </EmptyState>
-        )}
-        {tasks !== null && tasks.length > 0 && visible.length === 0 && (
-          <EmptyState
-            title="No Matching Tasks"
-            className="border-0 bg-transparent"
-            action={
-              <Button
-                variant="ghost"
-                disabled={deleting}
-                onClick={() => {
-                  setFilter("all");
-                  setQuery("");
-                }}
-              >
-                Clear Filters
-              </Button>
-            }
-          >
-            Try a different search or task state.
-          </EmptyState>
-        )}
         <ReviewTaskList
           actionsTarget={actionsTarget}
           org={org.login}
@@ -224,7 +199,7 @@ function RepoTasksPage() {
             setTasks((current) => current?.filter((task) => !deleted.has(taskKey(task))) ?? null)
           }
         />
-        {tasks !== null && tasks.length > 0 && (
+        {tasks !== null && (
           <p
             className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
             role="status"

@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { SESSION_EXPIRED } from "../session-expired";
 import { BatchesPage } from "./batches/BatchesPage";
 import { BatchPage } from "./batches/BatchPage";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { ComparisonPage } from "./evaluation/ComparisonPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
@@ -58,32 +59,34 @@ export function WebApp() {
           <SiteSkeleton />
         ) : (
           <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route element={<RequireUser />}>
-                <Route index element={<ReposPage />} />
-                <Route path="settings/credentials" element={<CredentialsPage />} />
-                <Route path="settings/api-keys" element={<ApiKeysPage />} />
-                <Route path="settings/billing" element={<BillingPage />} />
-                <Route path="repos/:owner/:name" element={<RepoLayout />}>
-                  <Route index element={<RepoPage />} />
-                  <Route path="batches" element={<BatchesPage />} />
-                  <Route path="batches/:batchId" element={<BatchPage />} />
-                  <Route path="add-prs" element={<AddPrPage />} />
-                  <Route path="evaluations" element={<EvaluationPage />} />
-                  <Route path="results" element={<EvaluationPage />} />
-                  <Route path="dataset" element={<Navigate to=".." replace />} />
-                  <Route path="run" element={<RunPage />} />
-                  <Route
-                    path="settings/credentials"
-                    element={<Navigate to="/settings/credentials" replace />}
-                  />
-                  <Route path="comparisons/:comparisonId" element={<ComparisonPage />} />
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route element={<RequireUser />}>
+                  <Route index element={<ReposPage />} />
+                  <Route path="settings/credentials" element={<CredentialsPage />} />
+                  <Route path="settings/api-keys" element={<ApiKeysPage />} />
+                  <Route path="settings/billing" element={<BillingPage />} />
+                  <Route path="repos/:owner/:name" element={<RepoLayout />}>
+                    <Route index element={<RepoPage />} />
+                    <Route path="batches" element={<BatchesPage />} />
+                    <Route path="batches/:batchId" element={<BatchPage />} />
+                    <Route path="add-prs" element={<AddPrPage />} />
+                    <Route path="evaluations" element={<EvaluationPage />} />
+                    <Route path="results" element={<EvaluationPage />} />
+                    <Route path="dataset" element={<Navigate to=".." replace />} />
+                    <Route path="run" element={<RunPage />} />
+                    <Route
+                      path="settings/credentials"
+                      element={<Navigate to="/settings/credentials" replace />}
+                    />
+                    <Route path="comparisons/:comparisonId" element={<ComparisonPage />} />
+                  </Route>
+                  <Route path="repos/:owner/:name/tasks/:runId/:taskId" element={<TaskPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
-                <Route path="repos/:owner/:name/tasks/:runId/:taskId" element={<TaskPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
+              </Routes>
+            </ErrorBoundary>
           </BrowserRouter>
         )}
       </div>

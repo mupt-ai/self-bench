@@ -9,9 +9,14 @@ export function useModalDialog(initialFocus: RefObject<HTMLElement | null>) {
     element?.showModal();
     document.body.style.overflow = "hidden";
     initialFocus.current?.focus();
-    return () => {
-      element?.close();
+    const restore = () => {
       document.body.style.overflow = previousOverflow;
+    };
+    element?.addEventListener("close", restore);
+    return () => {
+      element?.removeEventListener("close", restore);
+      element?.close();
+      restore();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
   }, [initialFocus]);

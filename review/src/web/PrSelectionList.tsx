@@ -49,7 +49,8 @@ export function PrSelectionList({
         {visible.map((pr) => (
           <label
             key={pr.number}
-            className={`flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[-2px] has-[:focus-visible]:outline-brand has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-brand/5" : ""}`}
+            className={`relative flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-brand/5" : ""}`}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <input
               className="sr-only"
