@@ -22,9 +22,9 @@ function managedAvailable(options: GenerationOptions): boolean {
 }
 
 /**
- * Generation settings as one collapsible: the summary line describes what will run, and
- * every field hides under Advanced Settings. It opens itself while the current selection
- * cannot be submitted yet (for example, when this deployment offers nothing managed).
+ * Generation settings as one collapsible. The closed row names what will run; every field
+ * lives inside. It opens itself while the current selection cannot be submitted yet
+ * (for example, when this deployment offers nothing managed).
  */
 export function GenerationFields({
   value,
@@ -43,23 +43,20 @@ export function GenerationFields({
   const fields = <AdvancedFields {...{ value, onChange, options, managed }} />;
   return (
     <fieldset disabled={disabled} className="min-w-0 border-0 p-0">
-      <details
-        className="group border border-border bg-muted/20"
-        {...(problem !== undefined && !customized ? { open: true } : {})}
-      >
-        <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            Advanced Settings
-            <ChevronDown
-              aria-hidden="true"
-              className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180"
-            />
+      <details className="group" {...(problem !== undefined && !customized ? { open: true } : {})}>
+        <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-foreground">Generation</span>
+            <span className="mt-1 block text-sm leading-6 text-muted-foreground group-open:hidden">
+              {options ? generationSettingsSummary(value) : "Loading generation settings…"}
+            </span>
           </span>
-          <span className="hidden min-w-0 flex-1 truncate text-right text-xs text-muted-foreground group-open:hidden sm:block">
-            {options ? generationSettingsSummary(value) : "Loading generation settings…"}
-          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          />
         </summary>
-        <div className="border-t border-border p-4 sm:p-6">{fields}</div>
+        <div className="mt-4">{fields}</div>
       </details>
     </fieldset>
   );

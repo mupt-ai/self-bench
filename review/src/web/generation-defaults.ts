@@ -89,21 +89,19 @@ export function withDefaultCredentials(
   return next;
 }
 
-/** The one-line summary shown while the advanced panel is collapsed. */
+/** Short facts shown while the generation panel is collapsed. */
 export function generationSettingsSummary(value: GenerationSettings): string {
-  const models =
+  const model =
     value.authorModel === value.verifierModel
-      ? `${generationModelLabel(value.authorModel)} both authors and verifies each task`
-      : `${generationModelLabel(value.authorModel)} authors and ${generationModelLabel(value.verifierModel)} verifies each task`;
-  const access =
-    value.modelAccess === "managed"
-      ? "model calls run on SelfBench's OpenRouter account"
-      : "model calls run on your stored credential";
+      ? generationModelLabel(value.authorModel)
+      : `${generationModelLabel(value.authorModel)} / ${generationModelLabel(value.verifierModel)}`;
+  const reasoning = `${value.reasoning.charAt(0).toUpperCase()}${value.reasoning.slice(1)} Reasoning`;
+  if (value.modelAccess === "managed" && value.sandbox === "managed")
+    return `${model} · ${reasoning} · Managed`;
+  const access = value.modelAccess === "managed" ? "Managed Models" : "My Credentials";
   const sandbox =
-    value.sandbox === "managed"
-      ? "sandboxes run on SelfBench's own E2B account"
-      : `sandboxes run on your stored ${generationSandboxLabels[value.sandbox]} credential`;
-  return `${models} at ${value.reasoning} reasoning. ${access.charAt(0).toUpperCase()}${access.slice(1)} and ${sandbox}. Usage is metered per run.`;
+    value.sandbox === "managed" ? "Managed Sandboxes" : generationSandboxLabels[value.sandbox];
+  return `${model} · ${reasoning} · ${access} · ${sandbox}`;
 }
 
 /** Why the current selection cannot be submitted yet, for the panel's auto-expand and validity. */

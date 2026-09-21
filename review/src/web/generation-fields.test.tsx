@@ -7,6 +7,7 @@ import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";
+import { generationSettingsSummary } from "./generation-defaults";
 
 const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel", "daytona"].map(
   (kind) => ({
@@ -78,8 +79,31 @@ test("managed model access and sandbox are offered only when the deployment flag
   );
   expect(html).toContain('value="managed"');
   expect(html).toContain("Managed (OpenRouter)");
-  expect(html).toContain("Advanced Settings");
+  expect(html).toContain("Generation");
+  expect(html).toContain("GPT-5.6 Sol / GPT-6 Astra · High Reasoning · Managed");
   expect(html).not.toContain("Model Credential");
+  expect(html).not.toContain("both authors and verifies");
+});
+
+test("collapsed generation summary is a short fact line", () => {
+  expect(
+    generationSettingsSummary({
+      authorModel: "gpt-5.6-sol",
+      verifierModel: "gpt-5.6-sol",
+      reasoning: "high",
+      modelAccess: "managed",
+      sandbox: "managed",
+    }),
+  ).toBe("GPT-5.6 Sol · High Reasoning · Managed");
+  expect(
+    generationSettingsSummary({
+      authorModel: "gpt-5.6-sol",
+      verifierModel: "gpt-6-astra",
+      reasoning: "medium",
+      modelAccess: "credential",
+      sandbox: "modal",
+    }),
+  ).toBe("GPT-5.6 Sol / GPT-6 Astra · Medium Reasoning · My Credentials · Modal");
 });
 
 test.each(["e2b", "vercel"] as const)(
