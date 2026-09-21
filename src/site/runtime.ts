@@ -46,8 +46,7 @@ export async function openSite(
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
-  /** The origin browsers send; a separate frontend URL wins when the site is served from one. */
-  const publicUrl = process.env.SELFBENCH_SITE_FRONTEND_URL ?? auth.publicUrl;
+  const publicUrl = auth.publicUrl;
   const repos = createRepoStore(database.db);
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
