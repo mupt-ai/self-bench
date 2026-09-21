@@ -73,10 +73,6 @@ export function BatchPage() {
       )}
       {run && (
         <>
-          <dl className="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
-            <dt className="mb-1">Batch ID</dt>
-            <dd className="break-all select-all">{run.runId}</dd>
-          </dl>
           {status?.usage && (status.usage.tokens > 0 || status.usage.sandboxSeconds > 0) && (
             <BatchUsage usage={status.usage} />
           )}
