@@ -30,3 +30,30 @@ export function partitionPullRequests(
     shards.push(groups.slice(index, index + prsPerShard).flat());
   return shards;
 }
+
+/** Newest PR groups, packed into at most `needed` shards of `prsPerShard`. */
+export function takeNewestShards(
+  chunks: readonly ProvenanceMessage[][],
+  needed: number,
+  prsPerShard = 25,
+): ProvenanceMessage[][] {
+  if (!Number.isInteger(needed) || needed < 1)
+    throw new Error("Shard count must be a positive integer");
+  const groups: ProvenanceMessage[][] = [];
+  let currentPr: number | undefined;
+  for (const chunk of chunks) {
+    for (const message of chunk) {
+      const pr = message.sourcePr;
+      if (pr === undefined) throw new Error("Discovery shards require PR-associated provenance");
+      if (pr !== currentPr) {
+        currentPr = pr;
+        groups.push([message]);
+      } else groups[groups.length - 1]?.push(message);
+    }
+  }
+  const newest = groups.slice(Math.max(0, groups.length - needed * prsPerShard));
+  const selected: ProvenanceMessage[][] = [];
+  for (let index = 0; index < newest.length; index += prsPerShard)
+    selected.push(newest.slice(index, index + prsPerShard).flat());
+  return selected;
+}

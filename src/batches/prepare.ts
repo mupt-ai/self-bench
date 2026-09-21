@@ -4,7 +4,7 @@ import { combineRunProvenance } from "../provenance.js";
 import { collectExcludedSourcePrs } from "../temporal/activities/excluded-source-prs.js";
 import { parseProvenance } from "../temporal/activities/runtime.js";
 import { fetchBatchPullRequests } from "./github.js";
-import { partitionPullRequests } from "./shards.js";
+import { partitionPullRequests, takeNewestShards } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 
 /** All ordinary GitHub I/O finishes here, before any Temporal execution is started. */
@@ -34,8 +34,12 @@ export async function prepareGenerationBatch(options: {
     ),
   );
   if (!chunks.length) throw new Error("No eligible merged PRs found");
+  // One discovery agent can fill a small request from a single 25-PR window. Do not
+  // start a shard per remaining PR group when the batch only asked for a few tasks.
+  const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
+  const selected = takeNewestShards(chunks, needed);
   const shards: GenerationBatch["shards"] = [];
-  for (const [index, chunk] of chunks.entries()) {
+  for (const [index, chunk] of selected.entries()) {
     const provenance = await artifacts.put(
       `runs/${run.runId}/input/shard-${index}.jsonl`,
       Buffer.from(`${chunk.map((message) => JSON.stringify(message)).join("\n")}\n`),
@@ -48,11 +52,11 @@ export async function prepareGenerationBatch(options: {
         partitioned: true,
         wave: 0,
         shardIndex: index,
-        shardCount: chunks.length,
+        shardCount: selected.length,
         targetCounts: Object.fromEntries(
           Object.entries(run.candidateCounts).map(([tier, count]) => [
             tier,
-            count === 0 ? 0 : Math.max(1, Math.ceil(count / chunks.length)),
+            count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
           ]),
         ) as RunRequest["candidateCounts"],
         excludedSourcePrs,

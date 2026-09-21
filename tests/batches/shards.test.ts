@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { partitionPullRequests } from "../../src/batches/shards.js";
+import { partitionPullRequests, takeNewestShards } from "../../src/batches/shards.js";
 import type { ProvenanceMessage } from "../../src/provenance/types.js";
 
 function message(pr: number, index = 0): ProvenanceMessage {
@@ -24,4 +24,15 @@ test("deterministic nonempty chunks keep all PR provenance together", () => {
   expect(partitionPullRequests([])).toEqual([]);
   expect(partitionPullRequests([message(1)])).toHaveLength(1);
   expect(() => partitionPullRequests(input, 0)).toThrow();
+});
+
+test("newest shards keep a full window of the highest PR numbers", () => {
+  const chunks = partitionPullRequests(Array.from({ length: 51 }, (_, i) => message(i + 1)));
+  const newest = takeNewestShards(chunks, 1);
+  expect(newest).toHaveLength(1);
+  expect(new Set(newest[0]?.map((item) => item.sourcePr))).toEqual(
+    new Set(Array.from({ length: 25 }, (_, i) => i + 27)),
+  );
+  expect(takeNewestShards(chunks, 3)).toHaveLength(3);
+  expect(() => takeNewestShards(chunks, 0)).toThrow();
 });
