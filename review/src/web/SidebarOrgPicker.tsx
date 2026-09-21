@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import React from "react";
 import { Avatar } from "./Dropdown";
 import { cn } from "./primitives/cn";
@@ -49,15 +50,7 @@ export function SidebarOrgPicker({
               <Avatar login={org.login} url={org.avatarUrl} size={20} />
             </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{org.login}</span>}
-            {!collapsed && (
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 12 12"
-                className="h-3 w-3 shrink-0 text-muted-foreground"
-              >
-                <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.25" />
-              </svg>
-            )}
+            {!collapsed && <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

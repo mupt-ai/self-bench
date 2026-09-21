@@ -53,7 +53,7 @@ export function GenerationFields({
           </span>
           <ChevronDown
             aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
           />
         </summary>
         <div className="mt-4">{fields}</div>

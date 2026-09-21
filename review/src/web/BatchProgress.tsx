@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { type BatchStatus, batchIsTerminal } from "./batch-api";
 import { batchMessage } from "./batches/presentation";
 import { activityCounts } from "./batches/task-activity";
@@ -93,14 +94,23 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
       </div>
 
       {discovery && (
-        <details className="border-t border-border px-4 py-3" open={status.phase === "discovering"}>
-          <summary className="cursor-pointer text-xs">
-            <span className="font-medium">Candidate Discovery · Wave {discovery.wave + 1}</span>
-            <span className="mt-1 block text-muted-foreground sm:ml-3 sm:mt-0 sm:inline">
-              {finishedDiscovery} / {discovery.totalShards} Searches Finished
+        <details
+          className="group border-t border-border px-4 py-3"
+          open={status.phase === "discovering"}
+        >
+          <summary className="flex cursor-pointer list-none items-start gap-2 text-xs [&::-webkit-details-marker]:hidden">
+            <ChevronDown
+              aria-hidden="true"
+              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+            />
+            <span className="min-w-0">
+              <span className="font-medium">Candidate Discovery · Wave {discovery.wave + 1}</span>
+              <span className="mt-1 block text-muted-foreground sm:mt-0 sm:ml-2 sm:inline">
+                {finishedDiscovery} / {discovery.totalShards} Searches Finished
+              </span>
             </span>
           </summary>
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-4 pl-5 text-xs leading-5 text-muted-foreground">
             Searching repository changes for task candidates. This is discovery progress, not
             overall batch completion.
           </p>
@@ -111,7 +121,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
               aria-valuemin={0}
               aria-valuemax={discovery.totalShards}
               aria-valuenow={finishedDiscovery}
-              className="mt-3 flex h-1.5 overflow-hidden bg-muted"
+              className="mt-3 ml-5 flex h-1.5 overflow-hidden bg-muted"
             >
               <span
                 className="bg-success"
@@ -123,7 +133,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
               />
             </div>
           )}
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-3 ml-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
             <span>{discovery.completedShards} Complete</span>
             <span className={discovery.failedShards ? "text-destructive" : undefined}>
               {discovery.failedShards} Failed
