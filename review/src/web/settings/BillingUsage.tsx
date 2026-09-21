@@ -35,10 +35,6 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
           </div>
         </UsagePanel>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Billable amounts use the frozen rate recorded with each managed usage event. Usage on
-        provider credentials is billed directly by those providers and is not included.
-      </p>
     </section>
   );
 }

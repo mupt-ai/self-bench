@@ -21,6 +21,6 @@ test("billing usage makes model and sandbox consumption visible", () => {
   expect(html).toContain("$1.25");
   expect(html).toContain("$0.080");
   expect(html.match(/Billable Amount/g)).toHaveLength(2);
-  expect(html).toContain("frozen rate recorded with each managed usage event");
+  expect(html).not.toContain("frozen rate recorded");
   expect(html).not.toContain("estimates");
 });
