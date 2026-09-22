@@ -10,7 +10,10 @@ fail() {
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "run as root"
 [[ $# -eq 1 && -f "$1" ]] || fail "provide one release request"
-command -v jq >/dev/null || fail "jq is required"
+if ! command -v jq >/dev/null; then
+  apt-get update
+  apt-get install -y jq
+fi
 command -v docker >/dev/null || fail "Docker is required"
 
 request=$1
@@ -73,7 +76,7 @@ printf '%s' "$token" | docker login --username oauth2accesstoken --password-stdi
 
 check=(docker run --rm --env-file "$release/shared.env" --env-file "$release/worker.env"
   -v "$release/deploy-check.mjs:/app/deploy-check.mjs:ro" "$image" node /app/deploy-check.mjs)
-"${compose[@]}" stop api worker 2>/dev/null || true
+"${compose[@]}" stop api worker
 migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
 docker run --rm --env-file "$release/shared.env" "$image" node --input-type=module -e "$migration"
 "${compose[@]}" up -d --wait --wait-timeout 180
