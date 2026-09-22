@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 
@@ -77,10 +78,10 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
     };
     const credentialId = await save("openrouter");
     const sandboxCredentialId = await save("e2b");
-    const draft = {
+    const draft: ComparisonDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
-      sandbox: "e2b" as const,
+      sandbox: "e2b",
       sandboxCredentialId,
       skipCompleted: false,
       models: [
@@ -88,7 +89,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
           catalogId: "openai-sol56",
           credentialId,
           harnesses: ["pi"],
-          thinking: "high" as string,
+          thinking: "high",
         },
       ],
     };

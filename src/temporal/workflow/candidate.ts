@@ -17,10 +17,6 @@ import type { StageContext } from "./stage.js";
 /** Keeps pre-change activity payloads deterministic while new workflows reset verify budgets. */
 export const AUTHORING_ROUND_PROTOCOL_PATCH = "authoring-round-protocol-v2";
 
-export interface CandidateWorkflowOptions {
-  readonly legacyAuthoringRoundProtocol?: boolean;
-}
-
 export function initialProgress(candidate: Candidate): TaskProgress {
   return {
     candidateId: candidate.candidateId,
@@ -37,7 +33,7 @@ export async function executeCandidate(
   input: CandidateWorkflowInput,
   activitySet: SelfBenchActivities,
   report: (progress: TaskProgress) => void,
-  options: CandidateWorkflowOptions = {},
+  options: { readonly legacyAuthoringRoundProtocol?: boolean } = {},
 ): Promise<CandidateWorkflowResult> {
   const { run, candidate } = input;
   const progress = initialProgress(candidate);

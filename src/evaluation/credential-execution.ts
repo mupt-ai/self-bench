@@ -42,10 +42,10 @@ export async function credentialExecution(
     info.kind !== input.credentials.provider
   )
     throw new Error("Credential unavailable");
-  const modelRecord = managedModel
-    ? undefined
-    : await records.read<{ value: string }>(secretPath(input.credentialOwnerId, info.id));
-  const modelSecret = { value: managedModel ? managedModelKey(env) : modelRecord?.value.value };
+  const modelSecret = managedModel
+    ? managedModelKey(env)
+    : (await records.read<{ value: string }>(secretPath(input.credentialOwnerId, info.id)))?.value
+        .value;
   const managedE2B = managedSandbox ? managedSandboxCredentials(env) : undefined;
   const sandboxSecret = managedE2B
     ? { value: managedE2B.apiKey }
@@ -54,7 +54,7 @@ export async function credentialExecution(
           secretPath(input.credentialOwnerId, sandbox.id),
         )
       )?.value;
-  if (!modelSecret.value || !sandboxSecret) throw new Error("Credential unavailable");
+  if (!modelSecret || !sandboxSecret) throw new Error("Credential unavailable");
   const child: NodeJS.ProcessEnv = {
     PATH: env.PATH,
     HOME: home,
@@ -62,16 +62,14 @@ export async function credentialExecution(
     LANG: "C.UTF-8",
     PYTHONUNBUFFERED: "1",
   };
-  const secrets = [modelSecret.value, sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(
-    Boolean,
-  );
+  const secrets = [modelSecret, sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(Boolean);
   if (info.auth === "codex-login") {
     if (input.harnesses.some((harness) => harness !== "codex"))
       throw new Error("Codex login requires Codex harness");
     const authPath = join(home, "codex-auth.json");
-    await writeFile(authPath, modelSecret.value, { mode: 0o600 });
+    await writeFile(authPath, modelSecret, { mode: 0o600 });
     child.CODEX_AUTH_JSON_PATH = authPath;
-    const auth = JSON.parse(modelSecret.value);
+    const auth = JSON.parse(modelSecret);
     secrets.push(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
     );
@@ -82,7 +80,7 @@ export async function credentialExecution(
         : info.kind === "openrouter"
           ? "OPENROUTER_API_KEY"
           : "OPENAI_API_KEY";
-    child[name] = modelSecret.value;
+    child[name] = modelSecret;
   }
   if (info.kind === "custom")
     child.OPENAI_BASE_URL = await validateEndpoint(info.endpoint ?? "", env);
