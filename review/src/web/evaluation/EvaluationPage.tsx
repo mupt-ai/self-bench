@@ -143,7 +143,7 @@ export function EvaluationPage() {
           <section className="mt-8">
             <SectionHeader title="Configuration × Task Results" />
             {runs.some((run) => run.trials.length > 0) && (
-              <div className="mt-3 font-mono [&_button]:text-foreground [&_button:hover]:text-brand">
+              <div className="mt-3 [&_button]:text-left [&_button]:font-semibold [&_button]:text-foreground [&_button:hover]:underline [&_button:hover]:underline-offset-4">
                 <DataTable>
                   <thead>
                     <tr>
