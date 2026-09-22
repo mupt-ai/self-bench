@@ -34,8 +34,6 @@ export interface AuthoringRoundInput {
   readonly session?: ArtifactRef;
   /** Previous round's stored VerifyReport JSON; required for round > 1. */
   readonly report?: ArtifactRef;
-  /** In-session verify calls already spent in earlier rounds of this session. */
-  readonly verifyCallsUsed?: number;
   /** Read-only verifier suggestions for the next authoring round. */
   readonly feedback?: string;
 }

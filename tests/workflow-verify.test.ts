@@ -12,9 +12,7 @@ import {
 describe("SelfBench in-session verify", () => {
   test("skips the worker verify when the submission matches a green in-session verify", async () => {
     const activities = acceptingActivities([candidate("verified", 1)]);
-    const budgets: number[] = [];
-    activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
-      budgets.push(verifyCallsUsed ?? -1);
+    activities.runAuthoringRound = async ({ candidate: value, round }) => {
       const task = draft(value.candidateId);
       return {
         kind: "submitted",
@@ -42,16 +40,15 @@ describe("SelfBench in-session verify", () => {
 
     expect(result.acceptedTaskIds).toEqual(["verified-task"]);
     expect(compileCalls).toBe(0);
-    expect(budgets).toEqual([0]);
     expect(verifierInputs).toEqual([
       { report: "file:///verified/report.json", bundle: "file:///verified/harbor-task.tar.gz" },
     ]);
   });
-  test("carries the author verify budget across red checks and reviewer suggestions", async () => {
+  test("starts each authoring round with a fresh verify budget", async () => {
     const activities = acceptingActivities([candidate("budget", 1)]);
-    const authorBudgets: number[] = [];
-    activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
-      authorBudgets.push(verifyCallsUsed ?? -1);
+    const authorRounds: number[] = [];
+    activities.runAuthoringRound = async ({ candidate: value, round }) => {
+      authorRounds.push(round);
       return {
         kind: "submitted",
         task: draft(value.candidateId, `-r${round}`),
@@ -64,14 +61,14 @@ describe("SelfBench in-session verify", () => {
       verifierRounds.push(round);
       expect(session).toBeUndefined();
       expect(verifyCallsUsed).toBeUndefined();
-      if (round === 2)
+      if (round === 1)
         return {
           kind: "suggestions",
-          session: ref("file:///v2"),
+          session: ref("file:///v1"),
           summary: "Fix coupling",
           suggestions: "Exercise public behavior",
         };
-      return { kind: "accepted", session: ref("file:///v3"), reason: "fair" };
+      return { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
     };
     const verified: string[] = [];
     const original = activities.compileAndVerify;
@@ -88,8 +85,8 @@ describe("SelfBench in-session verify", () => {
     const result = await executeRun(run, activities);
 
     expect(result.acceptedTaskIds).toEqual(["budget-task"]);
-    expect(authorBudgets).toEqual([0, 2, 3]);
-    expect(verifierRounds).toEqual([2, 3]);
+    expect(authorRounds).toEqual([1, 2, 3]);
+    expect(verifierRounds).toEqual([1, 2]);
     expect(verified).toEqual(["authoring:1", "authoring:2", "authoring:3"]);
   });
 });
