@@ -3,9 +3,9 @@
 # Installs a host runtime; deliberately does not start SelfBench or fetch secrets.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
+if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1 || ! command -v jq >/dev/null; then
   apt-get update
-  apt-get install -y ca-certificates curl python3
+  apt-get install -y ca-certificates curl jq
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
   chmod 0644 /etc/apt/keyrings/docker.asc

@@ -491,7 +491,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 
 ## Cloud topology
 
-For the reviewable GCP dev/prod Terraform foundation, bootstrap CLI, and deployment gates, see
+For the GCP dev/prod Terraform foundation and GitHub Actions deployment flow, see
 [`infra/README.md`](../infra/README.md). The infrastructure code does not provision or deploy itself.
 
 The API is a regular request-oriented HTTP service suitable for Cloud Run. Deploy `Dockerfile` with its default `node dist/api-main.js` command and port 8080:
