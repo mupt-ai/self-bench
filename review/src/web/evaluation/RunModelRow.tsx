@@ -11,7 +11,7 @@ import { Input, Select } from "../ui";
 import type { Harness } from "./api";
 import { nextModelSelection } from "./model-selection";
 
-const mobileLabel = "mb-2 block text-xs text-muted-foreground";
+const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
 
 type ModelSelection = ComparisonDraft["models"][number];
 
@@ -59,7 +59,7 @@ export function RunModelRow({
       <div className="min-w-0 sm:col-span-3 xl:col-span-1">
         <span className={mobileLabel}>Model</span>
         <Select
-          className="text-xs md:text-xs"
+          className="text-sm md:text-sm"
           aria-label="Model"
           value={selected.catalogId}
           onChange={(event) => {
@@ -100,7 +100,7 @@ export function RunModelRow({
       <div className="min-w-0">
         <span className={mobileLabel}>Credential</span>
         <Select
-          className="text-xs md:text-xs"
+          className="text-sm md:text-sm"
           aria-label={`${model.label} Credential`}
           disabled={!selected.catalogId}
           value={selected.credentialId}
@@ -119,7 +119,7 @@ export function RunModelRow({
       <div className="min-w-0">
         <span className={mobileLabel}>Reasoning</span>
         <Select
-          className="text-xs md:text-xs"
+          className="text-sm md:text-sm"
           aria-label={`${model.label} Thinking Level`}
           disabled={!selected.catalogId}
           value={thinking}
@@ -143,7 +143,7 @@ export function RunModelRow({
       <div className="min-w-0">
         <span className={mobileLabel}>Harness</span>
         <Select
-          className="text-xs md:text-xs"
+          className="text-sm md:text-sm"
           aria-label={`${model.label} Harness`}
           disabled={!selected.catalogId}
           value={selected.harnesses.length > 1 ? "multiple" : (selected.harnesses[0] ?? "")}

@@ -186,7 +186,7 @@ describe("add a PR", () => {
           taskId: "self-bench-pr-46",
           difficulty: "hard",
           status: "verifying",
-          stage: "verification",
+          stage: "review",
           round: 2,
         },
       },
@@ -201,7 +201,7 @@ describe("add a PR", () => {
       tasks: { stage: string; round?: number; state: string }[];
     };
     expect(running.tasks[0]).toMatchObject({
-      stage: "verification",
+      stage: "review",
       round: 2,
       state: "in_progress",
     });
@@ -214,7 +214,7 @@ describe("add a PR", () => {
           taskId: "self-bench-pr-46",
           difficulty: "hard",
           status: "rejected",
-          stage: "verification",
+          stage: "review",
           round: 3,
           reason: "verifier: tests pass without the fix",
         },

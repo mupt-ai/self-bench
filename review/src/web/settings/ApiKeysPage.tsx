@@ -115,9 +115,9 @@ function NewSecret({ created, onDismiss }: { created: CreatedApiKey; onDismiss()
   return (
     <section
       aria-labelledby="new-api-key-title"
-      className="mb-6 space-y-3 border border-success/30 bg-success/5 p-4"
+      className="mb-6 space-y-3 border border-success/30 bg-success/[0.06] p-4"
     >
-      <h2 id="new-api-key-title" className="text-sm font-medium text-foreground">
+      <h2 id="new-api-key-title" className="text-sm font-semibold text-foreground">
         {created.key.name} created
       </h2>
       <p className="text-sm text-muted-foreground">Copy the key now. It will not be shown again.</p>
@@ -197,11 +197,7 @@ function KeyTable({
 }) {
   if (loading) {
     return (
-      <div
-        role="status"
-        aria-label="Loading API Keys"
-        className="divide-y divide-border border border-border bg-card"
-      >
+      <div role="status" aria-label="Loading API Keys" className="panel divide-y divide-border">
         {Array.from({ length: 2 }, (_, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed, stateless loading placeholders.
           <div key={index} className="px-4 py-3.5">
@@ -214,7 +210,7 @@ function KeyTable({
   }
   if (!keys?.length) {
     return (
-      <EmptyState title="No API keys yet">
+      <EmptyState title="No API Keys Yet">
         Create a key, then send it as <code className="font-mono">Authorization: Bearer</code> or{" "}
         <code className="font-mono">X-API-Key</code> on any request the site makes.
       </EmptyState>
@@ -237,7 +233,7 @@ function KeyTable({
       <tbody>
         {keys.map((key) => (
           <tr key={key.id}>
-            <td className="font-medium">{key.name}</td>
+            <td className="font-semibold">{key.name}</td>
             <td className="font-mono text-xs">{key.prefix}…</td>
             <td>{scopeLabels[key.scope]}</td>
             <td className="whitespace-nowrap text-muted-foreground">

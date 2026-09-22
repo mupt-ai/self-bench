@@ -35,7 +35,7 @@ run_with_heartbeat pi --print --mode json --no-session --no-approve --no-skills 
 }
 /**
  * One authoring round. Round 1 starts a new pi session; later rounds resume the restored session
- * with the verification report as the next user message. The session file is always collected,
+ * with the review report as the next user message. The session file is always collected,
  * even when the agent submits nothing, so the conversation survives a rejected round's diagnosis.
  */
 export function authoringRoundScript(resume: boolean): string {
@@ -59,11 +59,11 @@ ${reportOutputs(["/work/source-task.tar.gz", "/work/definition.json", PI_SESSION
 wrapper_status=0`;
 }
 /**
- * One verification round. The sandbox program unpacks the compiled task and materializes the
+ * One review round. The sandbox program unpacks the compiled task and materializes the
  * base snapshot with the held-out patch applied; pi then accepts or submits review suggestions. Outputs are always
  * written so providers that require every declared output on success stay satisfied.
  */
-export function verifierRoundScript(resume: boolean): string {
+export function reviewRoundScript(resume: boolean): string {
   return `${sandboxBootstrap()}
 ${collectPiSessionScript()}
 ${mailboxSetup()}

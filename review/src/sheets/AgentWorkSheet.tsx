@@ -34,12 +34,14 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
   return (
     <div className={`${sheetBody} !gap-2`}>
       {error && (
-        <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-danger`} role="alert">
+        <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-destructive`} role="alert">
           {error}
         </p>
       )}
       {row.reason && (
-        <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-danger`}>{row.reason}</p>
+        <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-destructive`}>
+          {row.reason}
+        </p>
       )}
       {!artifacts && !error && <p className={`${notice} site:p-0!`}>Loading agent activity…</p>}
       {artifacts && rounds.length === 0 && (
@@ -110,28 +112,28 @@ function AgentPart({
           ? "In Progress"
           : "Stopped";
   return (
-    <details className="group/part border border-border bg-background open:bg-card">
-      <summary className="grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand [&::-webkit-details-marker]:hidden sm:px-4">
+    <details className="group/part panel">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-x-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4">
         <span
           aria-hidden="true"
-          className="text-[10px] text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾']"
+          className="shrink-0 text-[10px] text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾']"
         />
-        <span className="min-w-0 truncate font-mono text-sm font-medium text-foreground">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
           {round.title}
         </span>
-        <span className="max-w-[45%] truncate text-right font-mono text-xs text-muted-foreground">
+        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
           {round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}
           {status}
         </span>
       </summary>
       <div className="border-t border-border">
         {capturedAt && (
-          <p className="m-0 border-b border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground sm:px-4 site:text-xs">
+          <p className="m-0 border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground sm:px-4">
             Updated {formatCapturedAt(capturedAt)}
           </p>
         )}
         {error && (
-          <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>
+          <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>
             Could not load agent output
           </p>
         )}

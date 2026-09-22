@@ -39,7 +39,7 @@ export function RunModelTable({
           source: "",
         };
         return (
-          <section key={rowKey} className="relative min-w-0 bg-card">
+          <section key={rowKey} className="relative min-w-0">
             <RunModelRow
               model={model}
               models={models}
@@ -57,7 +57,7 @@ export function RunModelTable({
             />
             <button
               type="button"
-              className="absolute right-0 bottom-3 flex h-9 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground focus-visible:text-brand focus-visible:outline-none"
+              className="absolute right-0 bottom-3 flex h-9 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground focus-visible:text-foreground"
               aria-label={`Remove ${model.label}`}
               onClick={() => {
                 onChange({

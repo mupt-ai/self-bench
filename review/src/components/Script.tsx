@@ -20,7 +20,7 @@ export function Script({
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: lines have no identity beyond position
           key={index}
-          className={`block pr-4 text-foreground before:box-content before:mr-4 before:inline-block before:w-8 before:pl-3 before:text-right before:text-xs before:text-muted-foreground before:select-none before:content-[counter(line)] before:[counter-increment:line] hover:bg-muted ${wrap ? "max-w-[110ch] pl-15 -indent-15 whitespace-pre-wrap wrap-anywhere before:indent-0" : "whitespace-pre"} ${highlight?.(line) ? "bg-brand/10" : ""}`}
+          className={`block pr-4 text-foreground before:box-content before:mr-4 before:inline-block before:w-8 before:pl-3 before:text-right before:text-xs before:text-muted-foreground before:select-none before:content-[counter(line)] before:[counter-increment:line] hover:bg-muted ${wrap ? "max-w-[110ch] pl-15 -indent-15 whitespace-pre-wrap wrap-anywhere before:indent-0" : "whitespace-pre"} ${highlight?.(line) ? "bg-brand/15" : ""}`}
         >
           {placeholder ? emphasize(line, placeholder) : line || " "}
         </span>
@@ -37,7 +37,7 @@ function emphasize(line: string, token: string): React.ReactNode {
       ? [part]
       : [
           // biome-ignore lint/suspicious/noArrayIndexKey: split segments are positional
-          <span key={index} className="font-semibold text-(--brand) site:text-brand">
+          <span key={index} className="font-semibold text-(--brand) site:text-brand-foreground">
             {token}
           </span>,
           part,
@@ -59,12 +59,12 @@ export function Block({
   pad?: boolean;
 }) {
   return (
-    <section className="shrink-0 border border-(--border) bg-(--card)">
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted/50 px-4 py-2 text-xs tracking-wider text-muted-foreground uppercase [&_b]:text-sm [&_b]:font-medium [&_b]:tracking-normal [&_b]:text-foreground [&_b]:normal-case [&_button]:h-8 [&_button]:text-xs">
+    <section className="panel shrink-0">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground [&_b]:font-mono [&_b]:text-sm [&_b]:font-medium [&_b]:text-foreground [&_button]:h-8 [&_button]:text-xs">
         <span>{title}</span>
         {detail && <b>{detail}</b>}
         {right && (
-          <span className="ml-auto inline-flex items-center gap-3 text-xs font-normal tracking-normal text-muted-foreground normal-case">
+          <span className="ml-auto inline-flex items-center gap-3 font-mono text-xs font-normal text-muted-foreground">
             {right}
           </span>
         )}
@@ -75,7 +75,8 @@ export function Block({
 }
 
 export function KeyValueTable({ rows }: { rows: [string, React.ReactNode][] }) {
-  if (rows.length === 0) return <p className="px-4 py-3 text-(--muted-fg)">nothing recorded</p>;
+  if (rows.length === 0)
+    return <p className="px-4 py-3 text-muted-foreground">Nothing recorded.</p>;
   return (
     <table className={sheetTable}>
       <tbody>

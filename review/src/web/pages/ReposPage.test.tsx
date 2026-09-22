@@ -20,6 +20,6 @@ test("repository header actions match Dari's small buttons and spaced 16px icons
     expect(button).not.toContain("h-10");
   }
   expect(html.match(/mr-1 h-4 w-4/g)).toHaveLength(2);
-  expect(html).toContain("sm:items-start");
-  expect(html).toContain("mt-1 text-sm text-muted-foreground");
+  expect(html).toContain("sm:items-center");
+  expect(html).toContain("mt-1.5 text-sm text-muted-foreground");
 });

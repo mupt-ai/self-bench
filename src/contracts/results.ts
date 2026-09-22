@@ -1,7 +1,7 @@
 import type { ArtifactRef, Difficulty, RepositoryRef } from "./common.js";
 import type { RunRequest } from "./run.js";
 import type { AuthoredTask, Candidate } from "./task.js";
-import type { VerifyStage } from "./verify.js";
+import type { PipelineStage } from "./verify.js";
 
 export type RunPhase =
   | "queued"
@@ -16,7 +16,7 @@ export type RunPhase =
 
 /**
  * Per-candidate progress. `authoring` is an authoring-agent round, `verifying` the mechanical
- * compile/audit/build/smoke/nop/oracle gates, and `reviewing` a verification-agent round; `stage`
+ * compile/audit/build/smoke/nop/oracle gates, and `reviewing` an independent review round; `stage`
  * and `round` say which loop is running.
  */
 export interface TaskProgress {
@@ -31,7 +31,7 @@ export interface TaskProgress {
     | "infrastructure_failed"
     | "rejected"
     | "accepted";
-  stage?: VerifyStage;
+  stage?: PipelineStage;
   round?: number;
   reason?: string;
 }

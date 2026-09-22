@@ -19,9 +19,9 @@ test("groups native snapshots into numbered parts and distinct retries", () => {
         entry("authoring", "round-1/attempt-2/prompt.md"),
         entry("authoring", "session/round-1-attempt-2.jsonl"),
       ],
-      verification: [
-        entry("verification", "round-1/attempt-1/prompt.md"),
-        entry("verification", "round-2/attempt-1/prompt.md"),
+      review: [
+        entry("review", "round-1/attempt-1/prompt.md"),
+        entry("review", "round-2/attempt-1/prompt.md"),
       ],
     },
   } as unknown as CandidateArtifacts;
@@ -29,8 +29,8 @@ test("groups native snapshots into numbered parts and distinct retries", () => {
   expect(rounds.map((round) => round.title)).toEqual([
     "Authoring Part 1",
     "Authoring Part 1",
-    "Verification Part 1",
-    "Verification Part 2",
+    "Review Part 1",
+    "Review Part 2",
   ]);
   expect(rounds[0]?.live?.key).toEndWith("00000001.json");
   expect(rounds[1]?.attempt).toBe(2);
@@ -50,18 +50,19 @@ test("marks retries before a round result as failed", () => {
     bundles: [],
     groups: {
       authoring: [],
-      verification: [
-        entry("verification", "round-1/attempt-1/prompt.md"),
-        entry("verification", "session/round-1-attempt-1.jsonl"),
-        entry("verification", "round-1/attempt-2/prompt.md"),
-        entry("verification", "session/round-1-attempt-2.jsonl"),
-        entry("verification", "round-1/result.json"),
+      review: [
+        entry("review", "round-1/attempt-1/prompt.md"),
+        entry("review", "session/round-1-attempt-1.jsonl"),
+        entry("review", "round-1/attempt-2/prompt.md"),
+        entry("review", "session/round-1-attempt-2.jsonl"),
+        entry("review", "round-1/result.json"),
       ],
     },
   } as unknown as CandidateArtifacts;
 
   const rounds = agentRounds(artifacts);
-  expect(
-    rounds.filter((round) => round.stage === "verification").map((round) => round.status),
-  ).toEqual(["failed", "finished"]);
+  expect(rounds.filter((round) => round.stage === "review").map((round) => round.status)).toEqual([
+    "failed",
+    "finished",
+  ]);
 });

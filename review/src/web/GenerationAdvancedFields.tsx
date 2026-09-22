@@ -276,7 +276,7 @@ export function AdvancedFields({
       <div className="text-sm leading-6 text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Link
-            className="text-brand hover:text-brand"
+            className="font-medium text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
             to="/settings/credentials"
             target="_blank"
             rel="noopener noreferrer"

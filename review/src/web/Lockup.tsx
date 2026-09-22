@@ -1,7 +1,8 @@
 import { Link } from "react-router";
+import { cn } from "./primitives/cn";
 
 /** The dari turtle mark, as shipped in the approved login mock. */
-export function DariMark() {
+function DariMark() {
   return (
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <g fill="currentColor">
@@ -16,39 +17,42 @@ export function DariMark() {
   );
 }
 
-/** "self-bench" over "by dari.dev", beside the mark. Links home. */
+/** The dari mark beside "self-bench" over "by dari.dev". Links home. */
 export function Lockup({
   compact = false,
   showName = true,
+  className,
 }: {
   compact?: boolean;
   showName?: boolean;
+  className?: string;
 }) {
   return (
     <Link
-      className="inline-flex min-w-0 items-center gap-2.5 text-foreground"
+      className={cn("inline-flex min-w-0 items-center gap-2.5 text-foreground", className)}
       to="/"
       aria-label="self-bench by dari.dev Home"
     >
       <span
         className={
           compact
-            ? "inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-white/40 text-foreground [&>svg]:size-4"
+            ? "inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-foreground/30 text-foreground [&>svg]:size-5"
             : "size-9 shrink-0 text-foreground"
         }
       >
         <DariMark />
       </span>
       {showName && (
-        <span className="flex min-w-0 flex-col gap-1">
+        <span className="flex min-w-0 flex-col gap-0.5">
           <strong
-            className={
-              compact ? "text-sm leading-none font-medium" : "text-lg leading-none font-medium"
-            }
+            className={cn(
+              "font-mono leading-none font-bold tracking-wide",
+              compact ? "text-base" : "text-lg",
+            )}
           >
             self-bench
           </strong>
-          <span className="text-xs leading-none text-muted-foreground">by dari.dev</span>
+          <span className="font-mono text-xs leading-none text-muted-foreground">by dari.dev</span>
         </span>
       )}
     </Link>

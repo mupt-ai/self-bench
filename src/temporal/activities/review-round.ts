@@ -2,8 +2,8 @@ import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { ArtifactRef } from "../../contracts.js";
 import {
-  type VerifierRoundResult,
-  verifierRoundResultSchema,
+  type ReviewRoundResult,
+  reviewRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts.js";
 import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi-session.js";
@@ -11,9 +11,11 @@ import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { withAgentFeed } from "./agent-feed.js";
-import { verifierRoundScript } from "./agent-scripts.js";
-import { AGENT_INACTIVITY_TIMEOUT_MS, VERIFIER_TIMEOUT_MS } from "./constants.js";
-import { verifierPrompt } from "./prompts-verifier.js";
+import { reviewRoundScript } from "./agent-scripts.js";
+import { AGENT_INACTIVITY_TIMEOUT_MS, REVIEW_TIMEOUT_MS } from "./constants.js";
+import { reviewPrompt } from "./prompts-reviewer.js";
+import { buildReviewMaterial } from "./review-material.js";
+import { resolveReviewOutcome, VERDICT_PATH } from "./review-outcome.js";
 import { reconcileWrapperStatus, WRAPPER_STATUS_PATH } from "./round-outcome.js";
 import {
   readAsset,
@@ -21,44 +23,42 @@ import {
   storePiSession,
   withActivityHeartbeats,
 } from "./runtime.js";
-import type { VerifierRoundInput } from "./types.js";
-import { buildVerifierMaterial } from "./verifier-material.js";
-import { resolveVerifierOutcome, VERDICT_PATH } from "./verifier-outcome.js";
+import type { ReviewRoundInput } from "./types.js";
 
 /** Fresh read-only review of a mechanically green authoring revision. */
-export async function runVerifierRound(
+export async function runReviewRound(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
-  input: VerifierRoundInput,
-): Promise<VerifierRoundResult> {
+  input: ReviewRoundInput,
+): Promise<ReviewRoundResult> {
   const { run, candidate, task, round } = input;
-  const prefix = `runs/${run.runId}/verification/${candidate.candidateId}/round-${round}`;
+  const prefix = `runs/${run.runId}/review/${candidate.candidateId}/round-${round}`;
   // Everything one attempt produces before the round is decided lives under attempt-<n>, so a
   // Temporal retry never collides with the immutable artifacts of the attempt it replaces.
   const attempt = Context.current().info.attempt;
   const attemptPrefix = `${prefix}/attempt-${attempt}`;
   const checkpoint = await store.getByKey(`${prefix}/result.json`);
   if (checkpoint) {
-    return verifierRoundResultSchema.parse(JSON.parse(Buffer.from(checkpoint).toString("utf8")));
+    return reviewRoundResultSchema.parse(JSON.parse(Buffer.from(checkpoint).toString("utf8")));
   }
-  Context.current().heartbeat(`verifying ${task.taskId} round ${round}`);
+  Context.current().heartbeat(`reviewing ${task.taskId} round ${round}`);
   const [reportBytes, extension, program, piAuth] = await Promise.all([
     store.get(input.report),
-    readAsset("dist/extension-verifier.bundle.js"),
+    readAsset("dist/extension-reviewer.bundle.js"),
     readAsset("dist/sandbox-verifier.bundle.js"),
     loadPiModelAuth(),
   ]);
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8")));
-  if (!report.green) throw new Error("Read-only verification requires green mechanical checks");
-  const material = await withActivityHeartbeats(`preparing verifier ${task.taskId}`, ({ signal }) =>
-    buildVerifierMaterial(store, task, signal),
+  if (!report.green) throw new Error("Read-only review requires green mechanical checks");
+  const material = await withActivityHeartbeats(`preparing reviewer ${task.taskId}`, ({ signal }) =>
+    buildReviewMaterial(store, task, signal),
   );
   await store.put(
     `${attemptPrefix}/coupling-evidence.json`,
     Buffer.from(JSON.stringify(material.couplingEvidence)),
     "application/json",
   );
-  const prompt = verifierPrompt({
+  const prompt = reviewPrompt({
     taskId: task.taskId,
     testSelection: material.definition.testSelection,
     testResults: material.definition.testResults,
@@ -85,7 +85,7 @@ export async function runVerifierRound(
               {
                 runId: run.runId,
                 stage: `verify-${candidate.candidateId}-r${round}`,
-                timeoutMs: VERIFIER_TIMEOUT_MS,
+                timeoutMs: REVIEW_TIMEOUT_MS,
                 inactivityTimeoutMs: AGENT_INACTIVITY_TIMEOUT_MS,
                 files: [
                   // The bundle (hundreds of MB) is pulled by the sandbox from a signed URL when the
@@ -105,7 +105,7 @@ export async function runVerifierRound(
                   SELFBENCH_REPO_DIRECTORY: "/work/repo",
                   SELFBENCH_VERDICT_OUTPUT: "/work/verdict",
                 },
-                command: ["bash", "-lc", verifierRoundScript(false)],
+                command: ["bash", "-lc", reviewRoundScript(false)],
               },
               { ...options, onOutput },
             ),
@@ -120,10 +120,10 @@ export async function runVerifierRound(
   );
   const session = await storePiSession(
     store,
-    sessionArtifactKey(run.runId, "verification", candidate.candidateId, round, attempt),
+    sessionArtifactKey(run.runId, "review", candidate.candidateId, round, attempt),
     result.outputs[PI_SESSION_OUTPUT_PATH],
   );
-  const outcome = await resolveVerifierOutcome({
+  const outcome = await resolveReviewOutcome({
     store,
     input,
     prefix,

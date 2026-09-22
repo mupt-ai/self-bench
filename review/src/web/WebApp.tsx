@@ -54,7 +54,7 @@ export function WebApp() {
   const value = React.useMemo(() => ({ session, signOut }), [session, signOut]);
   return (
     <SessionContext.Provider value={value}>
-      <div className="sb min-h-full bg-background font-mono text-sm leading-6 text-foreground antialiased [&_a]:no-underline [&_button:not(:disabled)]:cursor-pointer [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-brand [&_:focus-visible]:outline-offset-2 motion-reduce:[&_*]:transition-none">
+      <div className="sb min-h-full bg-background font-sans text-sm leading-6 text-foreground antialiased [&_a]:no-underline [&_button:not(:disabled)]:cursor-pointer [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-foreground/45 [&_:focus-visible]:outline-offset-2 motion-reduce:[&_*]:transition-none">
         {session.status === "loading" ? (
           <SiteSkeleton />
         ) : (

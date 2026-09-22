@@ -1,6 +1,8 @@
-// Builds the combined accepted-task bundle from many runs: one task per source pull request, each
+// Builds a combined accepted-task bundle from many runs: one task per source pull request,
 // compiled from its final accepted deliverable with the trusted compiler exactly as run exports are.
-// usage: bun run scripts/build-combined-bundle.ts unique.json OUT_DIR NAME  (unique.json: {pr: {run, candidateId, difficulty}})
+// usage: bun run build:bundle -- unique.json OUT_DIR NAME --bucket BUCKET --prefix PREFIX
+//        --repository-url URL [--mirror PATH]
+// unique.json: {pr: {run, candidateId, difficulty}}
 
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -13,13 +15,39 @@ import { runCommand } from "../src/process.js";
 import type { TaskCompilerServices } from "../src/sandbox/task-compiler.js";
 import { compileSubmittedTask } from "../src/sandbox/task-compiler.js";
 
-const [listPath, outDir, name, mirror] = process.argv.slice(2);
-if (!listPath || !outDir || !name)
-  throw new Error("usage: build-combined.ts unique.json OUT_DIR NAME");
+const args = process.argv.slice(2);
+const positional: string[] = [];
+const options = new Map<string, string>();
+for (let index = 0; index < args.length; index += 1) {
+  const value = args[index];
+  if (value.startsWith("--")) {
+    const option = value.slice(2);
+    const next = args[index + 1];
+    if (!next || next.startsWith("--")) throw new Error(`missing value for --${option}`);
+    options.set(option, next);
+    index += 1;
+  } else {
+    positional.push(value);
+  }
+}
+const [listPath, outDir, name] = positional;
+const bucket = options.get("bucket");
+const prefix = options.get("prefix");
+const repositoryUrl = options.get("repository-url");
+const mirror = options.get("mirror");
+if (!listPath || !outDir || !name || !bucket || !prefix || !repositoryUrl) {
+  throw new Error(
+    "usage: bun run build:bundle -- unique.json OUT_DIR NAME --bucket BUCKET --prefix PREFIX --repository-url URL [--mirror PATH]",
+  );
+}
+const unknown = [...options.keys()].filter(
+  (option) => !["bucket", "prefix", "repository-url", "mirror"].includes(option),
+);
+if (unknown.length > 0) throw new Error(`unknown option: --${unknown[0]}`);
 const MIRROR = mirror;
 const LANES = MIRROR ? 8 : 4;
-const token = execSync("gh auth token", { encoding: "utf8" }).trim();
-const store = new GcsArtifactStore("dari-agent-host-prod-selfbench-artifacts", "selfbench/posthog");
+const token = process.env.GH_TOKEN ?? execSync("gh auth token", { encoding: "utf8" }).trim();
+const store = new GcsArtifactStore(bucket, prefix);
 const unique = JSON.parse(await readFile(listPath, "utf8")) as Record<
   string,
   { difficulty: string; run: string; candidateId: string }
@@ -133,7 +161,7 @@ async function packageOne([pr, entry]: [
   const compiled = await compileSubmittedTask(
     {
       taskId: task.taskId,
-      repositoryUrl: "https://github.com/PostHog/posthog.git",
+      repositoryUrl,
       definitionBytes,
       sourceBundle: await store.get(task.sourceBundle),
       token,
@@ -186,7 +214,7 @@ await rm(scratch, { recursive: true, force: true });
 const manifest = {
   schemaVersion: 1,
   name,
-  repository: { url: "https://github.com/PostHog/posthog.git", commit: "mixed" },
+  repository: { url: repositoryUrl, commit: "mixed" },
   acceptedCount: manifestTasks.length,
   byDifficulty,
   tasks: manifestTasks,
@@ -197,7 +225,7 @@ const manifest = {
 await writeFile(join(bundleDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 await writeFile(
   join(bundleDir, "README.md"),
-  `# PostHog SelfBench combined accepted eval (${manifestTasks.length} tasks)
+  `# SelfBench combined accepted eval (${manifestTasks.length} tasks)
 
 ${manifestTasks.length} unique accepted Harbor tasks from the SelfBench agent pipeline (discovery agent, authoring agent with in-session harness verification, independent verification agent), one per source pull request.
 

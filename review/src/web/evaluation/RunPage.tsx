@@ -201,10 +201,13 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         description="Compare models and harnesses against your accepted tasks."
       />
       {state.submitted && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-border bg-card p-4">
+        <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm">These settings belong to a submitted request.</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Link className="text-sm text-brand" to={`/repos/${repo}/comparisons/${draft.id}`}>
+            <Link
+              className="text-sm font-semibold text-foreground underline underline-offset-4"
+              to={`/repos/${repo}/comparisons/${draft.id}`}
+            >
               View Status
             </Link>
             <Button
@@ -237,13 +240,10 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         disabled={busy || state.submitted}
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <fieldset
-          className="min-w-0 border border-border bg-card p-0"
-          disabled={busy || state.submitted}
-        >
+        <fieldset className="panel min-w-0 p-0" disabled={busy || state.submitted}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div>
-              <h2 className="text-sm font-medium">Models and Harnesses</h2>
+              <h2 className="text-sm font-semibold">Models and Harnesses</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 {draft.models.length} of 12 configurations
               </p>

@@ -1,30 +1,48 @@
 import type { AgentFeedEvent } from "../../../src/agent-feed";
 
-const eventBody =
-  "mt-2 max-w-[96ch] font-mono text-xs leading-5 whitespace-pre-wrap wrap-anywhere text-foreground site:text-sm site:leading-6";
+const eventText = "max-w-[96ch] whitespace-pre-wrap wrap-anywhere text-foreground";
+const codeText = `${eventText} font-mono text-xs leading-5`;
 const summaryClass =
-  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand [&::-webkit-details-marker]:hidden sm:px-4";
+  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 text-left leading-4 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4";
 
 export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
   const time = event.timestamp ? formatEventTime(event.timestamp) : "";
 
-  if (event.kind === "message" || event.kind === "error") {
+  if (event.kind === "message") {
     return (
-      <article className="border-t border-border px-3 py-3 first:border-t-0 sm:px-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-t border-border px-3 py-2 first:border-t-0 sm:px-4">
+        <pre className={`${eventText} min-w-0 font-sans text-sm leading-6`}>
+          {formatTraceText(event.text)}
+        </pre>
+        {time && (
+          <time
+            className="justify-self-end font-mono text-[10px] leading-5 text-muted-foreground"
+            dateTime={event.timestamp}
+          >
+            {time}
+          </time>
+        )}
+      </div>
+    );
+  }
+
+  if (event.kind === "error") {
+    return (
+      <article className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 border-t border-border px-3 py-2 first:border-t-0 sm:px-4">
+        <pre className={`${codeText} min-w-0`}>{formatTraceText(event.text)}</pre>
         <EventHeading
-          label={event.kind === "error" ? "Provider Error" : "Model Output"}
-          tone={event.kind === "error" ? "error" : "model"}
-          timestamp={event.timestamp}
+          label="Provider Error"
           time={time}
+          timestamp={event.timestamp}
+          align="right"
         />
-        <pre className={eventBody}>{formatTraceText(event.text)}</pre>
       </article>
     );
   }
 
   const tool = event.kind === "tool" ? parseToolCall(event.text) : undefined;
   const label = event.kind === "tool" ? "Tool Call" : "Tool Output";
-  const detail = event.kind === "tool" ? tool?.name : "Returned to Model";
+  const detail = event.kind === "tool" ? tool?.name : undefined;
   const text = event.kind === "tool" ? (tool?.body ?? event.text) : event.text;
   const emptyPreview = event.kind === "tool" ? "(no arguments)" : "(empty output)";
 
@@ -33,37 +51,33 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
       <summary className={summaryClass}>
         <span
           aria-hidden="true"
-          className="text-[10px] text-muted-foreground before:content-['▸'] group-open/event:before:content-['▾']"
+          className="mt-0.5 text-[10px] text-muted-foreground before:content-['▸'] group-open/event:before:content-['▾']"
         />
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
-            <span className="shrink-0 font-mono text-xs font-medium text-brand site:text-sm">
-              {label}
-            </span>
+            <span className="shrink-0 text-xs font-semibold text-foreground">{label}</span>
             {detail && (
-              <span className="truncate font-mono text-xs text-muted-foreground site:text-sm">
-                · {detail}
-              </span>
+              <span className="truncate font-mono text-xs text-muted-foreground">· {detail}</span>
             )}
           </span>
-          <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+          <span className="block truncate font-mono text-[10px] leading-4 text-muted-foreground">
             {eventPreview(text, emptyPreview)}
           </span>
         </span>
         {time && (
           <time
-            className="self-start font-mono text-xs text-muted-foreground"
+            className="justify-self-end font-mono text-[10px] text-muted-foreground"
             dateTime={event.timestamp}
           >
             {time}
           </time>
         )}
       </summary>
-      <div className="border-t border-border/70 bg-muted/30 px-3 py-3 sm:px-4 sm:pl-9">
-        <p className="m-0 font-mono text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-          {event.kind === "tool" ? "Arguments" : "Returned to Model"}
+      <div className="border-t border-border/70 bg-muted/30 px-3 py-2 sm:px-4 sm:pl-9">
+        <p className="m-0 text-[11px] font-semibold text-muted-foreground">
+          {event.kind === "tool" ? "Arguments" : "Output"}
         </p>
-        <pre className={eventBody}>{formatTraceText(text) || emptyPreview}</pre>
+        <pre className={`${codeText} mt-1`}>{formatTraceText(text) || emptyPreview}</pre>
       </div>
     </details>
   );
@@ -71,26 +85,33 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
 
 function EventHeading({
   label,
-  tone,
-  timestamp,
   time,
+  timestamp,
+  align = "left",
 }: {
   label: string;
-  tone: "model" | "error";
+  time?: string;
   timestamp?: string;
-  time: string;
+  align?: "left" | "right";
 }) {
   return (
-    <header className="flex items-baseline justify-between gap-3">
+    <header
+      className={`flex w-full items-baseline gap-2 ${align === "right" ? "justify-end" : "justify-start"}`}
+    >
       <span
-        className={`font-mono text-xs font-medium site:text-sm ${tone === "error" ? "text-destructive" : "text-brand"}`}
+        className={`font-semibold ${align === "right" ? "text-[10px] text-destructive" : "text-xs text-destructive"}`}
       >
         {label}
       </span>
       {time && (
-        <time className="font-mono text-xs text-muted-foreground" dateTime={timestamp}>
-          {time}
-        </time>
+        <>
+          <span aria-hidden="true" className="font-mono text-[10px] text-muted-foreground">
+            ·
+          </span>
+          <time className="font-mono text-[10px] text-muted-foreground" dateTime={timestamp}>
+            {time}
+          </time>
+        </>
       )}
     </header>
   );
@@ -126,6 +147,13 @@ export function eventPreview(text: string, empty = "(empty)"): string {
   return truncatePreview(value.split("\n")[0]?.trim() || empty);
 }
 
+function formatEventTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+
 function structuredPreview(value: unknown): string {
   if (Array.isArray(value)) {
     if (value.length === 0) return "(empty array)";
@@ -154,15 +182,4 @@ function scalarPreview(value: unknown): string {
 
 function truncatePreview(value: string): string {
   return value.length > 160 ? `${value.slice(0, 159)}…` : value;
-}
-
-function formatEventTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-      });
 }

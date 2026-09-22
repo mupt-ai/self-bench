@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { type AgentFeedEvent, agentFeedEvents } from "../../../../src/agent-feed";
 import type { DiscoveryShardProgress } from "../../../../src/contracts";
+import { AgentTraceEvent } from "../../components/AgentTraceEvent";
 import { createApiClient } from "../../sources/types";
-import { cn } from "../primitives/cn";
 
 const api = createApiClient("");
 
@@ -58,8 +58,8 @@ export function DiscoveryFeed({
   return (
     <div className="border-t border-border">
       {capturedAt && (
-        <p className="m-0 px-4 py-2.5 text-xs text-muted-foreground">
-          Last Output · {new Date(capturedAt).toLocaleTimeString()}
+        <p className="m-0 px-4 py-1.5 text-[11px] text-muted-foreground">
+          Updated {formatCapturedAt(capturedAt)}
         </p>
       )}
       {shard.error && (
@@ -74,9 +74,11 @@ export function DiscoveryFeed({
         </p>
       )}
       <div className="max-h-[560px] overflow-auto">
-        {events.map((event) => (
-          <FeedEvent
-            key={`${event.kind}:${event.timestamp ?? ""}:${(event.text ?? "").slice(0, 32)}`}
+        {events.map((event, eventIndex) => (
+          <AgentTraceEvent
+            // Feed events have no IDs; the index disambiguates repeated streaming snapshots.
+            // biome-ignore lint/suspicious/noArrayIndexKey: rows contain no local state.
+            key={`${event.kind}:${event.timestamp ?? ""}:${(event.text ?? "").slice(0, 32)}:${eventIndex}`}
             event={event}
           />
         ))}
@@ -85,39 +87,9 @@ export function DiscoveryFeed({
   );
 }
 
-function FeedEvent({ event }: { event: AgentFeedEvent }) {
-  const time = event.timestamp ? new Date(event.timestamp) : undefined;
-  const stamp = time && !Number.isNaN(time.getTime()) ? time.toLocaleTimeString() : "";
-  if (event.kind === "message" || event.kind === "error") {
-    return (
-      <div className="border-t border-border px-4 py-3">
-        <span
-          className={cn(
-            "mb-2 block text-xs",
-            event.kind === "error" ? "text-destructive" : "text-brand",
-          )}
-        >
-          {event.kind === "error" ? "Provider Error" : "Agent Message"}
-        </span>
-        {stamp && <time className="float-right text-xs text-muted-foreground">{stamp}</time>}
-        <pre className="m-0 font-mono text-xs leading-[1.6] wrap-anywhere whitespace-pre-wrap text-foreground">
-          {event.text}
-        </pre>
-      </div>
-    );
-  }
-  return (
-    <details className="group/event border-t border-border px-4 py-3">
-      <summary className="cursor-pointer list-none text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-        <span className="mb-2 block text-xs text-brand">
-          {event.kind === "tool" ? "Tool Call" : "Tool Output"}
-        </span>
-        {stamp && <time className="float-right text-xs text-muted-foreground">{stamp}</time>}
-        <span>{event.text.split("\n")[0] || "(empty)"}</span>
-      </summary>
-      <pre className="m-0 mt-2 font-mono text-xs leading-[1.6] wrap-anywhere whitespace-pre-wrap text-foreground">
-        {event.text}
-      </pre>
-    </details>
-  );
+function formatCapturedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }

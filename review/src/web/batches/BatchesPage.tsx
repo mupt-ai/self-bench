@@ -12,7 +12,7 @@ const columns =
 export function BatchesPage() {
   const { repoId, runs, statuses, errors, error, refreshing, refresh } = useBatches();
   const navigate = useNavigate();
-  useDocumentTitle(`Batch Generation · ${repoId.fullName} · self-bench`);
+  useDocumentTitle(`Batch Generation · ${repoId.fullName} · SelfBench`);
   return (
     <PageContent>
       <PageHeader
@@ -45,9 +45,9 @@ export function BatchesPage() {
         </EmptyState>
       )}
       {!!runs?.length && (
-        <section className="border border-border bg-card" aria-label="Batch History">
+        <section className="panel" aria-label="Batch History">
           <div
-            className={`${columns} border-b border-border bg-muted/30 px-4 py-3 text-xs tracking-wider text-muted-foreground uppercase max-md:hidden`}
+            className={`${columns} border-b border-border bg-muted px-4 py-2.5 text-xs font-semibold text-muted-foreground max-md:hidden`}
             aria-hidden="true"
           >
             <span>Batch</span>
@@ -62,10 +62,12 @@ export function BatchesPage() {
                 <li key={run.runId}>
                   <Link
                     to={batchPath(repoId.fullName, run.runId)}
-                    className={`${columns} items-center px-4 py-3 hover:bg-muted/50`}
+                    className={`${columns} items-center px-4 py-3 hover:bg-muted/60`}
                   >
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium">{batchName(run.runId)}</span>
+                      <span className="block font-mono text-sm font-medium">
+                        {batchName(run.runId)}
+                      </span>
                       <span className="mt-1 block truncate text-xs text-muted-foreground">
                         <time dateTime={run.attachedAt}>{batchDate(run.attachedAt)}</time> ·{" "}
                         {run.attachedBy}
@@ -78,7 +80,7 @@ export function BatchesPage() {
                         <BatchState phase={status?.phase} />
                       )}
                     </span>
-                    <span className="text-xs leading-5 text-muted-foreground max-md:col-start-1 max-md:row-start-3">
+                    <span className="text-xs leading-5 text-muted-foreground tabular-nums max-md:col-start-1 max-md:row-start-3">
                       {status ? (
                         <>
                           <span>{status.discovered ?? "—"} Discovered</span>

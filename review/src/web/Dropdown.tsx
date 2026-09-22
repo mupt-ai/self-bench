@@ -49,7 +49,7 @@ export function Dropdown({
     <div className={`relative ${className ?? ""}`} ref={root}>
       <button
         type="button"
-        className="group/trigger flex h-9 items-center gap-2 border border-transparent bg-transparent pr-2.5 pl-2 font-mono text-sm font-medium text-foreground hover:border-input hover:bg-muted aria-expanded:border-input aria-expanded:bg-muted"
+        className="group/trigger flex h-9 items-center gap-2 rounded-full border border-transparent bg-transparent pr-2.5 pl-1 text-sm font-semibold text-foreground hover:bg-foreground/[0.06] aria-expanded:bg-foreground/[0.06]"
         ref={button}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -58,13 +58,13 @@ export function Dropdown({
       >
         {trigger}
         <ChevronDown
-          className="size-3.5 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-180 group-aria-expanded/trigger:text-brand"
+          className="size-3.5 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-180"
           aria-hidden="true"
         />
       </button>
       {open && (
         <div
-          className={`absolute ${above ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} z-10 min-w-[220px] border border-input bg-muted ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
+          className={`absolute ${above ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} z-30 min-w-[220px] panel bg-background ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
           role="menu"
           aria-label={label}
         >
@@ -78,11 +78,20 @@ export function Dropdown({
 /** A 24px square avatar with a lettered fallback. */
 export function Avatar({ login, url, size = 24 }: { login: string; url?: string; size?: number }) {
   if (url) {
-    return <img className="block shrink-0 bg-accent" src={url} alt="" width={size} height={size} />;
+    return (
+      <img
+        className="block shrink-0 rounded-full bg-accent"
+        src={url}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+      />
+    );
   }
   return (
     <span
-      className="grid shrink-0 place-items-center border border-input bg-accent font-mono text-xs font-medium text-brand"
+      className="grid shrink-0 place-items-center rounded-full bg-muted font-mono text-xs font-semibold text-muted-foreground"
       style={{ width: size, height: size }}
       aria-hidden="true"
     >

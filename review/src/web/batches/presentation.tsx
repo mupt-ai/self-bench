@@ -29,12 +29,12 @@ export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
       : phase === "complete"
         ? "border-success/40 bg-success/10 text-success"
         : phase === "cancelled" || !phase
-          ? "border-border bg-muted/30 text-muted-foreground"
-          : "border-brand/40 bg-brand/10 text-brand";
+          ? "border-border bg-muted text-muted-foreground"
+          : "border-brand/40 bg-brand/10 text-brand-foreground";
   return (
     <span
       className={cn(
-        "inline-flex items-center border px-1.5 py-0.5 text-[10px] leading-none font-medium",
+        "inline-flex items-center border px-2 py-1 text-xs leading-none font-semibold tracking-normal",
         tone,
       )}
     >

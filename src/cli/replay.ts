@@ -4,7 +4,7 @@ import { download, requestJson } from "./api-client.js";
 import { resolveSelfBenchCommit } from "./repository.js";
 import { asPolledRunStatus, defaultRunId, fail } from "./values.js";
 
-/** Re-runs known candidates of an earlier run through fresh authoring and verification. */
+/** Re-runs known candidates of an earlier run through fresh authoring and review. */
 export async function replay(args: string[]): Promise<void> {
   const parsed = parseArgs({
     args,

@@ -8,8 +8,8 @@ export async function reviewAuthoredTask(
   green: { readonly task: AuthoredTask; readonly report: ArtifactRef },
   round: number,
 ): Promise<StageOutcome | { kind: "suggestions"; feedback: string }> {
-  context.update({ status: "reviewing", stage: "verification", round });
-  const verdict = await context.activitySet.runVerifierRound({
+  context.update({ status: "reviewing", stage: "review", round });
+  const verdict = await context.activitySet.runReviewRound({
     run: context.run,
     candidate,
     ...green,

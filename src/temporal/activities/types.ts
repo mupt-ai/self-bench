@@ -6,12 +6,12 @@ import type {
   Candidate,
   Difficulty,
   DiscoveryResult,
+  PipelineStage,
   ReplayMaterial,
   ReplayRunRequest,
+  ReviewRoundResult,
   RunRequest,
-  VerifierRoundResult,
   VerifyOutcome,
-  VerifyStage,
 } from "../../contracts.js";
 
 export interface DiscoveryShardInput {
@@ -34,8 +34,6 @@ export interface AuthoringRoundInput {
   readonly session?: ArtifactRef;
   /** Previous round's stored VerifyReport JSON; required for round > 1. */
   readonly report?: ArtifactRef;
-  /** @deprecated Legacy workflow replay state; new workflows omit it to reset each round. */
-  readonly verifyCallsUsed?: number;
   /** Read-only verifier suggestions for the next authoring round. */
   readonly feedback?: string;
 }
@@ -45,12 +43,12 @@ export interface CompileAndVerifyInput {
   readonly run: RunRequest;
   readonly candidate: Candidate;
   readonly task: AuthoredTaskDraft;
-  readonly stage: VerifyStage;
+  readonly stage: PipelineStage;
   readonly round: number;
 }
 
-/** One verification agent turn over a green task and its latest report. */
-export interface VerifierRoundInput {
+/** One independent review turn over a green task and its latest mechanical report. */
+export interface ReviewRoundInput {
   readonly run: RunRequest;
   readonly candidate: Candidate;
   readonly task: AuthoredTask;
@@ -72,6 +70,6 @@ export interface SelfBenchActivities {
   rebuildReplayCandidates(input: ReplayRunRequest): Promise<ReplayMaterial>;
   runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
-  runVerifierRound(input: VerifierRoundInput): Promise<VerifierRoundResult>;
+  runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
   buildExport(input: ExportInput): Promise<ArtifactRef>;
 }

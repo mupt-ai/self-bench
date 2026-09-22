@@ -52,7 +52,8 @@ test("sign-in labels preserve product spelling and short prepositions", () => {
   const html = renderPage(<LoginPage />);
   expect(html).toContain("Continue with GitHub");
   expect(html).toContain('class="size-4 shrink-0" width="16" height="16"');
-  expect(html).toContain("self-bench</h1>");
+  expect(html).toContain("Sign In</h1>");
+  expect(html).toContain("by dari.dev</span>");
   expect(html).toContain('href="/auth/github"');
   expect(html).not.toContain("Build verified coding tasks");
   expect(html).not.toContain("Continue to self-bench");

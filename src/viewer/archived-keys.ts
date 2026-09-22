@@ -1,7 +1,7 @@
 import type { ArtifactEntry } from "./types.js";
 
 /** Groups the pipeline keys by candidate ID; every other group is keyed by task ID. */
-const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "verification", "verify"]);
+const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "review", "verification", "verify"]);
 
 /**
  * The candidate's newest definition. The agent pipeline rewrites it per round, attempt, and verify pass,

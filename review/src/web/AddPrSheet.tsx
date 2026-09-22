@@ -113,7 +113,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
         <DialogHeader
           title="Add PRs"
           titleId="add-pr-title"
-          description={fullName}
+          description={<span className="font-mono">{fullName}</span>}
           onClose={onClose}
           closeRef={closeButton}
           busy={busy}
@@ -154,7 +154,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
               </Notice>
             )}
             {!options && !optionsError ? (
-              <p role="status" className="font-mono text-sm text-muted-foreground">
+              <p role="status" className="text-sm text-muted-foreground">
                 Loading generation settings…
               </p>
             ) : (
@@ -168,9 +168,11 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
           </div>
         )}
         {error && (
-          <div className="max-h-40 shrink-0 overflow-auto border-t border-border px-4 py-3 font-mono text-sm leading-5 sm:px-6">
+          <div className="max-h-40 shrink-0 overflow-auto border-t border-border px-4 py-3 text-sm leading-5 sm:px-6">
             <p role="status" className="text-muted-foreground">
-              {error.started > 0 && <span className="text-brand">{error.started} started · </span>}
+              {error.started > 0 && (
+                <span className="text-brand-foreground">{error.started} started · </span>
+              )}
               <span className="text-destructive">{error.failed.length} failed</span>
               <span> — failed PRs remain selected.</span>
             </p>
@@ -178,7 +180,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
               <summary className="w-fit cursor-pointer hover:text-foreground">
                 Technical Details
               </summary>
-              <ul className="mt-2 space-y-1 break-words">
+              <ul className="mt-2 space-y-1 break-words font-mono text-xs">
                 {error.failed.map((item) => (
                   <li key={item.number}>
                     PR #{item.number}: {item.message}
@@ -189,7 +191,9 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
           </div>
         )}
         <DialogFooter className="sticky bottom-0 justify-between">
-          <span className="font-mono text-sm text-muted-foreground">{selected.size} Selected</span>
+          <span className="text-sm text-muted-foreground">
+            <span className="font-mono tabular-nums">{selected.size}</span> Selected
+          </span>
           <div className="ml-auto flex gap-3">
             {step === 2 && (
               <Button variant="ghost" disabled={busy} onClick={() => setStep(1)}>

@@ -49,7 +49,7 @@ export function PrSelectionList({
         {visible.map((pr) => (
           <label
             key={pr.number}
-            className={`relative flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-brand/5" : ""}`}
+            className={`relative flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-foreground/40 has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-foreground/[0.04]" : ""}`}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <input
@@ -61,7 +61,7 @@ export function PrSelectionList({
             />
             <span
               aria-hidden="true"
-              className={`flex size-4 shrink-0 items-center justify-center self-center border ${selected.has(pr.number) ? "border-brand bg-brand text-background" : "border-input"}`}
+              className={`flex size-4 shrink-0 items-center justify-center self-center border ${selected.has(pr.number) ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-card"}`}
             >
               {selected.has(pr.number) && (
                 <svg
@@ -77,13 +77,15 @@ export function PrSelectionList({
               )}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-mono text-sm leading-6 text-foreground/80 wrap-anywhere">
+              <span className="block text-sm leading-6 font-medium text-foreground wrap-anywhere">
                 {pr.title}
               </span>
               <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
-                <span className="text-brand/80">#{pr.number}</span>
+                <span className="font-mono">#{pr.number}</span>
                 <span className="min-w-0 break-all">{pr.author}</span>
-                {started.has(pr.number) && <span className="text-brand">Started</span>}
+                {started.has(pr.number) && (
+                  <span className="font-semibold text-brand-foreground">Started</span>
+                )}
                 <span className="ml-auto whitespace-nowrap">{formatAgo(pr.mergedAt)}</span>
               </span>
             </span>
@@ -97,11 +99,11 @@ export function PrSelectionList({
                 <div key={row} className="flex gap-3 border-b border-border px-2 py-3">
                   <div className="size-4 shrink-0 self-center border border-border" />
                   <div className="min-w-0 flex-1 py-1">
-                    <div className={`h-3 bg-accent ${row % 2 ? "w-4/5" : "w-3/5"}`} />
+                    <div className={`h-3 bg-muted ${row % 2 ? "w-4/5" : "w-3/5"}`} />
                     <div className="mt-3 flex items-center gap-2">
-                      <div className="h-2.5 w-8 bg-accent" />
-                      <div className="h-2.5 w-16 bg-accent" />
-                      <div className="ml-auto h-2.5 w-12 bg-accent" />
+                      <div className="h-2.5 w-8 bg-muted" />
+                      <div className="h-2.5 w-16 bg-muted" />
+                      <div className="ml-auto h-2.5 w-12 bg-muted" />
                     </div>
                   </div>
                 </div>
@@ -110,10 +112,7 @@ export function PrSelectionList({
           </div>
         )}
         {listError && (
-          <p
-            className="py-4 text-muted-foreground mt-4 font-mono text-sm leading-relaxed text-destructive"
-            role="alert"
-          >
+          <p className="mt-4 py-4 text-sm leading-relaxed text-destructive" role="alert">
             {listError}{" "}
             <Button type="button" variant="ghost" onClick={() => onRetry()}>
               Retry
@@ -121,12 +120,12 @@ export function PrSelectionList({
           </p>
         )}
         {!loading && !listError && visible.length === 0 && (
-          <p className="py-4 font-mono text-sm leading-5 text-muted-foreground">
+          <p className="py-4 text-sm leading-5 text-muted-foreground">
             {query ? "No matching pull requests." : "No merged pull requests found on this page."}
           </p>
         )}
         {incomplete && (
-          <p className="py-4 font-mono text-sm leading-5 text-muted-foreground">
+          <p className="py-4 text-sm leading-5 text-muted-foreground">
             GitHub returned partial results. Try reopening the picker to refresh.
           </p>
         )}

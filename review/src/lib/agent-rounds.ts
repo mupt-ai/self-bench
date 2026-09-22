@@ -3,7 +3,7 @@ import type { ArtifactEntry, CandidateArtifacts } from "../types";
 export interface AgentRound {
   id: string;
   title: string;
-  stage: "authoring" | "verification";
+  stage: "authoring" | "review";
   round: number;
   attempt: number;
   /** The canonical round result belongs to the attempt that ultimately decided the round. */
@@ -15,9 +15,10 @@ export interface AgentRound {
 
 export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
   const rounds = new Map<string, AgentRound>();
-  for (const stage of ["authoring", "verification"] as const) {
-    const prefix = `runs/${artifacts.runId}/${stage}/${artifacts.candidateId}/`;
-    for (const entry of artifacts.groups[stage] ?? []) {
+  for (const sourceStage of ["authoring", "review", "verification"] as const) {
+    const stage = sourceStage === "verification" ? "review" : sourceStage;
+    const prefix = `runs/${artifacts.runId}/${sourceStage}/${artifacts.candidateId}/`;
+    for (const entry of artifacts.groups[sourceStage] ?? []) {
       const path = entry.key.slice(prefix.length);
       const match =
         /^(?:round-(\d+)(?:\/attempt-(\d+))?\/|session\/round-(\d+)(?:-attempt-(\d+))?\.jsonl$)/.exec(
@@ -32,7 +33,7 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
         stage,
         round,
         attempt,
-        title: `${stage === "authoring" ? "Authoring" : "Verification"} Part ${round}`,
+        title: `${stage === "authoring" ? "Authoring" : "Review"} Part ${round}`,
       };
       if (path.includes("/live/") && (!item.live || entry.key > item.live.key)) item.live = entry;
       if (path.startsWith("session/")) item.session = entry;
@@ -64,7 +65,7 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
   return [...rounds.values()].sort(
     (a, b) =>
       a.round - b.round ||
-      Number(a.stage === "verification") - Number(b.stage === "verification") ||
+      Number(a.stage === "review") - Number(b.stage === "review") ||
       a.attempt - b.attempt,
   );
 }

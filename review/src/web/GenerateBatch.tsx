@@ -99,7 +99,7 @@ export function GenerateBatch({
           <DialogHeader
             title="Generate Batch"
             titleId="generate-batch-title"
-            description={fullName}
+            description={<span className="font-mono">{fullName}</span>}
             onClose={() => setOpen(false)}
             closeRef={closeButton}
             busy={busy}
@@ -113,7 +113,7 @@ export function GenerateBatch({
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
               <fieldset className="m-0 min-w-0 border-0 p-0">
-                <legend className="mb-4 text-sm font-medium">Candidates</legend>
+                <legend className="mb-4 text-sm font-semibold">Candidates</legend>
                 <div className="grid grid-cols-3 gap-3">
                   {(
                     [

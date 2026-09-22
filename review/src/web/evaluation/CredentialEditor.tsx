@@ -113,7 +113,7 @@ export function CredentialEditor({
             {draft.kind === "openai" && (
               <fieldset>
                 <legend className="sr-only">Authentication</legend>
-                <div className="grid grid-cols-2 border border-input p-1">
+                <div className="grid grid-cols-2 gap-1 border border-input bg-muted p-1">
                   {[
                     { id: "api-key", label: "API Key" },
                     { id: "codex-login", label: "ChatGPT Sign-In" },
@@ -122,7 +122,7 @@ export function CredentialEditor({
                       key={option.id}
                       type="button"
                       aria-pressed={draft.auth === option.id}
-                      className={`px-2 py-2 text-sm transition-colors ${draft.auth === option.id ? "bg-accent font-medium text-brand" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`px-2 py-1.5 text-sm font-medium transition-colors ${draft.auth === option.id ? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-muted-foreground hover:text-foreground"}`}
                       onClick={() => {
                         setDraft({
                           ...draft,

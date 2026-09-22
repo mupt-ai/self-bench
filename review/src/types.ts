@@ -29,7 +29,7 @@ export interface ArtifactEntry {
 }
 
 type BundleStage =
-  | "verification"
+  | "review"
   | "verify"
   | "authoring"
   | "environment"
@@ -41,6 +41,8 @@ interface BundleRef extends ArtifactEntry {
 }
 
 type ArtifactGroup =
+  | "review"
+  /** Legacy group retained for archived runs. */
   | "verification"
   | "verify"
   | "authoring"

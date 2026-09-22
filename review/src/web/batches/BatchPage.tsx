@@ -20,12 +20,12 @@ export function BatchPage() {
   const status = statuses[batchId];
   const statusError = errors[batchId];
   const repeated = status ? repeatedFailure(status) : undefined;
-  useDocumentTitle(`${batchName(batchId)} · ${repoId.fullName} · self-bench`);
+  useDocumentTitle(`${batchName(batchId)} · ${repoId.fullName} · SelfBench`);
   return (
     <PageContent>
       <Link
         to={batchPath(repoId.fullName)}
-        className="mb-5 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+        className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" aria-hidden="true" />
         Back to Batches
@@ -33,7 +33,7 @@ export function BatchPage() {
       <PageHeader
         title={
           <span className="inline-flex flex-wrap items-center gap-3">
-            {batchName(batchId)}
+            <span className="font-mono font-medium">{batchName(batchId)}</span>
             {status && <BatchState phase={status.phase} />}
           </span>
         }

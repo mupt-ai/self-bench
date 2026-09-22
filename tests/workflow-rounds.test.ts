@@ -33,7 +33,7 @@ describe("SelfBench workflow rounds", () => {
   test("accepts a task whose first authoring round is green and whose verifier accepts", async () => {
     const activities = acceptingActivities([candidate("green", 1)]);
     const calls: string[] = [];
-    const wrap = <K extends "runAuthoringRound" | "compileAndVerify" | "runVerifierRound">(
+    const wrap = <K extends "runAuthoringRound" | "compileAndVerify" | "runReviewRound">(
       name: K,
     ): void => {
       const original = activities[name] as (input: never) => Promise<unknown>;
@@ -47,7 +47,7 @@ describe("SelfBench workflow rounds", () => {
     };
     wrap("runAuthoringRound");
     wrap("compileAndVerify");
-    wrap("runVerifierRound");
+    wrap("runReviewRound");
     const status = recordStatuses();
 
     const result = await executeRun(run, activities, status.install);
@@ -56,9 +56,9 @@ describe("SelfBench workflow rounds", () => {
     expect(calls).toEqual([
       "runAuthoringRound:1",
       "compileAndVerify:authoring1",
-      "runVerifierRound:1",
+      "runReviewRound:1",
     ]);
-    expect(status.statuses()).toEqual([{ status: "accepted", stage: "verification", round: 1 }]);
+    expect(status.statuses()).toEqual([{ status: "accepted", stage: "review", round: 1 }]);
   });
   test("resumes the authoring session with the report after a policy error", async () => {
     const activities = acceptingActivities([candidate("policy", 1)]);
@@ -102,7 +102,7 @@ describe("SelfBench workflow rounds", () => {
       reportRef: ref(`file:///report-${round}`),
     });
     let verifierCalls = 0;
-    activities.runVerifierRound = async () => {
+    activities.runReviewRound = async () => {
       verifierCalls += 1;
       throw new Error("verifier must not run for a red task");
     };
@@ -136,7 +136,7 @@ describe("SelfBench workflow rounds", () => {
       expect(input.stage).toBe("authoring");
       return compile(input);
     };
-    activities.runVerifierRound = async (input) => {
+    activities.runReviewRound = async (input) => {
       calls.push(`review:${input.round}`);
       expect(input.session).toBeUndefined();
       return input.round === 1
@@ -167,7 +167,7 @@ describe("SelfBench workflow rounds", () => {
             reportRef: ref("file:///red-2"),
           }
         : greenOutcome(task, stage, round);
-    activities.runVerifierRound = async ({ round }) => {
+    activities.runReviewRound = async ({ round }) => {
       calls.push(`review:${round}`);
       return round === 1
         ? {
@@ -187,7 +187,7 @@ describe("SelfBench workflow rounds", () => {
   test("never reviews a revised draft while mechanical checks are red", async () => {
     const activities = acceptingActivities([candidate("red-revision", 1)]);
     const reviews: number[] = [];
-    activities.runVerifierRound = async ({ round }) => {
+    activities.runReviewRound = async ({ round }) => {
       reviews.push(round);
       return {
         kind: "suggestions",
@@ -215,7 +215,7 @@ describe("SelfBench workflow rounds", () => {
       authors.push(input.round);
       return author(input);
     };
-    activities.runVerifierRound = async ({ round }) => ({
+    activities.runReviewRound = async ({ round }) => ({
       kind: "suggestions",
       session: ref(`file:///v${round}`),
       summary: "Still coupled",
@@ -230,12 +230,12 @@ describe("SelfBench workflow rounds", () => {
     expect(current?.().tasks[0]?.reason).toContain("authoring exhausted 3 rounds");
     expect(current?.().tasks[0]?.reason).toContain("Use a public seam");
   });
-  test("rejects when the verification agent declines", async () => {
+  test("rejects when the review agent declines", async () => {
     const activities = acceptingActivities([candidate("declined", 1)]);
-    activities.runVerifierRound = async ({ candidate: value }) => ({
+    activities.runReviewRound = async ({ candidate: value }) => ({
       kind: "rejected",
       candidateId: value.candidateId,
-      reason: "verification agent declined the task: no public seam",
+      reason: "review agent declined the task: no public seam",
     });
     let currentStatus: (() => RunStatus) | undefined;
 
@@ -246,7 +246,7 @@ describe("SelfBench workflow rounds", () => {
     expect(currentStatus?.().tasks).toEqual([
       expect.objectContaining({
         status: "rejected",
-        reason: "verification agent declined the task: no public seam",
+        reason: "review agent declined the task: no public seam",
       }),
     ]);
   });

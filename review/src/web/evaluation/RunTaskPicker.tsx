@@ -28,11 +28,11 @@ export function RunTaskPicker({
 }) {
   const selected = new Set(draft.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId)));
   return (
-    <details className="group mb-5 border border-border bg-card">
+    <details className="group panel mb-5">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
         <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">
+          <span className="block text-sm font-semibold">
             {draft.tasks.length} {draft.tasks.length === 1 ? "Accepted Task" : "Accepted Tasks"}
           </span>
           <span className="mt-1 block text-xs text-muted-foreground">
@@ -69,7 +69,7 @@ export function RunTaskPicker({
             </Button>
           </div>
           <Link
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
             to={`/repos/${repo}`}
           >
             Review Dataset →
@@ -78,18 +78,18 @@ export function RunTaskPicker({
         {availableTasks.length ? (
           <div className="max-h-72 overflow-auto">
             <table className="w-full border-collapse text-left text-sm">
-              <thead className="sticky top-0 bg-muted/90 text-xs text-muted-foreground">
+              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
                 <tr>
-                  <th scope="col" className="w-12 px-4 py-3 font-medium">
+                  <th scope="col" className="w-12 px-4 py-2.5 font-semibold">
                     Include
                   </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
                     Task
                   </th>
-                  <th scope="col" className="hidden px-4 py-3 font-medium sm:table-cell">
+                  <th scope="col" className="hidden px-4 py-2.5 font-semibold sm:table-cell">
                     Difficulty
                   </th>
-                  <th scope="col" className="hidden px-4 py-3 font-medium lg:table-cell">
+                  <th scope="col" className="hidden px-4 py-2.5 font-semibold lg:table-cell">
                     Source Run
                   </th>
                 </tr>
@@ -99,7 +99,7 @@ export function RunTaskPicker({
                   const key = evaluationTaskKey(task.runId, task.taskId);
                   const checked = selected.has(key);
                   return (
-                    <tr key={key} className="border-t border-border hover:bg-muted/50">
+                    <tr key={key} className="border-t border-border hover:bg-muted/60">
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"

@@ -31,11 +31,11 @@ export function RunExecution({
   onSubmit(): void;
 }) {
   return (
-    <aside className="min-w-0 border border-border bg-card xl:sticky xl:top-6">
+    <aside className="panel min-w-0 xl:sticky xl:top-6">
       <div className="flex items-center justify-between border-b border-border px-4 py-4">
-        <h2 className="text-sm font-medium">Execution</h2>
+        <h2 className="text-sm font-semibold">Execution</h2>
         <Link
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="text-sm font-medium text-muted-foreground hover:text-foreground"
           to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
         >
           Credentials
@@ -86,18 +86,18 @@ export function RunExecution({
         </label>
       </fieldset>
       <div className="border-t border-border p-4">
-        <dl className="mb-4 space-y-2 text-xs tabular-nums">
+        <dl className="mb-4 space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
-            <dd>{draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
-            <dd>{pairs}</dd>
+            <dd className="font-mono tabular-nums">{pairs}</dd>
           </div>
           <div className="flex justify-between gap-3 border-t border-border pt-3 text-sm">
-            <dt>Total Trials</dt>
-            <dd className="font-medium">{pairs * draft.tasks.length}</dd>
+            <dt className="font-semibold">Total Trials</dt>
+            <dd className="font-mono font-semibold tabular-nums">{pairs * draft.tasks.length}</dd>
           </div>
         </dl>
         <Button
