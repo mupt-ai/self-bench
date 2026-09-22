@@ -1,6 +1,6 @@
 import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import { queryStatus } from "../api/status.js";
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
+import { queryStatus } from "../generation/run-status.js";
 import type { BatchStatus, TaskActivityDetail } from "./progress.js";
 
 const PENDING_ACTIVITY_SCHEDULED = 1;

@@ -8,6 +8,7 @@ import {
 } from "../../src/evaluation/credentials.js";
 import { orgRecords } from "../../src/evaluation/org-records.js";
 import { executionEnvironment } from "../../src/execution-environment.js";
+import { withGenerationRuntime } from "../../src/generation/runtime.js";
 import {
   type GenerationSettings,
   generationSettingsSchema,
@@ -19,7 +20,6 @@ import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "../../src/sandbox/timeout.js";
-import { withGenerationRuntime } from "../../src/temporal/activities/generation-runtime.js";
 import { MemoryRecords } from "../support/evaluation-records.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";

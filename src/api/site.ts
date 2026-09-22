@@ -16,6 +16,7 @@ import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
 import { evaluationStarter } from "../evaluation/start.js";
+import { temporalStarter, temporalStatus } from "../generation/candidate-workflows.js";
 import { generationRecordPath } from "../generation/credentials.js";
 import type { GenerationReference } from "../generation/settings.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "../github/repo-routes.js";
@@ -27,7 +28,6 @@ import { createPullRequestRoutes, type PullRequestRoutes } from "../tasks/pr-rou
 import { createTaskRoutes, type TaskRoutes } from "../tasks/routes.js";
 import { createRunStore } from "../tasks/run-store.js";
 import { createTaskStore } from "../tasks/store.js";
-import { temporalStarter, temporalStatus } from "../temporal/candidates.js";
 
 interface Site {
   users: ReturnType<typeof createUserStore>;

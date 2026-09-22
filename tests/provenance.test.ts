@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { selectCandidateProvenance } from "../src/generation/discovery/activity.js";
 import {
   assertProvenanceMatchesPullRequest,
   combineRunProvenance,
@@ -7,7 +8,6 @@ import {
   type ProvenanceMessage,
   redactSecrets,
 } from "../src/provenance.js";
-import { selectCandidateProvenance } from "../src/temporal/activities.js";
 
 describe("provenance sanitization", () => {
   test("extracts human Codex messages and ignores injected context", () => {

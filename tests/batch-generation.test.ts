@@ -3,11 +3,11 @@ import { loadWorkerConfig } from "../src/config.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { withExecutionEnvironment } from "../src/execution-environment.js";
+import { createActivities } from "../src/generation/activities.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
+import { withGenerationRuntime } from "../src/generation/runtime.js";
 import { githubToken } from "../src/github/token.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
-import { createActivities } from "../src/temporal/activities/factory.js";
-import { withGenerationRuntime } from "../src/temporal/activities/generation-runtime.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 

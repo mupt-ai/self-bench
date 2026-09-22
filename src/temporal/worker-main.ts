@@ -4,12 +4,11 @@ import { createArtifactStore } from "../artifacts.js";
 import { loadWorkerConfig } from "../config.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { openWorkerRecords } from "../evaluation/worker-records.js";
+import { createActivities } from "../generation/activities.js";
 import { createUsageStore } from "../managed/usage-store.js";
 import { runCommand } from "../process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
-
-import { createActivities } from "./activities.js";
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 import { harborTaskQueue } from "./task-queues.js";
@@ -26,7 +25,7 @@ if (config.execution.kind === "e2b") {
 }
 const connection = await connectTemporalWorker(config.temporal);
 const credentials = await openWorkerRecords();
-const workflowsPath = fileURLToPath(new URL("./workflow.js", import.meta.url));
+const workflowsPath = fileURLToPath(new URL("./workflows.js", import.meta.url));
 const { compileAndVerify, ...sandboxActivities } = createActivities(
   config,
   credentials?.records,

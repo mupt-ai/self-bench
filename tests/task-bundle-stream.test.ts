@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { LocalArtifactStore, verifiedArtifactReadStream } from "../src/artifacts.js";
 import type { ArtifactRef, AuthoredTask } from "../src/contracts.js";
+import { withTaskBundle } from "../src/generation/activity-runtime.js";
 import { runCommand } from "../src/process.js";
-import { withTaskBundle } from "../src/temporal/activities/runtime.js";
 
 const roots: string[] = [];
 afterEach(async () => {

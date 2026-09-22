@@ -4,6 +4,7 @@ import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { generationConfigEnvironment } from "../generation/config.js";
 import { generationEnvironment } from "../generation/credentials.js";
+import { buildExport } from "../generation/export.js";
 import { MANAGED_E2B_TEMPLATE_OWNER } from "../managed/generation.js";
 import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
 import { withUsageLedger } from "../managed/usage.js";
@@ -11,7 +12,6 @@ import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
-import { buildExport } from "../temporal/activities/export.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Resolve only this run's provider account; never launch repo tools in the API process. */

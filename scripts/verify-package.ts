@@ -128,7 +128,7 @@ try {
     "dist/validate-main.js",
     "review",
     "scripts",
-    "src/temporal/activities.ts",
+    "src/generation/activities.ts",
     "tests",
     "tsconfig.json",
   ]) {

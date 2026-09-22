@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ModalClient, Sandbox } from "modal";
 import type { ArtifactStore } from "../../../../src/artifacts.js";
+import { runSandboxWithFailureLog } from "../../../../src/generation/activity-runtime.js";
+import { WRAPPER_STATUS_PATH } from "../../../../src/generation/agent/round-outcome.js";
 import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";
 import {
   LiveSandboxRegistry,
@@ -12,8 +14,6 @@ import {
   ModalAllocation,
   ModalDeadline,
 } from "../../../../src/sandbox/providers/modal/lifecycle.js";
-import { WRAPPER_STATUS_PATH } from "../../../../src/temporal/activities/round-outcome.js";
-import { runSandboxWithFailureLog } from "../../../../src/temporal/activities/runtime.js";
 import { artifact } from "../../../support/workflow-fixture.js";
 import { fixture, never, request } from "./fixture.js";
 

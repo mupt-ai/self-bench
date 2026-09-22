@@ -3,10 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../../../src/artifacts.js";
+import { runSandboxWithFailureLog } from "../../../../src/generation/activity-runtime.js";
+import { WRAPPER_STATUS_PATH } from "../../../../src/generation/agent/round-outcome.js";
 import { LiveSandboxRegistry } from "../../../../src/sandbox/live.js";
 import { E2BSandboxExecutor } from "../../../../src/sandbox/providers/e2b/executor.js";
-import { WRAPPER_STATUS_PATH } from "../../../../src/temporal/activities/round-outcome.js";
-import { runSandboxWithFailureLog } from "../../../../src/temporal/activities/runtime.js";
 import {
   E2BSdkFixture,
   e2bFixtureConfig,

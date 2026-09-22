@@ -8,7 +8,7 @@ import type {
   VerifyOutcome,
   VerifyReport,
 } from "../../src/contracts.js";
-import type { SelfBenchActivities } from "../../src/temporal/activities.js";
+import type { SelfBenchActivities } from "../../src/generation/activity-types.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",

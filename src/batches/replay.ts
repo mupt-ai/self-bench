@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../artifacts.js";
 import { commitSchema, type ReplayRunRequest, type RunRequest } from "../contracts.js";
+import { rebuildReplayCandidates } from "../generation/replay.js";
 import { apiHeaders } from "../github/oauth.js";
-import { rebuildReplayCandidates } from "../temporal/activities/replay.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Replay metadata is ordinary API work too, never another orchestration workflow. */

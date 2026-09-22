@@ -10,8 +10,8 @@ import type {
   DiscoveryResult,
   TaskProgress,
 } from "../contracts.js";
+import type { DiscoveryShardInput } from "../generation/activity-types.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
-import type { DiscoveryShardInput } from "../temporal/activities.js";
 import { heartbeatCost } from "./activity.js";
 
 type ExecutionSnapshot<T> =

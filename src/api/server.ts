@@ -8,6 +8,7 @@ import { sendExpiredSession } from "../auth/session-expired.js";
 import { createGenerationBatches } from "../batches/service.js";
 import type { SelfBenchConfig } from "../config.js";
 import { openDatabase } from "../db/client.js";
+import { queryStatus } from "../generation/run-status.js";
 import { connectTemporalClient } from "../temporal/connection.js";
 import type { ViewerInfo } from "../viewer/types.js";
 import {
@@ -21,7 +22,6 @@ import {
 } from "./http.js";
 import { handleRunRoute } from "./run-routes.js";
 import { openSite } from "./site.js";
-import { queryStatus } from "./status.js";
 import { handleViewerRoute } from "./viewer-routes.js";
 
 export interface ApiOptions {

@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts.js";
+import { authoringPrompt, authoringResumePrompt } from "../src/generation/authoring/prompt.js";
 import { infrastructureFailureSummary, refreshInProgress } from "../src/tasks/status.js";
 import type { TaskRecord, TaskStore } from "../src/tasks/store.js";
-import {
-  authoringPrompt,
-  authoringResumePrompt,
-} from "../src/temporal/activities/prompts-authoring.js";
 import { candidate } from "./support/workflow-fixture.js";
 
 test("review feedback is the reason to revise even when mechanical gates are green", () => {
@@ -83,7 +80,7 @@ test("workflow failure preserves complete technical details", async () => {
 });
 
 test("authoring feedback is cleared when the revised mechanical report is red", async () => {
-  const { authoringResumePrompt } = await import("../src/temporal/activities/prompts-authoring.js");
+  const { authoringResumePrompt } = await import("../src/generation/authoring/prompt.js");
   expect(authoringResumePrompt(3, "RED mechanical report")).not.toContain(
     "read-only reviewer requested revisions",
   );
