@@ -117,7 +117,6 @@ try {
     "src/pi/extensions/authoring.ts",
     "src/pi/extensions/discovery.ts",
     "src/pi/extensions/reviewer.ts",
-    "src/skills/selfbench/SKILL.md",
   ]) {
     await readFile(join(installedRoot, asset));
   }

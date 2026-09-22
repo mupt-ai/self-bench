@@ -13,6 +13,7 @@ import {
   SUBMISSION,
   VERIFY,
 } from "./prompt-sections.js";
+import { AUTHORING_RUBRIC } from "./prompts-authoring-rubric.js";
 
 const authoringRole = (run: RunRequest, candidate: Candidate): string => `# Assignment
 
@@ -58,6 +59,7 @@ const verifyInstructions = `${VERIFY}\n\nEach authoring round has ${AUTHOR_VERIF
 export function authoringPrompt(run: RunRequest, candidate: Candidate, feedback?: string): string {
   return joinPromptSections(
     authoringRole(run, candidate),
+    AUTHORING_RUBRIC,
     reviewerFeedback(feedback),
     AUTHORING_TEST_EVIDENCE,
     HELD_OUT_TESTS,

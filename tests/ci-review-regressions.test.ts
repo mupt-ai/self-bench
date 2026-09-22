@@ -27,6 +27,7 @@ test("prompt sections stay explicit and ordered", () => {
   const prompt = authoringPrompt(run, candidate("prompt", 1));
   const sections = [
     "# Assignment",
+    "# Authoring Rubric",
     "# Test Reuse and Evidence",
     "# Held-Out Tests",
     "# Environment Contract",
@@ -35,9 +36,10 @@ test("prompt sections stay explicit and ordered", () => {
     "# Round 1 of 3",
     "# Verify Before You Submit",
   ];
+  const headings = prompt.split("\n").filter((line) => line.startsWith("# "));
   let previous = -1;
   for (const section of sections) {
-    const index = prompt.indexOf(section);
+    const index = headings.indexOf(section);
     expect(index).toBeGreaterThan(previous);
     previous = index;
   }

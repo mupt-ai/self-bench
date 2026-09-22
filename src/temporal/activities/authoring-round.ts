@@ -70,27 +70,17 @@ export async function runAuthoringRound(
     );
   }
   Context.current().heartbeat(`authoring ${candidate.candidateId} round ${round}`);
-  const [
-    provenance,
-    extension,
-    skill,
-    packager,
-    checker,
-    piAuth,
-    ghToken,
-    sessionBytes,
-    reportBytes,
-  ] = await Promise.all([
-    store.get(candidate.provenance),
-    readAsset("dist/extension-authoring.bundle.js"),
-    readAsset("src/skills/selfbench/SKILL.md"),
-    readAsset("dist/sandbox-author.bundle.js"),
-    readAsset("dist/sandbox-check.bundle.js"),
-    loadPiModelAuth(),
-    githubToken(),
-    input.session ? store.get(input.session) : undefined,
-    input.report ? store.get(input.report) : undefined,
-  ]);
+  const [provenance, extension, packager, checker, piAuth, ghToken, sessionBytes, reportBytes] =
+    await Promise.all([
+      store.get(candidate.provenance),
+      readAsset("dist/extension-authoring.bundle.js"),
+      readAsset("dist/sandbox-author.bundle.js"),
+      readAsset("dist/sandbox-check.bundle.js"),
+      loadPiModelAuth(),
+      githubToken(),
+      input.session ? store.get(input.session) : undefined,
+      input.report ? store.get(input.report) : undefined,
+    ]);
   const prompt = reportBytes
     ? authoringResumePrompt(
         round,
@@ -132,7 +122,6 @@ export async function runAuthoringRound(
                     contents,
                   })),
                   { path: "/work/authoring.js", contents: extension },
-                  { path: "/work/selfbench-skill/SKILL.md", contents: skill },
                   { path: "/work/sandbox-author.js", contents: packager },
                   { path: "/work/sandbox-check.js", contents: checker },
                   { path: "/work/provenance.json", contents: provenance },

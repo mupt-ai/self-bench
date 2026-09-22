@@ -47,8 +47,8 @@ mkdir -p /work/tasks /work/task ${PI_SESSION_DIRECTORY}
 cd /work/repo
 ${promptArguments()}
 agent_status=0
-run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-prompt-templates --no-context-files --no-extensions \\
-  --skill /work/selfbench-skill --extension /work/authoring.js \\
+run_with_heartbeat pi --print --mode json ${piSessionArguments(resume).join(" ")} --no-approve --no-skills --no-prompt-templates --no-context-files --no-extensions \\
+  --extension /work/authoring.js \\
   --provider "$(model_provider)" --model "$AUTHOR_MODEL" --thinking "\${AUTHOR_THINKING:-high}" \\
   --tools read,bash,grep,find,ls,verify,submit_task "\${prompt_args[@]}" || agent_status=$?
 collect_session

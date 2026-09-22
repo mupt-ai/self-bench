@@ -18,7 +18,6 @@
   "files": [
     "dist",
     "src/pi/extensions",
-    "src/skills",
     "drizzle",
     "docs",
     "compose.yaml",
