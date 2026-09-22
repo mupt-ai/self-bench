@@ -11,7 +11,7 @@ export interface StaticAuditReport {
   };
 }
 
-const thresholds: Record<
+export const difficultyThresholds: Record<
   Difficulty,
   {
     readonly implementationFiles: number;
@@ -31,7 +31,7 @@ export function auditTaskDefinition(
 ): StaticAuditReport {
   const gold = patchMetrics(goldPatch);
   const tests = patchMetrics(testPatch);
-  const threshold = thresholds[definition.difficulty];
+  const threshold = difficultyThresholds[definition.difficulty];
   const testPathSet = new Set(tests.files);
   const blockers: string[] = [];
   const protectedPaths = definition.testPaths.map((path) =>

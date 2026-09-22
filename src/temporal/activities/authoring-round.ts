@@ -89,7 +89,7 @@ export async function runAuthoringRound(
         ),
         input.feedback,
       )
-    : authoringPrompt(run, candidate, input.feedback);
+    : authoringPrompt(candidate, input.feedback);
   await store.put(`${attemptPrefix}/prompt.md`, Buffer.from(prompt), "text/markdown");
   const verifier = new SessionVerifier({
     store,

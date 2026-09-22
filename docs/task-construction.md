@@ -103,4 +103,4 @@ The export includes the repository snapshot at each selected base commit, held-o
 
 The manifest digest detects accidental corruption but is not a signature because it sits inside the same archive. Extract only exports from a trusted SelfBench deployment and store them as private benchmark material.
 
-The complete model-facing authoring and anti-coupling rubric is in [`src/temporal/activities/prompts-authoring-rubric.ts`](../src/temporal/activities/prompts-authoring-rubric.ts), which every initial authoring prompt includes.
+The complete model-facing authoring prompt, including the anti-coupling rules, is in [`src/temporal/activities/prompts-authoring.ts`](../src/temporal/activities/prompts-authoring.ts).

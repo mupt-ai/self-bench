@@ -6,7 +6,7 @@ import {
   authoringPrompt,
   authoringResumePrompt,
 } from "../src/temporal/activities/prompts-authoring.js";
-import { candidate, run } from "./support/workflow-fixture.js";
+import { candidate } from "./support/workflow-fixture.js";
 
 test("review feedback is the reason to revise even when mechanical gates are green", () => {
   const prompt = authoringResumePrompt(2, "Overall GREEN", "Remove private helper coupling");
@@ -20,21 +20,19 @@ test("review feedback is the reason to revise even when mechanical gates are gre
   expect(failed).toContain("did not pass mechanical verification");
   expect(failed).toContain("address its failures");
   expect(failed).toContain("fresh sandbox");
-  expect(authoringPrompt(run, candidate("prompt", 1))).not.toContain("fresh sandbox");
+  expect(authoringPrompt(candidate("prompt", 1))).not.toContain("fresh sandbox");
 });
 
 test("prompt sections stay explicit and ordered", () => {
-  const prompt = authoringPrompt(run, candidate("prompt", 1));
+  const prompt = authoringPrompt(candidate("prompt", 1));
   const sections = [
-    "# Assignment",
-    "# Authoring Rubric",
-    "# Test Reuse and Evidence",
-    "# Held-Out Tests",
-    "# Environment Contract",
-    "# Deliverable",
-    "# Submission and Rounds",
-    "# Round 1 of 3",
-    "# Verify Before You Submit",
+    "# Build One Eval Task",
+    "# What to Produce",
+    "# Isolate the Tests",
+    "# Keep the Instruction Fair",
+    "# Environment",
+    "# Difficulty",
+    "# How to Work",
   ];
   const headings = prompt.split("\n").filter((line) => line.startsWith("# "));
   let previous = -1;
