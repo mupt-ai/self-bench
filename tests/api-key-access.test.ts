@@ -97,7 +97,7 @@ describe("what an api key may reach", () => {
         candidateId: "w0s2-beta",
         difficulty: "easy",
         status: "verifying",
-        stage: "verification",
+        stage: "review",
         round: 2,
         taskId: "beta-renamed",
       },
@@ -107,7 +107,7 @@ describe("what an api key may reach", () => {
     expect((await renamed.json()).task).toMatchObject({
       taskId: "beta-renamed",
       candidateId: "w0s2-beta",
-      stage: "verification",
+      stage: "review",
       round: 2,
     });
     snapshot.mockImplementation(async () => ({

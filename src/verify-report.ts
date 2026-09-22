@@ -72,7 +72,7 @@ export function verifyReportSummary(report: VerifyReport): string {
 /** Concise markdown for the agent's next turn. */
 export function renderVerifyReport(report: VerifyReport): string {
   const sections = [
-    `# Verification report: ${report.stage} round ${report.round} for ${report.taskId}`,
+    `# Mechanical check report: ${report.stage} round ${report.round} for ${report.taskId}`,
     "",
     `Overall: **${report.green ? "GREEN" : "RED"}** — ${verifyReportSummary(report)}`,
     "",

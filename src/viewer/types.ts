@@ -85,7 +85,7 @@ export interface ArtifactEntry {
 }
 
 const BUNDLE_STAGES = [
-  "verification",
+  "review",
   "verify",
   "authoring",
   "environment",
@@ -99,6 +99,8 @@ export interface BundleRef extends ArtifactEntry {
 }
 
 export const ARTIFACT_GROUPS = [
+  "review",
+  /** Legacy artifact group retained so archived runs remain readable. */
   "verification",
   "verify",
   "authoring",

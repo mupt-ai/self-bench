@@ -125,10 +125,10 @@ describe("SelfBench candidate child workflows", () => {
         });
         signal?.(progress("verifying", "authoring", 2));
         observed.push(...(currentStatus?.().tasks.map((task) => task.status) ?? []));
-        signal?.(progress("reviewing", "verification", 1));
+        signal?.(progress("reviewing", "review", 1));
         observed.push(...(currentStatus?.().tasks.map((task) => task.status) ?? []));
         return {
-          progress: progress("accepted", "verification", 1),
+          progress: progress("accepted", "review", 1),
           task: {
             candidateId: candidateValue.candidateId,
             taskId: "signalled-task",
@@ -165,7 +165,7 @@ describe("SelfBench candidate child workflows", () => {
         taskId: "signalled-task",
         difficulty: "hard",
         status: "accepted",
-        stage: "verification",
+        stage: "review",
         round: 1,
       },
     ]);

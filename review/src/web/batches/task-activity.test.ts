@@ -70,7 +70,7 @@ test("a retrying candidate shows its attempt and last failure", () => {
 
 test("a failure shared by enough in-flight candidates is reported once for the batch", () => {
   const quota = { state: "queued" as const, attempt: 2, lastFailure: "quota reached" };
-  const verifierQuota = { ...quota, lastFailure: "verifier round 1: quota reached" };
+  const verifierQuota = { ...quota, lastFailure: "review round 1: quota reached" };
   const status: BatchStatus = {
     runId: "batch-one",
     phase: "authoring",

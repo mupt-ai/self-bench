@@ -83,7 +83,7 @@ export function authoringResumePrompt(
     DELIVERABLE,
     SUBMISSION,
     verifyInstructions,
-    `# Verification Report\n\n${renderedReport.trim()}`,
+    `# Mechanical Check Report\n\n${renderedReport.trim()}`,
     reviewerFeedback(feedback),
   );
 }

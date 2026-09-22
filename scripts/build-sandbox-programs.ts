@@ -6,7 +6,7 @@ const outputDirectory = join(root, "dist");
 
 const programs = ["author", "check", "verifier", "compiler", "task-operation"] as const;
 
-const extensions = ["authoring", "verifier"] as const;
+const extensions = ["authoring", "reviewer"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
 await mkdir(join(outputDirectory, "harbor-runtime"), { recursive: true });

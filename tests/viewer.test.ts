@@ -181,7 +181,7 @@ describe("artifact store listing", () => {
     expect(stages.get("cand-c")?.taskId).toBe("cand-c");
 
     // Agent-pipeline runs decide candidates in round results, not coupling reviews: the latest
-    // verification round's accepted result.json is the accept signal, and a rejected round result
+    // review round's accepted result.json is the accept signal, and a rejected round result
     // names the loop that ended the candidate.
     await store.put(
       "runs/run-1/verification/cand-b/round-1/result.json",

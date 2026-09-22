@@ -17,8 +17,8 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
-/** The verifier is intentionally read-only: it can accept or advise the next authoring round. */
-export default function verifierExtension(pi: ExtensionAPI): void {
+/** The reviewer is intentionally read-only: it can accept or advise the next authoring round. */
+export default function reviewerExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "accept_task",
     label: "Accept SelfBench task",
@@ -55,7 +55,7 @@ export default function verifierExtension(pi: ExtensionAPI): void {
     name: "submit_suggestions",
     label: "Submit authoring suggestions",
     description:
-      "Submit concise, actionable suggestions for the next authoring agent. This verifier is read-only and must not edit task files.",
+      "Submit concise, actionable suggestions for the next authoring agent. This reviewer is read-only and must not edit task files.",
     parameters: Type.Object(
       {
         summary: Type.String({ minLength: 1 }),

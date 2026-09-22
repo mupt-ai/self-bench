@@ -1,7 +1,7 @@
 import { type ArtifactRef, type Candidate, MAX_AUTHORING_ROUNDS } from "../../contracts.js";
 import { verifyReportSummary } from "../../verify-report.js";
+import { reviewAuthoredTask } from "./review-stage.js";
 import { infrastructureCounter, rejected, type StageContext, type StageOutcome } from "./stage.js";
-import { reviewAuthoredTask } from "./verification-stage.js";
 
 /** Authors own revisions; fresh read-only reviewers return feedback, never modified tasks. */
 export async function authorWithVerification(
@@ -11,7 +11,7 @@ export async function authorWithVerification(
   let session: ArtifactRef | undefined;
   let report: ArtifactRef | undefined;
   let feedback: string | undefined;
-  let lastSummary = "no verification report";
+  let lastSummary = "no review report";
   let verificationRound = 0;
   const infrastructure = infrastructureCounter();
   for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {

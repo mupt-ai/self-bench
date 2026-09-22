@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts.js";
-import type { VerifierRoundResult } from "../../contracts.js";
+import type { ReviewRoundResult } from "../../contracts.js";
 import { PI_SESSION_OUTPUT_PATH } from "../../pi-session.js";
 import {
   archiveSandboxResult,
@@ -10,7 +10,7 @@ import {
   type SandboxRoundResult,
 } from "./round-outcome.js";
 import type { StoredPiSession } from "./runtime.js";
-import type { VerifierRoundInput } from "./types.js";
+import type { ReviewRoundInput } from "./types.js";
 
 export const VERDICT_PATH = "/work/verdict/verdict.json";
 
@@ -27,9 +27,9 @@ const verdictSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
 ]);
 
-export interface VerifierOutcomeInput {
+export interface ReviewOutcomeInput {
   readonly store: ArtifactStore;
-  readonly input: VerifierRoundInput;
+  readonly input: ReviewRoundInput;
   readonly prefix: string;
   /** `<prefix>/attempt-<n>`: where this attempt's pre-decision artifacts go. */
   readonly attemptPrefix: string;
@@ -39,12 +39,10 @@ export interface VerifierOutcomeInput {
 }
 
 /** Archives a read-only verdict; never imports task modifications from the reviewer. */
-export async function resolveVerifierOutcome(
-  input: VerifierOutcomeInput,
-): Promise<VerifierRoundResult> {
+export async function resolveReviewOutcome(input: ReviewOutcomeInput): Promise<ReviewRoundResult> {
   const { store, prefix, attemptPrefix, result, session, logUri } = input;
   const { candidate, round } = input.input;
-  const reject = (reason: string): VerifierRoundResult => ({
+  const reject = (reason: string): ReviewRoundResult => ({
     kind: "rejected",
     candidateId: candidate.candidateId,
     reason: `${reason}; log: ${logUri}`,
@@ -67,20 +65,20 @@ export async function resolveVerifierOutcome(
     providerError: session?.providerError,
   });
   if (classified.kind === "infrastructure") {
-    throw new SandboxOutputError(`verifier ${classified.reason}; log: ${logUri}`);
+    throw new SandboxOutputError(`reviewer ${classified.reason}; log: ${logUri}`);
   }
   if (classified.kind === "rejected" || !verdictBytes || !session) {
     return reject(
-      `verifier ${classified.kind === "rejected" ? classified.reason : `round ${round} delivered no verdict`}`,
+      `reviewer ${classified.kind === "rejected" ? classified.reason : `round ${round} delivered no verdict`}`,
     );
   }
   const verdict = verdictSchema.safeParse(JSON.parse(Buffer.from(verdictBytes).toString("utf8")));
   if (!verdict.success) {
-    return reject(`verifier round ${round} produced an unreadable verdict`);
+    return reject(`review round ${round} produced an unreadable verdict`);
   }
   await store.put(`${prefix}/verdict.json`, verdictBytes, "application/json");
   if (verdict.data.kind === "none") {
-    return reject(`verification agent declined the task${explanation(session)}`);
+    return reject(`review agent declined the task${explanation(session)}`);
   }
   if (verdict.data.kind === "rejected") return reject(verdict.data.reason);
   if (verdict.data.kind === "accepted") {

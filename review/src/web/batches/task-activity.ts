@@ -40,8 +40,7 @@ export function activityCounts(status: BatchStatus) {
 }
 
 /** The round prefix repeats the row's Stage column; the rest is what actually went wrong. */
-const failureCause = (failure: string) =>
-  failure.replace(/^(authoring|verifier) round \d+:\s*/, "");
+const failureCause = (failure: string) => failure.replace(/^(authoring|review) round \d+:\s*/, "");
 
 /** "Attempt 3 of 4 · <failure>" for a candidate whose previous attempt failed. */
 export function retryDetail(status: BatchStatus, task: BatchTask): string | undefined {

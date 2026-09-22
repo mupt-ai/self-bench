@@ -53,8 +53,9 @@ function groupPrefix(
   switch (group) {
     case "authoring":
       return `runs/${runId}/authoring/${task.candidateId}`;
+    case "review":
     case "verification":
-      return `runs/${runId}/verification/${task.candidateId}`;
+      return `runs/${runId}/${group}/${task.candidateId}`;
     case "verify":
       return `runs/${runId}/verify/${task.candidateId}`;
     case "provenance":
@@ -66,8 +67,9 @@ function groupPrefix(
 
 function bundleStage(group: ArtifactGroup): BundleStage | undefined {
   switch (group) {
+    case "review":
     case "verification":
-      return "verification";
+      return "review";
     case "verify":
       return "verify";
     case "authoring":
@@ -84,7 +86,7 @@ function bundleStage(group: ArtifactGroup): BundleStage | undefined {
 }
 
 const STAGE_ORDER: Record<BundleStage, number> = {
-  verification: 0,
+  review: 0,
   verify: 1,
   repair: 2,
   "validation-repair": 3,

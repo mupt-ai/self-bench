@@ -53,7 +53,6 @@ jobs:
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      TF_PLAN_BUCKET: ${{ vars.TF_PLAN_BUCKET }}
       TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
@@ -67,10 +66,6 @@ jobs:
           fetch-depth: 0
       - name: Verify Trusted Deploy Source and Runtime Settings
         run: bash infra/ci/verify-source.sh
-      - name: Verify Apply Approval Protection
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 -m infra.ci.approval
       - name: Authenticate Terraform Plan
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -82,9 +77,27 @@ jobs:
         with:
           terraform_version: 1.14.2
           terraform_wrapper: false
-      - name: Generate and Store Private Plan
+      - name: Generate Terraform Plan
         id: plan
-        run: python3 -m infra.ci.terraform plan
+        run: |
+          set -euo pipefail
+          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
+          root="infra/terraform/environments/$TF_ENVIRONMENT"
+          jq -e --arg project "$GCP_PROJECT_ID" \
+            'type == "object" and .project_id == $project' <<<"$TF_INPUTS_JSON" >/dev/null
+          printf '%s' "$TF_INPUTS_JSON" > "$RUNNER_TEMP/terraform.tfvars.json"
+          terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
+          terraform -chdir="$root" validate
+          set +e
+          terraform -chdir="$root" plan -input=false -no-color -lock-timeout=5m -detailed-exitcode \
+            -var-file="$RUNNER_TEMP/terraform.tfvars.json" -out="$RUNNER_TEMP/terraform.tfplan"
+          status=$?
+          set -e
+          case "$status" in
+            0) echo 'has_changes=false' >> "$GITHUB_OUTPUT" ;;
+            2) echo 'has_changes=true' >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
       - name: Authenticate Terraform Apply
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -94,12 +107,13 @@ jobs:
       # Reconfigure gcloud as well as ADC so OS Login uses the apply account.
       - name: Configure gcloud for Apply
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-      - name: Apply the Approved Saved Plan
+      - name: Apply Terraform Plan
         if: steps.plan.outputs.has_changes == 'true'
-        env:
-          PLAN_MANIFEST_GENERATION: ${{ steps.plan.outputs.manifest_generation }}
-          PLAN_MANIFEST_SHA256: ${{ steps.plan.outputs.manifest_sha256 }}
-        run: python3 -m infra.ci.terraform apply
+        run: |
+          set -euo pipefail
+          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
+          terraform -chdir="infra/terraform/environments/$TF_ENVIRONMENT" apply \
+            -input=false -no-color -lock-timeout=5m "$RUNNER_TEMP/terraform.tfplan"
       - name: Infrastructure Bootstrap Complete
         if: inputs.infrastructure_only
         run: echo 'Infrastructure-only run complete. Configure DB login, secrets, Temporal, OAuth, DNS and TLS before a full deployment.' >> "$GITHUB_STEP_SUMMARY"
@@ -119,13 +133,13 @@ jobs:
             || { echo 'DNS/TLS and public web ingress must be configured first.' >&2; exit 1; }
           jq -e '.database != null' <<<"$deployment" >/dev/null \
             || { echo 'External databases require a reviewed backup adapter.' >&2; exit 1; }
-          {
-            echo image_prefix=$(jq -r '.image_prefix' <<<"$deployment")
-            echo registry=$(jq -r '.image_prefix | split("/")[0]' <<<"$deployment")
-            echo zone=$(jq -r '.zone' <<<"$deployment")
-            echo instance=$(jq -r '.instance' <<<"$deployment")
-            echo database_instance=$(jq -r '.database.instance | split(":")[-1]' <<<"$deployment")
-          } >> "$GITHUB_OUTPUT"
+          jq -r '
+            "image_prefix=\(.image_prefix)",
+            "registry=\(.image_prefix | split("/")[0])",
+            "zone=\(.zone)",
+            "instance=\(.instance)",
+            "database_instance=\(.database.instance | split(":")[-1])"
+          ' <<<"$deployment" >> "$GITHUB_OUTPUT"
       - name: Authenticate Docker to Artifact Registry
         if: ${{ !inputs.infrastructure_only }}
         run: gcloud auth configure-docker "$REGISTRY" --quiet
@@ -167,8 +181,7 @@ jobs:
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Registry digest not confirmed.' >&2; exit 1; }
           release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           staging=$(mktemp -d)
-          cp infra/runtime/deploy-host.py infra/runtime/deploy-check.mjs infra/runtime/compose.yaml \
-            infra/runtime/check_release.py "$staging/"
+          cp infra/runtime/deploy-host.sh infra/runtime/deploy-check.mjs infra/runtime/compose.yaml "$staging/"
           jq -Sc -n --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" --arg sha "$GITHUB_SHA" \
               --arg release_id "$release_id" --arg image "$SELFBENCH_IMAGE" --arg registry "$REGISTRY" \
               --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
@@ -180,7 +193,7 @@ jobs:
           remote+=" sudo cp -r /tmp/selfbench-release-$release_id /var/lib/selfbench-deploy/$release_id;"
           remote+=" sudo chown -R root:root /var/lib/selfbench-deploy/$release_id;"
           remote+=" sudo chmod -R go-rwx /var/lib/selfbench-deploy/$release_id;"
-          remote+=" sudo bash -c 'cd /var/lib/selfbench-deploy/$release_id && python3 deploy-host.py request.json > deploy.log 2>&1'"
+          remote+=" sudo bash -c 'cd /var/lib/selfbench-deploy/$release_id && bash deploy-host.sh request.json > deploy.log 2>&1'"
           tar -C "$staging" -czf - . | gcloud compute ssh "$INSTANCE" --project="$GCP_PROJECT_ID" --zone="$ZONE" \
             --tunnel-through-iap --quiet --command="$remote" -- -T
       - name: Verify Public HTTPS

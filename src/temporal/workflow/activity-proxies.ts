@@ -16,7 +16,7 @@ const candidateOptions: ActivityOptions = {
 
 const candidateActivities =
   proxyActivities<
-    Pick<SelfBenchActivities, "runAuthoringRound" | "runVerifierRound" | "buildExport">
+    Pick<SelfBenchActivities, "runAuthoringRound" | "runReviewRound" | "buildExport">
   >(candidateOptions);
 
 // The queue name depends on the running workflow, so the proxy is created per call.
@@ -62,6 +62,6 @@ export const workflowActivities: SelfBenchActivities = {
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   runAuthoringRound: candidateActivities.runAuthoringRound,
   compileAndVerify,
-  runVerifierRound: candidateActivities.runVerifierRound,
+  runReviewRound: candidateActivities.runReviewRound,
   buildExport: candidateActivities.buildExport,
 };
