@@ -84,7 +84,8 @@ jobs:
           export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
           root="infra/terraform/environments/$TF_ENVIRONMENT"
           jq -e --arg project "$GCP_PROJECT_ID" \
-            'type == "object" and .project_id == $project' <<<"$TF_INPUTS_JSON" > "$RUNNER_TEMP/terraform.tfvars.json"
+            'type == "object" and .project_id == $project' <<<"$TF_INPUTS_JSON" >/dev/null
+          printf '%s' "$TF_INPUTS_JSON" > "$RUNNER_TEMP/terraform.tfvars.json"
           terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
           terraform -chdir="$root" validate
           set +e

@@ -76,7 +76,8 @@ printf '%s' "$token" | docker login --username oauth2accesstoken --password-stdi
 
 check=(docker run --rm --env-file "$release/shared.env" --env-file "$release/worker.env"
   -v "$release/deploy-check.mjs:/app/deploy-check.mjs:ro" "$image" node /app/deploy-check.mjs)
-"${compose[@]}" stop api worker
+"${compose[@]}" stop api
+"${compose[@]}" stop worker
 migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
 docker run --rm --env-file "$release/shared.env" "$image" node --input-type=module -e "$migration"
 "${compose[@]}" up -d --wait --wait-timeout 180
