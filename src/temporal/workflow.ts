@@ -5,6 +5,7 @@ import {
   executeChild,
   getExternalWorkflowHandle,
   ParentClosePolicy,
+  patched,
   setHandler,
   workflowInfo,
 } from "@temporalio/workflow";

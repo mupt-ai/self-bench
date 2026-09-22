@@ -7,12 +7,12 @@ import { prepareGenerationBatch } from "../../src/batches/prepare.js";
 import { MAX_DISCOVERY_SHARDS } from "../../src/execution-limits.js";
 import { run } from "../support/workflow-fixture.js";
 
-test("caps independent discovery at the shared shard limit", async () => {
+test("caps independent discovery while covering enough PRs for a max-size run", async () => {
   const directory = await mkdtemp(join(tmpdir(), "batch-shard-cap-"));
   try {
     const artifacts = new LocalArtifactStore(directory);
     const provenance = await artifacts.put("input.jsonl", Buffer.alloc(0), "application/x-ndjson");
-    const nodes = Array.from({ length: 201 }, (_, i) => ({
+    const nodes = Array.from({ length: 500 }, (_, i) => ({
       number: i + 1,
       title: "Implement feature",
       body: "request",
@@ -56,6 +56,16 @@ test("caps independent discovery at the shared shard limit", async () => {
     expect(batch.shards.every((shard) => shard.input.shardCount === MAX_DISCOVERY_SHARDS)).toBe(
       true,
     );
+    const sourcePrs = new Set<number>();
+    for (const shard of batch.shards) {
+      const records = Buffer.from(await artifacts.get(shard.input.run.provenance))
+        .toString()
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { sourcePr: number });
+      for (const record of records) sourcePrs.add(record.sourcePr);
+    }
+    expect(sourcePrs.size).toBeGreaterThanOrEqual(300);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

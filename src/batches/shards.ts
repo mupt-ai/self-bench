@@ -1,9 +1,24 @@
+import { DISCOVERY_POOL_MULTIPLIER } from "../execution-limits.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
+
+const DEFAULT_PRS_PER_SHARD = 25;
+
+/** Size each shard to expose a 1.5× PR pool without exceeding the workflow bound. */
+export function discoveryPrsPerShard(candidateCount: number, shardCount: number): number {
+  if (!Number.isInteger(candidateCount) || candidateCount < 1)
+    throw new Error("Candidate count must be a positive integer");
+  if (!Number.isInteger(shardCount) || shardCount < 1)
+    throw new Error("Shard count must be a positive integer");
+  return Math.max(
+    DEFAULT_PRS_PER_SHARD,
+    Math.ceil((candidateCount * DISCOVERY_POOL_MULTIPLIER) / shardCount),
+  );
+}
 
 /** Keep every message for the same PR together; input ordering never changes membership. */
 export function partitionPullRequests(
   messages: readonly ProvenanceMessage[],
-  prsPerShard = 25,
+  prsPerShard = DEFAULT_PRS_PER_SHARD,
 ): ProvenanceMessage[][] {
   if (!Number.isInteger(prsPerShard) || prsPerShard < 1)
     throw new Error("Shard size must be a positive integer");
@@ -35,7 +50,7 @@ export function partitionPullRequests(
 export function takeNewestShards(
   chunks: readonly ProvenanceMessage[][],
   needed: number,
-  prsPerShard = 25,
+  prsPerShard = DEFAULT_PRS_PER_SHARD,
 ): ProvenanceMessage[][] {
   if (!Number.isInteger(needed) || needed < 1)
     throw new Error("Shard count must be a positive integer");
