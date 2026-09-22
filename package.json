@@ -41,6 +41,7 @@
     "build:review": "vite build --config review/vite.config.ts",
     "build:server": "tsc -p tsconfig.build.json && bun scripts/build-sandbox-programs.ts && bun run build:metadata",
     "build:metadata": "bun scripts/write-build-metadata.ts",
+    "build:bundle": "bun tools/build-combined-bundle.ts",
     "prepack": "bun run build",
     "prepublishOnly": "bun run validate",
     "verify:package": "bun scripts/verify-package.ts",
