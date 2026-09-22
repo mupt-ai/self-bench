@@ -114,11 +114,13 @@ export function RunExecution({
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             {!tasksReady
               ? "Accepted tasks are required to run."
-              : !pairs
-                ? "Add a model to continue."
-                : !draft.sandboxCredentialId
-                  ? "Select a sandbox credential to continue."
-                  : "Check the credentials and harness for each model."}
+              : !draft.tasks.length
+                ? "Select at least one accepted task to continue."
+                : !pairs
+                  ? "Add a model to continue."
+                  : !draft.sandboxCredentialId
+                    ? "Select a sandbox credential to continue."
+                    : "Check the credentials and harness for each model."}
           </p>
         )}
         <p className="mt-3 text-xs leading-5 text-muted-foreground">

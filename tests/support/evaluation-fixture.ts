@@ -47,7 +47,11 @@ export function evaluationInput(): EvaluationInput {
     tasks: [{ runId: "run-one", taskId: "task-one", bundleKey: "tasks/task.tar.gz" }],
   };
 }
-export async function evaluationServer(records?: EncryptedRecordStore, codexLogins?: CodexLogins) {
+export async function evaluationServer(
+  records?: EncryptedRecordStore,
+  codexLogins?: CodexLogins,
+  env: NodeJS.ProcessEnv = evaluationEnv,
+) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
   const artifacts = new LocalArtifactStore(directory);
   const database = await testDatabase();
@@ -149,10 +153,13 @@ export async function evaluationServer(records?: EncryptedRecordStore, codexLogi
         artifacts,
         publicUrl,
         ...(codexLogins ? { codexLogins } : {}),
-        env: evaluationEnv,
+        env,
         records:
           records ??
-          createEncryptedRecords(database.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY),
+          createEncryptedRecords(
+            database.db,
+            env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY,
+          ),
         async start(input) {
           if (failStart) throw new Error("mock connection lost");
           starts.push(input);

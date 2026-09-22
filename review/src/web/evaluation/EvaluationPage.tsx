@@ -140,6 +140,59 @@ export function EvaluationPage() {
             </label>
           )}
           <ParetoChart points={comparable} onSelect={(id) => setSearch({ run: id })} />
+          <section className="mt-8">
+            <SectionHeader title="Configuration × Task Results" />
+            {runs.some((run) => run.trials.length > 0) && (
+              <div className="mt-3 font-mono [&_button]:text-foreground [&_button:hover]:text-brand">
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Configuration</th>
+                      <th>Task</th>
+                      <th>Harness</th>
+                      <th>Verifier Score</th>
+                      <th>Model Cost</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.flatMap((run) =>
+                      run.trials.map((trial) => (
+                        <tr key={`${run.id}/${trial.runId}/${trial.taskId}/${trial.harness}`}>
+                          <td>
+                            <button type="button" onClick={() => setSearch({ run: run.id })}>
+                              {run.modelLabel}
+                            </button>
+                            <small>
+                              {run.modelName} · {run.sandbox} · {thinkingLabel(run.thinking)}
+                            </small>
+                          </td>
+                          <td className="wrap-anywhere">
+                            {trial.taskId}
+                            <small>Run {trial.runId}</small>
+                          </td>
+                          <td>{harnessLabels[trial.harness]}</td>
+                          <td>
+                            {trial.rewards.reward === undefined
+                              ? "Not Scored"
+                              : trial.rewards.reward}
+                          </td>
+                          <td>
+                            {trial.apiCostUsd === undefined
+                              ? "Not Available"
+                              : dollars(trial.apiCostUsd)}
+                          </td>
+                          <td>
+                            <RunStatus value={trial.status} />
+                          </td>
+                        </tr>
+                      )),
+                    )}
+                  </tbody>
+                </DataTable>
+              </div>
+            )}
+          </section>
           <ComparisonHistory key={url} repo={repo} url={url} />
           <section className="mt-6">
             <SectionHeader title="Runs" />
