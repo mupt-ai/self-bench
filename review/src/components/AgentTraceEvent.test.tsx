@@ -40,7 +40,7 @@ test("keeps provider-error metadata in the compact top-right header", () => {
   expect(html.indexOf("Provider Error")).toBeLessThan(html.indexOf("12:34:56 PM"));
 });
 
-test("separates tool names from arguments and identifies results as tool output", () => {
+test("labels tool outputs without a redundant returned-to-model detail", () => {
   const call = renderToStaticMarkup(
     <AgentTraceEvent
       event={{ kind: "tool", text: 'bash\n{"command":"bun test","timeout":30000}' }}
@@ -56,7 +56,7 @@ test("separates tool names from arguments and identifies results as tool output"
   expect(call).toContain("Arguments");
   expect(call).toContain("&quot;command&quot;: &quot;bun test&quot;");
   expect(result).toContain("Tool Output");
-  expect(result).toContain("Returned to Model");
+  expect(result).not.toContain("Returned to Model");
   expect(result).toContain("passed: 2 · failed: 0");
   expect(result).not.toContain("Model Input");
 });
