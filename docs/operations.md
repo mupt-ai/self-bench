@@ -303,7 +303,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The three tier counts total 1–10,000. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
+The three tier counts total 1–300. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
 
 ### Replaying known candidates
 

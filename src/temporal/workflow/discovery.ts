@@ -7,7 +7,11 @@ import type {
   DiscoveryResult,
   RunRequest,
 } from "../../contracts.js";
-import { MAX_CANDIDATES_PER_RUN, MAX_DISCOVERY_SHARDS } from "../../execution-limits.js";
+import {
+  DISCOVERY_POOL_MULTIPLIER,
+  MAX_CANDIDATES_PER_RUN,
+  MAX_DISCOVERY_SHARDS,
+} from "../../execution-limits.js";
 import type { DiscoveryShardInput, SelfBenchActivities } from "../activities.js";
 import { isExhaustedActivityFailure } from "./failures.js";
 
@@ -16,7 +20,6 @@ import { isExhaustedActivityFailure } from "./failures.js";
  * the observed rejection rate without multiplying the work. Spread across shards, small tiers
  * leave most shards with nothing to find for that tier.
  */
-const DISCOVERY_POOL_MULTIPLIER = 1.5;
 const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
 export const MAX_DISCOVERED_CANDIDATES = MAX_CANDIDATES_PER_RUN * 3;
 
