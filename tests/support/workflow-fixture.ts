@@ -173,6 +173,11 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),
       reason: "fair benchmark",
     }),
+    runVerifierRound: async ({ candidate: value, round }) => ({
+      kind: "accepted",
+      session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),
+      reason: "fair benchmark",
+    }),
     buildExport: async () => artifact,
   };
 }

@@ -72,5 +72,7 @@ export interface SelfBenchActivities {
   runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
   runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
+  /** @deprecated Kept for Temporal histories created before the review terminology rename. */
+  runVerifierRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
   buildExport(input: ExportInput): Promise<ArtifactRef>;
 }
