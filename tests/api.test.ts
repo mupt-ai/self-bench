@@ -18,21 +18,21 @@ const submission = {
 };
 
 describe("API run metadata", () => {
-  test("accepts up to ten thousand candidates", () => {
+  test("accepts up to three hundred candidates", () => {
     const built = buildRunRequest(loadConfig(), {
       ...submission,
-      candidateCounts: { easy: 3_334, medium: 3_333, hard: 3_333 },
+      candidateCounts: { easy: 100, medium: 100, hard: 100 },
     });
 
     expect("candidateCounts" in built ? built.candidateCounts : undefined).toEqual({
-      easy: 3_334,
-      medium: 3_333,
-      hard: 3_333,
+      easy: 100,
+      medium: 100,
+      hard: 100,
     });
     expect(() =>
       buildRunRequest(loadConfig(), {
         ...submission,
-        candidateCounts: { easy: 3_334, medium: 3_334, hard: 3_333 },
+        candidateCounts: { easy: 100, medium: 100, hard: 101 },
       }),
     ).toThrow();
   });

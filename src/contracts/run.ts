@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
 import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "../providers.js";
 import { generationReferenceSchema } from "../site/generation-settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
 
-export const MAX_CANDIDATES_PER_RUN = 10_000;
+export { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
 
 const candidateCountsSchema = z
   .object({
