@@ -84,7 +84,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
           content: [
             {
               type: "text",
-              text: `Submitted ${taskId}; the static check passed and the Harbor tree is dry-rendered under ${verdict.renderedDirectory ?? "/work/rendered"}. ${verified ? "This deliverable matches your last green verify, so the worker reuses that report." : "This deliverable was not verified green in this session, so the worker verifies it now and a round is spent if it fails."} Stop here and wait.`,
+              text: `Submitted ${taskId}; the static check passed and the Harbor tree is dry-rendered under ${verdict.renderedDirectory ?? "/work/rendered"}. ${verified ? "This deliverable matches your last green verify, so the worker reuses that report." : "This deliverable was not verified green in this authoring round, so the worker verifies it now and a round is spent if it fails."} Stop here and wait.`,
             },
           ],
           details: { taskId, verified },

@@ -20,7 +20,7 @@ export type VerifyOutcome =
 
 /**
  * Sandbox side of the worker mailbox: writes a verify request the supervising activity picks up,
- * then blocks until the response arrives. Reports consume the per-session budget; worker errors
+ * then blocks until the response arrives. Reports consume the current round's budget; worker errors
  * and budget exhaustion do not.
  */
 export class VerifyClient {
@@ -38,7 +38,7 @@ export class VerifyClient {
     return Math.max(0, this.#budget - this.#used);
   }
 
-  /** Whether this exact payload was verified green in this session. */
+  /** Whether this exact payload was verified green in this authoring round. */
   verifiedGreen(payload: SubmissionPayload): boolean {
     return this.#lastGreenHash !== undefined && this.#lastGreenHash === submissionHash(payload);
   }
@@ -104,7 +104,7 @@ export class VerifyClient {
 
 export function verifyOutcomeText(outcome: VerifyOutcome): string {
   if (outcome.kind === "exhausted") {
-    return `No verify calls remain in this session. Call submit_task with your best task or explain in your final message why it cannot be made fair.`;
+    return `No verify calls remain in this authoring round. Call submit_task with your best task or explain in your final message why it cannot be made fair.`;
   }
   if (outcome.kind === "error") {
     return `verify could not complete: ${outcome.message}`;
@@ -112,5 +112,5 @@ export function verifyOutcomeText(outcome: VerifyOutcome): string {
   const next = outcome.green
     ? `Call submit_task with exactly this payload to record it; the worker will reuse this report.`
     : `Fix the red gates and call verify again, or submit_task if you must (the worker verifies again and a round is spent if it fails).`;
-  return `${outcome.rendered.trim()}\n\nverify result: green=${outcome.green}. ${outcome.remaining} verify call(s) remain in this session. ${next}`;
+  return `${outcome.rendered.trim()}\n\nverify result: green=${outcome.green}. ${outcome.remaining} verify call(s) remain in this authoring round. ${next}`;
 }

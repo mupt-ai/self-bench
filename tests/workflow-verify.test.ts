@@ -44,11 +44,11 @@ describe("SelfBench in-session verify", () => {
       { report: "file:///verified/report.json", bundle: "file:///verified/harbor-task.tar.gz" },
     ]);
   });
-  test("starts each authoring round with a fresh verify budget", async () => {
+  test("does not carry verify usage into later authoring rounds", async () => {
     const activities = acceptingActivities([candidate("budget", 1)]);
-    const authorRounds: number[] = [];
-    activities.runAuthoringRound = async ({ candidate: value, round }) => {
-      authorRounds.push(round);
+    const authorInputs: { round: number; verifyCallsUsed: number | undefined }[] = [];
+    activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
+      authorInputs.push({ round, verifyCallsUsed });
       return {
         kind: "submitted",
         task: draft(value.candidateId, `-r${round}`),
@@ -85,7 +85,11 @@ describe("SelfBench in-session verify", () => {
     const result = await executeRun(run, activities);
 
     expect(result.acceptedTaskIds).toEqual(["budget-task"]);
-    expect(authorRounds).toEqual([1, 2, 3]);
+    expect(authorInputs).toEqual([
+      { round: 1, verifyCallsUsed: undefined },
+      { round: 2, verifyCallsUsed: undefined },
+      { round: 3, verifyCallsUsed: undefined },
+    ]);
     expect(verifierRounds).toEqual([1, 2]);
     expect(verified).toEqual(["authoring:1", "authoring:2", "authoring:3"]);
   });
