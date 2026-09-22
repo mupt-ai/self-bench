@@ -1,5 +1,6 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { RunRequest } from "../contracts.js";
+import { MAX_DISCOVERY_SHARDS } from "../execution-limits.js";
 import { combineRunProvenance } from "../provenance.js";
 import { collectExcludedSourcePrs } from "../temporal/activities/excluded-source-prs.js";
 import { parseProvenance } from "../temporal/activities/runtime.js";
@@ -37,7 +38,7 @@ export async function prepareGenerationBatch(options: {
   // One discovery agent can fill a small request from a single 25-PR window. Do not
   // start a shard per remaining PR group when the batch only asked for a few tasks.
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
-  const selected = takeNewestShards(chunks, needed);
+  const selected = takeNewestShards(chunks, Math.min(MAX_DISCOVERY_SHARDS, needed));
   const shards: GenerationBatch["shards"] = [];
   for (const [index, chunk] of selected.entries()) {
     const provenance = await artifacts.put(

@@ -11,11 +11,14 @@ import {
 import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
+  DiscoveryResult,
   RunResult,
   RunStatus,
   TaskProgress,
   WorkflowRunInput,
 } from "../contracts.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
+import type { DiscoveryShardInput } from "./activities.js";
 import { workflowActivities } from "./workflow/activity-proxies.js";
 import { executeCandidate, initialProgress } from "./workflow/candidate.js";
 import { executeRun } from "./workflow/run.js";
@@ -23,13 +26,19 @@ import { executeRun } from "./workflow/run.js";
 export const statusQuery = defineQuery<RunStatus>("status");
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
 const candidateProgressSignal = defineSignal<[TaskProgress]>("candidateProgress");
+const CANDIDATE_CONCURRENCY_PATCH = "candidate-workflow-concurrency-150";
+// Existing parent histories must keep their original child-start schedule during replay.
+const LEGACY_CANDIDATE_WORKFLOW_CONCURRENCY = 100;
 
 function candidateWorkflowId(runId: string, candidateId: string): string {
   return `${runId}/candidate/${candidateId}`;
 }
 
 export async function selfBenchRunWorkflow(input: WorkflowRunInput): Promise<RunResult> {
-  return await executeRun(
+  const candidateConcurrency = patched(CANDIDATE_CONCURRENCY_PATCH)
+    ? MAX_CONCURRENT_CANDIDATE_WORKFLOWS
+    : LEGACY_CANDIDATE_WORKFLOW_CONCURRENCY;
+  return executeRun(
     input,
     workflowActivities,
     (status) => setHandler(statusQuery, () => status()),
@@ -43,6 +52,7 @@ export async function selfBenchRunWorkflow(input: WorkflowRunInput): Promise<Run
           workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
         }),
     },
+    candidateConcurrency,
   );
 }
 
@@ -75,8 +85,8 @@ export { executeRun } from "./workflow/run.js";
 
 /** Independent discovery unit. Fetching PR metadata and dispatch happen in the application. */
 export async function selfBenchDiscoveryShardWorkflow(
-  input: import("./activities.js").DiscoveryShardInput,
-): Promise<import("../contracts.js").DiscoveryResult> {
+  input: DiscoveryShardInput,
+): Promise<DiscoveryResult> {
   return workflowActivities.discoverCandidateShard(input);
 }
 

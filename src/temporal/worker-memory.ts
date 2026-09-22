@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import { totalmem } from "node:os";
+import { MAX_HARBOR_CONCURRENCY } from "../execution-limits.js";
 import { harborSlotsForMemory } from "../worker-capacity.js";
 
 /** Harbor slots for this worker: the explicit setting, else sized to the cgroup or host memory. */
 export function resolveHarborConcurrency(configured: number | undefined): number {
-  return configured ?? harborSlotsForMemory(availableMemoryBytes());
+  return Math.min(
+    MAX_HARBOR_CONCURRENCY,
+    configured ?? harborSlotsForMemory(availableMemoryBytes()),
+  );
 }
 
 function availableMemoryBytes(): number {

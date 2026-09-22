@@ -1,3 +1,4 @@
+import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import type { ExecutionBackend } from "./providers.js";
 
 const DEFAULT_ACTIVITY_CONCURRENCY = {
@@ -22,5 +23,8 @@ const BYTES_PER_HARBOR_PROCESS = 256 * 1024 ** 2;
 const MINIMUM = 2;
 
 export function harborSlotsForMemory(memoryBytes: number): number {
-  return Math.max(MINIMUM, Math.floor((memoryBytes - RESERVED_BYTES) / BYTES_PER_HARBOR_PROCESS));
+  return Math.min(
+    MAX_HARBOR_CONCURRENCY,
+    Math.max(MINIMUM, Math.floor((memoryBytes - RESERVED_BYTES) / BYTES_PER_HARBOR_PROCESS)),
+  );
 }
