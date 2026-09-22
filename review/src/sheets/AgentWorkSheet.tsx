@@ -1,5 +1,6 @@
 import React from "react";
 import { type AgentFeedEvent, agentFeedEvents } from "../../../src/agent-feed";
+import { AgentTraceEvent } from "../components/AgentTraceEvent";
 import { notice, sheetBody } from "../components/viewer-ui";
 import { type AgentRound, agentRounds } from "../lib/agent-rounds";
 import type { TaskSource } from "../sources/types";
@@ -31,7 +32,7 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
   }, [source, row.id]);
   const rounds = artifacts ? agentRounds(artifacts) : [];
   return (
-    <div className={sheetBody}>
+    <div className={`${sheetBody} !gap-2`}>
       {error && (
         <p className={`${notice} site:p-0! !text-(--bad-fg) site:!text-danger`} role="alert">
           {error}
@@ -109,18 +110,24 @@ function AgentPart({
           ? "In Progress"
           : "Stopped";
   return (
-    <details className="group/part border border-border [&+&]:mt-3">
-      <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 font-mono text-sm font-medium text-foreground before:justify-self-start before:text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾'] [&::-webkit-details-marker]:hidden site:text-sm site:leading-normal">
-        <span className="text-center">{round.title}</span>
-        <span className="justify-self-end font-mono text-xs text-muted-foreground site:text-sm site:leading-normal">
+    <details className="group/part border border-border bg-background open:bg-card">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-x-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand [&::-webkit-details-marker]:hidden sm:px-4">
+        <span
+          aria-hidden="true"
+          className="shrink-0 text-[10px] text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾']"
+        />
+        <span className="min-w-0 flex-1 truncate font-mono text-sm font-medium text-foreground">
+          {round.title}
+        </span>
+        <span className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
           {round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}
           {status}
         </span>
       </summary>
       <div className="border-t border-border">
         {capturedAt && (
-          <p className="m-0 px-4 py-2.5 font-mono text-xs leading-[normal] text-muted-foreground site:text-sm site:leading-normal">
-            Last Output · {new Date(capturedAt).toLocaleTimeString()}
+          <p className="m-0 border-b border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground sm:px-4">
+            Updated {formatCapturedAt(capturedAt)}
           </p>
         )}
         {error && (
@@ -134,50 +141,23 @@ function AgentPart({
           </p>
         )}
         <div className="max-h-[560px] overflow-auto">
-          {events.map((event, eventIndex) => {
-            const key = `${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`;
-            return event.kind === "message" || event.kind === "error" ? (
-              <div
-                className="border-t border-border px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-foreground site:[&_pre]:text-base [&_time]:float-right [&_time]:font-mono [&_time]:text-xs [&_time]:text-muted-foreground site:[&_time]:text-sm site:[&_time]:leading-normal"
-                key={key}
-              >
-                <span
-                  className={`mb-2 block font-mono text-xs leading-[normal] site:text-sm site:leading-normal ${event.kind === "error" ? "text-destructive" : "text-brand"}`}
-                >
-                  {event.kind === "error" ? "Provider Error" : "Agent Message"}
-                </span>
-                {event.timestamp && (
-                  <time dateTime={event.timestamp}>{formatEventTime(event.timestamp)}</time>
-                )}
-                <pre>{event.text}</pre>
-              </div>
-            ) : (
-              <details
-                className="group/event border-t border-border px-4 py-3 first:border-t-0 [&_pre]:m-0 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-[1.6] [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:text-foreground site:[&_pre]:text-sm site:[&_pre]:leading-6 [&_time]:float-right [&_time]:font-mono [&_time]:text-xs [&_time]:text-muted-foreground site:[&_time]:text-sm site:[&_time]:leading-normal"
-                key={key}
-              >
-                <summary className="cursor-pointer list-none font-mono text-xs leading-[normal] text-muted-foreground [&::-webkit-details-marker]:hidden [&>span:first-child]:mr-2.5 [&>span:first-child]:inline site:text-sm site:leading-normal">
-                  <span className="mb-2 block font-mono text-xs leading-[normal] text-brand site:text-sm site:leading-normal">
-                    {event.kind === "tool" ? "Tool Call" : "Tool Output"}
-                  </span>
-                  {event.timestamp && (
-                    <time dateTime={event.timestamp}>{formatEventTime(event.timestamp)}</time>
-                  )}
-                  <span className="font-mono text-xs leading-[normal] text-muted-foreground site:text-sm site:leading-normal">
-                    {event.text.split("\n")[0] || "(empty)"}
-                  </span>
-                </summary>
-                <pre>{event.text}</pre>
-              </details>
-            );
-          })}
+          {events.map((event, eventIndex) => (
+            <AgentTraceEvent
+              // Feed events have no IDs; the index disambiguates repeated streaming snapshots.
+              // biome-ignore lint/suspicious/noArrayIndexKey: rows contain no local state.
+              key={`${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`}
+              event={event}
+            />
+          ))}
         </div>
       </div>
     </details>
   );
 }
 
-function formatEventTime(value: string): string {
+function formatCapturedAt(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString();
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
