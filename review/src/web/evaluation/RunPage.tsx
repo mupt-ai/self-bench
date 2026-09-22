@@ -5,6 +5,7 @@ import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
+import { evaluationTaskKey } from "../../../../src/evaluation/task-identity";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -84,10 +85,11 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           setAvailableTasks(result.tasks);
           setState((current) => {
             if (current.submitted) return current;
-            const taskKey = (runId: string, taskId: string) => JSON.stringify([runId, taskId]);
-            const available = new Set(result.tasks.map((task) => taskKey(task.runId, task.taskId)));
+            const available = new Set(
+              result.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId)),
+            );
             const selectedTasks = current.draft.tasks.filter((task) =>
-              available.has(taskKey(task.runId, task.taskId)),
+              available.has(evaluationTaskKey(task.runId, task.taskId)),
             );
             const tasks =
               selectedTasks.length || current.draft.tasks.length
