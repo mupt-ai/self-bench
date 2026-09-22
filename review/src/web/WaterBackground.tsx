@@ -98,9 +98,18 @@ export function WaterBackground() {
       if (!document.hidden) frame = requestAnimationFrame(draw);
     };
     document.addEventListener("visibilitychange", visibility);
+    // A still frame only redraws on demand, so repaint it when the theme flips.
+    const themeChange = new MutationObserver(() => {
+      if (still) visibility();
+    });
+    themeChange.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", visibility);
+      themeChange.disconnect();
     };
   }, []);
   return <canvas ref={canvas} className="pointer-events-none fixed inset-0 -z-10 h-full w-full" />;
