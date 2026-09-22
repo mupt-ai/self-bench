@@ -17,17 +17,17 @@ import { createEvaluationRoutes } from "../evaluation/routes.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "../github/repo-routes.js";
 import { generationCost } from "../managed/cost-status.js";
 import { createUsageStore } from "../managed/usage-store.js";
-import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
-import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected-repos.js";
-import { evaluationStarter } from "./evaluation-start.js";
-import { generationRecordPath } from "./generation-credentials.js";
-import type { GenerationReference } from "./generation-settings.js";
-import { createPullRequestRoutes, type PullRequestRoutes } from "./pr-routes.js";
-import { createRepoStore } from "./repo-store.js";
-import { createRunStore } from "./run-store.js";
-import { createTaskStore } from "./task-store.js";
-import { createTaskRoutes, type TaskRoutes } from "./tasks.js";
-import { temporalStarter, temporalStatus } from "./temporal-status.js";
+import { type BatchRoutes, createBatchRoutes } from "../site/batch-routes.js";
+import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "../site/connected-repos.js";
+import { evaluationStarter } from "../site/evaluation-start.js";
+import { generationRecordPath } from "../site/generation-credentials.js";
+import type { GenerationReference } from "../site/generation-settings.js";
+import { createPullRequestRoutes, type PullRequestRoutes } from "../site/pr-routes.js";
+import { createRepoStore } from "../site/repo-store.js";
+import { createRunStore } from "../site/run-store.js";
+import { createTaskStore } from "../site/task-store.js";
+import { createTaskRoutes, type TaskRoutes } from "../site/tasks.js";
+import { temporalStarter, temporalStatus } from "../site/temporal-status.js";
 
 interface Site {
   users: ReturnType<typeof createUserStore>;

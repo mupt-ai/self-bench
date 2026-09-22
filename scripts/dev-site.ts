@@ -50,7 +50,7 @@ const apiEnv: NodeJS.ProcessEnv = {
   // The login loop does not need Temporal; connect only if a run route is ever hit.
   SELFBENCH_TEMPORAL_CONNECT: env.SELFBENCH_TEMPORAL_CONNECT ?? "lazy",
 };
-const api = spawn("bunx", ["tsx", "src/api-main.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
+const api = spawn("bunx", ["tsx", "src/api/main.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
 const vite = spawn(
   "bunx",
   [

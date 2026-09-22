@@ -5,7 +5,7 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
 ARG SELFBENCH_BUILD_COMMIT
-RUN if [ -f tsconfig.build.json ]; then bun run build; else test -f dist/api-main.js; fi
+RUN if [ -f tsconfig.build.json ]; then bun run build; else test -f dist/api/main.js; fi
 RUN rm -rf node_modules && bun install --frozen-lockfile --production
 
 FROM docker:29.4.0-cli AS docker-cli
@@ -37,4 +37,4 @@ COPY package.json ./package.json
 COPY --from=build /app/Dockerfile.sandbox ./Dockerfile.sandbox
 
 USER node
-CMD ["node", "dist/api-main.js"]
+CMD ["node", "dist/api/main.js"]

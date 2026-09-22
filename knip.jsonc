@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "src/cli.ts!",
-    "src/api-main.ts!",
+    "src/api/main.ts!",
     "src/temporal/worker-main.ts!",
     // Documented standalone worker, separate from the combined worker.
     "src/evaluation/worker-main.ts!",

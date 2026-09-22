@@ -16,7 +16,7 @@ x-app: &app
 services:
   api:
     <<: *app
-    command: [node, dist/api-main.js]
+    command: [node, dist/api/main.js]
     env_file:
       - path: ${SELFBENCH_SHARED_ENV_FILE:?Set protected shared env-file path}
         format: raw

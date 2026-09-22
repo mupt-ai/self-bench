@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildRunRequest } from "../src/api.js";
+import { buildRunRequest } from "../src/api/run-request.js";
 import { loadConfig } from "../src/config.js";
 import { HOBBY_E2B_TIMEOUT_CAP_MS, HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
 

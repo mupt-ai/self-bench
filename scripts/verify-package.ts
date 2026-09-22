@@ -68,7 +68,7 @@ try {
     "dist/harbor/task/runtime/command.sh",
     "dist/runtime/junit.py",
     "dist/runtime/command.sh",
-    "dist/api-main.js",
+    "dist/api/main.js",
     "dist/temporal/worker-main.js",
     "dist/harbor/runtime/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
