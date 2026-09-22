@@ -18,7 +18,7 @@ export function TaskPage() {
   const fullName = `${owner}/${name}`;
   const [task, setTask] = React.useState<TaskItem | null | undefined>(undefined);
   const title = taskTitle(task ?? { taskId });
-  useDocumentTitle(`${title} · self-bench`);
+  useDocumentTitle(`${title} · SelfBench`);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -63,22 +63,23 @@ export function TaskPage() {
   return (
     <div className="grid h-full min-h-0 min-w-0 flex-none grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
       <header
-        className={`flex flex-wrap items-start justify-between gap-4 border-b border-border bg-card py-4 ${pageGutter}`}
+        className={`flex flex-wrap items-start justify-between gap-4 border-b border-border bg-background py-5 ${pageGutter}`}
       >
         <div className="min-w-0">
           <Breadcrumbs
             items={[
-              { label: fullName, to: `/repos/${fullName}` },
+              { label: "Repositories", to: "/" },
+              { label: fullName, to: `/repos/${fullName}`, mono: true },
               {
                 label: "Batch",
                 to: `/repos/${fullName}/batches/${encodeURIComponent(task.runId)}`,
               },
             ]}
           />
-          <h1 className="text-xl leading-7 font-medium wrap-anywhere">
+          <h1 className="font-mono text-xl leading-7 font-medium wrap-anywhere">
             {task.sourceUrl ? (
               <a
-                className="hover:text-brand"
+                className="hover:underline hover:underline-offset-4"
                 href={task.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
@@ -94,10 +95,10 @@ export function TaskPage() {
           </div>
           {task.pipelineStatus === "infrastructure_failed" &&
           (task.reason || task.reasonSummary) ? (
-            <div className="mt-3 font-mono text-sm leading-6 text-muted-foreground">
+            <div className="mt-3 text-sm leading-6 text-muted-foreground">
               {task.reasonSummary && <p>{task.reasonSummary}</p>}
               {technicalDetails && (
-                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
+                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-xs [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
                   <summary>Technical Details</summary>
                   <pre>{technicalDetails}</pre>
                 </details>
@@ -105,7 +106,7 @@ export function TaskPage() {
             </div>
           ) : task.reasonSummary && task.state !== "accepted" ? (
             <p
-              className="mt-2 max-w-[90ch] font-mono text-sm leading-6 text-muted-foreground wrap-anywhere"
+              className="mt-2 max-w-[90ch] text-sm leading-6 text-muted-foreground wrap-anywhere"
               title={task.reasonSummary}
             >
               {task.reasonSummary}

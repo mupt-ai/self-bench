@@ -27,7 +27,7 @@ function statsOf(counts: RepoTaskCounts | undefined): RepoStats {
 
 export function ReposPage() {
   const { org } = useOrg();
-  useDocumentTitle(`${org.login} · self-bench`);
+  useDocumentTitle(`${org.login} · SelfBench`);
   const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
   const [error, setError] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);

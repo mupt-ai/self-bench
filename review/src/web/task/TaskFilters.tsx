@@ -37,7 +37,7 @@ export function TaskFilters({
         />
         <label
           htmlFor={statusId}
-          className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground [&>span]:flex-1 sm:[&>span]:w-48"
+          className="flex shrink-0 items-center gap-3 text-sm font-medium text-muted-foreground [&>span]:flex-1 sm:[&>span]:w-48"
         >
           Status
           <Select

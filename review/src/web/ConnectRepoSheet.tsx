@@ -115,7 +115,7 @@ export function ConnectRepoSheet({
           >
             <Input
               ref={search}
-              className="flex-1"
+              className="flex-1 font-mono"
               type="text"
               placeholder="owner/name"
               value={query}
@@ -163,7 +163,7 @@ export function ConnectRepoSheet({
             </p>
           )}
           {visible.length > 0 && (
-            <ul className="border border-border bg-card" aria-label="Repositories">
+            <ul className="panel" aria-label="Repositories">
               {visible.map((repo) => (
                 <li key={repo.githubId} className="border-t border-border first:border-t-0">
                   <RepoRow
@@ -196,11 +196,7 @@ function RepoRow({
   connecting: boolean;
   onConnect: (repo: Repo) => void;
 }) {
-  const meta = [
-    repo.defaultBranch,
-    repo.private ? "Private" : undefined,
-    repo.archived ? "Archived" : undefined,
-  ]
+  const meta = [repo.private ? "Private" : undefined, repo.archived ? "Archived" : undefined]
     .filter(Boolean)
     .join(" · ");
   return (
@@ -209,20 +205,16 @@ function RepoRow({
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm text-foreground">{repo.fullName}</p>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{meta}</p>
+        <p className="truncate font-mono text-sm font-medium text-foreground">{repo.fullName}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          <span className="font-mono">{repo.defaultBranch}</span>
+          {meta && ` · ${meta}`}
+        </p>
       </div>
       {connected ? (
-        <span className="shrink-0 text-xs tracking-wide text-muted-foreground uppercase">
-          Connected
-        </span>
+        <span className="shrink-0 text-xs font-semibold text-muted-foreground">Connected</span>
       ) : (
-        <Button
-          variant="primary"
-          className="shrink-0"
-          disabled={busy}
-          onClick={() => onConnect(repo)}
-        >
+        <Button size="small" className="shrink-0" disabled={busy} onClick={() => onConnect(repo)}>
           {connecting ? "Connecting…" : "Connect"}
         </Button>
       )}

@@ -19,7 +19,7 @@ export function Discovery({ status }: { status: BatchStatus }) {
         </span>
       </SectionHeader>
       {shards.length ? (
-        <ul className="border border-border bg-card" aria-label="Discovery Shards">
+        <ul className="panel" aria-label="Discovery Shards">
           {shards.map((shard) => (
             <li
               key={`${shard.wave}-${shard.shardIndex}`}
@@ -56,7 +56,7 @@ function Shard({
   const label = shard.error ? "Failed" : running ? "In Progress" : "Finished";
   return (
     <details className="group/shard">
-      <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+      <summary className="grid cursor-pointer list-none grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3 text-sm font-semibold hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
         <span className="text-muted-foreground before:content-['▸'] group-open/shard:before:content-['▾']" />
         <span>
           Shard {shard.shardIndex + 1}

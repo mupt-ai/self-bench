@@ -12,16 +12,18 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
       role="status"
       aria-label="Loading Task"
     >
-      <header className={`border-b border-border bg-card py-5 ${pageGutter}`}>
+      <header className={`border-b border-border bg-background py-5 ${pageGutter}`}>
         <Breadcrumbs
           items={[
             { label: "Repositories", to: "/" },
-            { label: fullName, to: `/repos/${fullName}` },
+            { label: fullName, to: `/repos/${fullName}`, mono: true },
             { label: "Task" },
           ]}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl leading-7 font-medium wrap-anywhere">{taskTitle({ taskId })}</h1>
+          <h1 className="font-mono text-xl leading-7 font-medium wrap-anywhere">
+            {taskTitle({ taskId })}
+          </h1>
           <Skeleton className="h-5 w-20" />
         </div>
       </header>
@@ -30,7 +32,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
         aria-hidden="true"
       >
         <aside className="overflow-hidden border-r border-b border-border md:border-b-0">
-          <div className="flex h-11 items-center border-b border-border px-4 text-xs tracking-wider text-muted-foreground uppercase">
+          <div className="flex h-11 items-center border-b border-border px-4 text-xs font-semibold text-muted-foreground">
             Files
           </div>
           <div className="space-y-3 p-4">
@@ -46,7 +48,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
             <span className={tab}>Pipeline</span>
           </div>
           <div className={sheetBody}>
-            <div className="space-y-4 border border-border bg-card p-4">
+            <div className="panel space-y-4 p-4">
               <Skeleton className="h-3 w-1/3" />
               <Skeleton className="h-3 w-4/5" />
               <Skeleton className="h-3 w-3/5" />

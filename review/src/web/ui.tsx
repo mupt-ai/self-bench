@@ -6,14 +6,17 @@ export { Breadcrumbs, PageContent, PageFrame, PageHeader, SectionHeader } from "
 export { EmptyState, Notice } from "./states";
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0";
 const buttonVariants = {
   primary: cn(
     buttonBase,
-    "border border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+    "border border-primary bg-primary text-primary-foreground hover:bg-primary/85",
   ),
-  secondary: cn(buttonBase, "border border-border bg-transparent text-foreground hover:bg-accent"),
-  ghost: cn(buttonBase, "bg-transparent text-foreground hover:bg-accent"),
+  secondary: cn(
+    buttonBase,
+    "border border-foreground/20 bg-card text-foreground hover:border-foreground/35 hover:bg-accent",
+  ),
+  ghost: cn(buttonBase, "bg-transparent text-foreground hover:bg-foreground/[0.06]"),
   destructive: cn(
     buttonBase,
     "border border-destructive-background bg-destructive-background text-destructive-foreground hover:bg-destructive-background/90",
@@ -53,9 +56,9 @@ export function Button({
   );
 }
 
-export const fieldStyles = "grid min-w-0 gap-2 text-sm font-medium text-foreground";
+export const fieldStyles = "grid min-w-0 gap-2 text-sm font-semibold text-foreground";
 export const controlStyles =
-  "h-9 w-full min-w-0 rounded-none border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
+  "h-9 w-full min-w-0 rounded-none border border-input bg-card px-3 text-base font-normal text-foreground placeholder:text-muted-foreground transition-colors hover:border-foreground/30 focus-visible:border-foreground/50 focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-foreground/10 disabled:cursor-not-allowed disabled:opacity-40 md:text-sm";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input {...props} className={cn(controlStyles, className)} />;
@@ -88,7 +91,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
 export function DataTable({ className, ...props }: ComponentProps<"table">) {
   return (
     <section
-      className="min-w-0 overflow-x-auto border border-border bg-card"
+      className="panel min-w-0 overflow-x-auto"
       aria-label="Scrollable Table"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll wide tables.
       tabIndex={0}
@@ -96,13 +99,23 @@ export function DataTable({ className, ...props }: ComponentProps<"table">) {
       <table
         {...props}
         className={cn(
-          "w-full border-collapse text-left text-sm [&_thead]:bg-muted/50 [&_th]:px-4 [&_th]:py-3 [&_th]:text-xs [&_th]:font-medium [&_th]:tracking-wider [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_th]:uppercase [&_td]:border-t [&_td]:border-border [&_td]:px-4 [&_td]:py-3 [&_td]:align-middle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/50 [&_small]:mt-1 [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground",
+          "w-full border-collapse text-left text-sm [&_thead]:bg-muted [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_td]:border-t [&_td]:border-border [&_td]:px-4 [&_td]:py-3 [&_td]:align-middle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/60 [&_small]:mt-1 [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground",
           className,
         )}
       />
     </section>
   );
 }
+
+const runStatusLabels: Record<string, string> = {
+  queued: "Queued",
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  canceled: "Cancelled",
+};
 
 export function RunStatus({ value }: { value: string }) {
   const color =
@@ -111,16 +124,16 @@ export function RunStatus({ value }: { value: string }) {
       : value === "failed"
         ? "text-destructive"
         : value === "running"
-          ? "text-brand"
+          ? "text-brand-foreground"
           : "text-muted-foreground";
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs uppercase before:size-1 before:bg-current",
+        "inline-flex items-center gap-1.5 text-xs font-semibold before:size-1.5 before:rounded-full before:bg-current",
         color,
       )}
     >
-      {value}
+      {runStatusLabels[value] ?? value}
     </span>
   );
 }

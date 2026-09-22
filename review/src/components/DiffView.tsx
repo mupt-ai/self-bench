@@ -1,6 +1,7 @@
 import { parsePatchFiles } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import React from "react";
+import { useTheme } from "../web/use-theme";
 import { prose } from "./viewer-ui";
 
 export function DiffView({ patch }: { patch: string }) {
@@ -16,9 +17,10 @@ function RenderedPatch({ patch }: { patch: string }) {
     () => parsePatchFiles(patch).flatMap((parsed) => parsed.files),
     [patch],
   );
+  const theme = useTheme();
   if (!files.length) return <pre className={prose}>{patch}</pre>;
   const options = {
-    themeType: "dark" as const,
+    themeType: theme,
     diffStyle: window.matchMedia("(max-width: 1200px)").matches
       ? ("unified" as const)
       : ("split" as const),

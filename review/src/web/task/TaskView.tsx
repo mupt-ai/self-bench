@@ -85,13 +85,9 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         aria-label="Files"
       >
         <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border px-4">
-          <span className="font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase">
-            Files
-          </span>
+          <span className="text-xs font-semibold text-muted-foreground">Files</span>
           {files && (
-            <span className="font-mono text-sm font-medium text-muted-foreground">
-              {files.files.length}
-            </span>
+            <span className="font-mono text-xs text-muted-foreground">{files.files.length}</span>
           )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto">

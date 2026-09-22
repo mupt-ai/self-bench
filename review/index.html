@@ -3,15 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0b0a09" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/dari-logo.svg" />
-    <title>self-bench by dari.dev</title>
+    <title>SelfBench</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      // Apply the saved theme before first paint so a dark-mode visitor never sees a flash.
+      try {
+        var theme = localStorage.getItem("selfbench-theme");
+        if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (error) {}
+    </script>
   </head>
-  <body class="h-full bg-(--background) font-mono text-sm leading-normal text-(--foreground) antialiased [text-rendering:optimizeLegibility] selection:bg-(--foreground) selection:text-(--background)">
+  <body class="h-full bg-(--background) font-sans text-sm leading-normal text-(--foreground) antialiased [text-rendering:optimizeLegibility]">
     <div id="root" class="h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -54,10 +54,10 @@ export function ReviewBar({
 
   if (task.review) {
     return (
-      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 border border-border bg-background px-3 py-2">
+      <div className="panel flex min-w-0 max-w-full flex-wrap items-center gap-3 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <span
-            className={`inline-flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase ${
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
               task.review.decision === "approve" ? "text-success" : "text-destructive"
             }`}
           >
@@ -83,7 +83,7 @@ export function ReviewBar({
         <Button type="button" variant="ghost" size="small" disabled={busy} onClick={clear}>
           Clear Decision
         </Button>
-        {error && <span className="font-mono text-sm text-destructive">{error}</span>}
+        {error && <span className="text-sm text-destructive">{error}</span>}
       </div>
     );
   }
@@ -99,7 +99,7 @@ export function ReviewBar({
         >
           <Input
             className="w-64 max-w-full"
-            placeholder={pending === "approve" ? "Note (Optional)" : "Why reject? (optional)"}
+            placeholder={pending === "approve" ? "Note (optional)" : "Why reject? (optional)"}
             value={note}
             onChange={(event) => setNote(event.target.value)}
             aria-label="Review Note"
@@ -125,7 +125,7 @@ export function ReviewBar({
           </Button>
         </>
       )}
-      {error && <span className="font-mono text-sm text-destructive">{error}</span>}
+      {error && <span className="text-sm text-destructive">{error}</span>}
     </div>
   );
 }

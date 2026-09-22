@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
         <p className="mt-2 text-sm text-muted-foreground">
           The last action crashed this view. Reload to continue.
         </p>
-        <pre className="mt-4 max-h-64 overflow-auto border border-border bg-card p-4 text-xs text-destructive wrap-anywhere whitespace-pre-wrap">
+        <pre className="mt-4 max-h-64 overflow-auto panel p-4 text-xs text-destructive wrap-anywhere whitespace-pre-wrap">
           {this.state.error.message}
         </pre>
         <Button className="mt-4" onClick={() => window.location.reload()}>

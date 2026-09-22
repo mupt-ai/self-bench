@@ -36,7 +36,7 @@ test("shows a Discovery section above an empty task list while shards are runnin
   expect(html).toContain("Discovery");
   expect(html).toContain("0/2 Shards");
   expect(html).toContain("Shard 1 of 2");
-  expect(html).toContain("grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]");
+  expect(html).toContain("grid-cols-[1rem_minmax(0,1fr)_auto]");
   expect(html).not.toContain("<details open");
   expect(html).toContain("Attempt 2");
   expect(html).toContain("In Progress");
