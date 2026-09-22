@@ -1,6 +1,7 @@
 import { ChevronDown, Database } from "lucide-react";
 import { Link } from "react-router";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import { evaluationTaskKey } from "../../../../src/evaluation/task-identity";
 import { Button } from "../ui";
 import type { EvaluationOptions } from "./api";
 
@@ -25,8 +26,7 @@ export function RunTaskPicker({
   canRun: boolean;
   disabled: boolean;
 }) {
-  const taskKey = (runId: string, taskId: string) => JSON.stringify([runId, taskId]);
-  const selected = new Set(draft.tasks.map((task) => taskKey(task.runId, task.taskId)));
+  const selected = new Set(draft.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId)));
   return (
     <details className="group mb-5 border border-border bg-card">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
@@ -96,7 +96,7 @@ export function RunTaskPicker({
               </thead>
               <tbody>
                 {availableTasks.map((task) => {
-                  const key = taskKey(task.runId, task.taskId);
+                  const key = evaluationTaskKey(task.runId, task.taskId);
                   const checked = selected.has(key);
                   return (
                     <tr key={key} className="border-t border-border hover:bg-muted/50">
@@ -110,7 +110,8 @@ export function RunTaskPicker({
                             onChange(
                               checked
                                 ? draft.tasks.filter(
-                                    (candidate) => `${candidate.runId}/${candidate.taskId}` !== key,
+                                    (candidate) =>
+                                      evaluationTaskKey(candidate.runId, candidate.taskId) !== key,
                                   )
                                 : [...draft.tasks, { runId: task.runId, taskId: task.taskId }],
                             )

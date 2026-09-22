@@ -10,6 +10,7 @@ import { harnessIds } from "./harnesses.js";
 import { routeFor, thinkingLevels, thinkingOptions } from "./model-options.js";
 import { modelIdPattern } from "./providers.js";
 import { getEvaluation, listEvaluations } from "./store.js";
+import { evaluationTaskKey } from "./task-identity.js";
 import type { EvaluationInput } from "./types.js";
 
 export const comparisonSchema = z
@@ -68,7 +69,7 @@ export async function createComparison(
     return previous;
   }
   if (
-    new Set(selection.tasks.map((task) => JSON.stringify([task.runId, task.taskId]))).size !==
+    new Set(selection.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId))).size !==
     selection.tasks.length
   )
     throw new Error("Duplicate task selection");
