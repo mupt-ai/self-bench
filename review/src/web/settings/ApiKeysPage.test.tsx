@@ -123,13 +123,18 @@ test("creates a key, reveals the secret exactly once, and revokes it from the li
   await waitFor(() => !!container.querySelector('[data-testid="api-key-secret"]'));
   expect(container.querySelector('[data-testid="api-key-secret"]')?.textContent).toBe(secret);
   expect(requests).toContain(`POST ${root_}`);
-  await waitFor(() => !!container.querySelector("tbody tr"));
-  const row = container.querySelector("tbody tr");
-  expect(row?.textContent).toContain("CI");
-  expect(row?.textContent).toContain("sbk_abcd1234…");
-  expect(row?.textContent).toContain("Read & Write");
-  expect(row?.textContent).toContain("Never");
-  expect(row?.textContent).not.toContain(secret);
+  await waitFor(() => !!container.querySelector('[data-testid="api-key-card"]'));
+  const card = container.querySelector('[data-testid="api-key-card"]');
+  expect(card?.textContent).toContain("CI");
+  expect(card?.textContent).toContain("Active");
+  expect(card?.textContent).toContain("sbk_abcd1234…");
+  expect(card?.textContent).toContain("Read & Write");
+  expect(card?.textContent).toContain("Never Used");
+  expect(card?.textContent).not.toContain(secret);
+
+  await click("I’ve Saved It");
+  expect(container.querySelector('[data-testid="api-key-secret"]')).toBeNull();
+  expect(card?.textContent).not.toContain(secret);
 
   await click("Revoke CI");
   expect(container.textContent).toContain("Revoke API Key");

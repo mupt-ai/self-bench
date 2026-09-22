@@ -20,6 +20,15 @@ export interface BillingStatus extends BillingEligibility {
   usage: BillingUsageSummary;
 }
 
+export function formatBillingDollars(value: number): string {
+  return value.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: value > 0 && value < 0.01 ? 4 : 2,
+  });
+}
+
 export function fetchBilling(org: string): Promise<BillingStatus> {
   return requestJson<BillingStatus>(`/api/orgs/${encodeURIComponent(org)}/billing`);
 }
