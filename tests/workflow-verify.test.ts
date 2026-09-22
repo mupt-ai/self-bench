@@ -49,9 +49,18 @@ describe("SelfBench in-session verify", () => {
     test(`${protocol} protocol preserves its activity payloads and verifier numbering`, async () => {
       const assigned = candidate("budget", 1);
       const activities = acceptingActivities([assigned]);
-      const authorInputs: { round: number; verifyCallsUsed: number | undefined }[] = [];
-      activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
-        authorInputs.push({ round, verifyCallsUsed });
+      const authorInputs: {
+        round: number;
+        hasVerifyCallsUsed: boolean;
+        verifyCallsUsed: number | undefined;
+      }[] = [];
+      activities.runAuthoringRound = async (input) => {
+        const { candidate: value, round, verifyCallsUsed } = input;
+        authorInputs.push({
+          round,
+          hasVerifyCallsUsed: Object.hasOwn(input, "verifyCallsUsed"),
+          verifyCallsUsed,
+        });
         return {
           kind: "submitted",
           task: draft(value.candidateId, `-r${round}`),
@@ -91,14 +100,14 @@ describe("SelfBench in-session verify", () => {
       expect(authorInputs).toEqual(
         protocol === "legacy"
           ? [
-              { round: 1, verifyCallsUsed: 0 },
-              { round: 2, verifyCallsUsed: 2 },
-              { round: 3, verifyCallsUsed: 3 },
+              { round: 1, hasVerifyCallsUsed: true, verifyCallsUsed: 0 },
+              { round: 2, hasVerifyCallsUsed: true, verifyCallsUsed: 2 },
+              { round: 3, hasVerifyCallsUsed: true, verifyCallsUsed: 3 },
             ]
           : [
-              { round: 1, verifyCallsUsed: undefined },
-              { round: 2, verifyCallsUsed: undefined },
-              { round: 3, verifyCallsUsed: undefined },
+              { round: 1, hasVerifyCallsUsed: false, verifyCallsUsed: undefined },
+              { round: 2, hasVerifyCallsUsed: false, verifyCallsUsed: undefined },
+              { round: 3, hasVerifyCallsUsed: false, verifyCallsUsed: undefined },
             ],
       );
       expect(verifierRounds).toEqual(protocol === "legacy" ? [2, 3] : [1, 2]);
