@@ -11,7 +11,6 @@
   --color-popover: var(--card);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-fg);
-  --color-faint: var(--faint);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-accent: var(--accent);
@@ -39,7 +38,6 @@
 }
 
 @custom-variant site (&:where(.sb, .sb *));
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* Light by default: warm paper, amber kept for fills and accents. Text that must read as
    amber uses --brand-fg, which is dark enough for paper. */
@@ -105,11 +103,14 @@ html {
   background: var(--background);
 }
 
-/* Raised surface for cards, tables and panels: a firmer edge and a soft drop. */
-@utility panel {
-  border: 1.5px solid var(--panel-edge);
-  background-color: var(--card);
-  box-shadow: var(--panel-shadow);
+/* Raised surface for cards, tables and panels: a firmer edge and a soft drop. It lives in the
+   components layer so any utility (border-0, shadow-none, hover borders) can override it. */
+@layer components {
+  .panel {
+    border: 1.5px solid var(--panel-edge);
+    background-color: var(--card);
+    box-shadow: var(--panel-shadow);
+  }
 }
 
 /* Native number-input spinners clash with the square controls; the keyboard
