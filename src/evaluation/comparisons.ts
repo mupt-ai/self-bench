@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts.js";
+import type { ManagedOffer } from "../site/managed-generation.js";
 import type { TaskStore } from "../site/task-store.js";
 import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
@@ -8,7 +9,8 @@ import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { harnessIds } from "./harnesses.js";
 import { routeFor, thinkingLevels, thinkingOptions } from "./model-options.js";
 import { modelIdPattern } from "./providers.js";
-import { getEvaluation } from "./store.js";
+import { getEvaluation, listEvaluations } from "./store.js";
+import { evaluationTaskKey } from "./task-identity.js";
 import type { EvaluationInput } from "./types.js";
 
 export const comparisonSchema = z
@@ -27,7 +29,7 @@ export const comparisonSchema = z
           .object({
             catalogId: z.string().max(80),
             customModel: z.string().regex(modelIdPattern).optional(),
-            credentialId: z.uuid(),
+            credentialId: z.union([z.uuid(), z.literal("managed-model")]),
             thinking: z.enum(thinkingLevels).optional(),
             harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
           })
@@ -36,7 +38,8 @@ export const comparisonSchema = z
       .min(1)
       .max(12),
     sandbox: z.enum(hostedSandboxes),
-    sandboxCredentialId: z.uuid(),
+    sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
+    skipCompleted: z.boolean().optional(),
   })
   .strict();
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
@@ -50,6 +53,8 @@ export interface ComparisonScope {
 export async function createComparison(
   records: EncryptedRecordStore,
   tasks: TaskStore,
+  store: ArtifactStore,
+  managed: ManagedOffer,
   scope: ComparisonScope,
   draft: ComparisonDraft,
 ): Promise<ComparisonRecord> {
@@ -64,7 +69,7 @@ export async function createComparison(
     return previous;
   }
   if (
-    new Set(selection.tasks.map((task) => `${task.runId}/${task.taskId}`)).size !==
+    new Set(selection.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId))).size !==
     selection.tasks.length
   )
     throw new Error("Duplicate task selection");
@@ -84,6 +89,9 @@ export async function createComparison(
     if (!task?.bundleKey) throw new Error("Task bundle unavailable");
     return { runId: task.runId, taskId: task.taskId, bundleKey: task.bundleKey };
   });
+  const completed = selection.skipCompleted
+    ? completedConfigurationTasks(await listEvaluations(store, scope.repoId))
+    : new Set<string>();
   return updateAccount(records, scope.ownerId, async (account) => {
     const existing = account.comparisons.find((entry) => entry.id === selection.id);
     if (existing) {
@@ -93,14 +101,19 @@ export async function createComparison(
     }
     if (account.comparisons.length >= 500)
       throw new Error("Comparison retention limit reached; contact an operator");
-    const sandbox = account.credentials.find(
-      (entry) => entry.id === selection.sandboxCredentialId && !entry.deleted,
-    );
+    const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
+    const sandbox = managedSandbox
+      ? { id: "managed-sandbox", kind: "e2b" as const }
+      : account.credentials.find(
+          (entry) => entry.id === selection.sandboxCredentialId && !entry.deleted,
+        );
+    if (managedSandbox && !managed.sandbox)
+      throw new Error("Managed sandboxes are not available on this deployment.");
     if (sandbox?.kind !== selection.sandbox)
       throw new Error("Select your saved sandbox credential");
     const seen = new Set<string>();
     const createdAt = new Date().toISOString();
-    const inputs: EvaluationInput[] = selection.models.map((selected) => {
+    const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
       const model: CatalogModel | undefined =
         selected.catalogId === "custom" && selected.customModel
           ? {
@@ -114,10 +127,13 @@ export async function createComparison(
           : catalog.find((entry) => entry.id === selected.catalogId);
       if (!model || (selected.catalogId !== "custom" && selected.customModel))
         throw new Error("Unknown model");
-      const credential = account.credentials.find(
-        (entry) => entry.id === selected.credentialId && !entry.deleted,
-      );
+      const managedModel = selected.credentialId === "managed-model";
+      const credential = managedModel
+        ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
+        : account.credentials.find((entry) => entry.id === selected.credentialId && !entry.deleted);
       const route = credential ? routeFor(model, credential.kind) : undefined;
+      if (managedModel && !managed.models)
+        throw new Error("Managed models are not available on this deployment.");
       if (!credential || !route) throw new Error("Select your matching provider credential");
       if (
         credential.auth === "codex-login" &&
@@ -133,38 +149,54 @@ export async function createComparison(
       const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
       if (!levels.includes(thinking))
         throw new Error("Unsupported thinking level for this model and harness");
-      const identity = JSON.stringify([route.provider, route.model, credential.id, thinking]);
+      const modelIdentity = selected.catalogId === "custom" ? route.model : selected.catalogId;
       for (const harness of selected.harnesses) {
-        const pair = `${identity}/${harness}`;
+        const pair = configurationIdentity(modelIdentity, thinking, harness);
         if (seen.has(pair))
-          throw new Error(
-            "Select each model, harness, credential, and thinking configuration once",
-          );
+          throw new Error("Select each model, harness, and thinking configuration once");
         seen.add(pair);
       }
-      return {
-        id: randomUUID(),
-        model: selected.catalogId,
-        modelName: `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`,
-        thinking,
-        harnesses: selected.harnesses,
-        sandbox: selection.sandbox,
-        tasks: frozen,
-        repoId: scope.repoId,
-        tenant: scope.tenant,
-        startedBy: scope.login,
-        createdAt,
-        ...(route.pricing ? { pricing: route.pricing } : {}),
-        credentialOwnerId: scope.ownerId,
-        ...(scope.credentialOrgId ? { credentialOrgId: scope.credentialOrgId } : {}),
-        comparisonId: selection.id,
-        credentials: {
-          modelCredentialId: credential.id,
-          sandboxCredentialId: sandbox.id,
-          provider: route.provider,
-        },
-      };
+      const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
+      const groups = selection.skipCompleted
+        ? selected.harnesses.map((harness) => ({
+            harnesses: [harness],
+            tasks: frozen.filter(
+              (task) =>
+                !completed.has(
+                  configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
+                ),
+            ),
+          }))
+        : [{ harnesses: selected.harnesses, tasks: frozen }];
+      return groups
+        .filter((group) => group.tasks.length > 0)
+        .map(
+          (group): EvaluationInput => ({
+            id: randomUUID(),
+            model: selected.catalogId,
+            modelName,
+            thinking,
+            harnesses: group.harnesses,
+            sandbox: selection.sandbox,
+            tasks: group.tasks,
+            repoId: scope.repoId,
+            tenant: scope.tenant,
+            startedBy: scope.login,
+            createdAt,
+            ...(route.pricing ? { pricing: route.pricing } : {}),
+            credentialOwnerId: scope.ownerId,
+            ...(scope.credentialOrgId ? { credentialOrgId: scope.credentialOrgId } : {}),
+            comparisonId: selection.id,
+            credentials: {
+              modelCredentialId: credential.id,
+              sandboxCredentialId: sandbox.id,
+              provider: route.provider,
+            },
+          }),
+        );
     });
+    if (inputs.length === 0)
+      throw new Error("Every selected configuration and task already has a completed result.");
     const record: ComparisonRecord = {
       id: selection.id,
       repoId: scope.repoId,
@@ -177,6 +209,39 @@ export async function createComparison(
     return record;
   });
 }
+function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
+  return JSON.stringify([model, thinking ?? "default", harness]);
+}
+
+function configurationTaskKey(
+  model: string,
+  thinking: string | undefined,
+  harness: string,
+  runId: string,
+  taskId: string,
+) {
+  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
+}
+
+function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
+  const completed = new Set<string>();
+  for (const run of runs) {
+    for (const trial of run.trials) {
+      if (trial.status === "completed")
+        completed.add(
+          configurationTaskKey(
+            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
+            run.thinking,
+            trial.harness,
+            trial.runId,
+            trial.taskId,
+          ),
+        );
+    }
+  }
+  return completed;
+}
+
 export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
   const runs = await Promise.all(
     record.inputs.map(async (input) => {

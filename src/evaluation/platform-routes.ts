@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson, trustedMutation } from "../api/http.js";
 import type { User } from "../auth/users.js";
+import { managedOffer } from "../site/managed-generation.js";
 import { tenantFor } from "../site/tenant.js";
 import { readAccount } from "./account.js";
 import { catalog, catalogVersion, hostedSandboxes } from "./catalog.js";
@@ -56,6 +57,7 @@ export async function platformRoutes(
       models: catalog.map(withReferencePricing),
       sandboxes: hostedSandboxes,
       customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
+      managed: managedOffer(env),
     });
     return true;
   }
@@ -77,6 +79,8 @@ export async function platformRoutes(
         const record = await createComparison(
           records,
           options.tasks,
+          options.artifacts,
+          managedOffer(env),
           {
             repoId: repo.id,
             ownerId: tenant.id,
