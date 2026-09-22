@@ -54,7 +54,7 @@ for (const stage of ["unpack", "compile", "compiler-infrastructure"] as const) {
   });
 }
 
-test("an invalid submission still receives a failed verification report", async () => {
+test("an invalid submission still receives a failed mechanical check report", async () => {
   const f = await fixture();
   spyOn(operations, "taskOperation").mockImplementation(async (operation) => {
     if (operation === "draft") return { "/work/source-task.tar.gz": Buffer.from("draft") };
@@ -62,7 +62,7 @@ test("an invalid submission still receives a failed verification report", async 
   });
   const response = await f.verifier.handle(request, new AbortController().signal);
   expect(response.kind).toBe("report");
-  if (response.kind !== "report") throw new Error("expected verification report");
+  if (response.kind !== "report") throw new Error("expected mechanical check report");
   expect(response.green).toBe(false);
   expect(response.summary).toContain("malformed archive");
   expect(f.verifier.records).toHaveLength(1);

@@ -97,7 +97,7 @@ SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` defaults to `(worker memory - 2.25 GiB) / 256 MiB` (23 on 8 GiB, 119 on 32 GiB) and never takes an ordinary slot from authoring or verifier sessions. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and verification rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and verification rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
+Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` defaults to `(worker memory - 2.25 GiB) / 256 MiB` (23 on 8 GiB, 119 on 32 GiB) and never takes an ordinary slot from authoring or verifier sessions. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and review rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 
@@ -147,7 +147,7 @@ SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compo
 
 Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
 
-E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or verification round requests four hours, so the configured cap centrally shortens only longer stages; under a one-hour cap an agent has room for at most one in-session verify. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
+E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or review round requests four hours, so the configured cap centrally shortens only longer stages; under a one-hour cap an agent has room for at most one in-session verify. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
 
 Commands run under `/work`. Inputs and binary outputs are transferred with E2B's file API, and paths outside `/work` are rejected before allocation. Stdout/stderr stream progress while retaining only the latest 8 MiB per stream for diagnostics. Output inactivity cancels the command and sandbox. Workload environment and stage secrets are scoped to the command; SelfBench does not create durable account-level E2B Secrets.
 
@@ -166,7 +166,7 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or verification round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or review round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
 #### Interactive local setup
 
@@ -216,7 +216,7 @@ SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker com
 
 Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. Export the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
 
-The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and verification rounds then run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
+The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and review rounds then run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
 
 #### Environment-only and unattended workers
 
@@ -316,7 +316,7 @@ self-bench replay \
   --output ./replayed-tasks.tar.gz
 ```
 
-The worker rebuilds each candidate from the source run's artifacts: the retained human request from `runs/<source>/provenance/<candidate>.json`, the full candidate record from the discovery `report.json` located through the `w<wave>s<shard>-` ID prefix, or, failing that, the authored `definition.json` plus a `gh pr view` lookup of the completed commit. Candidate IDs are kept, artifacts are written under the new run ID, and authoring and verification start from fresh agent sessions. The same request shape is accepted by `POST /v1/runs` as a `replay` field (`{ "sourceRunId", "candidateIds" }`) in place of `repository`, `provenance`, and `candidateCounts`.
+The worker rebuilds each candidate from the source run's artifacts: the retained human request from `runs/<source>/provenance/<candidate>.json`, the full candidate record from the discovery `report.json` located through the `w<wave>s<shard>-` ID prefix, or, failing that, the authored `definition.json` plus a `gh pr view` lookup of the completed commit. Candidate IDs are kept, artifacts are written under the new run ID, and authoring and review start from fresh agent sessions. The same request shape is accepted by `POST /v1/runs` as a `replay` field (`{ "sourceRunId", "candidateIds" }`) in place of `repository`, `provenance`, and `candidateCounts`.
 
 `--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
 
@@ -354,15 +354,15 @@ were accepted, and drops later ones. The manifest's `acceptedCount` and `tasks` 
 
 ### Round artifacts
 
-Each authoring or verification round stores its decision directly under
+Each authoring or review round stores its decision directly under
 `runs/<runId>/<stage>/<candidateId>/round-<n>/` (`result.json`, `verdict.json`, `fix/`) and the pi session under
 `runs/<runId>/<stage>/<candidateId>/session/round-<n>.jsonl`. Everything a single attempt produces before the
-round is decided lives under `round-<n>/attempt-<m>/`: `prompt.md`, `coupling-evidence.json` (verifier round 1),
+round is decided lives under `round-<n>/attempt-<m>/`: `prompt.md`, `coupling-evidence.json` (review round 1),
 `sandbox.log`, `sandbox-result.json` (the provider's exit code, the wrapper's own status, pi's exit code, and which
 declared outputs were collected), and the in-session `verify-<k>/` reports. A Temporal retry of the same round therefore never collides with the immutable
 artifacts of the attempt it replaces; its session is stored as `session/round-<n>-attempt-<m>.jsonl`.
 
-Large request files reach the sandbox by URL rather than upload: the verifier round asks the artifact store for a V4 signed read URL of the compiled task bundle (two-hour TTL) and the E2B executor has the sandbox `curl` it and verify the SHA-256 in place. Pushing hundreds of MB per sandbox through `files.write` hit the SDK's client-side request timeout once a couple of dozen rounds started together; E2B recommends the pull pattern. Providers without an in-sandbox download step fetch remote files on the worker and upload them inline.
+Large request files reach the sandbox by URL rather than upload: the review round asks the artifact store for a V4 signed read URL of the compiled task bundle (two-hour TTL) and the E2B executor has the sandbox `curl` it and verify the SHA-256 in place. Pushing hundreds of MB per sandbox through `files.write` hit the SDK's client-side request timeout once a couple of dozen rounds started together; E2B recommends the pull pattern. Providers without an in-sandbox download step fetch remote files on the worker and upload them inline.
 
 The round wrapper records its own exit status in `/work/wrapper-status` from its EXIT trap, and the worker trusts
 that file over the provider's reported exit code (a provider hard timeout stays authoritative). E2B has been
@@ -425,13 +425,13 @@ Hot-reload loop: `bun run dev:site` starts a Postgres container (`selfbench-site
 
 Run status includes its phase, accepted/rejected counts, per-candidate status with the current stage (`authoring` or `verification`) and round, discovery wave, completed/failed shard counts, and current candidates. Failed generation runs use a new run ID. Run exported tasks directly with Harbor; Harbor owns evaluation result persistence and retry behavior.
 
-`/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest verification round wrote an `accepted` `result.json` (a `rejected` round result in either loop marks the stage that ended it). Runs without round results remain archived and are not inferred as accepted. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
+`/v1/runs` also lists runs that exist only in the artifact store (status `ARCHIVED`) once Temporal retention has dropped their workflow. For those runs the candidate routes reconstruct each candidate from its artifacts: the stage is the furthest pipeline group that wrote anything, and a candidate counts as accepted when its latest review round wrote an `accepted` `result.json` (a `rejected` round result in either loop marks the stage that ended it). Runs without round results remain archived and are not inferred as accepted. Bundle expansion caches extracted bundles under the API host's temporary directory, keyed by artifact key, and never returns `repo.tar.gz` contents.
 
 SelfBench has no remote deletion route. Delete local artifact-volume data or GCS run prefixes through normal operator tooling.
 
 ## Temporal workflow shape
 
-A run is the `selfBenchRunWorkflow` execution whose workflow ID is the run ID. It discovers candidates, then starts one `selfBenchCandidateWorkflow` child per candidate with the workflow ID `<runId>/candidate/<candidateId>` on the same task queue. The child runs that candidate's authoring and verification loops and returns its final progress plus the accepted task; it signals every progress change to the parent (`candidateProgress`), and the parent's `status` query and `GET /v1/runs/<runId>` merge those signals into the run status. The child's returned result is authoritative even if a signal is lost. Task-ID uniqueness across candidates is enforced by the parent when a child completes green.
+A run is the `selfBenchRunWorkflow` execution whose workflow ID is the run ID. It discovers candidates, then starts one `selfBenchCandidateWorkflow` child per candidate with the workflow ID `<runId>/candidate/<candidateId>` on the same task queue. The child runs that candidate's authoring and review loops and returns its final progress plus the accepted task; it signals every progress change to the parent (`candidateProgress`), and the parent's `status` query and `GET /v1/runs/<runId>` merge those signals into the run status. The child's returned result is authoritative even if a signal is lost. Task-ID uniqueness across candidates is enforced by the parent when a child completes green.
 
 To inspect one candidate, open the child workflow in the Temporal UI (search for the run ID prefix, or the parent's "Child Workflows" list). Its history shows that candidate's activities, retries, and timeouts alone; the `candidateStatus` query returns its current progress. Cancelling the run cancels every child, and the parent close policy terminates any straggler. A child that fails outright (anything other than an exhausted or Harbor-infrastructure activity failure) is recorded as `infrastructure_failed` for that candidate; the run continues.
 

@@ -31,7 +31,7 @@ describe("SelfBench in-session verify", () => {
       throw new Error("worker verify must be skipped");
     };
     const verifierInputs: { report: string; bundle: string }[] = [];
-    activities.runVerifierRound = async ({ report, task }) => {
+    activities.runReviewRound = async ({ report, task }) => {
       verifierInputs.push({ report: report.uri, bundle: task.bundle.uri });
       return { kind: "accepted", session: ref("file:///verifier-session"), reason: "fair" };
     };
@@ -58,7 +58,7 @@ describe("SelfBench in-session verify", () => {
       };
     };
     const verifierRounds: number[] = [];
-    activities.runVerifierRound = async ({ round }) => {
+    activities.runReviewRound = async ({ round }) => {
       verifierRounds.push(round);
       return round === 1
         ? {

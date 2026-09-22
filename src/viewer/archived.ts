@@ -12,7 +12,7 @@ const listingCache = new Map<string, { at: number; entries: Promise<ArtifactEntr
 let runIndexCache: { at: number; runs: Promise<ArchivedRun[]> } | undefined;
 
 /** Groups the pipeline keys by candidate ID; every other group is keyed by task ID. */
-const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "verification", "verify"]);
+const CANDIDATE_KEYED_GROUPS = new Set(["authoring", "review", "verification", "verify"]);
 
 /** Listing a whole run is thousands of objects on GCS, so reuse it briefly across requests. */
 function listRun(store: ArtifactStore, runId: string): Promise<ArtifactEntry[]> {
@@ -132,11 +132,11 @@ interface ArchivedDecision {
   readonly reason?: string;
 }
 
-const ROUND_RESULT = /^(authoring|verification)\/[^/]+\/round-(\d+)\/result\.json$/;
+const ROUND_RESULT = /^(authoring|review|verification)\/[^/]+\/round-(\d+)\/result\.json$/;
 
 /**
  * The agent pipeline decides a candidate in its round results: the workflow accepts exactly when
- * a verification round's `result.json` is `accepted`, and a `rejected` round result in either loop
+ * a review round's `result.json` is `accepted`, and a `rejected` round result in either loop
  * ends the candidate. Rounds alternate authoring/review; the highest round wins, then review within that round.
  */
 async function latestRoundDecision(
@@ -145,43 +145,40 @@ async function latestRoundDecision(
   prefix: string,
   candidateId: string,
 ): Promise<ArchivedDecision | undefined> {
-  const terminal: { key: string; loop: "authoring" | "verification"; round: number }[] = [];
+  const terminal: { key: string; loop: "authoring" | "review"; round: number }[] = [];
   for (const entry of entries) {
     const match = ROUND_RESULT.exec(entry.key.slice(prefix.length));
     if (!match?.[1] || !match[2]) continue;
     if (entry.key.slice(prefix.length).split("/")[1] !== candidateId) continue;
-    const loop = match[1] as "authoring" | "verification";
+    const loop = match[1] === "authoring" ? "authoring" : "review";
     const value = await readJson(store, entry.key);
     if (value?.kind === "accepted" || value?.kind === "rejected") {
       terminal.push({ key: entry.key, loop, round: Number(match[2]) });
     }
   }
-  const verification = terminal
-    .filter((item) => item.loop === "verification")
+  const review = terminal
+    .filter((item) => item.loop === "review")
     .sort((left, right) => right.round - left.round)[0];
   const authoring = terminal
     .filter((item) => item.loop === "authoring")
     .sort((left, right) => right.round - left.round)[0];
   // A later authoring rejection after suggestions is terminal.
-  const latest =
-    authoring && (!verification || authoring.round > verification.round) ? authoring : verification;
+  const latest = authoring && (!review || authoring.round > review.round) ? authoring : review;
   if (!latest) return undefined;
   const value = await readJson(store, latest.key);
   if (!value) return undefined;
   const reason = typeof value.reason === "string" ? value.reason : undefined;
   const summary = reasonSummary(reason);
-  if (latest.loop === "verification" && value.kind === "accepted") {
+  if (latest.loop === "review" && value.kind === "accepted") {
     return {
       stage: "accepted",
-      reasonSummary: summary
-        ? `verification agent accepted: ${summary}`
-        : "verification agent accepted",
+      reasonSummary: summary ? `review agent accepted: ${summary}` : "review agent accepted",
       ...(reason ? { reason } : {}),
     };
   }
   if (value.kind === "rejected") {
     return {
-      stage: latest.loop === "verification" ? "review" : "authoring",
+      stage: latest.loop === "review" ? "review" : "authoring",
       reasonSummary: summary ?? `${latest.loop} round ${latest.round} rejected`,
       ...(reason ? { reason } : {}),
     };
@@ -227,7 +224,12 @@ function furthestStage(groups: Set<string>): CandidateStage {
   if (groups.has("environment-preflights")) return "preflight";
   if (groups.has("audits")) return "audit";
   if (groups.has("environments")) return "environment";
-  if (groups.has("authoring") || groups.has("verification") || groups.has("verify")) {
+  if (
+    groups.has("authoring") ||
+    groups.has("review") ||
+    groups.has("verification") ||
+    groups.has("verify")
+  ) {
     return "authoring";
   }
   return "discovery";

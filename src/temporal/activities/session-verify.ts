@@ -5,8 +5,8 @@ import type {
   ArtifactRef,
   AuthoredTask,
   Candidate,
+  PipelineStage,
   RunRequest,
-  VerifyStage,
 } from "../../contracts.js";
 import type { LiveSandbox } from "../../sandbox/index.js";
 import {
@@ -25,7 +25,7 @@ export interface SessionVerifyContext {
   readonly harborEnvironment: SelfBenchConfig["harborEnvironment"];
   readonly run: RunRequest;
   readonly candidate: Candidate;
-  readonly stage: VerifyStage;
+  readonly stage: PipelineStage;
   readonly round: number;
   /** Round artifact prefix; verifies are stored under `<prefix>/verify-<k>/`. */
   readonly prefix: string;

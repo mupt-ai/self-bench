@@ -42,7 +42,7 @@ import type { AuthoringRoundInput } from "./types.js";
 
 /**
  * One authoring round: a fresh pi session on round 1, or the previous round's session resumed with
- * the verification report as the next user turn. The deliverable is the complete task submission
+ * the mechanical check report as the next user turn. The deliverable is the complete task submission
  * (definition with environment contract, held-out test patch, gold patch) as a source bundle that
  * the trusted compiler renders in a separate sandbox.
  */

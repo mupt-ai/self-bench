@@ -10,8 +10,8 @@ import { buildExport } from "./export.js";
 import { withGenerationRuntime } from "./generation-runtime.js";
 import { collectRunProvenance } from "./provenance.js";
 import { rebuildReplayCandidates } from "./replay.js";
+import { runReviewRound } from "./review-round.js";
 import type { SelfBenchActivities } from "./types.js";
-import { runVerifierRound } from "./verifier-round.js";
 import { compileAndVerify } from "./verify.js";
 
 export function createActivities(
@@ -65,14 +65,14 @@ export function createActivities(
         (_executor, environment, run) => compileAndVerify(store, environment, { ...input, run }),
         usage,
       ),
-    runVerifierRound: (input) =>
+    runReviewRound: (input) =>
       withGenerationRuntime(
         config,
         records,
         input.run,
         "verifier",
         sandbox,
-        (executor, _environment, run) => runVerifierRound(store, executor, { ...input, run }),
+        (executor, _environment, run) => runReviewRound(store, executor, { ...input, run }),
         usage,
       ),
     buildExport: (input) =>

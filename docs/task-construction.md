@@ -1,6 +1,6 @@
 # Task construction and validation
 
-SelfBench creates easy, medium, and hard Harbor evaluations from completed pull requests. This document defines the task boundary, the authoring and verification rounds, and export contents.
+SelfBench creates easy, medium, and hard Harbor evaluations from completed pull requests. This document defines the task boundary, the authoring and review rounds, and export contents.
 
 ## Terms
 
@@ -31,9 +31,9 @@ Profiles are eligibility rules, not empirical claims about model success:
 | medium | at least 50 changed lines across 2 implementation paths | at least 1 | at least 1 |
 | hard | at least 100 changed lines across 3 implementation paths | at least 1 | at least 2 |
 
-Every accepted task also requires a held-out test patch with no file overlap with the reference patch, deterministic repository-native setup and tests, a passing smoke/nop/oracle split, and acceptance by the independent verification agent.
+Every accepted task also requires a held-out test patch with no file overlap with the reference patch, deterministic repository-native setup and tests, a passing smoke/nop/oracle split, and acceptance by the independent review agent.
 
-The size gate is mechanical. Generated or vendored code suitability remains a verification judgment. Git LFS, submodules, generated changes, and service-heavy integration suites receive no special path and may be rejected during authoring or verification.
+The size gate is mechanical. Generated or vendored code suitability remains a verification judgment. Git LFS, submodules, generated changes, and service-heavy integration suites receive no special path and may be rejected during authoring or review.
 
 ## Agent-visible boundary
 
@@ -63,7 +63,7 @@ The Harbor gates prove:
 2. `oracle`: the reference patch applies and every selected test passes;
 3. determinism: the fail-to-pass selection passes a second time with the oracle.
 
-**Verification rounds.** A fresh read-only agent reviews each mechanically green authoring revision, including its instruction, patches, environment, verification report, and coupling evidence. It can accept the task, reject it, or return suggestions to the authoring agent. It cannot edit files or submit a fix. Suggestions start the next authoring round; the author makes changes and repeats mechanical verification before another independent review. The candidate has at most three authoring rounds.
+**Review rounds.** A fresh read-only agent reviews each mechanically green authoring revision, including its instruction, patches, environment, mechanical check report, and coupling evidence. It can accept the task, reject it, or return suggestions to the authoring agent. It cannot edit files or submit a fix. Suggestions start the next authoring round; the author makes changes and repeats the mechanical check before another independent review. The candidate has at most three authoring rounds.
 
 Every candidate in the discovered pool runs as its own child workflow in parallel; the requested counts size the pool (discovery targets 1.5 times the request per tier, dealt across its shards) rather than capping the result, so a run can export more accepted tasks than it asked for. Nothing is replaced or backfilled: a rejected candidate is simply a rejection in the run status.
 
@@ -99,7 +99,7 @@ harbor-task/
 └── solution/
 ```
 
-The export includes the repository snapshot at each selected base commit, held-out tests, and reference solutions. It excludes Git history, local provenance/session records, and the authoring and verification agent sessions (those stay in the run's artifacts).
+The export includes the repository snapshot at each selected base commit, held-out tests, and reference solutions. It excludes Git history, local provenance/session records, and the authoring and review agent sessions (those stay in the run's artifacts).
 
 The manifest digest detects accidental corruption but is not a signature because it sits inside the same archive. Extract only exports from a trusted SelfBench deployment and store them as private benchmark material.
 

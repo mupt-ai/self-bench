@@ -34,13 +34,13 @@ starts a run. Pass the manifest to run with --association (repeatable). No LLM p
 The tier counts are accepted-task targets. A rejected candidate is replaced from the leftover discovery
 pool until each tier is filled or the pool is exhausted, and the export contains only accepted tasks. The
 run command performs only repository metadata and sanitized provenance upload locally; discovery, authoring
-rounds, mechanical verification, and independent verification rounds run remotely. --output implies --wait,
+rounds, mechanical check, and independent review rounds run remotely. --output implies --wait,
 blocks until completion, and downloads the SHA-256-verified export. --exclude-run (repeatable) names
 earlier runs whose source pull requests discovery must skip, whatever their outcome there; the export also
 drops accepted tasks that repeat a source pull request and lists them in its manifest.
 
 The replay command skips discovery: the worker rebuilds the named candidates from the source run's stored
-provenance, discovery reports, and authored definitions, then runs authoring and verification fresh.
+provenance, discovery reports, and authored definitions, then runs authoring and review fresh.
 
 The view command serves the Harbor viewer over any directory of Harbor tasks (directories containing
 task.toml, searched four levels deep) without Temporal or an API token. The same viewer is served by the

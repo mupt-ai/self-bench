@@ -3,11 +3,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import verifierExtension from "../../src/extensions/verifier.js";
-import { verifierRoundScript } from "../../src/temporal/activities/agent-scripts.js";
+import reviewerExtension from "../../src/extensions/reviewer.js";
+import { reviewRoundScript } from "../../src/temporal/activities/agent-scripts.js";
 import { authoringResumePrompt } from "../../src/temporal/activities/prompts-authoring.js";
 
-test("verifier exposes only verdict tools and records feedback without creating task files", async () => {
+test("reviewer exposes only verdict tools and records feedback without creating task files", async () => {
   const root = await mkdtemp(join(tmpdir(), "readonly-review-"));
   const previous = process.env.SELFBENCH_VERDICT_OUTPUT;
   process.env.SELFBENCH_VERDICT_OUTPUT = root;
@@ -15,7 +15,7 @@ test("verifier exposes only verdict tools and records feedback without creating 
     string,
     { execute(id: string, input: Record<string, unknown>): Promise<unknown> }
   >();
-  verifierExtension({
+  reviewerExtension({
     registerTool: (tool: {
       name: string;
       execute(id: string, input: Record<string, unknown>): Promise<unknown>;
@@ -41,8 +41,8 @@ test("verifier exposes only verdict tools and records feedback without creating 
   }
 });
 
-test("verifier launcher has no shell or write tools and author receives review feedback", () => {
-  const script = verifierRoundScript(false);
+test("reviewer launcher has no shell or write tools and author receives review feedback", () => {
+  const script = reviewRoundScript(false);
   const tools = /--tools ([^ ]+)/.exec(script)?.[1]?.split(",");
   expect(tools).toEqual([
     "read",

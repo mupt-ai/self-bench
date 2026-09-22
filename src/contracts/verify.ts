@@ -2,8 +2,8 @@ import { z } from "zod";
 import { type ArtifactRef, artifactRefSchema } from "./common.js";
 import { type AuthoredTask, authoredTaskDraftSchema, authoredTaskSchema } from "./task.js";
 
-const verifyStageSchema = z.enum(["authoring", "verification"]);
-export type VerifyStage = z.infer<typeof verifyStageSchema>;
+const pipelineStageSchema = z.enum(["authoring", "review", "verification"]);
+export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 
 export const MAX_AUTHORING_ROUNDS = 3;
 /** In-session `verify` calls available to each authoring round. */
@@ -31,7 +31,7 @@ const rewardGateSchema = gateSchema.extend({ rewards: harborRewardsSchema });
 export const verifyReportSchema = z
   .object({
     schemaVersion: z.literal(1),
-    stage: verifyStageSchema,
+    stage: pipelineStageSchema,
     round: z.number().int().positive(),
     taskId: z.string().min(1),
     compile: z.object({ ok: z.boolean(), errors: z.array(z.string()) }),
@@ -79,7 +79,7 @@ export const authoringRoundResultSchema = z.discriminatedUnion("kind", [
 
 export type AuthoringRoundResult = z.infer<typeof authoringRoundResultSchema>;
 
-export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
+export const reviewRoundResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), session: artifactRefSchema, reason: z.string().min(1) }),
   z.object({
     kind: z.literal("suggestions"),
@@ -90,4 +90,4 @@ export const verifierRoundResultSchema = z.discriminatedUnion("kind", [
   rejectedRoundSchema,
 ]);
 
-export type VerifierRoundResult = z.infer<typeof verifierRoundResultSchema>;
+export type ReviewRoundResult = z.infer<typeof reviewRoundResultSchema>;

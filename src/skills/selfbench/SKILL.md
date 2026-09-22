@@ -5,7 +5,7 @@ description: Author one private software-engineering benchmark task at an assign
 
 # SelfBench Task Authoring
 
-Create exactly one Harbor evaluation at the assigned easy, medium, or hard difficulty. Do not discover alternative pull requests. Do not run Harbor; the worker compiles, builds, and measures your submission and sends the verification report back to this session. Your deliverable is the directory `/work/task/` with exactly four files: `definition.json` (with the environment contract), `instruction.md`, `test.patch`, and `gold.patch`. The `verify` and `submit_task` tools take no arguments; they read that directory.
+Create exactly one Harbor evaluation at the assigned easy, medium, or hard difficulty. Do not discover alternative pull requests. Do not run Harbor; the worker compiles, builds, and measures your submission and sends the mechanical check report back to this session. Your deliverable is the directory `/work/task/` with exactly four files: `definition.json` (with the environment contract), `instruction.md`, `test.patch`, and `gold.patch`. The `verify` and `submit_task` tools take no arguments; they read that directory.
 
 ## Integrity boundary
 

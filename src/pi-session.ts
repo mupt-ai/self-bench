@@ -1,4 +1,4 @@
-import type { VerifyStage } from "./contracts.js";
+import type { PipelineStage } from "./contracts.js";
 
 /** Directory pi writes session files into inside the sandbox. */
 export const PI_SESSION_DIRECTORY = "/work/session";
@@ -15,7 +15,7 @@ export interface PiSessionSummary {
 
 export function sessionArtifactKey(
   runId: string,
-  stage: VerifyStage,
+  stage: PipelineStage,
   candidateId: string,
   round: number,
   attempt = 1,

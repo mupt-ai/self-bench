@@ -2,7 +2,7 @@ import type { TaskDefinition, TaskEnvironment } from "../../contracts.js";
 import type { CouplingEvidence } from "../../coupling.js";
 import { joinPromptSections } from "./prompt-sections.js";
 
-export interface VerifierPromptInput {
+export interface ReviewPromptInput {
   readonly taskId: string;
   readonly testSelection?: TaskDefinition["testSelection"];
   readonly testResults?: TaskDefinition["testResults"];
@@ -46,7 +46,7 @@ const decision = `# Decision
 
 You have no bash, edit, write, or verify tools. Use read, grep, find, and ls only. Do not modify task files or the repository. Do not return prose after a tool call.`;
 
-export function verifierPrompt(input: VerifierPromptInput): string {
+export function reviewPrompt(input: ReviewPromptInput): string {
   const evidence = JSON.stringify(
     {
       testSelection: input.testSelection ?? null,
@@ -57,13 +57,13 @@ export function verifierPrompt(input: VerifierPromptInput): string {
     2,
   );
   return joinPromptSections(
-    `You are the independent SelfBench verification agent for task ${input.taskId}. You have not seen the authoring conversation. Judge whether this Harbor task is a fair, self-contained benchmark and either accept it or submit suggestions for the next authoring agent.`,
+    `You are the independent SelfBench review agent for task ${input.taskId}. You have not seen the authoring conversation. Judge whether this Harbor task is a fair, self-contained benchmark and either accept it or submit suggestions for the next authoring agent.`,
     workspace,
     rubric,
     decision,
     `# Selection and Evidence Contract\n\n${evidence}`,
     `# Authentic Request\n\n${input.instruction.trim()}`,
-    `# Verification Report\n\n${input.renderedReport.trim()}`,
+    `# Mechanical Check Report\n\n${input.renderedReport.trim()}`,
     `# Deterministic Coupling Evidence\n\n${JSON.stringify(input.couplingEvidence, null, 2)}`,
     `# Environment Contract\n\n${JSON.stringify(input.environment, null, 2)}`,
     `# Held-Out Test Patch\n\n\`\`\`diff\n${input.testPatch}\n\`\`\``,

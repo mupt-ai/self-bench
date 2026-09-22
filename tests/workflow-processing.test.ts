@@ -156,12 +156,12 @@ describe("SelfBench workflow processing", () => {
       ]),
     );
   });
-  test("propagates cancellation from a verifier round", async () => {
+  test("propagates cancellation from a review round", async () => {
     const activities = acceptingActivities([candidate("cancelled", 1)]);
-    activities.runVerifierRound = async () => {
+    activities.runReviewRound = async () => {
       throw new ActivityFailure(
         "Activity task failed",
-        "runVerifierRound",
+        "runReviewRound",
         "activity-id",
         RetryState.CANCEL_REQUESTED,
         "worker",

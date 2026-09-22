@@ -2,7 +2,7 @@ import type { ArtifactStore } from "../../artifacts.js";
 import type { AuthoredTask, TaskDefinition } from "../../contracts.js";
 import type { CouplingEvidence } from "../../coupling.js";
 import { taskOperation } from "../../sandbox/task-operation.js";
-export interface VerifierMaterial {
+export interface ReviewMaterial {
   readonly definition: TaskDefinition;
   readonly instruction: string;
   readonly testPatch: string;
@@ -12,11 +12,11 @@ export interface VerifierMaterial {
 }
 
 /** Repository hydration and coupling scans run in a fresh preparation sandbox. */
-export async function buildVerifierMaterial(
+export async function buildReviewMaterial(
   store: ArtifactStore,
   task: AuthoredTask,
   signal?: AbortSignal,
-): Promise<VerifierMaterial> {
+): Promise<ReviewMaterial> {
   const files = await taskOperation(
     "material",
     [
@@ -28,5 +28,5 @@ export async function buildVerifierMaterial(
   );
   const bytes = files["/work/material.json"];
   if (!bytes) throw new Error("Sandbox returned no verifier material");
-  return JSON.parse(Buffer.from(bytes).toString()) as VerifierMaterial;
+  return JSON.parse(Buffer.from(bytes).toString()) as ReviewMaterial;
 }

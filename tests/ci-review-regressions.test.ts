@@ -59,7 +59,7 @@ test("workflow failure preserves complete technical details", async () => {
   const task = {
     id: 1,
     workflowId: "workflow",
-    stage: "verification",
+    stage: "review",
     round: 2,
     pipelineStatus: "in_progress",
   } as TaskRecord;

@@ -11,7 +11,7 @@ import { generationSubscriptionAuth } from "../src/site/generation-subscription.
 import { githubToken, loadPiModelAuth } from "../src/subscription-auth.js";
 import {
   authoringRoundScript,
-  verifierRoundScript,
+  reviewRoundScript,
 } from "../src/temporal/activities/agent-scripts.js";
 import { codexAccess, codexAuth } from "./support/codex-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
@@ -132,7 +132,7 @@ test("generation credentials cannot be substituted and concurrent activity envir
     ),
   );
   expect(executionEnvironment()).toBe(process.env);
-  for (const script of [authoringRoundScript(false), verifierRoundScript(false)]) {
+  for (const script of [authoringRoundScript(false), reviewRoundScript(false)]) {
     expect(script).toContain(`--thinking "\${AUTHOR_THINKING:-high}"`);
     expect(script).not.toContain("--thinking high");
   }

@@ -212,7 +212,7 @@ describe("task routes", () => {
       runId: "run-one",
       taskId: "task-good",
       candidateId: "c1",
-      bundles: [expect.objectContaining({ stage: "verification" })],
+      bundles: [expect.objectContaining({ stage: "review" })],
     });
     expect((await site.request("/api/orgs/mupt-ai/repos/x/y/tasks", { headers })).status).toBe(404);
   });

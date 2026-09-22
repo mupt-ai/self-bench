@@ -69,7 +69,7 @@ describe("verify report", () => {
     );
     const oracleFailed: VerifyReport = {
       ...greenReport,
-      stage: "verification",
+      stage: "review",
       oracle: {
         ran: true,
         ok: false,
@@ -79,7 +79,7 @@ describe("verify report", () => {
       green: false,
     };
     expect(verifyReportSummary(oracleFailed)).toBe(
-      "verification round 1: oracle: fail_to_pass=0 (expected 1)",
+      "review round 1: oracle: fail_to_pass=0 (expected 1)",
     );
     const infrastructure: VerifyReport = {
       ...greenReport,
@@ -108,7 +108,7 @@ describe("verify report", () => {
       oracle: { ran: false, ok: false, rewards: {}, logTail: "" },
       green: false,
     });
-    expect(rendered).toContain("# Verification report: authoring round 1 for example-task");
+    expect(rendered).toContain("# Mechanical check report: authoring round 1 for example-task");
     expect(rendered).toContain("Overall: **RED**");
     expect(rendered).toContain(
       "## 3. Image build\nResult: failed.\n\n```text\nE: Unable to locate package foo\n```",

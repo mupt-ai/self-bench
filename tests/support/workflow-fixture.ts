@@ -3,10 +3,10 @@ import type {
   AuthoredTaskDraft,
   Candidate,
   Difficulty,
+  PipelineStage,
   RunRequest,
   VerifyOutcome,
   VerifyReport,
-  VerifyStage,
 } from "../../src/contracts.js";
 import type { SelfBenchActivities } from "../../src/temporal/activities.js";
 
@@ -68,7 +68,7 @@ export function draft(candidateId: string, suffix = ""): AuthoredTaskDraft {
   };
 }
 
-function greenReport(stage: VerifyStage, round: number, taskId: string): VerifyReport {
+function greenReport(stage: PipelineStage, round: number, taskId: string): VerifyReport {
   const gate = { ran: true, ok: true, logTail: "" };
   return {
     schemaVersion: 1,
@@ -98,7 +98,7 @@ function greenReport(stage: VerifyStage, round: number, taskId: string): VerifyR
 }
 
 export function redReport(
-  stage: VerifyStage,
+  stage: PipelineStage,
   round: number,
   taskId: string,
   failure: { compile?: string; infrastructure?: string; oracle?: boolean },
@@ -135,7 +135,7 @@ export function redReport(
 
 export function greenOutcome(
   task: AuthoredTaskDraft,
-  stage: VerifyStage,
+  stage: PipelineStage,
   round: number,
 ): VerifyOutcome {
   return {
@@ -168,9 +168,9 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       verifyCalls: 0,
     }),
     compileAndVerify: async ({ task, stage, round }) => greenOutcome(task, stage, round),
-    runVerifierRound: async ({ candidate: value, round }) => ({
+    runReviewRound: async ({ candidate: value, round }) => ({
       kind: "accepted",
-      session: ref(`file:///${value.candidateId}/verification/session/round-${round}.jsonl`),
+      session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),
       reason: "fair benchmark",
     }),
     buildExport: async () => artifact,
