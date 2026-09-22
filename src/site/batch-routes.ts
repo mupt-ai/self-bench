@@ -9,6 +9,7 @@ import type { BillingStore } from "../billing/store.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
+import { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
 import { type BatchStatus, syncBatchProgress } from "./batch-progress.js";
 import { type BatchStarter, batchSubmissionSchema, prepareBatch } from "./batch-start.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
@@ -72,7 +73,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           sendJson(response, 400, {
             error: parsed.error.issues.some((issue) => issue.path[0] === "generation")
               ? "Choose valid generation models, reasoning, sandbox, and credentials."
-              : "Request 1–10000 candidates total using nonnegative whole counts for easy, medium and hard.",
+              : `Request 1–${MAX_CANDIDATES_PER_RUN} candidates total using nonnegative whole counts for easy, medium and hard.`,
           });
           return true;
         }

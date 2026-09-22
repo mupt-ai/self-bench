@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, CancelledFailure } from "@temporalio/workflow";
 import type { Difficulty, RunStatus } from "../src/contracts.js";
+import {
+  MAX_CONCURRENT_CANDIDATE_WORKFLOWS,
+  MAX_DISCOVERY_SHARDS,
+} from "../src/execution-limits.js";
 import { discoveryShardTargets } from "../src/temporal/workflow/discovery.js";
 import { executeRun } from "../src/temporal/workflow.js";
 import {
@@ -136,9 +140,10 @@ describe("SelfBench workflow discovery", () => {
     expect(currentStatus?.().accepted).toBe(3);
     expect(currentStatus?.().rejected).toBe(1);
   });
-  test("bounds candidate activity fanout for large runs", async () => {
-    const candidates = Array.from({ length: 101 }, (_unused, index) =>
-      candidate(`candidate-${index}`, index + 1),
+  test("bounds candidate workflow fanout for large runs", async () => {
+    const candidates = Array.from(
+      { length: MAX_CONCURRENT_CANDIDATE_WORKFLOWS + 1 },
+      (_unused, index) => candidate(`candidate-${index}`, index + 1),
     );
     const activities = acceptingActivities(candidates);
     let active = 0;
@@ -161,11 +166,14 @@ describe("SelfBench workflow discovery", () => {
     };
 
     const result = await executeRun(
-      { ...run, candidateCounts: { easy: 0, medium: 0, hard: candidates.length } },
+      {
+        ...run,
+        candidateCounts: { easy: 0, medium: 0, hard: candidates.length },
+      },
       activities,
     );
 
-    expect(peak).toBe(100);
+    expect(peak).toBe(MAX_CONCURRENT_CANDIDATE_WORKFLOWS);
     expect(result.acceptedTaskIds).toHaveLength(candidates.length);
   });
   test("expands discovery only until every tier authoring budget is filled", async () => {
@@ -270,7 +278,7 @@ describe("SelfBench workflow discovery", () => {
   });
 
   test("sizes shard targets at 1.5x the request per tier, dealt across shards", () => {
-    const shards = discoveryShardTargets({ easy: 3, medium: 0, hard: 4 }, 8);
+    const shards = discoveryShardTargets({ easy: 3, medium: 0, hard: 4 }, MAX_DISCOVERY_SHARDS);
     const totals = shards.reduce(
       (sum, shard) => ({
         easy: sum.easy + shard.easy,

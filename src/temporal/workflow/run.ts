@@ -10,6 +10,7 @@ import {
   type TaskProgress,
   type WorkflowRunInput,
 } from "../../contracts.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../execution-limits.js";
 import { parallelMap } from "../../parallel.js";
 import type { ExportInput, SelfBenchActivities } from "../activities.js";
 import {
@@ -20,7 +21,6 @@ import {
 import {
   candidatePoolExhausted,
   discoverWave,
-  MAX_CONCURRENT_CANDIDATES,
   MAX_DISCOVERED_CANDIDATES,
   missingCandidateCounts,
   selectCandidates,
@@ -31,6 +31,7 @@ export async function executeRun(
   activitySet: SelfBenchActivities,
   installStatusQuery: (status: () => RunStatus) => void = () => undefined,
   children: CandidateChildren = inProcessCandidates(activitySet),
+  candidateConcurrency = MAX_CONCURRENT_CANDIDATE_WORKFLOWS,
 ): Promise<RunResult> {
   const requestedCounts = isReplayRunRequest(input)
     ? { easy: 0, medium: 0, hard: 0 }
@@ -99,7 +100,6 @@ export async function executeRun(
       candidates = await discoverUntilFilled(
         activitySet,
         run,
-        input,
         excludedSourcePrs,
         (progress) => {
           status = { ...status, discovery: progress };
@@ -112,10 +112,10 @@ export async function executeRun(
       tracker.process(run, candidate);
 
     setPhase("authoring");
-    // Every candidate, discovered or replayed, runs as its own child workflow at once. The
-    // requested counts size discovery's pool; they are not a cap on accepted tasks, so a pool that
-    // yields more than requested simply exports more.
-    await parallelMap(candidates, MAX_CONCURRENT_CANDIDATES, processCandidate);
+    // Every candidate, discovered or replayed, runs as its own child workflow. The concurrency
+    // cap limits active children; requested counts size discovery's pool, not accepted tasks, so a
+    // pool that yields more than requested simply exports more.
+    await parallelMap(candidates, candidateConcurrency, processCandidate);
 
     setPhase("exporting");
     const exportRef = await activitySet.buildExport({
@@ -149,7 +149,6 @@ export async function executeRun(
 async function discoverUntilFilled(
   activitySet: SelfBenchActivities,
   run: RunRequest,
-  input: RunRequest,
   excludedSourcePrs: readonly number[],
   updateDiscovery: (progress: DiscoveryProgress) => void,
   setDiscovered: (discovered: number) => void,
@@ -159,15 +158,15 @@ async function discoverUntilFilled(
   const excluded = new Set(excludedSourcePrs);
   let discoveryWave = 0;
   while (true) {
-    const selected = selectCandidates(candidates, input.candidateCounts);
-    const missing = missingCandidateCounts(selected, input.candidateCounts);
+    const selected = selectCandidates(candidates, run.candidateCounts);
+    const missing = missingCandidateCounts(selected, run.candidateCounts);
     if (Object.values(missing).every((count) => count === 0)) {
       break;
     }
     const capacity = MAX_DISCOVERED_CANDIDATES - candidates.length;
     if (capacity <= 0) {
       setPhase("blocked");
-      throw candidatePoolExhausted(selected, input.candidateCounts);
+      throw candidatePoolExhausted(selected, run.candidateCounts);
     }
     const additions = await discoverWave(activitySet, run, {
       wave: discoveryWave,
@@ -181,7 +180,7 @@ async function discoverUntilFilled(
     );
     if (uniqueAdditions.length === 0) {
       setPhase("blocked");
-      throw candidatePoolExhausted(selected, input.candidateCounts);
+      throw candidatePoolExhausted(selected, run.candidateCounts);
     }
     candidates.push(...uniqueAdditions.slice(0, capacity));
     setDiscovered(candidates.length);

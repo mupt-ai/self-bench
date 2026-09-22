@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
 import { GenerateBatch } from "./GenerateBatch";
 
 test("batch creation is one dialog that closes and opens the submitted batch once", async () => {
@@ -88,7 +89,10 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     await act(async () => button("Generate Batch").click());
     expect(container.querySelector("dialog")?.open).toBe(true);
     for (const label of ["Easy Candidates", "Medium Candidates", "Hard Candidates"])
-      expect(container.querySelector(`input[aria-label="${label}"]`)).not.toBeNull();
+      expect(container.querySelector(`input[aria-label="${label}"]`)?.getAttribute("max")).toBe(
+        String(MAX_CANDIDATES_PER_RUN),
+      );
+    expect(container.textContent).toContain(`1–${MAX_CANDIDATES_PER_RUN} candidates total.`);
     // One dialog: the generation settings sit beside the counts with no wizard step.
     expect(container.querySelector("select[aria-label='Author Model']")).not.toBeNull();
     expect(container.textContent).not.toContain("Configure Generation");

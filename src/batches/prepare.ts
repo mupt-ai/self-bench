@@ -1,10 +1,11 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { RunRequest } from "../contracts.js";
+import { MAX_DISCOVERY_SHARDS } from "../execution-limits.js";
 import { combineRunProvenance } from "../provenance.js";
 import { collectExcludedSourcePrs } from "../temporal/activities/excluded-source-prs.js";
 import { parseProvenance } from "../temporal/activities/runtime.js";
 import { fetchBatchPullRequests } from "./github.js";
-import { partitionPullRequests, takeNewestShards } from "./shards.js";
+import { discoveryPrsPerShard, partitionPullRequests, takeNewestShards } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 
 /** All ordinary GitHub I/O finishes here, before any Temporal execution is started. */
@@ -34,10 +35,16 @@ export async function prepareGenerationBatch(options: {
     ),
   );
   if (!chunks.length) throw new Error("No eligible merged PRs found");
-  // One discovery agent can fill a small request from a single 25-PR window. Do not
-  // start a shard per remaining PR group when the batch only asked for a few tasks.
+  // One discovery agent can fill a small request from a single PR window. Larger
+  // requests widen each window rather than exceeding the workflow shard bound.
+  const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
-  const selected = takeNewestShards(chunks, needed);
+  const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
+  const selected = takeNewestShards(
+    chunks,
+    shardCount,
+    discoveryPrsPerShard(requested, shardCount),
+  );
   const shards: GenerationBatch["shards"] = [];
   for (const [index, chunk] of selected.entries()) {
     const provenance = await artifacts.put(

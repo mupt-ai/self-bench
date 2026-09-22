@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
   HARBOR_ENVIRONMENTS,
@@ -16,7 +17,6 @@ import { defaultActivityConcurrency } from "./worker-capacity.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
-
 const environmentSchema = z.object({
   SELFBENCH_API_HOST: z.string().default("127.0.0.1"),
   SELFBENCH_API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
@@ -53,7 +53,7 @@ const environmentSchema = z.object({
   ),
   SELFBENCH_HARBOR_CONCURRENCY: z.preprocess(
     emptyStringAsUndefined,
-    z.coerce.number().int().min(1).max(100).optional(),
+    z.coerce.number().int().min(1).max(MAX_HARBOR_CONCURRENCY).optional(),
   ),
   SELFBENCH_TASK_QUEUE: z.string().default("selfbench-dev"),
   SELFBENCH_TEMPORAL_ADDRESS: z.string().default("127.0.0.1:7233"),

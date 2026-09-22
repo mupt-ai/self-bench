@@ -1,3 +1,4 @@
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
 import type { BatchStatus } from "../../../src/site/batch-progress";
 import type { GenerationSettings } from "../../../src/site/generation-settings";
 import { checkSessionExpired } from "../session-expired";
@@ -60,5 +61,9 @@ export const batchIsTerminal = (phase: string) =>
 export function validCandidateCounts(counts: CandidateCounts): boolean {
   const values = Object.values(counts);
   const total = values.reduce((sum, n) => sum + n, 0);
-  return values.every((n) => Number.isInteger(n) && n >= 0) && total > 0 && total <= 10000;
+  return (
+    values.every((n) => Number.isInteger(n) && n >= 0) &&
+    total > 0 &&
+    total <= MAX_CANDIDATES_PER_RUN
+  );
 }

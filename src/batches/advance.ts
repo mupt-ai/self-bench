@@ -1,3 +1,4 @@
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
 import type { BatchExecutions } from "./temporal.js";
 import type { GenerationBatch } from "./types.js";
 
@@ -57,7 +58,9 @@ export async function advanceBatch(
   }
   if (batch.phase !== "authoring") return;
   const pending = batch.candidates.filter((item) => !item.result && !item.error);
-  const item = pending[(batch.cursor ?? 0) % Math.max(1, pending.length)];
+  const active = pending.filter((item) => item.dispatchAttempted);
+  const eligible = active.length >= MAX_CONCURRENT_CANDIDATE_WORKFLOWS ? active : pending;
+  const item = eligible[(batch.cursor ?? 0) % Math.max(1, eligible.length)];
   batch.cursor = (batch.cursor ?? 0) + 1;
   if (item && !item.dispatchAttempted) {
     item.dispatchAttempted = true;

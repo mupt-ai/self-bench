@@ -1,6 +1,7 @@
 import { Layers } from "lucide-react";
 import React from "react";
 import { Link } from "react-router";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
 import {
   type BatchRepoId,
   BatchRequestError,
@@ -128,7 +129,7 @@ export function GenerateBatch({
                         aria-label={`${label} Candidates`}
                         type="number"
                         min="0"
-                        max="10000"
+                        max={MAX_CANDIDATES_PER_RUN}
                         step="1"
                         required
                         value={Number.isNaN(counts[tier]) ? "" : counts[tier]}
@@ -143,7 +144,9 @@ export function GenerateBatch({
                     </label>
                   ))}
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">1–10,000 candidates total.</p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  1–{MAX_CANDIDATES_PER_RUN} candidates total.
+                </p>
               </fieldset>
               <div className="mt-8">
                 {optionsError ? (

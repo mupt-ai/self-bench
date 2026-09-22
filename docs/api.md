@@ -94,7 +94,7 @@ Relative to `/api/orgs/:org/repos/:owner/:name`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/batches` | Batch runs attached to the repository (`batches`: `runId`, `attachedBy`, `attachedAt`) |
-| `POST` | `/batches` | Body `{ "candidateCounts": { "easy": n, "medium": n, "hard": n }, "generation"?: GenerationSettings }`, 1–10000 candidates in total. Starts a batch; `202 { run, runId }` |
+| `POST` | `/batches` | Body `{ "candidateCounts": { "easy": n, "medium": n, "hard": n }, "generation"?: GenerationSettings }`, 1–300 candidates in total. Starts a batch; `202 { run, runId }` |
 | `GET` | `/batches/:batchId` | Live status of the batch: phase, counts, candidates, and task progress |
 | `POST` | `/batches/:batchId/cancel` | Requests cancellation; `202` |
 
