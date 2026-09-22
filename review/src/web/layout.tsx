@@ -32,7 +32,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "mb-8 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between",
+        "mb-8 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       data-slot="page-header"
