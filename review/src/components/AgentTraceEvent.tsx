@@ -42,7 +42,7 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
 
   const tool = event.kind === "tool" ? parseToolCall(event.text) : undefined;
   const label = event.kind === "tool" ? "Tool Call" : "Tool Output";
-  const detail = event.kind === "tool" ? tool?.name : "Returned to Model";
+  const detail = event.kind === "tool" ? tool?.name : undefined;
   const text = event.kind === "tool" ? (tool?.body ?? event.text) : event.text;
   const emptyPreview = event.kind === "tool" ? "(no arguments)" : "(empty output)";
 
