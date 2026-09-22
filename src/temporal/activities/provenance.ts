@@ -2,8 +2,8 @@ import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { ArtifactRef, RunRequest } from "../../contracts.js";
+import { githubToken } from "../../github/token.js";
 import { collectGitHubPullRequestProvenance, combineRunProvenance } from "../../provenance.js";
-import { githubToken } from "../../subscription-auth.js";
 import { parseProvenance, withActivityHeartbeats } from "./runtime.js";
 
 export async function collectRunProvenance(

@@ -4,12 +4,12 @@ import { orgRecords } from "../src/evaluation/org-records.js";
 import { withExecutionEnvironment } from "../src/execution-environment.js";
 import { meteredSandboxExecutor } from "../src/managed/metered-sandbox.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "../src/managed/pricing.js";
+import { loadPiModelAuth } from "../src/pi/model-auth.js";
 import { generationEnvironment } from "../src/site/generation-credentials.js";
 import { generationModelRoute } from "../src/site/generation-models.js";
 import type { GenerationReference } from "../src/site/generation-settings.js";
 import { generationSettingsSchema } from "../src/site/generation-settings.js";
 import { managedModelKey, managedOffer } from "../src/site/managed-generation.js";
-import { loadPiModelAuth } from "../src/subscription-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 
 const managedSettings = {

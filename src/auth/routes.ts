@@ -1,10 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { bearerMatches, sendJson } from "../api/http.js";
-import { createOrgGate, OrgAccessError } from "./allowed-orgs.js";
-import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "./api-keys.js";
-import type { AuthConfig } from "./config.js";
-import { clearCookie, parseCookies, sendRedirect, setCookie } from "./cookies.js";
-import { constantTimeEqual, randomToken } from "./crypto.js";
 import {
   authorizeUrl,
   exchangeCode,
@@ -13,7 +8,12 @@ import {
   GitHubIdentityError,
   GitHubOAuthError,
   validateGitHubIdentity,
-} from "./github.js";
+} from "../github/oauth.js";
+import { createOrgGate, OrgAccessError } from "./allowed-orgs.js";
+import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "./api-keys.js";
+import type { AuthConfig } from "./config.js";
+import { clearCookie, parseCookies, sendRedirect, setCookie } from "./cookies.js";
+import { constantTimeEqual, randomToken } from "./crypto.js";
 import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "./session.js";
 import type { Org, User, UserStore } from "./users.js";
 

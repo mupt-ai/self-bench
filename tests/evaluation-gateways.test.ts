@@ -37,7 +37,7 @@ async def check():
     assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
 asyncio.run(check())
 `,
-    fileURLToPath(new URL("../src/harbor-runtime/harbor_gateway.py", import.meta.url)),
+    fileURLToPath(new URL("../src/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);
   expect(result.exitCode).toBe(0);
 });

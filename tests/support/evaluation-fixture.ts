@@ -7,7 +7,7 @@ import { apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
 import { createUserStore } from "../../src/auth/users.js";
-import type { CodexLogins } from "../../src/evaluation/codex-login.js";
+import type { CodexLogins } from "../../src/codex/login.js";
 import {
   createEncryptedRecords,
   type EncryptedRecordStore,

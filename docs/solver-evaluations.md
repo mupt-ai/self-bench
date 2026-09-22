@@ -33,8 +33,6 @@ The worker verifies Harbor **0.23.0**, matching the existing Dockerfile pin. Har
 
 ## Results and safety
 
-E2B uses a packaged Harbor environment subclass that limits sandbox lifetime to one hour. The pinned upstream environment otherwise requests 24 hours, which Hobby accounts reject before the solver starts. All other E2B behavior, including network policy and cleanup, remains inherited from Harbor. The adapter does not retry sandbox creation automatically. Tasks exceeding the one-hour sandbox lifetime fail rather than silently extending usage.
-
 - Session authentication, tenant membership, connected repository ownership, task membership, and runnable bundle state are checked server-side. Run requests accept setup identifiers, not credentials, bundle paths or commands. Credentials are accepted only by the scoped setup endpoint. Tasks must have an accepted pipeline result and an explicit human approval, checked again when submitting.
 - Same-origin JSON is required to start a run. A request UUID is also its durable workflow identity. Retrying an unconfirmed submission with the same selection/UUID never starts a second Temporal workflow; a new explicit run gets a new UUID.
 - Temporal executes a separate `selfBenchEvaluationWorkflow`. Automatic activity and Harbor trial retries are disabled. Each Harbor invocation has a two-hour limit and requests sandbox deletion. A killed worker or forced timeout can leave sandbox resources; the failure view warns that an operator may need to verify cleanup. Local tests do not prove remote cleanup.

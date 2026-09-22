@@ -3,10 +3,10 @@ import type { ArtifactStore } from "../artifacts.js";
 import { buildCommit } from "../build-metadata.js";
 import type { SelfBenchConfig } from "../config.js";
 import type { Candidate, CandidateWorkflowInput } from "../contracts.js";
+import type { PullRequestCandidate } from "../github/pr-candidate.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
 import { configureGenerationRun } from "./generation-run.js";
 import type { GenerationReference } from "./generation-settings.js";
-import type { PullRequestCandidate } from "./pr-candidate.js";
 
 /** Starts one candidate workflow; the Temporal client in production, a recorder in tests. */
 export type WorkflowStarter = (workflowId: string, input: CandidateWorkflowInput) => Promise<void>;

@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { sendJson } from "../api/http.js";
+import { GitHubOAuthError } from "../github/oauth.js";
 import { clearCookie } from "./cookies.js";
-import { GitHubOAuthError } from "./github.js";
 import { SESSION_COOKIE } from "./session.js";
 
 /** Only an authentication failure logs out the browser; permission/rate-limit errors do not. */

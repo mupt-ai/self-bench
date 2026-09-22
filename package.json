@@ -17,7 +17,7 @@
   },
   "files": [
     "dist",
-    "src/extensions",
+    "src/pi/extensions",
     "src/skills",
     "drizzle",
     "docs",

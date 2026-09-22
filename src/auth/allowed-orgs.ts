@@ -3,7 +3,7 @@ import {
   GitHubIdentityError,
   GitHubOAuthError,
   type OrgMembership,
-} from "./github.js";
+} from "../github/oauth.js";
 
 /** How long a membership answer stays trusted before GitHub is asked again. */
 const ALLOWED_ORGS_TTL_MS = 5 * 60 * 1000;

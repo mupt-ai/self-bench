@@ -9,7 +9,7 @@
     // Temporal loads workflows and Pi loads extensions by path, not imports.
     "src/temporal/workflow.ts!",
     "src/evaluation/workflow.ts!",
-    "src/extensions/{authoring,verifier,discovery}.ts!",
+    "src/pi/extensions/{authoring,verifier,discovery}.ts!",
     "src/sandbox/programs/{author,check,verifier,compiler,task-operation}.ts!",
     "review/src/main.tsx!",
     "scripts/*.ts!",
@@ -27,7 +27,7 @@
     // These exports are registration interfaces for the external loaders.
     "src/temporal/workflow.ts": ["exports"],
     "src/evaluation/workflow.ts": ["exports"],
-    "src/extensions/{authoring,verifier,discovery}.ts": ["exports"]
+    "src/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
   },
   // Resolved through createRequire; the CLI is installed by the operator.
   "ignoreDependencies": ["@openai/codex"],

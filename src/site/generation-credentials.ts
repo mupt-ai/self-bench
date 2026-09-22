@@ -1,8 +1,9 @@
 import { isDeepStrictEqual } from "node:util";
+import { generationSubscriptionAuth } from "../codex/subscription.js";
 import { type CredentialInfo, readAccount, secretPath } from "../evaluation/account.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import { HARBOR_E2B_API_KEY, HARBOR_VERCEL_CREDENTIALS } from "../harbor-environment.js";
+import { HARBOR_E2B_API_KEY, HARBOR_VERCEL_CREDENTIALS } from "../harbor/environment.js";
 import {
   executionBackendLabels,
   type HostedExecutionBackend,
@@ -11,7 +12,6 @@ import {
 } from "../providers.js";
 import { generationModelCredentialKinds, generationModelRoute } from "./generation-models.js";
 import type { GenerationReference, GenerationSettings } from "./generation-settings.js";
-import { generationSubscriptionAuth } from "./generation-subscription.js";
 import {
   type ManagedOffer,
   managedModelKey,

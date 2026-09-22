@@ -9,21 +9,17 @@ const programs = ["author", "check", "verifier", "compiler", "task-operation"] a
 const extensions = ["authoring", "reviewer"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
-await mkdir(join(outputDirectory, "harbor-runtime"), { recursive: true });
+await mkdir(join(outputDirectory, "harbor/runtime"), { recursive: true });
 await copyFile(
-  join(root, "src/harbor-runtime/harbor_e2b.py"),
-  join(outputDirectory, "harbor-runtime/harbor_e2b.py"),
-);
-await copyFile(
-  join(root, "src/harbor-runtime/harbor_gateway.py"),
-  join(outputDirectory, "harbor-runtime/harbor_gateway.py"),
+  join(root, "src/harbor/runtime/harbor_gateway.py"),
+  join(outputDirectory, "harbor/runtime/harbor_gateway.py"),
 );
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own
     // API and TypeBox stay external and resolve inside the sandbox exactly as before.
     const result = await Bun.build({
-      entrypoints: [join(root, "src/extensions", `${extension}.ts`)],
+      entrypoints: [join(root, "src/pi/extensions", `${extension}.ts`)],
       outdir: outputDirectory,
       naming: `extension-${extension}.bundle.js`,
       target: "node",
@@ -48,7 +44,7 @@ await Promise.all([
 ]);
 
 await Promise.all(
-  ["harbor-task/runtime", "runtime"].map((path) =>
-    cp(join(root, "src/harbor-task/runtime"), join(outputDirectory, path), { recursive: true }),
+  ["harbor/task/runtime", "runtime"].map((path) =>
+    cp(join(root, "src/harbor/task/runtime"), join(outputDirectory, path), { recursive: true }),
   ),
 );

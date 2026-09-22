@@ -11,9 +11,9 @@ import {
   verifyReportSchema,
 } from "../../contracts.js";
 import { assertEnvironmentPolicy } from "../../environment.js";
+import { githubToken } from "../../github/token.js";
 import { SandboxExecutionError } from "../../sandbox/contracts.js";
 import { submissionPatches } from "../../sandbox/submission.js";
-import { githubToken } from "../../subscription-auth.js";
 import { isGreen, renderVerifyReport } from "../../verify-report.js";
 import { activityLifetimeSignal, withActivityHeartbeats } from "./runtime.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "./task-compiler.js";

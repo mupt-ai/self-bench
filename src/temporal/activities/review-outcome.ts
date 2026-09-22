@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts.js";
 import type { ReviewRoundResult } from "../../contracts.js";
-import { PI_SESSION_OUTPUT_PATH } from "../../pi-session.js";
+import { PI_SESSION_OUTPUT_PATH } from "../../pi/session.js";
 import {
   archiveSandboxResult,
   classifyRound,

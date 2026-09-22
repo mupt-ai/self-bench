@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRepository } from "../github.js";
+import { githubRepository } from "../github/repository.js";
 
 export const commitSchema = z.string().regex(/^[0-9a-f]{40}$/i, "expected a full commit SHA");
 

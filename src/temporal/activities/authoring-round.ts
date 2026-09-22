@@ -8,15 +8,16 @@ import {
   authoringRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts.js";
-import { verifierRuntimeFiles } from "../../harbor-task/runtime-assets.js";
+import { githubToken } from "../../github/token.js";
+import { verifierRuntimeFiles } from "../../harbor/task/runtime-assets.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
 import {
   PI_RESUMED_SESSION_PATH,
   PI_SESSION_OUTPUT_PATH,
   sessionArtifactKey,
-} from "../../pi-session.js";
+} from "../../pi/session.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
-import { githubToken, loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { withAgentFeed } from "./agent-feed.js";
 import { authoringRoundScript } from "./agent-scripts.js";

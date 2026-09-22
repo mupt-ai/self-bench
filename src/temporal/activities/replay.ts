@@ -8,10 +8,10 @@ import {
   type ReplayMaterial,
   type ReplayRunRequest,
 } from "../../contracts.js";
-import { githubRepository } from "../../github.js";
+import { githubRepository } from "../../github/repository.js";
+import { githubToken } from "../../github/token.js";
 import { runCommand } from "../../process.js";
 import { provenanceMessageSchema } from "../../provenance.js";
-import { githubToken } from "../../subscription-auth.js";
 import { safeHeartbeat } from "./runtime.js";
 
 const MAX_DISCOVERY_ATTEMPTS = 5;

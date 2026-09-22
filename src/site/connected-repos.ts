@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
 import type { AuthConfig } from "../auth/config.js";
-import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
-import { lookupRepo } from "./github-repos.js";
+import { GitHubOAuthError } from "../github/oauth.js";
+import { lookupRepo } from "../github/repo-routes.js";
 import type { ConnectedRepo, RepoStore } from "./repo-store.js";
 import { tenantFor } from "./tenant.js";
 

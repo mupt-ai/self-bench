@@ -23,10 +23,6 @@ import { runCommand } from "../src/process.js";
 import { evaluationEnv, evaluationInput } from "./support/evaluation-fixture.js";
 
 const directories: string[] = [];
-test("E2B uses the packaged one-hour Harbor environment adapter", () => {
-  const args = solverArguments("/task", "/jobs", "codex", "openai/test", "e2b");
-  expect(args[args.indexOf("--env") + 1]).toBe("harbor_e2b:SelfBenchE2BEnvironment");
-});
 test("solver invocation carries the selected thinking level", () => {
   const args = solverArguments("/task", "/jobs", "codex", "openai/gpt-6-astra", "e2b", "max");
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);

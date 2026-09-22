@@ -6,9 +6,9 @@ import {
   reviewRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts.js";
-import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi-session.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
+import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi/session.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { renderVerifyReport } from "../../verify-report.js";
 import { withAgentFeed } from "./agent-feed.js";
 import { reviewRoundScript } from "./agent-scripts.js";

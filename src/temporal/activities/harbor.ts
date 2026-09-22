@@ -6,13 +6,13 @@ import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../../harbor-command.js";
-import { harborChildEnvironment } from "../../harbor-environment.js";
+} from "../../harbor/command.js";
+import { harborChildEnvironment } from "../../harbor/environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
   readHarborJobResult,
-} from "../../harbor-results.js";
+} from "../../harbor/results.js";
 import { runCommand } from "../../process.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";

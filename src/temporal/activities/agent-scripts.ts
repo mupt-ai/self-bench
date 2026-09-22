@@ -3,7 +3,7 @@ import {
   PI_SESSION_DIRECTORY,
   PI_SESSION_OUTPUT_PATH,
   piSessionArguments,
-} from "../../pi-session.js";
+} from "../../pi/session.js";
 import { MAILBOX_DIRECTORY, MAILBOX_DONE } from "../../sandbox/supervisor.js";
 import { WRAPPER_STATUS_PATH } from "./round-outcome.js";
 import type { DiscoveryShardInput } from "./types.js";

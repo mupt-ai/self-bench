@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { verifierRuntimeFiles } from "../../harbor-task/runtime-assets.js";
+import { verifierRuntimeFiles } from "../../harbor/task/runtime-assets.js";
 import type { SandboxExecutor } from "../../sandbox/contracts.js";
 import { taskSandbox } from "../../sandbox/task-context.js";
 import { readAsset } from "./runtime.js";

@@ -1,6 +1,6 @@
 import { ArrowUpRight, Check, Copy } from "lucide-react";
 import React from "react";
-import type { CodexLoginStatus } from "../../../../src/evaluation/codex-login";
+import type { CodexLoginStatus } from "../../../../src/codex/login";
 import { Skeleton } from "../LoadingSkeleton";
 import { Button, buttonStyles } from "../ui";
 import { evaluationRequest } from "./api";

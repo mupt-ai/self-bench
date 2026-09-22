@@ -1,4 +1,4 @@
-import { assertPullRequestBelongsToRepository } from "../github.js";
+import { assertPullRequestBelongsToRepository } from "../github/repository.js";
 import type { ProvenanceMessage } from "./types.js";
 
 export function combineRunProvenance(

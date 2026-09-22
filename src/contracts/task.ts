@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertPullRequestBelongsToRepository } from "../github.js";
+import { assertPullRequestBelongsToRepository } from "../github/repository.js";
 import { artifactRefSchema, commitSchema, difficultySchema, isGitHubRepository } from "./common.js";
 
 export const candidateSchema = z

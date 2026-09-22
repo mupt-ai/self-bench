@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import type { HarborJobResult } from "../src/harbor-results.js";
+import type { HarborJobResult } from "../src/harbor/results.js";
 import { LiveSandboxRegistry, SandboxSupervisionError } from "../src/sandbox/live.js";
 import { MAILBOX_REQUESTS } from "../src/sandbox/supervisor.js";
 import { compileAndVerify } from "../src/temporal/activities/verify.js";

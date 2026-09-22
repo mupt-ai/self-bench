@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
 import type { ArtifactStore } from "../artifacts.js";
 import type { AuthConfig } from "../auth/config.js";
-import { GitHubOAuthError } from "../auth/github.js";
 import type { User, UserStore } from "../auth/users.js";
 import { managedBillingRefusal } from "../billing/eligibility.js";
 import type { BillingStore } from "../billing/store.js";
@@ -10,13 +9,18 @@ import type { SelfBenchConfig } from "../config.js";
 import { listCredentials } from "../evaluation/credentials.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
+import { GitHubOAuthError } from "../github/oauth.js";
+import {
+  candidateFromPullRequest,
+  PullRequestError,
+  parsePullRequestRef,
+} from "../github/pr-candidate.js";
+import { listMergedPullRequests, MAX_PR_PAGE } from "../github/pull-requests.js";
 import { HOSTED_EXECUTION_BACKENDS } from "../providers.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "./generation-credentials.js";
 import { generationModels } from "./generation-models.js";
 import { generationSettingsSchema } from "./generation-settings.js";
 import { managedOffer } from "./managed-generation.js";
-import { candidateFromPullRequest, PullRequestError, parsePullRequestRef } from "./pr-candidate.js";
-import { listMergedPullRequests, MAX_PR_PAGE } from "./pr-list.js";
 import type { RepoStore } from "./repo-store.js";
 import { startTaskFromPullRequest, taskRunId, type WorkflowStarter } from "./task-start.js";
 import type { TaskStore } from "./task-store.js";

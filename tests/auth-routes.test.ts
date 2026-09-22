@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { loadAuthConfig } from "../src/auth/config.js";
-import { authorizeUrl } from "../src/auth/github.js";
 import { OAUTH_STATE_COOKIE } from "../src/auth/routes.js";
 import { SESSION_COOKIE } from "../src/auth/session.js";
+import { authorizeUrl } from "../src/github/oauth.js";
 import {
   type AuthServer,
   cookieAttributes,

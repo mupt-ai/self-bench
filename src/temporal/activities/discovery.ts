@@ -10,10 +10,11 @@ import {
   type DiscoveryResult,
   type RunRequest,
 } from "../../contracts.js";
-import { assertPullRequestBelongsToRepository } from "../../github.js";
+import { assertPullRequestBelongsToRepository } from "../../github/repository.js";
+import { githubToken } from "../../github/token.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
 import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../../provenance.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
-import { githubToken, loadPiModelAuth, piModelAuthSecrets } from "../../subscription-auth.js";
 import { withAgentFeed } from "./agent-feed.js";
 import { discoveryShardPrompt, modalAgentScript } from "./agent-scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, DISCOVERY_TIMEOUT_MS } from "./constants.js";
@@ -86,7 +87,7 @@ export async function discoverCandidateShard(
     );
   } else {
     const [extension, piAuth, ghToken] = await Promise.all([
-      readAsset("src/extensions/discovery.ts"),
+      readAsset("src/pi/extensions/discovery.ts"),
       loadPiModelAuth(),
       githubToken(),
     ]);

@@ -13,7 +13,7 @@ import {
   finalAssistantMessage,
   sessionProviderError,
   toolCallNames,
-} from "../../pi-session.js";
+} from "../../pi/session.js";
 import { projectRoot } from "../../project-paths.js";
 import { type ProvenanceMessage, provenanceMessageSchema } from "../../provenance.js";
 import {

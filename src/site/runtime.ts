@@ -14,6 +14,7 @@ import type { SelfBenchConfig } from "../config.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";
+import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "../github/repo-routes.js";
 import { generationCost } from "../managed/cost-status.js";
 import { createUsageStore } from "../managed/usage-store.js";
 import { type BatchRoutes, createBatchRoutes } from "./batch-routes.js";
@@ -21,7 +22,6 @@ import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./connected
 import { evaluationStarter } from "./evaluation-start.js";
 import { generationRecordPath } from "./generation-credentials.js";
 import type { GenerationReference } from "./generation-settings.js";
-import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./github-repos.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./pr-routes.js";
 import { createRepoStore } from "./repo-store.js";
 import { createRunStore } from "./run-store.js";

@@ -8,7 +8,7 @@ import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../harbor-command.js";
+} from "../harbor/command.js";
 import { runCommand } from "../process.js";
 import type { HarborEnvironment } from "../providers.js";
 import { solverEnvironment } from "./config.js";

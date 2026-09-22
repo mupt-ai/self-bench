@@ -7,7 +7,7 @@ import {
   discoverContractArtifacts,
   scanBaseContractArtifacts,
 } from "../coupling.js";
-import { repositoryRelativePath } from "../harbor-task/paths.js";
+import { repositoryRelativePath } from "../harbor/task/paths.js";
 import { patchPaths } from "../repair.js";
 export async function verifierMaterial(root: string): Promise<void> {
   await extractRegularArchive("/work/task.tar.gz", root);

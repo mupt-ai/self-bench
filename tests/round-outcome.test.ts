@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts.js";
-import { toolCallNames } from "../src/pi-session.js";
+import { toolCallNames } from "../src/pi/session.js";
 import { SandboxExecutionError } from "../src/sandbox/index.js";
 import { attachCleanupError } from "../src/sandbox/providers/e2b/outcome.js";
 import {

@@ -1,10 +1,10 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { RunRequest } from "../contracts.js";
 import { MAX_DISCOVERY_SHARDS } from "../execution-limits.js";
+import { fetchBatchPullRequests } from "../github/batch-pull-requests.js";
 import { combineRunProvenance } from "../provenance.js";
 import { collectExcludedSourcePrs } from "../temporal/activities/excluded-source-prs.js";
 import { parseProvenance } from "../temporal/activities/runtime.js";
-import { fetchBatchPullRequests } from "./github.js";
 import { discoveryPrsPerShard, partitionPullRequests, takeNewestShards } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 

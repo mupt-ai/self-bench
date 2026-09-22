@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { assertPullRequestBelongsToRepository, githubRepository } from "./github.js";
+import { assertPullRequestBelongsToRepository, githubRepository } from "./github/repository.js";
 import { sha256 } from "./hash.js";
 import { runCommand } from "./process.js";
 import type { LocalSessionMetadata, ProvenanceMessage } from "./provenance.js";

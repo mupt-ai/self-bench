@@ -8,7 +8,7 @@ import {
 } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { executionEnvironment } from "../src/execution-environment.js";
-import { harborChildEnvironment } from "../src/harbor-environment.js";
+import { harborChildEnvironment } from "../src/harbor/environment.js";
 import { HOSTED_EXECUTION_BACKENDS } from "../src/providers.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import {

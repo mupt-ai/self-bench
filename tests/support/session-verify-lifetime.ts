@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context } from "@temporalio/activity";
 import { LocalArtifactStore } from "../../src/artifacts.js";
-import type { HarborJobResult } from "../../src/harbor-results.js";
+import * as githubTokenModule from "../../src/github/token.js";
+import type { HarborJobResult } from "../../src/harbor/results.js";
 import type { MailboxRequest } from "../../src/sandbox/supervisor.js";
 import * as operations from "../../src/sandbox/task-operation.js";
-import * as auth from "../../src/subscription-auth.js";
 import * as harbor from "../../src/temporal/activities/harbor.js";
 import * as runtime from "../../src/temporal/activities/runtime.js";
 import { SessionVerifier } from "../../src/temporal/activities/session-verify.js";
@@ -90,7 +90,7 @@ export async function fixture() {
     cancellationSignal: activity.signal,
     heartbeat: () => {},
   } as unknown as Context);
-  spyOn(auth, "githubToken").mockResolvedValue(undefined);
+  spyOn(githubTokenModule, "githubToken").mockResolvedValue(undefined);
   const root = await mkdtemp(join(tmpdir(), "selfbench-verifier-lifetime-"));
   roots.push(root);
   const store = new LocalArtifactStore(join(root, "artifacts"));

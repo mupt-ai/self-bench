@@ -1,5 +1,5 @@
 import { executionEnvironment } from "../../execution-environment.js";
-import { harborChildEnvironment } from "../../harbor-environment.js";
+import { harborChildEnvironment } from "../../harbor/environment.js";
 import { type CommandResult, runCommand } from "../../process.js";
 
 /** Harbor's default Modal app; image builds for its sandboxes log under it. */

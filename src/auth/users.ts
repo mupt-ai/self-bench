@@ -1,8 +1,8 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { orgMembers, orgs, users } from "../db/schema.js";
+import type { GitHubProfile, OrgMembership } from "../github/oauth.js";
 import { createSecretBox, deriveKey } from "./crypto.js";
-import type { GitHubProfile, OrgMembership } from "./github.js";
 
 /** How an API-key request identifies itself; absent on cookie sessions. */
 export interface ApiKeyRef {

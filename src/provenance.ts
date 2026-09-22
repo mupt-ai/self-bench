@@ -1,7 +1,7 @@
 export {
   collectGitHubPullRequestProvenance,
   extractGitHubPullRequestProvenance,
-} from "./provenance/github.js";
+} from "./github/provenance.js";
 export {
   collectRepositoryProvenance,
   collectRepositoryProvenanceWithMetadata,
