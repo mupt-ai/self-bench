@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { difficultyFor, parsePullRequestRef } from "../../src/github/pr-candidate.js";
-import { taskRunId } from "../../src/site/task-start.js";
-import type { WorkflowSnapshot } from "../../src/site/task-status.js";
+import { taskRunId } from "../../src/tasks/start.js";
+import type { WorkflowSnapshot } from "../../src/tasks/status.js";
 import { MERGE, prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import { type AuthServer, testAuthConfig } from "../support/site-fixture.js";
 

@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { generationSubscriptionAuth } from "../src/codex/subscription.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { executionEnvironment, withExecutionEnvironment } from "../src/execution-environment.js";
-import { githubToken } from "../src/github/token.js";
-import { loadPiModelAuth } from "../src/pi/model-auth.js";
 import {
   generationEnvironment,
   generationRecordPath,
   saveGenerationRecords,
-} from "../src/site/generation-credentials.js";
-import type { GenerationReference } from "../src/site/generation-settings.js";
+} from "../src/generation/credentials.js";
+import type { GenerationReference } from "../src/generation/settings.js";
+import { githubToken } from "../src/github/token.js";
+import { loadPiModelAuth } from "../src/pi/model-auth.js";
 import {
   authoringRoundScript,
   reviewRoundScript,

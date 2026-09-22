@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts.js";
-import { infrastructureFailureSummary, refreshInProgress } from "../src/site/task-status.js";
-import type { TaskRecord, TaskStore } from "../src/site/task-store.js";
+import { infrastructureFailureSummary, refreshInProgress } from "../src/tasks/status.js";
+import type { TaskRecord, TaskStore } from "../src/tasks/store.js";
 import {
   authoringPrompt,
   authoringResumePrompt,

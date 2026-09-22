@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import type { CredentialInfo } from "../../../src/evaluation/account";
-import type { GenerationSettings } from "../../../src/site/generation-settings";
+import type { GenerationSettings } from "../../../src/generation/settings";
 import { AdvancedFields } from "./GenerationAdvancedFields";
 import {
   defaultGenerationSettings,

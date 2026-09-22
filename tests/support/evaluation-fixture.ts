@@ -14,8 +14,8 @@ import {
 } from "../../src/evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../../src/evaluation/routes.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
-import { createRepoStore } from "../../src/site/repo-store.js";
-import { createTaskStore } from "../../src/site/task-store.js";
+import { createRepoStore } from "../../src/repos/store.js";
+import { createTaskStore } from "../../src/tasks/store.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {

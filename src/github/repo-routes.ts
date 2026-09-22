@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../api/http.js";
 import type { AuthConfig } from "../auth/config.js";
+import { tenantFor } from "../auth/tenant.js";
 import type { User, UserStore } from "../auth/users.js";
-import { tenantFor } from "../site/tenant.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
 
 /** One row in the picker; everything comes straight from GitHub's repository object. */

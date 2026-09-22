@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { readBody, sendJson, trustedMutation } from "../api/http.js";
+import { tenantFor } from "../auth/tenant.js";
 import type { User } from "../auth/users.js";
 import { RecordStoreError } from "../evaluation/encrypted-records.js";
 import type { EvaluationRoutesOptions } from "../evaluation/routes.js";
-import { tenantFor } from "../site/tenant.js";
 import { codexLogins } from "./login.js";
 
 const pattern =

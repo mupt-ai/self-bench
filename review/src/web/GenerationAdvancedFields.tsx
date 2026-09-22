@@ -1,18 +1,18 @@
 import { Link } from "react-router";
 import type { CredentialInfo } from "../../../src/evaluation/account";
+import { generationModelLabel } from "../../../src/generation/models";
+import {
+  type GenerationSandbox,
+  type GenerationSettings,
+  generationExecutionBackend,
+  generationSandboxLabels,
+} from "../../../src/generation/settings";
 import {
   executionBackendLabels,
   HOSTED_HARBOR_ENVIRONMENTS,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../../src/providers";
-import { generationModelLabel } from "../../../src/site/generation-models";
-import {
-  type GenerationSandbox,
-  type GenerationSettings,
-  generationExecutionBackend,
-  generationSandboxLabels,
-} from "../../../src/site/generation-settings";
 import type { GenerationOptions } from "./GenerationFields";
 import { modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";

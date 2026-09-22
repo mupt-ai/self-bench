@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson, trustedMutation } from "../api/http.js";
+import { tenantFor } from "../auth/tenant.js";
 import type { User } from "../auth/users.js";
-import { managedOffer } from "../site/managed-generation.js";
-import { tenantFor } from "../site/tenant.js";
+import { managedOffer } from "../managed/generation.js";
 import { readAccount } from "./account.js";
 import { catalog, catalogVersion, hostedSandboxes } from "./catalog.js";
 import { withReferencePricing } from "./catalog-pricing.js";

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson, trustedMutation } from "../api/http.js";
+import { tenantFor } from "../auth/tenant.js";
 import type { User, UserStore } from "../auth/users.js";
-import { tenantFor } from "../site/tenant.js";
 import type { StripeConfig } from "./config.js";
 import type { BillingStore } from "./store.js";
 import { createCheckoutSession, createPortalSession, createStripeCustomer } from "./stripe.js";

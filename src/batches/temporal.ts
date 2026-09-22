@@ -11,8 +11,8 @@ import type {
   TaskProgress,
 } from "../contracts.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
-import { heartbeatCost } from "../site/batch-activity.js";
 import type { DiscoveryShardInput } from "../temporal/activities.js";
+import { heartbeatCost } from "./activity.js";
 
 type ExecutionSnapshot<T> =
   | { state: "running"; progress?: TaskProgress; cost?: SandboxCostSnapshot }

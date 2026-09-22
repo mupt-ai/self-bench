@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts.js";
-import type { ManagedOffer } from "../site/managed-generation.js";
-import type { TaskStore } from "../site/task-store.js";
+import type { ManagedOffer } from "../managed/generation.js";
+import type { TaskStore } from "../tasks/store.js";
 import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";

@@ -2,15 +2,15 @@ import type { ArtifactStore } from "../artifacts.js";
 import { loadWorkerConfig } from "../config.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
+import { generationConfigEnvironment } from "../generation/config.js";
+import { generationEnvironment } from "../generation/credentials.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../managed/generation.js";
 import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
 import { withUsageLedger } from "../managed/usage.js";
 import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
-import { generationConfigEnvironment } from "../site/generation-config.js";
-import { generationEnvironment } from "../site/generation-credentials.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "../site/managed-generation.js";
 import { buildExport } from "../temporal/activities/export.js";
 import type { GenerationBatch } from "./types.js";
 

@@ -5,16 +5,16 @@ import type { RunRequest } from "../../contracts.js";
 import type { EncryptedRecordStore } from "../../evaluation/encrypted-records.js";
 import { orgRecords } from "../../evaluation/org-records.js";
 import { withExecutionEnvironment } from "../../execution-environment.js";
+import { generationConfigEnvironment } from "../../generation/config.js";
+import { generationStageEnvironment, stageAuthoring } from "../../generation/credentials.js";
+import { generationExecutionBackend } from "../../generation/settings.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../../managed/generation.js";
 import { meteredSandboxExecutor } from "../../managed/metered-sandbox.js";
 import { withUsageLedger } from "../../managed/usage.js";
 import type { UsageLedger } from "../../managed/usage-store.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
 import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../../setup/e2b/managed.js";
-import { generationConfigEnvironment } from "../../site/generation-config.js";
-import { generationStageEnvironment, stageAuthoring } from "../../site/generation-credentials.js";
-import { generationExecutionBackend } from "../../site/generation-settings.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "../../site/managed-generation.js";
 import { safeHeartbeat } from "./runtime.js";
 
 export async function withGenerationRuntime<T>(

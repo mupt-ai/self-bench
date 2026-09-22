@@ -14,13 +14,13 @@ import { loadConfig } from "../../src/config.js";
 import { type Database, migrationsFolder } from "../../src/db/client.js";
 import * as schema from "../../src/db/schema.js";
 import { createGitHubRepoRoutes } from "../../src/github/repo-routes.js";
-import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
-import { createPullRequestRoutes } from "../../src/site/pr-routes.js";
-import { createRepoStore } from "../../src/site/repo-store.js";
-import type { WorkflowStarter } from "../../src/site/task-start.js";
-import type { TaskStatusSource } from "../../src/site/task-status.js";
-import { createTaskStore } from "../../src/site/task-store.js";
-import { createTaskRoutes } from "../../src/site/tasks.js";
+import { createConnectedRepoRoutes } from "../../src/repos/routes.js";
+import { createRepoStore } from "../../src/repos/store.js";
+import { createPullRequestRoutes } from "../../src/tasks/pr-routes.js";
+import { createTaskRoutes } from "../../src/tasks/routes.js";
+import type { WorkflowStarter } from "../../src/tasks/start.js";
+import type { TaskStatusSource } from "../../src/tasks/status.js";
+import { createTaskStore } from "../../src/tasks/store.js";
 
 export interface TestDatabase {
   readonly db: Database;

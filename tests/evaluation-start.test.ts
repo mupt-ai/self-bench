@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
 import type { Client } from "@temporalio/client";
-import { evaluationStarter } from "../src/site/evaluation-start.js";
+import { evaluationStarter } from "../src/evaluation/start.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 test("all solver runs use the evaluation queue regardless of credential ownership", async () => {

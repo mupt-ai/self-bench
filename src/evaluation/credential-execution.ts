@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { managedModelKey, managedSandboxCredentials } from "../site/managed-generation.js";
+import { managedModelKey, managedSandboxCredentials } from "../managed/generation.js";
 import { readAccount, secretPath } from "./account.js";
 import { validateEndpoint } from "./credentials.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";

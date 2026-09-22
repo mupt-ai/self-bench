@@ -9,7 +9,7 @@ import { LocalArtifactStore } from "../src/artifacts.js";
 import { createUserStore } from "../src/auth/users.js";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
-import { createTaskStore } from "../src/site/task-store.js";
+import { createTaskStore } from "../src/tasks/store.js";
 import { testAuthConfig } from "./support/site-fixture.js";
 
 test("review migrations preserve batch ownership, tasks, reviews, tombstones and artifacts", async () => {

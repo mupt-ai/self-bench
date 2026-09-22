@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
+import { generationReferenceSchema } from "../generation/settings.js";
 import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "../providers.js";
-import { generationReferenceSchema } from "../site/generation-settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
 
 export { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
