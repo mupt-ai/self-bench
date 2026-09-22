@@ -148,7 +148,7 @@ export function EnvironmentSheet({
             <tbody>
               {image.instructions.map((entry) => (
                 <tr key={`${entry.line}`}>
-                  <th className="!font-medium !text-(--brand) site:font-mono site:!text-brand">
+                  <th className="font-mono !font-semibold !text-brand-foreground">
                     {entry.instruction}
                   </th>
                   <td className={tableCode}>{entry.args}</td>

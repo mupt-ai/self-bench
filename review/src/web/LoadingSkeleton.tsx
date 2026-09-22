@@ -2,17 +2,21 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`block animate-pulse rounded-md bg-muted motion-reduce:animate-none ${className}`}
+      className={`block animate-pulse bg-muted motion-reduce:animate-none ${className}`}
     />
   );
 }
 
 export function CardGridSkeleton({ label, cards = 4 }: { label: string; cards?: number }) {
   return (
-    <div role="status" aria-label={label} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div
+      role="status"
+      aria-label={label}
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+    >
       <span className="sr-only">{label}</span>
       {(["first", "second", "third", "fourth"] as const).slice(0, cards).map((key) => (
-        <div key={key} className="border border-border bg-card p-4" aria-hidden="true">
+        <div key={key} className="panel p-5" aria-hidden="true">
           <Skeleton className="h-4 w-40 max-w-full" />
           <Skeleton className="mt-2 h-3 w-56 max-w-full" />
           <div className="mt-4 space-y-2">
@@ -28,11 +32,7 @@ export function CardGridSkeleton({ label, cards = 4 }: { label: string; cards?: 
 
 export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
-    <div
-      role="status"
-      aria-label={label}
-      className="divide-y divide-border border border-border bg-card"
-    >
+    <div role="status" aria-label={label} className="panel divide-y divide-border">
       <span className="sr-only">{label}</span>
       {["first", "second", "third", "fourth"].slice(0, rows).map((key) => (
         <div key={key} className="flex items-center gap-4 px-4 py-4" aria-hidden="true">
@@ -50,7 +50,11 @@ export function ListSkeleton({ label, rows = 3 }: { label: string; rows?: number
 
 export function SiteSkeleton() {
   return (
-    <div className="min-h-screen md:pl-64" role="status" aria-label="Loading Workspace">
+    <div
+      className="min-h-screen bg-background md:pl-64"
+      role="status"
+      aria-label="Loading Workspace"
+    >
       <span className="sr-only">Loading workspace…</span>
       <aside
         aria-hidden="true"
@@ -63,11 +67,11 @@ export function SiteSkeleton() {
       </aside>
       <div
         aria-hidden="true"
-        className="flex h-14 items-center justify-end border-b border-border px-6"
+        className="flex h-16 items-center justify-end border-b border-border px-6"
       >
         <Skeleton className="size-7" />
       </div>
-      <div className="space-y-6 px-6 py-6" aria-hidden="true">
+      <div className="mx-auto max-w-6xl space-y-6 px-6 py-8" aria-hidden="true">
         <Skeleton className="h-6 w-52" />
         <Skeleton className="h-4 w-80 max-w-full" />
         <ListSkeleton label="Loading Content" />

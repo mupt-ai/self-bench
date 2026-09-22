@@ -12,8 +12,8 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
   ] as const;
   return (
     <section aria-label="Token Usage and Estimated Cost">
-      <h4 className="text-sm font-medium">Token Usage</h4>
-      <dl className="my-3 grid grid-cols-2 gap-4 border border-border bg-muted/30 p-4 sm:grid-cols-3 xl:grid-cols-5 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:text-sm [&_dd]:tabular-nums [&_dd]:text-foreground">
+      <h4 className="text-sm font-semibold">Token Usage</h4>
+      <dl className="my-3 grid grid-cols-2 gap-4 border border-border bg-background p-4 sm:grid-cols-3 xl:grid-cols-5 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:font-mono [&_dd]:text-sm [&_dd]:tabular-nums [&_dd]:text-foreground">
         {counts.map(([label, count]) => (
           <div key={label}>
             <dt>{label}</dt>

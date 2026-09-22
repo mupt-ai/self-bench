@@ -18,7 +18,7 @@ export function DropdownMenuContent({
         sideOffset={6}
         collisionPadding={12}
         className={cn(
-          "z-50 min-w-56 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto border border-input bg-card p-1 font-mono text-sm text-foreground outline-none",
+          "panel z-50 min-w-56 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-background p-1 text-sm text-foreground outline-none",
           className,
         )}
         {...props}
@@ -41,7 +41,7 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return (
     <Primitive.Item
       className={cn(
-        "flex cursor-default items-center gap-2 px-2 py-2 outline-none data-[highlighted]:bg-muted data-[highlighted]:text-brand data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>svg]:size-4",
+        "flex cursor-default items-center gap-2 px-2 py-2 outline-none data-[highlighted]:bg-foreground/[0.06] data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>svg]:size-4",
         className,
       )}
       {...props}
@@ -56,14 +56,14 @@ export function DropdownMenuRadioItem({
   return (
     <Primitive.RadioItem
       className={cn(
-        "relative flex cursor-default items-center gap-2 px-2 py-2 pr-8 outline-none data-[highlighted]:bg-muted data-[highlighted]:text-brand",
+        "relative flex cursor-default items-center gap-2 px-2 py-2 pr-8 outline-none data-[highlighted]:bg-foreground/[0.06]",
         className,
       )}
       {...props}
     >
       {children}
       <Primitive.ItemIndicator className="absolute right-2">
-        <Check className="size-3.5 text-brand" />
+        <Check className="size-3.5 text-foreground" />
       </Primitive.ItemIndicator>
     </Primitive.RadioItem>
   );

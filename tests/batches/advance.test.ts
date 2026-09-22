@@ -3,6 +3,7 @@ import { advanceBatch } from "../../src/batches/advance.js";
 import { batchStatus } from "../../src/batches/status.js";
 import type { BatchExecutions } from "../../src/batches/temporal.js";
 import type { GenerationBatch } from "../../src/batches/types.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/execution-limits.js";
 import { artifact, candidate, run } from "../support/workflow-fixture.js";
 
 function batch(): GenerationBatch {
@@ -62,6 +63,33 @@ test("discovery ends independently; durable candidate plan precedes dispatch and
   await advanceBatch(state, executions);
   expect(calls).toHaveLength(3);
 });
+test("candidate dispatch respects the shared workflow concurrency limit", async () => {
+  const state = batch();
+  state.phase = "authoring";
+  state.shards = [];
+  state.candidates = Array.from({ length: MAX_CONCURRENT_CANDIDATE_WORKFLOWS + 1 }, (_, index) => ({
+    workflowId: `run/candidate/${index}`,
+    ...(index < MAX_CONCURRENT_CANDIDATE_WORKFLOWS ? { dispatchAttempted: true } : {}),
+    candidate: candidate(`candidate-${index}`, index + 1),
+  }));
+  let observed = 0;
+  const executions: BatchExecutions = {
+    shard: async () => {
+      throw Error("must not start");
+    },
+    candidate: async () => {
+      observed += 1;
+      return { state: "running" };
+    },
+    cancel: async () => true,
+  };
+
+  await advanceBatch(state, executions);
+
+  expect(observed).toBe(1);
+  expect(state.candidates[MAX_CONCURRENT_CANDIDATE_WORKFLOWS]?.dispatchAttempted).toBeUndefined();
+});
+
 test("cancellation never starts work and stays pending until independent executions settle", async () => {
   const state = batch();
   state.phase = "cancelling";

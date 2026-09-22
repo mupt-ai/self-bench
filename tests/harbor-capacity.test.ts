@@ -1,15 +1,16 @@
 import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../src/config.js";
 import { harborTaskQueue } from "../src/temporal/task-queues.js";
+import { resolveHarborConcurrency } from "../src/temporal/worker-memory.js";
 import { harborSlotsForMemory } from "../src/worker-capacity.js";
 
 const GiB = 1024 ** 3;
 
 test("Harbor slots follow worker memory with a floor of two", () => {
   expect(harborSlotsForMemory(2 * GiB)).toBe(2);
-  expect(harborSlotsForMemory(8 * GiB)).toBe(23);
-  expect(harborSlotsForMemory(16 * GiB)).toBe(55);
-  expect(harborSlotsForMemory(32 * GiB)).toBe(119);
+  expect(harborSlotsForMemory(8 * GiB)).toBe(10);
+  expect(harborSlotsForMemory(16 * GiB)).toBe(10);
+  expect(harborSlotsForMemory(32 * GiB)).toBe(10);
 });
 
 test("an explicit Harbor concurrency is validated and otherwise left to the worker", () => {
@@ -18,11 +19,16 @@ test("an explicit Harbor concurrency is validated and otherwise left to the work
     SELFBENCH_HARBOR_ENVIRONMENT: "modal",
     SELFBENCH_ACTIVITY_CONCURRENCY: "100",
   };
-  expect(loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "16" }).harborConcurrency).toBe(
-    16,
+  expect(loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "10" }).harborConcurrency).toBe(
+    10,
   );
   expect(loadWorkerConfig(base).harborConcurrency).toBeUndefined();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "0" })).toThrow();
+  expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "11" })).toThrow();
+});
+
+test("the resolved Harbor concurrency keeps the hard cap for direct callers", () => {
+  expect(resolveHarborConcurrency(100)).toBe(10);
 });
 
 test("the Harbor queue is derived from the worker queue", () => {

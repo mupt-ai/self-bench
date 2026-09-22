@@ -1,12 +1,15 @@
 import { expect, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
 import { BatchRequestError, batchIsTerminal, startBatch, validCandidateCounts } from "./batch-api";
 import { GenerateBatch } from "./GenerateBatch";
 
 test("batch form count validation and terminal states", () => {
   expect(validCandidateCounts({ easy: 1, medium: 2, hard: 3 })).toBe(true);
-  for (const easy of [-1, 0.2, Number.NaN, Infinity, 10001])
+  for (const easy of [-1, 0.2, Number.NaN, Infinity, MAX_CANDIDATES_PER_RUN + 1])
     expect(validCandidateCounts({ easy, medium: 0, hard: 0 })).toBe(false);
+  expect(validCandidateCounts({ easy: 100, medium: 100, hard: 100 })).toBe(true);
+  expect(validCandidateCounts({ easy: 100, medium: 100, hard: 101 })).toBe(false);
   expect(validCandidateCounts({ easy: 0, medium: 0, hard: 0 })).toBe(false);
   for (const phase of ["complete", "blocked", "failed", "cancelled"])
     expect(batchIsTerminal(phase)).toBe(true);

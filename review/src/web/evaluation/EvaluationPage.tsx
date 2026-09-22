@@ -122,7 +122,7 @@ export function EvaluationPage() {
           {datasets.length > 1 && (
             <label
               htmlFor="evaluationpage-field-0"
-              className="mb-4 flex flex-wrap items-center gap-3.5 font-mono text-sm text-muted-foreground"
+              className="mb-4 flex flex-wrap items-center gap-3.5 text-sm font-medium text-muted-foreground"
             >
               Compare Dataset
               <Select
@@ -150,7 +150,7 @@ export function EvaluationPage() {
               </EmptyState>
             )}
             {runs.length > 0 && (
-              <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">
+              <div className="mt-3 [&_button]:text-left [&_button]:font-semibold [&_button]:text-foreground [&_button:hover]:underline [&_button:hover]:underline-offset-4">
                 <DataTable>
                   <thead>
                     <tr>
@@ -179,8 +179,14 @@ export function EvaluationPage() {
                             </td>
                             <td>{harnessLabels[harness]}</td>
                             <td>{thinkingLabel(run.thinking)}</td>
-                            <td>{accuracy === undefined ? "—" : `${accuracy.toFixed(1)}%`}</td>
-                            <td>{point ? dollars(point.cost) : "Not Available"}</td>
+                            <td className="font-mono tabular-nums">
+                              {accuracy === undefined ? "—" : `${accuracy.toFixed(1)}%`}
+                            </td>
+                            <td
+                              className={point ? "font-mono tabular-nums" : "text-muted-foreground"}
+                            >
+                              {point ? dollars(point.cost) : "Not Available"}
+                            </td>
                             <td>
                               <RunStatus value={run.status} />
                             </td>

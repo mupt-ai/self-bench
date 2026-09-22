@@ -8,7 +8,7 @@ test("counts reject missing, fractional, negative, zero, excessive and client-su
     { easy: 0, medium: 0, hard: 0 },
     { easy: -1, medium: 2, hard: 0 },
     { easy: 1.5, medium: 0, hard: 0 },
-    { easy: 10000, medium: 1, hard: 0 },
+    { easy: 301, medium: 0, hard: 0 },
     { easy: 1 },
   ]) {
     expect(batchSubmissionSchema.safeParse({ candidateCounts }).success).toBe(false);

@@ -7,20 +7,21 @@ import type {
   DiscoveryResult,
   RunRequest,
 } from "../../contracts.js";
-import { MAX_CANDIDATES_PER_RUN } from "../../contracts.js";
+import {
+  DISCOVERY_POOL_MULTIPLIER,
+  MAX_CANDIDATES_PER_RUN,
+  MAX_DISCOVERY_SHARDS,
+} from "../../execution-limits.js";
 import type { DiscoveryShardInput, SelfBenchActivities } from "../activities.js";
 import { isExhaustedActivityFailure } from "./failures.js";
 
-const DISCOVERY_SHARD_COUNT = 8;
 /**
  * Every pool candidate is processed, so the pool is sized to the request: 1.5× per tier covers
  * the observed rejection rate without multiplying the work. Spread across shards, small tiers
  * leave most shards with nothing to find for that tier.
  */
-const DISCOVERY_POOL_MULTIPLIER = 1.5;
 const MAX_CANDIDATES_PER_TIER_PER_SHARD = 8;
 export const MAX_DISCOVERED_CANDIDATES = MAX_CANDIDATES_PER_RUN * 3;
-export const MAX_CONCURRENT_CANDIDATES = 100;
 
 interface DiscoveryWaveOptions {
   readonly wave: number;
@@ -49,7 +50,7 @@ export async function discoverWave(
 /** Per-shard targets: ceil(request × multiplier) per tier, dealt round-robin across the shards. */
 export function discoveryShardTargets(
   targetCounts: RunRequest["candidateCounts"],
-  shardCount = DISCOVERY_SHARD_COUNT,
+  shardCount = MAX_DISCOVERY_SHARDS,
 ): Record<Difficulty, number>[] {
   const shards: Record<Difficulty, number>[] = Array.from({ length: shardCount }, () => ({
     easy: 0,
@@ -75,7 +76,7 @@ function discoveryProgress(options: DiscoveryWaveOptions) {
   const report = (): void =>
     options.onProgress({
       wave: options.wave,
-      totalShards: DISCOVERY_SHARD_COUNT,
+      totalShards: MAX_DISCOVERY_SHARDS,
       completedShards,
       failedShards,
       candidates,
@@ -112,7 +113,7 @@ async function discoverShard(
       run,
       wave: options.wave,
       shardIndex,
-      shardCount: DISCOVERY_SHARD_COUNT,
+      shardCount: MAX_DISCOVERY_SHARDS,
       targetCounts,
       excludedSourcePrs: options.excludedSourcePrs,
     } satisfies DiscoveryShardInput);

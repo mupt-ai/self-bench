@@ -22,7 +22,7 @@ function RepoTasksPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const fullName = `${owner}/${name}`;
-  useDocumentTitle(`Dataset · ${fullName} · self-bench`);
+  useDocumentTitle(`Dataset · ${fullName} · SelfBench`);
   const [repo, setRepo] = React.useState<ConnectedRepo | null | undefined>(undefined);
   const [tasks, setTasks] = React.useState<TaskItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -114,7 +114,7 @@ function RepoTasksPage() {
   if (repo === null) {
     return (
       <PageContent>
-        <p className="mb-4 font-mono text-base text-destructive">
+        <p className="mb-4 text-base text-destructive">
           {fullName} is not connected in {org.login}. <Link to="/">Back to Repositories</Link>
         </p>
       </PageContent>
@@ -128,10 +128,10 @@ function RepoTasksPage() {
         className="max-sm:flex-col max-sm:items-start"
         description={
           repo && (
-            <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className="inline-flex items-center gap-1.5">
                 <GitBranch className="size-3.5" aria-hidden="true" />
-                {repo.defaultBranch}
+                <span className="font-mono">{repo.defaultBranch}</span>
               </span>
               {repo.private && (
                 <span className="inline-flex items-center gap-1.5">
@@ -158,7 +158,7 @@ function RepoTasksPage() {
         </div>
       </PageHeader>
       {error && tasks !== null && <Notice className="mb-4">{error}</Notice>}
-      <section className="overflow-clip border border-border bg-card" aria-label="Dataset">
+      <section className="panel overflow-clip" aria-label="Dataset">
         <TaskFilters
           counts={tasks === null ? null : counts}
           filter={filter}
@@ -178,7 +178,7 @@ function RepoTasksPage() {
           <div role="alert">
             <EmptyState
               title="Could Not Load Tasks"
-              className="border-0 bg-transparent"
+              className="border-0 bg-transparent shadow-none"
               action={<Button onClick={loadTasks}>Try Again</Button>}
             >
               {error}
@@ -201,7 +201,7 @@ function RepoTasksPage() {
         />
         {tasks !== null && (
           <p
-            className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
+            className="border-t border-border px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground"
             role="status"
           >
             {visible.length === tasks.length

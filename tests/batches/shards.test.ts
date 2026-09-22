@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { partitionPullRequests, takeNewestShards } from "../../src/batches/shards.js";
+import {
+  discoveryPrsPerShard,
+  partitionPullRequests,
+  takeNewestShards,
+} from "../../src/batches/shards.js";
 import type { ProvenanceMessage } from "../../src/provenance/types.js";
 
 function message(pr: number, index = 0): ProvenanceMessage {
@@ -35,4 +39,24 @@ test("newest shards keep a full window of the highest PR numbers", () => {
   );
   expect(takeNewestShards(chunks, 3)).toHaveLength(3);
   expect(() => takeNewestShards(chunks, 0)).toThrow();
+});
+
+test("large requests widen bounded shards to cover the discovery pool", () => {
+  const messages = Array.from({ length: 500 }, (_, i) => message(i + 1));
+  const chunks = partitionPullRequests(messages);
+  const prsPerShard = discoveryPrsPerShard(300, 8);
+  const selected = takeNewestShards(chunks, 8, prsPerShard);
+  const sourcePrs = new Set(
+    selected.flatMap((chunk) =>
+      chunk.flatMap((item) => (item.sourcePr === undefined ? [] : [item.sourcePr])),
+    ),
+  );
+
+  expect(prsPerShard).toBe(57);
+  expect(selected).toHaveLength(8);
+  expect(sourcePrs.size).toBe(456);
+  expect(Math.min(...sourcePrs)).toBe(45);
+  expect(Math.max(...sourcePrs)).toBe(500);
+  expect(() => discoveryPrsPerShard(0, 8)).toThrow();
+  expect(() => discoveryPrsPerShard(1, 0)).toThrow();
 });

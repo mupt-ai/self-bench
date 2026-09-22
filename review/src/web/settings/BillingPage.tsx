@@ -103,12 +103,12 @@ export function BillingStatusCard({ data }: { data: BillingStatus }) {
   return (
     <section aria-label="Subscription">
       <div className="mb-3">
-        <h2 className="text-sm font-medium">Subscription</h2>
+        <h2 className="text-sm font-semibold">Subscription</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Stripe status and access to managed resources.
         </p>
       </div>
-      <dl className="grid border border-border bg-card md:grid-cols-3 md:divide-x md:divide-border [&>div]:border-b [&>div]:border-border [&>div]:p-4 md:[&>div]:border-b-0">
+      <dl className="panel grid md:grid-cols-3 md:divide-x md:divide-border [&>div]:border-b [&>div]:border-border [&>div]:p-4 md:[&>div]:border-b-0">
         <StatusMetric
           label="Status"
           value={statusLabels[data.status] ?? data.status}
@@ -121,7 +121,7 @@ export function BillingStatusCard({ data }: { data: BillingStatus }) {
         <StatusMetric label="Current Period Ends" value={periodEnd} />
       </dl>
       {data.cancelAtPeriodEnd && (
-        <p className="border-x border-b border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+        <p className="border-x-[1.5px] border-b-[1.5px] border-foreground/15 bg-muted px-4 py-2 text-xs text-muted-foreground">
           This subscription cancels at the end of the current period.
         </p>
       )}
@@ -145,9 +145,9 @@ function StatusMetric({
 }) {
   return (
     <div>
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-1.5 flex items-center gap-2 text-sm text-foreground">
-        {active && <span className="size-1.5 bg-success" aria-hidden="true" />}
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-foreground">
+        {active && <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />}
         {value}
       </dd>
     </div>

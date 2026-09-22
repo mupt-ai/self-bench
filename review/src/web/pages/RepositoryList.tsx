@@ -29,7 +29,7 @@ export function RepositoryList({
   onConnect(): void;
 }) {
   return (
-    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {repos.map((repo) => (
         <li key={repo.fullName}>
           <RepositoryCard repo={repo} stats={stats[repo.fullName]} onDisconnect={onDisconnect} />
@@ -54,25 +54,15 @@ function RepositoryCard({
   const trigger = useRef<HTMLButtonElement>(null);
   const pendingDisconnect = useRef(false);
   return (
-    <article className="group relative flex h-full min-h-36 flex-col border border-border bg-card transition-colors hover:border-brand hover:[&_[data-card-title]]:text-brand">
+    <article className="panel group relative flex h-full min-h-40 flex-col transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] has-[a:focus-visible]:border-foreground/40">
       <Link
         aria-label={`Open ${repo.fullName}`}
-        className="absolute inset-0 z-0"
+        className="absolute inset-0 z-0 focus-visible:outline-none!"
         to={`/repos/${repo.fullName}`}
       />
-      <header className="pointer-events-none relative z-10 flex items-start justify-between gap-2 p-4 pb-3">
-        <div className="min-w-0">
-          <h2
-            data-card-title
-            className="truncate text-sm leading-snug font-medium transition-colors"
-          >
-            {repo.fullName}
-          </h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {repo.defaultBranch} · {repo.private ? "Private" : "Public"} · connected{" "}
-            {formatAgo(repo.connectedAt)}
-          </p>
-        </div>
+      <header className="pointer-events-none relative z-10 flex items-center gap-2.5 px-4 pt-4">
+        <OwnerAvatar owner={repo.fullName.split("/")[0] ?? ""} />
+        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">{repo.fullName}</h2>
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) pendingDisconnect.current = false;
@@ -83,7 +73,7 @@ function RepositoryCard({
               ref={trigger}
               size="icon"
               variant="ghost"
-              className="pointer-events-auto -mt-1 -mr-1 h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="pointer-events-auto -my-1 -mr-2 h-8 w-8 text-muted-foreground hover:text-foreground"
               aria-label={`Actions for ${repo.fullName}`}
             >
               <Ellipsis aria-hidden="true" />
@@ -110,7 +100,14 @@ function RepositoryCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-      <dl className="pointer-events-none relative z-10 flex flex-col gap-1 p-4 pt-0 text-xs text-muted-foreground">
+      <p className="pointer-events-none relative z-10 mt-2 flex items-center gap-x-2 truncate px-4 text-xs text-muted-foreground">
+        <span className="font-mono">{repo.defaultBranch}</span>
+        <span aria-hidden="true">·</span>
+        <span>{repo.private ? "Private" : "Public"}</span>
+        <span aria-hidden="true">·</span>
+        <span>Connected {formatAgo(repo.connectedAt)}</span>
+      </p>
+      <dl className="pointer-events-none relative z-10 mt-auto grid grid-cols-3 border-t border-border">
         <Stat label="Tasks" value={stats?.tasks} />
         <Stat label="Needs Review" value={stats?.needsReview} attention={!!stats?.needsReview} />
         <Stat
@@ -122,15 +119,29 @@ function RepositoryCard({
   );
 }
 
+function OwnerAvatar({ owner }: { owner: string }) {
+  return (
+    <img
+      src={`https://github.com/${encodeURIComponent(owner)}.png?size=48`}
+      alt=""
+      width={24}
+      height={24}
+      loading="lazy"
+      className="size-6 shrink-0 rounded-full bg-muted object-contain"
+    />
+  );
+}
+
 function ConnectRepositoryCard({ onConnect }: { onConnect(): void }) {
   return (
     <button
       type="button"
       onClick={onConnect}
       aria-label="Connect a Repository"
-      className="group flex h-full min-h-36 w-full flex-col items-center justify-center border border-dashed border-border transition-colors hover:border-brand hover:bg-muted/20"
+      className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-foreground/15 text-sm font-semibold text-muted-foreground transition-colors hover:border-foreground/35 hover:bg-foreground/[0.03] hover:text-foreground"
     >
-      <Plus className="h-6 w-6 text-muted-foreground group-hover:text-brand" aria-hidden="true" />
+      <Plus className="size-5" aria-hidden="true" />
+      Connect a Repository
     </button>
   );
 }
@@ -145,13 +156,13 @@ function Stat({
   attention?: boolean;
 }) {
   return (
-    <div>
-      <dt className="inline uppercase tracking-widest">{label}</dt>{" "}
-      <dd className="inline tabular-nums">
+    <div className="flex flex-col gap-1 border-r border-border px-4 py-3 last:border-r-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-sm font-medium tabular-nums">
         {value === undefined ? (
-          <Skeleton className="inline-block h-3 w-8 align-middle" />
+          <Skeleton className="inline-block h-3.5 w-8 align-middle" />
         ) : (
-          <span className={attention ? "text-brand" : "text-foreground"}>{value}</span>
+          <span className={attention ? "text-brand-foreground" : "text-foreground"}>{value}</span>
         )}
       </dd>
     </div>

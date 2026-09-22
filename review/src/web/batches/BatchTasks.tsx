@@ -45,7 +45,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
       <SectionHeader title="Tasks">
         <Link
           to={`/repos/${fullName}`}
-          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           View Dataset <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -60,7 +60,11 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                 size="small"
                 aria-pressed={filter === key}
                 onClick={() => setFilter(key)}
-                className={filter === key ? "border-brand bg-brand/10 text-brand" : undefined}
+                className={
+                  filter === key
+                    ? "border-foreground bg-foreground text-background hover:border-foreground hover:bg-foreground/85"
+                    : undefined
+                }
               >
                 {key === "all" ? "All Tasks" : key === "queued" ? "Queued" : activityLabels[key]}{" "}
                 <span className="tabular-nums">{key === "all" ? tasks.length : counts[key]}</span>
@@ -71,7 +75,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
       {tasks.length ? (
         <>
           <div
-            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs text-muted-foreground lg:grid"
+            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs font-semibold text-muted-foreground lg:grid"
             aria-hidden="true"
           >
             <span>Task</span>
@@ -79,10 +83,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
             <span>Stage</span>
             <span>Activity or Result</span>
           </div>
-          <ul
-            className="divide-y divide-border border border-border bg-card"
-            aria-label="Batch Tasks"
-          >
+          <ul className="panel divide-y divide-border" aria-label="Batch Tasks">
             {visible.map((task) => {
               const activity = taskActivity(status, task);
               const retry = retryDetail(status, task);
@@ -90,10 +91,10 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                 <li key={task.candidateId}>
                   <Link
                     to={`/repos/${fullName}/tasks/${encodeURIComponent(status.runId)}/${encodeURIComponent(task.taskId)}`}
-                    className="grid items-center gap-3 px-4 py-4 hover:bg-muted/50 lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
+                    className="grid items-center gap-3 px-4 py-3.5 hover:bg-muted/60 lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
                   >
                     <span className="min-w-0">
-                      <span className="block break-words text-sm">
+                      <span className="block break-words font-mono text-sm font-medium">
                         {taskTitle({ taskId: task.candidateId })}
                       </span>
                       {task.reason && (
@@ -117,7 +118,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                         className={cn(
                           "text-xs",
                           activity === "running"
-                            ? "text-brand"
+                            ? "text-brand-foreground"
                             : activity === "accepted"
                               ? "text-success"
                               : activity === "infrastructure_failed"

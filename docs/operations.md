@@ -97,7 +97,7 @@ SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted production runs 100 so every candidate of a full batch holds a slot. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` defaults to `(worker memory - 2.25 GiB) / 256 MiB` (23 on 8 GiB, 119 on 32 GiB) and never takes an ordinary slot from authoring or verifier sessions. Discovery starts eight independently retryable shards, and candidate slots are continuously refilled. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and review rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
+Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and review rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
 
 ### E2B
 
@@ -303,7 +303,7 @@ self-bench run \
   --output ./self-bench-tasks.tar.gz
 ```
 
-The three tier counts total 1–10,000. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
+The three tier counts total 1–300. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
 
 ### Replaying known candidates
 
@@ -435,7 +435,7 @@ A run is the `selfBenchRunWorkflow` execution whose workflow ID is the run ID. I
 
 To inspect one candidate, open the child workflow in the Temporal UI (search for the run ID prefix, or the parent's "Child Workflows" list). Its history shows that candidate's activities, retries, and timeouts alone; the `candidateStatus` query returns its current progress. Cancelling the run cancels every child, and the parent close policy terminates any straggler. A child that fails outright (anything other than an exhausted or Harbor-infrastructure activity failure) is recorded as `infrastructure_failed` for that candidate; the run continues.
 
-Deployment note: this shape replaced a single workflow that drove every candidate through activities directly. Deploy a worker with the child-workflow shape only when no run is in flight. An in-flight run started under the old shape would replay against the new code and hit a non-determinism error; let running runs finish (or cancel and replay them) before restarting the worker on a build across that boundary.
+Deployment note: this shape replaced a single workflow that drove every candidate through activities directly. Deploy a worker with the child-workflow shape only when no run is in flight. An in-flight run started under the old shape would replay against the new code and hit a non-determinism error; let running runs finish (or cancel and replay them) before restarting the worker on a build across that boundary. The candidate-child fanout increase is guarded by a Temporal patch, so existing parent histories retain their original schedule while new runs use the higher limit; keep that patch until those histories have drained.
 
 ## Configuration
 
@@ -452,7 +452,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 | `SELFBENCH_DOCKER_IMAGE` | `selfbench-sandbox:local` | Docker worker; sandbox image tag built by `docker compose --profile sandbox` |
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
-| `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory | Worker |
+| `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |

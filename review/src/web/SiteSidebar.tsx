@@ -33,7 +33,7 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
   const { pathname } = useLocation();
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
-      <SidebarHeader className="flex h-14 shrink-0 flex-row items-center border-b border-border px-4 group-data-[collapsible=icon]/sidebar:px-2">
+      <SidebarHeader className="flex h-16 shrink-0 flex-row items-center border-b border-border px-5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
         <Lockup compact showName={!collapsed} />
       </SidebarHeader>
       <SidebarContent>
@@ -129,7 +129,7 @@ export function MobileSidebar(props: SidebarProps & { onClose: () => void }) {
         event.preventDefault();
         props.onClose();
       }}
-      className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-72 max-w-[calc(100%_-_2rem)] border-0 border-r border-border bg-card p-0 text-foreground backdrop:bg-black/70"
+      className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-72 max-w-[calc(100%_-_2rem)] border-0 border-r border-border bg-background p-0 text-foreground backdrop:bg-foreground/30 backdrop:backdrop-blur-[2px]"
     >
       <Button
         size="icon"

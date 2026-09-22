@@ -1,11 +1,12 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { Lockup } from "./Lockup";
-import { pageContainer, pageGutter } from "./layout";
+import { pageGutter } from "./layout";
 import { cn } from "./primitives/cn";
 import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
+import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 import { Button } from "./ui";
 
@@ -68,7 +69,7 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
     >
       <div
         className={cn(
-          "group/sidebar fixed inset-y-0 left-0 z-20 hidden border-r border-border text-sidebar-foreground transition-[width] duration-200 ease-linear md:block",
+          "group/sidebar fixed inset-y-0 left-0 z-20 hidden border-r border-border bg-background text-sidebar-foreground transition-[width] duration-200 ease-linear md:block",
           sidebarCollapsed ? "w-12" : "w-64",
         )}
         data-state={sidebarCollapsed ? "collapsed" : "expanded"}
@@ -87,9 +88,9 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
       </div>
       <SidebarInset>
         <header
-          className={cn("z-10 h-14 shrink-0 border-b border-border bg-background", pageGutter)}
+          className={cn("z-10 h-16 shrink-0 border-b border-border bg-background", pageGutter)}
         >
-          <div className={cn(pageContainer, "flex h-full items-center justify-between")}>
+          <div className="flex h-full w-full min-w-0 items-center justify-between">
             <SidebarTrigger
               type="button"
               aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
@@ -100,7 +101,8 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
             <div className="md:hidden">
               <Lockup compact />
             </div>
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
               <UserMenu user={user} onSignOut={signOut} />
               <Button
                 size="icon"

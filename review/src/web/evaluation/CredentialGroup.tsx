@@ -31,7 +31,7 @@ export function CredentialGroup({
           <>
             {title}
             {!loading && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
+              <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
                 {credentials.length}
               </span>
             )}
@@ -47,11 +47,7 @@ export function CredentialGroup({
         {loading && <Skeleton className="h-8 w-28" />}
       </SectionHeader>
       {loading ? (
-        <div
-          role="status"
-          aria-label={`Loading ${title}`}
-          className="divide-y divide-border border border-border bg-card"
-        >
+        <div role="status" aria-label={`Loading ${title}`} className="panel divide-y divide-border">
           {Array.from({ length: sandbox ? 2 : 3 }, (_, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed, stateless loading placeholders.
             <div key={index} className="px-4 py-3.5">
@@ -61,11 +57,11 @@ export function CredentialGroup({
           ))}
         </div>
       ) : credentials.length ? (
-        <ul className="divide-y divide-border border border-border bg-card">
+        <ul className="panel divide-y divide-border">
           {credentials.map((credential) => (
             <li key={credential.id} className="flex items-center gap-4 px-4 py-3.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" title={credential.name}>
+                <p className="truncate text-sm font-semibold" title={credential.name}>
                   {credential.name}
                 </p>
                 <p
@@ -87,9 +83,7 @@ export function CredentialGroup({
           ))}
         </ul>
       ) : (
-        <p className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-          No credentials yet.
-        </p>
+        <p className="panel px-4 py-6 text-sm text-muted-foreground">No credentials yet.</p>
       )}
     </section>
   );

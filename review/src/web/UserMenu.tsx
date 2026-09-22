@@ -12,18 +12,18 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
       trigger={
         <>
           <Avatar login={user.login} url={user.avatarUrl} />
-          <span className="hidden max-w-32 truncate sm:block">{user.login}</span>
+          <span className="hidden max-w-32 truncate font-mono text-sm font-medium sm:block">
+            {user.login}
+          </span>
         </>
       }
     >
       {() => (
         <>
           <div className="border-b border-border px-3.5 py-3">
-            <div className="font-mono text-sm font-medium tracking-[0.14em] text-brand uppercase">
-              Account
-            </div>
+            <div className="text-xs font-semibold text-muted-foreground">Account</div>
             {user.name && (
-              <div className="mt-1.5 font-mono text-sm leading-snug font-semibold text-foreground">
+              <div className="mt-1.5 text-sm leading-snug font-semibold text-foreground">
                 {user.name}
               </div>
             )}
@@ -32,7 +32,7 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left font-mono text-sm font-medium text-foreground hover:bg-accent hover:text-brand disabled:cursor-default disabled:opacity-50"
+            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium text-foreground hover:bg-foreground/[0.05] disabled:cursor-default disabled:opacity-50"
             disabled={busy}
             onClick={() => {
               setBusy(true);

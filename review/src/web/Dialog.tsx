@@ -45,7 +45,7 @@ export function Dialog({
           onDismiss();
       }}
       className={cn(
-        "fixed inset-0 w-[calc(100%_-_2rem)] overflow-y-auto border border-input bg-card p-0 text-foreground backdrop:bg-black/70",
+        "fixed inset-0 w-[calc(100%_-_2rem)] overflow-y-auto border-[1.5px] border-foreground/15 bg-background p-0 text-foreground shadow-[0_24px_64px_-16px_rgb(0_0_0/0.35)] backdrop:bg-[hsl(30_8%_12%/0.35)] backdrop:backdrop-blur-[2px]",
         placement === "center"
           ? "m-auto max-h-[calc(100dvh_-_2rem)]"
           : "my-0 mr-0 ml-auto h-dvh max-h-none w-full border-y-0 border-r-0",
@@ -76,7 +76,7 @@ export function DialogHeader({
   return (
     <header className="flex items-start justify-between gap-4 border-b border-border p-4 sm:px-6 sm:py-5">
       <div className="min-w-0">
-        <h2 id={titleId} className="text-base leading-6 font-medium">
+        <h2 id={titleId} className="text-lg leading-7 font-semibold tracking-tight">
           {title}
         </h2>
         {description && (
@@ -111,7 +111,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<"footer">) 
     <footer
       {...props}
       className={cn(
-        "flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 p-4 sm:px-6",
+        "flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card p-4 sm:px-6",
         className,
       )}
     />

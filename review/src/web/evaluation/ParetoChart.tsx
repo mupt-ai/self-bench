@@ -1,5 +1,6 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
+import { harnessLabels } from "../../../../src/evaluation/harnesses";
 import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({
@@ -21,11 +22,7 @@ export function ParetoChart({
   }, []);
   const oneHarness = new Set(points.map((point) => point.harness)).size === 1;
   return (
-    <section
-      ref={container}
-      className="border border-border bg-background p-4 sm:p-6"
-      aria-label="Accuracy versus Cost"
-    >
+    <section ref={container} className="panel p-4 sm:p-6" aria-label="Accuracy versus Cost">
       {!points.length ? (
         <div className="py-2 text-sm text-muted-foreground [&_span]:mt-2 [&_span]:block [&_span]:max-w-2xl [&_span]:text-xs [&_span]:leading-5">
           <p>Your completed runs appear here.</p>
@@ -37,7 +34,7 @@ export function ParetoChart({
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--background)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--muted-fg)] [--pareto-font-family:'DM_Mono',var(--mono)] [&>text[font-size='14']]:text-[17px] [&_text[font-size='11']]:text-[13px] [&_text[font-size='10']]:text-[12px] [&_text[font-size='8']]:text-[10px]"
+            className="[--pareto-background:var(--card)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--faint)] [--pareto-frontier:var(--foreground)] [--pareto-font-family:var(--mono)] [&>text[font-size='14']]:text-[17px] [&_text[font-size='11']]:text-[13px] [&_text[font-size='10']]:text-[12px] [&_text[font-size='8']]:text-[10px]"
             title="Model Comparison"
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
@@ -45,7 +42,9 @@ export function ParetoChart({
             showLegend={width >= 640}
             points={points.map((point) => ({
               id: point.id,
-              label: oneHarness ? point.name : `${point.name} · ${point.harness}`,
+              label: oneHarness
+                ? point.name
+                : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`,
               x: point.cost,
               y: point.accuracy,
               description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
