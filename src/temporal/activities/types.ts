@@ -34,7 +34,7 @@ export interface AuthoringRoundInput {
   readonly session?: ArtifactRef;
   /** Previous round's stored VerifyReport JSON; required for round > 1. */
   readonly report?: ArtifactRef;
-  /** @deprecated Verify budgets reset each round; this value is ignored. */
+  /** @deprecated Legacy workflow replay state; new workflows omit it to reset each round. */
   readonly verifyCallsUsed?: number;
   /** Read-only verifier suggestions for the next authoring round. */
   readonly feedback?: string;

@@ -109,6 +109,7 @@ export async function runAuthoringRound(
     round,
     prefix: attemptPrefix,
   });
+  const verifyBudget = Math.max(0, AUTHOR_VERIFY_BUDGET - (input.verifyCallsUsed ?? 0));
   const logKey = `${attemptPrefix}/sandbox.log`;
   const sandboxResult = await withAgentFeed(
     store,
@@ -160,7 +161,7 @@ export async function runAuthoringRound(
                   SELFBENCH_DELIVERABLE: "/work/task",
                   SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
                   SELFBENCH_MAILBOX: MAILBOX_DIRECTORY,
-                  SELFBENCH_VERIFY_BUDGET: String(AUTHOR_VERIFY_BUDGET),
+                  SELFBENCH_VERIFY_BUDGET: String(verifyBudget),
                 },
                 command: ["bash", "-lc", authoringRoundScript(round > 1)],
               },

@@ -12,6 +12,7 @@ export async function authorWithVerification(
   let report: ArtifactRef | undefined;
   let feedback: string | undefined;
   let lastSummary = "no verification report";
+  let verifyCallsUsed = 0;
   let verificationRound = 0;
   const infrastructure = infrastructureCounter();
   for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
@@ -20,12 +21,14 @@ export async function authorWithVerification(
       run: context.run,
       candidate,
       round,
+      ...(context.legacyAuthoringRoundProtocol ? { verifyCallsUsed } : {}),
       ...(session ? { session } : {}),
       ...(report ? { report } : {}),
       ...(feedback ? { feedback } : {}),
     });
     if (authored.kind === "rejected") return rejected(authored.reason);
     session = authored.session;
+    if (context.legacyAuthoringRoundProtocol) verifyCallsUsed += authored.verifyCalls ?? 0;
     context.update({ taskId: authored.task.taskId, status: "verifying" });
     let green = authored.verified;
     if (!green) {
@@ -49,8 +52,13 @@ export async function authorWithVerification(
     } else infrastructure.observe(false);
     if (!green) continue;
     report = green.report;
-    verificationRound += 1;
-    const review = await reviewAuthoredTask(context, candidate, green, verificationRound);
+    if (!context.legacyAuthoringRoundProtocol) verificationRound += 1;
+    const review = await reviewAuthoredTask(
+      context,
+      candidate,
+      green,
+      context.legacyAuthoringRoundProtocol ? round : verificationRound,
+    );
     if (review.kind !== "suggestions") return review;
     feedback = review.feedback;
     lastSummary = `verifier requested authoring changes: ${feedback}`;

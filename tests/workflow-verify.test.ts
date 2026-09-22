@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { executeCandidate } from "../src/temporal/workflow/candidate.js";
 import { executeRun } from "../src/temporal/workflow.js";
 import {
   acceptingActivities,
@@ -44,53 +45,64 @@ describe("SelfBench in-session verify", () => {
       { report: "file:///verified/report.json", bundle: "file:///verified/harbor-task.tar.gz" },
     ]);
   });
-  test("does not carry verify usage into later authoring rounds", async () => {
-    const activities = acceptingActivities([candidate("budget", 1)]);
-    const authorInputs: { round: number; verifyCallsUsed: number | undefined }[] = [];
-    activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
-      authorInputs.push({ round, verifyCallsUsed });
-      return {
-        kind: "submitted",
-        task: draft(value.candidateId, `-r${round}`),
-        session: ref(`file:///session-${round}`),
-        verifyCalls: round === 1 ? 2 : 1,
-      };
-    };
-    const verifierRounds: number[] = [];
-    activities.runVerifierRound = async ({ round, session, verifyCallsUsed }) => {
-      verifierRounds.push(round);
-      expect(session).toBeUndefined();
-      expect(verifyCallsUsed).toBeUndefined();
-      if (round === 1)
+  for (const protocol of ["current", "legacy"] as const) {
+    test(`${protocol} protocol preserves its activity payloads and verifier numbering`, async () => {
+      const assigned = candidate("budget", 1);
+      const activities = acceptingActivities([assigned]);
+      const authorInputs: { round: number; verifyCallsUsed: number | undefined }[] = [];
+      activities.runAuthoringRound = async ({ candidate: value, round, verifyCallsUsed }) => {
+        authorInputs.push({ round, verifyCallsUsed });
         return {
-          kind: "suggestions",
-          session: ref("file:///v1"),
-          summary: "Fix coupling",
-          suggestions: "Exercise public behavior",
+          kind: "submitted",
+          task: draft(value.candidateId, `-r${round}`),
+          session: ref(`file:///session-${round}`),
+          verifyCalls: round === 1 ? 2 : 1,
         };
-      return { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
-    };
-    const verified: string[] = [];
-    const original = activities.compileAndVerify;
-    activities.compileAndVerify = async (input) => {
-      verified.push(`${input.stage}:${input.round}`);
-      return input.stage === "authoring" && input.round === 1
-        ? {
-            report: redReport(input.stage, input.round, input.task.taskId, { oracle: true }),
-            reportRef: ref("file:///red"),
-          }
-        : await original(input);
-    };
+      };
+      const verifierRounds: number[] = [];
+      activities.runVerifierRound = async ({ round }) => {
+        verifierRounds.push(round);
+        if (round === (protocol === "legacy" ? 2 : 1))
+          return {
+            kind: "suggestions",
+            session: ref(`file:///v${round}`),
+            summary: "Fix coupling",
+            suggestions: "Exercise public behavior",
+          };
+        return { kind: "accepted", session: ref(`file:///v${round}`), reason: "fair" };
+      };
+      const verified: string[] = [];
+      const original = activities.compileAndVerify;
+      activities.compileAndVerify = async (input) => {
+        verified.push(`${input.stage}:${input.round}`);
+        return input.stage === "authoring" && input.round === 1
+          ? {
+              report: redReport(input.stage, input.round, input.task.taskId, { oracle: true }),
+              reportRef: ref("file:///red"),
+            }
+          : await original(input);
+      };
 
-    const result = await executeRun(run, activities);
+      const result = await executeCandidate({ run, candidate: assigned }, activities, () => {}, {
+        legacyAuthoringRoundProtocol: protocol === "legacy",
+      });
 
-    expect(result.acceptedTaskIds).toEqual(["budget-task"]);
-    expect(authorInputs).toEqual([
-      { round: 1, verifyCallsUsed: undefined },
-      { round: 2, verifyCallsUsed: undefined },
-      { round: 3, verifyCallsUsed: undefined },
-    ]);
-    expect(verifierRounds).toEqual([1, 2]);
-    expect(verified).toEqual(["authoring:1", "authoring:2", "authoring:3"]);
-  });
+      expect(result.task?.taskId).toBe("budget-task");
+      expect(authorInputs).toEqual(
+        protocol === "legacy"
+          ? [
+              { round: 1, verifyCallsUsed: 0 },
+              { round: 2, verifyCallsUsed: 2 },
+              { round: 3, verifyCallsUsed: 3 },
+            ]
+          : [
+              { round: 1, verifyCallsUsed: undefined },
+              { round: 2, verifyCallsUsed: undefined },
+              { round: 3, verifyCallsUsed: undefined },
+            ],
+      );
+      expect(verifierRounds).toEqual(protocol === "legacy" ? [2, 3] : [1, 2]);
+      expect(verified).toEqual(["authoring:1", "authoring:2", "authoring:3"]);
+    });
+  }
 });
