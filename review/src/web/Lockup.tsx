@@ -43,7 +43,7 @@ export function Lockup({
         <DariMark />
       </span>
       {showName && (
-        <span className="flex min-w-0 flex-col gap-1">
+        <span className="flex min-w-0 flex-col gap-0.5">
           <strong
             className={cn(
               "font-mono leading-none font-bold tracking-wide",
