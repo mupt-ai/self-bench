@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { thinkingLevels } from "../../../../src/evaluation/model-options";
@@ -7,6 +8,7 @@ import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
 import { RunModelRow } from "./RunModelRow";
 import { RunModelTable } from "./RunModelTable";
+import { RunTaskPicker } from "./RunTaskPicker";
 import { thinkingLabel } from "./run-presentation";
 
 test("thinking levels use lowercase in selectors and run summaries", () => {
@@ -30,6 +32,42 @@ test("thinking levels use lowercase in selectors and run summaries", () => {
   for (const level of thinkingLevels) {
     expect(thinkingLabel(level)).toBe(level === "default" ? "model default" : level);
   }
+});
+
+test("task picker is collapsed with selected tasks in an expandable table", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <RunTaskPicker
+        repo="owner/repo"
+        availableTasks={[
+          { runId: "run-a", taskId: "task-a", difficulty: "easy" },
+          { runId: "run-b", taskId: "task-b", difficulty: "hard" },
+        ]}
+        draft={{
+          id: "draft",
+          tasks: [
+            { runId: "run-a", taskId: "task-a" },
+            { runId: "run-b", taskId: "task-b" },
+          ],
+          models: [],
+          sandbox: "e2b",
+          sandboxCredentialId: "",
+        }}
+        tasksReady
+        canRun
+        disabled={false}
+        onChange={() => {}}
+        onSkipCompleted={() => {}}
+        onRunMissing={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  expect(html).toContain("<details");
+  expect(html).not.toContain("<details open");
+  expect(html).toContain("2 of 2 Selected");
+  expect((html.match(/checked/g) ?? []).length).toBe(2);
+  expect(html).toContain("Skip Completed Results");
+  expect(html).toContain("Run Missing Tasks");
 });
 
 test("model cards remain usable without credentials and never embed a table or secret fields", () => {

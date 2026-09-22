@@ -24,6 +24,7 @@ const draftStateSchema = z.object({
       .max(12),
     sandbox: z.enum(["e2b", "modal", "daytona"]),
     sandboxCredentialId: z.string().max(36),
+    skipCompleted: z.boolean().optional(),
   }),
 });
 
@@ -54,6 +55,7 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
       models: [{ catalogId: "", credentialId: "", harnesses: [] }],
       sandbox: "e2b" as const,
       sandboxCredentialId: "",
+      skipCompleted: false,
     },
   };
 }

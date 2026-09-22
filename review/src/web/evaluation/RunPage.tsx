@@ -1,4 +1,4 @@
-import { ArrowRight, Database, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CredentialInfo } from "../../../../src/evaluation/account";
@@ -11,9 +11,10 @@ import { useDocumentTitle } from "../session";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
-import { hasDuplicateModelSelections } from "./model-selection";
+import { customModel, hasDuplicateModelSelections } from "./model-selection";
 import { RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
+import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
 export function RunPage() {
@@ -36,6 +37,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [sandboxes, setSandboxes] = React.useState<HostedSandbox[]>([]);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
+  const [managed, setManaged] = React.useState({ models: false, sandbox: false });
+  const [availableTasks, setAvailableTasks] = React.useState<EvaluationOptions["tasks"]>([]);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [tasksReady, setTasksReady] = React.useState(false);
@@ -49,13 +52,16 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   React.useEffect(() => {
     let disposed = false;
     setTasksReady(false);
-    evaluationRequest<{ models: CatalogModel[]; sandboxes: HostedSandbox[] }>(
-      `${url}/catalog`,
-    ).then(
+    evaluationRequest<{
+      models: CatalogModel[];
+      sandboxes: HostedSandbox[];
+      managed?: { models: boolean; sandbox: boolean };
+    }>(`${url}/catalog`).then(
       (result) => {
         if (!disposed) {
           setModels(result.models);
           setSandboxes(result.sandboxes);
+          setManaged(result.managed ?? { models: false, sandbox: false });
         }
       },
       (cause) => {
@@ -75,47 +81,78 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     evaluationRequest<EvaluationOptions>(`${url}/options`).then(
       (result) => {
         if (!disposed) {
-          const tasks = result.tasks.map(({ runId, taskId }) => ({ runId, taskId }));
-          setState((current) =>
-            current.submitted ? current : { ...current, draft: { ...current.draft, tasks } },
-          );
-          setTasksReady(!state.submitted && tasks.length > 0);
+          setAvailableTasks(result.tasks);
+          setState((current) => {
+            if (current.submitted) return current;
+            const taskKey = (runId: string, taskId: string) => JSON.stringify([runId, taskId]);
+            const available = new Set(result.tasks.map((task) => taskKey(task.runId, task.taskId)));
+            const selectedTasks = current.draft.tasks.filter((task) =>
+              available.has(taskKey(task.runId, task.taskId)),
+            );
+            const tasks =
+              selectedTasks.length || current.draft.tasks.length
+                ? selectedTasks
+                : result.tasks.map(({ runId, taskId }) => ({ runId, taskId }));
+            return { ...current, draft: { ...current.draft, tasks } };
+          });
+          setTasksReady(true);
         }
       },
       (cause) => {
-        if (!disposed) setError(cause.message);
+        if (!disposed) {
+          setTasksReady(true);
+          setError(cause.message);
+        }
       },
     );
     return () => {
       disposed = true;
     };
-  }, [url, org.login, state.submitted]);
+  }, [url, org.login]);
+  const availableCredentials: CredentialInfo[] = [
+    ...(managed.models
+      ? [
+          {
+            id: "managed-model",
+            name: "Managed",
+            kind: "openrouter" as const,
+            auth: "api-key" as const,
+            createdAt: "",
+          },
+        ]
+      : []),
+    ...(managed.sandbox
+      ? [
+          {
+            id: "managed-sandbox",
+            name: "Managed E2B",
+            kind: "e2b" as const,
+            auth: "api-key" as const,
+            createdAt: "",
+          },
+        ]
+      : []),
+    ...credentials,
+  ];
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
-  const custom: CatalogModel = {
-    id: "custom",
-    provider: "custom",
-    model: "",
-    label: "Custom Model",
-    harnesses: ["pi"],
-    source: "",
-  };
   const ready =
     tasksReady &&
+    draft.tasks.length > 0 &&
     selected.length > 0 &&
     selected.length === draft.models.length &&
-    !hasDuplicateModelSelections([...models, custom], draft.models) &&
+    !hasDuplicateModelSelections([...models, customModel], draft.models) &&
     selected.length <= 12 &&
-    credentials.some(
+    availableCredentials.some(
       (credential) =>
         credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
     ) &&
     selected.every((selection) => {
       const model =
         selection.catalogId === "custom"
-          ? custom
+          ? customModel
           : models.find((entry) => entry.id === selection.catalogId);
-      const credential = credentials.find((entry) => entry.id === selection.credentialId);
+      const credential = availableCredentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
       const route = routeFor(model, credential.kind);
       const levels = thinkingOptions(model, selection.harnesses);
@@ -128,11 +165,13 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         (model.id !== "custom" || !!selection.customModel)
       );
     });
-  const submit = async () => {
+  const submit = async (missingOnly = false) => {
     if (busy || (!state.submitted && !ready)) return;
     setBusy(true);
     setError("");
-    const frozen = state.submitted ? draft : { ...draft, models: selected };
+    const frozen = state.submitted
+      ? draft
+      : { ...draft, models: selected, skipCompleted: missingOnly || draft.skipCompleted };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
     try {
@@ -180,27 +219,21 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         </div>
       )}
       {error && <Notice className="mb-4">{error}</Notice>}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-border bg-card px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-medium">
-              {draft.tasks.length} {draft.tasks.length === 1 ? "Accepted Task" : "Accepted Tasks"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {draft.tasks.length
-                ? "Each configuration runs against the same dataset."
-                : "Accept tasks in your dataset before starting a comparison."}
-            </p>
-          </div>
-        </div>
-        <Link
-          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-          to={`/repos/${repo}`}
-        >
-          Review Dataset <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
-      </div>
+      <RunTaskPicker
+        repo={repo}
+        availableTasks={availableTasks}
+        draft={draft}
+        tasksReady={tasksReady}
+        onChange={(tasks) =>
+          setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
+        }
+        onSkipCompleted={(skipCompleted) =>
+          setState((current) => ({ ...current, draft: { ...current.draft, skipCompleted } }))
+        }
+        onRunMissing={() => void submit(true)}
+        canRun={ready}
+        disabled={busy || state.submitted}
+      />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <fieldset
           className="min-w-0 border border-border bg-card p-0"
@@ -236,8 +269,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             </InfoTooltip>
           </div>
           <RunModelTable
-            models={[...models, custom]}
-            credentials={credentials}
+            models={[...models, customModel]}
+            credentials={availableCredentials}
             draft={draft}
             onChange={(value) => setState({ draft: value, submitted: false })}
           />
@@ -245,7 +278,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         <RunExecution
           repo={repo}
           draft={draft}
-          credentials={credentials}
+          credentials={availableCredentials}
           sandboxes={sandboxes}
           submitted={state.submitted}
           busy={busy}

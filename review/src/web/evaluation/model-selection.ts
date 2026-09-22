@@ -4,6 +4,15 @@ import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
 import type { Harness } from "./api";
 
+export const customModel: CatalogModel = {
+  id: "custom",
+  provider: "custom",
+  model: "",
+  label: "Custom Model",
+  harnesses: ["pi"],
+  source: "",
+};
+
 export function nextModelSelection(
   model: CatalogModel,
   credentials: CredentialInfo[],

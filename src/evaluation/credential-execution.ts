@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { managedModelKey, managedSandboxCredentials } from "../site/managed-generation.js";
 import { readAccount, secretPath } from "./account.js";
 import { validateEndpoint } from "./credentials.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
@@ -22,12 +23,18 @@ export async function credentialExecution(
     ?.inputs.find((entry) => entry.id === input.id);
   if (!saved || !isDeepStrictEqual(saved, input))
     throw new Error("Execution does not match the reserved comparison");
-  const info = account.credentials.find(
-    (entry) => entry.id === input.credentials?.modelCredentialId && !entry.deleted,
-  );
-  const sandbox = account.credentials.find(
-    (entry) => entry.id === input.credentials?.sandboxCredentialId && !entry.deleted,
-  );
+  const managedModel = input.credentials.modelCredentialId === "managed-model";
+  const managedSandbox = input.credentials.sandboxCredentialId === "managed-sandbox";
+  const info = managedModel
+    ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
+    : account.credentials.find(
+        (entry) => entry.id === input.credentials?.modelCredentialId && !entry.deleted,
+      );
+  const sandbox = managedSandbox
+    ? { id: "managed-sandbox", kind: "e2b" as const }
+    : account.credentials.find(
+        (entry) => entry.id === input.credentials?.sandboxCredentialId && !entry.deleted,
+      );
   if (
     !info ||
     !sandbox ||
@@ -35,15 +42,19 @@ export async function credentialExecution(
     info.kind !== input.credentials.provider
   )
     throw new Error("Credential unavailable");
-  const modelSecret = (
-    await records.read<{ value: string }>(secretPath(input.credentialOwnerId, info.id))
-  )?.value;
-  const sandboxSecret = (
-    await records.read<{ value: string; tokenId?: string }>(
-      secretPath(input.credentialOwnerId, sandbox.id),
-    )
-  )?.value;
-  if (!modelSecret || !sandboxSecret) throw new Error("Credential unavailable");
+  const modelRecord = managedModel
+    ? undefined
+    : await records.read<{ value: string }>(secretPath(input.credentialOwnerId, info.id));
+  const modelSecret = { value: managedModel ? managedModelKey(env) : modelRecord?.value.value };
+  const managedE2B = managedSandbox ? managedSandboxCredentials(env) : undefined;
+  const sandboxSecret = managedE2B
+    ? { value: managedE2B.apiKey }
+    : (
+        await records.read<{ value: string; tokenId?: string }>(
+          secretPath(input.credentialOwnerId, sandbox.id),
+        )
+      )?.value;
+  if (!modelSecret.value || !sandboxSecret) throw new Error("Credential unavailable");
   const child: NodeJS.ProcessEnv = {
     PATH: env.PATH,
     HOME: home,
@@ -78,7 +89,9 @@ export async function credentialExecution(
   if (sandbox.kind === "modal") {
     child.MODAL_TOKEN_ID = sandboxSecret.tokenId;
     child.MODAL_TOKEN_SECRET = sandboxSecret.value;
-  } else if (sandbox.kind === "e2b") child.E2B_API_KEY = sandboxSecret.value;
-  else if (sandbox.kind === "daytona") child.DAYTONA_API_KEY = sandboxSecret.value;
+  } else if (sandbox.kind === "e2b") {
+    child.E2B_API_KEY = sandboxSecret.value;
+    if (managedE2B?.domain) child.E2B_DOMAIN = managedE2B.domain;
+  } else if (sandbox.kind === "daytona") child.DAYTONA_API_KEY = sandboxSecret.value;
   return { profile: { model: input.modelName }, child, secrets };
 }

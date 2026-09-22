@@ -8,7 +8,7 @@ import { credentialExecution } from "../src/evaluation/credential-execution.js";
 import { credentialSchema, validateEndpoint } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
-import { evaluationServer } from "./support/evaluation-fixture.js";
+import { evaluationEnv, evaluationServer } from "./support/evaluation-fixture.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 
 const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
@@ -28,6 +28,46 @@ test("catalog is populated without keys and only exposes supported provider fami
     expect((await fixture.request(`${fixture.base}/credentials`, {}, 2)).status).toBe(404);
   } finally {
     await fixture.close();
+  }
+});
+
+test("managed evaluations use the platform model and sandbox credentials", async () => {
+  const records = new MemoryRecords();
+  const env = {
+    ...evaluationEnv,
+    SELFBENCH_MANAGED_OPENROUTER_API_KEY: "managed-model-secret",
+    SELFBENCH_MANAGED_E2B_API_KEY: "managed-sandbox-secret",
+  };
+  const fixture = await evaluationServer(records, undefined, env);
+  const home = await mkdtemp(join(tmpdir(), "managed-evaluation-"));
+  try {
+    const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
+    expect(catalog.managed).toEqual({ models: true, sandbox: true });
+    const draft = {
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      models: [
+        {
+          catalogId: "openai-sol56",
+          credentialId: "managed-model",
+          harnesses: ["pi"],
+          thinking: "high",
+        },
+      ],
+      sandbox: "e2b",
+      sandboxCredentialId: "managed-sandbox",
+    };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    const input = fixture.starts[0];
+    if (!input) throw new Error("Missing managed evaluation input");
+    const execution = await credentialExecution(input, home, env, records);
+    expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
+    expect(execution.child.E2B_API_KEY).toBe("managed-sandbox-secret");
+    expect(execution.secrets).toContain("managed-model-secret");
+    expect(execution.secrets).toContain("managed-sandbox-secret");
+  } finally {
+    await fixture.close();
+    await rm(home, { recursive: true, force: true });
   }
 });
 
