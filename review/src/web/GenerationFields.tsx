@@ -47,7 +47,7 @@ export function GenerationFields({
       <details className="group" {...(problem !== undefined && !customized ? { open: true } : {})}>
         <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-foreground">Generation</span>
+            <span className="block text-sm font-semibold text-foreground">Generation</span>
             <span className="mt-1 block text-sm leading-6 text-muted-foreground group-open:hidden">
               {options ? generationSettingsSummary(value) : "Loading generation settings…"}
             </span>

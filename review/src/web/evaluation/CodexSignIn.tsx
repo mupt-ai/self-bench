@@ -113,11 +113,11 @@ export function CodexSignIn({
   if (session?.status === "saved")
     return (
       <div
-        className="flex flex-wrap items-center gap-3 border border-brand/25 bg-brand/5 p-4"
+        className="flex flex-wrap items-center gap-3 border border-success/30 bg-success/[0.06] p-4"
         role="status"
       >
-        <Check className="text-brand" size={18} aria-hidden="true" />
-        <h3 className="flex-1 text-sm font-medium">Codex Connected</h3>
+        <Check className="text-success" size={18} aria-hidden="true" />
+        <h3 className="flex-1 text-sm font-semibold">Codex Connected</h3>
         <Button type="button" variant="primary" onClick={() => void onDone()}>
           Done
         </Button>
@@ -142,11 +142,7 @@ export function CodexSignIn({
           </Button>
         </div>
       ) : starting || session?.status === "starting" ? (
-        <div
-          role="status"
-          aria-label="Preparing Sign-In"
-          className="space-y-4 border border-border bg-background p-4"
-        >
+        <div role="status" aria-label="Preparing Sign-In" className="panel space-y-4 p-4">
           <Skeleton className="h-4 w-44" />
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-9 w-full" />
@@ -160,22 +156,22 @@ export function CodexSignIn({
           </Button>
         </div>
       ) : (
-        <div className="border border-border bg-background p-4">
+        <div className="panel p-4">
           <p className="mb-3 text-sm text-muted-foreground">Enter this code on OpenAI.</p>
-          <div className="flex border border-input bg-card">
+          <div className="flex border border-input bg-background">
             <input
               ref={code}
               aria-label="One-Time Code"
               readOnly
               value={session?.instructions?.userCode ?? ""}
               onFocus={(event) => event.target.select()}
-              className="min-w-0 flex-1 bg-transparent p-3 text-center font-mono text-xl tracking-[0.15em] text-brand outline-none"
+              className="min-w-0 flex-1 bg-transparent p-3 text-center font-mono text-xl tracking-[0.15em] text-foreground outline-none"
             />
             <button
               type="button"
               aria-label={copied ? "Code Copied" : "Copy Code"}
               title={copied ? "Code Copied" : "Copy Code"}
-              className="border-l border-border px-4 text-muted-foreground hover:text-brand"
+              className="border-l border-border px-4 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(session?.instructions?.userCode ?? "");
@@ -213,7 +209,7 @@ export function CodexSignIn({
             role="status"
           >
             <span
-              className="size-1.5 animate-pulse bg-brand motion-reduce:animate-none"
+              className="size-1.5 animate-pulse rounded-full bg-brand motion-reduce:animate-none"
               aria-hidden="true"
             />
             {session?.status === "saving" ? "Saving…" : "Waiting for approval…"}

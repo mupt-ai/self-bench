@@ -32,39 +32,36 @@ export function TaskList({
             data-selected={selected.has(taskKey(task))}
             className={cn(
               taskRowLayout,
-              "group border-border transition-colors hover:bg-muted/50 data-[selected=true]:bg-brand/5",
+              "group border-border transition-colors hover:bg-muted/60 data-[selected=true]:bg-foreground/[0.04]",
             )}
           >
             <input
               type="checkbox"
-              className="size-4 accent-brand"
+              className="size-4 accent-foreground"
               aria-label={`Select ${task.taskId} from ${task.runId}`}
               checked={selected.has(taskKey(task))}
               disabled={busy || task.pipelineStatus === "in_progress"}
               onChange={(event) => onSelect(task, event.target.checked)}
             />
             <Link
-              className={cn(
-                taskDetailsLayout,
-                "py-3 text-foreground outline-offset-4 focus-visible:outline-brand",
-              )}
+              className={cn(taskDetailsLayout, "py-3 text-foreground outline-offset-4")}
               to={`/repos/${fullName}/tasks/${task.runId}/${encodeURIComponent(task.taskId)}`}
             >
               <span className="flex min-w-0 flex-col gap-1">
                 <span
-                  className="line-clamp-2 text-sm leading-6 font-medium wrap-anywhere md:line-clamp-1"
+                  className="line-clamp-2 font-mono text-sm leading-6 font-medium wrap-anywhere md:line-clamp-1"
                   title={task.taskId}
                 >
                   {task.taskId}
                 </span>
                 <span className="flex min-w-0 items-center gap-2 text-xs leading-5 text-muted-foreground">
                   {task.sourcePr && (
-                    <span className="shrink-0 xl:hidden">
+                    <span className="shrink-0 font-mono xl:hidden">
                       PR #{task.sourcePr}
                       <span className="ml-2 text-input">/</span>
                     </span>
                   )}
-                  <span className="truncate" title={task.runId}>
+                  <span className="truncate font-mono" title={task.runId}>
                     {task.runId}
                   </span>
                 </span>
@@ -83,7 +80,7 @@ export function TaskList({
                   </span>
                 ) : null}
               </span>
-              <span className="hidden items-center gap-1.5 text-xs text-muted-foreground xl:flex">
+              <span className="hidden items-center gap-1.5 font-mono text-xs text-muted-foreground xl:flex">
                 {task.sourcePr ? (
                   <>
                     <GitPullRequest className="size-3.5" aria-hidden="true" />#{task.sourcePr}
@@ -114,7 +111,7 @@ export function TaskListHeader() {
     <div
       className={cn(
         taskRowLayout,
-        "hidden border-b border-border bg-muted/30 py-3 text-xs text-muted-foreground md:grid",
+        "hidden border-b border-border bg-muted py-2.5 text-xs font-semibold text-muted-foreground md:grid",
       )}
       aria-hidden="true"
     >

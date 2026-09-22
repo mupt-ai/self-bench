@@ -58,7 +58,7 @@ export function DiscoveryFeed({
   return (
     <div className="border-t border-border">
       {capturedAt && (
-        <p className="m-0 px-4 py-1.5 text-[10px] text-muted-foreground">
+        <p className="m-0 px-4 py-1.5 text-[11px] text-muted-foreground">
           Updated {formatCapturedAt(capturedAt)}
         </p>
       )}

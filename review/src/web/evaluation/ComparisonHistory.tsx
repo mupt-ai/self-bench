@@ -27,7 +27,7 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
     <section className="mt-6">
       <SectionHeader title="Saved Comparisons" />
       {error && <p className="mt-2 text-sm text-muted-foreground">{error}</p>}
-      <div className="mt-3 font-mono [&_a]:text-foreground [&_a:hover]:text-brand [&_button]:text-foreground [&_button:hover]:text-brand">
+      <div className="mt-3 [&_a]:font-medium [&_a]:text-foreground [&_a:hover]:underline [&_a:hover]:underline-offset-4">
         <DataTable>
           <thead>
             <tr>
@@ -40,16 +40,18 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
           <tbody>
             {comparisons.map((comparison) => (
               <tr key={comparison.id}>
-                <td>{new Date(comparison.createdAt).toLocaleString()}</td>
+                <td className="whitespace-nowrap">
+                  {new Date(comparison.createdAt).toLocaleString()}
+                </td>
                 <td className="max-w-md">
                   <span
-                    className="block truncate"
+                    className="block truncate font-mono text-xs"
                     title={comparison.runs.map((run) => run.model).join(", ")}
                   >
                     {comparison.runs.map((run) => run.model).join(", ")}
                   </span>
                 </td>
-                <td>
+                <td className="font-mono tabular-nums">
                   {comparison.runs.reduce((sum, run) => sum + run.completed, 0)} /{" "}
                   {comparison.runs.reduce((sum, run) => sum + run.trials, 0)}
                 </td>

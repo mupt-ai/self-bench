@@ -23,8 +23,8 @@ test("connected repositories render as info cards instead of a table", () => {
       />
     </MemoryRouter>,
   );
-  expect(html).toContain("grid grid-cols-1 gap-4 md:grid-cols-2");
-  expect(html).toContain("border border-border bg-card");
+  expect(html).toContain("grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3");
+  expect(html).toContain("panel");
   expect(html).toContain('href="/repos/example/repo"');
   expect(html).toContain('aria-label="Open example/repo"');
   expect(html).toContain("example/repo");

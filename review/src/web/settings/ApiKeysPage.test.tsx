@@ -114,7 +114,7 @@ async function type(id: string, value: string) {
 }
 
 test("creates a key, reveals the secret exactly once, and revokes it from the list", async () => {
-  await waitFor(() => container.textContent?.includes("No API keys yet") ?? false);
+  await waitFor(() => container.textContent?.includes("No API Keys Yet") ?? false);
   await click("Create Key");
   expect(submit().disabled).toBe(true);
   await type("api-key-name", "CI");
@@ -134,7 +134,7 @@ test("creates a key, reveals the secret exactly once, and revokes it from the li
   await click("Revoke CI");
   expect(container.textContent).toContain("Revoke API Key");
   await click("Revoke");
-  await waitFor(() => container.textContent?.includes("No API keys yet") ?? false);
+  await waitFor(() => container.textContent?.includes("No API Keys Yet") ?? false);
   expect(requests).toContain(`DELETE ${root_}/1`);
   expect(container.querySelector('[data-testid="api-key-secret"]')).toBeNull();
   expect(container.textContent).toContain("API key revoked.");
@@ -153,7 +153,7 @@ test("reports a failed load and offers to reload", async () => {
 });
 
 async function createKey() {
-  await waitFor(() => container.textContent?.includes("No API keys yet") ?? false);
+  await waitFor(() => container.textContent?.includes("No API Keys Yet") ?? false);
   await click("Create Key");
   await type("api-key-name", "CI");
   await act(async () => submit().click());

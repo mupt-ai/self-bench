@@ -12,6 +12,15 @@ export function scores(trial: EvaluationTrial): string {
     ? entries.map(([name, value]) => `${name}: ${Number(value.toFixed(4))}`).join(" · ")
     : "Not Scored";
 }
+const ROLE_LABELS: Record<string, string> = {
+  agent: "Agent",
+  assistant: "Assistant",
+  user: "User",
+  system: "System",
+  tool: "Tool",
+};
+const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
+
 export function EvaluationResults({
   run,
   baseUrl,
@@ -31,12 +40,12 @@ export function EvaluationResults({
     .at(-1)?.text;
   return (
     <section
-      className="border border-border bg-card p-4 sm:p-6 [&_h4]:mb-3 [&_h4]:text-sm [&_h4]:font-medium [&_h5]:my-2 [&_h5]:text-xs [&_h5]:text-muted-foreground [&_details]:mt-3 [&_details]:border [&_details]:border-border [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:text-sm [&_details_h5]:px-4 [&_pre]:max-h-96 [&_pre]:overflow-auto [&_pre]:bg-background [&_pre]:p-4 [&_pre]:text-xs [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere"
+      className="panel p-4 sm:p-6 [&_h4]:mb-3 [&_h4]:text-sm [&_h4]:font-semibold [&_h5]:my-2 [&_h5]:text-xs [&_h5]:text-muted-foreground [&_details]:mt-3 [&_details]:border [&_details]:border-border [&_details]:bg-background [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:text-sm [&_summary]:font-medium [&_details_h5]:px-4 [&_pre]:max-h-96 [&_pre]:overflow-auto [&_pre]:bg-muted/60 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere"
       aria-label="Evaluation Results"
     >
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="flex flex-wrap items-center gap-3 text-sm font-medium">
+          <h2 className="flex flex-wrap items-center gap-3 text-base font-semibold">
             {run.modelLabel} <RunStatus value={run.status} />
           </h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -48,17 +57,19 @@ export function EvaluationResults({
             {run.credentials?.provider ?? run.modelName.split("/")[0]}
           </p>
         </div>
-        <span className="text-xs text-muted-foreground" role="status">
+        <span className="text-xs text-muted-foreground tabular-nums" role="status">
           {done}/{run.trials.length} completed{failed ? ` · ${failed} failed` : ""}
         </span>
       </header>
       {run.error && <Notice className="mt-4">{run.error}</Notice>}
       {active && (
-        <div className="mt-4 border-l-2 border-brand bg-brand/5 px-4 py-3" role="status">
-          <p className="text-sm font-medium">
+        <div className="mt-4 border-l-2 border-brand bg-brand/[0.06] px-4 py-3" role="status">
+          <p className="text-sm font-semibold">
             {run.status === "queued" ? "Queued" : "Running Now"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p
+            className={`mt-1 text-sm text-muted-foreground ${run.status === "queued" ? "" : "font-mono"}`}
+          >
             {run.status === "queued"
               ? "Waiting for an evaluation worker."
               : (run.trials.find((entry) => entry.status === "running")?.taskId ??
@@ -71,7 +82,7 @@ export function EvaluationResults({
         </div>
       )}
       <div className="mt-6">
-        <DataTable className="min-w-[600px] font-mono [&_tr[data-selected=true]]:bg-accent [&_button]:text-left [&_button]:text-brand [&_button]:wrap-anywhere">
+        <DataTable className="min-w-[600px] [&_tr[data-selected=true]]:bg-foreground/[0.05] [&_button]:text-left [&_button]:font-mono [&_button]:text-foreground [&_button]:wrap-anywhere [&_button:hover]:underline [&_button:hover]:underline-offset-4 [&_button[aria-pressed=true]]:font-semibold">
           <thead>
             <tr>
               <th>Task</th>
@@ -99,7 +110,7 @@ export function EvaluationResults({
                 <td>
                   <RunStatus value={entry.status} />
                 </td>
-                <td>{scores(entry)}</td>
+                <td className="font-mono text-xs">{scores(entry)}</td>
               </tr>
             ))}
           </tbody>
@@ -108,7 +119,7 @@ export function EvaluationResults({
       {trial && (
         <div>
           <div className="mt-6 mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center [&_h3]:wrap-anywhere [&_h3_span]:ml-2 [&_h3_span]:font-mono [&_h3_span]:text-sm [&_h3_span]:text-muted-foreground">
-            <h3>
+            <h3 className="font-mono text-base font-medium">
               {trial.taskId} <span> / {trial.harness}</span>
             </h3>
             <Link
@@ -118,10 +129,10 @@ export function EvaluationResults({
               View Task ↗
             </Link>
           </div>
-          {trial.error && <p className="my-4 font-mono text-sm text-destructive">{trial.error}</p>}
+          {trial.error && <p className="my-4 text-sm text-destructive">{trial.error}</p>}
           <TokenCosts trial={trial} />
           {!active && finalMessage && (
-            <div className="my-5 border-l-2 border-brand bg-muted/40 p-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
+            <div className="my-5 border-l-2 border-foreground/30 bg-muted/60 p-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
               <h4>Solver’s Final Response</h4>
               <p>{finalMessage}</p>
             </div>
@@ -137,8 +148,8 @@ export function EvaluationResults({
           <ol className="m-0 list-none p-0 [&>li]:border-t [&>li]:border-border [&>li]:py-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
             {trial.steps.map((step, stepIndex) => (
               <li key={step.id}>
-                <span className="mb-2.5 block font-mono text-sm text-muted-foreground uppercase">
-                  {stepIndex + 1} · {step.role}
+                <span className="mb-2.5 block text-xs font-semibold text-muted-foreground">
+                  {stepIndex + 1} · {roleLabel(step.role)}
                 </span>
                 {step.text && <p>{step.text}</p>}
                 {step.tools.map((tool) => (
@@ -158,7 +169,7 @@ export function EvaluationResults({
             <pre>{trial.log || "No output yet."}</pre>
           </details>
           {trial.artifacts.length > 0 && (
-            <details className="[&_p]:mt-3 [&_p]:text-sm [&_p]:text-muted-foreground [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-brand [&_a]:wrap-anywhere">
+            <details className="[&_p]:mt-3 [&_p]:text-sm [&_p]:text-muted-foreground [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-foreground [&_a]:underline [&_a]:decoration-foreground/25 [&_a]:underline-offset-4 [&_a]:wrap-anywhere [&_a:hover]:decoration-foreground">
               <summary>Artifacts · {trial.artifacts.length}</summary>
               <p>Sanitized text exports; large files may be capped at 1 MiB.</p>
               <ul>

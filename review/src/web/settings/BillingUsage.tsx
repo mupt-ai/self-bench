@@ -14,8 +14,8 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
   return (
     <section aria-label="Recorded Usage">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium">Recorded Usage</h2>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">All Time</span>
+        <h2 className="text-sm font-semibold">Recorded Usage</h2>
+        <span className="text-xs text-muted-foreground">All Time</span>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <UsagePanel title="LLM Usage">
@@ -41,10 +41,8 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
 
 function UsagePanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-border bg-muted/20 p-4" aria-label={title}>
-      <h3 className="mb-3 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        {title}
-      </h3>
+    <section className="panel p-4" aria-label={title}>
+      <h3 className="mb-3 text-sm font-semibold text-foreground">{title}</h3>
       {children}
     </section>
   );
@@ -53,8 +51,8 @@ function UsagePanel({ title, children }: { title: string; children: ReactNode })
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-1 text-sm tabular-nums text-foreground">{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 font-mono text-sm tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }

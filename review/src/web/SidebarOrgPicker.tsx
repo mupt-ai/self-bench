@@ -42,14 +42,14 @@ export function SidebarOrgPicker({
             type="button"
             aria-label="Organization"
             className={cn(
-              "flex h-9 w-full min-w-0 cursor-pointer items-center gap-2 border border-border bg-transparent px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand",
+              "flex h-10 w-full min-w-0 cursor-pointer items-center gap-2.5 border border-foreground/15 bg-card px-2.5 text-sm font-medium hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
               collapsed && "justify-center px-0",
             )}
           >
-            <span className="shrink-0 overflow-hidden border border-border">
-              <Avatar login={org.login} url={org.avatarUrl} size={20} />
-            </span>
-            {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{org.login}</span>}
+            <Avatar login={org.login} url={org.avatarUrl} size={20} />
+            {!collapsed && (
+              <span className="min-w-0 flex-1 truncate text-left font-mono">{org.login}</span>
+            )}
             {!collapsed && (
               <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             )}
@@ -75,7 +75,7 @@ export function SidebarOrgPicker({
             {organizations.length > 0 && (
               <>
                 {personal.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 pt-2 pb-1 font-mono text-xs text-muted-foreground">
+                <DropdownMenuLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">
                   Organizations
                 </DropdownMenuLabel>
                 {organizations.map((item) => (
@@ -94,17 +94,13 @@ function OrgItem({ org }: { org: SiteOrg }) {
   return (
     <DropdownMenuRadioItem
       value={org.login}
-      className="min-h-9 gap-2.5 py-1.5 data-[state=checked]:bg-brand/5"
+      className="min-h-9 gap-2.5 py-1.5 data-[state=checked]:bg-foreground/[0.04]"
     >
-      <span className="shrink-0 overflow-hidden border border-border">
-        <Avatar login={org.login} url={org.avatarUrl} size={24} />
-      </span>
+      <Avatar login={org.login} url={org.avatarUrl} size={24} />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-mono text-sm leading-5">{org.login}</span>
         {org.kind === "user" && (
-          <span className="block font-mono text-xs leading-5 text-muted-foreground">
-            Personal Account
-          </span>
+          <span className="block text-xs leading-5 text-muted-foreground">Personal Account</span>
         )}
       </span>
     </DropdownMenuRadioItem>

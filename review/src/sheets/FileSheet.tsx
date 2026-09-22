@@ -16,6 +16,15 @@ export interface OpenFile {
   tail?: { shownBytes: number; loadFull: () => void };
 }
 
+const KIND_LABELS: Record<string, string> = {
+  patch: "Patch",
+  json: "JSON",
+  toml: "TOML",
+  dockerfile: "Dockerfile",
+  shell: "Shell",
+  text: "Text",
+};
+
 export function FileSheet({ file }: { file: OpenFile | null }) {
   const [fullscreen, setFullscreen] = React.useState(false);
   React.useEffect(() => {
@@ -30,13 +39,13 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
   if (!file) return <p className={notice}>Select a file to inspect.</p>;
   if (file.loading) return <p className={notice}>reading {file.path}</p>;
   if (file.error)
-    return <p className={`${notice} !text-(--bad-fg) site:!text-danger`}>{file.error}</p>;
+    return <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{file.error}</p>;
   const size = file.sizeBytes ?? file.text?.length ?? 0;
   if (file.text === undefined) {
     return (
       <div className={sheetBody}>
         <Block title="Binary File" detail={file.path}>
-          <p className="px-4 py-3 text-(--muted-fg)">
+          <p className="px-4 py-3 text-muted-foreground">
             {formatBytes(size)} · not shown inline. Repository snapshots and archives stay on the
             server.
           </p>
@@ -45,6 +54,7 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
     );
   }
   const kind = fileKind(file.path);
+  const kindLabel = KIND_LABELS[kind] ?? kind;
   const stats = file.tail
     ? `last ${formatBytes(file.tail.shownBytes)} of ${formatBytes(size)}`
     : `${formatBytes(size)} · ${file.text.split("\n").length} lines`;
@@ -64,9 +74,7 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
         aria-label={`${file.path} Full Screen`}
       >
         <div className="flex h-12 items-center gap-3.5 border-b border-(--border) bg-(--viewer-panel) px-6 site:h-auto site:min-h-12 site:flex-wrap site:gap-3 site:py-3 site:break-all">
-          <span className="text-xs tracking-[0.16em] text-(--muted-fg) uppercase site:font-mono site:text-sm site:font-medium site:tracking-[0.14em] site:text-brand">
-            {kind}
-          </span>
+          <span className="text-xs font-semibold text-muted-foreground">{kindLabel}</span>
           <b className="font-mono text-sm">{file.path}</b>
           <span className="text-xs text-(--muted-fg) site:font-mono site:text-sm">{stats}</span>
           <span className="flex-1" />
@@ -98,14 +106,14 @@ export function FileSheet({ file }: { file: OpenFile | null }) {
         </p>
       )}
       <Block
-        title={kind}
+        title={kindLabel}
         detail={file.path}
         right={
           <span className="inline-flex items-baseline gap-3.5 site:items-center site:gap-3">
             <span>{stats}</span>
             <button
               type="button"
-              className="inline-flex size-8 cursor-pointer items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="inline-flex size-8 cursor-pointer items-center justify-center text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
               onClick={() => setFullscreen(true)}
               aria-label="Full Screen"
               title="Full Screen"

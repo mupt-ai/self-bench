@@ -8,9 +8,9 @@ export function ActiveEvaluations({ runs, repo }: { runs: EvaluationRun[]; repo:
   const queued = runs.filter((run) => run.status === "queued");
   if (!active.length && !queued.length) return null;
   return (
-    <section className="mb-6 border border-border bg-card" aria-label="Run Activity">
+    <section className="panel mb-6" aria-label="Run Activity">
       <header className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
-        <h2 className="font-medium">Run Activity</h2>
+        <h2 className="font-semibold">Run Activity</h2>
         <span className="text-xs text-muted-foreground">
           {active.length} running · {queued.length} queued
         </span>
@@ -19,14 +19,14 @@ export function ActiveEvaluations({ runs, repo }: { runs: EvaluationRun[]; repo:
         <Link
           key={run.id}
           to={`/repos/${repo}/results?run=${run.id}`}
-          className="block border-l-2 border-brand bg-brand/5 px-4 py-4 hover:bg-brand/10"
+          className="block border-l-2 border-brand bg-brand/[0.06] px-4 py-4 hover:bg-brand/10"
         >
-          <span className="text-xs text-brand">Running Now</span>
+          <span className="text-xs font-semibold text-brand-foreground">Running Now</span>
           <p className="mt-1 text-sm">
             {run.modelLabel} · {run.harnesses.map((harness) => harnessLabels[harness]).join(" + ")}{" "}
             · Thinking: {thinkingLabel(run.thinking)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
             {run.trials.find((trial) => trial.status === "running")?.taskId ??
               "Preparing the evaluation environment…"}
           </p>

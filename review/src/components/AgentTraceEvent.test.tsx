@@ -80,6 +80,6 @@ test("keeps expandable summaries keyboard-visible and ignores decorative disclos
   const html = renderToStaticMarkup(
     <AgentTraceEvent event={{ kind: "result", text: '{"ok":true}' }} />,
   );
-  expect(html).toContain("focus-visible:outline-brand");
+  expect(html).toContain("focus-visible:outline-foreground/40");
   expect(html).toContain('aria-hidden="true"');
 });

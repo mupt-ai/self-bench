@@ -3,6 +3,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* Token names are shared with the public site's theme.css, so both render the same palette. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -10,10 +11,12 @@
   --color-popover: var(--card);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-fg);
+  --color-faint: var(--faint);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-accent: var(--accent);
   --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-fg);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-fg);
   --color-destructive: var(--bad-fg);
@@ -27,8 +30,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: var(--sans);
   --font-mono: var(--mono);
-  --font-sans: var(--mono);
   --radius-sm: 0px;
   --radius-md: 0px;
   --radius-lg: 0px;
@@ -36,29 +39,35 @@
 }
 
 @custom-variant site (&:where(.sb, .sb *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* Light by default: warm paper, amber kept for fills and accents. Text that must read as
+   amber uses --brand-fg, which is dark enough for paper. */
 :root {
-  color-scheme: dark;
-  --background: hsl(30 6% 4%);
-  --foreground: hsl(30 8% 93%);
-  --card: hsl(30 5% 6%);
-  --viewer-panel: hsl(30 5% 8%);
-  --muted: hsl(30 5% 8%);
-  --muted-fg: hsl(30 5% 60%);
-  --faint: hsl(30 5% 40%);
-  --border: hsl(30 5% 14%);
-  --input: hsl(30 5% 14%);
-  --accent: hsl(30 5% 13%);
-  --brand: hsl(38 95% 55%);
-  --primary: hsl(0 0% 100%);
-  --primary-fg: hsl(0 0% 0%);
-  --ok: hsl(150 40% 45%);
-  --bad: hsl(0 72% 45%);
-  --bad-fg: hsl(0 70% 62%);
-  --warn-fg: hsl(38 80% 60%);
+  color-scheme: light;
+  --background: hsl(40 33% 98%);
+  --foreground: hsl(30 8% 12%);
+  --card: hsl(38 24% 95%);
+  --viewer-panel: hsl(38 20% 93%);
+  --muted: hsl(38 20% 90.5%);
+  --muted-fg: hsl(30 6% 42%);
+  --faint: hsl(30 6% 62%);
+  --border: hsl(35 16% 86%);
+  --input: hsl(35 16% 82%);
+  --accent: hsl(40 26% 92%);
+  --brand: hsl(38 92% 48%);
+  --brand-fg: hsl(32 90% 32%);
+  --primary: hsl(30 8% 12%);
+  --primary-fg: hsl(40 33% 98%);
+  --ok: hsl(150 45% 30%);
+  --bad: hsl(0 65% 45%);
+  --bad-fg: hsl(0 62% 42%);
+  --warn-fg: hsl(35 80% 34%);
+  --panel-edge: hsl(30 8% 12% / 0.15);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+  --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Match dari-mono's sidebar token aliases exactly. */
   --sidebar-background: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-accent: var(--accent);
@@ -67,7 +76,43 @@
   --sidebar-ring: var(--brand);
 }
 
-/* Native number-input spinners clash with the square mono controls; the keyboard
+/* Dark mode is the public site's dark palette, so the two sites match. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: hsl(30 6% 4%);
+  --foreground: hsl(30 8% 93%);
+  --card: hsl(30 6% 2.5%);
+  --viewer-panel: hsl(30 5% 7%);
+  --muted: hsl(30 5% 8%);
+  --muted-fg: hsl(30 5% 60%);
+  --faint: hsl(30 5% 40%);
+  --border: hsl(30 5% 14%);
+  --input: hsl(30 5% 18%);
+  --accent: hsl(30 5% 13%);
+  --brand: hsl(38 95% 55%);
+  --brand-fg: hsl(38 95% 60%);
+  --primary: hsl(0 0% 100%);
+  --primary-fg: hsl(0 0% 0%);
+  --ok: hsl(150 40% 45%);
+  --bad: hsl(0 72% 45%);
+  --bad-fg: hsl(0 70% 62%);
+  --warn-fg: hsl(38 80% 60%);
+  --panel-edge: hsl(30 8% 93% / 0.15);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+}
+
+html {
+  background: var(--background);
+}
+
+/* Raised surface for cards, tables and panels: a firmer edge and a soft drop. */
+@utility panel {
+  border: 1.5px solid var(--panel-edge);
+  background-color: var(--card);
+  box-shadow: var(--panel-shadow);
+}
+
+/* Native number-input spinners clash with the square controls; the keyboard
    arrows still step the value. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

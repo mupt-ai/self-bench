@@ -30,9 +30,9 @@ test("Pareto charts rely on the package defaults and only map app theme tokens",
       onSelect={() => {}}
     />,
   );
-  expect(html).toContain("[--pareto-background:var(--background)]");
-  expect(html).toContain("[--pareto-font-family:&#x27;DM_Mono&#x27;,var(--mono)]");
-  expect(html).not.toContain("[--pareto-frontier");
+  expect(html).toContain("[--pareto-background:var(--card)]");
+  expect(html).toContain("[--pareto-font-family:var(--mono)]");
+  expect(html).toContain("[--pareto-frontier:var(--foreground)]");
   expect(html).not.toContain("var(--brand)");
   expect(html).not.toContain("[&amp;_polyline]");
   expect(html).not.toContain("[&amp;_circle");
