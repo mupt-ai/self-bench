@@ -50,6 +50,7 @@ export async function exportBatch(
           managedModel: generation.settings.modelAccess === "managed",
           managedSandbox: generation.settings.sandbox === "managed",
           model: generation.settings.authorModel,
+          sandboxProvider: batch.run.version.executionBackend,
         })
       : inner;
   try {

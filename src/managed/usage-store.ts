@@ -1,14 +1,16 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, like, or, sql } from "drizzle-orm";
 import { loadBillingPolicy } from "../billing/config.js";
 import { modelBillableUnits, rateSnapshotSpec, sandboxBillableUnits } from "../billing/policy.js";
 import type { Database } from "../db/client.js";
 import { billingOutbox, billingRateSnapshots, generationUsage, orgBilling } from "../db/schema.js";
 import type { RunUsageSummary, UsageRow } from "./usage.js";
 
+type UsageSummaryScope = { readonly stage: string } | { readonly candidateId: string };
+
 /** Persists metered stage usage into the site database and sums it back per run. */
 export interface UsageLedger {
   record(row: UsageRow): Promise<void>;
-  summary(runId: string): Promise<RunUsageSummary>;
+  summary(runId: string, orgId: number, scope?: UsageSummaryScope): Promise<RunUsageSummary>;
 }
 
 export interface UsageStoreOptions {
@@ -81,7 +83,18 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
         });
       });
     },
-    async summary(runId) {
+    async summary(runId, orgId, scope) {
+      const candidatePattern =
+        scope && "candidateId" in scope ? scope.candidateId.replace(/[\\%_]/g, "\\$&") : undefined;
+      const stageScope =
+        scope && "stage" in scope
+          ? eq(generationUsage.stage, scope.stage)
+          : candidatePattern
+            ? or(
+                like(generationUsage.stage, `author-${candidatePattern}-r%`),
+                like(generationUsage.stage, `verify-${candidatePattern}-r%`),
+              )
+            : undefined;
       const [row] = await db
         .select({
           modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
@@ -95,7 +108,7 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
           sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
         })
         .from(generationUsage)
-        .where(eq(generationUsage.runId, runId));
+        .where(and(eq(generationUsage.runId, runId), eq(generationUsage.orgId, orgId), stageScope));
       return row
         ? {
             modelCostUsd: row.modelCostUsd ?? undefined,

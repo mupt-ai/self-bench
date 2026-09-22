@@ -1,5 +1,6 @@
 import type { DiscoveryShardProgress } from "../../../../src/contracts";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
+import { GenerationCost } from "../GenerationCost";
 import { EmptyState, SectionHeader } from "../ui";
 import { DiscoveryFeed } from "./DiscoveryFeed";
 
@@ -62,9 +63,12 @@ function Shard({
           Shard {shard.shardIndex + 1}
           {status.discovery?.totalShards ? ` of ${status.discovery.totalShards}` : ""}
         </span>
-        <span className="min-w-0 justify-self-end truncate text-right text-xs text-muted-foreground">
-          {shard.attempt && shard.attempt > 1 ? `Attempt ${shard.attempt} · ` : ""}
-          {label}
+        <span className="flex min-w-0 items-center gap-2 justify-self-end truncate text-right text-xs text-muted-foreground">
+          <GenerationCost cost={shard.cost} />
+          <span>
+            {shard.attempt && shard.attempt > 1 ? `Attempt ${shard.attempt} · ` : ""}
+            {label}
+          </span>
         </span>
       </summary>
       <DiscoveryFeed runId={status.runId} shard={shard} active={running} />

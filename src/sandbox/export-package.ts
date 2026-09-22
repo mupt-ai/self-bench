@@ -18,7 +18,7 @@ export async function packageExport(): Promise<void> {
   }
   await writeFile(
     join(root, "manifest.json"),
-    JSON.stringify({ ...input.manifest, tasks, acceptedCount: tasks.length }, null, 2) + "\n",
+    `${JSON.stringify({ ...input.manifest, tasks, acceptedCount: tasks.length }, null, 2)}\n`,
   );
   await runCommand("tar", ["-czf", "/work/export.tar.gz", "-C", root, "manifest.json", "tasks"]);
 }

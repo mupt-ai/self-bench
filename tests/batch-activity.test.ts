@@ -1,11 +1,43 @@
 import { expect, test } from "bun:test";
-import type { Client } from "@temporalio/client";
+import { type Client, defaultPayloadConverter } from "@temporalio/client";
 import {
   activityDetail,
+  heartbeatCost,
   liveBatchStatus,
   normalizeFailure,
   overlayCandidateActivity,
 } from "../src/site/batch-activity.js";
+
+test("heartbeat costs decode valid Temporal payloads and reject unsafe values", () => {
+  const payload = defaultPayloadConverter.toPayload({
+    detail: "authoring",
+    cost: {
+      state: "partial",
+      sandboxSeconds: 12,
+      modelUsd: 0.25,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  });
+  expect(heartbeatCost(payload)).toEqual({
+    state: "partial",
+    sandboxSeconds: 12,
+    modelUsd: 0.25,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  expect(
+    heartbeatCost(
+      defaultPayloadConverter.toPayload({
+        cost: {
+          state: "estimated",
+          sandboxSeconds: Number.NaN,
+          sandboxUsd: -1,
+          updatedAt: "not-a-date",
+        },
+      }),
+    ),
+  ).toBeUndefined();
+  expect(heartbeatCost({ metadata: {}, data: new Uint8Array([1, 2, 3]) })).toBeUndefined();
+});
 
 test("batch progress distinguishes running, queued and unavailable activity state", async () => {
   const client = {

@@ -6,6 +6,7 @@ import type {
   RunRequest,
   TaskProgress,
 } from "../contracts.js";
+import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { DiscoveryShardInput } from "../temporal/activities.js";
 
 interface BatchShard {
@@ -14,6 +15,7 @@ interface BatchShard {
   /** Committed before an RPC; an ambiguous start remains owned by this batch. */
   dispatchAttempted?: boolean;
   input: DiscoveryShardInput;
+  cost?: SandboxCostSnapshot;
   result?: DiscoveryResult;
   error?: string;
 }
@@ -23,6 +25,7 @@ interface BatchCandidate {
   /** Committed before an RPC; an ambiguous start remains owned by this batch. */
   dispatchAttempted?: boolean;
   candidate: Candidate;
+  cost?: SandboxCostSnapshot;
   progress?: TaskProgress;
   result?: CandidateWorkflowResult;
   error?: string;

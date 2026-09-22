@@ -14,8 +14,10 @@ export async function advanceBatch(
     if (
       item &&
       (!item.dispatchAttempted || (await executions.cancel(item.workflowId, batch.taskQueue)))
-    )
+    ) {
       item.cancelled = true;
+      delete item.cost;
+    }
     if ([...batch.shards, ...batch.candidates].every((item) => item.cancelled))
       batch.phase = "cancelled";
     return;
@@ -30,8 +32,16 @@ export async function advanceBatch(
     }
     if (shard) {
       const observed = await executions.shard(shard.workflowId, shard.input, batch.taskQueue);
-      if (observed.state === "completed") shard.result = observed.result;
-      else if (observed.state === "failed") shard.error = observed.error;
+      if (observed.state === "completed") {
+        shard.result = observed.result;
+        delete shard.cost;
+      } else if (observed.state === "cancelled") {
+        shard.error = "Generation cancelled.";
+        delete shard.cost;
+      } else if (observed.state === "failed") {
+        shard.error = observed.error;
+        delete shard.cost;
+      } else if (observed.cost) shard.cost = observed.cost;
     }
     if (batch.shards.some((shard) => !shard.result && !shard.error)) return;
     // Deterministic shard order wins duplicate PRs; no candidate is dispatched twice.
@@ -91,8 +101,18 @@ export async function advanceBatch(
         item.error = "Another candidate already owns this task ID";
       } else item.result = result;
       item.progress = observed.result.progress;
-    } else if (observed.state === "failed") item.error = observed.error;
-    else if (observed.progress) item.progress = observed.progress;
+      delete item.cost;
+    } else if (observed.state === "cancelled") {
+      item.cancelled = true;
+      item.error = "Generation cancelled.";
+      delete item.cost;
+    } else if (observed.state === "failed") {
+      item.error = observed.error;
+      delete item.cost;
+    } else {
+      if (observed.progress) item.progress = observed.progress;
+      if (observed.cost) item.cost = observed.cost;
+    }
   }
   if (batch.candidates.every((item) => item.result || item.error)) batch.phase = "exporting";
 }

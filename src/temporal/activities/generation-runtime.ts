@@ -132,6 +132,8 @@ export async function withGenerationRuntime<T>(
     managedModel: settings.modelAccess === "managed",
     managedSandbox: settings.sandbox === "managed",
     model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
+    sandboxProvider: selected.execution.kind,
+    provider: authoring.provider,
   });
   return withExecutionEnvironment(env, async () =>
     withUsageLedger(

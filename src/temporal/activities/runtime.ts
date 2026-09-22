@@ -17,6 +17,7 @@ import {
 import { projectRoot } from "../../project-paths.js";
 import { type ProvenanceMessage, provenanceMessageSchema } from "../../provenance.js";
 import {
+  type SandboxCostSnapshot,
   SandboxExecutionError,
   type SandboxResult,
   type SandboxRunOptions,
@@ -73,14 +74,17 @@ export async function withActivityHeartbeats<T>(
   const signal = activityLifetimeSignal(lifetime);
   let outputBytes = 0;
   let lastOutputAt: string | undefined;
+  let cost: SandboxCostSnapshot | undefined;
   const heartbeatDetail = (): {
     detail: string;
     outputBytes: number;
     lastOutputAt?: string;
+    cost?: SandboxCostSnapshot;
   } => ({
     detail,
     outputBytes,
     ...(lastOutputAt ? { lastOutputAt } : {}),
+    ...(cost ? { cost } : {}),
   });
   context.heartbeat(heartbeatDetail());
   const heartbeat = setInterval(() => context.heartbeat(heartbeatDetail()), 60_000);
@@ -96,6 +100,11 @@ export async function withActivityHeartbeats<T>(
           if (signal.aborted) return;
           outputBytes += progress.bytes;
           lastOutputAt = new Date().toISOString();
+        },
+        onCost: (snapshot) => {
+          if (signal.aborted) return;
+          cost = snapshot;
+          context.heartbeat(heartbeatDetail());
         },
       });
       if (context.cancellationSignal.aborted) {

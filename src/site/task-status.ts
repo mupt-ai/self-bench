@@ -1,5 +1,6 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { CandidateWorkflowResult, TaskProgress } from "../contracts.js";
+import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { TaskRecord, TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
 
@@ -22,13 +23,19 @@ export function infrastructureFailureSummary(reason: string): string {
 
 /** What the site can learn about a task's workflow without owning it. */
 export type WorkflowSnapshot =
-  | { readonly kind: "running"; readonly progress?: TaskProgress }
+  | {
+      readonly kind: "running";
+      readonly progress?: TaskProgress;
+      readonly cost?: SandboxCostSnapshot;
+    }
   | { readonly kind: "completed"; readonly result: CandidateWorkflowResult }
   | { readonly kind: "failed"; readonly status: string; readonly detail?: string }
+  | { readonly kind: "cancelled" }
   | { readonly kind: "unknown" };
 
 export interface TaskStatusSource {
   snapshot(workflowId: string): Promise<WorkflowSnapshot>;
+  cancel?(workflowId: string): Promise<void>;
 }
 
 export interface RefreshOptions {
@@ -43,57 +50,72 @@ export interface RefreshOptions {
  * it runs, the verdict when it ends, and the artifact-backed fields (definition, bundle) after.
  */
 export async function refreshInProgress(options: RefreshOptions): Promise<number> {
-  const { tasks, artifacts, status, repo } = options;
-  const running = (await tasks.listForRepo(repo.id)).filter(
+  const running = (await options.tasks.listForRepo(options.repo.id)).filter(
     (task) =>
       task.pipelineStatus === "in_progress" ||
       (task.pipelineStatus === "accepted" && !task.bundleKey),
   );
   let changed = 0;
   for (const task of running) {
-    if (task.pipelineStatus === "accepted") {
-      const result = await syncRun({
-        tasks,
-        artifacts,
-        repo,
-        runId: task.runId,
-        repairAcceptedTask: task,
-      }).catch(() => undefined);
-      if (result?.synced) changed += 1;
-      continue;
-    }
-    if (!task.workflowId) continue;
-    const snapshot = await status
-      .snapshot(task.workflowId)
-      .catch((): WorkflowSnapshot => ({ kind: "unknown" }));
-    if (
-      snapshot.kind === "completed" &&
-      snapshot.result.progress.status !== "infrastructure_failed"
-    ) {
-      await syncRun({
-        tasks,
-        artifacts,
-        repo,
-        runId: task.runId,
-        completedWorkflowId: task.workflowId,
-      }).catch(() => undefined);
-    }
-    if (await applySnapshot(task, snapshot, tasks)) changed += 1;
+    if ((await refreshTask(options, task)).changed) changed += 1;
   }
   return changed;
+}
+
+/** Refreshes one task without polling every active workflow in its repository. */
+export async function refreshTask(
+  options: RefreshOptions,
+  task: TaskRecord,
+): Promise<{ task: TaskRecord; snapshot?: WorkflowSnapshot; changed: boolean }> {
+  const { tasks, artifacts, status, repo } = options;
+  if (task.pipelineStatus === "accepted" && !task.bundleKey) {
+    const result = await syncRun({
+      tasks,
+      artifacts,
+      repo,
+      runId: task.runId,
+      repairAcceptedTask: task,
+    }).catch(() => undefined);
+    return {
+      task: (await tasks.find(repo.id, task.runId, task.candidateId)) ?? task,
+      changed: Boolean(result?.synced),
+    };
+  }
+  if (task.pipelineStatus !== "in_progress" || !task.workflowId) return { task, changed: false };
+  const snapshot = await status
+    .snapshot(task.workflowId)
+    .catch((): WorkflowSnapshot => ({ kind: "unknown" }));
+  if (
+    snapshot.kind === "completed" &&
+    snapshot.result.progress.status !== "infrastructure_failed"
+  ) {
+    await syncRun({
+      tasks,
+      artifacts,
+      repo,
+      runId: task.runId,
+      completedWorkflowId: task.workflowId,
+    }).catch(() => undefined);
+  }
+  const updated = await applySnapshot(task, snapshot, tasks);
+  return {
+    task: updated ?? task,
+    snapshot,
+    changed: updated !== undefined,
+  };
 }
 
 async function applySnapshot(
   task: TaskRecord,
   snapshot: WorkflowSnapshot,
   tasks: TaskStore,
-): Promise<boolean> {
+): Promise<TaskRecord | undefined> {
   switch (snapshot.kind) {
     case "running": {
       const progress = snapshot.progress;
-      if (!progress) return false;
-      if (progress.stage === task.stage && progress.round === task.round) return false;
-      await tasks.progress(task.id, {
+      if (!progress) return undefined;
+      if (progress.stage === task.stage && progress.round === task.round) return undefined;
+      return tasks.progress(task.id, {
         stage: progress.stage ?? task.stage,
         ...(progress.round !== undefined ? { round: progress.round } : {}),
         pipelineStatus: "in_progress",
@@ -101,11 +123,10 @@ async function applySnapshot(
           ? { taskId: progress.taskId }
           : {}),
       });
-      return true;
     }
     case "completed": {
       const progress = snapshot.result.progress;
-      await tasks.progress(task.id, {
+      return tasks.progress(task.id, {
         stage: progress.status === "accepted" ? "accepted" : (progress.stage ?? task.stage),
         ...(progress.round !== undefined ? { round: progress.round } : {}),
         pipelineStatus:
@@ -124,19 +145,25 @@ async function applySnapshot(
           : {}),
         ...(snapshot.result.task?.taskId ? { taskId: snapshot.result.task.taskId } : {}),
       });
-      return true;
+    }
+    case "cancelled": {
+      return tasks.progress(task.id, {
+        stage: "cancelled",
+        ...(task.round !== undefined ? { round: task.round } : {}),
+        pipelineStatus: "infrastructure_failed",
+        reason: "Generation cancelled.",
+      });
     }
     case "failed": {
       const detail = `workflow ${snapshot.status.toLowerCase()}${snapshot.detail ? `: ${snapshot.detail}` : ""}`;
-      await tasks.progress(task.id, {
+      return tasks.progress(task.id, {
         stage: task.stage,
         ...(task.round !== undefined ? { round: task.round } : {}),
         pipelineStatus: "infrastructure_failed",
         reason: `${infrastructureFailureSummary(detail)}\n\nTechnical details: ${detail}`,
       });
-      return true;
     }
     default:
-      return false;
+      return undefined;
   }
 }

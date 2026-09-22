@@ -31,7 +31,9 @@ test("reviewer exposes only verdict tools and records feedback without creating 
       summary: "Too coupled",
       suggestions: "Use the public API",
     });
-    await expect(tools.get("accept_task")!.execute("call-2", { reason: "fair" })).rejects.toThrow(
+    const acceptTask = tools.get("accept_task");
+    if (!acceptTask) throw new Error("accept_task tool was not registered");
+    await expect(acceptTask.execute("call-2", { reason: "fair" })).rejects.toThrow(
       "already submitted",
     );
   } finally {

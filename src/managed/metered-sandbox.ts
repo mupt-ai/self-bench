@@ -14,11 +14,15 @@ export interface MeteredSandboxOptions {
   readonly managedSandbox: boolean;
   /** The canonical generation model id this stage's agent invokes, for cost rates. */
   readonly model?: string;
+  /** Runtime provider; only E2B has a sandbox rate in the existing pricing catalog. */
+  readonly sandboxProvider?: "docker" | "e2b" | "modal" | "vercel";
+  /** Pi model provider stored alongside model usage. */
+  readonly provider?: string;
 }
 
 /**
- * A sandbox executor that records compute time and Pi token usage per stage. Usage is only
- * metered for managed resources: the platform pays for managed models and managed E2B.
+ * A sandbox executor that records compute time and Pi token usage per stage. Managed flags
+ * separately determine which recorded usage is billable by the platform.
  */
 export function meteredSandboxExecutor(
   inner: SandboxExecutor,
@@ -43,29 +47,60 @@ async function runMetered(
   runOptions: SandboxRunOptions | undefined,
   options: MeteredSandboxOptions,
 ): Promise<SandboxResult> {
-  if (!options.managedModel && !options.managedSandbox) return await inner.run(request, runOptions);
   const meter = new PiUsageMeter();
   const started = Date.now();
+  const pricedSandbox = options.sandboxProvider === "e2b";
+  const snapshot = () => {
+    const seconds = Math.max(1, Math.ceil((Date.now() - started) / 1000));
+    const usage = meter.usage();
+    const modelUsd = options.model ? managedModelCostUsd(options.model, usage) : undefined;
+    const modelPriced = options.model !== undefined && modelUsd !== undefined;
+    const state =
+      pricedSandbox && (options.model === undefined || modelPriced)
+        ? "estimated"
+        : pricedSandbox || modelPriced
+          ? "partial"
+          : options.sandboxProvider
+            ? "unpriced"
+            : "unknown";
+    runOptions?.onCost?.({
+      state,
+      sandboxSeconds: seconds,
+      ...(pricedSandbox
+        ? { sandboxUsd: managedSandboxCostUsd(seconds, request.cpu, request.memoryMiB) }
+        : {}),
+      ...(modelUsd !== undefined ? { modelUsd } : {}),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+  snapshot();
+  const live = setInterval(snapshot, 5_000);
+  live.unref();
   try {
     return await inner.run(request, {
       ...runOptions,
       onOutput: (stream, chunk) => {
         if (stream === "stdout") meter.push(chunk);
         runOptions?.onOutput?.(stream, chunk);
+        snapshot();
       },
     });
   } finally {
-    const seconds = Math.max(1, Math.round((Date.now() - started) / 1000));
+    clearInterval(live);
+    snapshot();
+    const seconds = Math.max(1, Math.ceil((Date.now() - started) / 1000));
     const usage = meter.usage();
+    const modelCostUsd = options.model ? managedModelCostUsd(options.model, usage) : undefined;
     const entry: StageUsage = {
       stage: request.stage,
       managed: options.managedModel || options.managedSandbox,
       managedModel: options.managedModel,
       managedSandbox: options.managedSandbox,
       sandboxSeconds: seconds,
+      ...(options.provider ? { provider: options.provider } : {}),
       ...(request.cpu !== undefined ? { cpu: request.cpu } : {}),
       ...(request.memoryMiB !== undefined ? { memoryMiB: request.memoryMiB } : {}),
-      ...(options.managedSandbox
+      ...(pricedSandbox
         ? { sandboxCostUsd: managedSandboxCostUsd(seconds, request.cpu, request.memoryMiB) }
         : {}),
       ...(usage.messages > 0
@@ -77,12 +112,7 @@ async function runMetered(
               cacheRead: usage.cacheRead,
               cacheWrite: usage.cacheWrite,
             },
-            ...(options.managedModel && options.model
-              ? (() => {
-                  const cost = managedModelCostUsd(options.model ?? "", usage);
-                  return cost !== undefined ? { modelCostUsd: cost } : {};
-                })()
-              : {}),
+            ...(modelCostUsd !== undefined ? { modelCostUsd } : {}),
           }
         : {}),
     };

@@ -1,4 +1,4 @@
-import type { Client } from "@temporalio/client";
+import { type Client, defaultPayloadConverter } from "@temporalio/client";
 import { queryStatus } from "../api/status.js";
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
 import type { BatchStatus, TaskActivityDetail } from "./batch-progress.js";
@@ -17,6 +17,7 @@ interface PendingActivity {
   activityType?: { name?: string | null } | null;
   lastFailure?: { message?: string | null } | null;
   nextAttemptScheduleTime?: ProtoTimestamp | null;
+  heartbeatDetails?: { payloads?: unknown[] | null } | null;
 }
 
 /** Workflow stages describe intent; pending activities distinguish execution from queueing. */
@@ -85,7 +86,44 @@ export function activityDetail(pending: readonly PendingActivity[]): TaskActivit
   if (failure) detail.lastFailure = failure;
   const next = timestampToIso(current.nextAttemptScheduleTime);
   if (next) detail.nextAttemptAt = next;
+  const cost = heartbeatCost(current.heartbeatDetails?.payloads?.[0]);
+  if (cost) detail.cost = cost;
   return detail;
+}
+
+export function heartbeatCost(payload: unknown): TaskActivityDetail["cost"] {
+  if (!payload) return undefined;
+  try {
+    const value = defaultPayloadConverter.fromPayload<unknown>(payload as never);
+    if (!value || typeof value !== "object") return undefined;
+    const cost = (value as { cost?: unknown }).cost;
+    if (!cost || typeof cost !== "object") return undefined;
+    const item = cost as Record<string, unknown>;
+    if (
+      !["estimated", "partial", "unpriced", "unknown"].includes(String(item.state)) ||
+      typeof item.sandboxSeconds !== "number" ||
+      !Number.isFinite(item.sandboxSeconds) ||
+      item.sandboxSeconds < 0 ||
+      typeof item.updatedAt !== "string" ||
+      !Number.isFinite(Date.parse(item.updatedAt))
+    )
+      return undefined;
+    if (
+      item.sandboxUsd !== undefined &&
+      (typeof item.sandboxUsd !== "number" ||
+        !Number.isFinite(item.sandboxUsd) ||
+        item.sandboxUsd < 0)
+    )
+      return undefined;
+    if (
+      item.modelUsd !== undefined &&
+      (typeof item.modelUsd !== "number" || !Number.isFinite(item.modelUsd) || item.modelUsd < 0)
+    )
+      return undefined;
+    return cost as TaskActivityDetail["cost"];
+  } catch {
+    return undefined;
+  }
 }
 
 /** Strips the per-attempt artifact reference so identical provider errors compare equal. */

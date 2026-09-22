@@ -10,11 +10,14 @@ import type {
   DiscoveryResult,
   TaskProgress,
 } from "../contracts.js";
+import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
+import { heartbeatCost } from "../site/batch-activity.js";
 import type { DiscoveryShardInput } from "../temporal/activities.js";
 
 type ExecutionSnapshot<T> =
-  | { state: "running"; progress?: TaskProgress }
+  | { state: "running"; progress?: TaskProgress; cost?: SandboxCostSnapshot }
   | { state: "completed"; result: T }
+  | { state: "cancelled" }
   | { state: "failed"; error: string };
 export interface BatchExecutions {
   shard(
@@ -64,11 +67,28 @@ export function batchExecutions(client: Client): BatchExecutions {
       handle = client.workflow.getHandle(id, description.runId);
       if (description.status.name === "COMPLETED")
         return { state: "completed", result: (await handle.result()) as T };
+      if (description.status.name === "CANCELLED") return { state: "cancelled" };
       if (description.status.name !== "RUNNING")
         return { state: "failed", error: `Workflow ${description.status.name.toLowerCase()}` };
-      if (!candidate) return { state: "running" };
+      const pending = client.workflowService
+        ? await client.workflowService
+            .describeWorkflowExecution({
+              namespace: client.options.namespace,
+              execution: { workflowId: id, runId: description.runId },
+            })
+            .then((value) => value.pendingActivities ?? [])
+            .catch(() => [])
+        : [];
+      const cost = pending
+        .map((activity) => heartbeatCost(activity.heartbeatDetails?.payloads?.[0]))
+        .find((value) => value !== undefined);
+      if (!candidate) return { state: "running", ...(cost ? { cost } : {}) };
       const progress = await handle.query<TaskProgress>("candidateStatus").catch(() => undefined);
-      return { state: "running", ...(progress ? { progress } : {}) };
+      return {
+        state: "running",
+        ...(progress ? { progress } : {}),
+        ...(cost ? { cost } : {}),
+      };
     });
   }
   return {

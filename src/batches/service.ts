@@ -3,6 +3,7 @@ import type { ArtifactStore } from "../artifacts.js";
 import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import { generationCost, sumLiveCosts } from "../managed/cost-status.js";
 import { createUsageStore } from "../managed/usage-store.js";
 import { liveBatchStatus, overlayCandidateActivity } from "../site/batch-activity.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../viewer/discovery.js";
@@ -70,9 +71,54 @@ export function createGenerationBatches(
     list: () => store.list(),
     async status(runId: string) {
       const batch = await store.read(runId);
-      const base = batch
+      let base = batch
         ? await overlayCandidateActivity(client, batchStatus(batch))
         : await liveBatchStatus(client, runId);
+      if (batch?.run.generation) {
+        const { settings } = batch.run.generation;
+        const orgId = batch.run.generation.orgId ?? batch.run.generation.ownerId;
+        const provider = batch.run.version.executionBackend;
+        const live = [
+          ...batch.shards.map((item) => (!item.result && !item.error ? item.cost : undefined)),
+          ...batch.candidates.map((item) =>
+            !item.result && !item.error
+              ? (base.activity?.[item.candidate.candidateId]?.cost ?? item.cost)
+              : undefined,
+          ),
+        ].filter((cost) => cost !== undefined);
+        const [total, ...shards] = await Promise.all([
+          usage.summary(runId, orgId),
+          ...batch.shards.map((shard) =>
+            usage.summary(runId, orgId, {
+              stage: `discover-${shard.input.wave}-${shard.input.shardIndex}`,
+            }),
+          ),
+        ]);
+        base = {
+          ...base,
+          cost: generationCost(total, provider, settings.authorModel, sumLiveCosts(live)),
+          ...(base.discovery
+            ? {
+                discovery: {
+                  ...base.discovery,
+                  ...(base.discovery.shards
+                    ? {
+                        shards: base.discovery.shards.map((shard, index) => ({
+                          ...shard,
+                          cost: generationCost(
+                            shards[index] ?? total,
+                            provider,
+                            settings.authorModel,
+                            batch.shards[index]?.cost,
+                          ),
+                        })),
+                      }
+                    : {}),
+                },
+              }
+            : {}),
+        };
+      }
       const listed = await loadDiscoveryShards(artifacts, runId);
       if (!listed.length && !base.discovery?.shards?.length) return base;
       return {

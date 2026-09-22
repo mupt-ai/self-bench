@@ -4,7 +4,15 @@ import { SearchInput, Select } from "../ui";
 import { STATE_LABEL } from "./state";
 
 export type Filter = "all" | TaskState;
-const FILTERS: Filter[] = ["all", "in_progress", "needs_review", "accepted", "rejected", "failed"];
+const FILTERS: Filter[] = [
+  "all",
+  "in_progress",
+  "needs_review",
+  "accepted",
+  "rejected",
+  "failed",
+  "cancelled",
+];
 
 export function TaskFilters({
   counts,

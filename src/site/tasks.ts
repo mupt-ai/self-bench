@@ -2,10 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
 import type { ArtifactStore } from "../artifacts.js";
 import type { User, UserStore } from "../auth/users.js";
+import type { GenerationCost } from "../contracts.js";
+import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import { candidateArtifacts } from "../viewer/artifacts.js";
 import type { RepoStore } from "./repo-store.js";
 import { TaskNotFoundError } from "./task-deletion.js";
-import { refreshInProgress, type TaskStatusSource } from "./task-status.js";
+import { refreshInProgress, refreshTask, type TaskStatusSource } from "./task-status.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "./task-store.js";
 import { tenantFor } from "./tenant.js";
 
@@ -16,11 +18,17 @@ const ORG = "([A-Za-z0-9_.-]+)";
 const countsRoute = new RegExp(`^/api/orgs/${ORG}/task-counts$`);
 const tasksRoute = new RegExp(`^/api/orgs/${ORG}/repos/${REPO}/tasks$`);
 const taskRoute = new RegExp(
-  `^/api/orgs/${ORG}/repos/${REPO}/tasks/${RUN_ID}/${TASK_ID}(?:/(review|artifacts))?$`,
+  `^/api/orgs/${ORG}/repos/${REPO}/tasks/${RUN_ID}/${TASK_ID}(?:/(review|artifacts|cancel))?$`,
 );
 
 /** How a task stands after the pipeline and, when present, a human. */
-export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
+export type TaskState =
+  | "needs_review"
+  | "accepted"
+  | "rejected"
+  | "failed"
+  | "cancelled"
+  | "in_progress";
 
 export interface TaskListItem {
   readonly runId: string;
@@ -40,6 +48,7 @@ export interface TaskListItem {
   readonly workflowId?: string;
   readonly startedBy?: string;
   readonly startedAt?: string;
+  readonly cost?: GenerationCost;
 }
 
 export interface TaskRoutesOptions {
@@ -49,6 +58,12 @@ export interface TaskRoutesOptions {
   readonly artifacts: ArtifactStore;
   /** When present, in-progress rows are brought up to date with their workflows on each list. */
   readonly status?: TaskStatusSource;
+  readonly cost?: (
+    runId: string,
+    orgId: number,
+    candidateId: string,
+    live?: SandboxCostSnapshot,
+  ) => Promise<GenerationCost | undefined>;
 }
 
 export interface TaskRoutes {
@@ -86,19 +101,41 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       if (!match?.[1] || !match[2] || !match[3]) return false;
       const tenant = await tenantFor(users, user, match[1]);
       const repo = tenant ? await repos.find(tenant.id, `${match[2]}/${match[3]}`) : undefined;
-      if (!repo) {
+      if (!repo || !tenant) {
         sendJson(response, 404, { error: "repository is not connected here" });
         return true;
       }
       if (tasksRoute.test(url.pathname) && request.method === "GET") {
         if (status) await refreshInProgress({ tasks, artifacts, status, repo });
-        sendJson(response, 200, { tasks: (await tasks.listForRepo(repo.id)).map(taskItem) });
+        sendJson(response, 200, {
+          tasks: (await tasks.listForRepo(repo.id)).map((task) => taskItem(task)),
+        });
         return true;
       }
       const runId = match[4];
       const taskId = match[5];
       const leaf = match[6];
       if (!runId || !taskId) return false;
+      if (leaf === "cancel" && request.method === "POST") {
+        const found = await tasks.find(repo.id, runId, taskId);
+        if (!found) {
+          sendJson(response, 404, { error: "task not found" });
+          return true;
+        }
+        if (found.pipelineStatus !== "in_progress") {
+          sendJson(response, 200, {
+            state: found.stage === "cancelled" ? "confirmed" : "finished",
+          });
+          return true;
+        }
+        if (!found.workflowId || !status?.cancel) {
+          sendJson(response, 409, { error: "Cancellation is unavailable for this task." });
+          return true;
+        }
+        await status.cancel(found.workflowId);
+        sendJson(response, 202, { state: "requested" });
+        return true;
+      }
       if (!leaf && request.method === "DELETE") {
         const result = await tasks.deleteTask(repo.id, runId, taskId);
         if (result === "active") {
@@ -125,12 +162,21 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       }
       if (!leaf) {
         let task = found;
+        let liveCost: SandboxCostSnapshot | undefined;
         if (status) {
-          await refreshInProgress({ tasks, artifacts, status, repo });
-          // The refresh may have renamed the task; re-read it by its stable candidate id.
-          task = (await tasks.find(repo.id, runId, found.candidateId)) ?? found;
+          if (found.pipelineStatus === "in_progress") {
+            const refreshed = await refreshTask({ tasks, artifacts, status, repo }, found);
+            task = refreshed.task;
+            if (refreshed.snapshot?.kind === "running") liveCost = refreshed.snapshot.cost;
+          } else {
+            await refreshInProgress({ tasks, artifacts, status, repo });
+            task = (await tasks.find(repo.id, runId, taskId)) ?? found;
+          }
         }
-        sendJson(response, 200, { task: taskItem(task) });
+        const cost = options.cost
+          ? await options.cost(runId, tenant.id, task.candidateId, liveCost)
+          : undefined;
+        sendJson(response, 200, { task: taskItem(task, cost) });
         return true;
       }
       const task = found;
@@ -165,8 +211,12 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
 
 /** Pipeline verdict first, then the human's: a review overrides whatever the run concluded. */
 export function taskState(
-  task: Pick<TaskRecord, "pipelineStatus"> & { review?: { decision: ReviewDecision } },
+  task: Pick<TaskRecord, "pipelineStatus"> & {
+    stage?: string;
+    review?: { decision: ReviewDecision };
+  },
 ): TaskState {
+  if (task.stage === "cancelled") return "cancelled";
   if (task.review) return task.review.decision === "approve" ? "accepted" : "rejected";
   switch (task.pipelineStatus) {
     case "accepted":
@@ -180,7 +230,7 @@ export function taskState(
   }
 }
 
-export function taskItem(task: TaskRecord): TaskListItem {
+export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem {
   const reason = task.reason;
   return {
     runId: task.runId,
@@ -199,6 +249,7 @@ export function taskItem(task: TaskRecord): TaskListItem {
     ...(task.workflowId ? { workflowId: task.workflowId } : {}),
     ...(task.startedBy ? { startedBy: task.startedBy } : {}),
     ...(task.startedAt ? { startedAt: task.startedAt } : {}),
+    ...(cost ? { cost } : {}),
   };
 }
 

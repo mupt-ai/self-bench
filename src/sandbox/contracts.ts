@@ -40,6 +40,15 @@ interface SandboxProgress {
   readonly bytes: number;
 }
 
+/** Provider/accounting-backed cost observed while one sandbox request is running. */
+export interface SandboxCostSnapshot {
+  readonly state: "estimated" | "partial" | "unpriced" | "unknown";
+  readonly sandboxSeconds: number;
+  readonly sandboxUsd?: number;
+  readonly modelUsd?: number;
+  readonly updatedAt: string;
+}
+
 export interface SandboxExecResult {
   readonly exitCode: number;
   readonly stdout: string;
@@ -59,6 +68,7 @@ export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: SandboxProgress) => void;
   readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
+  readonly onCost?: (cost: SandboxCostSnapshot) => void;
   /**
    * Runs concurrently with the main command once it has started; `exited` aborts when the command
    * finishes. run() waits for it to settle before collecting outputs and rejects if it throws.

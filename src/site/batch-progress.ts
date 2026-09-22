@@ -1,5 +1,6 @@
 import type { ArtifactStore } from "../artifacts.js";
 import type { RunPhase, RunStatus } from "../contracts.js";
+import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { ConnectedRepo } from "./repo-store.js";
 import type { TaskStore } from "./task-store.js";
 import { syncRun } from "./task-sync.js";
@@ -14,6 +15,7 @@ export interface TaskActivityDetail {
   lastFailure?: string;
   /** ISO time of the next retry, while the activity waits on backoff. */
   nextAttemptAt?: string;
+  cost?: SandboxCostSnapshot;
 }
 export type BatchStatus = Pick<RunStatus, "runId" | "phase"> &
   Partial<Omit<RunStatus, "runId" | "phase">> & {
@@ -39,6 +41,8 @@ export async function syncBatchProgress(options: {
     const { reason: _previousReason, ...metadata } = previous ?? {};
     const settled = ["accepted", "rejected", "infrastructure_failed"].includes(progress.status);
     const interrupted = !settled && terminalBatch(status.phase);
+    const cancelled =
+      progress.reason === "Generation cancelled." || (interrupted && status.phase === "cancelled");
     await tasks.upsertMany([
       {
         ...metadata,
@@ -47,7 +51,7 @@ export async function syncBatchProgress(options: {
         candidateId: progress.candidateId,
         taskId: progress.taskId,
         difficulty: progress.difficulty,
-        stage: progress.stage ?? progress.status,
+        stage: progress.stage ?? (cancelled ? "cancelled" : progress.status),
         ...(progress.round !== undefined ? { round: progress.round } : {}),
         pipelineStatus:
           progress.status === "accepted"
@@ -60,7 +64,10 @@ export async function syncBatchProgress(options: {
         ...(progress.reason
           ? { reason: progress.reason }
           : interrupted
-            ? { reason: `Batch ${status.phase}` }
+            ? {
+                reason:
+                  status.phase === "cancelled" ? "Generation cancelled." : `Batch ${status.phase}`,
+              }
             : {}),
       },
     ]);
@@ -70,10 +77,13 @@ export async function syncBatchProgress(options: {
     for (const task of await tasks.listForRepo(repo.id)) {
       if (task.runId !== status.runId || task.pipelineStatus !== "in_progress") continue;
       await tasks.progress(task.id, {
-        stage: task.stage,
+        stage: status.phase === "cancelled" ? "cancelled" : task.stage,
         ...(task.round !== undefined ? { round: task.round } : {}),
         pipelineStatus: "infrastructure_failed",
-        reason: status.error ?? `Batch ${status.phase} without a task verdict`,
+        reason:
+          status.phase === "cancelled"
+            ? "Generation cancelled."
+            : (status.error ?? `Batch ${status.phase} without a task verdict`),
       });
     }
   }

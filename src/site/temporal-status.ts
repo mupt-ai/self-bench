@@ -5,6 +5,7 @@ import type {
   TaskProgress,
 } from "../contracts.js";
 import { candidateStatusQuery, selfBenchAuthorWorkflow } from "../temporal/workflow.js";
+import { heartbeatCost } from "./batch-activity.js";
 import type { WorkflowStarter } from "./task-start.js";
 import type { TaskStatusSource, WorkflowSnapshot } from "./task-status.js";
 
@@ -30,13 +31,29 @@ export function temporalStatus(client: Client): TaskStatusSource {
       const description = await handle.describe();
       const status = description.status.name;
       if (status === "RUNNING") {
+        const pending = client.workflowService
+          ? await client.workflowService
+              .describeWorkflowExecution({
+                namespace: client.options.namespace,
+                execution: { workflowId, runId: description.runId },
+              })
+              .then((value) => value.pendingActivities ?? [])
+              .catch(() => [])
+          : [];
+        const cost = pending
+          .map((activity) => heartbeatCost(activity.heartbeatDetails?.payloads?.[0]))
+          .find((value) => value !== undefined);
         const progress = await Promise.race([
           handle.query<TaskProgress>(candidateStatusQuery),
           new Promise<undefined>((resolve) =>
             setTimeout(() => resolve(undefined), QUERY_TIMEOUT_MS),
           ),
         ]).catch(() => undefined);
-        return { kind: "running", ...(progress ? { progress } : {}) };
+        return {
+          kind: "running",
+          ...(progress ? { progress } : {}),
+          ...(cost ? { cost } : {}),
+        };
       }
       if (status === "COMPLETED") {
         const result = (await handle.result()) as CandidateWorkflowResult;
@@ -45,8 +62,17 @@ export function temporalStatus(client: Client): TaskStatusSource {
       if (status === "FAILED" || status === "TIMED_OUT" || status === "TERMINATED") {
         return { kind: "failed", status };
       }
-      if (status === "CANCELLED") return { kind: "failed", status };
+      if (status === "CANCELLED") return { kind: "cancelled" };
       return { kind: "unknown" };
+    },
+    async cancel(workflowId) {
+      const handle = client.workflow.getHandle(workflowId);
+      try {
+        await handle.cancel();
+      } catch (error) {
+        const status = await handle.describe().then((value) => value.status.name);
+        if (status === "RUNNING") throw error;
+      }
     },
   };
 }
