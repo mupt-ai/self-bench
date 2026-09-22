@@ -55,7 +55,6 @@ export interface ReviewRoundInput {
   readonly report: ArtifactRef;
   readonly round: number;
   readonly session?: ArtifactRef;
-  readonly verifyCallsUsed?: number;
 }
 
 export interface ExportInput {

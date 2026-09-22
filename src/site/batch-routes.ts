@@ -34,8 +34,6 @@ export interface BatchRoutesOptions {
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
   records?: EncryptedRecordStore;
-  /** Whether this deployment offers managed model access and sandboxes. */
-  managed?: boolean;
   billing?: BillingStore;
 }
 export interface BatchRoutes {

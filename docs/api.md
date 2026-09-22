@@ -117,9 +117,9 @@ Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/catalog` | The model catalog with reference pricing: `version`, `models`, `sandboxes`, `customHosts` |
+| `GET` | `/catalog` | The model catalog with reference pricing: `version`, `models`, `sandboxes`, `customHosts`, and the available managed model/sandbox offer |
 | `GET` | `/comparisons` | Comparisons of this repository with live status (`comparisons`) |
-| `POST` | `/comparisons` | Body per `comparisonSchema` in `src/evaluation/comparisons.ts`: `id` (uuid), `tasks`, `models` (`catalogId`, `credentialId`, `harnesses`, optional `customModel` and `thinking`), `sandbox`, and the sandbox credential. Creates and dispatches the comparison; `202`. A `submissionError` field means some runs were not confirmed and should be resumed |
+| `POST` | `/comparisons` | Body per `comparisonSchema` in `src/evaluation/comparisons.ts`: `id` (uuid), `tasks`, `models` (`catalogId`, `credentialId`, `harnesses`, optional `customModel` and `thinking`), `sandbox`, the sandbox credential, and optional `skipCompleted`. Managed deployments also accept the catalog-advertised managed credential choices. Creates and dispatches the comparison; `202`. A `submissionError` field means some runs were not confirmed and should be resumed |
 | `GET` | `/comparisons/:id` | One comparison with per-model run status |
 | `POST` | `/comparisons/:id/resume` | Re-dispatches unconfirmed runs with the same run ids; `202` |
 | `*` | `/credentials…` | Alias of the organization credential routes below |
