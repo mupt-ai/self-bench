@@ -59,6 +59,35 @@ describe("what an api key may reach", () => {
     const repo = await createRepoStore(server.db).find(org?.id ?? 0, "Mupt-AI/self-bench");
     if (!repo) throw new Error("repo missing");
     const taskStore = createTaskStore(server.db);
+    await artifacts.put(
+      "runs/batch-repair/authoring/repair/definition.json",
+      Buffer.from(
+        JSON.stringify({
+          taskId: "repaired-task",
+          difficulty: "easy",
+          repo: "Mupt-AI/self-bench",
+          testCommand: "bun test",
+          failToPass: ["repair"],
+          passToPass: [],
+          testPaths: ["tests"],
+          workdir: ".",
+          sourcePr: 7,
+          sourceUrl: "https://github.com/Mupt-AI/self-bench/pull/7",
+          baseCommit: "a".repeat(40),
+        }),
+      ),
+      "application/json",
+    );
+    await artifacts.put(
+      "runs/batch-repair/verification/repair/round-1/result.json",
+      Buffer.from(JSON.stringify({ kind: "accepted" })),
+      "application/json",
+    );
+    await artifacts.put(
+      "runs/batch-repair/verification/repair/round-1/attempt-1/verify-1/harbor-task.tar.gz",
+      Buffer.from("tar"),
+      "application/gzip",
+    );
     await taskStore.upsertMany([
       {
         repoId: repo.id,
@@ -69,6 +98,15 @@ describe("what an api key may reach", () => {
         stage: "accepted",
         difficulty: "easy",
         bundleKey: "runs/batch-one/bundle.tar.gz",
+      },
+      {
+        repoId: repo.id,
+        runId: "batch-repair",
+        candidateId: "repair",
+        taskId: "old-task-id",
+        pipelineStatus: "accepted",
+        stage: "accepted",
+        difficulty: "easy",
       },
     ]);
     await taskStore.insertStarted({
@@ -83,6 +121,15 @@ describe("what an api key may reach", () => {
       startedBy: user?.id ?? 0,
     });
     const path = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench/tasks/batch-one";
+    const repaired = await server.request(
+      "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench/tasks/batch-repair/old-task-id",
+      { headers: keyHeaders },
+    );
+    expect(repaired.status).toBe(200);
+    expect((await repaired.json()).task).toMatchObject({
+      candidateId: "repair",
+      taskId: "repaired-task",
+    });
     const byTask = await server.request(`${path}/alpha-task`, { headers: keyHeaders });
     expect(byTask.status).toBe(200);
     expect(await byTask.json()).toMatchObject({

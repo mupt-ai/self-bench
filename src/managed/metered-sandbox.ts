@@ -64,6 +64,7 @@ async function runMetered(
             ? "unpriced"
             : "unknown";
     runOptions?.onCost?.({
+      stage: request.stage,
       state,
       sandboxSeconds: seconds,
       ...(pricedSandbox

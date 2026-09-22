@@ -57,7 +57,7 @@ export function TaskPage() {
 
   const onReview = (updated: TaskItem) => setTask(updated);
 
-  if (error) {
+  if (error && task === undefined) {
     return (
       <PageFrame>
         <Notice>{error}</Notice>
@@ -107,6 +107,11 @@ export function TaskPage() {
           <div className="mt-1">
             <LiveTaskState task={task} org={org.login} fullName={fullName} />
           </div>
+          {error && (
+            <Notice tone="info" className="mt-3">
+              Task status could not be refreshed. Showing the last update. {error}
+            </Notice>
+          )}
           {task.pipelineStatus === "infrastructure_failed" &&
           (task.reason || task.reasonSummary) ? (
             <div className="mt-3 text-sm leading-6 text-muted-foreground">

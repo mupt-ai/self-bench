@@ -12,6 +12,7 @@ test("heartbeat costs decode valid Temporal payloads and reject unsafe values", 
   const payload = defaultPayloadConverter.toPayload({
     detail: "authoring",
     cost: {
+      stage: "author-candidate-r1",
       state: "partial",
       sandboxSeconds: 12,
       modelUsd: 0.25,
@@ -19,6 +20,7 @@ test("heartbeat costs decode valid Temporal payloads and reject unsafe values", 
     },
   });
   expect(heartbeatCost(payload)).toEqual({
+    stage: "author-candidate-r1",
     state: "partial",
     sandboxSeconds: 12,
     modelUsd: 0.25,

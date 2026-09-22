@@ -2,13 +2,22 @@ import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
 import type { BatchExecutions } from "./temporal.js";
 import type { GenerationBatch } from "./types.js";
 
+function cancellationSettled(
+  items: readonly { result?: unknown; error?: string; cancelled?: boolean }[],
+): boolean {
+  return items.every(
+    (item) => item.result !== undefined || item.error !== undefined || item.cancelled === true,
+  );
+}
+
 /** One durable application sweep; SDK outages throw so the persisted plan remains retryable. */
 export async function advanceBatch(
   batch: GenerationBatch,
   executions: BatchExecutions,
 ): Promise<void> {
   if (batch.phase === "cancelling") {
-    const pending = [...batch.shards, ...batch.candidates].filter((item) => !item.cancelled);
+    const all = [...batch.shards, ...batch.candidates];
+    const pending = all.filter((item) => !item.result && !item.cancelled);
     const item = pending[(batch.cursor ?? 0) % Math.max(1, pending.length)];
     batch.cursor = (batch.cursor ?? 0) + 1;
     if (
@@ -18,8 +27,7 @@ export async function advanceBatch(
       item.cancelled = true;
       delete item.cost;
     }
-    if ([...batch.shards, ...batch.candidates].every((item) => item.cancelled))
-      batch.phase = "cancelled";
+    if (cancellationSettled(all)) batch.phase = "cancelled";
     return;
   }
   if (batch.phase === "discovering") {

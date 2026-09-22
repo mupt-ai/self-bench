@@ -1,9 +1,10 @@
 import type { RunStatus } from "../contracts.js";
-import { generationCost, sumLiveCosts } from "../managed/cost-status.js";
+import { generationCost } from "../managed/cost-status.js";
 import type { RunUsageSummary } from "../managed/usage.js";
 import type { GenerationBatch } from "./types.js";
 
 const EMPTY_USAGE: RunUsageSummary = {
+  settledStages: [],
   modelCostUsd: undefined,
   sandboxCostUsd: undefined,
   managedCostUsd: 0,
@@ -16,28 +17,30 @@ export function batchStatus(batch: GenerationBatch): RunStatus {
   const provider = batch.run.version.executionBackend;
   const model = batch.run.generation?.settings.authorModel ?? batch.run.authoring.model;
   const tasks = batch.candidates.map((item) =>
-    item.cancelled
-      ? {
-          candidateId: item.candidate.candidateId,
-          taskId: item.candidate.candidateId,
-          difficulty: item.candidate.difficulty,
-          status: "infrastructure_failed" as const,
-          reason: item.error ?? "Generation cancelled.",
-        }
-      : item.error
+    item.result
+      ? item.result.progress
+      : item.cancelled
         ? {
             candidateId: item.candidate.candidateId,
             taskId: item.candidate.candidateId,
             difficulty: item.candidate.difficulty,
             status: "infrastructure_failed" as const,
-            reason: item.error,
+            reason: item.error ?? "Generation cancelled.",
           }
-        : (item.progress ?? {
-            candidateId: item.candidate.candidateId,
-            taskId: item.candidate.candidateId,
-            difficulty: item.candidate.difficulty,
-            status: "queued" as const,
-          }),
+        : item.error
+          ? {
+              candidateId: item.candidate.candidateId,
+              taskId: item.candidate.candidateId,
+              difficulty: item.candidate.difficulty,
+              status: "infrastructure_failed" as const,
+              reason: item.error,
+            }
+          : (item.progress ?? {
+              candidateId: item.candidate.candidateId,
+              taskId: item.candidate.candidateId,
+              difficulty: item.candidate.difficulty,
+              status: "queued" as const,
+            }),
   );
   return {
     runId: batch.run.runId,
@@ -54,11 +57,9 @@ export function batchStatus(batch: GenerationBatch): RunStatus {
       EMPTY_USAGE,
       provider,
       model,
-      sumLiveCosts(
-        [...batch.shards, ...batch.candidates]
-          .map((item) => (!item.result && !item.error ? item.cost : undefined))
-          .filter((cost) => cost !== undefined),
-      ),
+      [...batch.shards, ...batch.candidates]
+        .map((item) => (!item.result ? item.cost : undefined))
+        .filter((cost) => cost !== undefined),
     ),
     discovery: {
       wave: 0,

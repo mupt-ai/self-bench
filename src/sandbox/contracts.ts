@@ -42,6 +42,7 @@ interface SandboxProgress {
 
 /** Provider/accounting-backed cost observed while one sandbox request is running. */
 export interface SandboxCostSnapshot {
+  readonly stage: string;
   readonly state: "estimated" | "partial" | "unpriced" | "unknown";
   readonly sandboxSeconds: number;
   readonly sandboxUsd?: number;

@@ -95,22 +95,36 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
                 like(generationUsage.stage, `verify-${candidatePattern}-r%`),
               )
             : undefined;
-      const [row] = await db
-        .select({
-          modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
-          sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
-          managedCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}) filter (where ${generationUsage.managed}) + coalesce(sum(${generationUsage.sandboxCostUsd}) filter (where ${generationUsage.managed}), 0), 0)::float8`,
-          modelInputTokens: sql<number>`coalesce(sum(${generationUsage.inputTokens}), 0)::int`,
-          modelOutputTokens: sql<number>`coalesce(sum(${generationUsage.outputTokens}), 0)::int`,
-          modelCacheReadTokens: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}), 0)::int`,
-          modelCacheWriteTokens: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}), 0)::int`,
-          tokens: sql<number>`coalesce(sum(${generationUsage.inputTokens} + ${generationUsage.outputTokens} + ${generationUsage.cacheReadTokens} + ${generationUsage.cacheWriteTokens}), 0)::int`,
-          sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
-        })
-        .from(generationUsage)
-        .where(and(eq(generationUsage.runId, runId), eq(generationUsage.orgId, orgId), stageScope));
+      const predicate = and(
+        eq(generationUsage.runId, runId),
+        eq(generationUsage.orgId, orgId),
+        stageScope,
+      );
+      const [[row], settledStages] = await Promise.all([
+        db
+          .select({
+            modelCostUsd: sql<number | null>`sum(${generationUsage.modelCostUsd})::float8`,
+            sandboxCostUsd: sql<number | null>`sum(${generationUsage.sandboxCostUsd})::float8`,
+            managedCostUsd: sql<number>`coalesce(sum(${generationUsage.modelCostUsd}) filter (where ${generationUsage.managed}) + coalesce(sum(${generationUsage.sandboxCostUsd}) filter (where ${generationUsage.managed}), 0), 0)::float8`,
+            modelInputTokens: sql<number>`coalesce(sum(${generationUsage.inputTokens}), 0)::int`,
+            modelOutputTokens: sql<number>`coalesce(sum(${generationUsage.outputTokens}), 0)::int`,
+            modelCacheReadTokens: sql<number>`coalesce(sum(${generationUsage.cacheReadTokens}), 0)::int`,
+            modelCacheWriteTokens: sql<number>`coalesce(sum(${generationUsage.cacheWriteTokens}), 0)::int`,
+            tokens: sql<number>`coalesce(sum(${generationUsage.inputTokens} + ${generationUsage.outputTokens} + ${generationUsage.cacheReadTokens} + ${generationUsage.cacheWriteTokens}), 0)::int`,
+            sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}), 0)::int`,
+          })
+          .from(generationUsage)
+          .where(predicate),
+        db
+          .select({ stage: generationUsage.stage })
+          .from(generationUsage)
+          .where(predicate)
+          .groupBy(generationUsage.stage),
+      ]);
+      const settledStageNames = settledStages.map(({ stage }) => stage).sort();
       return row
         ? {
+            settledStages: settledStageNames,
             modelCostUsd: row.modelCostUsd ?? undefined,
             sandboxCostUsd: row.sandboxCostUsd ?? undefined,
             managedCostUsd: row.managedCostUsd,
@@ -124,6 +138,7 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
             sandboxSeconds: row.sandboxSeconds,
           }
         : {
+            settledStages: settledStageNames,
             modelCostUsd: undefined,
             sandboxCostUsd: undefined,
             managedCostUsd: 0,

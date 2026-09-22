@@ -5,16 +5,18 @@ import type { RunUsageSummary } from "./usage.js";
 
 export type CostedSandboxProvider = "docker" | "e2b" | "modal" | "vercel";
 
-/** Combines settled ledger rows with the current activity heartbeat without inventing rates. */
+/** Combines settled ledger rows with heartbeats that have not already reached the ledger. */
 export function generationCost(
   summary: RunUsageSummary,
   provider: CostedSandboxProvider | undefined,
   model: string | undefined,
-  live?: SandboxCostSnapshot,
+  live?: SandboxCostSnapshot | readonly SandboxCostSnapshot[],
 ): GenerationCost {
-  const sandboxSeconds = summary.sandboxSeconds + (live?.sandboxSeconds ?? 0);
-  const sandboxUsd = addKnown(summary.sandboxCostUsd, live?.sandboxUsd);
-  const modelUsd = addKnown(summary.modelCostUsd, live?.modelUsd);
+  const pending = liveCostsAfterSettlement(summary, live);
+  const sandboxSeconds =
+    summary.sandboxSeconds + pending.reduce((sum, cost) => sum + cost.sandboxSeconds, 0);
+  const sandboxUsd = addKnown(summary.sandboxCostUsd, sumKnown(pending, "sandboxUsd"));
+  const modelUsd = addKnown(summary.modelCostUsd, sumKnown(pending, "modelUsd"));
   const sandboxPriced = provider === "e2b";
   const modelPriced = model !== undefined && generationModelPricing(model) !== undefined;
   const state =
@@ -31,36 +33,33 @@ export function generationCost(
     ...(sandboxUsd !== undefined ? { sandboxUsd } : {}),
     ...(modelUsd !== undefined ? { modelUsd } : {}),
     sandboxSeconds,
-    updatedAt: live?.updatedAt ?? new Date().toISOString(),
+    updatedAt: latestTimestamp(pending) ?? new Date().toISOString(),
   };
 }
 
-export function sumLiveCosts(
+function liveCostsAfterSettlement(
+  summary: RunUsageSummary,
+  live: SandboxCostSnapshot | readonly SandboxCostSnapshot[] | undefined,
+): readonly SandboxCostSnapshot[] {
+  const costs = live ? (Array.isArray(live) ? live : [live]) : [];
+  const settled = new Set(summary.settledStages);
+  return costs.filter((cost) => !settled.has(cost.stage));
+}
+
+function sumKnown(
   costs: readonly SandboxCostSnapshot[],
-): SandboxCostSnapshot | undefined {
-  if (!costs.length) return undefined;
-  const sumKnown = (field: "sandboxUsd" | "modelUsd") =>
-    costs.some((cost) => cost[field] !== undefined)
-      ? costs.reduce((sum, cost) => sum + (cost[field] ?? 0), 0)
-      : undefined;
-  const sandboxUsd = sumKnown("sandboxUsd");
-  const modelUsd = sumKnown("modelUsd");
-  return {
-    state: costs.every((cost) => cost.state === "estimated")
-      ? "estimated"
-      : costs.every((cost) => cost.state === "unknown")
-        ? "unknown"
-        : costs.every((cost) => cost.state === "unpriced")
-          ? "unpriced"
-          : "partial",
-    sandboxSeconds: costs.reduce((sum, cost) => sum + cost.sandboxSeconds, 0),
-    ...(sandboxUsd !== undefined ? { sandboxUsd } : {}),
-    ...(modelUsd !== undefined ? { modelUsd } : {}),
-    updatedAt: costs.reduce(
-      (latest, cost) => (cost.updatedAt > latest ? cost.updatedAt : latest),
-      costs[0]?.updatedAt ?? new Date(0).toISOString(),
-    ),
-  };
+  field: "sandboxUsd" | "modelUsd",
+): number | undefined {
+  return costs.some((cost) => cost[field] !== undefined)
+    ? costs.reduce((sum, cost) => sum + (cost[field] ?? 0), 0)
+    : undefined;
+}
+
+function latestTimestamp(costs: readonly SandboxCostSnapshot[]): string | undefined {
+  return costs.reduce<string | undefined>(
+    (latest, cost) => (!latest || cost.updatedAt > latest ? cost.updatedAt : latest),
+    undefined,
+  );
 }
 
 function addKnown(settled: number | undefined, live: number | undefined): number | undefined {

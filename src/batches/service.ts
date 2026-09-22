@@ -3,7 +3,7 @@ import type { ArtifactStore } from "../artifacts.js";
 import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
-import { generationCost, sumLiveCosts } from "../managed/cost-status.js";
+import { generationCost } from "../managed/cost-status.js";
 import { createUsageStore } from "../managed/usage-store.js";
 import { liveBatchStatus, overlayCandidateActivity } from "../site/batch-activity.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../viewer/discovery.js";
@@ -79,9 +79,9 @@ export function createGenerationBatches(
         const orgId = batch.run.generation.orgId ?? batch.run.generation.ownerId;
         const provider = batch.run.version.executionBackend;
         const live = [
-          ...batch.shards.map((item) => (!item.result && !item.error ? item.cost : undefined)),
+          ...batch.shards.map((item) => (!item.result ? item.cost : undefined)),
           ...batch.candidates.map((item) =>
-            !item.result && !item.error
+            !item.result
               ? (base.activity?.[item.candidate.candidateId]?.cost ?? item.cost)
               : undefined,
           ),
@@ -96,7 +96,7 @@ export function createGenerationBatches(
         ]);
         base = {
           ...base,
-          cost: generationCost(total, provider, settings.authorModel, sumLiveCosts(live)),
+          cost: generationCost(total, provider, settings.authorModel, live),
           ...(base.discovery
             ? {
                 discovery: {

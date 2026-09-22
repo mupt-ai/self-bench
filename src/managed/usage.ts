@@ -30,6 +30,8 @@ export interface StageUsage {
 export type UsageRow = StageUsage & { readonly runId: string; readonly orgId: number };
 
 export interface RunUsageSummary {
+  /** Stages already written to the ledger. Their heartbeats must not be added again. */
+  readonly settledStages: readonly string[];
   /** Undefined when no model price was available. */
   readonly modelCostUsd: number | undefined;
   /** Undefined when the sandbox provider has no published compute price. */

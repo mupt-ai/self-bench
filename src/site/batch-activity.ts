@@ -100,6 +100,8 @@ export function heartbeatCost(payload: unknown): TaskActivityDetail["cost"] {
     if (!cost || typeof cost !== "object") return undefined;
     const item = cost as Record<string, unknown>;
     if (
+      typeof item.stage !== "string" ||
+      item.stage.length === 0 ||
       !["estimated", "partial", "unpriced", "unknown"].includes(String(item.state)) ||
       typeof item.sandboxSeconds !== "number" ||
       !Number.isFinite(item.sandboxSeconds) ||

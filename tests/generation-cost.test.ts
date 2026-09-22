@@ -11,6 +11,7 @@ import type {
 import { testDatabase } from "./support/site-fixture.js";
 
 const emptyUsage = {
+  settledStages: [],
   modelCostUsd: undefined,
   sandboxCostUsd: undefined,
   managedCostUsd: 0,
@@ -33,6 +34,7 @@ test("generation costs distinguish priced, partial, unpriced, and unknown provid
   }
   expect(
     generationCost(emptyUsage, "vercel", "gpt-5.6-sol", {
+      stage: "author-candidate-r1",
       state: "partial",
       sandboxSeconds: 7,
       modelUsd: 0.02,
@@ -50,6 +52,7 @@ test("generation costs distinguish priced, partial, unpriced, and unknown provid
       "e2b",
       "gpt-5.6-sol",
       {
+        stage: "author-candidate-r1",
         state: "estimated",
         sandboxSeconds: 5,
         sandboxUsd: 0.01,
@@ -64,6 +67,39 @@ test("generation costs distinguish priced, partial, unpriced, and unknown provid
     modelUsd: 0.05,
     sandboxSeconds: 15,
     updatedAt: now,
+  });
+});
+
+test("a settled stage excludes its heartbeat even when the heartbeat is newer", () => {
+  const settled = {
+    ...emptyUsage,
+    settledStages: ["author-candidate-r1"],
+    modelCostUsd: 0.03,
+    sandboxCostUsd: 0.04,
+    sandboxSeconds: 10,
+  };
+  const heartbeat = {
+    stage: "author-candidate-r1",
+    state: "estimated" as const,
+    sandboxSeconds: 10,
+    sandboxUsd: 0.04,
+    modelUsd: 0.03,
+    updatedAt: "2026-01-01T00:00:11.000Z",
+  };
+  const nextStage = {
+    ...heartbeat,
+    stage: "verify-candidate-r1",
+    sandboxSeconds: 2,
+    sandboxUsd: 0.01,
+    modelUsd: 0.02,
+  };
+  expect(generationCost(settled, "e2b", "gpt-5.6-sol", [heartbeat, nextStage])).toEqual({
+    state: "estimated",
+    usd: 0.1,
+    sandboxUsd: 0.05,
+    modelUsd: 0.05,
+    sandboxSeconds: 12,
+    updatedAt: nextStage.updatedAt,
   });
 });
 
@@ -115,6 +151,7 @@ test("metering emits live provider-aware costs and records final usage on comple
 
   expect(snapshots.length).toBeGreaterThanOrEqual(3);
   expect(snapshots.at(-1)).toMatchObject({
+    stage: "author-candidate-r1",
     state: "estimated",
     sandboxSeconds: 1,
   });
@@ -155,6 +192,7 @@ test("usage summaries enforce tenant and candidate stage boundaries", async () =
     expect(await usage.summary("shared-run", 1, { candidateId: "c_1" })).toMatchObject({
       modelCostUsd: 3,
       sandboxSeconds: 2,
+      settledStages: ["author-c_1-r1", "verify-c_1-r2"],
     });
     expect(await usage.summary("shared-run", 2, { candidateId: "c_1" })).toMatchObject({
       modelCostUsd: 8,

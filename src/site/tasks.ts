@@ -170,7 +170,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
             if (refreshed.snapshot?.kind === "running") liveCost = refreshed.snapshot.cost;
           } else {
             await refreshInProgress({ tasks, artifacts, status, repo });
-            task = (await tasks.find(repo.id, runId, taskId)) ?? found;
+            task = (await tasks.find(repo.id, runId, found.candidateId)) ?? found;
           }
         }
         const cost = options.cost
