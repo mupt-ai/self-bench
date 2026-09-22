@@ -21,16 +21,6 @@ export function createActivities(
 ): SelfBenchActivities {
   const store = createArtifactStore(config.artifact);
   const sandbox = createSandboxExecutor(config.execution);
-  const runReviewRoundActivity: SelfBenchActivities["runReviewRound"] = (input) =>
-    withGenerationRuntime(
-      config,
-      records,
-      input.run,
-      "verifier",
-      sandbox,
-      (executor, _environment, run) => runReviewRound(store, executor, { ...input, run }),
-      usage,
-    );
   return {
     collectRunProvenance: (run) =>
       withGenerationRuntime(
@@ -75,9 +65,16 @@ export function createActivities(
         (_executor, environment, run) => compileAndVerify(store, environment, { ...input, run }),
         usage,
       ),
-    runReviewRound: runReviewRoundActivity,
-    // Temporal histories may still schedule the pre-rename activity type.
-    runVerifierRound: runReviewRoundActivity,
+    runReviewRound: (input) =>
+      withGenerationRuntime(
+        config,
+        records,
+        input.run,
+        "verifier",
+        sandbox,
+        (executor, _environment, run) => runReviewRound(store, executor, { ...input, run }),
+        usage,
+      ),
     buildExport: (input) =>
       withGenerationRuntime(
         config,
