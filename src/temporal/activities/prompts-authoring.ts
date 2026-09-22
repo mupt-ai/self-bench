@@ -38,12 +38,20 @@ const reviewerFeedback = (feedback?: string): string =>
     ? `# Read-Only Verifier Suggestions\n\n${feedback}\n\nAddress these suggestions in the deliverable, but do not add behavior beyond the authentic request.`
     : "";
 
-const roundInstructions = (
-  round: number,
-  resumed: boolean,
-): string => `# Round ${round} of ${MAX_AUTHORING_ROUNDS}
+const freshSandbox = `This is a fresh sandbox. The repository was re-cloned and /work/task is empty. Do not edit files from a previous round; recreate the deliverable from the report and any reviewer suggestions.`;
 
-${resumed ? "Read the previous report and rewrite the deliverable to address its failures or the reviewer's suggestions." : "Create the deliverable from the authentic request."} You have a fresh budget of ${AUTHOR_VERIFY_BUDGET} verify calls in this authoring round. Use verify until the task is green, then call submit_task exactly once and stop. If the budget is exhausted, submit your best deliverable; a red worker result starts the next round.`;
+const roundInstructions = (round: number, resumed: boolean, feedback?: string): string => {
+  const action = resumed
+    ? feedback
+      ? "Apply the reviewer's suggestions to a new deliverable. The mechanical report is context for the latest tested draft, not a failed check."
+      : "Read the previous report and rewrite the deliverable to address its failures."
+    : "Create the deliverable from the authentic request.";
+  return joinPromptSections(
+    `# Round ${round} of ${MAX_AUTHORING_ROUNDS}`,
+    resumed ? freshSandbox : "",
+    `${action} You have a fresh budget of ${AUTHOR_VERIFY_BUDGET} verify calls in this authoring round. Use verify until the task is green, then call submit_task exactly once and stop. If the budget is exhausted, submit your best deliverable; a red worker result starts the next round.`,
+  );
+};
 
 const verifyInstructions = `${VERIFY}\n\nEach authoring round has ${AUTHOR_VERIFY_BUDGET} verify calls. A successful submission matching its last green verify lets the worker reuse that report.`;
 
@@ -56,7 +64,7 @@ export function authoringPrompt(run: RunRequest, candidate: Candidate, feedback?
     ENVIRONMENT_CONTRACT,
     DELIVERABLE,
     SUBMISSION,
-    roundInstructions(1, false),
+    roundInstructions(1, false, feedback),
     verifyInstructions,
   );
 }
@@ -71,7 +79,7 @@ export function authoringResumePrompt(
     : "Your previous submission did not pass mechanical verification. Address the failures in the report.";
   return joinPromptSections(
     `# ${reason}`,
-    roundInstructions(round, true),
+    roundInstructions(round, true, feedback),
     DELIVERABLE,
     SUBMISSION,
     verifyInstructions,

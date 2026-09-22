@@ -12,8 +12,15 @@ test("review feedback is the reason to revise even when mechanical gates are gre
   const prompt = authoringResumePrompt(2, "Overall GREEN", "Remove private helper coupling");
   expect(prompt).toContain("read-only reviewer requested revisions");
   expect(prompt).toContain("Remove private helper coupling");
+  expect(prompt).toContain("not a failed check");
+  expect(prompt).toContain("fresh sandbox");
   expect(prompt).not.toContain("previous submission did not pass");
-  expect(authoringResumePrompt(2, "RED")).toContain("did not pass mechanical verification");
+  expect(prompt).not.toContain("address its failures");
+  const failed = authoringResumePrompt(2, "RED");
+  expect(failed).toContain("did not pass mechanical verification");
+  expect(failed).toContain("address its failures");
+  expect(failed).toContain("fresh sandbox");
+  expect(authoringPrompt(run, candidate("prompt", 1))).not.toContain("fresh sandbox");
 });
 
 test("prompt sections stay explicit and ordered", () => {
