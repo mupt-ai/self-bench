@@ -39,7 +39,7 @@ export function LoginPage() {
       />
       <header className="shrink-0 border-b border-border">
         <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
-          <Lockup />
+          <Lockup compact />
           <ThemeToggle />
         </div>
       </header>

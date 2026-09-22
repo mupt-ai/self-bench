@@ -31,8 +31,8 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain(">API Keys</span>");
   expect(html).toContain('aria-label="Billing"');
   expect(html).toContain(">Billing</span>");
-  expect(html).toContain('aria-label="SELF-BENCH Home"');
-  expect(html).toContain(">SELF-BENCH</a>");
+  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
+  expect(html).toContain("by dari.dev</span>");
 });
 
 test("sidebar supports the compact icon mode", () => {

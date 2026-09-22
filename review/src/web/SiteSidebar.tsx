@@ -34,7 +34,7 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
       <SidebarHeader className="flex h-16 shrink-0 flex-row items-center border-b border-border px-5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
-        <Lockup compact showName={!collapsed} className={collapsed ? "text-sm" : undefined} />
+        <Lockup compact showName={!collapsed} />
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label="Organization Navigation">
