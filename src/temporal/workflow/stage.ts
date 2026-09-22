@@ -7,7 +7,6 @@ const MAX_CONSECUTIVE_INFRASTRUCTURE_ROUNDS = 3;
 export interface StageContext {
   readonly activitySet: SelfBenchActivities;
   readonly run: RunRequest;
-  readonly legacyAuthoringRoundProtocol: boolean;
   readonly update: (patch: Partial<TaskProgress>) => void;
 }
 

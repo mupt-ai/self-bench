@@ -5,7 +5,6 @@ import {
   executeChild,
   getExternalWorkflowHandle,
   ParentClosePolicy,
-  patched,
   setHandler,
   workflowInfo,
 } from "@temporalio/workflow";
@@ -18,11 +17,7 @@ import type {
   WorkflowRunInput,
 } from "../contracts.js";
 import { workflowActivities } from "./workflow/activity-proxies.js";
-import {
-  AUTHORING_ROUND_PROTOCOL_PATCH,
-  executeCandidate,
-  initialProgress,
-} from "./workflow/candidate.js";
+import { executeCandidate, initialProgress } from "./workflow/candidate.js";
 import { executeRun } from "./workflow/run.js";
 
 export const statusQuery = defineQuery<RunStatus>("status");
@@ -65,18 +60,12 @@ export async function selfBenchCandidateWorkflow(
   let current = initialProgress(input.candidate);
   setHandler(candidateStatusQuery, () => current);
   const signals: Promise<void>[] = [];
-  const legacyAuthoringRoundProtocol = !patched(AUTHORING_ROUND_PROTOCOL_PATCH);
-  const result = await executeCandidate(
-    input,
-    workflowActivities,
-    (progress) => {
-      current = progress;
-      if (parentHandle) {
-        signals.push(parentHandle.signal(candidateProgressSignal, progress).catch(() => undefined));
-      }
-    },
-    { legacyAuthoringRoundProtocol },
-  );
+  const result = await executeCandidate(input, workflowActivities, (progress) => {
+    current = progress;
+    if (parentHandle) {
+      signals.push(parentHandle.signal(candidateProgressSignal, progress).catch(() => undefined));
+    }
+  });
   await Promise.all(signals);
   return result;
 }
@@ -97,14 +86,9 @@ export async function selfBenchAuthorWorkflow(
 ): Promise<CandidateWorkflowResult> {
   let current = initialProgress(input.candidate);
   setHandler(candidateStatusQuery, () => current);
-  return executeCandidate(
-    input,
-    workflowActivities,
-    (progress) => {
-      current = progress;
-    },
-    { legacyAuthoringRoundProtocol: !patched(AUTHORING_ROUND_PROTOCOL_PATCH) },
-  );
+  return executeCandidate(input, workflowActivities, (progress) => {
+    current = progress;
+  });
 }
 
 /** Cancellation tombstone: reserves a never-started dispatch ID without any paid activities. */
