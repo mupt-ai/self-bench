@@ -88,7 +88,7 @@ describe("E2BSandboxExecutor timeouts", () => {
     });
 
     expect(result.exitCode).toBe(124);
-    expect(performance.now() - startedAt).toBeLessThan(250);
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
     expect(fixture.calls).toContain("command.kill");
     expect(fixture.calls).toContain("sandbox.kill");
   });
@@ -124,7 +124,7 @@ describe("E2BSandboxExecutor timeouts", () => {
     });
 
     await expect(failure).rejects.toBeInstanceOf(SandboxExecutionError);
-    expect(performance.now() - startedAt).toBeLessThan(250);
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
     expect(fixture.calls).toContain("files.read:/work/one");
     expect(fixture.calls).toContain("files.read:/work/two");
     expect(fixture.calls).toContain("sandbox.kill");

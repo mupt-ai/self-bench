@@ -6,7 +6,7 @@ const verifyStageSchema = z.enum(["authoring", "verification"]);
 export type VerifyStage = z.infer<typeof verifyStageSchema>;
 
 export const MAX_AUTHORING_ROUNDS = 3;
-/** In-session `verify` calls per agent session (carried across fallback rounds). */
+/** In-session `verify` calls available to each authoring round. */
 export const AUTHOR_VERIFY_BUDGET = 5;
 
 const harborRewardsSchema = z.record(z.string(), z.number());

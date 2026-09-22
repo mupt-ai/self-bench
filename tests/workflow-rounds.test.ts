@@ -152,6 +152,38 @@ describe("SelfBench workflow rounds", () => {
     expect(result.acceptedTaskIds).toEqual(["fixable-task"]);
     expect(calls).toEqual(["author:1", "checks:1", "review:1", "author:2", "checks:2", "review:2"]);
   });
+  test("numbers reviews sequentially when a draft fails mechanical checks between them", async () => {
+    const activities = acceptingActivities([candidate("review-numbers", 1)]);
+    const calls: string[] = [];
+    const author = activities.runAuthoringRound;
+    activities.runAuthoringRound = async (input) => {
+      calls.push(`author:${input.round}`);
+      return author(input);
+    };
+    activities.compileAndVerify = async ({ task, stage, round }) =>
+      round === 2
+        ? {
+            report: redReport(stage, round, task.taskId, { oracle: true }),
+            reportRef: ref("file:///red-2"),
+          }
+        : greenOutcome(task, stage, round);
+    activities.runVerifierRound = async ({ round }) => {
+      calls.push(`review:${round}`);
+      return round === 1
+        ? {
+            kind: "suggestions",
+            session: ref("file:///v1"),
+            summary: "Fix coupling",
+            suggestions: "Exercise public behavior",
+          }
+        : { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
+    };
+
+    const result = await executeRun(run, activities);
+
+    expect(result.acceptedTaskIds).toEqual(["review-numbers-task"]);
+    expect(calls).toEqual(["author:1", "review:1", "author:2", "author:3", "review:2"]);
+  });
   test("never reviews a revised draft while mechanical checks are red", async () => {
     const activities = acceptingActivities([candidate("red-revision", 1)]);
     const reviews: number[] = [];
