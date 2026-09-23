@@ -6,10 +6,8 @@ import type {
   SandboxRunOptions,
   StartedSandbox,
 } from "../../src/sandbox/contracts.js";
-import {
-  HOBBY_VERCEL_TIMEOUT_CAP_MS,
-  TimeoutCappedSandboxExecutor,
-} from "../../src/sandbox/timeout.js";
+import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/vercel/timeout-cap.js";
+import { TimeoutCappedSandboxExecutor } from "../../src/sandbox/timeout.js";
 
 class RecordingExecutor implements SandboxExecutor {
   readonly requests: SandboxRequest[] = [];

@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig, loadWorkerConfig } from "../src/contracts/config/index.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
-  HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_E2B_TIMEOUT_CAP_MS,
+} from "../src/sandbox/providers/e2b/timeout-cap.js";
+import {
+  HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox/timeout.js";
+} from "../src/sandbox/providers/vercel/timeout-cap.js";
 
 const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 

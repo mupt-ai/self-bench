@@ -4,8 +4,9 @@ import {
   normalizeE2BDomain,
   normalizeE2BTemplateReference,
 } from "../../sandbox/providers/e2b/template.js";
+import { e2bTimeoutCap } from "../../sandbox/providers/e2b/timeout-cap.js";
+import { vercelTimeoutCap } from "../../sandbox/providers/vercel/timeout-cap.js";
 import { sandboxDockerfileReference } from "../../sandbox/runtime-dockerfile.js";
-import { e2bTimeoutCap, vercelTimeoutCap } from "../../sandbox/timeout.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
