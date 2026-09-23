@@ -1,7 +1,4 @@
-import {
-  type EncryptedRecordStore,
-  RecordStoreError,
-} from "../../src/evaluation/encrypted-records.js";
+import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 
 export class MemoryRecords implements EncryptedRecordStore {
   private entries = new Map<string, { value: unknown; version: number }>();

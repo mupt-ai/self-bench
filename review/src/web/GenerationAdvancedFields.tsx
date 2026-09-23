@@ -4,7 +4,7 @@ import {
   HOSTED_HARBOR_ENVIRONMENTS,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-} from "../../../src/config/providers";
+} from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import { generationModelLabel } from "../../../src/generation/models";
 import {

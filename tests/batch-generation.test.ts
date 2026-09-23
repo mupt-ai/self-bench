@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
-import { withExecutionEnvironment } from "../src/config/execution-environment.js";
-import { loadWorkerConfig } from "../src/config/index.js";
+import { withExecutionEnvironment } from "../src/contracts/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { createActivities } from "../src/generation/activities.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { withGenerationRuntime } from "../src/generation/runtime.js";
-import { githubToken } from "../src/github/token.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
+import { githubToken } from "../src/third_party/github/token.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 

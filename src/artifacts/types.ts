@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import type { ArtifactRef } from "../contracts/index.js";
-import type { ArtifactEntry } from "../runs/types.js";
+import type { ArtifactEntry } from "../generation/runs/types.js";
 
 export type { ArtifactEntry };
 

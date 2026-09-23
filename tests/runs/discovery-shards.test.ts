@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { listDiscoveryShards, mergeDiscoveryShards } from "../../src/runs/discovery-shards.js";
+import {
+  listDiscoveryShards,
+  mergeDiscoveryShards,
+} from "../../src/generation/runs/discovery-shards.js";
 
 const runId = "batch-abc";
 const key = (path: string) => ({ key: `runs/${runId}/discovery/${path}` });

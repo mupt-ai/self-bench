@@ -1,5 +1,5 @@
+import { type EncryptedRecordStore, RecordStoreError } from "../db/encrypted-records.js";
 import type { CatalogProvider, HostedSandbox } from "./catalog.js";
-import { type EncryptedRecordStore, RecordStoreError } from "./encrypted-records.js";
 import type { EvaluationInput } from "./types.js";
 
 export interface CredentialInfo {

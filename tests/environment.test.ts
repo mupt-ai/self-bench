@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type { TaskEnvironment } from "../src/contracts/index.js";
 import {
   assertEnvironmentEvidence,
   assertEnvironmentPolicy,
   isPlaceholderSecretValue,
-} from "../src/checks/environment-policy.js";
-import type { TaskEnvironment } from "../src/contracts/index.js";
+} from "../src/generation/checks/environment-policy.js";
 
 const environment: TaskEnvironment = {
   schemaVersion: 1,

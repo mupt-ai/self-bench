@@ -1,6 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { ApplicationFailure } from "@temporalio/common";
-import type { HarborJobResult } from "../src/harbor/results.js";
+import type { HarborJobResult } from "../src/harnesses/harbor/results.js";
 import * as processes from "../src/lib/process.js";
 import {
   cleanupFixture,

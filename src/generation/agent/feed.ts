@@ -1,5 +1,5 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { PiEventFeed } from "../../pi/event-feed.js";
+import { PiEventFeed } from "../../harnesses/pi/event-feed.js";
 import type { SandboxRunOptions } from "../../sandbox/index.js";
 
 /** Capture Pi's native stdout events; publish immutable, bounded snapshots for the UI. */

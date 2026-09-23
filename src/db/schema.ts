@@ -181,7 +181,7 @@ export const apiKeys = pgTable(
 /** Application-owned batch bookkeeping, not a Temporal parent execution. */
 export const generationBatches = pgTable("generation_batches", {
   runId: text("run_id").primaryKey(),
-  state: jsonb("state").$type<import("../batches/types.js").GenerationBatch>().notNull(),
+  state: jsonb("state").$type<import("../generation/batches/types.js").GenerationBatch>().notNull(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
 

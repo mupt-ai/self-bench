@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = new URL("../", import.meta.url);
-const output = new URL("../dist/config/build-metadata.js", import.meta.url);
+const output = new URL("../dist/contracts/config/build-metadata.js", import.meta.url);
 const configuredCommit = process.env.SELFBENCH_BUILD_COMMIT;
 
 let commit = configuredCommit;

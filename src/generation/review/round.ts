@@ -6,8 +6,8 @@ import {
   reviewRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts/index.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
-import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi/session.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
+import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../harnesses/pi/session.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import {
   readAsset,

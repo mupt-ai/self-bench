@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { HARBOR_ENVIRONMENTS } from "../../src/config/providers.js";
+import { HARBOR_ENVIRONMENTS } from "../../src/contracts/config/providers.js";
 import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../../src/harbor/command.js";
+} from "../../src/harnesses/harbor/command.js";
 
 test("all Harbor providers share invocation policy without acquiring solver retry semantics in gates", () => {
   for (const environment of HARBOR_ENVIRONMENTS) {
@@ -59,7 +59,7 @@ test("process setup does not mutate or reinterpret already isolated credentials"
 });
 
 test("Docker packaging and the process policy pin the same Harbor version", async () => {
-  const { HARBOR_VERSION } = await import("../../src/harbor/command.js");
+  const { HARBOR_VERSION } = await import("../../src/harnesses/harbor/command.js");
   const dockerfile = await Bun.file(new URL("../../Dockerfile", import.meta.url)).text();
   expect(dockerfile.match(/^ARG HARBOR_VERSION=(.+)$/m)?.[1]).toBe(HARBOR_VERSION);
 });

@@ -1,6 +1,6 @@
-import type { CouplingEvidence } from "../../checks/coupling.js";
 import type { TaskDefinition, TaskEnvironment } from "../../contracts/index.js";
 import { joinPromptSections } from "../agent/prompt-sections.js";
+import type { CouplingEvidence } from "../checks/coupling.js";
 
 export interface ReviewPromptInput {
   readonly taskId: string;

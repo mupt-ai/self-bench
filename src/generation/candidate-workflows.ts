@@ -1,12 +1,12 @@
 import type { Client } from "@temporalio/client";
-import { heartbeatCost } from "../batches/activity.js";
 import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
   TaskProgress,
 } from "../contracts/index.js";
-import type { WorkflowStarter } from "../tasks/start.js";
-import type { TaskStatusSource, WorkflowSnapshot } from "../tasks/status.js";
+import { heartbeatCost } from "./batches/activity.js";
+import type { WorkflowStarter } from "./tasks/start.js";
+import type { TaskStatusSource, WorkflowSnapshot } from "./tasks/status.js";
 import { candidateStatusQuery, selfBenchAuthorWorkflow } from "./workflows.js";
 
 const QUERY_TIMEOUT_MS = 5_000;

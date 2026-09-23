@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
-import { generationSubscriptionAuth } from "../../src/codex/subscription.js";
 import {
   executionEnvironment,
   withExecutionEnvironment,
-} from "../../src/config/execution-environment.js";
+} from "../../src/contracts/config/execution-environment.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
 import { authoringRoundScript, reviewRoundScript } from "../../src/generation/agent/scripts.js";
 import {
@@ -12,8 +11,9 @@ import {
   saveGenerationRecords,
 } from "../../src/generation/credentials.js";
 import type { GenerationReference } from "../../src/generation/settings.js";
-import { githubToken } from "../../src/github/token.js";
-import { loadPiModelAuth } from "../../src/pi/model-auth.js";
+import { generationSubscriptionAuth } from "../../src/harnesses/codex/subscription.js";
+import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
+import { githubToken } from "../../src/third_party/github/token.js";
 import { codexAccess, codexAuth } from "../support/codex-auth.js";
 import { MemoryRecords } from "../support/evaluation-records.js";
 

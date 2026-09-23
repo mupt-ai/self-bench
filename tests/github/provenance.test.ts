@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { redactSecrets } from "../../src/lib/redact.js";
 import {
   assertProvenanceMatchesPullRequest,
   extractGitHubPullRequestProvenance,
-} from "../../src/github/provenance.js";
-import { redactSecrets } from "../../src/lib/redact.js";
+} from "../../src/third_party/github/provenance.js";
 
 describe("provenance sanitization", () => {
   test("redacts provider, GitHub, and database credentials", () => {

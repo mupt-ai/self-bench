@@ -1,4 +1,4 @@
-import type { AgentFeedEvent } from "../../../src/pi/agent-feed";
+import type { AgentFeedEvent } from "../../../src/harnesses/pi/agent-feed";
 
 const eventText = "max-w-[96ch] whitespace-pre-wrap wrap-anywhere text-foreground";
 const codeText = `${eventText} font-mono text-xs leading-5`;

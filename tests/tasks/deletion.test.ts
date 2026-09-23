@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createUserStore } from "../../src/auth/users.js";
+import { createRepoStore } from "../../src/db/repos.js";
 import { evaluationRecords, tasks } from "../../src/db/schema.js";
-import { createRepoStore } from "../../src/repos/store.js";
-import { createTaskStore, type TaskUpsert } from "../../src/tasks/store.js";
+import { createTaskStore, type TaskUpsert } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
 import { testAuthConfig, testDatabase } from "../support/site-fixture.js";
 
 test("task tombstones retain history, exclude all public reads and cannot be overwritten", async () => {

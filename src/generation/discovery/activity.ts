@@ -10,14 +10,14 @@ import {
   type DiscoveryResult,
   type RunRequest,
 } from "../../contracts/index.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
+import type { SandboxExecutor } from "../../sandbox/index.js";
 import {
   assertProvenanceMatchesPullRequest,
   type ProvenanceMessage,
-} from "../../github/provenance.js";
-import { assertPullRequestBelongsToRepository } from "../../github/repository.js";
-import { githubToken } from "../../github/token.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
-import type { SandboxExecutor } from "../../sandbox/index.js";
+} from "../../third_party/github/provenance.js";
+import { assertPullRequestBelongsToRepository } from "../../third_party/github/repository.js";
+import { githubToken } from "../../third_party/github/token.js";
 import {
   parseProvenance,
   readAsset,
@@ -90,7 +90,7 @@ export async function discoverCandidateShard(
     );
   } else {
     const [extension, piAuth, ghToken] = await Promise.all([
-      readAsset("src/pi/extensions/discovery.ts"),
+      readAsset("src/harnesses/pi/extensions/discovery.ts"),
       loadPiModelAuth(),
       githubToken(),
     ]);

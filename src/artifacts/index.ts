@@ -1,4 +1,4 @@
-import type { SelfBenchConfig } from "../config/index.js";
+import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { GcsArtifactStore } from "./gcs.js";
 import { LocalArtifactStore } from "./local.js";
 import type { ArtifactStore } from "./types.js";

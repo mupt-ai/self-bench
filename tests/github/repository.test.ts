@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertPullRequestBelongsToRepository } from "../../src/github/repository.js";
+import { assertPullRequestBelongsToRepository } from "../../src/third_party/github/repository.js";
 
 describe("GitHub repository boundaries", () => {
   test("accepts canonical pull request URLs for HTTPS and SSH remotes", () => {

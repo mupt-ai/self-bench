@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import authoringExtension from "../../../src/pi/extensions/authoring.js";
+import authoringExtension from "../../../src/harnesses/pi/extensions/authoring.js";
 
 interface RegisteredTool {
   name: string;

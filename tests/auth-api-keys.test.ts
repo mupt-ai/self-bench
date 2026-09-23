@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { API_KEY_PREFIX, createApiKeyStore, hashApiKey } from "../src/auth/api-keys.js";
-import { createUserStore } from "../src/auth/users.js";
+import { API_KEY_PREFIX, createApiKeyStore, hashApiKey } from "../src/db/api-keys.js";
 import { apiKeys } from "../src/db/schema.js";
+import { createUserStore } from "../src/db/users.js";
 import { mint, signedIn } from "./support/api-keys.js";
 import {
   type AuthServer,

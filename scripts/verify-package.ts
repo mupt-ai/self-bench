@@ -64,13 +64,13 @@ try {
     await readFile(join(installRoot, "node_modules", ".bin", name));
   }
   for (const asset of [
-    "dist/harbor/task/runtime/junit.py",
-    "dist/harbor/task/runtime/command.sh",
+    "dist/generation/harbor-task/runtime/junit.py",
+    "dist/generation/harbor-task/runtime/command.sh",
     "dist/runtime/junit.py",
     "dist/runtime/command.sh",
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
-    "dist/harbor/runtime/harbor_gateway.py",
+    "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
     "dist/sandbox-author.bundle.js",
@@ -83,13 +83,13 @@ try {
     await readFile(join(installedRoot, asset));
   }
   for (const asset of ["harbor_gateway.py"]) {
-    const source = join(root, "src/harbor/runtime", asset);
-    const packed = join(installedRoot, "dist/harbor/runtime", asset);
+    const source = join(root, "src/harnesses/harbor/runtime", asset);
+    const packed = join(installedRoot, "dist/harnesses/harbor/runtime", asset);
     if ((await digest(source)) !== (await digest(packed))) {
       throw new Error(`packed Harbor runtime asset differs from source: ${asset}`);
     }
   }
-  const runtimeModule = join(installedRoot, "dist/harbor/task/runtime-assets.js");
+  const runtimeModule = join(installedRoot, "dist/generation/harbor-task/runtime-assets.js");
   const assets = await run(
     "node",
     [
@@ -114,9 +114,9 @@ try {
     "docs/evaluations.md",
     "docs/operations.md",
     "docs/task-construction.md",
-    "src/pi/extensions/authoring.ts",
-    "src/pi/extensions/discovery.ts",
-    "src/pi/extensions/reviewer.ts",
+    "src/harnesses/pi/extensions/authoring.ts",
+    "src/harnesses/pi/extensions/discovery.ts",
+    "src/harnesses/pi/extensions/reviewer.ts",
   ]) {
     await readFile(join(installedRoot, asset));
   }

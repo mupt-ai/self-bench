@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { withAgentFeed } from "../../src/generation/agent/feed.js";
-import { agentFeedEvents } from "../../src/pi/agent-feed.js";
-import { PiEventFeed } from "../../src/pi/event-feed.js";
+import { agentFeedEvents } from "../../src/harnesses/pi/agent-feed.js";
+import { PiEventFeed } from "../../src/harnesses/pi/event-feed.js";
 
 const line = (event: unknown) => Buffer.from(`${JSON.stringify(event)}\n`);
 

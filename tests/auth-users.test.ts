@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createUserStore } from "../src/auth/users.js";
 import { orgMembers, orgs, users } from "../src/db/schema.js";
+import { createUserStore } from "../src/db/users.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 describe("user store", () => {

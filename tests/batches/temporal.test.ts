@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { type Client, WorkflowNotFoundError } from "@temporalio/client";
-import { batchExecutions } from "../../src/batches/temporal.js";
+import { batchExecutions } from "../../src/generation/batches/temporal.js";
 import { artifact, candidate, run } from "../support/workflow-fixture.js";
 
 function fixture() {

@@ -1,5 +1,5 @@
 import { E2B } from "e2b";
-import type { SelfBenchWorkerConfig } from "../../../config/index.js";
+import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { errorMessage } from "../../../lib/util.js";
 import { raceWithSignal } from "./lifecycle.js";
 

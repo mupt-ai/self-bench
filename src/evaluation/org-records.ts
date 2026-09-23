@@ -1,4 +1,4 @@
-import type { EncryptedRecordStore } from "./encrypted-records.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 
 /** Organization records never overlap legacy personal account or credential paths. */
 export function orgRecords(records: EncryptedRecordStore, orgId?: number): EncryptedRecordStore {

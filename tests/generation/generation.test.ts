@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadWorkerConfig } from "../../src/config/index.js";
+import { loadWorkerConfig } from "../../src/contracts/config/index.js";
 import { tasks as taskRows } from "../../src/db/schema.js";
+import { createTaskStore } from "../../src/db/tasks.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
 import { orgRecords } from "../../src/evaluation/org-records.js";
+import { managedOffer } from "../../src/generation/managed/generation.js";
 import { withGenerationRuntime } from "../../src/generation/runtime.js";
-import { managedOffer } from "../../src/managed/generation.js";
-import { loadPiModelAuth } from "../../src/pi/model-auth.js";
+import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
-import { createTaskStore } from "../../src/tasks/store.js";
 import { MemoryRecords } from "../support/evaluation-records.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";

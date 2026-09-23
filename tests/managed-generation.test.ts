@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
-import { withExecutionEnvironment } from "../src/config/execution-environment.js";
+import { withExecutionEnvironment } from "../src/contracts/config/execution-environment.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
+import { managedModelKey, managedOffer } from "../src/generation/managed/generation.js";
+import { meteredSandboxExecutor } from "../src/generation/managed/metered-sandbox.js";
+import { managedModelCostUsd, managedSandboxCostUsd } from "../src/generation/managed/pricing.js";
 import { generationModelRoute } from "../src/generation/models.js";
 import type { GenerationReference } from "../src/generation/settings.js";
 import { generationSettingsSchema } from "../src/generation/settings.js";
-import { managedModelKey, managedOffer } from "../src/managed/generation.js";
-import { meteredSandboxExecutor } from "../src/managed/metered-sandbox.js";
-import { managedModelCostUsd, managedSandboxCostUsd } from "../src/managed/pricing.js";
-import { loadPiModelAuth } from "../src/pi/model-auth.js";
+import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
 
 const managedSettings = {

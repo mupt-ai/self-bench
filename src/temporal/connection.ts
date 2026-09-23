@@ -1,6 +1,6 @@
 import { Connection } from "@temporalio/client";
 import { NativeConnection } from "@temporalio/worker";
-import type { SelfBenchConfig } from "../config/index.js";
+import type { SelfBenchConfig } from "../contracts/config/index.js";
 
 export async function connectTemporalClient(
   config: SelfBenchConfig["temporal"],

@@ -1,8 +1,6 @@
 import { CancelledFailure, Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { auditTaskDefinition } from "../../checks/audit.js";
-import { assertEnvironmentPolicy } from "../../checks/environment-policy.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import {
   type AuthoredTask,
   type TaskDefinition,
@@ -11,12 +9,14 @@ import {
   type VerifyReport,
   verifyReportSchema,
 } from "../../contracts/index.js";
-import { githubToken } from "../../github/token.js";
 import { errorMessage } from "../../lib/util.js";
 import { SandboxExecutionError } from "../../sandbox/contracts.js";
 import { submissionPatches } from "../../sandbox/submission.js";
+import { githubToken } from "../../third_party/github/token.js";
 import { activityLifetimeSignal, withActivityHeartbeats } from "../activity-runtime.js";
 import type { CompileAndVerifyInput } from "../activity-types.js";
+import { auditTaskDefinition } from "../checks/audit.js";
+import { assertEnvironmentPolicy } from "../checks/environment-policy.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { isGreen, renderVerifyReport } from "./report.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "./task-compiler.js";

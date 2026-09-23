@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { reviewRoundScript } from "../../../src/generation/agent/scripts.js";
 import { authoringResumePrompt } from "../../../src/generation/authoring/prompt.js";
-import reviewerExtension from "../../../src/pi/extensions/reviewer.js";
+import reviewerExtension from "../../../src/harnesses/pi/extensions/reviewer.js";
 
 test("reviewer exposes only verdict tools and records feedback without creating task files", async () => {
   const root = await mkdtemp(join(tmpdir(), "readonly-review-"));

@@ -1,0 +1,228 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "../../db/api-keys.js";
+import type { Org, User, UserStore } from "../../db/users.js";
+import {
+  authorizeUrl,
+  exchangeCode,
+  fetchOrgMemberships,
+  fetchProfile,
+  GitHubIdentityError,
+  GitHubOAuthError,
+  validateGitHubIdentity,
+} from "../../third_party/github/oauth.js";
+import { createOrgGate, OrgAccessError } from "../auth/allowed-orgs.js";
+import type { AuthConfig } from "../auth/config.js";
+import { clearCookie, parseCookies, sendRedirect, setCookie } from "../auth/cookies.js";
+import { constantTimeEqual, randomToken } from "../auth/crypto.js";
+import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../auth/session.js";
+import { bearerMatches, sendJson } from "../http.js";
+
+export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
+const STATE_TTL_SECONDS = 10 * 60;
+
+/** Why a sign-in attempt bounced back to /login; the page renders one line per code. */
+type LoginError = "state" | "denied" | "github" | "organization";
+
+export interface SiteAuthOptions {
+  readonly config: AuthConfig;
+  readonly users: UserStore;
+  /** When present, `Authorization: Bearer sbk_…` and `X-API-Key` resolve to their owner. */
+  readonly apiKeys?: ApiKeyStore;
+  readonly fetchImpl?: typeof fetch;
+  readonly now?: () => Date;
+}
+
+export interface SiteAuth {
+  /** Answers /auth/* and /api/me. True when the response has been sent. */
+  handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean>;
+  /**
+   * Resolves the caller: an API key first, else the session cookie (validated against GitHub).
+   * A matching CLI bearer is authorized separately. Throws ApiKeyError for an unknown key.
+   */
+  authenticate(request: IncomingMessage, apiToken?: string): Promise<User | undefined>;
+}
+
+export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
+  const { config, users } = options;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const now = options.now ?? (() => new Date());
+  const signer = createSessionSigner(config.sessionSecret, { now });
+  const secure = config.publicUrl.startsWith("https://");
+  const gate = createOrgGate({
+    githubApiUrl: config.githubApiUrl,
+    allowedOrgs: config.allowedOrgs,
+    fetchImpl,
+    now,
+  });
+
+  const authenticate = async (
+    request: IncomingMessage,
+    apiToken?: string,
+  ): Promise<User | undefined> => {
+    if (apiToken && bearerMatches(request, apiToken)) return undefined;
+    const secret = presentedApiKey(request.headers);
+    if (secret !== undefined) {
+      const owner = await options.apiKeys?.authenticate(secret);
+      if (!owner) throw new ApiKeyError();
+      return owner;
+    }
+    const claims = signer.verify(parseCookies(request)[SESSION_COOKIE]);
+    if (!claims) return undefined;
+    const token = await users.gitHubToken(claims.githubId);
+    if (!token) throw new GitHubIdentityError(401);
+    await validateGitHubIdentity(config, token, claims.githubId, fetchImpl);
+    if (!(await gate.permits(claims.githubId, token))) throw new OrgAccessError();
+    return users.findByGitHubId(claims.githubId);
+  };
+
+  const startSignIn = (response: ServerResponse): void => {
+    const state = randomToken();
+    setCookie(response, OAUTH_STATE_COOKIE, state, {
+      maxAgeSeconds: STATE_TTL_SECONDS,
+      secure,
+      path: "/auth",
+    });
+    sendRedirect(response, authorizeUrl(config, state));
+  };
+
+  const finishSignIn = async (
+    request: IncomingMessage,
+    url: URL,
+    response: ServerResponse,
+  ): Promise<void> => {
+    const expected = parseCookies(request)[OAUTH_STATE_COOKIE];
+    const state = url.searchParams.get("state") ?? "";
+    const code = url.searchParams.get("code") ?? "";
+    clearCookie(response, OAUTH_STATE_COOKIE, { secure, path: "/auth" });
+    if (!expected || !state || !constantTimeEqual(expected, state)) {
+      sendRedirect(response, loginPath("state"));
+      return;
+    }
+    if (!code) {
+      sendRedirect(response, loginPath("denied"));
+      return;
+    }
+    let signedIn: { user: User } | { error: LoginError };
+    try {
+      const { token, scopes } = await exchangeCode(config, code, fetchImpl);
+      const profile = await fetchProfile(config, token, fetchImpl);
+      const orgs = await fetchOrgMemberships(config, token, fetchImpl);
+      if (!gate.admits(profile.githubId, orgs)) {
+        console.warn(`Sign-in refused for ${profile.login}: no allowed organization membership`);
+        signedIn = { error: "organization" };
+      } else {
+        signedIn = { user: await users.upsert({ ...profile, token, scopes, orgs }) };
+      }
+    } catch (error) {
+      if (!(error instanceof GitHubOAuthError)) throw error;
+      console.error(`GitHub sign-in failed: ${error.message}`);
+      signedIn = { error: "github" };
+    }
+    if ("error" in signedIn) {
+      sendRedirect(response, loginPath(signedIn.error));
+      return;
+    }
+    setCookie(response, SESSION_COOKIE, signer.issue(signedIn.user.githubId), {
+      maxAgeSeconds: SESSION_TTL_SECONDS,
+      secure,
+    });
+    sendRedirect(response, "/");
+  };
+
+  return {
+    authenticate,
+    async handle(request, url, response) {
+      const method = request.method ?? "GET";
+      if (method === "GET" && url.pathname === "/auth/github") {
+        startSignIn(response);
+        return true;
+      }
+      if (method === "GET" && url.pathname === "/auth/github/callback") {
+        await finishSignIn(request, url, response);
+        return true;
+      }
+      if (method === "POST" && url.pathname === "/auth/logout") {
+        clearCookie(response, SESSION_COOKIE, { secure });
+        sendJson(response, 200, { ok: true });
+        return true;
+      }
+      if (method === "GET" && url.pathname === "/api/me") {
+        const user = await authenticate(request);
+        if (!user) {
+          sendJson(response, 401, { error: "sign in required" });
+          return true;
+        }
+        const orgs = await users.orgsFor(user.id);
+        sendJson(response, 200, {
+          user: publicUser(user),
+          orgs: orgs.map(publicOrg),
+          auth: user.apiKey ? "api-key" : "session",
+          ...(user.apiKey ? { apiKey: { name: user.apiKey.name, scope: user.apiKey.scope } } : {}),
+        });
+        return true;
+      }
+      return false;
+    },
+  };
+}
+
+/** The browser-facing shape of a user: display fields only. */
+function publicUser(user: User): {
+  login: string;
+  name?: string;
+  avatarUrl?: string;
+} {
+  return {
+    login: user.login,
+    ...(user.name ? { name: user.name } : {}),
+    ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+  };
+}
+
+/** The browser-facing shape of a tenant. */
+function publicOrg(org: Org): {
+  login: string;
+  kind: "org" | "user";
+  role: "admin" | "member";
+  name?: string;
+  avatarUrl?: string;
+} {
+  return {
+    login: org.login,
+    kind: org.kind,
+    role: org.role,
+    ...(org.name ? { name: org.name } : {}),
+    ...(org.avatarUrl ? { avatarUrl: org.avatarUrl } : {}),
+  };
+}
+
+function loginPath(error: LoginError): string {
+  return `/login?error=${error}`;
+}
+
+export function sendIdentityError(
+  response: ServerResponse,
+  error: unknown,
+  publicUrl: string,
+): boolean {
+  if (error instanceof ApiKeyError) {
+    response.setHeader("cache-control", "no-store");
+    sendJson(response, error.status, { error: error.message, code: "invalid_api_key" });
+    return true;
+  }
+  if (error instanceof OrgAccessError) {
+    clearCookie(response, SESSION_COOKIE, { secure: publicUrl.startsWith("https://") });
+    response.setHeader("cache-control", "no-store");
+    sendJson(response, 403, { error: error.message, code: "organization_required" });
+    return true;
+  }
+  if (!(error instanceof GitHubIdentityError)) return false;
+  if (error.status === 401)
+    clearCookie(response, SESSION_COOKIE, { secure: publicUrl.startsWith("https://") });
+  response.setHeader("cache-control", "no-store");
+  sendJson(response, error.status, {
+    error: error.message,
+    code: error.status === 401 ? "session_expired" : "github_identity_unavailable",
+  });
+  return true;
+}

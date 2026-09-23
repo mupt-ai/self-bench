@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { listMergedPullRequests } from "../../src/github/pull-requests.js";
+import { listMergedPullRequests } from "../../src/third_party/github/pull-requests.js";
 
 test("merged PR search uses the user's token and reports partial results at the search cap", async () => {
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {

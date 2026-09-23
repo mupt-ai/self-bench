@@ -1,5 +1,5 @@
-import { executionEnvironment } from "../../config/execution-environment.js";
-import { harborChildEnvironment } from "../../harbor/environment.js";
+import { executionEnvironment } from "../../contracts/config/execution-environment.js";
+import { harborChildEnvironment } from "../../harnesses/harbor/environment.js";
 import { type CommandResult, runCommand } from "../../lib/process.js";
 import { errorMessage, tail } from "../../lib/util.js";
 

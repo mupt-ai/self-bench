@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { harborChildEnvironment } from "../../src/harbor/environment.js";
+import { harborChildEnvironment } from "../../src/harnesses/harbor/environment.js";
 
 describe("Harbor child environment", () => {
   test("removes hosted sandbox control credentials while preserving selected Harbor credentials", () => {

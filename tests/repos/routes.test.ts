@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
-import { SESSION_COOKIE } from "../../src/auth/session.js";
-import { createUserStore } from "../../src/auth/users.js";
-import { createRepoStore } from "../../src/repos/store.js";
+import { SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createUserStore } from "../../src/db/users.js";
 import {
   type AuthServer,
   cookieValue,

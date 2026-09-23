@@ -3,18 +3,18 @@ import {
   DEFAULT_BILLING_UNIT_SCALE,
   loadBillingPolicy,
   loadStripeConfig,
-} from "../src/billing/config.js";
+} from "../src/generation/billing/config.js";
 import {
   BILLING_REQUIRED_CODE,
   eligibilityFrom,
   managedBillingRefusal,
-} from "../src/billing/eligibility.js";
+} from "../src/generation/billing/eligibility.js";
 import {
   modelBillableUnits,
   rateSnapshotSpec,
   sandboxBillableUnits,
   usdToUnits,
-} from "../src/billing/policy.js";
+} from "../src/generation/billing/policy.js";
 
 test("Stripe config is all-or-nothing and policy defaults are pass-through", () => {
   expect(loadStripeConfig({})).toBeUndefined();

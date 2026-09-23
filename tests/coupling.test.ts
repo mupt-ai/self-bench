@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { buildCouplingEvidence, discoverContractArtifacts } from "../src/checks/coupling.js";
+import {
+  buildCouplingEvidence,
+  discoverContractArtifacts,
+} from "../src/generation/checks/coupling.js";
 
 describe("coupling evidence", () => {
   test("rejects gold-only response fields asserted by held-out tests", () => {

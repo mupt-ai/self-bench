@@ -2,8 +2,8 @@
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { patchApplyCheck } from "../../checks/patch.js";
-import { type StaticCheckError, staticCheckSubmission } from "../../checks/static.js";
+import { patchApplyCheck } from "../../generation/checks/patch.js";
+import { type StaticCheckError, staticCheckSubmission } from "../../generation/checks/static.js";
 
 // usage: sandbox-check DEFINITION.json TEST.patch GOLD.patch OUTPUT_DIR
 //        [--repository DIR --base REF]

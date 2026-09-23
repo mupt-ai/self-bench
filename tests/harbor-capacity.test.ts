@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { loadWorkerConfig } from "../src/config/index.js";
-import { harborSlotsForMemory } from "../src/config/worker-capacity.js";
+import { loadWorkerConfig } from "../src/contracts/config/index.js";
+import { harborSlotsForMemory } from "../src/contracts/config/worker-capacity.js";
 import { harborTaskQueue } from "../src/temporal/task-queues.js";
 import { resolveHarborConcurrency } from "../src/temporal/worker-memory.js";
 

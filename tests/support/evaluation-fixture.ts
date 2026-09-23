@@ -2,20 +2,20 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { createSiteAuth } from "../../src/api/routes/auth.js";
+import { createEvaluationRoutes } from "../../src/api/routes/evaluations.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
-import { createSiteAuth } from "../../src/auth/routes.js";
-import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
-import { createUserStore } from "../../src/auth/users.js";
-import type { CodexLogins } from "../../src/codex/login.js";
+import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
 import {
   createEncryptedRecords,
   type EncryptedRecordStore,
-} from "../../src/evaluation/encrypted-records.js";
-import { createEvaluationRoutes } from "../../src/evaluation/routes.js";
+} from "../../src/db/encrypted-records.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
-import { createRepoStore } from "../../src/repos/store.js";
-import { createTaskStore } from "../../src/tasks/store.js";
+import type { CodexLogins } from "../../src/harnesses/codex/login.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {

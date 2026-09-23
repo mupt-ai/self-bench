@@ -1,7 +1,7 @@
 import { createArtifactStore } from "../artifacts/index.js";
-import type { SelfBenchWorkerConfig } from "../config/index.js";
-import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
-import type { UsageLedger } from "../managed/usage-store.js";
+import type { SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
+import type { UsageLedger } from "../db/usage.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
 import type { SelfBenchActivities } from "./activity-types.js";
 import { runAuthoringRound } from "./authoring/round.js";

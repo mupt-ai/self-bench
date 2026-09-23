@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import discoveryExtension from "../../../src/pi/extensions/discovery.js";
+import discoveryExtension from "../../../src/harnesses/pi/extensions/discovery.js";
 
 test("discovery rejects unsafe candidate IDs before writing so the agent can correct them", async () => {
   let tool!: { parameters: unknown; execute: unknown };

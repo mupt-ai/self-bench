@@ -2,19 +2,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { HarborEnvironment } from "../config/providers.js";
+import type { HarborEnvironment } from "../contracts/config/providers.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../harbor/command.js";
+} from "../harnesses/harbor/command.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";
-import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { gatewayTrial, solverAgent } from "./gateway-execution.js";
 import { type ThinkingLevel, thinkingArguments } from "./model-options.js";
 import {

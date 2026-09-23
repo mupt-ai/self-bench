@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SelfBenchConfig } from "../config/index.js";
+import type { SelfBenchConfig } from "../contracts/config/index.js";
 import {
   artifactRefSchema,
   MAX_CANDIDATES_PER_RUN,

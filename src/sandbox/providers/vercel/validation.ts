@@ -2,7 +2,7 @@ import {
   isDigestPinnedOciImage,
   type SelfBenchWorkerConfig,
   type VercelCredentials,
-} from "../../../config/index.js";
+} from "../../../contracts/config/index.js";
 import type { SandboxRequest } from "../../contracts.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 

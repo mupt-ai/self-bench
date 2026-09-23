@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { isDigestPinnedOciImage } from "../config/index.js";
+import { isDigestPinnedOciImage } from "../contracts/config/index.js";
 import {
   HOSTED_EXECUTION_BACKENDS,
   HOSTED_HARBOR_ENVIRONMENTS,
   type HostedExecutionBackend,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-} from "../config/providers.js";
+} from "../contracts/config/providers.js";
 import { normalizeE2BTemplateReference } from "../sandbox/providers/e2b/template.js";
 import { generationModels } from "./models.js";
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { matchingGreenVerify, submissionHash } from "../src/checks/submission-hash.js";
+import { matchingGreenVerify, submissionHash } from "../src/generation/checks/submission-hash.js";
 
 describe("submission hash", () => {
   test("is stable across object and pretty-printed JSON forms of the same definition", () => {

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { generationCost } from "../src/managed/cost-status.js";
-import { meteredSandboxExecutor } from "../src/managed/metered-sandbox.js";
-import { type StageUsage, withUsageLedger } from "../src/managed/usage.js";
-import { createUsageStore } from "../src/managed/usage-store.js";
+import { createUsageStore } from "../src/db/usage.js";
+import { generationCost } from "../src/generation/managed/cost-status.js";
+import { meteredSandboxExecutor } from "../src/generation/managed/metered-sandbox.js";
+import { type StageUsage, withUsageLedger } from "../src/generation/managed/usage.js";
 import type {
   SandboxCostSnapshot,
   SandboxExecutor,

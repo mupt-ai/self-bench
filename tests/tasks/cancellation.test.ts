@@ -3,12 +3,12 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
+import { SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
-import { SESSION_COOKIE } from "../../src/auth/session.js";
 import { repos } from "../../src/db/schema.js";
-import type { TaskStatusSource } from "../../src/tasks/status.js";
-import { createTaskStore } from "../../src/tasks/store.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
 import {
   type AuthServer,
   cookieValue,

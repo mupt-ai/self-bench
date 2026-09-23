@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { taskDefinitionSchema } from "../contracts/index.js";
-import { compileHarborTask } from "../harbor/task/compiler.js";
+import { compileHarborTask } from "../generation/harbor-task/compiler.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { withTemporaryDirectory } from "./temporary.js";

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { createCodexLogins } from "../../src/codex/login.js";
 import { listCredentials } from "../../src/evaluation/credentials.js";
 import { orgRecords } from "../../src/evaluation/org-records.js";
+import { createCodexLogins } from "../../src/harnesses/codex/login.js";
 import { evaluationServer } from "../support/evaluation-fixture.js";
 import { MemoryRecords } from "../support/evaluation-records.js";
 

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import { type CredentialInfo, readAccount, secretPath, updateAccount } from "./account.js";
-import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { getEvaluation } from "./store.js";
 
 const secret = z.string().min(1).max(24_000);

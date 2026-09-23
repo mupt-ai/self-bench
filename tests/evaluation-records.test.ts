@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { createEncryptedRecords } from "../src/db/encrypted-records.js";
 import { evaluationRecords } from "../src/db/schema.js";
-import { createEncryptedRecords } from "../src/evaluation/encrypted-records.js";
 import { testDatabase } from "./support/site-fixture.js";
 
 test("encrypted records persist without plaintext and reject wrong keys and tampering", async () => {

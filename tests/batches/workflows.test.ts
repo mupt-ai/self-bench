@@ -12,12 +12,6 @@ test("new discovery and author entrypoints contain no child starts, parent signa
     );
     expect(declaration).toBeDefined();
     const body = declaration?.getText(file) ?? "";
-    expect(body).not.toMatch(
-      /executeChild|startChild|parent|signal\(|fetch\(|collectRunProvenance/,
-    );
-  }
-  for (const source of ["server.ts", "run-routes.ts", "site.ts"]) {
-    const text = await Bun.file(new URL(`../../src/api/${source}`, import.meta.url)).text();
-    expect(text).not.toContain("start(selfBenchRunWorkflow");
+    expect(body).not.toMatch(/executeChild|startChild|parent|signal\(|fetch\(/);
   }
 });

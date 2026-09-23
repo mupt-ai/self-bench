@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { CouplingEvidence } from "../../checks/coupling.js";
 import type { AuthoredTask, TaskDefinition } from "../../contracts/index.js";
 import { taskOperation } from "../../sandbox/task-operation.js";
+import type { CouplingEvidence } from "../checks/coupling.js";
 export interface ReviewMaterial {
   readonly definition: TaskDefinition;
   readonly instruction: string;

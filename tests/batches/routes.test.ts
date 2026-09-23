@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { batchSubmissionSchema } from "../../src/batches/start.js";
-import { taskState } from "../../src/tasks/routes.js";
+import { taskState } from "../../src/api/routes/tasks.js";
+import { batchSubmissionSchema } from "../../src/generation/batches/start.js";
 import { fixture, ROOT } from "../support/batch-fixture.js";
 
 test("counts reject missing, fractional, negative, zero, excessive and client-supplied repository input", () => {

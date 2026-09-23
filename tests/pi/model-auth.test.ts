@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadPiModelAuth, loadPiSubscriptionAuth } from "../../src/pi/model-auth.js";
+import { loadPiModelAuth, loadPiSubscriptionAuth } from "../../src/harnesses/pi/model-auth.js";
 
 afterEach(() => {
   delete process.env.OPENAI_API_KEY;

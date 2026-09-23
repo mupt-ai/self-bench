@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { constantTimeEqual, createSecretBox, deriveKey, randomToken } from "../src/auth/crypto.js";
-import { createSessionSigner, SESSION_TTL_SECONDS } from "../src/auth/session.js";
+import {
+  constantTimeEqual,
+  createSecretBox,
+  deriveKey,
+  randomToken,
+} from "../src/api/auth/crypto.js";
+import { createSessionSigner, SESSION_TTL_SECONDS } from "../src/api/auth/session.js";
 
 const SECRET = "session-secret-for-tests-that-is-long-enough-000";
 

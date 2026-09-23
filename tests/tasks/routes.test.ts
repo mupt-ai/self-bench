@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
+import { taskState } from "../../src/api/routes/tasks.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
-import { SESSION_COOKIE } from "../../src/auth/session.js";
-import { clearArchivedListingCache } from "../../src/runs/archived.js";
-import { taskState } from "../../src/tasks/routes.js";
-import { sourcePullRequest } from "../../src/tasks/sync.js";
+import { clearArchivedListingCache } from "../../src/generation/runs/archived.js";
+import { sourcePullRequest } from "../../src/generation/tasks/sync.js";
 import { ingestTasks } from "../support/ingest-tasks.js";
 import {
   type AuthServer,

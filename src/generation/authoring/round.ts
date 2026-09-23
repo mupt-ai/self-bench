@@ -1,23 +1,22 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import {
   AUTHOR_VERIFY_BUDGET,
   type AuthoringRoundResult,
   authoringRoundResultSchema,
   verifyReportSchema,
 } from "../../contracts/index.js";
-import { githubToken } from "../../github/token.js";
-import { verifierRuntimeFiles } from "../../harbor/task/runtime-assets.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
 import {
   PI_RESUMED_SESSION_PATH,
   PI_SESSION_OUTPUT_PATH,
   sessionArtifactKey,
-} from "../../pi/session.js";
+} from "../../harnesses/pi/session.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
+import { githubToken } from "../../third_party/github/token.js";
 import {
   readAsset,
   runSandboxWithFailureLog,
@@ -36,6 +35,7 @@ import {
 } from "../agent/round-outcome.js";
 import { authoringRoundScript } from "../agent/scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, AUTHORING_TIMEOUT_MS } from "../agent/timeouts.js";
+import { verifierRuntimeFiles } from "../harbor-task/runtime-assets.js";
 import { renderVerifyReport } from "../verify/report.js";
 import { authoringPrompt, authoringResumePrompt } from "./prompt.js";
 import { SessionVerifier } from "./session-verify.js";

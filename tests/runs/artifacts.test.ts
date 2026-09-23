@@ -3,16 +3,16 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { runCommand } from "../../src/lib/process.js";
 import {
   archivedCandidates,
   clearArchivedListingCache,
   listArchivedRuns,
-} from "../../src/runs/archived.js";
-import { candidateArtifacts } from "../../src/runs/artifacts.js";
-import { clearBundleCache, expandBundle } from "../../src/runs/bundle.js";
-import { reasonSummary, testRunner } from "../../src/runs/candidate-summary.js";
-import { readTaskDirectory } from "../../src/runs/task-files.js";
+} from "../../src/generation/runs/archived.js";
+import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
+import { clearBundleCache, expandBundle } from "../../src/generation/runs/bundle.js";
+import { reasonSummary, testRunner } from "../../src/generation/runs/candidate-summary.js";
+import { readTaskDirectory } from "../../src/generation/runs/task-files.js";
+import { runCommand } from "../../src/lib/process.js";
 
 const roots: string[] = [];
 

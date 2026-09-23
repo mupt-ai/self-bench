@@ -6,7 +6,7 @@ import {
   liveBatchStatus,
   normalizeFailure,
   overlayCandidateActivity,
-} from "../../src/batches/activity.js";
+} from "../../src/generation/batches/activity.js";
 
 test("heartbeat costs decode valid Temporal payloads and reject unsafe values", () => {
   const payload = defaultPayloadConverter.toPayload({

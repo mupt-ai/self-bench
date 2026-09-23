@@ -1,18 +1,18 @@
 import { ApplicationFailure } from "@temporalio/common";
-import { executionEnvironment } from "../../config/execution-environment.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import { executionEnvironment } from "../../contracts/config/execution-environment.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../../harbor/command.js";
-import { harborChildEnvironment } from "../../harbor/environment.js";
+} from "../../harnesses/harbor/command.js";
+import { harborChildEnvironment } from "../../harnesses/harbor/environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
   readHarborJobResult,
-} from "../../harbor/results.js";
+} from "../../harnesses/harbor/results.js";
 import { runCommand } from "../../lib/process.js";
 import { errorMessage, isRecord } from "../../lib/util.js";
 

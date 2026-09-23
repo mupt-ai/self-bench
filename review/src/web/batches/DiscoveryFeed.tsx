@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DiscoveryShardProgress } from "../../../../src/contracts/index";
-import { type AgentFeedEvent, agentFeedEvents } from "../../../../src/pi/agent-feed";
+import { type AgentFeedEvent, agentFeedEvents } from "../../../../src/harnesses/pi/agent-feed";
 import { AgentTraceEvent } from "../../components/AgentTraceEvent";
 import { createApiClient } from "../../sources/types";
 

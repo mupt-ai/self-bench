@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import type { E2BCredentials } from "../src/config/index.js";
+import type { E2BCredentials } from "../src/contracts/config/index.js";
 import { buildSelfBenchE2BTemplate } from "../src/sandbox/providers/e2b/template-build.js";
 
 /** Builds Dockerfile.sandbox as an E2B template: bun scripts/build-e2b-template.ts --name NAME[:TAG]. */

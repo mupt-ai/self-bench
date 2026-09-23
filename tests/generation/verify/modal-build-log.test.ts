@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withExecutionEnvironment } from "../../../src/config/execution-environment.js";
+import { withExecutionEnvironment } from "../../../src/contracts/config/execution-environment.js";
 import {
   extractModalImageId,
   HARBOR_MODAL_APP,

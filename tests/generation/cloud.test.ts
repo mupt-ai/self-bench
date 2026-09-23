@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
-import { executionEnvironment } from "../../src/config/execution-environment.js";
-import { loadWorkerConfig } from "../../src/config/index.js";
-import { HOSTED_EXECUTION_BACKENDS } from "../../src/config/providers.js";
+import { executionEnvironment } from "../../src/contracts/config/execution-environment.js";
+import { loadWorkerConfig } from "../../src/contracts/config/index.js";
+import { HOSTED_EXECUTION_BACKENDS } from "../../src/contracts/config/providers.js";
 import { secretPath } from "../../src/evaluation/account.js";
 import {
   credentialSchema,
@@ -14,7 +14,7 @@ import {
   type GenerationSettings,
   generationSettingsSchema,
 } from "../../src/generation/settings.js";
-import { harborChildEnvironment } from "../../src/harbor/environment.js";
+import { harborChildEnvironment } from "../../src/harnesses/harbor/environment.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,

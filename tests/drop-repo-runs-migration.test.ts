@@ -6,10 +6,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
-import { createUserStore } from "../src/auth/users.js";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
-import { createTaskStore } from "../src/tasks/store.js";
+import { createTaskStore } from "../src/db/tasks.js";
+import { createUserStore } from "../src/db/users.js";
 import { testAuthConfig } from "./support/site-fixture.js";
 
 test("review migrations preserve batch ownership, tasks, reviews, tombstones and artifacts", async () => {

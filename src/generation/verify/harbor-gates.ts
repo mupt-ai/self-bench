@@ -2,11 +2,11 @@ import { copyFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CancelledFailure } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { executionEnvironment } from "../../config/execution-environment.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import { executionEnvironment } from "../../contracts/config/execution-environment.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts/index.js";
-import { harborChildEnvironment } from "../../harbor/environment.js";
-import type { HarborJobResult } from "../../harbor/results.js";
+import { harborChildEnvironment } from "../../harnesses/harbor/environment.js";
+import type { HarborJobResult } from "../../harnesses/harbor/results.js";
 import { runCommand } from "../../lib/process.js";
 import { errorMessage } from "../../lib/util.js";
 import {

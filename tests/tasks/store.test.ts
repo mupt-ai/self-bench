@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createUserStore } from "../../src/auth/users.js";
-import { createRepoStore } from "../../src/repos/store.js";
-import { createTaskStore } from "../../src/tasks/store.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "../support/site-fixture.js";
 
 describe("postgres task store", () => {

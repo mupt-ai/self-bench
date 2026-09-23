@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { bearerMatches } from "../../src/api/http.js";
+import { createSiteAuth } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { createSiteAuth } from "../../src/auth/routes.js";
-import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
 import { repos, tasks, users } from "../../src/db/schema.js";
-import { validateGitHubIdentity } from "../../src/github/oauth.js";
+import { validateGitHubIdentity } from "../../src/third_party/github/oauth.js";
 import {
   type AuthServer,
   cookieAttributes,

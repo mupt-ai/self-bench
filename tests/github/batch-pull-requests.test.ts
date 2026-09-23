@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fetchBatchPullRequests } from "../../src/github/batch-pull-requests.js";
+import { fetchBatchPullRequests } from "../../src/third_party/github/batch-pull-requests.js";
 
 const pr = (number: number, bot = false) => ({
   number,

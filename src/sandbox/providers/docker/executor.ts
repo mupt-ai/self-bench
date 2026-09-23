@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import type { SelfBenchConfig } from "../../../config/index.js";
+import type { SelfBenchConfig } from "../../../contracts/config/index.js";
 import { runCommand } from "../../../lib/process.js";
 import type {
   SandboxExecResult,

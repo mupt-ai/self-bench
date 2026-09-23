@@ -13,7 +13,7 @@ import {
   WRAPPER_STATUS_PATH,
   wrapperStatusFrom,
 } from "../../../src/generation/agent/round-outcome.js";
-import { toolCallNames } from "../../../src/pi/session.js";
+import { toolCallNames } from "../../../src/harnesses/pi/session.js";
 import { SandboxExecutionError } from "../../../src/sandbox/index.js";
 import { attachCleanupError } from "../../../src/sandbox/providers/e2b/outcome.js";
 

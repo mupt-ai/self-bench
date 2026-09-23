@@ -2,11 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { E2B } from "e2b";
-import type { E2BCredentials } from "../../../config/index.js";
-import {
-  type EncryptedRecordStore,
-  RecordStoreError,
-} from "../../../evaluation/encrypted-records.js";
+import type { E2BCredentials } from "../../../contracts/config/index.js";
+import { type EncryptedRecordStore, RecordStoreError } from "../../../db/encrypted-records.js";
 import { projectRoot } from "../../../lib/project-paths.js";
 import { errorMessage } from "../../../lib/util.js";
 import { buildSelfBenchE2BTemplate } from "./template-build.js";

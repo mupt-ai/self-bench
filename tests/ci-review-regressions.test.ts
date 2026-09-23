@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts/index.js";
+import type { TaskRecord, TaskStore } from "../src/db/tasks.js";
 import { authoringPrompt, authoringResumePrompt } from "../src/generation/authoring/prompt.js";
-import { infrastructureFailureSummary, refreshInProgress } from "../src/tasks/status.js";
-import type { TaskRecord, TaskStore } from "../src/tasks/store.js";
+import { infrastructureFailureSummary, refreshInProgress } from "../src/generation/tasks/status.js";
 import { candidate } from "./support/workflow-fixture.js";
 
 test("review feedback is the reason to revise even when mechanical gates are green", () => {

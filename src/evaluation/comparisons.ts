@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { ManagedOffer } from "../managed/generation.js";
-import type { TaskStore } from "../tasks/store.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
+import type { TaskStore } from "../db/tasks.js";
+import type { ManagedOffer } from "../generation/managed/generation.js";
 import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
-import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { harnessIds } from "./harnesses.js";
 import { routeFor, thinkingLevels, thinkingOptions } from "./model-options.js";
 import { modelIdPattern } from "./providers.js";

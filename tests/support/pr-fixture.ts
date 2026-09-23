@@ -1,11 +1,11 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
-import { SESSION_COOKIE } from "../../src/auth/session.js";
 import type { CandidateWorkflowInput } from "../../src/contracts/index.js";
-import type { WorkflowSnapshot } from "../../src/tasks/status.js";
+import type { WorkflowSnapshot } from "../../src/generation/tasks/status.js";
 import type { MemoryRecords } from "./evaluation-records.js";
 import { cookieValue, fakeGitHub, startAuthServer, testAuthConfig } from "./site-fixture.js";
 export const MERGE = "a".repeat(40);

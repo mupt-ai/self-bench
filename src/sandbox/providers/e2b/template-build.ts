@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { type BuildInfo, E2B, type LogEntry, type TemplateClass } from "e2b";
-import type { E2BCredentials } from "../../../config/index.js";
+import type { E2BCredentials } from "../../../contracts/config/index.js";
 import {
   normalizeE2BBuildName,
   normalizeE2BDomain,

@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { ArtifactStore } from "../../src/artifacts/index.js";
 import { repos } from "../../src/db/schema.js";
-import { createTaskStore } from "../../src/tasks/store.js";
-import { syncRun } from "../../src/tasks/sync.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { syncRun } from "../../src/generation/tasks/sync.js";
 import type { AuthServer } from "./site-fixture.js";
 
 /** Seed the isolated site database through the same ingestion used by workflow completion. */

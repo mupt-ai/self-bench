@@ -1,12 +1,12 @@
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
-import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../config/index.js";
+import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import { createUsageStore } from "../db/usage.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { openWorkerRecords } from "../evaluation/worker-records.js";
 import { createActivities } from "../generation/activities.js";
 import { runCommand } from "../lib/process.js";
-import { createUsageStore } from "../managed/usage-store.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityEventInterceptor } from "./activity-events.js";

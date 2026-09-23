@@ -8,7 +8,7 @@ import {
   piSessionArguments,
   sessionArtifactKey,
   sessionProviderError,
-} from "../../src/pi/session.js";
+} from "../../src/harnesses/pi/session.js";
 
 const header = JSON.stringify({
   type: "session",

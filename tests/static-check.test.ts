@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { staticCheckSubmission } from "../src/checks/static.js";
 import type { TaskDefinition } from "../src/contracts/index.js";
+import { staticCheckSubmission } from "../src/generation/checks/static.js";
 import { runCommand } from "../src/lib/process.js";
 
 const goldPatch = `diff --git a/src/feature.ts b/src/feature.ts

@@ -1,7 +1,6 @@
 import { CancelledFailure, Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { matchingGreenVerify, submissionHash } from "../../checks/submission-hash.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type {
   ArtifactRef,
   AuthoredTask,
@@ -16,6 +15,7 @@ import {
   superviseMailbox,
 } from "../../sandbox/supervisor.js";
 import { activityLifetimeSignal } from "../activity-runtime.js";
+import { matchingGreenVerify, submissionHash } from "../checks/submission-hash.js";
 import {
   compileAndVerify,
   isVerificationInfrastructureFailure,

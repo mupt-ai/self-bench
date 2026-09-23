@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { executionBackendLabels, HOSTED_EXECUTION_BACKENDS } from "../../../src/config/providers";
+import {
+  executionBackendLabels,
+  HOSTED_EXECUTION_BACKENDS,
+} from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import type { GenerationSettings } from "../../../src/generation/settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";

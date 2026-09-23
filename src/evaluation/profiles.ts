@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { createSecretBox } from "../api/auth/crypto.js";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { createSecretBox } from "../auth/crypto.js";
 import { evaluationSandboxes } from "./config.js";
 import { modelIdPattern, providerIds, providers } from "./providers.js";
 import type { EvaluationInput, EvaluationModel } from "./types.js";

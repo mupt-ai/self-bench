@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadConfig, loadWorkerConfig } from "../src/config/index.js";
+import { loadConfig, loadWorkerConfig } from "../src/contracts/config/index.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
   HOBBY_VERCEL_TIMEOUT_CAP_MS,

@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { createUserStore } from "../src/auth/users.js";
-import { loadBillingPolicy } from "../src/billing/config.js";
-import { startBillingDispatcher } from "../src/billing/outbox.js";
+import { createBillingStore } from "../src/db/billing.js";
+import { billingOutbox, generationUsage } from "../src/db/schema.js";
+import { createUsageStore } from "../src/db/usage.js";
+import { createUserStore } from "../src/db/users.js";
+import { loadBillingPolicy } from "../src/generation/billing/config.js";
+import { startBillingDispatcher } from "../src/generation/billing/outbox.js";
 import {
   modelBillableUnits,
   rateSnapshotSpec,
   sandboxBillableUnits,
-} from "../src/billing/policy.js";
-import { createBillingStore } from "../src/billing/store.js";
-import { billingOutbox, generationUsage } from "../src/db/schema.js";
-import { createUsageStore } from "../src/managed/usage-store.js";
+} from "../src/generation/billing/policy.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 async function orgFixture() {

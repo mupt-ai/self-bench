@@ -1,5 +1,5 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { SelfBenchConfig } from "../../config/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { ArtifactRef } from "../../contracts/index.js";
 import { runCommand } from "../../lib/process.js";
 import { errorMessage } from "../../lib/util.js";

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Client } from "@temporalio/client";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import * as exporter from "../../src/batches/export.js";
-import { createGenerationBatches } from "../../src/batches/service.js";
-import { createBatchStore } from "../../src/batches/store.js";
+import { createBatchStore } from "../../src/db/batches.js";
+import * as exporter from "../../src/generation/batches/export.js";
+import { createGenerationBatches } from "../../src/generation/batches/service.js";
 import { testDatabase } from "../support/site-fixture.js";
 import { candidate, run } from "../support/workflow-fixture.js";
 

@@ -8,10 +8,10 @@ import * as runtime from "../../src/generation/activity-runtime.js";
 import { SessionVerifier } from "../../src/generation/authoring/session-verify.js";
 import * as harbor from "../../src/generation/verify/harbor-gate.js";
 import * as compiler from "../../src/generation/verify/task-compiler.js";
-import * as githubTokenModule from "../../src/github/token.js";
-import type { HarborJobResult } from "../../src/harbor/results.js";
+import type { HarborJobResult } from "../../src/harnesses/harbor/results.js";
 import type { MailboxRequest } from "../../src/sandbox/supervisor.js";
 import * as operations from "../../src/sandbox/task-operation.js";
+import * as githubTokenModule from "../../src/third_party/github/token.js";
 import { candidate, run } from "./workflow-fixture.js";
 
 const roots: string[] = [];

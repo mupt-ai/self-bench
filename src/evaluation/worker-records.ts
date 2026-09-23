@@ -1,5 +1,5 @@
 import { openDatabase } from "../db/client.js";
-import { createEncryptedRecords } from "./encrypted-records.js";
+import { createEncryptedRecords } from "../db/encrypted-records.js";
 
 export async function openWorkerRecords(env: NodeJS.ProcessEnv = process.env) {
   const key = env.SELFBENCH_EVAL_CREDENTIAL_KEY;

@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { MAX_CANDIDATES_PER_RUN } from "../config/execution-limits.js";
-import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "../config/providers.js";
 import { generationReferenceSchema } from "../generation/settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
+import { MAX_CANDIDATES_PER_RUN } from "./config/execution-limits.js";
+import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "./config/providers.js";
 
-export { MAX_CANDIDATES_PER_RUN } from "../config/execution-limits.js";
+export { MAX_CANDIDATES_PER_RUN } from "./config/execution-limits.js";
 
 const candidateCountsSchema = z
   .object({

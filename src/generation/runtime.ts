@@ -1,14 +1,11 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
-import { withExecutionEnvironment } from "../config/execution-environment.js";
-import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../config/index.js";
+import { withExecutionEnvironment } from "../contracts/config/execution-environment.js";
+import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/config/index.js";
 import type { RunRequest } from "../contracts/index.js";
-import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
+import type { EncryptedRecordStore } from "../db/encrypted-records.js";
+import type { UsageLedger } from "../db/usage.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "../managed/generation.js";
-import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
-import { withUsageLedger } from "../managed/usage.js";
-import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../sandbox/index.js";
 import {
   ensureManagedE2BTemplate,
@@ -18,6 +15,9 @@ import { withTaskSandbox } from "../sandbox/task-context.js";
 import { safeHeartbeat } from "./activity-runtime.js";
 import { generationConfigEnvironment } from "./config.js";
 import { generationStageEnvironment, stageAuthoring } from "./credentials.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "./managed/generation.js";
+import { meteredSandboxExecutor } from "./managed/metered-sandbox.js";
+import { withUsageLedger } from "./managed/usage.js";
 import { generationExecutionBackend } from "./settings.js";
 
 export async function withGenerationRuntime<T>(

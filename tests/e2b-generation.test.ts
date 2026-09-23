@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
-import { executionEnvironment } from "../src/config/execution-environment.js";
-import { loadWorkerConfig } from "../src/config/index.js";
+import { executionEnvironment } from "../src/contracts/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import type { RunRequest } from "../src/contracts/index.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { withGenerationRuntime } from "../src/generation/runtime.js";
 import { generationSettingsSchema } from "../src/generation/settings.js";
-import { harborChildEnvironment } from "../src/harbor/environment.js";
-import { loadPiModelAuth } from "../src/pi/model-auth.js";
+import { harborChildEnvironment } from "../src/harnesses/harbor/environment.js";
+import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { codexAuth } from "./support/codex-auth.js";

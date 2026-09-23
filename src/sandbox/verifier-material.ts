@@ -1,12 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { taskDefinitionSchema } from "../contracts/index.js";
 import {
   buildCouplingEvidence,
   discoverContractArtifacts,
   scanBaseContractArtifacts,
-} from "../checks/coupling.js";
-import { taskDefinitionSchema } from "../contracts/index.js";
-import { repositoryRelativePath } from "../harbor/task/paths.js";
+} from "../generation/checks/coupling.js";
+import { repositoryRelativePath } from "../generation/harbor-task/paths.js";
 import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../lib/archive.js";
 import { patchPaths } from "../lib/patch-paths.js";
 export async function verifierMaterial(root: string): Promise<void> {

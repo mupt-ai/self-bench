@@ -6,7 +6,7 @@ import {
   exportIgnoredPaths,
   malformedPatchProblems,
   patchApplyCheck,
-} from "../src/checks/patch.js";
+} from "../src/generation/checks/patch.js";
 import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
