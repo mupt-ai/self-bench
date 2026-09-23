@@ -8,7 +8,7 @@
     <title>SelfBench</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script>
       // Apply the saved theme before first paint so a dark-mode visitor never sees a flash.
       try {
@@ -18,6 +18,12 @@
     </script>
   </head>
   <body class="h-full bg-(--background) font-sans text-sm leading-normal text-(--foreground) antialiased [text-rendering:optimizeLegibility]">
+    <!-- Referenced by theme.css to tint avatars in dark mode: channels scaled, blue kept most. -->
+    <svg aria-hidden="true" style="position: absolute; width: 0; height: 0">
+      <filter id="ink-cast" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="0.72 0 0 0 0  0 0.78 0 0 0  0 0 0.88 0 0  0 0 0 1 0" />
+      </filter>
+    </svg>
     <div id="root" class="h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -39,31 +39,32 @@
 
 @custom-variant site (&:where(.sb, .sb *));
 
-/* Light by default: warm paper, amber kept for fills and accents. Text that must read as
-   amber uses --brand-fg, which is dark enough for paper. */
+/* The public site's palettes (review/src/public-site/theme.css), so both sites match. Light by
+   default: warm paper, amber kept for fills and accents. Text that must read as amber uses
+   --brand-fg, which is dark enough for paper. */
 :root {
   color-scheme: light;
-  --background: hsl(40 33% 98%);
+  --background: hsl(40 22% 94.8%);
   --foreground: hsl(30 8% 12%);
-  --card: hsl(38 24% 95%);
-  --viewer-panel: hsl(38 20% 93%);
-  --muted: hsl(38 20% 90.5%);
+  --card: hsl(38 21% 91.8%);
+  --viewer-panel: hsl(38 19% 89.8%);
+  --muted: hsl(38 18% 87.5%);
   --muted-fg: hsl(30 6% 42%);
   --faint: hsl(30 6% 62%);
-  --border: hsl(35 16% 86%);
-  --input: hsl(35 16% 82%);
-  --accent: hsl(40 26% 92%);
+  --border: hsl(35 16% 84%);
+  --input: hsl(35 16% 80%);
+  --accent: hsl(40 22% 90%);
   --brand: hsl(38 92% 48%);
   --brand-fg: hsl(32 90% 32%);
   --primary: hsl(30 8% 12%);
-  --primary-fg: hsl(40 33% 98%);
-  --ok: hsl(150 45% 30%);
+  --primary-fg: hsl(40 22% 94.8%);
+  --ok: hsl(150 45% 34%);
   --bad: hsl(0 65% 45%);
   --bad-fg: hsl(0 62% 42%);
-  --warn-fg: hsl(35 80% 34%);
-  --panel-edge: hsl(30 8% 12% / 0.15);
+  --warn-fg: hsl(35 80% 38%);
+  --panel-edge: color-mix(in srgb, var(--foreground) 15%, transparent);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
-  --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --sidebar-background: var(--background);
@@ -74,33 +75,39 @@
   --sidebar-ring: var(--brand);
 }
 
-/* Dark mode is the public site's dark palette, so the two sites match. */
+/* Dark mode: the public site's ink blue. The brand turns blue with it. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: hsl(30 6% 4%);
-  --foreground: hsl(30 8% 93%);
-  --card: hsl(30 6% 2.5%);
-  --viewer-panel: hsl(30 5% 7%);
-  --muted: hsl(30 5% 8%);
-  --muted-fg: hsl(30 5% 60%);
-  --faint: hsl(30 5% 40%);
-  --border: hsl(30 5% 14%);
-  --input: hsl(30 5% 18%);
-  --accent: hsl(30 5% 13%);
-  --brand: hsl(38 95% 55%);
-  --brand-fg: hsl(38 95% 60%);
+  --background: hsl(215 28% 5%);
+  --foreground: hsl(210 20% 86%);
+  --card: hsl(215 24% 8.5%);
+  --viewer-panel: hsl(215 20% 7%);
+  --muted: hsl(215 18% 10%);
+  --muted-fg: hsl(212 10% 58%);
+  --faint: hsl(212 8% 40%);
+  --border: hsl(215 16% 16%);
+  --input: hsl(215 16% 20%);
+  --accent: hsl(215 18% 10%);
+  --brand: hsl(210 90% 65%);
+  --brand-fg: hsl(210 90% 70%);
   --primary: hsl(0 0% 100%);
   --primary-fg: hsl(0 0% 0%);
   --ok: hsl(150 40% 45%);
   --bad: hsl(0 72% 45%);
   --bad-fg: hsl(0 70% 62%);
   --warn-fg: hsl(38 80% 60%);
-  --panel-edge: hsl(30 8% 93% / 0.15);
+  --panel-edge: color-mix(in srgb, var(--foreground) 9%, transparent);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
 html {
   background: var(--background);
+}
+
+/* Dark mode dims GitHub avatars and casts them toward the ink blue, as on the public site, so
+   white marks stop glaring. The filter lives in index.html. */
+:root[data-theme="dark"] img.avatar {
+  filter: url(#ink-cast);
 }
 
 /* Raised surface for cards, tables and panels: a firmer edge and a soft drop. It lives in the
