@@ -7,6 +7,7 @@ import authoringExtension from "../../../src/harnesses/pi/extensions/authoring.j
 
 interface RegisteredTool {
   name: string;
+  executionMode?: string;
   parameters: { properties?: Record<string, unknown> };
   execute: (
     toolCallId: string,
@@ -155,9 +156,10 @@ describe("authoring extension directory deliverable", () => {
     await registered.get("verify")?.execute("1", {});
 
     expect(toolCall()).toEqual(expect.objectContaining({ block: true }));
-    const submitted = await registered.get("submit_task")?.execute("2", {});
-    expect(submitted?.isError).toBe(true);
-    expect(await readdir(join(root, "submission")).catch(() => [])).toEqual([]);
+    // A batch that mixes other tools with verify would prepare them all before verify ran.
+    for (const name of ["verify", "submit_task"]) {
+      expect(registered.get(name)?.executionMode).toBe("sequential");
+    }
   });
 
   test("verify refuses once the round's budget is spent", async () => {

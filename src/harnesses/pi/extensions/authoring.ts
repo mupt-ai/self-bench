@@ -48,14 +48,13 @@ function packDeliverable(directory: string) {
  */
 export default function authoringExtension(pi: ExtensionAPI): void {
   const budget = Number(process.env.SELFBENCH_VERIFY_BUDGET ?? "0");
+  // Both tools run sequentially, so every tool call after a hand-off reaches this check.
   let handedOff = false;
-  const alreadyHandedOff = "The task was already handed to the worker. Stop now.";
-  pi.on("tool_call", () => (handedOff ? { block: true, reason: alreadyHandedOff } : undefined));
-  const refuse = (text: string) => ({
-    content: [{ type: "text" as const, text }],
-    details: {},
-    isError: true as const,
-  });
+  pi.on("tool_call", () =>
+    handedOff
+      ? { block: true, reason: "The task was already handed to the worker. Stop now." }
+      : undefined,
+  );
 
   pi.registerTool({
     name: "verify",
@@ -63,12 +62,19 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     description:
       "Takes no arguments. Static-checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
     parameters: noArguments,
+    executionMode: "sequential",
     async execute() {
-      if (handedOff) return refuse(alreadyHandedOff);
       if (budget <= 0) {
-        return refuse(
-          "No verify calls remain this round. Call submit_task with your best task, or explain why it can't be made fair.",
-        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No verify calls remain this round. Call submit_task with your best task, or explain why it can't be made fair.",
+            },
+          ],
+          details: {},
+          isError: true,
+        };
       }
       const packed = packDeliverable(requiredEnvironment("SELFBENCH_VERIFY_REQUEST"));
       if ("isError" in packed) return packed;
@@ -92,8 +98,8 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     description:
       "Takes no arguments. Static-checks the deliverable in /work/task and records it as this round's submission. The worker verifies it again. Stop after submitting.",
     parameters: noArguments,
+    executionMode: "sequential",
     async execute() {
-      if (handedOff) return refuse(alreadyHandedOff);
       const packed = packDeliverable(requiredEnvironment("SELFBENCH_SUBMISSION"));
       if ("isError" in packed) return packed;
       handedOff = true;
