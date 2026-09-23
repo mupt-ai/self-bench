@@ -102,8 +102,8 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
               <Lockup compact />
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <ThemeToggle />
               <UserMenu user={user} onSignOut={signOut} />
+              <ThemeToggle />
               <Button
                 size="icon"
                 variant="ghost"

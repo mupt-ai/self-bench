@@ -85,7 +85,8 @@ export function WaterBackground() {
       const dark = document.documentElement.getAttribute("data-theme") === "dark";
       gl.uniform2f(uniform("size"), width, height);
       gl.uniform1f(uniform("time"), still ? 0 : now / 1000);
-      gl.uniform3f(uniform("tint"), dark ? 1 : 0.28, dark ? 1 : 0.24, dark ? 1 : 0.18);
+      // The ink blue of the dark palette, or warm brown on paper.
+      gl.uniform3f(uniform("tint"), dark ? 0.43 : 0.28, dark ? 0.65 : 0.24, dark ? 1 : 0.18);
       gl.uniform1f(uniform("strength"), dark ? 0.22 : 0.3);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
