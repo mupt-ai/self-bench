@@ -6,12 +6,13 @@ import { ModelTable } from "../components/ModelTable";
 import { Picks } from "../components/Picks";
 import { ResultsChart } from "../components/ResultsChart";
 import type { PublicRepoPage } from "../contract";
-import { flightTo, revealFade, select, shownLine } from "../effects/marks";
+import { flightTo, revealFade, shownLine } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
 import { PANEL } from "../frame";
 import { APP_URL } from "../PublicLayout";
 import { picks } from "../picks";
+import { scrollArea } from "../scroll-area";
 import { useSource } from "../source-context";
 import { useLoad } from "../use-load";
 import { useTitle } from "../use-title";
@@ -51,9 +52,9 @@ function Results({ page }: { page: PublicRepoPage }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once per release shown
   useLayoutEffect(() => {
     const section = lines.current;
-    const scroller = section?.closest<HTMLElement>(select.scrollRoot);
-    if (pinned === undefined || !section || !scroller) return;
-    scroller.scrollTop += section.getBoundingClientRect().top - pinned;
+    const area = scrollArea();
+    if (pinned === undefined || !section || !area) return;
+    area.scrollTo(area.top() + section.getBoundingClientRect().top - pinned);
   }, [release.releaseId]);
   const { repository } = release;
   return (

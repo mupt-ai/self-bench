@@ -1,3 +1,4 @@
+import type { ScrollArea } from "../scroll-area";
 import type { Origin } from "./burn";
 import { type Box, FLIGHT_EASING, type FlightPath, flightKeyframes } from "./flight-path";
 import { unmarkFlightTo } from "./marks";
@@ -36,12 +37,13 @@ export function measure(element: HTMLElement) {
 }
 
 /**
- * A static copy of the scrolling area at its current scroll, laid exactly over it: the sheet
- * of paper the transitions burn. Its content sits in one inner element, which can be masked
- * apart separately from the paper behind it. See `beginWithSheet` for starting a transition.
+ * A static copy of the visible part of the page (the band between the pinned header and
+ * footer), laid exactly over it: the sheet of paper the transitions burn. Its content sits in
+ * one inner element, which can be masked apart separately from the paper behind it. See
+ * `beginWithSheet` for starting a transition.
  */
-function paperFrom(scroller: HTMLElement, layout: HTMLElement): HTMLElement {
-  const box = scroller.getBoundingClientRect();
+function paperFrom(area: ScrollArea, layout: HTMLElement): HTMLElement {
+  const box = area.view();
   const sheet = document.createElement("div");
   sheet.setAttribute("aria-hidden", "true");
   sheet.setAttribute("inert", "");
@@ -52,15 +54,15 @@ function paperFrom(scroller: HTMLElement, layout: HTMLElement): HTMLElement {
     width: `${box.width}px`,
     height: `${box.height}px`,
     overflow: "hidden",
-    scrollbarGutter: "stable both-edges",
     background: "var(--background)",
     pointerEvents: "none",
-    // Above the page content and its cover, below the ruler lines.
+    // Above the page content, below the pinned header and footer and the ruler lines.
     zIndex: "5",
   });
+  // The copy sits exactly where the content is on screen.
   const inner = document.createElement("div");
-  inner.style.transform = `translateY(${-scroller.scrollTop}px)`;
-  for (const child of scroller.children) inner.append(child.cloneNode(true));
+  inner.style.transform = `translateY(${area.content.getBoundingClientRect().top - box.top}px)`;
+  for (const child of area.content.children) inner.append(child.cloneNode(true));
   sheet.append(inner);
   layout.append(sheet);
   return sheet;
@@ -72,8 +74,8 @@ function paperFrom(scroller: HTMLElement, layout: HTMLElement): HTMLElement {
  * transition is still doing is cancelled; then the new sheet is registered to go if this
  * transition is cancelled in turn.
  */
-export function beginWithSheet(scroller: HTMLElement, layout: HTMLElement): HTMLElement {
-  const sheet = paperFrom(scroller, layout);
+export function beginWithSheet(area: ScrollArea, layout: HTMLElement): HTMLElement {
+  const sheet = paperFrom(area, layout);
   newTransition();
   onCancel(() => sheet.remove());
   return sheet;
@@ -139,8 +141,10 @@ export function fly(
   // Laid out exactly as the original: a flex item is laid out as a block, but a copy on its
   // own would be inline, putting its text on a different baseline and nudging it at the swap.
   const style = getComputedStyle(target);
+  // Except a line-clamped paragraph: its computed display is not the one that clamps it, and
+  // copying it would drop the clamp's ellipsis until the real paragraph swaps in.
+  if (style.webkitLineClamp === "none") copy.style.display = style.display;
   Object.assign(copy.style, {
-    display: style.display,
     // Inherited text settings (a card's star count takes its monospace font from its parent)
     // are carried over too, or the copy would change font at the swap.
     font: style.font,

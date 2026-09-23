@@ -12,8 +12,8 @@ const HOLE_BAND = 16;
 /** Width, in dots, of the scorched band ahead of the holes; darkest next to them. */
 const CHAR_BAND = 30;
 const DURATION_MS = 1250;
-/** How long the paper over a `keepClear` area takes to dissolve. */
-const KEEP_FADE_MS = 220;
+/** How long the paper over a `keepClear` area takes to dissolve: quick, close to a swap. */
+const KEEP_FADE_MS = 100;
 /** Most the burning edge wanders from a clean outline, in dots. */
 const RAGGED = 9;
 

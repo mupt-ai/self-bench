@@ -17,9 +17,15 @@ const ACTIVE = "data-active";
 const FLIGHT = "data-flight";
 const FLIGHT_TARGET = "data-flight-target";
 const REVEAL = "data-reveal";
+const EDGE = "data-site-edge";
 
-/** The page's scrolling area; the transition freezes and burns a copy of it. */
+/**
+ * The page's content, between the pinned header and footer. The window scrolls it (see
+ * scroll-area.ts); the transitions freeze and burn a copy of it.
+ */
 export const scrollRoot = { [SCROLL_ROOT]: "" };
+/** The pinned header and footer, which bound the visible part of the page. */
+export const siteEdge = (side: "top" | "bottom") => ({ [EDGE]: side });
 /**
  * A repository card; the cursor aura wakes over it. It names its repository ("owner/name")
  * and the run it shows ("owner/name/publisher"), so a title can fly back to it.
@@ -39,6 +45,7 @@ export const revealFade = { [REVEAL]: "fade" };
 
 export const select = {
   scrollRoot: `[${SCROLL_ROOT}]`,
+  siteEdge: (side: "top" | "bottom") => `[${EDGE}="${side}"]`,
   card: `[${CARD}]`,
   /** A card for this run if there is one, else any card for its repository. */
   cardFor: (root: ParentNode, line: string) =>

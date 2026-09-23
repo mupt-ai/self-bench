@@ -1,4 +1,5 @@
 import { repositoryOf, saveHomeNow } from "../home-view";
+import { scrollArea } from "../scroll-area";
 import { lineOf, select } from "./marks";
 import { returnHome } from "./page-return";
 import { openFromCard, transitionsOn } from "./page-reveal";
@@ -24,8 +25,9 @@ export function installHistoryTransitions(): void {
     const from = shown;
     const to = window.location.pathname;
     shown = to;
-    const scroller = document.querySelector<HTMLElement>(select.scrollRoot);
-    if (!scroller) return;
+    const area = scrollArea();
+    if (!area) return;
+    const scroller = area.content;
     if (repositoryOf(from) && to === "/") {
       const line = lineOf(scroller.querySelector(select.shownLine) ?? scroller);
       returnHome(line, () => {});
@@ -37,7 +39,7 @@ export function installHistoryTransitions(): void {
       if (!transitionsOn()) return;
       const card = select.cardFor(scroller, to.split("/").filter(Boolean).join("/"));
       const rect = card?.getBoundingClientRect();
-      const frame = scroller.getBoundingClientRect();
+      const frame = area.view();
       const onScreen = rect && rect.top >= frame.top && rect.bottom <= frame.bottom;
       openFromCard(card && onScreen ? card : null, () => {});
     }

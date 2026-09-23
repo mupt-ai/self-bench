@@ -12,6 +12,9 @@ if (!root) throw new Error("public site root is missing");
 
 // Before the router, so back and forward can freeze the old page before it is replaced.
 installHistoryTransitions();
+// The window scrolls the page, and the home page puts back its own scroll on return (see
+// home-view.ts); the browser's restoring it as well would fight that.
+history.scrollRestoration = "manual";
 
 createRoot(root).render(
   <StrictMode>
