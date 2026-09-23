@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { z } from "zod";
-import { projectRoot } from "../project-paths.js";
+import { projectRoot } from "../lib/project-paths.js";
+import { errorMessage } from "../lib/util.js";
 
 export async function readBody(
   request: IncomingMessage,
@@ -92,12 +93,9 @@ class RequestBodyTooLargeError extends Error {
 
 function apiErrorStatus(error: unknown): number {
   if (error instanceof RequestBodyTooLargeError) return 413;
+  if (error instanceof Error && error.name === "RunNotFoundError") return 404;
   if (error instanceof z.ZodError || error instanceof SyntaxError) return 400;
   return 500;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function contentType(path: string): string {

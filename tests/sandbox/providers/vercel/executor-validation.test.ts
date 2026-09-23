@@ -38,7 +38,7 @@ describe("VercelSandboxExecutor validation", () => {
         outputPaths: ["/work/required.tar.gz"],
         timeoutMs: 60_000,
       }),
-    ).rejects.toThrow("exited successfully without output /work/required.tar.gz");
+    ).rejects.toThrow("exited 0 without /work/required.tar.gz");
     expect(fixture.calls.at(-1)?.method).toBe("DELETE");
   });
   test("rejects invalid paths and resource mappings before allocation", async () => {
@@ -65,52 +65,6 @@ describe("VercelSandboxExecutor validation", () => {
       }),
     ).rejects.toThrow("Vercel fixes memory at 2048 MiB per vCPU");
     expect(fixture.calls).toEqual([]);
-  });
-  test("rejects a created sandbox whose session is not running", async () => {
-    const fixture = new VercelSdkFixture();
-    fixture.sessionStatus = "stopped";
-    const executor = new VercelSandboxExecutor(config, fixture.fetch);
-
-    await expect(
-      executor.run({
-        runId: "invalid-session-status",
-        stage: "author",
-        command: ["true"],
-        timeoutMs: 60_000,
-      }),
-    ).rejects.toThrow("created in unexpected state stopped");
-    expect(fixture.calls.at(-1)?.method).toBe("DELETE");
-  });
-  test("rejects a created sandbox whose image workdir is not /work", async () => {
-    const fixture = new VercelSdkFixture();
-    fixture.sessionCwd = "/vercel";
-    const executor = new VercelSandboxExecutor(config, fixture.fetch);
-
-    await expect(
-      executor.run({
-        runId: "invalid-session-cwd",
-        stage: "author",
-        command: ["true"],
-        timeoutMs: 60_000,
-      }),
-    ).rejects.toThrow("has workdir /vercel; expected /work");
-    expect(fixture.calls.at(-1)?.method).toBe("DELETE");
-  });
-  test("rejects a created sandbox whose resources differ from the request", async () => {
-    const fixture = new VercelSdkFixture();
-    fixture.sessionMemory = 4096;
-    fixture.sessionVcpus = 2;
-    const executor = new VercelSandboxExecutor(config, fixture.fetch);
-
-    await expect(
-      executor.run({
-        runId: "invalid-session-resources",
-        stage: "author",
-        command: ["true"],
-        timeoutMs: 60_000,
-      }),
-    ).rejects.toThrow("returned 2 vCPU/4096 MiB; expected 4 vCPU/8192 MiB");
-    expect(fixture.calls.at(-1)?.method).toBe("DELETE");
   });
   test("does not allocate when cancellation is already requested", async () => {
     const fixture = new VercelSdkFixture();

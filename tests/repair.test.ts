@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { patchPaths } from "../src/repair.js";
+import { patchPaths } from "../src/lib/patch-paths.js";
 
 const patch = `diff --git a/tests/a.test.ts b/tests/a.test.ts
 index 1111111..2222222 100644

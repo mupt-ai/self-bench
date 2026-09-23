@@ -1,43 +1,45 @@
 import { expect, test } from "bun:test";
-import type { ArtifactStore } from "../src/artifacts.js";
-import { infrastructureFailureSummary, refreshInProgress } from "../src/site/task-status.js";
-import type { TaskRecord, TaskStore } from "../src/site/task-store.js";
-import {
-  authoringPrompt,
-  authoringResumePrompt,
-} from "../src/temporal/activities/prompts-authoring.js";
-import { candidate, run } from "./support/workflow-fixture.js";
+import type { ArtifactStore } from "../src/artifacts/index.js";
+import type { TaskRecord, TaskStore } from "../src/db/tasks.js";
+import { authoringPrompt } from "../src/generation/pipeline/authoring.js";
+import { infrastructureFailureSummary, refreshInProgress } from "../src/generation/tasks/status.js";
+import { candidate } from "./support/workflow-fixture.js";
 
 test("review feedback is the reason to revise even when mechanical gates are green", () => {
-  const prompt = authoringResumePrompt(2, "Overall GREEN", "Remove private helper coupling");
-  expect(prompt).toContain("read-only reviewer requested revisions");
+  const prompt = authoringPrompt(
+    candidate("prompt", 1),
+    2,
+    "Overall GREEN",
+    "Remove private helper coupling",
+  );
+  expect(prompt).toContain("reviewer requested revisions");
   expect(prompt).toContain("Remove private helper coupling");
   expect(prompt).toContain("not a failed check");
   expect(prompt).toContain("fresh sandbox");
   expect(prompt).not.toContain("previous submission did not pass");
-  expect(prompt).not.toContain("address its failures");
-  const failed = authoringResumePrompt(2, "RED");
-  expect(failed).toContain("did not pass mechanical verification");
+  const failed = authoringPrompt(candidate("prompt", 1), 2, "RED");
+  expect(failed).toContain("did not pass verification");
   expect(failed).toContain("address its failures");
   expect(failed).toContain("fresh sandbox");
-  expect(authoringPrompt(run, candidate("prompt", 1))).not.toContain("fresh sandbox");
+  expect(failed).not.toContain("reviewer requested revisions");
+  expect(authoringPrompt(candidate("prompt", 1), 1)).not.toContain("fresh sandbox");
 });
 
 test("prompt sections stay explicit and ordered", () => {
-  const prompt = authoringPrompt(run, candidate("prompt", 1));
+  const prompt = authoringPrompt(candidate("prompt", 1), 1);
   const sections = [
-    "# Assignment",
-    "# Test Reuse and Evidence",
-    "# Held-Out Tests",
-    "# Environment Contract",
-    "# Deliverable",
-    "# Submission and Rounds",
-    "# Round 1 of 3",
-    "# Verify Before You Submit",
+    "# Build One Eval Task",
+    "# What to Produce",
+    "# Isolate the Tests",
+    "# Keep the Instruction Fair",
+    "# Environment",
+    "# Difficulty",
+    "# How to Work",
   ];
+  const headings = prompt.split("\n").filter((line) => line.startsWith("# "));
   let previous = -1;
   for (const section of sections) {
-    const index = prompt.indexOf(section);
+    const index = headings.indexOf(section);
     expect(index).toBeGreaterThan(previous);
     previous = index;
   }
@@ -80,11 +82,4 @@ test("workflow failure preserves complete technical details", async () => {
     pipelineStatus: "infrastructure_failed",
     reason: expect.stringContaining(detail),
   });
-});
-
-test("authoring feedback is cleared when the revised mechanical report is red", async () => {
-  const { authoringResumePrompt } = await import("../src/temporal/activities/prompts-authoring.js");
-  expect(authoringResumePrompt(3, "RED mechanical report")).not.toContain(
-    "read-only reviewer requested revisions",
-  );
 });

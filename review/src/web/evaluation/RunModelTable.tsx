@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useState } from "react";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { Notice } from "../ui";

@@ -3,7 +3,7 @@ import {
   reviewRoundResultSchema,
   runRequestSchema,
   taskDefinitionSchema,
-} from "../src/contracts.js";
+} from "../src/contracts/index.js";
 
 const definition = {
   schemaVersion: 2 as const,

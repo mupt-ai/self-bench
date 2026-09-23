@@ -1,18 +1,26 @@
 import React from "react";
 import { Link, useParams } from "react-router";
-import { fetchTasks, type TaskItem } from "../api";
+import { fetchTask, type TaskItem } from "../api";
 import { pageGutter } from "../layout";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { LiveTaskState } from "../task/LiveTaskState";
 import { ReviewBar } from "../task/ReviewBar";
 import { rowFor, siteTaskSource } from "../task/site-source";
+import { TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
 import { Breadcrumbs, Notice, PageFrame } from "../ui";
 
+/** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
+  const { org } = useOrg();
+  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  return <TaskPageContent key={JSON.stringify([org.login, owner, name, runId, taskId])} />;
+}
+
+function TaskPageContent() {
   const { org } = useOrg();
   const { owner = "", name = "", runId = "", taskId = "" } = useParams();
   const fullName = `${owner}/${name}`;
@@ -21,19 +29,32 @@ export function TaskPage() {
   useDocumentTitle(`${title} · SelfBench`);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    fetchTasks(org.login, fullName).then(
-      (tasks) => {
-        if (cancelled) return;
-        setTask(tasks.find((t) => t.runId === runId && t.taskId === taskId) ?? null);
-      },
-      (cause: Error) => !cancelled && setError(cause.message),
-    );
-    return () => {
-      cancelled = true;
-    };
+  const refresh = React.useCallback(async () => {
+    try {
+      const found = await fetchTask(org.login, fullName, runId, taskId);
+      setTask(found);
+      setError(null);
+      return found;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return undefined;
+    }
   }, [org.login, fullName, runId, taskId]);
+
+  React.useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      const found = await refresh();
+      if (!disposed && (!found || found.state === "in_progress"))
+        timer = setTimeout(() => void poll(), 3000);
+    };
+    void poll();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [refresh]);
 
   const source = React.useMemo(
     () => (task ? siteTaskSource(org.login, fullName, task) : null),
@@ -43,7 +64,7 @@ export function TaskPage() {
 
   const onReview = (updated: TaskItem) => setTask(updated);
 
-  if (error) {
+  if (error && task === undefined) {
     return (
       <PageFrame>
         <Notice>{error}</Notice>
@@ -93,6 +114,11 @@ export function TaskPage() {
           <div className="mt-1">
             <LiveTaskState task={task} org={org.login} fullName={fullName} />
           </div>
+          {error && (
+            <Notice tone="info" className="mt-3">
+              Task status could not be refreshed. Showing the last update. {error}
+            </Notice>
+          )}
           {task.pipelineStatus === "infrastructure_failed" &&
           (task.reason || task.reasonSummary) ? (
             <div className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -113,9 +139,19 @@ export function TaskPage() {
             </p>
           ) : null}
         </div>
-        {task.state !== "in_progress" && task.state !== "failed" && (
-          <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
-        )}
+        <div className="flex flex-col items-end gap-2">
+          <TaskGenerationControls
+            task={task}
+            org={org.login}
+            fullName={fullName}
+            onRequested={() => void refresh()}
+          />
+          {task.state !== "in_progress" &&
+            task.state !== "failed" &&
+            task.state !== "cancelled" && (
+              <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
+            )}
+        </div>
       </header>
       <TaskView source={source} row={rowFor(task)} />
     </div>

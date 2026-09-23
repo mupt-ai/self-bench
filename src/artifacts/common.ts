@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { ArtifactRef } from "../contracts.js";
-import { sha256 } from "../hash.js";
+import type { ArtifactRef } from "../contracts/index.js";
+import { sha256 } from "../lib/hash.js";
 
 export function verifiedArtifactReadStream(reference: ArtifactRef, input: Readable): Readable {
   return Readable.from(

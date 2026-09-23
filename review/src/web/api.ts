@@ -1,3 +1,4 @@
+import type { GenerationCost } from "../../../src/contracts/index";
 import { checkSessionExpired } from "../session-expired";
 
 export interface Repo {
@@ -99,7 +100,13 @@ export function formatAgo(iso: string | undefined, now = Date.now()): string {
   return iso.slice(0, 10);
 }
 
-export type TaskState = "needs_review" | "accepted" | "rejected" | "failed" | "in_progress";
+export type TaskState =
+  | "needs_review"
+  | "accepted"
+  | "rejected"
+  | "failed"
+  | "cancelled"
+  | "in_progress";
 
 interface TaskReview {
   decision: "approve" | "reject";
@@ -126,13 +133,14 @@ export interface TaskItem {
   workflowId?: string;
   startedBy?: string;
   startedAt?: string;
+  cost?: GenerationCost;
 }
 
 export async function addPullRequest(
   org: string,
   fullName: string,
   pr: string,
-  generation?: import("../../../src/site/generation-settings").GenerationSettings,
+  generation?: import("../../../src/generation/settings/settings").GenerationSettings,
 ): Promise<TaskItem> {
   const body = await requestJson<{ task: TaskItem }>(`${repoPath(org, fullName)}/tasks/from-pr`, {
     method: "POST",
@@ -168,6 +176,31 @@ const repoPath = (org: string, fullName: string) =>
 
 export async function fetchTasks(org: string, fullName: string): Promise<TaskItem[]> {
   return (await requestJson<{ tasks: TaskItem[] }>(`${repoPath(org, fullName)}/tasks`)).tasks;
+}
+
+export async function fetchTask(
+  org: string,
+  fullName: string,
+  runId: string,
+  taskId: string,
+): Promise<TaskItem> {
+  return (
+    await requestJson<{ task: TaskItem }>(
+      `${repoPath(org, fullName)}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`,
+    )
+  ).task;
+}
+
+export async function cancelTaskGeneration(
+  org: string,
+  fullName: string,
+  runId: string,
+  taskId: string,
+): Promise<{ state: "requested" | "confirmed" | "finished" }> {
+  return requestJson(
+    `${repoPath(org, fullName)}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}/cancel`,
+    { method: "POST" },
+  );
 }
 
 export async function deleteTask(

@@ -55,7 +55,7 @@ try {
   await run("bun", ["add", "--no-save", tarball], installRoot);
   const executable = join(installRoot, "node_modules", ".bin", "self-bench");
   const help = await run(executable, ["--help"], installRoot);
-  if (!help.includes("self-bench setup")) {
+  if (!help.includes("self-bench status")) {
     throw new Error("installed self-bench did not print the expected CLI help");
   }
   const installedRoot = join(installRoot, "node_modules", packageJson.name);
@@ -64,17 +64,16 @@ try {
     await readFile(join(installRoot, "node_modules", ".bin", name));
   }
   for (const asset of [
-    "dist/harbor-task/runtime/junit.py",
-    "dist/harbor-task/runtime/command.sh",
+    "dist/generation/task/runtime/junit.py",
+    "dist/generation/task/runtime/command.sh",
     "dist/runtime/junit.py",
     "dist/runtime/command.sh",
-    "dist/api-main.js",
+    "dist/api/main.js",
     "dist/temporal/worker-main.js",
-    "dist/harbor-runtime/harbor_gateway.py",
-    "dist/harbor-runtime/harbor_e2b.py",
+    "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
-    "dist/sandbox-author.bundle.js",
+    "dist/generation/pipeline/prompts/authoring.md",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-compiler.bundle.js",
     "dist/sandbox-task-operation.bundle.js",
@@ -83,14 +82,14 @@ try {
   ]) {
     await readFile(join(installedRoot, asset));
   }
-  for (const asset of ["harbor_e2b.py", "harbor_gateway.py"]) {
-    const source = join(root, "src/harbor-runtime", asset);
-    const packed = join(installedRoot, "dist/harbor-runtime", asset);
+  for (const asset of ["harbor_gateway.py"]) {
+    const source = join(root, "src/harnesses/harbor/runtime", asset);
+    const packed = join(installedRoot, "dist/harnesses/harbor/runtime", asset);
     if ((await digest(source)) !== (await digest(packed))) {
       throw new Error(`packed Harbor runtime asset differs from source: ${asset}`);
     }
   }
-  const runtimeModule = join(installedRoot, "dist/harbor-task/runtime-assets.js");
+  const runtimeModule = join(installedRoot, "dist/generation/task/runtime-assets.js");
   const assets = await run(
     "node",
     [
@@ -115,10 +114,9 @@ try {
     "docs/evaluations.md",
     "docs/operations.md",
     "docs/task-construction.md",
-    "src/extensions/authoring.ts",
-    "src/extensions/discovery.ts",
-    "src/extensions/reviewer.ts",
-    "src/skills/selfbench/SKILL.md",
+    "src/harnesses/pi/extensions/authoring.ts",
+    "src/harnesses/pi/extensions/discovery.ts",
+    "src/harnesses/pi/extensions/reviewer.ts",
   ]) {
     await readFile(join(installedRoot, asset));
   }
@@ -130,7 +128,7 @@ try {
     "dist/validate-main.js",
     "review",
     "scripts",
-    "src/temporal/activities.ts",
+    "src/generation/pipeline/activities.ts",
     "tests",
     "tsconfig.json",
   ]) {

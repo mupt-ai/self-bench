@@ -4,26 +4,22 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "..");
 const outputDirectory = join(root, "dist");
 
-const programs = ["author", "check", "verifier", "compiler", "task-operation"] as const;
+const programs = ["check", "verifier", "compiler", "task-operation"] as const;
 
 const extensions = ["authoring", "reviewer"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
-await mkdir(join(outputDirectory, "harbor-runtime"), { recursive: true });
+await mkdir(join(outputDirectory, "harnesses/harbor/runtime"), { recursive: true });
 await copyFile(
-  join(root, "src/harbor-runtime/harbor_e2b.py"),
-  join(outputDirectory, "harbor-runtime/harbor_e2b.py"),
-);
-await copyFile(
-  join(root, "src/harbor-runtime/harbor_gateway.py"),
-  join(outputDirectory, "harbor-runtime/harbor_gateway.py"),
+  join(root, "src/harnesses/harbor/runtime/harbor_gateway.py"),
+  join(outputDirectory, "harnesses/harbor/runtime/harbor_gateway.py"),
 );
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own
     // API and TypeBox stay external and resolve inside the sandbox exactly as before.
     const result = await Bun.build({
-      entrypoints: [join(root, "src/extensions", `${extension}.ts`)],
+      entrypoints: [join(root, "src/harnesses/pi/extensions", `${extension}.ts`)],
       outdir: outputDirectory,
       naming: `extension-${extension}.bundle.js`,
       target: "node",
@@ -48,7 +44,16 @@ await Promise.all([
 ]);
 
 await Promise.all(
-  ["harbor-task/runtime", "runtime"].map((path) =>
-    cp(join(root, "src/harbor-task/runtime"), join(outputDirectory, path), { recursive: true }),
+  ["generation/task/runtime", "runtime"].map((path) =>
+    cp(join(root, "src/generation/task/runtime"), join(outputDirectory, path), {
+      recursive: true,
+    }),
   ),
+);
+await cp(
+  join(root, "src/generation/pipeline/prompts"),
+  join(outputDirectory, "generation/pipeline/prompts"),
+  {
+    recursive: true,
+  },
 );

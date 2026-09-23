@@ -1,4 +1,4 @@
-import { harborCost } from "./harbor-cost.js";
+import { harborCost } from "../harnesses/harbor/cost.js";
 import { record } from "./output.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 

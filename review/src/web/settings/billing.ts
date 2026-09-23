@@ -1,4 +1,4 @@
-import type { BillingEligibility } from "../../../../src/billing/eligibility";
+import type { BillingEligibility } from "../../../../src/generation/billing/eligibility";
 
 export interface BillingUsageSummary {
   modelTokens: {

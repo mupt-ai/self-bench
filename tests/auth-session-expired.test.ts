@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { createServer } from "node:http";
-import { GitHubOAuthError } from "../src/auth/github.js";
-import { sendExpiredSession } from "../src/auth/session-expired.js";
-import { listMergedPullRequests } from "../src/site/pr-list.js";
+import { sendExpiredSession } from "../src/api/auth/session-expired.js";
+import { GitHubOAuthError } from "../src/third_party/github/oauth.js";
+import { listMergedPullRequests } from "../src/third_party/github/pull-requests.js";
 
 test("GitHub 401 clears the session with a readable response; other failures do not", async () => {
   const server = createServer(async (request, response) => {

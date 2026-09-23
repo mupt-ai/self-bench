@@ -1,15 +1,15 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "src/cli.ts!",
-    "src/api-main.ts!",
+    "src/api/cli/bin.ts!",
+    "src/api/main.ts!",
     "src/temporal/worker-main.ts!",
-    // Documented standalone worker, separate from the combined worker.
-    "src/evaluation/worker-main.ts!",
+    // The one-time evaluation records migration, run by operators from the API image.
+    "src/db/records-migration.ts!",
     // Temporal loads workflows and Pi loads extensions by path, not imports.
-    "src/temporal/workflow.ts!",
+    "src/temporal/workflows.ts!",
     "src/evaluation/workflow.ts!",
-    "src/extensions/{authoring,verifier,discovery}.ts!",
+    "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts!",
     "src/sandbox/programs/{author,check,verifier,compiler,task-operation}.ts!",
     "review/src/main.tsx!",
     "scripts/*.ts!",
@@ -25,11 +25,10 @@
   "includeEntryExports": true,
   "ignoreIssues": {
     // These exports are registration interfaces for the external loaders.
-    "src/temporal/workflow.ts": ["exports"],
+    "src/temporal/workflows.ts": ["exports"],
     "src/evaluation/workflow.ts": ["exports"],
-    "src/extensions/{authoring,verifier,discovery}.ts": ["exports"]
+    "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
   },
   // Resolved through createRequire; the CLI is installed by the operator.
-  "ignoreDependencies": ["@openai/codex"],
-  "ignoreBinaries": ["vercel"]
+  "ignoreDependencies": ["@openai/codex"]
 }

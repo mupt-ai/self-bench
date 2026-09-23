@@ -1,18 +1,18 @@
 import { Link } from "react-router";
-import type { CredentialInfo } from "../../../src/evaluation/account";
 import {
   executionBackendLabels,
   HOSTED_HARBOR_ENVIRONMENTS,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-} from "../../../src/providers";
-import { generationModelLabel } from "../../../src/site/generation-models";
+} from "../../../src/contracts/config/providers";
+import type { CredentialInfo } from "../../../src/db/credentials";
+import { generationModelLabel } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,
   type GenerationSettings,
   generationExecutionBackend,
   generationSandboxLabels,
-} from "../../../src/site/generation-settings";
+} from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
 import { modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";
@@ -202,7 +202,7 @@ export function AdvancedFields({
         <label className={`${fieldStyles} content-start`} htmlFor="generation-image">
           <span className="flex items-center gap-1.5">
             Vercel Runtime Image
-            <InfoTooltip label="Use the digest-pinned image from self-bench setup vercel." />
+            <InfoTooltip label="Use the digest-pinned image published from Dockerfile.sandbox." />
           </span>
           <Input
             id="generation-image"

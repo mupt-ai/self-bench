@@ -1,4 +1,4 @@
-import type { ArtifactRef, Difficulty, RepositoryRef } from "./common.js";
+import type { ArtifactRef, Difficulty } from "./common.js";
 import type { RunRequest } from "./run.js";
 import type { AuthoredTask, Candidate } from "./task.js";
 import type { PipelineStage } from "./verify.js";
@@ -19,6 +19,18 @@ export type RunPhase =
  * compile/audit/build/smoke/nop/oracle gates, and `reviewing` an independent review round; `stage`
  * and `round` say which loop is running.
  */
+type CostState = "estimated" | "partial" | "unpriced" | "unknown";
+
+/** Current generation spend. Missing USD fields are deliberate, never zero-filled estimates. */
+export interface GenerationCost {
+  readonly state: CostState;
+  readonly usd?: number;
+  readonly sandboxUsd?: number;
+  readonly modelUsd?: number;
+  readonly sandboxSeconds: number;
+  readonly updatedAt: string;
+}
+
 export interface TaskProgress {
   taskId: string;
   candidateId: string;
@@ -39,13 +51,14 @@ export interface TaskProgress {
 export interface DiscoveryShardProgress {
   readonly wave: number;
   readonly shardIndex: number;
+  readonly cost?: GenerationCost;
   readonly attempt?: number;
   readonly liveKey?: string;
   readonly logKey?: string;
   readonly error?: string;
 }
 
-export interface DiscoveryProgress {
+interface DiscoveryProgress {
   readonly wave: number;
   readonly totalShards: number;
   readonly completedShards: number;
@@ -63,15 +76,10 @@ export interface RunStatus {
   readonly accepted: number;
   readonly rejected: number;
   readonly tasks: readonly TaskProgress[];
+  readonly cost?: GenerationCost;
   readonly discovery?: DiscoveryProgress;
   readonly export?: ArtifactRef;
   readonly error?: string;
-}
-
-export interface RunResult {
-  readonly runId: string;
-  readonly export: ArtifactRef;
-  readonly acceptedTaskIds: readonly string[];
 }
 
 /** Input of one candidate child workflow. */
@@ -90,11 +98,4 @@ export interface CandidateWorkflowResult {
 export interface DiscoveryResult {
   readonly candidates: readonly Candidate[];
   readonly report: ArtifactRef;
-}
-
-/** Candidates and run metadata rebuilt from a source run for a replay. */
-export interface ReplayMaterial {
-  readonly candidates: readonly Candidate[];
-  readonly repository: RepositoryRef;
-  readonly provenance: ArtifactRef;
 }

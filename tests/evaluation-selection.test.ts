@@ -9,7 +9,7 @@ test("one model row resolves its saved route and rejects unsupported thinking be
   try {
     const credential = async (kind: string) => {
       const response = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         post({
           kind,
           name: kind,
@@ -71,7 +71,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
   try {
     const save = async (kind: string) => {
       const response = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         post({ kind, name: kind, value: `fake-${kind}` }),
       );
       return (await response.json()).id as string;
@@ -134,7 +134,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
   try {
     const save = async (kind: string) => {
       const response = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         post({ kind, name: kind, value: `fake-${kind}` }),
       );
       expect(response.status).toBe(201);

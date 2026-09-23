@@ -13,12 +13,11 @@
   },
   "type": "module",
   "bin": {
-    "self-bench": "dist/cli.js"
+    "self-bench": "dist/api/cli/bin.js"
   },
   "files": [
     "dist",
-    "src/extensions",
-    "src/skills",
+    "src/harnesses/pi/extensions",
     "drizzle",
     "docs",
     "compose.yaml",
@@ -37,7 +36,7 @@
   "scripts": {
     "build": "bun run clean && bun run build:server && bun run build:review",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "cli": "bun run src/cli.ts",
+    "cli": "bun run src/api/cli/bin.ts",
     "build:review": "vite build --config review/vite.config.ts",
     "build:server": "tsc -p tsconfig.build.json && bun scripts/build-sandbox-programs.ts && bun run build:metadata",
     "build:metadata": "bun scripts/write-build-metadata.ts",
@@ -47,12 +46,12 @@
     "verify:package": "bun scripts/verify-package.ts",
     "verify:package:docker": "bun scripts/verify-package.ts --docker-build",
     "check": "biome check . && tsc --noEmit -p tsconfig.json && bun run typecheck:review && bun scripts/check-file-sizes.ts && bun run check:unused",
-    "dev:api": "bun run build:review && tsx src/api-main.ts",
+    "dev:api": "bun run build:review && tsx src/api/main.ts",
     "dev:review": "vite --config review/vite.config.ts",
     "dev:site": "bun scripts/dev-site.ts",
     "dev:worker": "bun run build:server && tsx src/temporal/worker-main.ts",
     "format": "biome format --write .",
-    "start:api": "node dist/api-main.js",
+    "start:api": "node dist/api/main.js",
     "start:worker": "node dist/temporal/worker-main.js",
     "test": "bun test tests review/src src",
     "typecheck:review": "tsc --noEmit -p review/tsconfig.json",
@@ -60,7 +59,6 @@
     "check:unused": "knip"
   },
   "dependencies": {
-    "@clack/prompts": "1.7.0",
     "@google-cloud/storage": "^7.22.0",
     "@openai/codex": "0.153.4",
     "@radix-ui/react-dropdown-menu": "2.1.24",

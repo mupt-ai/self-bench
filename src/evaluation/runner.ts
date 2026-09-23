@@ -1,22 +1,20 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractRegularArchive } from "../archive.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { HarborEnvironment } from "../contracts/config/providers.js";
+import type { Vault } from "../db/vault.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../harbor-command.js";
-import { runCommand } from "../process.js";
-import type { HarborEnvironment } from "../providers.js";
-import { solverEnvironment } from "./config.js";
+} from "../harnesses/harbor/command.js";
+import { extractRegularArchive } from "../lib/archive.js";
+import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
-import { credentialExecution } from "./credential-execution.js";
-import type { EncryptedRecordStore } from "./encrypted-records.js";
-import { gatewayTrial, solverAgent } from "./gateway-execution.js";
-import { type ThinkingLevel, thinkingArguments } from "./model-options.js";
+import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
+import { type ThinkingLevel, thinkingArguments } from "./models.js";
 import {
   boundedSteps,
   collectOutput,
@@ -26,7 +24,6 @@ import {
   redactOutput,
   trajectorySteps,
 } from "./output.js";
-import { profileEnvironment } from "./profiles.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
@@ -55,7 +52,7 @@ export interface RunnerOptions {
   signal?: AbortSignal;
   heartbeat?: () => void;
   pollMs?: number;
-  records?: EncryptedRecordStore;
+  vault?: Pick<Vault, "credentials" | "comparisons">;
 }
 export async function executeEvaluation(
   store: ArtifactStore,
@@ -79,21 +76,8 @@ export async function executeEvaluation(
     await saveEvaluation(store, run);
     const home = join(root, "home");
     await mkdir(home, { mode: 0o700 });
-    const resolved = input.credentials
-      ? environment
-      : await profileEnvironment(store, input, environment);
-    secrets.push(
-      ...Object.entries(resolved)
-        .filter(([name]) => name.startsWith("SELFBENCH_EVAL_SECRET_"))
-        .map(([, value]) => value ?? "")
-        .filter(Boolean),
-    );
-    if (input.credentials && !options.records)
-      throw new Error("Credential storage unavailable on the worker");
-    const execution =
-      input.credentials && options.records
-        ? await credentialExecution(input, home, environment, options.records)
-        : { ...solverEnvironment(input, home, resolved), secrets: [] };
+    if (!options.vault) throw new Error("Credential storage unavailable on the worker");
+    const execution = await credentialExecution(input, home, environment, options.vault);
     secrets.push(...execution.secrets);
     const { profile } = execution;
     const child = harborProcessEnvironment(execution.child);

@@ -1,6 +1,6 @@
 import { Play } from "lucide-react";
 import { Link } from "react-router";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { Button, fieldStyles, Select } from "../ui";

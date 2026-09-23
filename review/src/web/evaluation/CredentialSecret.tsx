@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import React from "react";
-import type { CredentialDraft } from "../../../../src/evaluation/credentials";
+import type { CredentialDraft } from "../../../../src/db/credentials";
 import { fieldStyles, Input } from "../ui";
 
 export function CredentialSecret({

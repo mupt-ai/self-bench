@@ -5,6 +5,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   accepted: "Accepted",
   rejected: "Rejected",
   failed: "Failed",
+  cancelled: "Cancelled",
   in_progress: "In Progress",
 };
 
@@ -15,6 +16,7 @@ export function StateStamp({ state }: { state: TaskState }) {
     accepted: "text-success",
     rejected: "text-muted-foreground",
     failed: "text-destructive",
+    cancelled: "text-muted-foreground",
     in_progress: "text-brand-foreground",
   };
   return (

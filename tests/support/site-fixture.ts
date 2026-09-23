@@ -2,25 +2,25 @@ import { createServer, type Server } from "node:http";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import type { AuthConfig } from "../../src/api/auth/config.js";
+import { sendExpiredSession } from "../../src/api/auth/session-expired.js";
 import { sendApiError } from "../../src/api/http.js";
-import type { ArtifactStore } from "../../src/artifacts.js";
-import { createApiKeyRoutes } from "../../src/auth/api-key-routes.js";
-import { type ApiKeyStore, apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
-import type { AuthConfig } from "../../src/auth/config.js";
-import { createSiteAuth, sendIdentityError } from "../../src/auth/routes.js";
-import { sendExpiredSession } from "../../src/auth/session-expired.js";
-import { createUserStore, type UserStore } from "../../src/auth/users.js";
-import { loadConfig } from "../../src/config.js";
+import { createApiKeyRoutes } from "../../src/api/routes/api-keys.js";
+import { createSiteAuth, sendIdentityError } from "../../src/api/routes/auth.js";
+import { createGitHubRepoRoutes } from "../../src/api/routes/github-repos.js";
+import { createPullRequestRoutes } from "../../src/api/routes/pull-requests.js";
+import { createConnectedRepoRoutes } from "../../src/api/routes/repos.js";
+import { createTaskRoutes } from "../../src/api/routes/tasks.js";
+import type { ArtifactStore } from "../../src/artifacts/index.js";
+import { loadConfig } from "../../src/contracts/config/index.js";
+import { type ApiKeyStore, apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
 import { type Database, migrationsFolder } from "../../src/db/client.js";
+import { createRepoStore } from "../../src/db/repos.js";
 import * as schema from "../../src/db/schema.js";
-import { createConnectedRepoRoutes } from "../../src/site/connected-repos.js";
-import { createGitHubRepoRoutes } from "../../src/site/github-repos.js";
-import { createPullRequestRoutes } from "../../src/site/pr-routes.js";
-import { createRepoStore } from "../../src/site/repo-store.js";
-import type { WorkflowStarter } from "../../src/site/task-start.js";
-import type { TaskStatusSource } from "../../src/site/task-status.js";
-import { createTaskStore } from "../../src/site/task-store.js";
-import { createTaskRoutes } from "../../src/site/tasks.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore, type UserStore } from "../../src/db/users.js";
+import type { WorkflowStarter } from "../../src/generation/tasks/start.js";
+import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
 
 export interface TestDatabase {
   readonly db: Database;
@@ -156,7 +156,7 @@ export interface AuthServer {
 }
 
 export interface AuthServerOptions {
-  readonly records?: import("../../src/evaluation/encrypted-records.js").EncryptedRecordStore;
+  readonly vault?: import("../../src/db/vault.js").Vault;
   readonly config?: AuthConfig;
   readonly fetchImpl?: typeof fetch;
   readonly artifacts?: ArtifactStore;
@@ -202,7 +202,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const pullRequestRoutes =
     options.artifacts && options.start
       ? createPullRequestRoutes({
-          ...(options.records ? { records: options.records } : {}),
+          ...(options.vault ? { vault: options.vault } : {}),
           config: loadConfig({}),
           auth: config,
           users,

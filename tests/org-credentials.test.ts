@@ -1,26 +1,21 @@
 import { expect, test } from "bun:test";
-import { listCredentials, saveCredential } from "../src/evaluation/credentials.js";
-import { orgRecords } from "../src/evaluation/org-records.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
-test("organization credentials are shared across repositories, isolated from personal accounts and admin-managed", async () => {
-  const records = new MemoryRecords();
-  const site = await evaluationServer(records);
+test("organization credentials are shared by members, isolated per organization and admin-managed", async () => {
+  const vault = memoryVault();
+  const site = await evaluationServer(vault);
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   const draft = {
     name: "Shared Model",
-    kind: "openai",
-    auth: "api-key",
+    kind: "openai" as const,
+    auth: "api-key" as const,
     value: "mock-shared-secret",
   };
   try {
-    await saveCredential(
-      records,
-      1,
-      { ...draft, kind: "openai", auth: "api-key", name: "Private Key" },
-      {},
-    );
+    const tenant = (await site.users.orgsFor(site.user.id))[0];
+    if (!tenant) throw new Error("Missing tenant");
+    await vault.credentials.create(tenant.id + 100, { ...draft, name: "Other Org Key" }, {});
     expect((await (await site.request("/api/orgs/avyay/credentials")).json()).credentials).toEqual(
       [],
     );
@@ -40,14 +35,10 @@ test("organization credentials are shared across repositories, isolated from per
     expect(JSON.stringify(credential)).not.toContain(draft.value);
     const list = await (await site.request("/api/orgs/avyay/credentials")).json();
     expect(list.canManage).toBe(true);
-    for (const repo of ["repo", "other"]) {
-      const found = await (
-        await site.request(`/api/orgs/avyay/repos/avyay/${repo}/evaluations/credentials`)
-      ).json();
-      expect(found.credentials.map((item: { id: string }) => item.id)).toEqual([credential.id]);
-    }
-    expect(await listCredentials(orgRecords(records, 2), 2)).toEqual([]);
-    expect((await listCredentials(records, 1)).map((item) => item.name)).toEqual(["Private Key"]);
+    expect(list.credentials.map((item: { id: string }) => item.id)).toEqual([credential.id]);
+    expect((await vault.credentials.list(tenant.id + 100)).map((item) => item.name)).toEqual([
+      "Other Org Key",
+    ]);
     const team = { githubId: 20, login: "team", role: "admin" as const };
     await site.users.upsert({
       githubId: 1,

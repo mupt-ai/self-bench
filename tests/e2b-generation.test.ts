@@ -1,18 +1,16 @@
 import { expect, test } from "bun:test";
-import { loadWorkerConfig } from "../src/config.js";
-import type { RunRequest } from "../src/contracts.js";
-import { saveCredential } from "../src/evaluation/credentials.js";
-import { orgRecords } from "../src/evaluation/org-records.js";
-import { executionEnvironment } from "../src/execution-environment.js";
-import { harborChildEnvironment } from "../src/harbor-environment.js";
+import { executionEnvironment } from "../src/contracts/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/contracts/config/index.js";
+import type { RunRequest } from "../src/contracts/index.js";
+import { withGenerationRuntime } from "../src/generation/pipeline/runtime.js";
+import { generationEnvironment } from "../src/generation/settings/credentials.js";
+import { generationSettingsSchema } from "../src/generation/settings/settings.js";
+import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
-import { generationEnvironment } from "../src/site/generation-credentials.js";
-import { generationSettingsSchema } from "../src/site/generation-settings.js";
-import { loadPiModelAuth } from "../src/subscription-auth.js";
-import { withGenerationRuntime } from "../src/temporal/activities/generation-runtime.js";
+import { providerEnvironment } from "../src/sandbox/provider-environment.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { codexAuth } from "./support/codex-auth.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "./support/pr-fixture.js";
 
 test.each(["batch", "pr"] as const)(
@@ -20,14 +18,14 @@ test.each(["batch", "pr"] as const)(
   async (kind) => {
     const previous = process.env.SELFBENCH_E2B_TEMPLATE;
     process.env.SELFBENCH_E2B_TEMPLATE = "selfbench-test";
-    const records = new MemoryRecords();
+    const vault = memoryVault();
     let close: (() => Promise<void>) | undefined;
     try {
       let ownerId: number;
       let submit: (settings: unknown) => Promise<Response>;
       let submitted: () => RunRequest | undefined;
       if (kind === "batch") {
-        const f = await fixture({ records });
+        const f = await fixture({ vault });
         ownerId = f.tenant.id;
         submit = (generation) =>
           f.request(ROOT, {
@@ -36,7 +34,7 @@ test.each(["batch", "pr"] as const)(
           });
         submitted = () => f.started[0];
       } else {
-        const f = await prFixture({ records, pullRequests: { 57: pullRequest(57) } });
+        const f = await prFixture({ vault, pullRequests: { 57: pullRequest(57) } });
         close = () => f.site.stop();
         ownerId = 2;
         submit = (generation) =>
@@ -51,21 +49,17 @@ test.each(["batch", "pr"] as const)(
         ).json();
         expect(options.sandboxes).toContain("e2b");
       }
-      const scoped = orgRecords(records, ownerId);
-      const model = await saveCredential(
-        scoped,
+      const model = await vault.credentials.create(
         ownerId,
         { name: "ChatGPT", kind: "openai", auth: "codex-login", value: codexAuth },
         {},
       );
-      const e2b = await saveCredential(
-        scoped,
+      const e2b = await vault.credentials.create(
         ownerId,
         { name: "E2B", kind: "e2b", auth: "api-key", value: "selected-e2b-secret" },
         {},
       );
-      const modal = await saveCredential(
-        scoped,
+      const modal = await vault.credentials.create(
         ownerId,
         {
           name: "Modal",
@@ -76,14 +70,12 @@ test.each(["batch", "pr"] as const)(
         },
         {},
       );
-      const harbor = await saveCredential(
-        scoped,
+      const harbor = await vault.credentials.create(
         ownerId,
         { name: "Harbor E2B", kind: "e2b", auth: "api-key", value: "harbor-e2b-secret" },
         {},
       );
-      const foreign = await saveCredential(
-        orgRecords(records, ownerId + 100),
+      const foreign = await vault.credentials.create(
         ownerId + 100,
         { name: "Foreign", kind: "e2b", auth: "api-key", value: "foreign-key" },
         {},
@@ -125,7 +117,7 @@ test.each(["batch", "pr"] as const)(
       });
       expect(JSON.stringify(run)).not.toContain("selected-e2b-secret");
       expect(JSON.stringify(run)).not.toContain("test-refresh");
-      const env = await generationEnvironment(records, run.runId, run.generation, {
+      const env = await generationEnvironment(vault, run.runId, run.generation, {
         E2B_API_KEY: "host-key",
         E2B_DOMAIN: "untrusted.example",
         MODAL_TOKEN_ID: "host-modal",
@@ -135,13 +127,13 @@ test.each(["batch", "pr"] as const)(
       expect(env.E2B_DOMAIN).toBeUndefined();
       expect(env.MODAL_TOKEN_SECRET).toBeUndefined();
       expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe("harbor-e2b-secret");
-      expect(harborChildEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
+      expect(providerEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
       process.env.SELFBENCH_E2B_TEMPLATE = "changed-host-template";
       const config = loadWorkerConfig({});
       for (const stage of ["author", "verifier"] as const) {
         await withGenerationRuntime(
           config,
-          records,
+          vault,
           run,
           stage,
           createSandboxExecutor(config.execution),

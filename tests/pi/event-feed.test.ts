@@ -1,0 +1,166 @@
+import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
+import { liveFeed } from "../../src/generation/pipeline/agent.js";
+import { agentFeedEvents } from "../../src/harnesses/pi/agent-feed.js";
+import { PiEventFeed } from "../../src/harnesses/pi/event-feed.js";
+
+const line = (event: unknown) => Buffer.from(`${JSON.stringify(event)}\n`);
+
+test("cached snapshots refresh after deltas and cannot be changed by readers", () => {
+  const feed = new PiEventFeed(["sensitive-secret"]);
+  const push = (delta: string) =>
+    feed.push(
+      line({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta },
+      }),
+    );
+  push("sensitive-");
+  const first = feed.events();
+  expect(first[0]?.text).toBe("sensitive-");
+  const event = first[0];
+  if (!event) throw new Error("expected a feed event");
+  event.text = "modified by reader";
+  expect(feed.events()[0]?.text).toBe("sensitive-");
+  push("secret");
+  expect(feed.events()[0]?.text).toBe("[REDACTED]");
+  expect(feed.events()[0]?.text).toBe("[REDACTED]");
+});
+
+test("native Pi deltas survive chunk boundaries, replace cumulative tool output and omit reasoning", () => {
+  const feed = new PiEventFeed(["sensitive-secret"]);
+  const bytes = Buffer.concat([
+    line({ type: "message_start", message: { role: "assistant" } }),
+    line({
+      type: "message_update",
+      assistantMessageEvent: { type: "thinking_delta", delta: "private" },
+    }),
+    line({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "Checking café sensitive-" },
+    }),
+    line({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "secret" },
+    }),
+    line({
+      type: "tool_execution_start",
+      toolCallId: "a",
+      toolName: "bash",
+      args: { command: "bun test" },
+    }),
+    line({
+      type: "tool_execution_update",
+      toolCallId: "a",
+      partialResult: { content: [{ type: "text", text: "1 pass" }] },
+    }),
+    line({
+      type: "tool_execution_end",
+      toolCallId: "a",
+      result: { content: [{ type: "text", text: "2 pass" }] },
+    }),
+  ]);
+  for (const byte of bytes) feed.push(Uint8Array.of(byte));
+  expect(feed.events()).toEqual([
+    { kind: "message", text: "Checking café [REDACTED]" },
+    { kind: "tool", text: 'bash\n{\n  "command": "bun test"\n}' },
+    { kind: "result", text: "2 pass" },
+  ]);
+});
+
+test("final messages replace streamed text and oversized input cannot poison the next event", () => {
+  const feed = new PiEventFeed();
+  feed.push(Buffer.from("x".repeat(1048577)));
+  feed.push(Buffer.from("\n"));
+  feed.push(
+    line({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "partial" },
+    }),
+  );
+  feed.push(
+    line({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "complete" }] },
+    }),
+  );
+  expect(feed.events()).toEqual([{ kind: "message", text: "complete" }]);
+});
+
+test("provider failures become public error events", () => {
+  const text = JSON.stringify({
+    type: "message_end",
+    timestamp: "2026-09-21T19:45:38.508Z",
+    message: {
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorMessage: '401: {"message":"User not found.","code":401}',
+    },
+  });
+  expect(agentFeedEvents(text)).toEqual([
+    {
+      kind: "error",
+      text: '401: {"message":"User not found.","code":401}',
+      timestamp: "2026-09-21T19:45:38.508Z",
+    },
+  ]);
+  const feed = new PiEventFeed();
+  feed.push(
+    line({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        errorMessage: "401: User not found.",
+      },
+    }),
+  );
+  expect(feed.events()).toEqual([{ kind: "error", text: "401: User not found." }]);
+});
+
+test("archived conversations redact credentials and omit prompts and reasoning", () => {
+  const text = [
+    { message: { role: "user", content: [{ type: "text", text: "prompt" }] } },
+    {
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "private" },
+          { type: "text", text: "token=oauth-secret-value" },
+        ],
+      },
+    },
+  ]
+    .map((value) => JSON.stringify(value))
+    .join("\n");
+  expect(agentFeedEvents(text, ['{"access":"oauth-secret-value"}'])).toEqual([
+    { kind: "message", text: "token=[REDACTED]" },
+  ]);
+});
+
+test("feed publishes a snapshot when it closes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agent-feed-"));
+  const store = new LocalArtifactStore(root);
+  try {
+    const feed = liveFeed(store, "round-1/attempt-1", []);
+    feed.push(
+      "stdout",
+      line({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "Working" },
+      }),
+    );
+    await feed.close();
+    const saved = await store.getByKey("round-1/attempt-1/live/00000000.json");
+    expect(JSON.parse(Buffer.from(saved ?? []).toString()).events).toEqual([
+      { kind: "message", text: "Working" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

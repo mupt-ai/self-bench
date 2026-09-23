@@ -1,5 +1,5 @@
 import React from "react";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button } from "../ui";
 

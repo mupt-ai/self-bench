@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 import {
   compileSubmittedTask,
   TaskCompilerInfrastructureError,

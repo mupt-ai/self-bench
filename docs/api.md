@@ -6,7 +6,7 @@ All responses are JSON unless noted. Errors carry `{ "error": "message" }` and s
 
 ## Authentication
 
-There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz`, `/v1/viewer`, and `POST /api/stripe/webhook` are open.
+There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open.
 
 | Method | Header | Reaches |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ All paths below are relative to `/api/orgs/:org/repos/:owner/:name`.
 
 A task object carries `runId`, `taskId`, `candidateId`, `difficulty`, `stage`, `pipelineStatus`, the derived `state` (`needs_review`, `accepted`, `rejected`, `failed`, `in_progress`), `reason`, `sourcePr`, `sourceUrl`, `review`, `round`, `workflowId`, `startedBy`, `startedAt`, and `syncedAt`.
 
-`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox: "modal" | "vercel" | "e2b", modelCredentialId, sandboxCredentialId, sandboxImage?, harborEnvironment?: "modal" | "vercel" | "e2b" | "daytona", harborCredentialId? }`; the credential ids come from the organization credentials routes. `sandboxImage` is required for `vercel`, optional for `e2b` (the worker builds the managed template on first use when omitted), and rejected for `modal`; every non-managed sandbox requires a separate `harborEnvironment` and `harborCredentialId`. The full schema is `generationSettingsSchema` in `src/site/generation-settings.ts`.
+`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox: "modal" | "vercel" | "e2b", modelCredentialId, sandboxCredentialId, sandboxImage?, harborEnvironment?: "modal" | "vercel" | "e2b" | "daytona", harborCredentialId? }`; the credential ids come from the organization credentials routes. `sandboxImage` is required for `vercel`, optional for `e2b` (the worker builds the managed template on first use when omitted), and rejected for `modal`; every non-managed sandbox requires a separate `harborEnvironment` and `harborCredentialId`. The full schema is `generationSettingsSchema` in `src/generation/settings/settings.ts`.
 
 ## Batches
 
@@ -100,29 +100,19 @@ Relative to `/api/orgs/:org/repos/:owner/:name`.
 
 ## Evaluations
 
-Relative to `/api/orgs/:org/repos/:owner/:name`. Single-model evaluation runs use the operator-configured model list; model comparisons (below) use organization credentials.
+Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`. Runs start only through model comparisons, which use organization credentials.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/evaluations` | Past and running evaluations (`runs`), trial logs omitted |
-| `GET` | `/evaluations/options` | Configured `models` (each with its `harnesses`), `sandboxes`, `harborVersion`, whether personal setups are `configurable`, and the approved `tasks` that may be evaluated |
-| `POST` | `/evaluations` | Body `{ "id": uuid, "model", "harnesses": [...], "sandbox", "tasks": [{ "runId", "taskId" }] }`. Starts an evaluation; `202` with the run. Repeating the same `id` and selection resumes rather than duplicates; a different selection under a known `id` answers `409` |
-| `GET` | `/evaluations/:id` | One evaluation with every trial's log, steps, and artifact names |
-| `GET` | `/evaluations/:id/artifacts?name=…` | Downloads one trial artifact as text |
-| `POST` | `/evaluations/profiles` | Body per `setupSchema` in `src/evaluation/profiles.ts` (`provider`, `model`, `modelApiKey`, `sandbox`, sandbox credentials, optional `pricing`). Saves a personal model setup; `201` |
-
-## Model comparisons
-
-Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`.
-
-| Method | Path | Purpose |
-| --- | --- | --- |
+| `GET` | `/` | Past and running evaluations (`runs`), trial logs omitted |
+| `GET` | `/options` | The approved `tasks` that may be evaluated |
+| `GET` | `/:id` | One evaluation with every trial's log, steps, and artifact names |
+| `GET` | `/:id/artifacts?name=…` | Downloads one trial artifact as text |
 | `GET` | `/catalog` | The model catalog with reference pricing: `version`, `models`, `sandboxes`, `customHosts`, and the available managed model/sandbox offer |
 | `GET` | `/comparisons` | Comparisons of this repository with live status (`comparisons`) |
 | `POST` | `/comparisons` | Body per `comparisonSchema` in `src/evaluation/comparisons.ts`: `id` (uuid), `tasks`, `models` (`catalogId`, `credentialId`, `harnesses`, optional `customModel` and `thinking`), `sandbox`, the sandbox credential, and optional `skipCompleted`. Managed deployments also accept the catalog-advertised managed credential choices. Creates and dispatches the comparison; `202`. A `submissionError` field means some runs were not confirmed and should be resumed |
 | `GET` | `/comparisons/:id` | One comparison with per-model run status |
 | `POST` | `/comparisons/:id/resume` | Re-dispatches unconfirmed runs with the same run ids; `202` |
-| `*` | `/credentials…` | Alias of the organization credential routes below |
 
 ## Organization credentials
 
@@ -131,7 +121,7 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/orgs/:org/credentials` | Stored credentials without their secrets (`credentials`) and whether the caller `canManage` them |
-| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/evaluation/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
+| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/db/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
 | `POST` | `/api/orgs/:org/credentials/:id/delete` | Deletes a credential; `400` while a comparison still references it |
 | `POST` | `/api/orgs/:org/credentials/codex-login` | Body `{ "name": "Codex" }`. Starts a ChatGPT device sign-in for Codex; `202` with the session id and instructions |
 | `GET` | `/api/orgs/:org/credentials/codex-login/:id` | Sign-in status |
@@ -151,22 +141,17 @@ Metered Stripe billing applies only to managed model and sandbox usage. Organiza
 
 `GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 
-## Run artifacts and CLI routes
+## Run artifacts and run routes
 
-The site's task pages read bundles and raw artifacts through the run routes that the CLI also uses. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. See [Operations](operations.md#http-api) for run submission details.
+The site's task pages read bundles and raw artifacts through the run routes that the CLI also uses. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. Start runs with the batch routes above.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check (unauthenticated) |
-| `GET` | `/v1/viewer` | Viewer capabilities (unauthenticated) |
-| `GET` | `/v1/runs` | Every run Temporal knows plus archived runs |
-| `POST` | `/v1/runs` | Start a candidate workflow or a replay |
+| `GET` | `/v1/runs` | Every batch plus archived runs |
 | `GET` | `/v1/runs/:runId` | Run status |
 | `POST` | `/v1/runs/:runId/cancel` | Request cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download the export archive |
-| `POST` | `/v1/provenance?runId=…` | Store provenance JSONL for a run |
-| `GET` | `/v1/runs/:runId/candidates` | Every candidate of a run |
-| `GET` | `/v1/runs/:runId/candidates/:taskId/artifacts` | Artifact keys for one candidate |
 | `GET` | `/v1/runs/:runId/artifacts?key=…&start=…` | Stream one artifact, optionally from a byte offset |
 | `GET` | `/v1/runs/:runId/bundle?key=…` | Expand a Harbor task bundle into its text files |
 

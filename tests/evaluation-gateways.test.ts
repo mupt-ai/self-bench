@@ -1,13 +1,12 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
-import { credentialSchema } from "../src/evaluation/credentials.js";
-import { gatewayTrial } from "../src/evaluation/gateway-execution.js";
-import { harnessIds } from "../src/evaluation/harnesses.js";
-import { modelRoutes, routeFor } from "../src/evaluation/model-options.js";
+import { gatewayTrial } from "../src/evaluation/execution.js";
+import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 
 test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
   expect(solverArguments("task", "jobs", "codex", "openai/gpt-5.6-sol", "modal")).toContain(
@@ -37,7 +36,7 @@ async def check():
     assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
 asyncio.run(check())
 `,
-    fileURLToPath(new URL("../src/harbor-runtime/harbor_gateway.py", import.meta.url)),
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);
   expect(result.exitCode).toBe(0);
 });

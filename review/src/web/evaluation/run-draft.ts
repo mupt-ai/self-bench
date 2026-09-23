@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { harnessIds } from "../../../../src/evaluation/harnesses";
-import { thinkingLevels } from "../../../../src/evaluation/model-options";
+import { harnessIds, thinkingLevels } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
 
 const tasksSchema = z.array(

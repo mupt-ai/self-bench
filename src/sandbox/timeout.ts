@@ -1,5 +1,5 @@
+import { z } from "zod";
 import type {
-  SandboxExecResult,
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
@@ -13,7 +13,7 @@ export const HOBBY_VERCEL_TIMEOUT_CAP_MS = 45 * 60 * 1_000;
 export const STANDARD_E2B_TIMEOUT_CAP_MS = 24 * 60 * 60 * 1_000;
 export const HOBBY_E2B_TIMEOUT_CAP_MS = 60 * 60 * 1_000;
 
-export function parseSandboxTimeoutCapText(value: string): number | undefined {
+function parseSandboxTimeoutCapText(value: string): number | undefined {
   const normalized = value.trim().toLowerCase();
   if (normalized === "") {
     return undefined;
@@ -32,6 +32,26 @@ export function parseSandboxTimeoutCapText(value: string): number | undefined {
           ? 1_000
           : 1;
   return amount * multiplier;
+}
+
+/** A configured Vercel timeout cap, defaulting to the paid-team ceiling. */
+export function vercelTimeoutCap(value: string | undefined): number {
+  return providerTimeoutCap(value, STANDARD_VERCEL_TIMEOUT_CAP_MS);
+}
+
+/** A configured E2B timeout cap, defaulting to the Hobby-compatible one hour. */
+export function e2bTimeoutCap(value: string | undefined): number {
+  if (value === undefined) {
+    return HOBBY_E2B_TIMEOUT_CAP_MS;
+  }
+  return providerTimeoutCap(value, STANDARD_E2B_TIMEOUT_CAP_MS);
+}
+
+function providerTimeoutCap(value: string | undefined, maximumMs: number): number {
+  if (value === undefined) {
+    return maximumMs;
+  }
+  return z.number().int().min(100).max(maximumMs).parse(parseSandboxTimeoutCapText(value));
 }
 
 export class TimeoutCappedSandboxExecutor implements SandboxExecutor {
@@ -53,18 +73,6 @@ export class TimeoutCappedSandboxExecutor implements SandboxExecutor {
         : request,
       options,
     );
-  }
-
-  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
-    return this.#delegate.execute(sandboxId, command);
-  }
-
-  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
-    return this.#delegate.readFile(sandboxId, path);
-  }
-
-  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
-    return this.#delegate.writeFile(sandboxId, path, contents);
   }
 
   close(): void {

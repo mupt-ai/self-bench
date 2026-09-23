@@ -1,5 +1,5 @@
 import React from "react";
-import type { GenerationSettings } from "../../../src/site/generation-settings";
+import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { fetchGenerationOptions } from "./api";
 import type { GenerationOptions } from "./GenerationFields";
 import {

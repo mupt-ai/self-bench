@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../src/archive.js";
-import { runCommand } from "../src/process.js";
+import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../src/lib/archive.js";
+import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
 

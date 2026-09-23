@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createBatchStore } from "../../src/batches/store.js";
+import { createBatchStore } from "../../src/db/batches.js";
 import { testDatabase } from "../support/site-fixture.js";
 import { artifact, run } from "../support/workflow-fixture.js";
 

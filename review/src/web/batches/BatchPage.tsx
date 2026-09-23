@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
 import { BatchProgress } from "../BatchProgress";
 import { batchIsTerminal } from "../batch-api";
+import { GenerationCost } from "../GenerationCost";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
@@ -46,8 +47,13 @@ export function BatchPage() {
           ) : undefined
         }
       >
-        {status && !batchIsTerminal(status.phase) && (
-          <CancelBatch key={batchId} repoId={repoId} runId={batchId} onCancelled={refresh} />
+        {status && (
+          <div className="flex items-center gap-3">
+            <GenerationCost cost={status.cost} />
+            {!batchIsTerminal(status.phase) && (
+              <CancelBatch key={batchId} repoId={repoId} runId={batchId} onCancelled={refresh} />
+            )}
+          </div>
         )}
       </PageHeader>
       {!status && state?.batchStartWarning && (

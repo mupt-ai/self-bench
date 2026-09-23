@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { evaluationServer } from "./support/evaluation-fixture.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
-test("both evaluation endpoints accept eleven scoped approved tasks without truncation", async () => {
-  const fixture = await evaluationServer(new MemoryRecords());
+test("comparisons accept eleven scoped approved tasks without truncation", async () => {
+  const fixture = await evaluationServer(memoryVault());
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
     const tasks = Array.from({ length: 11 }, (_, index) => ({
@@ -28,7 +28,7 @@ test("both evaluation endpoints accept eleven scoped approved tasks without trun
     }
     const credential = async (kind: string) => {
       const response = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         post({ name: kind, kind, value: "mock-only" }),
       );
       expect(response.status).toBe(201);
@@ -37,10 +37,6 @@ test("both evaluation endpoints accept eleven scoped approved tasks without trun
     const modelKey = await credential("openai");
     const sandboxKey = await credential("e2b");
     const bodies = [
-      {
-        path: fixture.base,
-        body: { model: "openai-test", harnesses: ["codex"], sandbox: "docker" },
-      },
       {
         path: `${fixture.base}/comparisons`,
         body: {

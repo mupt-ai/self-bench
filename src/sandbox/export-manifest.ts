@@ -1,4 +1,4 @@
-import type { RunRequest } from "../contracts.js";
+import type { RunRequest } from "../contracts/index.js";
 export interface DroppedDuplicate {
   readonly taskId: string;
   readonly sourcePr: number;

@@ -2,37 +2,62 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../../src/artifacts.js";
-import { apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
-import { createSiteAuth } from "../../src/auth/routes.js";
-import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
-import { createUserStore } from "../../src/auth/users.js";
-import type { CodexLogins } from "../../src/evaluation/codex-login.js";
-import {
-  createEncryptedRecords,
-  type EncryptedRecordStore,
-} from "../../src/evaluation/encrypted-records.js";
-import { createEvaluationRoutes } from "../../src/evaluation/routes.js";
+import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { createSiteAuth } from "../../src/api/routes/auth.js";
+import { createEvaluationRoutes } from "../../src/api/routes/evaluations.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
+import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
+import { createVault, type Vault } from "../../src/db/vault.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
-import { createRepoStore } from "../../src/site/repo-store.js";
-import { createTaskStore } from "../../src/site/task-store.js";
+import type { CodexLogins } from "../../src/harnesses/codex/login.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {
   SELFBENCH_EVAL_CREDENTIAL_KEY: "a".repeat(64),
-  SELFBENCH_EVAL_MODELS: JSON.stringify([
-    {
-      id: "openai-test",
-      label: "Test model",
-      model: "openai/test-model",
-      harnesses: ["codex", "pi"],
-      tenants: ["avyay"],
-      credentialEnv: "SELFBENCH_EVAL_SECRET_TEST",
-    },
-  ]),
-  SELFBENCH_EVAL_SANDBOXES: '["docker","modal"]',
-  SELFBENCH_EVAL_SECRET_TEST: "test-model-secret-never-publish",
 };
+export const testModelSecret = "test-model-secret-never-publish";
+
+/** A saved comparison input backed by an OpenAI key and an E2B key in organization 1. */
+export async function credentialedInput(
+  vault: Vault,
+  change: (input: EvaluationInput) => void = () => {},
+): Promise<EvaluationInput> {
+  const model = await vault.credentials.create(
+    1,
+    { name: "Model", kind: "openai", auth: "api-key", value: testModelSecret },
+    {},
+  );
+  const sandbox = await vault.credentials.create(
+    1,
+    { name: "Sandbox", kind: "e2b", auth: "api-key", value: "sandbox-secret" },
+    {},
+  );
+  const input: EvaluationInput = {
+    ...evaluationInput(),
+    sandbox: "e2b",
+    credentialOrgId: 1,
+    comparisonId: crypto.randomUUID(),
+    credentials: {
+      modelCredentialId: model.id,
+      sandboxCredentialId: sandbox.id,
+      provider: "openai",
+    },
+  };
+  change(input);
+  await vault.comparisons.insert({
+    id: input.comparisonId ?? "",
+    orgId: 1,
+    repoId: input.repoId,
+    createdAt: input.createdAt,
+    signature: "test",
+    inputs: [input],
+  });
+  return input;
+}
+
 export function evaluationInput(): EvaluationInput {
   return {
     id: crypto.randomUUID(),
@@ -48,7 +73,7 @@ export function evaluationInput(): EvaluationInput {
   };
 }
 export async function evaluationServer(
-  records?: EncryptedRecordStore,
+  vault?: Vault,
   codexLogins?: CodexLogins,
   env: NodeJS.ProcessEnv = evaluationEnv,
 ) {
@@ -154,9 +179,9 @@ export async function evaluationServer(
         publicUrl,
         ...(codexLogins ? { codexLogins } : {}),
         env,
-        records:
-          records ??
-          createEncryptedRecords(
+        vault:
+          vault ??
+          createVault(
             database.db,
             env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY,
           ),

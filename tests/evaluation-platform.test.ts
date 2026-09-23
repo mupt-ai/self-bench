@@ -2,19 +2,19 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readAccount } from "../src/evaluation/account.js";
+import { credentialSchema, validateEndpoint } from "../src/db/credentials.js";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
-import { credentialExecution } from "../src/evaluation/credential-execution.js";
-import { credentialSchema, validateEndpoint } from "../src/evaluation/credentials.js";
-import { orgRecords } from "../src/evaluation/org-records.js";
+import { credentialExecution } from "../src/evaluation/execution.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { evaluationEnv, evaluationServer } from "./support/evaluation-fixture.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
+
+const credentialsUrl = "/api/orgs/avyay/credentials";
 
 const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
 
 test("catalog is populated without keys and only exposes supported provider families", async () => {
-  const fixture = await evaluationServer(new MemoryRecords());
+  const fixture = await evaluationServer(memoryVault());
   try {
     const response = await fixture.request(`${fixture.base}/catalog`);
     const body = await response.json();
@@ -25,14 +25,14 @@ test("catalog is populated without keys and only exposes supported provider fami
     );
     expect(body.sandboxes).not.toContain("docker");
     expect((await fixture.request(`${fixture.base}/catalog`, {}, null)).status).toBe(401);
-    expect((await fixture.request(`${fixture.base}/credentials`, {}, 2)).status).toBe(404);
+    expect((await fixture.request(credentialsUrl, {}, 2)).status).toBe(404);
   } finally {
     await fixture.close();
   }
 });
 
 test("managed evaluations use the platform model and sandbox credentials", async () => {
-  const records = new MemoryRecords();
+  const records = memoryVault();
   const env = {
     ...evaluationEnv,
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "managed-model-secret",
@@ -72,14 +72,11 @@ test("managed evaluations use the platform model and sandbox credentials", async
 });
 
 test("durable comparison, scoped credentials, frozen tasks, partial dispatch and deletion protection", async () => {
-  const records = new MemoryRecords();
+  const records = memoryVault();
   const fixture = await evaluationServer(records);
   try {
     const create = async (kind: string, value: string) => {
-      const response = await fixture.request(
-        `${fixture.base}/credentials`,
-        post({ name: kind, kind, value }),
-      );
+      const response = await fixture.request(credentialsUrl, post({ name: kind, kind, value }));
       expect(response.status).toBe(201);
       const info = await response.json();
       expect(JSON.stringify(info)).not.toContain(value);
@@ -106,17 +103,14 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(saved.status).toBe(202);
     expect((await saved.json()).submissionError).toBeDefined();
-    const account = await readAccount(orgRecords(records, 1), 1);
-    expect(account.comparisons).toHaveLength(1);
-    const comparison = account.comparisons[0];
+    const comparisons = await records.comparisons.listForRepo(fixture.repo.id);
+    expect(comparisons).toHaveLength(1);
+    const comparison = comparisons[0];
     if (!comparison) throw new Error("Missing comparison");
     expect(comparison.inputs[0]?.tasks).toEqual(comparison.inputs[1]?.tasks);
     expect(comparison.inputs[0]?.thinking).toBe("xhigh");
     expect(JSON.stringify(comparison)).not.toContain("model-secret");
-    const deletion = await fixture.request(
-      `${fixture.base}/credentials/${modelKey}/delete`,
-      post({}),
-    );
+    const deletion = await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}));
     expect(deletion.status).toBe(400);
     expect((await fixture.request(`${fixture.base}/comparisons/${draft.id}`, {}, 2)).status).toBe(
       404,
@@ -159,9 +153,9 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
       run.status = "completed";
       await saveEvaluation(fixture.artifacts, run);
     }
-    expect(
-      (await fixture.request(`${fixture.base}/credentials/${modelKey}/delete`, post({}))).status,
-    ).toBe(200);
+    expect((await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}))).status).toBe(
+      200,
+    );
     await fixture.request(`${fixture.base}/comparisons/${draft.id}/resume`, post({}));
     expect(fixture.starts).toHaveLength(2);
   } finally {
@@ -181,17 +175,17 @@ test("credential validation rejects auth mixing and unsafe custom endpoints", as
   expect(
     credentialSchema.safeParse({ name: "wrong", kind: "modal", value: "secret" }).success,
   ).toBe(false);
-  await expect(validateEndpoint("http://127.0.0.1/v1", {})).rejects.toThrow("operator-approved");
-  await expect(validateEndpoint("https://api.example/v1", {})).rejects.toThrow("operator-approved");
+  expect(() => validateEndpoint("http://127.0.0.1/v1", {})).toThrow("operator-approved");
+  expect(() => validateEndpoint("https://api.example/v1", {})).toThrow("operator-approved");
   expect(
-    await validateEndpoint("https://api.example/v1/", {
+    validateEndpoint("https://api.example/v1/", {
       SELFBENCH_CUSTOM_MODEL_HOSTS: "api.example",
     }),
   ).toBe("https://api.example/v1");
 });
 
 test("Codex sign-in is explicit, scoped and never falls back to an API key", async () => {
-  const records = new MemoryRecords();
+  const records = memoryVault();
   const fixture = await evaluationServer(records);
   const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
   try {
@@ -200,13 +194,13 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
     });
     const model = await (
       await fixture.request(
-        `${fixture.base}/credentials`,
+        credentialsUrl,
         post({ name: "Codex", kind: "openai", auth: "codex-login", value: auth }),
       )
     ).json();
     const sandbox = await (
       await fixture.request(
-        `${fixture.base}/credentials`,
+        credentialsUrl,
         post({ name: "Sandbox", kind: "e2b", value: "fake-sandbox" }),
       )
     ).json();

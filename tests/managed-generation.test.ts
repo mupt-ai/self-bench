@@ -1,16 +1,14 @@
 import { expect, test } from "bun:test";
-import { saveCredential } from "../src/evaluation/credentials.js";
-import { orgRecords } from "../src/evaluation/org-records.js";
-import { withExecutionEnvironment } from "../src/execution-environment.js";
-import { meteredSandboxExecutor } from "../src/managed/metered-sandbox.js";
-import { managedModelCostUsd, managedSandboxCostUsd } from "../src/managed/pricing.js";
-import { generationEnvironment } from "../src/site/generation-credentials.js";
-import { generationModelRoute } from "../src/site/generation-models.js";
-import type { GenerationReference } from "../src/site/generation-settings.js";
-import { generationSettingsSchema } from "../src/site/generation-settings.js";
-import { managedModelKey, managedOffer } from "../src/site/managed-generation.js";
-import { loadPiModelAuth } from "../src/subscription-auth.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { withExecutionEnvironment } from "../src/contracts/config/execution-environment.js";
+import { managedModelKey, managedOffer } from "../src/generation/billing/managed.js";
+import { meteredSandboxExecutor } from "../src/generation/billing/metered-sandbox.js";
+import { managedModelCostUsd, managedSandboxCostUsd } from "../src/generation/billing/pricing.js";
+import { generationEnvironment } from "../src/generation/settings/credentials.js";
+import { generationModelRoute } from "../src/generation/settings/models.js";
+import type { GenerationReference } from "../src/generation/settings/settings.js";
+import { generationSettingsSchema } from "../src/generation/settings/settings.js";
+import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
 const managedSettings = {
   authorModel: "gpt-5.6-sol",
@@ -78,15 +76,13 @@ test("model routes resolve per credential kind", () => {
 });
 
 test("managed runs resolve platform keys and never inherit the worker's own credentials", async () => {
-  const records = new MemoryRecords();
-  const sandbox = await saveCredential(
-    orgRecords(records, 1),
+  const vault = memoryVault();
+  const sandbox = await vault.credentials.create(
     1,
     { name: "Modal", kind: "modal", auth: "api-key", value: "sandbox-one", tokenId: "id-one" },
     {},
   );
-  const model = await saveCredential(
-    orgRecords(records, 1),
+  const model = await vault.credentials.create(
     1,
     { name: "OpenAI", kind: "openai", auth: "api-key", value: "model-one" },
     {},
@@ -104,9 +100,9 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
       sandboxCredentialId: sandbox.id,
     },
   };
-  await records.write(`generations/run-m`, reference, 0);
+  await vault.records.write(`generations/run-m`, reference, 0);
   const offer = { models: true, sandbox: true };
-  const env = await generationEnvironment(records, "run-m", reference, {
+  const env = await generationEnvironment(vault, "run-m", reference, {
     OPENAI_API_KEY: "host-key",
     MODAL_TOKEN_SECRET: "host-modal",
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
@@ -122,8 +118,8 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
     ...reference,
     settings: { ...managedSettings },
   };
-  await records.write(`generations/run-managed`, managedReference, 0);
-  const managedEnv = await generationEnvironment(records, "run-managed", managedReference, {
+  await vault.records.write(`generations/run-managed`, managedReference, 0);
+  const managedEnv = await generationEnvironment(vault, "run-managed", managedReference, {
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
     SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b",
   });
@@ -136,19 +132,16 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
     models: true,
     sandbox: false,
   });
-  await expect(generationEnvironment(records, "run-managed", managedReference, {})).rejects.toThrow(
+  await expect(generationEnvironment(vault, "run-managed", managedReference, {})).rejects.toThrow(
     "Managed models are not available",
   );
   expect(managedModelKey({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toBe("k");
 });
 
-test("managed usage metering records tokens and sandbox seconds with costs", async () => {
+test("managed usage metering vault tokens and sandbox seconds with costs", async () => {
   meteredSandboxExecutor(
     {
       run: async () => ({ sandboxId: "s", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
-      execute: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
-      readFile: async () => undefined,
-      writeFile: async () => undefined,
       close: () => {},
     },
     { managedModel: true, managedSandbox: true, model: "gpt-5.6-sol" },

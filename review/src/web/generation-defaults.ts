@@ -1,13 +1,13 @@
-import type { CredentialInfo } from "../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../src/db/credentials";
 import {
   generationModelCredentialKinds,
   generationModelLabel,
-} from "../../../src/site/generation-models";
+} from "../../../src/generation/settings/models";
 import {
   type GenerationSettings,
   generationSandboxLabels,
   generationSettingsSchema,
-} from "../../../src/site/generation-settings";
+} from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
 
 export const defaultGenerationSettings: GenerationSettings = {

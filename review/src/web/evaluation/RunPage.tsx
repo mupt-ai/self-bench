@@ -1,11 +1,10 @@
 import { Plus } from "lucide-react";
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { routeFor, thinkingOptions } from "../../../../src/evaluation/model-options";
-import { evaluationTaskKey } from "../../../../src/evaluation/task-identity";
+import { evaluationTaskKey, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";

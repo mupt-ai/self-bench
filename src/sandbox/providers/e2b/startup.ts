@@ -1,6 +1,6 @@
 import { E2B } from "e2b";
-import type { SelfBenchWorkerConfig } from "../../../config.js";
-import { raceWithSignal } from "./lifecycle.js";
+import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
+import { errorMessage, raceAbort } from "../../../lib/util.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
 
@@ -17,7 +17,8 @@ export async function validateE2BWorkerStartup(
   const signal = AbortSignal.timeout(timeoutMs);
   let exists: boolean;
   try {
-    exists = await raceWithSignal(resolved.exists(config.image, signal), signal);
+    // The SDK does not always honor the signal, so the bound is enforced here.
+    exists = await raceAbort(resolved.exists(config.image, signal), signal);
   } catch (error) {
     throw new Error(
       `E2B startup validation could not access template ${config.image}: ${errorMessage(error)}`,
@@ -26,7 +27,7 @@ export async function validateE2BWorkerStartup(
   }
   if (!exists) {
     throw new Error(
-      `E2B template ${config.image} does not exist or is not accessible; build it with self-bench setup e2b --name ${config.image}`,
+      `E2B template ${config.image} does not exist or is not accessible; build it with bun scripts/build-e2b-template.ts --name ${config.image}`,
     );
   }
 }
@@ -37,8 +38,4 @@ function createE2BStartupApi(config: E2BExecutionConfig): E2BStartupApi {
     exists: async (template, signal) =>
       await client.Template.exists(template, { requestTimeoutMs: 30_000, signal }),
   };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

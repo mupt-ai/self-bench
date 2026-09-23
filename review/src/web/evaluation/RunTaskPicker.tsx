@@ -1,7 +1,7 @@
 import { ChevronDown, Database } from "lucide-react";
 import { Link } from "react-router";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { evaluationTaskKey } from "../../../../src/evaluation/task-identity";
+import { evaluationTaskKey } from "../../../../src/evaluation/models";
 import { Button } from "../ui";
 import type { EvaluationOptions } from "./api";
 

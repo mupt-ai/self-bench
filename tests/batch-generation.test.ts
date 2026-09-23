@@ -1,27 +1,23 @@
 import { expect, test } from "bun:test";
-import { loadWorkerConfig } from "../src/config.js";
-import { saveCredential } from "../src/evaluation/credentials.js";
-import { orgRecords } from "../src/evaluation/org-records.js";
-import { withExecutionEnvironment } from "../src/execution-environment.js";
+import { withExecutionEnvironment } from "../src/contracts/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/contracts/config/index.js";
+import { createActivities } from "../src/generation/pipeline/activities.js";
+import { withGenerationRuntime } from "../src/generation/pipeline/runtime.js";
+import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
-import { generationEnvironment } from "../src/site/generation-credentials.js";
-import { githubToken } from "../src/subscription-auth.js";
-import { createActivities } from "../src/temporal/activities/factory.js";
-import { withGenerationRuntime } from "../src/temporal/activities/generation-runtime.js";
+import { githubToken } from "../src/third_party/github/token.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
 async function configured() {
-  const records = new MemoryRecords();
-  const f = await fixture({ records });
-  const model = await saveCredential(
-    orgRecords(records, f.tenant.id),
+  const vault = memoryVault();
+  const f = await fixture({ vault });
+  const model = await vault.credentials.create(
     f.tenant.id,
     { name: "Model", kind: "openai", auth: "api-key", value: "batch-model-secret" },
     {},
   );
-  const sandbox = await saveCredential(
-    orgRecords(records, f.tenant.id),
+  const sandbox = await vault.credentials.create(
     f.tenant.id,
     {
       name: "Sandbox",
@@ -51,7 +47,7 @@ async function configured() {
         generation: settings,
       }),
     });
-  return { ...f, records, generation, post };
+  return { ...f, vault, generation, post };
 }
 
 test("batch settings reach discovery and candidate runtimes with saved organization credentials", async () => {
@@ -76,7 +72,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
   expect(JSON.stringify(run)).not.toContain("batch-model-secret");
   expect(JSON.stringify(run)).not.toContain("batch-modal-secret");
   expect(JSON.stringify(run)).not.toContain("secret-token");
-  const env = await generationEnvironment(f.records, run.runId, run.generation, {});
+  const env = await generationEnvironment(f.vault, run.runId, run.generation, {});
   expect(env.OPENAI_API_KEY).toBe("batch-model-secret");
   expect(env.MODAL_TOKEN_SECRET).toBe("batch-modal-secret");
   // The hosted worker has no GitHub login; provenance and discovery use the submitter's token.
@@ -87,7 +83,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
   for (const stage of ["author", "verifier"] as const) {
     await withGenerationRuntime(
       config,
-      f.records,
+      f.vault,
       run,
       stage,
       legacy,
@@ -99,12 +95,9 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       },
     );
   }
-  // Provenance and discovery must resolve this run's credentials before touching any sandbox
+  // Discovery must resolve this run's credentials before touching any sandbox
   // or activity context.
   const activities = createActivities(config);
-  await expect(activities.collectRunProvenance(run)).rejects.toThrow(
-    "credentials are not configured",
-  );
   await expect(
     activities.discoverCandidateShard({
       run,
@@ -123,8 +116,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
 
 test("invalid, foreign and missing batch credentials fail before discovery or workflow start", async () => {
   const f = await configured();
-  const foreign = await saveCredential(
-    orgRecords(f.records, f.tenant.id + 100),
+  const foreign = await f.vault.credentials.create(
     f.tenant.id + 100,
     { name: "Foreign", kind: "openai", auth: "api-key", value: "foreign" },
     {},
@@ -156,7 +148,7 @@ test("invalid, foreign and missing batch credentials fail before discovery or wo
   ).toBe(503);
   expect(unavailable.github).toHaveLength(0);
   expect(unavailable.started).toHaveLength(0);
-  f.records.write = async () => {
+  f.vault.records.write = async () => {
     throw new Error("storage unavailable");
   };
   expect((await f.post()).status).toBe(500);

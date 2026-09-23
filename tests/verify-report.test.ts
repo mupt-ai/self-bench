@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { VerifyReport } from "../src/contracts.js";
+import type { VerifyReport } from "../src/contracts/index.js";
 import {
   isGreen,
   nopGatePassed,
   oracleGatePassed,
   renderVerifyReport,
   verifyReportSummary,
-} from "../src/verify-report.js";
+} from "../src/generation/pipeline/verify-report.js";
 
 const greenReport: VerifyReport = {
   schemaVersion: 1,

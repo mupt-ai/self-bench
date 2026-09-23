@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildRunRequest } from "../src/api.js";
-import { loadConfig } from "../src/config.js";
+import { loadConfig } from "../src/contracts/config/index.js";
+import { buildRunRequest } from "../src/generation/settings/run.js";
 import { HOBBY_E2B_TIMEOUT_CAP_MS, HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/timeout.js";
 
 const submission = {
@@ -33,47 +33,6 @@ describe("API run metadata", () => {
       buildRunRequest(loadConfig(), {
         ...submission,
         candidateCounts: { easy: 100, medium: 100, hard: 101 },
-      }),
-    ).toThrow();
-  });
-
-  test("carries excluded runs into the request and omits an empty list", () => {
-    const built = buildRunRequest(loadConfig(), {
-      ...submission,
-      excludeRuns: ["posthog-agent-pipeline-20-v1", "posthog-agent-pipeline-replay-v1"],
-    });
-
-    expect("excludeRuns" in built ? built.excludeRuns : undefined).toEqual([
-      "posthog-agent-pipeline-20-v1",
-      "posthog-agent-pipeline-replay-v1",
-    ]);
-    expect(buildRunRequest(loadConfig(), { ...submission, excludeRuns: [] })).not.toHaveProperty(
-      "excludeRuns",
-    );
-    expect(() =>
-      buildRunRequest(loadConfig(), { ...submission, excludeRuns: ["Not A Run Id"] }),
-    ).toThrow();
-  });
-
-  test("builds a replay request that skips discovery inputs", () => {
-    const built = buildRunRequest(loadConfig(), {
-      runId: "replay-run",
-      replay: { sourceRunId: "source-run", candidateIds: ["w0s1-alpha", "w1s3-beta"] },
-      authoringModel: "gpt-5.6-sol",
-      selfbenchCommit: "c".repeat(40),
-    });
-
-    expect(built).toEqual({
-      runId: "replay-run",
-      replay: { sourceRunId: "source-run", candidateIds: ["w0s1-alpha", "w1s3-beta"] },
-      authoring: { provider: "openai-codex", model: "gpt-5.6-sol", reasoningEffort: "high" },
-      version: expect.objectContaining({ selfbenchCommit: "c".repeat(40), schema: 2 }),
-    });
-    expect(() =>
-      buildRunRequest(loadConfig(), {
-        runId: "replay-run",
-        replay: { sourceRunId: "source-run", candidateIds: [] },
-        selfbenchCommit: "c".repeat(40),
       }),
     ).toThrow();
   });

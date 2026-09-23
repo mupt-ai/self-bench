@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Skeleton } from "../LoadingSkeleton";
 import { Button, SectionHeader } from "../ui";
 import { CredentialActions } from "./CredentialActions";

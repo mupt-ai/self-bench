@@ -34,7 +34,21 @@ self-bench requires GitHub and model credentials:
 
 Self-managed workers (started outside Compose, e.g. the cloud topology below) may instead hold `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY` in their own environment; a managed platform key is the last resort before the host's ChatGPT subscription. For ChatGPT subscription authentication on such a worker, provide `SELFBENCH_PI_AUTH_JSON` containing Pi's `openai-codex` OAuth credential. API-key authentication takes precedence when a key variable is set. SelfBench does not install or invoke the Codex CLI; exported-task evaluation credentials belong to Harbor.
 
-Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. For a local Vercel worker, `self-bench setup vercel` stores a project-scoped token in an owner-only local profile. Unattended Vercel workers use the equivalent `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; E2B setup reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
+Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. Vercel workers use `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; The E2B template script reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
+
+### Moving stored credentials to their tables (one time)
+
+Organization credentials and evaluation comparisons used to live inside encrypted per-account blobs in `evaluation_records`. They now live in the `credentials` table (one row per credential, secret column sealed with `SELFBENCH_EVAL_CREDENTIAL_KEY`) and the `comparisons` table. Migration `0010_credentials_and_comparisons` creates the empty tables; `src/db/records-migration.ts` copies the data. It keeps every credential and comparison ID, maps personal accounts to the user's personal organization, records deleted credentials as soft-deleted rows without a secret, and skips IDs already copied, so it is safe to rerun. It never deletes the source records, so rolling the code back needs no data restore (credentials added after the cutover exist only in the new tables).
+
+Run it only with a separate deployment authorization, against the database the API uses:
+
+1. Stop new submissions: stop the API and worker (`docker compose stop api worker`, or the equivalent for your topology). Credentials created between the copy and the cutover would otherwise be missed.
+2. Take a database backup.
+3. Dry run from the new release's API image, which already carries `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY`: `docker compose run --rm --no-deps api node dist/db/records-migration.js`. It applies pending schema migrations, then prints counts of accounts, live and deleted credentials, comparisons, and any skipped accounts. It writes no rows. It never prints secrets.
+4. Apply: the same command with `--apply`. Rerun the dry run and confirm the counts match `select count(*) from credentials` and `select count(*) from comparisons`.
+5. Start the API and worker on the new release. Spot-check **Settings → Credentials** and **Results → comparisons** for one organization.
+
+The old `accounts/…` and `credentials/…` records can be deleted in a later release once the new tables are confirmed. Generation run records (`generations/<runId>`) and managed E2B template locks stay in `evaluation_records`.
 
 ## Execution backends and Harbor
 
@@ -101,7 +115,7 @@ Modal defaults to 20 concurrent worker activities; hosted provider settings rema
 
 ### E2B
 
-E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. Sandboxes must run a custom SelfBench template: stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects. Hosted generation manages this automatically — the worker builds a template named `selfbench-runtime:<dockerfile-hash>` in the run's E2B account from the packaged `Dockerfile.sandbox` the first time a run needs it, and reuses it after (an encrypted record serialises concurrent builds, and a lock left by a crashed worker is taken over after 45 minutes). Self-hosted stacks can rely on the same managed template or build their own with `self-bench setup e2b` and export `SELFBENCH_E2B_TEMPLATE`; SelfBench never installs runtime dependencies while allocating a sandbox.
+E2B generation defaults to E2B Harbor; choose Docker, Modal, Vercel, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. Sandboxes must run a custom SelfBench template: stock E2B templates do not contain the pinned Pi, GitHub CLI, system packages, or `/work` layout that SelfBench expects. Hosted generation manages this automatically — the worker builds a template named `selfbench-runtime:<dockerfile-hash>` in the run's E2B account from the packaged `Dockerfile.sandbox` the first time a run needs it, and reuses it after (an encrypted record serialises concurrent builds, and a lock left by a crashed worker is taken over after 45 minutes). Self-hosted stacks can rely on the same managed template or build their own with `bun scripts/build-e2b-template.ts` from a checkout and export `SELFBENCH_E2B_TEMPLATE`; SelfBench never installs runtime dependencies while allocating a sandbox.
 
 #### Build the template
 
@@ -112,7 +126,7 @@ export E2B_API_KEY=...
 # Optional only for an E2B-compatible private/control-plane domain:
 # export E2B_DOMAIN=e2b.example.com
 
-self-bench setup e2b --name selfbench-runtime:v1
+bun scripts/build-e2b-template.ts --name selfbench-runtime:v1
 ```
 
 This noninteractive command uses the pinned `e2b@2.46.0` SDK to parse the packaged `Dockerfile.sandbox` with the package root as its file context, then calls `Template.build`. It does not require the E2B CLI or a local Docker daemon. Setup accepts a lowercase `name[:tag]` (letters, digits, hyphens, and underscores, plus periods in a tag) and rejects malformed names before any SDK call. The Dockerfile pins its base image and tool versions, supplies an `amd64` default for E2B's `TARGETARCH` parser, and ends at `WORKDIR /work`. Build requests have a 60-second per-request control-plane timeout while the build itself may run longer. Build logs go to stderr; on success the command prints JSON containing the exact template reference returned by E2B, template ID, build ID, and a shell-safe `SELFBENCH_E2B_TEMPLATE` export. Preserve the build ID in deployment records and use a new versioned name/tag when rebuilding so run metadata can identify the intended runtime reference; a mutable tag is not an immutable build identifier.
@@ -120,7 +134,7 @@ This noninteractive command uses the pinned `e2b@2.46.0` SDK to parse the packag
 A standard SelfBench request expects 4 CPUs and 8,192 MiB. E2B 2.46 assigns CPU and memory when the template is built and exposes no per-sandbox resource override. Setup therefore uses those values by default:
 
 ```bash
-self-bench setup e2b \
+bun scripts/build-e2b-template.ts \
   --name selfbench-runtime:v1 \
   --cpus 4 \
   --memory-mib 8192
@@ -166,46 +180,22 @@ Common failures:
 
 ### Vercel Sandbox
 
-Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or review round requests four hours; setup detects the selected project's effective capability and caps every Vercel stage centrally when necessary. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
+Vercel generation defaults to Vercel Harbor; choose Docker, Modal, E2B, or Daytona instead with `SELFBENCH_HARBOR_ENVIRONMENT`. SelfBench supports both Vercel's 45-minute Hobby Sandbox ceiling and the longer paid-team ceiling. Discovery requests 45 minutes and each authoring or review round requests four hours; `SELFBENCH_VERCEL_TIMEOUT_CAP` (default `2h`; use `45m` on Hobby) caps every Vercel stage centrally. Sandbox use, VCR storage, memory, active CPU, and data transfer are metered by Vercel; configure Spend Management before unattended runs. Vercel Hobby use is intended for personal, non-commercial work.
 
-#### Interactive local setup
+#### Publish the runtime image
 
-Install the current Vercel CLI and make sure Docker is available for the runtime-image build:
+Vercel sandboxes run a digest-pinned image built from `Dockerfile.sandbox` and published to the project's Vercel Container Registry (VCR). With the Vercel CLI logged in and Docker available, from a checkout:
 
 ```bash
 npm install --global vercel@latest
-self-bench setup vercel
+vercel vcr add selfbench-runtime --project "$VERCEL_PROJECT_ID" --scope "$TEAM_SLUG"
+vercel vcr login docker --project "$VERCEL_PROJECT_ID" --scope "$TEAM_SLUG"
+vercel vcr build docker . selfbench-runtime:v1 --project "$VERCEL_PROJECT_ID" \
+  --platform linux/amd64 --push --scope "$TEAM_SLUG" -- --file Dockerfile.sandbox
+vercel vcr tag inspect selfbench-runtime v1 --project "$VERCEL_PROJECT_ID" --scope "$TEAM_SLUG" --json
 ```
 
-Interactive setup keeps long-running publication and capability checks compact, with a live elapsed timer that freezes when each step completes. Use `self-bench setup vercel --verbose` to stream the underlying Vercel CLI and Docker build output; compact mode reveals retained command output automatically when a step fails.
-
-Setup uses Vercel CLI browser login for control-plane selection and VCR publication. It then:
-
-1. shows a searchable team or personal-scope picker;
-2. offers a searchable existing-project picker or creation of a dedicated project;
-3. asks for a project name, defaulting to `selfbench-sandbox`, and retries rather than silently suffixing an unavailable name;
-4. publishes the pinned `Dockerfile.sandbox` runtime to the project's `selfbench-runtime` VCR repository;
-5. prints the Vercel token page and asks for a manually created access token restricted to the selected project, with terminal echo disabled;
-6. creates and immediately deletes a one-vCPU, nonpersistent probe sandbox to verify the token, image, command execution, cleanup, and effective duration ceiling;
-7. activates the profile only after every required check succeeds.
-
-The project does not need a deployment. Its metered use is billed to its owning Vercel scope. CLI login and worker configuration are deliberately separate: CLI login selects and provisions resources, while the project-scoped token plus team and project IDs configure the SelfBench worker. Although the Vercel SDK supports ambient OIDC on Vercel infrastructure, SelfBench does not use it.
-
-Profiles live in `~/.selfbench/config.json`; tokens live separately in `~/.selfbench/credentials.json`. The directory is mode `0700`, both files are mode `0600`, writes are atomic, and displayed setup output never includes the token. Override the directory with `SELFBENCH_CONFIG_DIR` when isolation is needed. To maintain more than one project profile:
-
-```bash
-self-bench setup vercel --profile secondary
-```
-
-Export the saved profile's `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, and `SELFBENCH_VERCEL_IMAGE` into the environment Compose reads. Rerunning setup revalidates the existing project and token by default. It fingerprints the exact Dockerfile—including its digest-pinned base and pinned tool defaults—plus the fingerprint schema and target platform; if the matching immutable VCR image is already ready, publication is skipped. A changed runtime produces a new content-derived tag and digest. The final image reference is always digest-pinned, and existing digests are not deleted automatically. If the default VCR repository contains unrelated images, setup leaves it untouched and asks for another name.
-
-When rerunning setup for a named profile, the available actions are:
-
-- **Revalidate** keeps the saved team, project, and token. It verifies current access, reuses a compatible ready image, republishes only if the runtime fingerprint changed, reruns the temporary Sandbox capability probe, and refreshes the saved image digest and timeout cap.
-- **Replace the access token** keeps the saved team and project, requests a new project-scoped token, and activates it only after verification succeeds. It replaces only the locally stored credential; revoke the old token separately in Vercel if necessary.
-- **Choose another team or project** repoints the same local profile name after the new project, image, and token pass verification. It does not delete the previous Vercel project or images. Use a different `--profile` name instead when both configurations should remain available.
-
-If setup is interrupted after creating a project or VCR repository, it reports the failure and leaves the durable resource in place; rerun setup to continue. It never activates a partial profile. Vercel projects and VCR images are reusable across SelfBench runs and persist after `docker compose down`.
+Set `SELFBENCH_VERCEL_IMAGE` to the bare repository-plus-digest form (`selfbench-runtime@sha256:...`) from the inspect output, and create a project-scoped access token for `VERCEL_TOKEN`. Publish a new tag whenever `Dockerfile.sandbox` changes. The project does not need a deployment; its metered use is billed to its owning Vercel scope.
 
 #### Start the local worker
 
@@ -216,11 +206,11 @@ SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker com
 
 Modal Harbor also needs the Modal profile or token pair. Vercel control credentials are removed from the Harbor child process for both Harbor environments. Export the complete credential triple, digest-pinned image, and timeout cap before starting Compose.
 
-The setup probe records a two-hour effective SelfBench ceiling when the requested two-hour sandbox is accepted. If Vercel returns its exact 45-minute limit response, setup verifies a 45-minute sandbox, explains the impact, and asks before saving that cap. Longer authoring and review rounds then run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
+With a 45-minute cap, longer authoring and review rounds run for at most 45 minutes and return exit 124 on timeout, so only the affected round fails. Discovery retains its shorter requested limit. The effective cap is included in run and export metadata.
 
 #### Environment-only and unattended workers
 
-`self-bench setup vercel` is intentionally interactive. CI and long-running workers can provide the same resolved values through environment variables or a secret manager:
+Workers read the Vercel values from environment variables or a secret manager:
 
 ```bash
 export VERCEL_TOKEN=...
@@ -232,7 +222,7 @@ export SELFBENCH_VERCEL_TIMEOUT_CAP=2h  # use 45m when that is the verified ceil
 SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
 ```
 
-The image must already have been published from `Dockerfile.sandbox` to the same project's VCR as `linux/amd64`. Use the bare repository-plus-digest form shown above; tags and rolling aliases are rejected. VCR repositories are project-scoped by default, so a sandbox in another project cannot use the image unless the repository is explicitly shared. Explicit token and image values take precedence over profile values, and a lower timeout cap may be supplied; an override cannot exceed the profile's verified ceiling. Supplying a complete credential/image environment requires no local profile; partial team or project overrides are rejected rather than combined across scopes.
+The image must already have been published from `Dockerfile.sandbox` to the same project's VCR as `linux/amd64`. Use the bare repository-plus-digest form shown above; tags and rolling aliases are rejected. VCR repositories are project-scoped by default, so a sandbox in another project cannot use the image unless the repository is explicitly shared.
 
 Vercel defaults to four concurrent worker activities. A standard SelfBench sandbox requests 4 vCPUs, which Vercel pairs with 8 GB of memory, plus 32 GB of ephemeral disk. Unsupported CPU/memory combinations are rejected before allocation. Raise `SELFBENCH_ACTIVITY_CONCURRENCY` only after considering the team's allocation limits and budget. Lower it—often to `1`—when using Docker Harbor on a smaller local machine, because the Vercel-oriented default does not account for local Harbor capacity.
 
@@ -242,112 +232,21 @@ Cancel active workflows and let cleanup finish before stopping the stack.
 
 Common failures:
 
-- A newly changed paid plan may take time to propagate its longer timeout entitlement. Rerun `self-bench setup vercel` to repeat the short-lived capability probe and update the saved cap; if a correctly scoped paid project continues to detect 45 minutes, verify team/project ownership before contacting Vercel Support.
+- A newly changed paid plan may take time to propagate its longer timeout entitlement. Keep `SELFBENCH_VERCEL_TIMEOUT_CAP=45m` until it does; if a correctly scoped paid project keeps rejecting longer sandboxes, verify team/project ownership before contacting Vercel Support.
 - `not_found` on create usually means the image belongs to another project or is private and unshared. Prefer the same project and a bare digest reference.
 - `image_not_ready` means VCR has not finished optimizing the `linux/amd64` image.
 - Repeated HTTP 429 allocation failures indicate project/team allocation pressure. The executor honors bounded `Retry-After` retries; reduce activity concurrency if pressure continues.
 - Cleanup errors fail the activity rather than silently leaving reusable state and include the exact `selfbench-...` sandbox name for diagnosis.
 
-## CLI behavior
+## Generation runs
 
-`self-bench run` requires an absolute or relative path to a Git checkout whose `origin` is an HTTPS or SSH GitHub URL. It pins `HEAD`; uncommitted content is excluded.
-
-The CLI collects sanitized user messages from Pi, Claude Code, and Codex sessions associated with the checkout or its worktrees, then uploads that local corpus with the run request. The workflow starts by running a Temporal activity on the worker that fetches exact titles and bodies from up to 500 recent merged pull requests by non-bot authors that clear coarse tier-appropriate size thresholds. It stores the combined local and GitHub corpus as a run artifact before discovery begins.
-
-GitHub records remain labeled `github-pull-request` and are bound to their own repository, PR number, and canonical URL. Local requests are preferred when they clearly describe the same change. A run can proceed with only local or only GitHub provenance, but fails when the combined corpus is empty. Common credential forms and injected harness context are removed, but this is not a general secret scanner.
-
-### Explicit local-session association
-
-Use an optional local association manifest when you know which coding session produced a merged PR and do not want remote discovery to infer that correspondence. First list the sanitized sessions found for the repository and all of its worktrees:
-
-```bash
-self-bench associate --repo /absolute/path/to/repository --list-sessions
-```
-
-The newest sessions appear first. The listing contains source type, session ID, retained user-message count, the local session file path (with the home directory abbreviated as `~`), and its filesystem modification timestamp. These fields stay in terminal output only: they are not written to the association manifest or uploaded. Request text is never printed. Treat paths and timestamps as private metadata, and redirect the listing only to a protected file if it must be saved. Select one or more complete sessions and bind them to one merged PR:
-
-```bash
-self-bench associate \
-  --repo /absolute/path/to/repository \
-  --pr 123 \
-  --session pi:01a03611-1df5-7f46-a88e-e24f4987b745 \
-  --session claude-code:9dd842c0-59d8-4838-8f29-cff97820f4e8 \
-  --output ./pr-123-sessions.json
-```
-
-`associate` calls `gh pr view` to verify that the PR is merged and belongs to the repository. It then writes the output with create-only semantics and owner-only permissions. The manifest is deterministic and text-free: it contains the repository, canonical PR identity, each selected local message identity, and a SHA-256 of the exact sanitized and whitespace-normalized content SelfBench retains. It does **not** contain request text, upload anything, mutate the repository, or start a run. Keep it private anyway because session identifiers and PR associations can be sensitive.
-
-Pass one or more manifests explicitly when starting a run:
-
-```bash
-self-bench run \
-  --repo /absolute/path/to/repository \
-  --association ./pr-123-sessions.json \
-  --easy-count 5 \
-  --medium-count 10 \
-  --hard-count 5 \
-  --output ./self-bench-tasks.tar.gz
-```
-
-The run command re-collects, whitespace-normalizes, and sanitizes local sessions, validates the manifest's repository and the complete selected-session snapshot, then annotates the exact retained messages before the existing provenance upload. Changed, added, or missing messages, cross-repository manifests, duplicate bindings, and one message associated more than once fail locally before upload. Unassociated local messages retain the existing discovery behavior only for PRs without explicit associations. On the worker, an explicit local association suppresses the GitHub title/body fallback for that PR, and materialization rejects any attempt to pair that PR with an unbound local message. The API, run request, and artifact reference contracts do not change; the existing sanitized provenance NDJSON is how the worker consumes the optional binding.
-
-Association is deliberately a user assertion, not an LLM decision. Only the local CLI can see the local session stores. An LLM would make the binding nondeterministic, expose more request text, and could invent a correspondence. Remote model discovery can still rank candidates, but materialization resolves an exact retained message and enforces the explicit PR binding.
-
-```bash
-self-bench run \
-  --repo /absolute/path/to/repository \
-  --easy-count 5 \
-  --medium-count 10 \
-  --hard-count 5 \
-  --model gpt-5.6-sol \
-  --output ./self-bench-tasks.tar.gz
-```
+Runs start from the web app or its `/api` batch routes (a personal API key works for scripts). The API pins the head of the repository's default branch and lists up to 500 recent merged pull requests with the submitter's GitHub token. Each PR by a non-bot author that clears the coarse size thresholds becomes a provenance record: its title and body, redacted of common credential forms, labeled `github-pull-request`, and bound to its repository, PR number, and canonical URL. Discovery shards propose candidates from those records, and every candidate's request is the exact text of its own PR. "Add PR" skips discovery and authors one chosen PR.
 
 The three tier counts total 1–300. Each is an accepted-task target: discovery expands until it can fill every tier and over-fetches a small pool, and a rejected or infrastructure-failed candidate is replaced from that leftover pool until each tier is filled or the pool is exhausted. Accepted tasks are then exported.
 
-### Replaying known candidates
+The `self-bench` command only wraps the run API: `list`, `status`, `cancel`, and `download` (which verifies the export's SHA-256 and writes it create-only). Point it at the API with `SELFBENCH_API_URL` and authenticate with `SELFBENCH_API_TOKEN` (the operator token or a personal `sbk_` API key).
 
-`self-bench replay` starts a run from candidates of an earlier run instead of discovery, for example to re-run a few previously rejected candidates through the current pipeline:
-
-```bash
-self-bench replay \
-  --source-run sb-20260901-abcd1234 \
-  --candidate w0s2-uploader --candidate w1s0-legacy \
-  --output ./replayed-tasks.tar.gz
-```
-
-The worker rebuilds each candidate from the source run's artifacts: the retained human request from `runs/<source>/provenance/<candidate>.json`, the full candidate record from the discovery `report.json` located through the `w<wave>s<shard>-` ID prefix, or, failing that, the authored `definition.json` plus a `gh pr view` lookup of the completed commit. Candidate IDs are kept, artifacts are written under the new run ID, and authoring and review start from fresh agent sessions. The same request shape is accepted by `POST /v1/runs` as a `replay` field (`{ "sourceRunId", "candidateIds" }`) in place of `repository`, `provenance`, and `candidateCounts`.
-
-`--output` implies `--wait`. It reports phase changes, requires a successful Temporal terminal state, downloads with create-only filesystem semantics, and verifies the API-provided SHA-256.
-
-A custom `--run-id` must contain 3–63 lowercase letters, digits, or hyphens and start with a letter or digit.
-
-#### Excluding pull requests earlier runs already processed
-
-Discovery only avoids pull requests found within the same run. A follow-up generation run over the same
-repository therefore proposes PRs an earlier run already authored, wasting agent time and producing duplicate
-tasks. Pass `--exclude-run` (repeatable) with every earlier run whose PRs must not be proposed again:
-
-```bash
-self-bench run --repo ~/code/posthog \
-  --easy-count 10 --medium-count 10 --hard-count 10 \
-  --exclude-run posthog-agent-pipeline-20-v1 \
-  --exclude-run posthog-agent-pipeline-replay-v1 \
-  --run-id posthog-agent-pipeline-30-v2 --output ./posthog-30-v2.tar.gz
-```
-
-Before the first discovery wave the worker runs `collectExcludedSourcePrs`, which reads each listed run's
-candidate records from the artifact store: the discovery checkpoints and reports under
-`runs/<runId>/discovery/`, a replay run's `runs/<runId>/provenance/replay.jsonl`, and, when present, an archived
-run status at `runs/<runId>/status.json` (a saved `GET /v1/runs/<runId>` body; each listed candidate resolves
-through its `provenance/<candidateId>.json` or authored `definition.json`). Every PR the run processed counts,
-whatever its outcome there: accepted, rejected, infrastructure-failed, or still pending. A rejected PR was
-judged on the same material, so retrying it belongs to `replay`, not to a fresh discovery. The set is sent with
-every wave and a candidate whose PR is excluded never enters the pool, even if a shard returns it. A listed run
-with no candidate records at all fails the run non-retryably (`ExcludedRunMissing`) so a mistyped ID cannot
-silently exclude nothing. `POST /v1/runs` accepts the same list as `excludeRuns`.
-
-Export dedupe rule: `buildExport` keeps the first accepted task per source pull request, in the order candidates
+Export dedupe rule: the export keeps the first accepted task per source pull request, in the order candidates
 were accepted, and drops later ones. The manifest's `acceptedCount` and `tasks` cover only kept tasks;
 `droppedDuplicates` lists each dropped task with its `sourcePr` and the `keptTaskId` it duplicates. Run status and
 `acceptedTaskIds` still report every accepted candidate; the export is the deduplicated deliverable.
@@ -369,17 +268,9 @@ that file over the provider's reported exit code (a provider hard timeout stays 
 observed to lose a long command's stream after the script finished and report a spurious exit code or a gRPC
 "terminated" error; with the status file collected, such a failure becomes a normal round result instead of a retry.
 
-## Harbor viewer
+## Task pages
 
-The API serves a browser viewer at `/`. It has two sources, chosen by the server that serves it: a self-bench run (every candidate, including rejected and infrastructure-failed ones, with the artifacts and logs each stage wrote) when served by the API, and a local directory of Harbor tasks when served by `self-bench view`. Each task shows the compiled environment (task.toml, Dockerfiles, services, resources), the setup, smoke, and test commands with the selected tests, the instruction beside the gold and held-out test patches, and a file tree of everything in the bundle. In run mode the pipeline sheet lists each stage's artifacts with a one-line summary of what it concluded.
-
-The same viewer runs without Temporal or a token over any directory of Harbor tasks:
-
-```bash
-self-bench view ./self-bench-tasks --port 8090
-```
-
-Directories are recognized by a `task.toml` up to four levels deep, so an extracted self-bench export, a single task, or a Harbor tasks directory all work. Deep links carry `#run=`, `#task=`, and `#tab=`.
+Each task in the web app shows the compiled environment (task.toml, Dockerfiles, services, resources), the setup, smoke, and test commands with the selected tests, the instruction beside the gold and held-out test patches, and a file tree of everything in the bundle. The pipeline sheet lists each stage's artifacts with a one-line summary of what it concluded. The pages read bundles and artifacts through `GET /v1/runs/:runId/bundle` and `GET /v1/runs/:runId/artifacts`.
 
 ## HTTP API
 
@@ -388,15 +279,10 @@ The CLI is the recommended client for run workflows. Every site feature is also 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check |
-| `POST` | `/v1/provenance?runId=...` | Store sanitized provenance JSONL |
-| `POST` | `/v1/runs` | Start a tiered candidate workflow (optionally with `excludeRuns`), or a replay of known candidates |
 | `GET` | `/v1/runs` | List workflows |
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download a completed export |
-| `GET` | `/v1/viewer` | Viewer capabilities (`modes`) |
-| `GET` | `/v1/runs/:runId/candidates` | Every candidate with stage, reason, and definition summary |
-| `GET` | `/v1/runs/:runId/candidates/:taskId/artifacts` | Artifact keys grouped by pipeline stage, plus bundles |
 | `GET` | `/v1/runs/:runId/artifacts?key=...` | Stream one artifact under `runs/:runId/` |
 | `GET` | `/v1/runs/:runId/bundle?key=...` | Expand a Harbor task bundle into its text files |
 
@@ -415,7 +301,7 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 | `*` | `/api/api-keys…` | Personal API keys: list, create (secret shown once), revoke |
 | `*` | `/api/orgs/:org/…` | Repositories, tasks, batches, evaluations, comparisons, and credentials; see the [API reference](api.md) |
 
-The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
+The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests.
 
 Set `SELFBENCH_ALLOWED_GITHUB_ORGS` (comma-separated logins, case-insensitive) to limit sign-in to active members of those organizations. Non-members are refused at the callback and land on `/login?error=organization`; existing sessions re-verify membership against GitHub with a five-minute cache, and a removed member is denied with `organization_required` instead of waiting for the 30-day cookie to expire. Without the setting, sign-in stays open to everyone.
 
@@ -431,11 +317,9 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 
 ## Temporal workflow shape
 
-A run is the `selfBenchRunWorkflow` execution whose workflow ID is the run ID. It discovers candidates, then starts one `selfBenchCandidateWorkflow` child per candidate with the workflow ID `<runId>/candidate/<candidateId>` on the same task queue. The child runs that candidate's authoring and review loops and returns its final progress plus the accepted task; it signals every progress change to the parent (`candidateProgress`), and the parent's `status` query and `GET /v1/runs/<runId>` merge those signals into the run status. The child's returned result is authoritative even if a signal is lost. Task-ID uniqueness across candidates is enforced by the parent when a child completes green.
+A batch is not a Temporal workflow. The API's batch reconciler (`src/generation/batches/service.ts`) stores each batch in Postgres, polls every five seconds, and starts independent workflows as the batch advances: one `selfBenchDiscoveryShardWorkflow` per discovery shard, then one `selfBenchAuthorWorkflow` per candidate, which runs that candidate's authoring and review loops and returns its final progress plus the accepted task. The reconciler reads each workflow's result, replaces rejected candidates from the leftover pool, and builds the export once every tier is filled or the pool is exhausted. A cancelled dispatch reserves its workflow ID with the no-op `selfBenchCancelledDispatchWorkflow`.
 
-To inspect one candidate, open the child workflow in the Temporal UI (search for the run ID prefix, or the parent's "Child Workflows" list). Its history shows that candidate's activities, retries, and timeouts alone; the `candidateStatus` query returns its current progress. Cancelling the run cancels every child, and the parent close policy terminates any straggler. A child that fails outright (anything other than an exhausted or Harbor-infrastructure activity failure) is recorded as `infrastructure_failed` for that candidate; the run continues.
-
-Deployment note: this shape replaced a single workflow that drove every candidate through activities directly. Deploy a worker with the child-workflow shape only when no run is in flight. An in-flight run started under the old shape would replay against the new code and hit a non-determinism error; let running runs finish (or cancel and replay them) before restarting the worker on a build across that boundary. The candidate-child fanout increase is guarded by a Temporal patch, so existing parent histories retain their original schedule while new runs use the higher limit; keep that patch until those histories have drained.
+To inspect one candidate, open its author workflow in the Temporal UI; its history shows that candidate's activities, retries, and timeouts alone, and the `candidateStatus` query returns its current progress.
 
 ## Configuration
 
@@ -494,7 +378,7 @@ Deployment note: this shape replaced a single workflow that drove every candidat
 For the GCP dev/prod Terraform foundation and GitHub Actions deployment flow, see
 [`infra/README.md`](../infra/README.md). The infrastructure code does not provision or deploy itself.
 
-The API is a regular request-oriented HTTP service suitable for Cloud Run. Deploy `Dockerfile` with its default `node dist/api-main.js` command and port 8080:
+The API is a regular request-oriented HTTP service suitable for Cloud Run. Deploy `Dockerfile` with its default `node dist/api/main.js` command and port 8080:
 
 ```text
 SELFBENCH_API_HOST=0.0.0.0

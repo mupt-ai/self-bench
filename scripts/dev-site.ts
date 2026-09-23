@@ -11,7 +11,7 @@
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { readEnvFile } from "../src/env-file.js";
+import { readEnvFile } from "../src/lib/env-file.js";
 
 const root = resolve(import.meta.dir, "..");
 const VITE_PORT = Number(process.env.SELFBENCH_SITE_PORT ?? 5173);
@@ -50,7 +50,7 @@ const apiEnv: NodeJS.ProcessEnv = {
   // The login loop does not need Temporal; connect only if a run route is ever hit.
   SELFBENCH_TEMPORAL_CONNECT: env.SELFBENCH_TEMPORAL_CONNECT ?? "lazy",
 };
-const api = spawn("bunx", ["tsx", "src/api-main.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
+const api = spawn("bunx", ["tsx", "src/api/main.ts"], { cwd: root, env: apiEnv, stdio: "inherit" });
 const vite = spawn(
   "bunx",
   [

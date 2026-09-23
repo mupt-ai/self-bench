@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
-import { evaluationChoices, HARBOR_VERSION, solverEnvironment } from "../src/evaluation/config.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
+import { credentialExecution } from "../src/evaluation/execution.js";
 import {
   collectOutput,
   completeLines,
@@ -19,14 +19,12 @@ import {
   listEvaluations,
   saveEvaluation,
 } from "../src/evaluation/store.js";
-import { runCommand } from "../src/process.js";
-import { evaluationEnv, evaluationInput } from "./support/evaluation-fixture.js";
+import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
+import { runCommand } from "../src/lib/process.js";
+import { credentialedInput, testModelSecret } from "./support/evaluation-fixture.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
 const directories: string[] = [];
-test("E2B uses the packaged one-hour Harbor environment adapter", () => {
-  const args = solverArguments("/task", "/jobs", "codex", "openai/test", "e2b");
-  expect(args[args.indexOf("--env") + 1]).toBe("harbor_e2b:SelfBenchE2BEnvironment");
-});
 test("solver invocation carries the selected thinking level", () => {
   const args = solverArguments("/task", "/jobs", "codex", "openai/gpt-6-astra", "e2b", "max");
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
@@ -51,14 +49,15 @@ async function fixture() {
     "harbor-task",
   ]);
   const store = new LocalArtifactStore(join(root, "artifacts"));
-  const input = evaluationInput();
+  const vault = memoryVault();
+  const input = await credentialedInput(vault);
   await store.put(
     input.tasks[0]?.bundleKey ?? "",
     await readFile(join(root, "task.tar.gz")),
     "application/gzip",
   );
   await saveEvaluation(store, initialEvaluation(input, "Test model"));
-  return { root, store, input };
+  return { root, store, input, vault };
 }
 const trajectory = {
   steps: [
@@ -73,37 +72,35 @@ const trajectory = {
     },
   ],
 };
-test("only configured, tenant-allowed choices are public; credentials and host auth are isolated", () => {
-  expect(evaluationChoices("outsider", evaluationEnv).models).toHaveLength(0);
-  expect(evaluationChoices("avyay", {}).models).toHaveLength(0);
-  const { child } = solverEnvironment(evaluationInput(), "/temporary-home", {
-    ...evaluationEnv,
-    PATH: "/bin",
-    HOME: "/real-home",
-    GITHUB_TOKEN: "github",
-    DATABASE_URL: "postgres-secret",
-    ANTHROPIC_API_KEY: "other-provider",
-    E2B_API_KEY: "e2b",
-    VERCEL_TOKEN: "vercel",
-    MODAL_TOKEN_SECRET: "modal",
-  });
+test("saved credentials reach the solver; host auth never does", async () => {
+  const { input, vault } = await fixture();
+  const { child } = await credentialExecution(
+    input,
+    "/temporary-home",
+    {
+      PATH: "/bin",
+      HOME: "/real-home",
+      GITHUB_TOKEN: "github",
+      DATABASE_URL: "postgres-secret",
+      ANTHROPIC_API_KEY: "other-provider",
+      E2B_API_KEY: "e2b",
+      VERCEL_TOKEN: "vercel",
+      MODAL_TOKEN_SECRET: "modal",
+    },
+    vault,
+  );
   expect(child).toEqual({
     PATH: "/bin",
     HOME: "/temporary-home",
     TMPDIR: "/temporary-home",
     LANG: "C.UTF-8",
     PYTHONUNBUFFERED: "1",
-    OPENAI_API_KEY: evaluationEnv.SELFBENCH_EVAL_SECRET_TEST,
+    OPENAI_API_KEY: testModelSecret,
+    E2B_API_KEY: "sandbox-secret",
   });
-  expect(() =>
-    solverEnvironment(evaluationInput(), "/tmp", {
-      ...evaluationEnv,
-      SELFBENCH_EVAL_SECRET_TEST: "",
-    }),
-  ).toThrow("credential");
-  expect(() =>
-    solverEnvironment({ ...evaluationInput(), sandbox: "modal" }, "/tmp", evaluationEnv),
-  ).toThrow("Modal credentials");
+  await expect(
+    credentialExecution({ ...input, sandbox: "modal" }, "/tmp", {}, vault),
+  ).rejects.toThrow("reserved comparison");
 });
 test("solver argv cannot trigger author/oracle gates or implicit retries", () => {
   const args = solverArguments("/task space", "/jobs", "codex", "openai/test-model", "docker");
@@ -116,7 +113,7 @@ test("solver argv cannot trigger author/oracle gates or implicit retries", () =>
   expect(args).not.toContain("nop");
 });
 test("mocked Harbor persists live output, structured tool results and final scores without secrets", async () => {
-  const { store, input } = await fixture();
+  const { store, input, vault } = await fixture();
   let calls = 0;
   let sawLive = false;
   const command: typeof runCommand = async (name, args, options) => {
@@ -127,19 +124,13 @@ test("mocked Harbor persists live output, structured tool results and final scor
     if (!jobs) throw new Error("Missing jobs path");
     const trial = join(jobs, "solver", "task__123");
     await mkdir(join(trial, "agent"), { recursive: true });
-    await writeFile(
-      join(trial, "agent", "codex.txt"),
-      `Running tests\n${evaluationEnv.SELFBENCH_EVAL_SECRET_TEST}\n`,
-    );
-    options?.onOutput?.(
-      "stdout",
-      Buffer.from(`Starting ${evaluationEnv.SELFBENCH_EVAL_SECRET_TEST}\n`),
-    );
+    await writeFile(join(trial, "agent", "codex.txt"), `Running tests\n${testModelSecret}\n`);
+    options?.onOutput?.("stdout", Buffer.from(`Starting ${testModelSecret}\n`));
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const snapshot = await getEvaluation(store, input.repoId, input.id);
       if (snapshot?.trials[0]?.log.includes("Running tests")) {
         sawLive = true;
-        expect(JSON.stringify(snapshot)).not.toContain(evaluationEnv.SELFBENCH_EVAL_SECRET_TEST);
+        expect(JSON.stringify(snapshot)).not.toContain(testModelSecret);
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -152,7 +143,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     await writeFile(join(trial, "config.json"), '{"secret":"never-export-this"}');
     return { stdout: "", stderr: "", exitCode: 0 };
   };
-  await executeEvaluation(store, input, { env: evaluationEnv, command, pollMs: 5 });
+  await executeEvaluation(store, input, { env: {}, vault, command, pollMs: 5 });
   const run = await getEvaluation(store, input.repoId, input.id);
   expect(sawLive).toBe(true);
   expect(run?.status).toBe("completed");
@@ -161,23 +152,23 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(run?.trials[0]?.artifacts.some((name) => name.endsWith("config.json"))).toBe(false);
   for (const artifact of await store.list(evaluationPrefix(input.repoId, input.id).slice(0, -1)))
     expect(Buffer.from((await store.getByKey(artifact.key)) ?? []).toString()).not.toContain(
-      evaluationEnv.SELFBENCH_EVAL_SECRET_TEST,
+      testModelSecret,
     );
   expect((await listEvaluations(store, input.repoId))[0]?.status).toBe("completed");
-  await expect(executeEvaluation(store, input, { env: evaluationEnv, command })).rejects.toThrow(
+  await expect(executeEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
     "refusing to repeat",
   );
   expect(calls).toBe(1);
 });
 test("missing credentials and incompatible Harbor fail before a model command", async () => {
   for (const scenario of ["credential", "version"]) {
-    const { store, input } = await fixture();
+    const { store, input, vault } = await fixture();
+    if (scenario === "credential")
+      await vault.credentials.remove(1, input.credentials?.modelCredentialId ?? "");
     let calls = 0;
     await executeEvaluation(store, input, {
-      env:
-        scenario === "credential"
-          ? { ...evaluationEnv, SELFBENCH_EVAL_SECRET_TEST: "" }
-          : evaluationEnv,
+      env: {},
+      vault,
       command: async (_name, args) => {
         if (args[0] !== "--version") calls += 1;
         return { stdout: "wrong-version", stderr: "", exitCode: 0 };
@@ -188,9 +179,10 @@ test("missing credentials and incompatible Harbor fail before a model command", 
   }
 });
 test("missing verifier results are failures, never invented zero scores", async () => {
-  const { store, input } = await fixture();
+  const { store, input, vault } = await fixture();
   await executeEvaluation(store, input, {
-    env: evaluationEnv,
+    env: {},
+    vault,
     command: async (_name, args) => ({
       stdout: args[0] === "--version" ? HARBOR_VERSION : "",
       stderr: "",

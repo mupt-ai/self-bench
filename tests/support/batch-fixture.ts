@@ -4,18 +4,18 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sendApiError, sendJson } from "../../src/api/http.js";
-import { LocalArtifactStore } from "../../src/artifacts.js";
-import { createUserStore } from "../../src/auth/users.js";
-import { createBillingStore } from "../../src/billing/store.js";
-import { loadConfig } from "../../src/config.js";
-import type { RunRequest } from "../../src/contracts.js";
-import type { EncryptedRecordStore } from "../../src/evaluation/encrypted-records.js";
-import type { BatchStatus } from "../../src/site/batch-progress.js";
-import { createBatchRoutes } from "../../src/site/batch-routes.js";
-import { createRepoStore } from "../../src/site/repo-store.js";
-import { createRunStore } from "../../src/site/run-store.js";
-import { createTaskStore } from "../../src/site/task-store.js";
-import { createTaskRoutes } from "../../src/site/tasks.js";
+import { createBatchRoutes } from "../../src/api/routes/batches.js";
+import { createTaskRoutes } from "../../src/api/routes/tasks.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
+import { loadConfig } from "../../src/contracts/config/index.js";
+import type { Candidate, RunRequest, TaskProgress } from "../../src/contracts/index.js";
+import { createBillingStore } from "../../src/db/billing.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createRunStore } from "../../src/db/runs.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
+import type { Vault } from "../../src/db/vault.js";
+import type { BatchStatus } from "../../src/generation/batches/progress.js";
 import { testDatabase } from "./site-fixture.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -28,7 +28,7 @@ export async function fixture(
     failStart?: boolean;
     failAttach?: boolean;
     sha?: string;
-    records?: EncryptedRecordStore;
+    vault?: Vault;
     billing?: boolean;
   } = {},
 ) {
@@ -62,9 +62,10 @@ export async function fixture(
   const cancelled: string[] = [];
   const github: string[] = [];
   let snapshot: BatchStatus | undefined;
+  const seen = new Map<string, TaskProgress>();
   const routes = createBatchRoutes({
     config: loadConfig({}),
-    ...(options.records ? { records: options.records } : {}),
+    ...(options.vault ? { vault: options.vault } : {}),
     auth: { githubApiUrl: "https://github.invalid" },
     users,
     repos,
@@ -86,7 +87,7 @@ export async function fixture(
     start: async (input) => {
       expect((await runs.runsFor(repo.id)).some((run) => run.runId === input.runId)).toBe(true);
       if (input.generation)
-        expect((await options.records?.read(`generations/${input.runId}`))?.value).toEqual(
+        expect((await options.vault?.records.read(`generations/${input.runId}`))?.value).toEqual(
           input.generation,
         );
       if (options.failStart) throw new Error("ambiguous transport failure");
@@ -98,6 +99,25 @@ export async function fixture(
         phase: "discovering",
         discovery: { wave: 0, totalShards: 3, completedShards: 1, failedShards: 1, candidates: 2 },
       },
+    batch: async (runId) => {
+      for (const task of snapshot?.tasks ?? []) seen.set(task.candidateId, task);
+      return {
+        run: { runId } as RunRequest,
+        taskQueue: "test",
+        phase: "authoring",
+        shards: [],
+        candidates: [...seen.values()].map((progress) => ({
+          workflowId: `${runId}/candidate/${progress.candidateId}`,
+          candidate: {
+            candidateId: progress.candidateId,
+            difficulty: progress.difficulty,
+            sourcePr: 1,
+            sourceUrl: "https://github.com/owner/repo/pull/1",
+          } as Candidate,
+          progress,
+        })),
+      };
+    },
     cancel: async (runId) => {
       cancelled.push(runId);
     },

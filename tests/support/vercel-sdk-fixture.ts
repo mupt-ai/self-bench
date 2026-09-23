@@ -10,7 +10,7 @@ import {
   streamingLogs,
 } from "./vercel-sdk-http.js";
 
-export const vercelFixtureImage = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
+const vercelFixtureImage = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 
 export const vercelFixtureConfig = {
   kind: "vercel" as const,
@@ -180,19 +180,4 @@ export class VercelSdkFixture {
     };
     this.fetch = Object.assign(fixtureFetch, { preconnect() {} });
   }
-}
-
-export function vercelRequestBody(
-  calls: readonly RecordedVercelCall[],
-  method: string,
-  pathSuffix: string,
-): Record<string, unknown> {
-  const call = calls.find(
-    (candidate) =>
-      candidate.method === method && candidate.path.split("?")[0]?.endsWith(pathSuffix),
-  );
-  if (!call?.body) {
-    throw new Error(`request not found: ${method} *${pathSuffix}`);
-  }
-  return JSON.parse(call.body) as Record<string, unknown>;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createOrgGate } from "../src/auth/allowed-orgs.js";
-import { GitHubIdentityError, type OrgMembership } from "../src/auth/github.js";
+import { createOrgGate } from "../src/api/auth/allowed-orgs.js";
+import { GitHubIdentityError, type OrgMembership } from "../src/third_party/github/oauth.js";
 
 const member: OrgMembership = {
   githubId: 1,

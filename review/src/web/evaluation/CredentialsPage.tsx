@@ -1,7 +1,6 @@
 import React from "react";
 import { Link, useSearchParams } from "react-router";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
-import type { CredentialDraft } from "../../../../src/evaluation/credentials";
+import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, buttonStyles, Notice, PageFrame, PageHeader } from "../ui";

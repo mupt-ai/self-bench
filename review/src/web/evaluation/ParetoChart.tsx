@@ -1,6 +1,6 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
-import { harnessLabels } from "../../../../src/evaluation/harnesses";
+import { harnessLabels } from "../../../../src/evaluation/models";
 import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({

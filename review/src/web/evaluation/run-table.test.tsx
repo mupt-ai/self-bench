@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import { thinkingLevels } from "../../../../src/evaluation/model-options";
+import { thinkingLevels } from "../../../../src/evaluation/models";
 import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
 import { RunModelRow } from "./RunModelRow";

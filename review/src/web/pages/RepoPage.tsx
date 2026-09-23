@@ -93,6 +93,7 @@ function RepoTasksPage() {
       accepted: 0,
       rejected: 0,
       failed: 0,
+      cancelled: 0,
       in_progress: 0,
     };
     for (const task of tasks ?? []) {

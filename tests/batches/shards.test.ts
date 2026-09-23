@@ -3,8 +3,8 @@ import {
   discoveryPrsPerShard,
   partitionPullRequests,
   takeNewestShards,
-} from "../../src/batches/shards.js";
-import type { ProvenanceMessage } from "../../src/provenance/types.js";
+} from "../../src/generation/batches/shards.js";
+import type { ProvenanceMessage } from "../../src/third_party/github/provenance.js";
 
 function message(pr: number, index = 0): ProvenanceMessage {
   return {

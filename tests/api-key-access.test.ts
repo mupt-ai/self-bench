@@ -2,10 +2,10 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
-import { createRepoStore } from "../src/site/repo-store.js";
-import type { WorkflowSnapshot } from "../src/site/task-status.js";
-import { createTaskStore } from "../src/site/task-store.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
+import { createRepoStore } from "../src/db/repos.js";
+import { createTaskStore } from "../src/db/tasks.js";
+import type { WorkflowSnapshot } from "../src/generation/tasks/status.js";
 import { mint, signedIn } from "./support/api-keys.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { type AuthServer, fakeGitHub, startAuthServer } from "./support/site-fixture.js";
@@ -132,27 +132,27 @@ describe("api keys and evaluation mutations", () => {
       const reader = await fixture.apiKeys.create(fixture.user.id, { name: "r", scope: "read" });
       const body = JSON.stringify({ name: "openai", kind: "openai", value: "model-secret" });
       const foreignOrigin = { origin: "https://evil.example" };
-      const cookieCrossSite = await fixture.request(`${fixture.base}/credentials`, {
+      const cookieCrossSite = await fixture.request("/api/orgs/avyay/credentials", {
         method: "POST",
         headers: foreignOrigin,
         body,
       });
       expect(cookieCrossSite.status).toBe(403);
       const keyed = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { method: "POST", headers: { ...foreignOrigin, "x-api-key": writer.secret }, body },
         null,
       );
       expect(keyed.status).toBe(201);
       const listed = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { headers: { "x-api-key": reader.secret } },
         null,
       );
       expect(listed.status).toBe(200);
       expect((await listed.json()).credentials).toHaveLength(1);
       const readOnly = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { method: "POST", headers: { "x-api-key": reader.secret }, body },
         null,
       );

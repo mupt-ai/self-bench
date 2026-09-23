@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { Storage } from "@google-cloud/storage";
-import type { ArtifactRef } from "../contracts.js";
-import { sha256 } from "../hash.js";
+import type { ArtifactRef } from "../contracts/index.js";
+import { sha256 } from "../lib/hash.js";
 import { copyWithDigest, verifiedArtifactReadStream, verifyArtifact } from "./common.js";
 import type { ArtifactEntry, ArtifactStore } from "./types.js";
 

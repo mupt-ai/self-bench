@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
-import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
-import { SESSION_COOKIE } from "../../src/auth/session.js";
+import { SESSION_COOKIE } from "../../src/api/auth/session.js";
+import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { type AuthServer, cookieValue } from "./site-fixture.js";
 
 /** Signs in through the OAuth flow and returns cookie headers that pass the same-origin check. */

@@ -14,8 +14,8 @@ import {
 import { dirname, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
-import type { ArtifactRef } from "../contracts.js";
-import { sha256 } from "../hash.js";
+import type { ArtifactRef } from "../contracts/index.js";
+import { sha256 } from "../lib/hash.js";
 import {
   copyWithDigest,
   fileDigest,

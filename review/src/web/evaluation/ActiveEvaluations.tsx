@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { harnessLabels } from "../../../../src/evaluation/harnesses";
+import { harnessLabels } from "../../../../src/evaluation/models";
 import type { EvaluationRun } from "./api";
 import { thinkingLabel } from "./run-presentation";
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 export function evaluationPrefix(repoId: number, id = ""): string {
