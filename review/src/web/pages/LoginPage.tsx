@@ -1,15 +1,14 @@
-import { ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
-import { Lockup } from "../Lockup";
+import { OutLink } from "../../public-site/components/OutLink";
+import { WaterBackground } from "../../public-site/effects/WaterBackground";
+import { EDGE_FRAME, PANEL, RULER_WIDTH } from "../../public-site/frame";
+import { SettingsMenu } from "../../public-site/SettingsMenu";
+import { ThemeToggle } from "../../public-site/ThemeToggle";
 import { useDocumentTitle, useSession } from "../session";
-import { ThemeToggle } from "../ThemeToggle";
 import { buttonStyles, Notice } from "../ui";
-import { WaterBackground } from "../WaterBackground";
 
-/** Rulers sit a proportional margin in from each window edge, as on selfbench.dev. */
-const RULER_WIDTH = "w-[calc(100%-2*clamp(24px,6vw,160px))]";
-const EDGE_FRAME = "mx-auto w-[calc(100%-2*clamp(24px,6vw,160px))] px-6";
+const PUBLIC_SITE_URL = "https://selfbench.dev";
 
 const ERRORS: Record<string, string> = {
   state: "That sign-in attempt expired. Try again.",
@@ -30,21 +29,33 @@ export function LoginPage() {
   }, []);
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
+  // selfbench.dev's own frame, water, header controls, and footer links (review/src/public-site),
+  // so signing in feels like the same site and follows it when it changes.
   return (
     <div className="relative isolate flex h-dvh flex-col bg-transparent text-foreground">
       <WaterBackground />
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-foreground/10`}
+        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler)`}
       />
       <header className="shrink-0 border-b border-border">
         <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
-          <Lockup compact />
-          <ThemeToggle />
+          <a
+            href={PUBLIC_SITE_URL}
+            aria-label="SELF-BENCH Home"
+            className="font-mono text-xl font-bold tracking-wider"
+          >
+            SELF-BENCH
+          </a>
+          {/* As on selfbench.dev: 32px icon buttons 4px apart, the last glyph on the frame edge. */}
+          <span className="-mr-2 flex items-center gap-1">
+            <ThemeToggle />
+            <SettingsMenu />
+          </span>
         </div>
       </header>
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12">
-        <div className="panel w-full max-w-sm p-8">
+        <div className={`w-full max-w-sm p-8 ${PANEL}`}>
           <h1 className="text-2xl font-semibold tracking-tight">Sign In</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Build private evals from your repository&apos;s history and find which model is best for
@@ -92,7 +103,7 @@ export function LoginPage() {
         <div
           className={`${EDGE_FRAME} flex items-center justify-between gap-3 py-4 font-mono text-xs font-semibold text-foreground/90`}
         >
-          <a href="https://selfbench.dev" className="hover:text-foreground">
+          <a href={PUBLIC_SITE_URL} className="hover:text-foreground">
             selfbench.dev
           </a>
           <span className="flex gap-4">
@@ -102,20 +113,6 @@ export function LoginPage() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function OutLink({ href, children }: { href: string; children: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-0.5 hover:text-foreground"
-    >
-      {children}
-      <ArrowUpRight className="size-3" aria-hidden="true" />
-    </a>
   );
 }
 

@@ -2,6 +2,7 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
+@import "./public-site/palette.css";
 
 /* Token names are shared with the public site's theme.css, so both render the same palette. */
 @theme inline {
@@ -39,33 +40,15 @@
 
 @custom-variant site (&:where(.sb, .sb *));
 
-/* The public site's palettes (review/src/public-site/theme.css), so both sites match. Light by
-   default: warm paper, amber kept for fills and accents. Text that must read as amber uses
-   --brand-fg, which is dark enough for paper. */
+/* The palettes come from public-site/palette.css, shared with selfbench.dev. Only what the
+   app changes or adds is set here. Text that must read as amber uses --brand-fg, which is dark
+   enough for paper; inputs get a firmer edge than cards. */
 :root {
-  color-scheme: light;
-  --background: hsl(40 22% 94.8%);
-  --foreground: hsl(30 8% 12%);
-  --card: hsl(38 21% 91.8%);
   --viewer-panel: hsl(38 19% 89.8%);
-  --muted: hsl(38 18% 87.5%);
-  --muted-fg: hsl(30 6% 42%);
-  --faint: hsl(30 6% 62%);
-  --border: hsl(35 16% 84%);
   --input: hsl(35 16% 80%);
-  --accent: hsl(40 22% 90%);
-  --brand: hsl(38 92% 48%);
   --brand-fg: hsl(32 90% 32%);
-  --primary: hsl(30 8% 12%);
-  --primary-fg: hsl(40 22% 94.8%);
-  --ok: hsl(150 45% 34%);
-  --bad: hsl(0 65% 45%);
-  --bad-fg: hsl(0 62% 42%);
-  --warn-fg: hsl(35 80% 38%);
-  --panel-edge: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --panel-edge: var(--panel-border);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
-  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --sidebar-background: var(--background);
   --sidebar-foreground: var(--foreground);
@@ -75,28 +58,10 @@
   --sidebar-ring: var(--brand);
 }
 
-/* Dark mode: the public site's ink blue. The brand turns blue with it. */
 :root[data-theme="dark"] {
-  color-scheme: dark;
-  --background: hsl(215 28% 5%);
-  --foreground: hsl(210 20% 86%);
-  --card: hsl(215 24% 8.5%);
   --viewer-panel: hsl(215 20% 7%);
-  --muted: hsl(215 18% 10%);
-  --muted-fg: hsl(212 10% 58%);
-  --faint: hsl(212 8% 40%);
-  --border: hsl(215 16% 16%);
   --input: hsl(215 16% 20%);
-  --accent: hsl(215 18% 10%);
-  --brand: hsl(210 90% 65%);
   --brand-fg: hsl(210 90% 70%);
-  --primary: hsl(0 0% 100%);
-  --primary-fg: hsl(0 0% 0%);
-  --ok: hsl(150 40% 45%);
-  --bad: hsl(0 72% 45%);
-  --bad-fg: hsl(0 70% 62%);
-  --warn-fg: hsl(38 80% 60%);
-  --panel-edge: color-mix(in srgb, var(--foreground) 9%, transparent);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
