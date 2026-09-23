@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Context } from "@temporalio/activity";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { ArtifactRef } from "../../contracts/index.js";
 import { projectRoot } from "../../lib/project-paths.js";
-import type { SandboxCostSnapshot, SandboxRunOptions } from "../../sandbox/index.js";
+import type { SandboxCostSnapshot, SandboxFile, SandboxRunOptions } from "../../sandbox/index.js";
 import {
   type ProvenanceMessage,
   provenanceMessageSchema,
@@ -11,6 +13,17 @@ import {
 /** A bundled program or extension from the package root (dist/…, src/…). */
 export function readAsset(relativePath: string): Promise<Buffer> {
   return readFile(join(projectRoot(import.meta.url), relativePath));
+}
+
+/** An artifact as a sandbox file: pulled from a signed URL when the store has one. */
+export async function artifactFile(
+  store: ArtifactStore,
+  artifact: ArtifactRef,
+  path: string,
+): Promise<SandboxFile> {
+  const url = await store.signedReadUrl?.(artifact, 2 * 60 * 60_000).catch(() => undefined);
+  if (url) return { path, url, sha256: artifact.sha256 };
+  return { path, contents: await store.get(artifact) };
 }
 
 export function parseProvenance(bytes: Uint8Array): ProvenanceMessage[] {

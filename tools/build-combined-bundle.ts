@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { extractRegularArchive } from "../src/lib/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
 import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts/index.js";
+import { authoringRoundResultKey } from "../src/generation/pipeline/authoring.js";
 import { runCommand } from "../src/lib/process.js";
 import type { TaskCompilerServices } from "../src/sandbox/task-compiler.js";
 import { compileSubmittedTask } from "../src/sandbox/task-compiler.js";
@@ -60,9 +61,9 @@ async function readJson(key: string): Promise<unknown | undefined> {
 async function finalTask(run: string, candidateId: string) {
   let task: unknown;
   for (let round = 1; round <= 3; round += 1) {
-    const result = (await readJson(
-      `runs/${run}/authoring/${candidateId}/round-${round}/result.json`,
-    )) as { kind?: string; task?: unknown } | undefined;
+    const result = (await readJson(authoringRoundResultKey(run, candidateId, round))) as
+      | { kind?: string; task?: unknown }
+      | undefined;
     if (result?.kind === "submitted" && result.task) task = result.task;
   }
   if (!task) throw new Error(`no final task for ${run}/${candidateId}`);

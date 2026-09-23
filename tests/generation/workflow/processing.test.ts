@@ -31,12 +31,12 @@ describe("SelfBench workflow processing", () => {
       candidate("timed-out", 1),
       candidate("successful-sibling", 2),
     ]);
-    const originalAuthor = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
+    const originalAuthor = activities.runAuthoringTurn;
+    activities.runAuthoringTurn = async (input) => {
       if (input.candidate.candidateId === "timed-out") {
         throw new ActivityFailure(
           "Activity task failed",
-          "runAuthoringRound",
+          "runAuthoringTurn",
           "activity-id",
           RetryState.MAXIMUM_ATTEMPTS_REACHED,
           "worker",

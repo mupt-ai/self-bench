@@ -52,7 +52,7 @@ The old `accounts/…` and `credentials/…` records can be deleted in a later r
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
+SelfBench uses one provider for discovery, authoring-turn, and review-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every `verify` and every submission. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
 
 ```bash
 SELFBENCH_EXECUTION_BACKEND=docker docker compose --profile sandbox up -d --build   # Docker + Docker
@@ -111,7 +111,7 @@ SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring and review rounds each request four hours because an in-session `verify` can take up to an hour and an agent has several.
+Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring turns and review rounds each request four hours.
 
 ### E2B
 
@@ -161,7 +161,7 @@ SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compo
 
 Worker startup calls `Template.exists` with an explicit SDK client and a 30-second local/request timeout, and fails before polling Temporal if the credentials cannot access the template. The default activity concurrency is four. Reduce `SELFBENCH_ACTIVITY_CONCURRENCY`, often to `1`, when Docker Harbor or the E2B account cannot sustain four concurrent activities.
 
-E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring or review round requests four hours, so the configured cap centrally shortens only longer stages; under a one-hour cap an agent has room for at most one in-session verify. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
+E2B Hobby sandboxes have a one-hour maximum lifetime; paid plans can support up to 24 hours. SelfBench conservatively defaults `SELFBENCH_E2B_TIMEOUT_CAP` to `1h`. Set a larger cap only after verifying the account entitlement; values above `24h` are rejected. Discovery requests 45 minutes and each authoring turn or review round requests four hours, so the configured cap centrally shortens only longer stages. Because every `verify` ends the authoring turn, the cap bounds a single turn, not the whole round. E2B also receives the effective stage timeout with lifecycle action `kill`, and SelfBench independently enforces the same hard deadline, returning exit 124 after a confirmed cleanup.
 
 Commands run under `/work`. Inputs and binary outputs are transferred with E2B's file API, and paths outside `/work` are rejected before allocation. Stdout/stderr stream progress while retaining only the latest 8 MiB per stream for diagnostics. Output inactivity cancels the command and sandbox. Workload environment and stage secrets are scoped to the command; SelfBench does not create durable account-level E2B Secrets.
 
@@ -253,13 +253,16 @@ were accepted, and drops later ones. The manifest's `acceptedCount` and `tasks` 
 
 ### Round artifacts
 
-Each authoring or review round stores its decision directly under
-`runs/<runId>/<stage>/<candidateId>/round-<n>/` (`result.json`, `verdict.json`, `fix/`) and the pi session under
-`runs/<runId>/<stage>/<candidateId>/session/round-<n>.jsonl`. Everything a single attempt produces before the
-round is decided lives under `round-<n>/attempt-<m>/`: `prompt.md`, `coupling-evidence.json` (review round 1),
-`sandbox.log`, `sandbox-result.json` (the provider's exit code, the wrapper's own status, pi's exit code, and which
-declared outputs were collected), and the in-session `verify-<k>/` reports. A Temporal retry of the same round therefore never collides with the immutable
-artifacts of the attempt it replaces; its session is stored as `session/round-<n>-attempt-<m>.jsonl`.
+Each review round stores its decision directly under `runs/<runId>/review/<candidateId>/round-<n>/`
+(`result.json`, `verdict.json`) and each authoring turn under
+`runs/<runId>/authoring/<candidateId>/round-<n>/turn-<k>/` (`result.json`, the draft). The pi session is stored
+per round or turn under `runs/<runId>/<stage>/<candidateId>/session/`. Everything a single attempt produces before
+it is decided lives under `…/attempt-<m>/`: `prompt.md`, `sandbox.log`, `sandbox-result.json` (the provider's
+exit code, the wrapper's own status, pi's exit code, and which declared outputs were collected), and `agent.json`,
+the run's own record (stage, round, turn, attempt, session key, start and finish) that the agent work sheet lists
+instead of parsing artifact paths. A Temporal retry
+therefore never collides with the immutable artifacts of the attempt it replaces; its session is stored with an
+`-attempt-<m>` suffix.
 
 Large request files reach the sandbox by URL rather than upload: the review round asks the artifact store for a V4 signed read URL of the compiled task bundle (two-hour TTL) and the E2B executor has the sandbox `curl` it and verify the SHA-256 in place. Pushing hundreds of MB per sandbox through `files.write` hit the SDK's client-side request timeout once a couple of dozen rounds started together; E2B recommends the pull pattern. Providers without an in-sandbox download step fetch remote files on the worker and upload them inline.
 

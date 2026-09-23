@@ -31,9 +31,9 @@ export interface SandboxSession {
 }
 
 /**
- * The shared lifecycle every provider uses: allocate, stage files, run the command (with the
- * caller's live hook alongside), collect outputs, and always delete the sandbox. The hard
- * deadline covers all of it; when it fires the result is exit 124 with no outputs.
+ * The shared lifecycle every provider uses: allocate, stage files, run the command, collect
+ * outputs, and always delete the sandbox. The hard deadline covers all of it; when it fires the
+ * result is exit 124 with no outputs.
  */
 export async function runSandbox(
   open: () => Promise<SandboxSession>,
@@ -123,15 +123,6 @@ async function runInSession(
     );
     idle.unref();
   };
-  const exited = new AbortController();
-  const live = options.onLive?.(
-    {
-      readFile: (path) => session.read(path),
-      writeFile: (path, contents) =>
-        session.write(path, typeof contents === "string" ? Buffer.from(contents) : contents),
-    },
-    exited.signal,
-  );
   let exitCode: number | undefined;
   let failure: unknown;
   touch();
@@ -149,9 +140,7 @@ async function runInSession(
     failure = inactivity.signal.aborted ? inactivity.signal.reason : error;
   } finally {
     clearTimeout(idle);
-    exited.abort();
   }
-  await live;
   // The deadline or the caller's cancel ends the run here; outputs are not collected.
   signal.throwIfAborted();
 

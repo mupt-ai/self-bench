@@ -45,6 +45,7 @@ test("a transient refresh failure preserves the task and cancellation state", as
         candidateId: "candidate-one",
         groups: {},
         bundles: [],
+        agents: [],
       });
     if (url.includes("/batches/"))
       return Response.json({ error: "batch unavailable" }, { status: 503 });

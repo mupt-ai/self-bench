@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
@@ -12,7 +12,6 @@ import {
 } from "./shared/static-check.js";
 
 const noArguments = Type.Object({}, { additionalProperties: false });
-const VERIFY_TIMEOUT_MS = 60 * 60 * 1000;
 
 /**
  * Static-checks the deliverable and packs it as `<directory>/{definition.json,source-task.tar.gz}`.
@@ -43,18 +42,29 @@ function packDeliverable(directory: string) {
   }
 }
 
+/**
+ * `verify` and `submit_task` hand the deliverable to the worker and end the agent's turn. After a
+ * verify the worker checks the task and resumes this session in a fresh sandbox with the report.
+ */
 export default function authoringExtension(pi: ExtensionAPI): void {
   const budget = Number(process.env.SELFBENCH_VERIFY_BUDGET ?? "0");
-  let used = 0;
+  // Both tools run sequentially, so every tool call after a hand-off reaches this check.
+  let handedOff = false;
+  pi.on("tool_call", () =>
+    handedOff
+      ? { block: true, reason: "The task was already handed to the worker. Stop now." }
+      : undefined,
+  );
 
   pi.registerTool({
     name: "verify",
     label: "Verify SelfBench task",
     description:
-      "Takes no arguments. Checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch): static checks here, then the worker compiles it and runs the real image build, smoke, nop, and oracle. Blocks until the report is back (up to an hour). Limited calls per round.",
+      "Takes no arguments. Static-checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
     parameters: noArguments,
+    executionMode: "sequential",
     async execute() {
-      if (used >= budget) {
+      if (budget <= 0) {
         return {
           content: [
             {
@@ -66,37 +76,18 @@ export default function authoringExtension(pi: ExtensionAPI): void {
           isError: true,
         };
       }
-      const directory = join(requiredEnvironment("SELFBENCH_MAILBOX"), String(used + 1));
-      const packed = packDeliverable(directory);
+      const packed = packDeliverable(requiredEnvironment("SELFBENCH_VERIFY_REQUEST"));
       if ("isError" in packed) return packed;
-      used += 1;
-      writeFileSync(join(directory, "ready"), "");
-      const response = join(directory, "response.json");
-      const deadline = Date.now() + VERIFY_TIMEOUT_MS;
-      while (!existsSync(response)) {
-        if (Date.now() > deadline) {
-          return {
-            content: [
-              { type: "text", text: "verify timed out; submit your best task or try again." },
-            ],
-            details: {},
-            isError: true,
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-      const result = JSON.parse(readFileSync(response, "utf8")) as {
-        green?: boolean;
-        report?: string;
-        error?: string;
-      };
-      const remaining = budget - used;
-      const text = result.error
-        ? `verify could not complete: ${result.error}. ${remaining} verify call(s) remain.`
-        : `${result.report?.trim() ?? ""}\n\nverify result: green=${result.green === true}. ${remaining} verify call(s) remain. ${result.green ? "Call submit_task now." : "Fix what the report names and verify again."}`;
+      handedOff = true;
       return {
-        content: [{ type: "text", text }],
-        details: { green: result.green === true, remaining },
+        content: [
+          {
+            type: "text",
+            text: "Verification requested. Stop now: the report arrives as your next message.",
+          },
+        ],
+        details: { taskId: packed.taskId },
+        terminate: true,
       };
     },
   });
@@ -107,12 +98,15 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     description:
       "Takes no arguments. Static-checks the deliverable in /work/task and records it as this round's submission. The worker verifies it again. Stop after submitting.",
     parameters: noArguments,
+    executionMode: "sequential",
     async execute() {
       const packed = packDeliverable(requiredEnvironment("SELFBENCH_SUBMISSION"));
       if ("isError" in packed) return packed;
+      handedOff = true;
       return {
         content: [{ type: "text", text: `Submitted ${packed.taskId}. Stop here.` }],
         details: { taskId: packed.taskId },
+        terminate: true,
       };
     },
   });
