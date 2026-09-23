@@ -5,7 +5,7 @@ import { fieldStyles, Select } from "./ui";
 
 const pairRow = "grid min-w-0 gap-6 sm:grid-cols-2";
 
-/** Reasoning effort and how many author → verify → review rounds each candidate gets. */
+/** Reasoning effort, author → verify → review rounds per candidate, and how deep verify goes. */
 export function TuningFields({
   value,
   onChange,
@@ -49,6 +49,26 @@ export function TuningFields({
               {rounds}
             </option>
           ))}
+        </Select>
+      </label>
+      <label htmlFor="generation-verification" className={`${fieldStyles} content-start`}>
+        <span className="flex items-center gap-1.5">
+          Verification
+          <InfoTooltip label="Full builds the task image and runs the smoke, nop, and oracle checks in Harbor. Static Only runs the compiler, environment policy, and audit and builds nothing: faster and cheaper, but tasks are not proven to run." />
+        </span>
+        <Select
+          id="generation-verification"
+          aria-label="Verification"
+          value={value.verification ?? "full"}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              verification: event.target.value as NonNullable<GenerationSettings["verification"]>,
+            })
+          }
+        >
+          <option value="full">Full</option>
+          <option value="static">Static Only</option>
         </Select>
       </label>
     </div>

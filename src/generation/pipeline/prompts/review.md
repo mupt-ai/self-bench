@@ -12,7 +12,7 @@ Read only; you have read, grep, find, and ls.
 - The instruction matches the original request below and doesn't leak the PR, commits, test names, or the solution.
 - The hidden tests exercise public behavior. A different correct implementation must pass them: no private helpers from the gold patch, no pinned SQL, error wording, UI copy, or response shapes the request doesn't ask for. Grep the base repository to confirm that anything the tests pin already exists or is named in the instruction.
 - The environment is deterministic: pinned image, frozen dependencies, no secrets, only needed services.
-- The mechanical report is GREEN.
+- The mechanical report is GREEN. If it says Harbor was skipped, nothing was built or run: read the environment and tests closely enough to be confident the tests fail on the base and pass with the gold patch.
 
 # Decide
 

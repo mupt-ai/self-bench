@@ -42,6 +42,8 @@ export const generationSettingsSchema = z
     reasoning: z.enum(["low", "medium", "high"]),
     /** Author → verify → review rounds per candidate; unset means the default. */
     authoringRounds: z.number().int().min(1).max(MAX_AUTHORING_ROUNDS).optional(),
+    /** "static" checks only the compiler and audit, skipping the Harbor runs; unset is "full". */
+    verification: z.enum(["full", "static"]).optional(),
     /**
      * "managed" routes model calls through OpenRouter behind a platform key the server
      * holds; "credential" runs the models on the organization's own stored credential.

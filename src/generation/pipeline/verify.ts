@@ -35,7 +35,8 @@ const compileResultSchema = z.object({
 /**
  * The full check of one submission. The compiler sandbox validates the definition, patches,
  * environment policy, audit, and candidate identity, then renders the Harbor task; Harbor then
- * builds it and runs smoke, nop, and oracle. Every result lands in one report for the agent.
+ * builds it and runs smoke, nop, and oracle, unless the run chose static verification. Every
+ * result lands in one report for the agent.
  */
 export async function compileAndVerify(
   store: ArtifactStore,
@@ -97,8 +98,9 @@ export async function compileAndVerify(
       const bundleRef = await store.put(`${prefix}/harbor-task.tar.gz`, bundle, "application/gzip");
       task = { ...input.task, bundle: bundleRef };
     }
+    const staticOnly = run.generation?.settings.verification === "static";
     const gates =
-      task && result.auditBlockers.length === 0
+      task && result.auditBlockers.length === 0 && !staticOnly
         ? await runHarborGates(store, task, harborEnvironment, prefix, options.signal)
         : notRunGates();
     const partial = {
@@ -109,6 +111,7 @@ export async function compileAndVerify(
       compile: { ok: result.compileErrors.length === 0, errors: result.compileErrors },
       audit: { ok: result.auditBlockers.length === 0, blockers: result.auditBlockers },
       ...gates,
+      ...(staticOnly ? { staticOnly } : {}),
     };
     const report: VerifyReport = { ...partial, green: isGreen(partial) };
     await store.put(

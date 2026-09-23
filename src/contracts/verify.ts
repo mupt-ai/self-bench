@@ -42,6 +42,8 @@ export const verifyReportSchema = z
     smoke: gateSchema,
     nop: rewardGateSchema,
     oracle: rewardGateSchema,
+    /** The run chose static verification: Harbor build, smoke, nop, and oracle were skipped. */
+    staticOnly: z.boolean().optional(),
     green: z.boolean(),
   })
   .strict();

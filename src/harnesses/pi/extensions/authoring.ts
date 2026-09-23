@@ -51,7 +51,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     name: "verify",
     label: "Verify SelfBench task",
     description:
-      "Takes no arguments. Checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch): static checks here, then the worker compiles it and runs the real image build, smoke, nop, and oracle. Blocks until the report is back (up to an hour). Limited calls per round.",
+      "Takes no arguments. Checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch): static checks here, then the worker compiles it and runs the run's checks (static only, or also the real image build, smoke, nop, and oracle). Blocks until the report is back (up to an hour). Limited calls per round.",
     parameters: noArguments,
     async execute() {
       if (used >= budget) {

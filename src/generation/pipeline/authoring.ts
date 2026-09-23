@@ -12,6 +12,7 @@ import {
 } from "../../contracts/index.js";
 import { errorMessage } from "../../lib/util.js";
 import type { LiveSandbox, SandboxExecutor } from "../../sandbox/index.js";
+import type { GenerationSettings } from "../settings/settings.js";
 import { difficultyThresholds } from "../task/audit.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { runAgent } from "./agent.js";
@@ -84,7 +85,7 @@ export async function runAuthoringRound(
           verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8"))),
         ),
       input.feedback,
-      run.generation?.settings.authoringRounds,
+      run.generation?.settings,
     ),
     files: [
       ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
@@ -141,7 +142,7 @@ export function authoringPrompt(
   round: number,
   report?: string,
   feedback?: string,
-  rounds = DEFAULT_AUTHORING_ROUNDS,
+  settings?: Pick<GenerationSettings, "authoringRounds" | "verification">,
 ): string {
   const tiers = Object.entries(difficultyThresholds)
     .map(
@@ -153,7 +154,11 @@ export function authoringPrompt(
     howToWork: renderPrompt("how-to-work", {
       verifyBudget: AUTHOR_VERIFY_BUDGET,
       round,
-      rounds,
+      rounds: settings?.authoringRounds ?? DEFAULT_AUTHORING_ROUNDS,
+      verifyScope:
+        settings?.verification === "static"
+          ? "verify runs only the static checks (compiler, environment policy, audit); this run builds and runs nothing. Confirm by reading code, tests, and the repository's CI that the tests fail on the base and pass with gold.patch."
+          : "verify is the test harness: it compiles the task and runs the real image build, smoke, nop, and oracle checks. Don't install dependencies or run test suites in this sandbox; read code and git history instead.",
     }),
     feedback: feedback ? renderPrompt("feedback", { feedback }) : "",
   };

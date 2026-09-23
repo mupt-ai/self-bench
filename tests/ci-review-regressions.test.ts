@@ -24,9 +24,13 @@ test("review feedback is the reason to revise even when mechanical gates are gre
   expect(failed).not.toContain("reviewer requested revisions");
   expect(authoringPrompt(candidate("prompt", 1), 1)).not.toContain("fresh sandbox");
   expect(authoringPrompt(candidate("prompt", 1), 1)).toContain("(round 1 of 3)");
-  expect(authoringPrompt(candidate("prompt", 1), 1, undefined, undefined, 5)).toContain(
-    "(round 1 of 5)",
-  );
+  expect(
+    authoringPrompt(candidate("prompt", 1), 1, undefined, undefined, { authoringRounds: 5 }),
+  ).toContain("(round 1 of 5)");
+  expect(authoringPrompt(candidate("prompt", 1), 1)).toContain("real image build");
+  expect(
+    authoringPrompt(candidate("prompt", 1), 1, undefined, undefined, { verification: "static" }),
+  ).toContain("builds and runs nothing");
 });
 
 test("prompt sections stay explicit and ordered", () => {

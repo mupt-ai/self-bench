@@ -51,6 +51,27 @@ describe("verify report", () => {
     );
   });
 
+  test("static-only runs are green on compile and audit alone and say Harbor was skipped", () => {
+    const skipped = { ran: false, ok: false, logTail: "" };
+    const report: VerifyReport = {
+      ...greenReport,
+      build: { ...skipped, infrastructure: false },
+      smoke: skipped,
+      nop: { ...skipped, rewards: {} },
+      oracle: { ...skipped, rewards: {} },
+      staticOnly: true,
+    };
+    expect(isGreen(report)).toBe(true);
+    expect(isGreen({ ...report, audit: { ok: false, blockers: ["overlap"] } })).toBe(false);
+    expect(isGreen({ ...report, staticOnly: undefined })).toBe(false);
+    expect(verifyReportSummary(report)).toBe(
+      "authoring round 1: static checks green (Harbor skipped)",
+    );
+    const rendered = renderVerifyReport(report);
+    expect(rendered).toContain("Skipped: this run uses static verification only");
+    expect(rendered).not.toContain("## 5. nop run");
+  });
+
   test("summarises the first failing gates in order", () => {
     expect(verifyReportSummary(greenReport)).toBe("authoring round 1: all gates green");
     const red: VerifyReport = {

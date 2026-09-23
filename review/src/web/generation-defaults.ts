@@ -99,7 +99,7 @@ export function generationSettingsSummary(value: GenerationSettings): string {
     value.authorModel === value.verifierModel
       ? generationModelLabel(value.authorModel)
       : `${generationModelLabel(value.authorModel)} / ${generationModelLabel(value.verifierModel)}`;
-  const reasoning = `${value.reasoning.charAt(0).toUpperCase()}${value.reasoning.slice(1)} Reasoning`;
+  const reasoning = `${value.reasoning.charAt(0).toUpperCase()}${value.reasoning.slice(1)} Reasoning${value.verification === "static" ? " · Static Verification" : ""}`;
   if (value.modelAccess === "managed" && value.sandbox === "managed")
     return `${model} · ${reasoning} · Managed`;
   const access = value.modelAccess === "managed" ? "Managed Models" : "My Credentials";

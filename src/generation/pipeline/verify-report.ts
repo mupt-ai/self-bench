@@ -29,6 +29,7 @@ export function oracleGatePassed(rewards: HarborRewards): boolean {
 }
 
 export function isGreen(report: Omit<VerifyReport, "green">): boolean {
+  if (report.staticOnly) return report.compile.ok && report.audit.ok;
   return (
     report.compile.ok &&
     report.audit.ok &&
@@ -43,7 +44,7 @@ export function isGreen(report: Omit<VerifyReport, "green">): boolean {
 export function verifyReportSummary(report: VerifyReport): string {
   const label = `${report.stage} round ${report.round}`;
   if (report.green) {
-    return `${label}: all gates green`;
+    return `${label}: ${report.staticOnly ? "static checks green (Harbor skipped)" : "all gates green"}`;
   }
   const failures: string[] = [];
   if (!report.compile.ok) {
@@ -82,6 +83,18 @@ export function renderVerifyReport(report: VerifyReport): string {
     "## 2. Static audit",
     report.audit.ok ? "OK." : bulletList(report.audit.blockers, "Audit blocked the task."),
     "",
+    ...(report.staticOnly
+      ? [
+          "## 3–6. Harbor build, smoke, nop, and oracle",
+          "Skipped: this run uses static verification only. Nothing was built or run, so check the environment and tests by reading them.",
+        ]
+      : harborSections(report)),
+  ];
+  return `${sections.join("\n").trimEnd()}\n`;
+}
+
+function harborSections(report: VerifyReport): string[] {
+  return [
     "## 3. Image build",
     gateText(report.build, report.build.infrastructure ? "failed (infrastructure)" : "failed"),
     "",
@@ -98,7 +111,6 @@ export function renderVerifyReport(report: VerifyReport): string {
     `Expected ${expectationText(ORACLE_EXPECTATIONS)}.`,
     rewardGateText(report.oracle),
   ];
-  return `${sections.join("\n").trimEnd()}\n`;
 }
 
 function gateText(gate: VerifyReport["build"] | VerifyReport["smoke"], failure: string): string {
