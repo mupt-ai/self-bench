@@ -5,12 +5,18 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
+import { modelApiKeyVariable } from "../../contracts/models.js";
 import type { CredentialStore } from "../../db/credentials.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import { type EncryptedRecordStore, orgRecords } from "../../db/encrypted-records.js";
 import type { Vault } from "../../db/vault.js";
 import { generationSubscriptionAuth } from "../../harnesses/codex/subscription.js";
-import { VERIFICATION_CREDENTIALS } from "../../sandbox/provider-environment.js";
 import {
+  providerCredentialEnvironment,
+  WORKER_PROVIDER_CREDENTIALS,
+} from "../../sandbox/provider-environment.js";
+import type { SandboxRuntimeOwner } from "../../sandbox/runtime-image.js";
+import {
+  MANAGED_E2B_TEMPLATE_OWNER,
   type ManagedOffer,
   managedModelKey,
   managedOffer,
@@ -24,11 +30,6 @@ type ProviderCredential =
   | { role: "harbor"; id: string | undefined; kind: HostedHarborEnvironment };
 
 const credentialLabels = { ...harborEnvironmentLabels, ...executionBackendLabels };
-const VERCEL_SANDBOX_CREDENTIALS = {
-  VERCEL_TOKEN: "VERCEL_TOKEN",
-  VERCEL_TEAM_ID: "VERCEL_TEAM_ID",
-  VERCEL_PROJECT_ID: "VERCEL_PROJECT_ID",
-} as const;
 
 /** The generation sandbox credential plus its separate Harbor credential. */
 function sandboxCredentials(settings: GenerationSettings): ProviderCredential[] {
@@ -66,8 +67,24 @@ export async function saveGenerationRecords(
 }
 
 /** The organization whose credentials a run uses. */
-export function credentialOrg(reference: GenerationReference): number {
+function credentialOrg(reference: GenerationReference): number {
   return reference.orgId ?? reference.ownerId;
+}
+
+/**
+ * A managed-sandbox run's runtime lives in the platform's own E2B account, shared across
+ * organizations (so its build lock is global); otherwise in the run's sandbox credential account.
+ */
+export function generationRuntimeOwner(
+  reference: GenerationReference,
+  records: EncryptedRecordStore,
+): SandboxRuntimeOwner {
+  return reference.settings.sandbox === "managed"
+    ? { credentialId: MANAGED_E2B_TEMPLATE_OWNER, records }
+    : {
+        credentialId: reference.settings.sandboxCredentialId,
+        records: orgRecords(records, credentialOrg(reference)),
+      };
 }
 
 /** Validates the selected credentials; managed selections only require the offered flag. */
@@ -151,19 +168,7 @@ export async function generationEnvironment(
   const github = await records.read<{ value: string }>(generationGitHubTokenPath(runId));
   if (github?.value.value) env.GH_TOKEN = github.value.value;
   // A worker's own provider credentials must never reach a generation sandbox.
-  for (const key of [
-    "MODAL_TOKEN_ID",
-    "MODAL_TOKEN_SECRET",
-    "E2B_API_KEY",
-    "E2B_DOMAIN",
-    "VERCEL_TOKEN",
-    "VERCEL_TEAM_ID",
-    "VERCEL_PROJECT_ID",
-    "VERCEL_OIDC_TOKEN",
-    "DAYTONA_API_KEY",
-    ...Object.values(VERIFICATION_CREDENTIALS),
-  ])
-    delete env[key];
+  for (const key of WORKER_PROVIDER_CREDENTIALS) delete env[key];
   // Model credential: managed platform access, or one stored credential per stage.
   if (settings.modelAccess === "managed") {
     env.OPENROUTER_API_KEY = managedModelKey(base);
@@ -173,41 +178,20 @@ export async function generationEnvironment(
     if (!credential || !secret) throw new Error("Model credential is unavailable.");
     if (credential.auth === "codex-login")
       env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(secret);
-    else
-      env[
-        credential.kind === "anthropic"
-          ? "ANTHROPIC_API_KEY"
-          : credential.kind === "openrouter"
-            ? "OPENROUTER_API_KEY"
-            : "OPENAI_API_KEY"
-      ] = secret;
+    else env[modelApiKeyVariable(credential.kind)] = secret;
   }
   // Sandbox: the platform's managed E2B account, or one credential per role.
   if (settings.sandbox === "managed") {
     const managed = managedSandboxCredentials(base);
-    env.E2B_API_KEY = managed.apiKey;
-    if (managed.domain) env.E2B_DOMAIN = managed.domain;
+    Object.assign(
+      env,
+      providerCredentialEnvironment("e2b", { value: managed.apiKey, domain: managed.domain }),
+    );
   } else
     for (const { role, id, kind } of sandboxCredentials(settings)) {
       const secret = await credentials.secret(orgId, id ?? "");
       if (!secret?.value) throw new Error(`${credentialLabels[kind]} credential is unavailable.`);
-      if (kind === "modal") {
-        if (!secret.tokenId) throw new Error("Modal credential is unavailable.");
-        env.MODAL_TOKEN_ID = secret.tokenId;
-        env.MODAL_TOKEN_SECRET = secret.value;
-      } else if (kind === "e2b") {
-        env[role === "harbor" ? VERIFICATION_CREDENTIALS.E2B_API_KEY : "E2B_API_KEY"] =
-          secret.value;
-      } else if (kind === "daytona") {
-        env.DAYTONA_API_KEY = secret.value;
-      } else {
-        if (!secret.teamId || !secret.projectId)
-          throw new Error("Vercel credential is unavailable.");
-        const names = role === "harbor" ? VERIFICATION_CREDENTIALS : VERCEL_SANDBOX_CREDENTIALS;
-        env[names.VERCEL_TOKEN] = secret.value;
-        env[names.VERCEL_TEAM_ID] = secret.teamId;
-        env[names.VERCEL_PROJECT_ID] = secret.projectId;
-      }
+      Object.assign(env, providerCredentialEnvironment(kind, secret, role));
     }
   return env;
 }

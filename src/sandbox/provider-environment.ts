@@ -39,7 +39,7 @@ const RUNTIME_KEYS = [
  * Hosted runs may verify with a different provider account than they generate with, so the
  * verification (Harbor) credentials travel under these keys and replace the provider's own.
  */
-export const VERIFICATION_CREDENTIALS = {
+const VERIFICATION_CREDENTIALS = {
   E2B_API_KEY: "SELFBENCH_HARBOR_E2B_API_KEY",
   VERCEL_TOKEN: "SELFBENCH_HARBOR_VERCEL_TOKEN",
   VERCEL_TEAM_ID: "SELFBENCH_HARBOR_VERCEL_TEAM_ID",
@@ -70,4 +70,67 @@ export function providerEnvironment(
     if (environment[source]) child[target] = environment[source];
   }
   return child;
+}
+
+/** A worker's own provider credentials; none may reach a sandbox driven for a user's run. */
+export const WORKER_PROVIDER_CREDENTIALS = [
+  "MODAL_TOKEN_ID",
+  "MODAL_TOKEN_SECRET",
+  "E2B_API_KEY",
+  "E2B_DOMAIN",
+  "VERCEL_TOKEN",
+  "VERCEL_TEAM_ID",
+  "VERCEL_PROJECT_ID",
+  "VERCEL_OIDC_TOKEN",
+  "DAYTONA_API_KEY",
+  ...Object.values(VERIFICATION_CREDENTIALS),
+] as const;
+
+interface ProviderSecret {
+  readonly value: string;
+  readonly tokenId?: string;
+  readonly teamId?: string;
+  readonly projectId?: string;
+  /** Only the platform's managed E2B account carries a custom domain. */
+  readonly domain?: string | undefined;
+}
+
+/**
+ * A stored provider credential as the variables that provider's SDK or CLI reads. A Harbor
+ * (verification) credential travels under the dedicated keys `providerEnvironment` prefers,
+ * so it can differ from the generation sandbox account.
+ */
+export function providerCredentialEnvironment(
+  provider: HarborEnvironment,
+  secret: ProviderSecret,
+  role: "sandbox" | "harbor" = "sandbox",
+): Record<string, string> {
+  const verification = role === "harbor";
+  switch (provider) {
+    case "docker":
+      return {};
+    case "modal":
+      if (!secret.tokenId) throw new Error("Modal credential is unavailable.");
+      return { MODAL_TOKEN_ID: secret.tokenId, MODAL_TOKEN_SECRET: secret.value };
+    case "e2b":
+      return {
+        [verification ? VERIFICATION_CREDENTIALS.E2B_API_KEY : "E2B_API_KEY"]: secret.value,
+        ...(secret.domain ? { E2B_DOMAIN: secret.domain } : {}),
+      };
+    case "daytona":
+      return { DAYTONA_API_KEY: secret.value };
+    case "vercel":
+      if (!secret.teamId || !secret.projectId) throw new Error("Vercel credential is unavailable.");
+      return verification
+        ? {
+            [VERIFICATION_CREDENTIALS.VERCEL_TOKEN]: secret.value,
+            [VERIFICATION_CREDENTIALS.VERCEL_TEAM_ID]: secret.teamId,
+            [VERIFICATION_CREDENTIALS.VERCEL_PROJECT_ID]: secret.projectId,
+          }
+        : {
+            VERCEL_TOKEN: secret.value,
+            VERCEL_TEAM_ID: secret.teamId,
+            VERCEL_PROJECT_ID: secret.projectId,
+          };
+  }
 }

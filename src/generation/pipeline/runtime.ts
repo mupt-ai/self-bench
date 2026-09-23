@@ -3,19 +3,18 @@ import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
-import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
-import {
-  ensureManagedE2BTemplate,
-  managedE2BTemplateReference,
-} from "../../sandbox/providers/e2b/managed-template.js";
+import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "../billing/managed.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
-import { credentialOrg, generationEnvironment, stageAuthoring } from "../settings/credentials.js";
+import {
+  generationEnvironment,
+  generationRuntimeOwner,
+  stageAuthoring,
+} from "../settings/credentials.js";
 import { generationConfigEnvironment } from "../settings/run.js";
 import { generationExecutionBackend } from "../settings/settings.js";
 import { safeHeartbeat } from "./helpers.js";
@@ -75,40 +74,23 @@ export async function withGenerationRuntime<T>(
       "GenerationConfiguration",
     );
   }
-  // A managed E2B run stamped by the API must use this build's template; build it in the
-  // run's E2B account — the platform's own for managed sandboxes — before the first
-  // sandbox request if the account does not have it yet.
-  if (
-    selected.execution.kind === "e2b" &&
-    selected.execution.image === managedE2BTemplateReference() &&
-    run.version.sandboxImage === selected.execution.image
-  ) {
-    const managed = settings.sandbox === "managed";
-    const credentialId = managed ? MANAGED_E2B_TEMPLATE_OWNER : settings.sandboxCredentialId;
-    if (!credentialId)
-      throw ApplicationFailure.nonRetryable(
-        "Managed E2B template build is not configured on this worker.",
-        "GenerationConfiguration",
-      );
-    try {
-      await ensureManagedE2BTemplate({
-        reference: selected.execution.image,
-        credentials: selected.execution.credentials,
-        // A platform template is shared across organizations, so its build lock is global.
-        records: managed ? vault.records : orgRecords(vault.records, credentialOrg(run.generation)),
-        credentialId,
-        onLog: safeHeartbeat,
-        signal: Context.current().cancellationSignal,
-      });
-    } catch (error) {
-      // Cancellation must propagate as cancellation, not a non-retryable configuration failure.
-      if (Context.current().cancellationSignal.aborted)
-        throw new CancelledFailure("activity cancellation requested");
-      throw ApplicationFailure.nonRetryable(
-        error instanceof Error ? error.message : "Managed E2B template unavailable",
-        "GenerationConfiguration",
-      );
-    }
+  // A run stamped with the managed E2B template must find it in the run's account before the
+  // first sandbox request; build it there if absent.
+  const generation = run.generation;
+  try {
+    await prepareSandboxRuntime(selected.execution, () => ({
+      ...generationRuntimeOwner(generation, vault.records),
+      onLog: safeHeartbeat,
+      signal: Context.current().cancellationSignal,
+    }));
+  } catch (error) {
+    // Cancellation must propagate as cancellation, not a non-retryable configuration failure.
+    if (Context.current().cancellationSignal.aborted)
+      throw new CancelledFailure("activity cancellation requested");
+    throw ApplicationFailure.nonRetryable(
+      error instanceof Error ? error.message : "Managed E2B template unavailable",
+      "GenerationConfiguration",
+    );
   }
   const execution =
     "timeoutCapMs" in selected.execution
@@ -129,7 +111,6 @@ export async function withGenerationRuntime<T>(
       reasoningEffort: authoring.reasoningEffort as RunRequest["authoring"]["reasoningEffort"],
     },
   };
-  const generation = run.generation;
   const metered = meteredSandboxExecutor(createSandboxExecutor(execution, env), {
     managedModel: settings.modelAccess === "managed",
     managedSandbox: settings.sandbox === "managed",

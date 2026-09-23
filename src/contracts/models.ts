@@ -175,3 +175,17 @@ export function modelPricing(model: Model, via: "native" | "openRouter"): ModelP
     maxInputTokens: 200_000,
   };
 }
+
+/**
+ * The variable a model provider's API key travels under, for Pi and every Harbor harness.
+ * OpenAI-compatible providers (OpenAI, Codex, custom endpoints) share OPENAI_API_KEY.
+ */
+export function modelApiKeyVariable(
+  provider: string,
+): "ANTHROPIC_API_KEY" | "OPENROUTER_API_KEY" | "OPENAI_API_KEY" {
+  return provider === "anthropic"
+    ? "ANTHROPIC_API_KEY"
+    : provider === "openrouter"
+      ? "OPENROUTER_API_KEY"
+      : "OPENAI_API_KEY";
+}

@@ -1,9 +1,11 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { modelApiKeyVariable } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { managedModelKey, managedSandboxCredentials } from "../generation/billing/managed.js";
+import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /** The organization whose credentials an evaluation uses. */
@@ -70,23 +72,14 @@ export async function credentialExecution(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
     );
   } else {
-    const name =
-      info.kind === "anthropic"
-        ? "ANTHROPIC_API_KEY"
-        : info.kind === "openrouter"
-          ? "OPENROUTER_API_KEY"
-          : "OPENAI_API_KEY";
-    child[name] = modelSecret;
+    child[modelApiKeyVariable(info.kind)] = modelSecret;
   }
   if (info.kind === "custom")
     child.OPENAI_BASE_URL = validateEndpoint("endpoint" in info ? (info.endpoint ?? "") : "", env);
-  if (sandbox.kind === "modal") {
-    child.MODAL_TOKEN_ID = sandboxSecret.tokenId;
-    child.MODAL_TOKEN_SECRET = sandboxSecret.value;
-  } else if (sandbox.kind === "e2b") {
-    child.E2B_API_KEY = sandboxSecret.value;
-    if (managedE2B?.domain) child.E2B_DOMAIN = managedE2B.domain;
-  } else if (sandbox.kind === "daytona") child.DAYTONA_API_KEY = sandboxSecret.value;
+  Object.assign(
+    child,
+    providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
+  );
   return { profile: { model: input.modelName }, child, secrets };
 }
 

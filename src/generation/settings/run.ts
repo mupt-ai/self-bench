@@ -7,7 +7,7 @@ import {
   repositoryRefSchema,
   runRequestSchema,
 } from "../../contracts/index.js";
-import { managedE2BTemplateReference } from "../../sandbox/providers/e2b/managed-template.js";
+import { sandboxImageEnvironment } from "../../sandbox/runtime-image.js";
 import {
   type GenerationReference,
   type GenerationSettings,
@@ -57,18 +57,12 @@ function version(config: SelfBenchConfig, selfbenchCommit: string): RunRequest["
     executionBackend: config.execution.kind,
     harborEnvironment: config.harborEnvironment,
     sandboxImage: config.execution.image,
-    ...(config.execution.kind === "vercel" || config.execution.kind === "e2b"
+    ...("timeoutCapMs" in config.execution
       ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
       : {}),
     schema: 2,
   };
 }
-
-const imageVariables = {
-  modal: "SELFBENCH_MODAL_IMAGE",
-  vercel: "SELFBENCH_VERCEL_IMAGE",
-  e2b: "SELFBENCH_E2B_TEMPLATE",
-} as const;
 
 /** Generation agents and Harbor verification have independent provider contracts. */
 export function generationConfigEnvironment(
@@ -81,11 +75,7 @@ export function generationConfigEnvironment(
     ...base,
     SELFBENCH_EXECUTION_BACKEND: backend,
     SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(settings),
-    ...(backend === "e2b"
-      ? { SELFBENCH_E2B_TEMPLATE: image ?? managedE2BTemplateReference() }
-      : image
-        ? { [imageVariables[backend]]: image }
-        : {}),
+    ...sandboxImageEnvironment(backend, image),
   };
 }
 
@@ -111,8 +101,7 @@ export function configureGenerationRun(
       settings.sandboxImage ??
         (settings.sandbox !== "managed" && settings.sandbox === config.execution.kind
           ? config.execution.image
-          : undefined) ??
-        (settings.sandbox === "managed" ? managedE2BTemplateReference() : undefined),
+          : undefined),
     ),
   );
   run.version.executionBackend = selected.execution.kind;

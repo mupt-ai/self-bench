@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
+import { modelApiKeyVariable } from "../../contracts/models.js";
 import { isRecord } from "../../lib/util.js";
 
 type PiModelAuthProvider = "openai" | "openai-codex" | "anthropic" | "openrouter";
@@ -16,19 +17,10 @@ function environment(): NodeJS.ProcessEnv {
   return executionEnvironment();
 }
 
-/** The env variable Pi reads each provider's API key from inside the sandbox. */
-function piModelAuthKeyName(auth: PiModelAuth): string {
-  return auth.provider === "anthropic"
-    ? "ANTHROPIC_API_KEY"
-    : auth.provider === "openrouter"
-      ? "OPENROUTER_API_KEY"
-      : "OPENAI_API_KEY";
-}
-
 /** The sandbox secrets that authenticate Pi for this resolved provider. */
 export function piModelAuthSecrets(auth: PiModelAuth): Record<string, string> {
   if (auth.authJson) return { SELFBENCH_PI_AUTH_JSON: auth.authJson };
-  return { [piModelAuthKeyName(auth)]: auth.apiKey ?? "" };
+  return { [modelApiKeyVariable(auth.provider)]: auth.apiKey ?? "" };
 }
 
 /**

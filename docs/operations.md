@@ -52,7 +52,7 @@ The old `accounts/…` and `credentials/…` records can be deleted in a later r
 
 ## Execution backends and Harbor
 
-SelfBench uses one provider for discovery, authoring-turn, and review-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every `verify` and every submission. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
+SelfBench uses one provider for discovery, authoring-turn, and review-round sandboxes. Every generation provider runs the same runtime, defined by `Dockerfile.sandbox`: Docker runs the image Compose builds from it, Modal and E2B build from the packaged file automatically, and Vercel runs an image published from it (see below). It separately invokes Harbor for the build, smoke, nop, and oracle gates of every `verify` and every submission. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.
 
 ```bash
 SELFBENCH_EXECUTION_BACKEND=docker docker compose --profile sandbox up -d --build   # Docker + Docker
@@ -108,6 +108,8 @@ SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH="$HOME/.modal.toml
 # If your profile is not at ~/.modal.toml:
 SELFBENCH_EXECUTION_BACKEND=modal SELFBENCH_MODAL_CONFIG_PATH=/absolute/path/to/.modal.toml docker compose up -d --build
 ```
+
+Modal sandboxes are built from the packaged `Dockerfile.sandbox`: its pinned `FROM` image, then its remaining instructions replayed as Modal Dockerfile commands. Modal caches the resulting image, so it rebuilds only when the file changes, and run metadata records the file's content hash as `Dockerfile.sandbox@<hash>`.
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
@@ -342,7 +344,6 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
-| `SELFBENCH_MODAL_IMAGE` | `node:22-bookworm` | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |
 | `SELFBENCH_VERCEL_IMAGE` | profile or — | Required digest-pinned VCR image for Vercel execution |
 | `SELFBENCH_VERCEL_TIMEOUT_CAP` | `2h` | Vercel worker and API; accepts integer milliseconds or `ms`, `s`, `m`, `h` units |
