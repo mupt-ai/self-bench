@@ -63,6 +63,7 @@ export async function runReviewRound(
     label: `verify-${candidate.candidateId}-r${round}`,
     prefix: `${roundPrefix}/attempt-${attempt}`,
     sessionKey: `runs/${run.runId}/review/${candidate.candidateId}/session/round-${round}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    record: { stage: "review", round, attempt },
     workspace: { kind: "task" },
     extension: "/work/reviewer.js",
     tools: "read,grep,find,ls,accept_task,submit_suggestions,reject_task",

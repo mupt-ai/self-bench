@@ -46,10 +46,33 @@ export const ARTIFACT_GROUPS = [
 ] as const;
 export type ArtifactGroup = (typeof ARTIFACT_GROUPS)[number];
 
+export const AGENT_RECORD_NAME = "agent.json";
+
+/** What one agent sandbox run records about itself in `<prefix>/agent.json`. */
+export interface AgentRunRecord {
+  readonly stage: "authoring" | "review";
+  readonly round: number;
+  /** Authoring turns within a round; each `verify` ends one. */
+  readonly turn?: number;
+  /** The Temporal activity attempt. */
+  readonly attempt: number;
+  /** The directory holding this run's prompt, live feed, and log. */
+  readonly prefix: string;
+  /** Where the pi session is stored once the run ends. */
+  readonly session?: string;
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  readonly exitCode?: number;
+  /** Set when the run itself failed (sandbox or provider error) rather than finishing. */
+  readonly error?: string;
+}
+
 export interface CandidateArtifacts {
   readonly runId: string;
   readonly taskId: string;
   readonly candidateId: string;
   readonly groups: Readonly<Record<ArtifactGroup, readonly ArtifactEntry[]>>;
   readonly bundles: readonly BundleRef[];
+  /** Agent runs that recorded themselves; runs from before agent.json existed have none. */
+  readonly agents: readonly AgentRunRecord[];
 }

@@ -257,8 +257,10 @@ Each review round stores its decision directly under `runs/<runId>/review/<candi
 (`result.json`, `verdict.json`) and each authoring turn under
 `runs/<runId>/authoring/<candidateId>/round-<n>/turn-<k>/` (`result.json`, the draft). The pi session is stored
 per round or turn under `runs/<runId>/<stage>/<candidateId>/session/`. Everything a single attempt produces before
-it is decided lives under `…/attempt-<m>/`: `prompt.md`, `sandbox.log`, and `sandbox-result.json` (the provider's
-exit code, the wrapper's own status, pi's exit code, and which declared outputs were collected). A Temporal retry
+it is decided lives under `…/attempt-<m>/`: `prompt.md`, `sandbox.log`, `sandbox-result.json` (the provider's
+exit code, the wrapper's own status, pi's exit code, and which declared outputs were collected), and `agent.json`,
+the run's own record (stage, round, turn, attempt, session key, start and finish) that the agent work sheet lists
+instead of parsing artifact paths. A Temporal retry
 therefore never collides with the immutable artifacts of the attempt it replaces; its session is stored with an
 `-attempt-<m>` suffix.
 

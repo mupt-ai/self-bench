@@ -88,6 +88,7 @@ export async function runAuthoringTurn(
     label: `author-${candidate.candidateId}-r${round}-t${turn}`,
     prefix: `${turnPrefix}/attempt-${attempt}`,
     sessionKey: `runs/${run.runId}/authoring/${candidate.candidateId}/session/round-${round}-turn-${turn}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    record: { stage: "authoring", round, turn, attempt },
     ...(session ? { resume: session } : {}),
     workspace: { kind: "clone", commit: candidate.baseCommit },
     ...(draft ? { setup: RESTORE_DRAFT } : {}),

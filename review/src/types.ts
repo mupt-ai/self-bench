@@ -55,12 +55,28 @@ type ArtifactGroup =
   | "repairs"
   | "provenance";
 
+/** One agent sandbox run, as recorded in its `agent.json`. */
+export interface AgentRunRecord {
+  stage: "authoring" | "review";
+  round: number;
+  turn?: number;
+  attempt: number;
+  prefix: string;
+  session?: string;
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  error?: string;
+}
+
 export interface CandidateArtifacts {
   runId: string;
   taskId: string;
   candidateId: string;
   groups: Record<ArtifactGroup, ArtifactEntry[]>;
   bundles: BundleRef[];
+  /** Absent or empty for runs from before agent runs recorded themselves. */
+  agents?: AgentRunRecord[];
 }
 
 /** One row of the ledger, whichever source it came from. */
