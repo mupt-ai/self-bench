@@ -79,6 +79,7 @@ try {
     "dist/sandbox-task-operation.bundle.js",
     "dist/sandbox-verifier.bundle.js",
     "dist/review/index.html",
+    "dist/public-site/index.html",
   ]) {
     await readFile(join(installedRoot, asset));
   }

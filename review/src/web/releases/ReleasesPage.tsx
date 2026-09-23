@@ -61,8 +61,7 @@ export function ReleasesPage() {
     void load();
   }, [load]);
   const current = list?.releases.find((release) => release.current);
-  const pageUrl = (release: ReleaseSummary) =>
-    list ? publicPageUrl(list.resultsSiteUrl, release.fullName, release.publisher) : "";
+  const site = list?.resultsSiteUrl;
 
   return (
     <PageContent>
@@ -70,10 +69,10 @@ export function ReleasesPage() {
         title="Releases"
         description="Publish this repository's results on selfbench.dev. Each release is kept."
       >
-        {current && (
+        {current && site && (
           <a
             className={buttonStyles.secondary}
-            href={pageUrl(current)}
+            href={publicPageUrl(site, current.fullName, current.publisher)}
             target="_blank"
             rel="noreferrer"
           >

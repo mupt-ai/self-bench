@@ -13,7 +13,12 @@ import { RulerScrollbar } from "./RulerScrollbar";
 import { SettingsMenu } from "./SettingsMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
-export const APP_URL = "https://app.selfbench.dev";
+/** The app's origin: set by the server that serves the site, prod's app otherwise. */
+export const APP_URL =
+  (typeof document === "undefined"
+    ? undefined
+    : document.querySelector<HTMLMetaElement>('meta[name="selfbench-app-url"]')?.content) ||
+  "https://app.selfbench.dev";
 
 /**
  * Optional style widgets for trying palettes and effects: a local-only file, not in the

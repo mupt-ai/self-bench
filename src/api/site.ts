@@ -19,7 +19,10 @@ import { startBillingDispatcher } from "../generation/billing/outbox.js";
 import { generationRecordPath } from "../generation/settings/credentials.js";
 import type { GenerationReference } from "../generation/settings/settings.js";
 import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
+import { projectRoot } from "../lib/project-paths.js";
 import type { AuthConfig } from "./auth/config.js";
+import { createRateLimiter } from "./rate-limit.js";
+import { createResultsSite, type ResultsSite } from "./results-site.js";
 import { type ApiKeyRoutes, createApiKeyRoutes } from "./routes/api-keys.js";
 import { createSiteAuth, type SiteAuth } from "./routes/auth.js";
 import { type BatchRoutes, createBatchRoutes } from "./routes/batches.js";
@@ -46,6 +49,8 @@ interface Site {
   readonly releases: ReleaseRoutes;
   /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
   readonly publicReleases: PublicReleaseRoutes;
+  /** selfbench.dev itself, answered on its own host by this same server, when configured. */
+  readonly resultsSite?: ResultsSite;
   readonly database: OpenDatabase;
   generationBatches: ReturnType<typeof createGenerationBatches>;
   close(): Promise<void>;
@@ -69,6 +74,18 @@ export async function openSite(
   const runs = createRunStore(database.db);
   const usage = createUsageStore(database.db);
   const releases = createReleaseStore(database.db);
+  // Unset means no public results site: no host serves it and nothing links to it.
+  const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
+  // Anonymous reads share this server with the app: a scraper must not slow the app down.
+  const limiter = createRateLimiter({
+    perMinute: 300,
+    burst: 60,
+    globalPerMinute: 6_000,
+    globalBurst: 600,
+    onLimit: (client, scope) =>
+      console.warn(`public site rate limit (${scope}) refused requests from ${client}`),
+  });
+  const publicReleases = createPublicReleaseRoutes(releases, { limiter });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
     ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
@@ -115,12 +132,22 @@ export async function openSite(
       releases,
       publicUrl,
       githubApiUrl: auth.githubApiUrl,
-      resultsSiteUrl: (process.env.SELFBENCH_RESULTS_SITE_URL || "https://selfbench.dev").replace(
-        /\/+$/,
-        "",
-      ),
+      resultsSiteUrl,
     }),
-    publicReleases: createPublicReleaseRoutes(releases),
+    publicReleases,
+    ...(resultsSiteUrl
+      ? {
+          resultsSite: createResultsSite({
+            siteUrl: resultsSiteUrl,
+            appUrl: publicUrl,
+            indexable: process.env.SELFBENCH_RESULTS_SITE_INDEX === "true",
+            root: `${projectRoot(import.meta.url)}/dist/public-site`,
+            releases,
+            publicRoutes: publicReleases,
+            limiter,
+          }),
+        }
+      : {}),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
     batches: createBatchRoutes({
       config,

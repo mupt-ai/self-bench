@@ -23,10 +23,10 @@ export interface ReleaseView {
   current: ReleaseSummary | null;
 }
 
-/** The Releases tab's list, and where released pages live. */
+/** The Releases tab's list, and where released pages live: null when no results site is set up. */
 export interface ReleaseList {
   releases: ReleaseSummary[];
-  resultsSiteUrl: string;
+  resultsSiteUrl: string | null;
 }
 
 export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): ReleaseSummary {

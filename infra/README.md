@@ -103,7 +103,8 @@ The runtime expects:
 - separate Temporal namespaces for dev and prod
 - separate GitHub OAuth applications
 - a configured public HTTPS origin
-- Caddy or another host TLS proxy forwarding to `127.0.0.1:8080`
+- Caddy or another host TLS proxy forwarding to `127.0.0.1:8080`, for the app's host and the
+  results site's host alike (`infra/runtime/Caddyfile.example`)
 
 Public web ingress is disabled by default. Enable it only after DNS and TLS are configured.
 
@@ -128,6 +129,7 @@ Configure `dev` and `prod` GitHub environments. Production should require review
 | `TF_STATE_BUCKET` | Environment Terraform state bucket |
 | `TF_INPUTS_JSON` | JSON object matching the root Terraform variables |
 | `SELFBENCH_PUBLIC_URL` | Public HTTPS origin |
+| `SELFBENCH_RESULTS_SITE_URL` | Optional HTTPS origin of the results site; when set, the deploy checks it |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | Worker concurrency from 1 to 100 |
 
 The workflow:
