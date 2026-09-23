@@ -82,12 +82,12 @@ test("only gateway routes offer every harness; direct keys keep their native har
         );
     }
   }
-  const model = catalog.find((entry) => entry.id === "openai-sol56");
+  const model = catalog.find((entry) => entry.id === "gpt-5.6-sol");
   if (!model) throw new Error("Missing model fixture");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("mini-swe-agent");
   expect(routeFor(model, "openai")?.harnesses).not.toContain("claude-code");
-  const anthropic = catalog.find((entry) => entry.id === "anthropic-opus5");
+  const anthropic = catalog.find((entry) => entry.id === "claude-opus-5");
   if (!anthropic) throw new Error("Missing model fixture");
   expect(routeFor(anthropic, "anthropic")?.harnesses).not.toContain("codex");
   expect(routeFor(model, "vercel")).toBeUndefined();

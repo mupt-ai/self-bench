@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
@@ -11,7 +12,6 @@ import {
   harnessIds,
   modelIdPattern,
   routeFor,
-  thinkingLevels,
   thinkingOptions,
 } from "./models.js";
 import { getEvaluation, listEvaluations } from "./store.js";
@@ -147,7 +147,7 @@ export async function createComparison(
     const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
-    const modelIdentity = selected.catalogId === "custom" ? route.model : selected.catalogId;
+    const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
     for (const harness of selected.harnesses) {
       const pair = configurationIdentity(modelIdentity, thinking, harness);
       if (seen.has(pair))
@@ -171,7 +171,7 @@ export async function createComparison(
       .map(
         (group): EvaluationInput => ({
           id: randomUUID(),
-          model: selected.catalogId,
+          model: model.id,
           modelName,
           thinking,
           harnesses: group.harnesses,

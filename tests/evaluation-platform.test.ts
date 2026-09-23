@@ -48,7 +48,7 @@ test("managed evaluations use the platform model and sandbox credentials", async
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [
         {
-          catalogId: "openai-sol56",
+          catalogId: "gpt-5.6-sol",
           credentialId: "managed-model",
           harnesses: ["pi"],
           thinking: "high",
@@ -89,12 +89,12 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [
         {
-          catalogId: "openai-astra6",
+          catalogId: "gpt-6-astra",
           credentialId: modelKey,
           harnesses: ["codex", "pi"],
           thinking: "xhigh",
         },
-        { catalogId: "openai-sol56", credentialId: modelKey, harnesses: ["codex"] },
+        { catalogId: "gpt-5.6-sol", credentialId: modelKey, harnesses: ["codex"] },
       ],
       sandbox: "e2b",
       sandboxCredentialId: sandboxKey,
@@ -207,14 +207,14 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
     const draft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
-      models: [{ catalogId: "openai-sol56", credentialId: model.id, harnesses: ["pi"] }],
+      models: [{ catalogId: "gpt-5.6-sol", credentialId: model.id, harnesses: ["pi"] }],
       sandbox: "e2b",
       sandboxCredentialId: sandbox.id,
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     draft.models[0] = {
       ...draft.models[0],
-      catalogId: "openai-sol56",
+      catalogId: "gpt-5.6-sol",
       credentialId: model.id,
       harnesses: ["codex"],
     };
