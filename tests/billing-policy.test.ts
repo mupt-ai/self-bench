@@ -52,21 +52,21 @@ test("integer units come from quantities and frozen rates, not USD estimates", (
   expect(snapshot.unitScale).toBe(DEFAULT_BILLING_UNIT_SCALE);
   expect(snapshot.markupBps).toBe(0);
   expect(usdToUnits(1, snapshot.unitScale, 0)).toBe(DEFAULT_BILLING_UNIT_SCALE);
-  const model = modelBillableUnits(snapshot, "gpt-5.6-sol", {
+  const model = modelBillableUnits(snapshot, "gpt-6-sol", {
     input: 1_000_000,
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
   });
   expect(model).toBe(usdToUnits(2, snapshot.unitScale, 0));
-  expect(modelBillableUnits(snapshot, "gpt-5.6-sol", undefined)).toBe(0);
+  expect(modelBillableUnits(snapshot, "gpt-6-sol", undefined)).toBe(0);
   expect(sandboxBillableUnits(snapshot, 1, 4, 8192)).toBe(
     usdToUnits(4 * 0.000014 + 8 * 0.0000045, snapshot.unitScale, 0),
   );
   const marked = rateSnapshotSpec(loadBillingPolicy({ SELFBENCH_BILLING_MARKUP_BPS: "1000" }));
   expect(marked.markupBps).toBe(1000);
   expect(
-    modelBillableUnits(marked, "gpt-5.6-sol", {
+    modelBillableUnits(marked, "gpt-6-sol", {
       input: 1_000_000,
       output: 0,
       cacheRead: 0,

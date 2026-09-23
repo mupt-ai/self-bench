@@ -18,7 +18,7 @@ import {
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 const commonSchema = {
   runId: runIdSchema,
-  authoringModel: z.string().min(1).default("gpt-5.6-sol"),
+  authoringModel: z.string().min(1).default("gpt-6-sol"),
   selfbenchCommit: z.string().regex(/^[0-9a-f]{40}$/i),
 };
 

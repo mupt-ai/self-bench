@@ -28,7 +28,7 @@ export const run: RunRequest = {
   repository: { url: "https://github.com/example/repo.git", commit: "a".repeat(40) },
   provenance: artifact,
   candidateCounts: { easy: 0, medium: 0, hard: 1 },
-  authoring: { provider: "openai-codex", model: "gpt-5.6-sol", reasoningEffort: "high" },
+  authoring: { provider: "openai-codex", model: "gpt-6-sol", reasoningEffort: "high" },
   version: {
     selfbenchCommit: "b".repeat(40),
     executionBackend: "docker",

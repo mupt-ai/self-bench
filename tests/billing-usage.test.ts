@@ -34,7 +34,7 @@ const managedRow = {
   managed: true,
   managedModel: true,
   managedSandbox: true,
-  model: "gpt-5.6-sol",
+  model: "gpt-6-sol",
   tokens: { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 },
   sandboxSeconds: 10,
   cpu: 4,
@@ -52,7 +52,7 @@ test("managed usage snapshots integer units and only enqueues when a Stripe cust
     const snapshot = rateSnapshotSpec(loadBillingPolicy({}));
     expect(row?.rateSnapshotId).toBeGreaterThan(0);
     expect(row?.modelBillableUnits).toBe(
-      modelBillableUnits(snapshot, "gpt-5.6-sol", managedRow.tokens),
+      modelBillableUnits(snapshot, "gpt-6-sol", managedRow.tokens),
     );
     expect(row?.sandboxBillableUnits).toBe(sandboxBillableUnits(snapshot, 10, 4, 8192));
     expect(await database.db.select().from(billingOutbox)).toEqual([]);

@@ -4,7 +4,8 @@
  * per-credential Harbor routes. Browser-safe: the site imports it too.
  *
  * A model with a `vendor` runs on that vendor's own key under its `id`; every model also runs
- * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF.
+ * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF; server
+ * processes replace the OpenRouter rates with OpenRouter's live list prices (openrouter-rates.ts).
  */
 
 export const thinkingLevels = [
@@ -20,7 +21,7 @@ export const thinkingLevels = [
 export type ThinkingLevel = (typeof thinkingLevels)[number];
 
 /** [input, output, cache read, cache write] in $ per million tokens. */
-type Rates = readonly [number, number, number, number];
+export type Rates = readonly [number, number, number, number];
 
 export interface ModelPricing {
   maxInputTokens?: number;
@@ -46,8 +47,8 @@ export interface Model {
   readonly generation?: boolean;
 }
 
-export const catalogVersion = "2026-09-23.1";
-const RATES_AS_OF = "2026-09-06";
+export const catalogVersion = "2026-09-23.2";
+const RATES_AS_OF = "2026-09-23";
 const openAiThinking = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 const vendorThinking = ["low", "medium", "high", "xhigh", "max"] as const;
 
@@ -63,31 +64,22 @@ export const models: readonly Model[] = [
     generation: true,
   },
   {
-    id: "gpt-5.6-sol",
-    label: "GPT-5.6 Sol",
+    id: "gpt-6-sol",
+    label: "GPT-6 Sol",
     vendor: "openai",
-    openRouter: "openai/gpt-5.6-sol",
-    source: "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
-    rates: { native: [4, 20, 0.4, 5], openRouter: [2, 10, 0.2, 2.5] },
+    openRouter: "openai/gpt-6-sol",
+    source: "https://developers.openai.com/api/docs/models/gpt-6-sol",
+    rates: { native: [2, 10, 0.2, 2.5], openRouter: [2, 10, 0.2, 2.5] },
     thinking: openAiThinking,
     generation: true,
   },
   {
-    id: "gpt-5.6-terra",
-    label: "GPT-5.6 Terra",
+    id: "gpt-6-luna",
+    label: "GPT-6 Luna",
     vendor: "openai",
-    openRouter: "openai/gpt-5.6-terra",
-    source: "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
-    rates: { native: [2, 12, 0.2, 2.5], openRouter: [2, 12, 0.2, 2.5] },
-    thinking: openAiThinking,
-  },
-  {
-    id: "gpt-5.6-luna",
-    label: "GPT-5.6 Luna",
-    vendor: "openai",
-    openRouter: "openai/gpt-5.6-luna",
-    source: "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
-    rates: { native: [0.2, 1.2, 0.02, 0.25], openRouter: [0.2, 1.2, 0.02, 0.25] },
+    openRouter: "openai/gpt-6-luna",
+    source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
+    rates: { native: [0.1, 0.5, 0.01, 0.125], openRouter: [0.1, 0.5, 0.01, 0.125] },
     thinking: openAiThinking,
   },
   {
@@ -101,12 +93,12 @@ export const models: readonly Model[] = [
     generation: true,
   },
   {
-    id: "claude-opus-5",
-    label: "Claude Opus 5",
+    id: "claude-opus-5-5",
+    label: "Claude Opus 5.5",
     vendor: "anthropic",
-    openRouter: "anthropic/claude-opus-5",
+    openRouter: "anthropic/claude-opus-5.5",
     source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [5, 25, 0.5, 6.25], openRouter: [5, 25, 0.5, 6.25] },
+    rates: { native: [4, 20, 0.2, 5], openRouter: [4, 20, 0.2, 5] },
     thinking: vendorThinking,
     generation: true,
   },
@@ -124,7 +116,7 @@ export const models: readonly Model[] = [
     label: "GLM 5.3",
     openRouter: "z-ai/glm-5.3",
     source: "https://openrouter.ai/z-ai/glm-5.3",
-    rates: { openRouter: [0.896, 2.816, 0.1664, 0.896] },
+    rates: { openRouter: [0.84, 2.64, 0.156, 0.84] },
     thinking: ["low", "high", "max"],
     generation: true,
   },
@@ -133,7 +125,7 @@ export const models: readonly Model[] = [
     label: "Kimi K3",
     openRouter: "moonshotai/kimi-k3",
     source: "https://openrouter.ai/moonshotai/kimi-k3",
-    rates: { openRouter: [1.7, 8.5, 0.17, 1.7] },
+    rates: { openRouter: [3, 15, 0.3, 3] },
     generation: true,
   },
   {
@@ -143,13 +135,21 @@ export const models: readonly Model[] = [
     source: "https://openrouter.ai/google/gemini-3.8-flash",
   },
   {
-    id: "deepseek-v4-pro",
-    label: "DeepSeek V4 Pro",
-    openRouter: "deepseek/deepseek-v4-pro",
-    source: "https://openrouter.ai/deepseek/deepseek-v4-pro",
+    id: "deepseek-v4-pro-0813",
+    label: "DeepSeek V4 Pro 0813",
+    openRouter: "deepseek/deepseek-v4-pro-0813",
+    source: "https://openrouter.ai/deepseek/deepseek-v4-pro-0813",
     thinking: ["off", "low", "high", "max"],
   },
 ];
+
+/** OpenRouter's live list prices by OpenRouter id; empty until a server process loads them. */
+let openRouterRates: ReadonlyMap<string, { readonly rates: Rates; readonly asOf: string }> =
+  new Map();
+
+export function setOpenRouterRates(rates: typeof openRouterRates): void {
+  openRouterRates = rates;
+}
 
 export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);
@@ -157,7 +157,8 @@ export function findModel(id: string): Model | undefined {
 
 /** Reference pricing for running `model` on its vendor's key or through OpenRouter. */
 export function modelPricing(model: Model, via: "native" | "openRouter"): ModelPricing | undefined {
-  const rates = model.rates?.[via];
+  const live = via === "openRouter" ? openRouterRates.get(model.openRouter) : undefined;
+  const rates = live?.rates ?? model.rates?.[via];
   if (!rates) return undefined;
   const [input, output, cacheRead, cacheWrite] = rates;
   return {
@@ -171,7 +172,7 @@ export function modelPricing(model: Model, via: "native" | "openRouter"): ModelP
         : model.vendor === "anthropic"
           ? "https://platform.claude.com/docs/en/about-claude/pricing"
           : model.source,
-    asOf: RATES_AS_OF,
+    asOf: live?.asOf ?? RATES_AS_OF,
     maxInputTokens: 200_000,
   };
 }

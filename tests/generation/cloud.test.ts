@@ -60,7 +60,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         {},
       );
       const generation: GenerationSettings = {
-        authorModel: "gpt-5.6-sol",
+        authorModel: "gpt-6-sol",
         verifierModel: "gpt-6-astra",
         reasoning: "high",
         modelAccess: "credential",
@@ -194,7 +194,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
 
 test("cloud generation validates runtime artifacts and never offers worker-local Docker", () => {
   const base = {
-    authorModel: "gpt-5.6-sol",
+    authorModel: "gpt-6-sol",
     verifierModel: "gpt-6-astra",
     reasoning: "high",
     modelAccess: "credential",

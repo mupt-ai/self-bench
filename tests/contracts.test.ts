@@ -43,7 +43,7 @@ const request = {
     sizeBytes: 1,
     contentType: "application/x-ndjson",
   },
-  authoring: { provider: "openai-codex", model: "gpt-5.6-sol", reasoningEffort: "high" },
+  authoring: { provider: "openai-codex", model: "gpt-6-sol", reasoningEffort: "high" },
   version: {
     selfbenchCommit: "b".repeat(40),
     executionBackend: "docker",

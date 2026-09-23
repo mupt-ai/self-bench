@@ -24,7 +24,7 @@ test("generation defaults select compatible credentials and remember choices wit
     _input: Parameters<typeof globalThis.fetch>[0],
   ) =>
     Response.json({
-      models: ["gpt-5.6-sol", "gpt-6-astra"],
+      models: ["gpt-6-sol", "gpt-6-astra"],
       sandboxes: ["modal", "e2b"],
       available: true,
       managed: { models: false, sandbox: false },
@@ -52,8 +52,8 @@ test("generation defaults select compatible credentials and remember choices wit
     await render();
     expect(current.valid).toBe(true);
     expect(current.settings).toEqual({
-      authorModel: "gpt-5.6-sol",
-      verifierModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "high",
       modelAccess: "credential",
       sandbox: "modal",
@@ -107,7 +107,7 @@ test("generation defaults select compatible credentials and remember choices wit
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",
-      verifierModel: "gpt-5.6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "low" as const,
       modelAccess: "credential" as const,
       sandbox: "modal" as const,
@@ -120,10 +120,10 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.settings).toEqual(chosen);
     expect(current.valid).toBe(true);
     await render("other-team");
-    expect(current.settings.authorModel).toBe("gpt-5.6-sol");
+    expect(current.settings.authorModel).toBe("gpt-6-sol");
     expect(current.settings.modelCredentialId).toBe(id(3));
     await render("team", "owner/other");
-    expect(current.settings.authorModel).toBe("gpt-5.6-sol");
+    expect(current.settings.authorModel).toBe("gpt-6-sol");
     await render();
     expect(current.settings).toEqual(chosen);
     // Reopening reads choices saved by the other generation dialog.

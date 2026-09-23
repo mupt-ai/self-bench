@@ -27,7 +27,7 @@ test("current catalog exposes explicit model IDs and dated provider pricing", ()
     output: 50,
     cacheRead: 0.25,
     cacheWrite: 12.5,
-    asOf: "2026-09-06",
+    asOf: "2026-09-23",
   });
 });
 
@@ -40,25 +40,25 @@ test("generation and evaluation read the same catalog", () => {
 });
 
 test("an OpenRouter-only model keeps its OpenRouter ID and every harness", () => {
-  const model = catalog.find((entry) => entry.id === "deepseek-v4-pro");
+  const model = catalog.find((entry) => entry.id === "deepseek-v4-pro-0813");
   if (!model) throw new Error("Missing model");
   expect(model.provider).toBe("openrouter");
-  expect(model.model).toBe("deepseek/deepseek-v4-pro");
+  expect(model.model).toBe("deepseek/deepseek-v4-pro-0813");
   expect(modelRoutes(model)).toHaveLength(1);
   expect(modelRoutes(model)[0]).toMatchObject({
     provider: "openrouter",
-    model: "deepseek/deepseek-v4-pro",
+    model: "deepseek/deepseek-v4-pro-0813",
     harnesses: [...harnessIds],
   });
 });
 
 test("credential routes preserve exact model IDs, provider pricing and harness support", () => {
-  const sol = catalog.find((model) => model.id === "gpt-5.6-sol");
+  const sol = catalog.find((model) => model.id === "gpt-6-sol");
   if (!sol) throw new Error("Missing Sol");
   const routes = modelRoutes(sol);
   expect(routes.map((route) => [route.provider, route.model, route.pricing?.input])).toEqual([
-    ["openai", "gpt-5.6-sol", 4],
-    ["openrouter", "openai/gpt-5.6-sol", 2],
+    ["openai", "gpt-6-sol", 2],
+    ["openrouter", "openai/gpt-6-sol", 2],
   ]);
   expect(routes[1]?.harnesses).toEqual([
     "codex",
@@ -96,7 +96,7 @@ test("custom endpoints only offer default thinking whatever model ID is typed", 
 
 test.each([
   ["glm-5.3", ["low", "high", "max"]],
-  ["deepseek-v4-pro", ["off", "low", "high", "max"]],
+  ["deepseek-v4-pro-0813", ["off", "low", "high", "max"]],
 ] as const)(
   "%s exposes its reasoning levels independently of gateway ID mappings",
   (id, levels) => {

@@ -21,7 +21,7 @@ completed requests + implementations
         ↓
 validated Harbor tasks with hidden tests
         ↓
-gpt-5.6-luna vs gpt-5.6-terra vs gpt-5.6-sol
+gpt-6-luna vs gpt-6-sol vs gpt-6-astra
 ```
 
 ## Quickstart
@@ -34,7 +34,7 @@ This path runs the self-bench API, worker, [Temporal](https://temporal.io/), and
 - [uv](https://docs.astral.sh/uv/) for installing Harbor
 - Docker with Compose
 - A GitHub OAuth app for sign-in (see [Site sign-in](docs/operations.md#site-sign-in-selfbenchdev))
-- An OpenAI API key with access to `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`
+- An OpenAI API key with access to `gpt-6-luna`, `gpt-6-sol`, and `gpt-6-astra`
 - A GitHub repository with merged pull requests to author tasks from
 
 Install the self-bench command, which wraps the run API, and set a random token that protects the local self-bench API:
@@ -90,9 +90,9 @@ Run Harbor's Codex agent adapter directly. Harbor evaluates every extracted task
 harbor run \
   --path ./self-bench-tasks \
   --agent codex \
-  --model gpt-5.6-luna \
-  --model gpt-5.6-terra \
-  --model gpt-5.6-sol \
+  --model gpt-6-luna \
+  --model gpt-6-sol \
+  --model gpt-6-astra \
   --ak version=0.146.1 \
   --ak reasoning_effort=high \
   --env docker \
