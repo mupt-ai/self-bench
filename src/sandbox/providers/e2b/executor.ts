@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { CommandExitError, type CommandHandle, E2B } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { raceAbort, shellQuote } from "../../../lib/util.js";
@@ -124,23 +125,32 @@ function releaseArchiveRead(): void {
   } else archiveReads.active -= 1;
 }
 
-/** A bounded read of a small output through the command channel. */
+/** A bounded, digest-checked read of a small output through the command channel. */
 async function readThroughCommand(
   sandbox: Awaited<ReturnType<E2B["Sandbox"]["create"]>>,
   path: string,
   signal: AbortSignal,
 ): Promise<Uint8Array | undefined> {
   const bounded = AbortSignal.any([signal, AbortSignal.timeout(COMMAND_READ_TIMEOUT_MS)]);
+  const file = shellQuote(path);
   try {
+    // Prints "<size> <sha256>" then the base64 body; a truncated or noisy stream fails the checks.
     const result = await raceAbort(
       sandbox.commands.run(
-        `test -f ${shellQuote(path)} && head -c ${COMMAND_READ_MAX_BYTES + 1} ${shellQuote(path)} | base64 -w0`,
+        `test -f ${file} && test $(stat -c%s ${file}) -le ${COMMAND_READ_MAX_BYTES} && echo $(stat -c%s ${file}) $(sha256sum < ${file} | cut -d' ' -f1) && base64 -w0 ${file}`,
         { timeoutMs: COMMAND_READ_TIMEOUT_MS, requestTimeoutMs: COMMAND_READ_TIMEOUT_MS },
       ),
       bounded,
     );
-    const bytes = Buffer.from(result.stdout, "base64");
-    return bytes.length <= COMMAND_READ_MAX_BYTES ? bytes : undefined;
+    const [header = "", data = ""] = result.stdout.split("\n");
+    const [size, sha256] = header.split(" ");
+    const bytes = Buffer.from(data, "base64");
+    const intact =
+      result.exitCode === 0 &&
+      bytes.toString("base64") === data &&
+      String(bytes.length) === size &&
+      createHash("sha256").update(bytes).digest("hex") === sha256;
+    return intact ? bytes : undefined;
   } catch {
     signal.throwIfAborted();
     return undefined;

@@ -21,18 +21,12 @@ export function pipelineStatus(progress: Pick<TaskProgress, "status">): Pipeline
   }
 }
 
-/**
- * The bundle and definition of an accepted task. An unreadable definition is left off, so one
- * bad artifact never blocks the other rows; the next sync tries it again.
- */
+/** The bundle and definition of an accepted task, written onto its row once. */
 export async function acceptedTaskFields(
   artifacts: ArtifactStore,
   task: AuthoredTask,
 ): Promise<Pick<TaskUpsert, "bundleKey" | "definition">> {
   const bundleKey = artifactKey(task.bundle);
-  const definition = await artifacts
-    .get(task.definition)
-    .then((bytes) => JSON.parse(Buffer.from(bytes).toString("utf8")) as Record<string, unknown>)
-    .catch(() => undefined);
-  return { ...(bundleKey ? { bundleKey } : {}), ...(definition ? { definition } : {}) };
+  const definition = JSON.parse(Buffer.from(await artifacts.get(task.definition)).toString("utf8"));
+  return { ...(bundleKey ? { bundleKey } : {}), definition };
 }
