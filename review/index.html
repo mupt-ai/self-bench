@@ -14,6 +14,9 @@
       try {
         var theme = localStorage.getItem("selfbench-theme");
         if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+        // The public site's Disable Animations choice also stills the sign-in page's water.
+        if (localStorage.getItem("selfbench-motion") === "off")
+          document.documentElement.setAttribute("data-motion", "off");
       } catch (error) {}
     </script>
   </head>
