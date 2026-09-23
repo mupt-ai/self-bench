@@ -129,7 +129,7 @@ Configure `dev` and `prod` GitHub environments. Production should require review
 | `TF_STATE_BUCKET` | Environment Terraform state bucket |
 | `TF_INPUTS_JSON` | JSON object matching the root Terraform variables |
 | `SELFBENCH_PUBLIC_URL` | Public HTTPS origin |
-| `SELFBENCH_RESULTS_SITE_URL` | Optional HTTPS origin of the results site; when set, the deploy checks it |
+| `SELFBENCH_RESULTS_SITE_URL` | Results site HTTPS origin, checked after each deploy |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | Worker concurrency from 1 to 100 |
 
 The workflow:
