@@ -3,9 +3,9 @@ import { withExecutionEnvironment } from "../src/contracts/config/execution-envi
 import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
-import { createActivities } from "../src/generation/activities.js";
-import { generationEnvironment } from "../src/generation/credentials.js";
-import { withGenerationRuntime } from "../src/generation/runtime.js";
+import { createActivities } from "../src/generation/pipeline/activities.js";
+import { withGenerationRuntime } from "../src/generation/pipeline/runtime.js";
+import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { githubToken } from "../src/third_party/github/token.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";

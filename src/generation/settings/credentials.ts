@@ -4,18 +4,18 @@ import {
   type HostedExecutionBackend,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-} from "../contracts/config/providers.js";
-import type { EncryptedRecordStore } from "../db/encrypted-records.js";
-import { type CredentialInfo, readAccount, secretPath } from "../evaluation/account.js";
-import { orgRecords } from "../evaluation/org-records.js";
-import { generationSubscriptionAuth } from "../harnesses/codex/subscription.js";
-import { VERIFICATION_CREDENTIALS } from "../sandbox/provider-environment.js";
+} from "../../contracts/config/providers.js";
+import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import { type CredentialInfo, readAccount, secretPath } from "../../evaluation/account.js";
+import { orgRecords } from "../../evaluation/org-records.js";
+import { generationSubscriptionAuth } from "../../harnesses/codex/subscription.js";
+import { VERIFICATION_CREDENTIALS } from "../../sandbox/provider-environment.js";
 import {
   type ManagedOffer,
   managedModelKey,
   managedOffer,
   managedSandboxCredentials,
-} from "./managed/generation.js";
+} from "../billing/managed.js";
 import { generationModelCredentialKinds, generationModelRoute } from "./models.js";
 import type { GenerationReference, GenerationSettings } from "./settings.js";
 

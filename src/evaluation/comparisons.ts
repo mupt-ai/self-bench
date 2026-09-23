@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import type { TaskStore } from "../db/tasks.js";
-import type { ManagedOffer } from "../generation/managed/generation.js";
+import type { ManagedOffer } from "../generation/billing/managed.js";
 import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
 import { harnessIds } from "./harnesses.js";

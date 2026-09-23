@@ -1,25 +1,25 @@
 import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ArtifactStore } from "../artifacts/index.js";
-import { executionEnvironment } from "../contracts/config/execution-environment.js";
-import type { SelfBenchConfig } from "../contracts/config/index.js";
-import type { AuthoredTask, HarborRewards, VerifyReport } from "../contracts/index.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import { executionEnvironment } from "../../contracts/config/execution-environment.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
+import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts/index.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
-} from "../harnesses/harbor/command.js";
+} from "../../harnesses/harbor/command.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
   readHarborJobResult,
-} from "../harnesses/harbor/results.js";
-import { extractRegularArchive } from "../lib/archive.js";
-import { runCommand } from "../lib/process.js";
-import { isRecord, tail } from "../lib/util.js";
-import { providerEnvironment } from "../sandbox/provider-environment.js";
+} from "../../harnesses/harbor/results.js";
+import { extractRegularArchive } from "../../lib/archive.js";
+import { runCommand } from "../../lib/process.js";
+import { isRecord, tail } from "../../lib/util.js";
+import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;

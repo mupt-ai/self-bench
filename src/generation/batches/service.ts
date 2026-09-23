@@ -5,15 +5,22 @@ import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
 import { createUsageStore } from "../../db/usage.js";
-import { generationCost } from "../managed/cost-status.js";
+import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
-import { liveBatchStatus, overlayCandidateActivity } from "./activity.js";
+import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
 import { batchExecutions } from "./temporal.js";
 import type { GenerationBatch } from "./types.js";
+
+export class RunNotFoundError extends Error {
+  constructor(runId: string) {
+    super(`run ${runId} not found`);
+    this.name = "RunNotFoundError";
+  }
+}
 
 /** A restartable application reconciler, not a Temporal orchestration workflow. */
 export function createGenerationBatches(
@@ -66,12 +73,12 @@ export function createGenerationBatches(
       poll();
     },
     list: () => store.list(),
+    read: (runId: string) => store.read(runId),
     async status(runId: string) {
       const batch = await store.read(runId);
-      let base = batch
-        ? await overlayCandidateActivity(client, batchStatus(batch))
-        : await liveBatchStatus(client, runId);
-      if (batch?.run.generation) {
+      if (!batch) throw new RunNotFoundError(runId);
+      let base = await overlayCandidateActivity(client, batchStatus(batch));
+      if (batch.run.generation) {
         const { settings } = batch.run.generation;
         const orgId = batch.run.generation.orgId ?? batch.run.generation.ownerId;
         const provider = batch.run.version.executionBackend;

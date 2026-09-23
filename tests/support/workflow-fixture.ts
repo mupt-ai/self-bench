@@ -10,8 +10,11 @@ import type {
   VerifyOutcome,
   VerifyReport,
 } from "../../src/contracts/index.js";
-import type { DiscoveryShardInput, SelfBenchActivities } from "../../src/generation/activities.js";
-import { executeCandidate } from "../../src/generation/workflows.js";
+import type {
+  DiscoveryShardInput,
+  SelfBenchActivities,
+} from "../../src/generation/pipeline/activities.js";
+import { executeCandidate } from "../../src/generation/pipeline/workflows.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",

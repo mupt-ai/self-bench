@@ -1,6 +1,6 @@
 import { Context } from "@temporalio/activity";
 import { z } from "zod";
-import type { ArtifactStore } from "../artifacts/index.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import {
   type ArtifactRef,
   type AuthoredTask,
@@ -9,8 +9,8 @@ import {
   type RunRequest,
   taskDefinitionSchema,
   verifyReportSchema,
-} from "../contracts/index.js";
-import type { SandboxExecutor, SandboxFile } from "../sandbox/index.js";
+} from "../../contracts/index.js";
+import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import { runAgent } from "./agent.js";
 import { readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";

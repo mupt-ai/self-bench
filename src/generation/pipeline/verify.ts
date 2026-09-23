@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { ArtifactStore } from "../artifacts/index.js";
-import type { SelfBenchConfig } from "../contracts/config/index.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type {
   AuthoredTask,
   AuthoredTaskDraft,
@@ -9,11 +9,11 @@ import type {
   RunRequest,
   VerifyOutcome,
   VerifyReport,
-} from "../contracts/index.js";
-import type { SandboxExecutor } from "../sandbox/index.js";
-import { githubToken } from "../third_party/github/token.js";
+} from "../../contracts/index.js";
+import type { SandboxExecutor } from "../../sandbox/index.js";
+import { githubToken } from "../../third_party/github/token.js";
+import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
-import { verifierRuntimeFiles } from "./harbor-task/runtime-assets.js";
 import { readAsset, withHeartbeats } from "./helpers.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
 

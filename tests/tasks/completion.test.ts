@@ -1,13 +1,20 @@
 import { expect, mock, test } from "bun:test";
 import type { ArtifactStore } from "../../src/artifacts/index.js";
+import type { ArtifactRef } from "../../src/contracts/index.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
-import { clearArchivedListingCache } from "../../src/generation/runs/archived.js";
 import { refreshInProgress } from "../../src/generation/tasks/status.js";
 import { testAuthConfig, testDatabase } from "../support/site-fixture.js";
 
-test("completed workflows persist bundles and repair incomplete accepted rows", async () => {
+const ref = (uri: string): ArtifactRef => ({
+  uri,
+  sha256: "a".repeat(64),
+  sizeBytes: 1,
+  contentType: "application/octet-stream",
+});
+
+test("a completed workflow writes its verdict, bundle, and definition onto the task row", async () => {
   const database = await testDatabase();
   try {
     const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
@@ -29,119 +36,61 @@ test("completed workflows persist bundles and repair incomplete accepted rows", 
       connectedBy: user.id,
     });
     const tasks = createTaskStore(database.db);
-    for (const pipelineStatus of ["in_progress", "accepted"] as const) {
-      const runId = `completion-${pipelineStatus.replaceAll("_", "-")}`;
-      const workflowId = `${runId}/candidate/candidate`;
-      const row = await tasks.insertStarted({
-        repoId: repo.id,
-        runId,
-        candidateId: "candidate",
-        taskId: "candidate",
-        difficulty: "easy",
-        stage: pipelineStatus === "accepted" ? "accepted" : "review",
-        pipelineStatus,
-        workflowId,
-        startedBy: user.id,
-      });
-      if (pipelineStatus === "accepted")
-        await tasks.progress(row.id, {
+    const runId = "completion";
+    const row = await tasks.insertStarted({
+      repoId: repo.id,
+      runId,
+      candidateId: "candidate",
+      taskId: "candidate",
+      difficulty: "easy",
+      stage: "review",
+      pipelineStatus: "in_progress",
+      workflowId: `${runId}/candidate/candidate`,
+      startedBy: user.id,
+    });
+    await tasks.review(row.id, { decision: "approve", note: "Preserve review", userId: user.id });
+    const bundleKey = `runs/${runId}/verify/candidate/authoring-round-2/harbor-task.tar.gz`;
+    const artifacts = {
+      get: async () => Buffer.from(JSON.stringify({ taskId: "task", prompt: "Fix short help" })),
+    } as unknown as ArtifactStore;
+    const snapshot = mock(async () => ({
+      kind: "completed" as const,
+      result: {
+        progress: {
+          candidateId: "candidate",
+          taskId: "task",
+          difficulty: "easy" as const,
+          status: "accepted" as const,
           round: 2,
-          stage: "accepted",
-          pipelineStatus,
-          reason: "Persisted acceptance",
-        });
-      await tasks.review(row.id, { decision: "approve", note: "Preserve review", userId: user.id });
-      const sibling = await tasks.insertStarted({
-        repoId: repo.id,
-        runId,
-        candidateId: "sibling",
-        taskId: "sibling",
-        difficulty: "easy",
-        stage: "accepted",
-        pipelineStatus: "accepted",
-        workflowId: `${runId}/candidate/sibling`,
-        startedBy: user.id,
-      });
-      await tasks.upsertMany([
-        {
-          ...sibling,
-          round: 3,
-          reason: "Sibling acceptance",
-          bundleKey: "existing-sibling-bundle",
         },
-      ]);
-      const prefix = `runs/${runId}/`;
-      const bundleKey = `${prefix}authoring/candidate/round-2/attempt-1/verify-1/harbor-task.tar.gz`;
-      const files = new Map([
-        [
-          `${prefix}authoring/candidate/round-2/definition.json`,
-          JSON.stringify({ taskId: "task", difficulty: "easy", prompt: "Fix short help" }),
-        ],
-        [
-          `${prefix}verification/candidate/round-2/result.json`,
-          JSON.stringify({ kind: "accepted" }),
-        ],
-        [bundleKey, "bundle"],
-        [`${prefix}verification/sibling/round-3/result.json`, JSON.stringify({ kind: "accepted" })],
-      ]);
-      let unavailable = true;
-      const artifacts = {
-        list: async () => {
-          if (unavailable) throw new Error("Transient artifact failure");
-          return [...files].map(([key, value]) => ({ key, sizeBytes: value.length }));
+        task: {
+          candidateId: "candidate",
+          taskId: "task",
+          definition: ref(
+            `file:///store/runs/${runId}/authoring/candidate/round-2/definition.json`,
+          ),
+          sourceBundle: ref(
+            `file:///store/runs/${runId}/authoring/candidate/round-2/source-task.tar.gz`,
+          ),
+          bundle: ref(`file:///store/${bundleKey}`),
         },
-        getByKey: async (key: string) => {
-          const value = files.get(key);
-          return value === undefined ? undefined : Buffer.from(value);
-        },
-      } as unknown as ArtifactStore;
-      const snapshot = mock(async () => ({
-        kind: "completed" as const,
-        result: {
-          progress: {
-            candidateId: "candidate",
-            taskId: "task",
-            difficulty: "easy" as const,
-            status: "accepted" as const,
-            round: 2,
-          },
-        },
-      }));
-      const refresh = () =>
-        refreshInProgress({
-          tasks,
-          artifacts,
-          repo,
-          status: { snapshot },
-        });
-      expect(await refresh()).toBe(pipelineStatus === "in_progress" ? 1 : 0);
-      expect((await tasks.find(repo.id, runId, "candidate"))?.pipelineStatus).toBe("accepted");
-      expect(snapshot).toHaveBeenCalledTimes(pipelineStatus === "in_progress" ? 1 : 0);
-      snapshot.mockClear();
-      snapshot.mockImplementation(async () => {
-        throw new Error("Workflow history expired");
-      });
-      unavailable = false;
-      clearArchivedListingCache();
-      expect(await refresh()).toBe(1);
-      expect(snapshot).not.toHaveBeenCalled();
-      expect(await tasks.find(repo.id, runId, "candidate")).toMatchObject({
-        taskId: "task",
-        pipelineStatus: "accepted",
-        stage: "accepted",
-        round: 2,
-        bundleKey,
-        definition: { prompt: "Fix short help" },
-        review: { decision: "approve", note: "Preserve review" },
-        ...(pipelineStatus === "accepted" ? { reason: "Persisted acceptance" } : {}),
-      });
-      expect(await tasks.find(repo.id, runId, "sibling")).toMatchObject({
-        round: 3,
-        reason: "Sibling acceptance",
-      });
-    }
+      },
+    }));
+    expect(await refreshInProgress({ tasks, artifacts, repo, status: { snapshot } })).toBe(1);
+    expect(await tasks.find(repo.id, runId, "candidate")).toMatchObject({
+      taskId: "task",
+      pipelineStatus: "accepted",
+      stage: "accepted",
+      round: 2,
+      bundleKey,
+      definition: { prompt: "Fix short help" },
+      review: { decision: "approve", note: "Preserve review" },
+    });
+    // Settled rows are not polled again.
+    snapshot.mockClear();
+    expect(await refreshInProgress({ tasks, artifacts, repo, status: { snapshot } })).toBe(0);
+    expect(snapshot).not.toHaveBeenCalled();
   } finally {
-    clearArchivedListingCache();
     await database.close();
   }
 });

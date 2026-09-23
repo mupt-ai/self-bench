@@ -64,8 +64,8 @@ try {
     await readFile(join(installRoot, "node_modules", ".bin", name));
   }
   for (const asset of [
-    "dist/generation/harbor-task/runtime/junit.py",
-    "dist/generation/harbor-task/runtime/command.sh",
+    "dist/generation/task/runtime/junit.py",
+    "dist/generation/task/runtime/command.sh",
     "dist/runtime/junit.py",
     "dist/runtime/command.sh",
     "dist/api/main.js",
@@ -73,7 +73,7 @@ try {
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
-    "dist/generation/prompts/authoring.md",
+    "dist/generation/pipeline/prompts/authoring.md",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-compiler.bundle.js",
     "dist/sandbox-task-operation.bundle.js",
@@ -89,7 +89,7 @@ try {
       throw new Error(`packed Harbor runtime asset differs from source: ${asset}`);
     }
   }
-  const runtimeModule = join(installedRoot, "dist/generation/harbor-task/runtime-assets.js");
+  const runtimeModule = join(installedRoot, "dist/generation/task/runtime-assets.js");
   const assets = await run(
     "node",
     [
@@ -128,7 +128,7 @@ try {
     "dist/validate-main.js",
     "review",
     "scripts",
-    "src/generation/activities.ts",
+    "src/generation/pipeline/activities.ts",
     "tests",
     "tsconfig.json",
   ]) {

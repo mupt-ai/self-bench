@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compileHarborTask, refreshHarborTask } from "../../src/generation/harbor-task/compiler.js";
-import { dependencyManifestPatch } from "../../src/generation/harbor-task/dependencies.js";
+import { compileHarborTask, refreshHarborTask } from "../../src/generation/task/compiler.js";
+import { dependencyManifestPatch } from "../../src/generation/task/dependencies.js";
 import { sha256 } from "../../src/lib/hash.js";
 import { runCommand } from "../../src/lib/process.js";
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { staticCheckSubmission } from "../../generation/checks/static.js";
+import { staticCheckSubmission } from "../../generation/task/static.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { errorMessage } from "../../lib/util.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "../task-compiler.js";

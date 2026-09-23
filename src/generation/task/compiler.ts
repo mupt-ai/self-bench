@@ -3,12 +3,9 @@ import { join } from "node:path";
 import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
 import { sha256 } from "../../lib/hash.js";
 import { runCommand } from "../../lib/process.js";
-import {
-  assertEnvironmentEvidence,
-  assertEnvironmentPolicy,
-} from "../checks/environment-policy.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { dependencyManifestPatch } from "./dependencies.js";
+import { assertEnvironmentEvidence, assertEnvironmentPolicy } from "./environment-policy.js";
 import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
   agentDockerfile,

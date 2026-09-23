@@ -1,7 +1,10 @@
 import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
 import { errorMessage } from "../../lib/util.js";
-import { dependencyManifestPatch } from "../harbor-task/dependencies.js";
-import { assertSafePatchPaths, assertSafeTaskPaths } from "../harbor-task/paths.js";
+import { auditTaskDefinition } from "./audit.js";
+import { dependencyManifestPatch } from "./dependencies.js";
+import { assertEnvironmentPolicy } from "./environment-policy.js";
+import { malformedPatchProblems } from "./patch.js";
+import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
   agentDockerfile,
   bashScript,
@@ -10,13 +13,10 @@ import {
   smokeScript,
   taskToml,
   verifierDockerfile,
-} from "../harbor-task/render.js";
-import { verifierRuntimeFiles } from "../harbor-task/runtime-assets.js";
-import { isBaseOnlyTestPatch } from "../harbor-task/test-patch.js";
-import { solutionScript, testScript } from "../harbor-task/verifier.js";
-import { auditTaskDefinition } from "./audit.js";
-import { assertEnvironmentPolicy } from "./environment-policy.js";
-import { malformedPatchProblems } from "./patch.js";
+} from "./render.js";
+import { verifierRuntimeFiles } from "./runtime-assets.js";
+import { isBaseOnlyTestPatch } from "./test-patch.js";
+import { solutionScript, testScript } from "./verifier.js";
 
 type StaticCheckGate = "schema" | "policy" | "paths" | "patches" | "patch" | "audit" | "render";
 

@@ -1,24 +1,24 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
-import { withExecutionEnvironment } from "../contracts/config/execution-environment.js";
-import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/config/index.js";
-import type { RunRequest } from "../contracts/index.js";
-import type { EncryptedRecordStore } from "../db/encrypted-records.js";
-import type { UsageLedger } from "../db/usage.js";
-import { orgRecords } from "../evaluation/org-records.js";
-import { createSandboxExecutor, type SandboxExecutor } from "../sandbox/index.js";
+import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
+import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/config/index.js";
+import type { RunRequest } from "../../contracts/index.js";
+import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import type { UsageLedger } from "../../db/usage.js";
+import { orgRecords } from "../../evaluation/org-records.js";
+import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import {
   ensureManagedE2BTemplate,
   managedE2BTemplateReference,
-} from "../sandbox/providers/e2b/managed-template.js";
-import { withTaskSandbox } from "../sandbox/task-context.js";
-import { generationConfigEnvironment } from "./config.js";
-import { generationStageEnvironment, stageAuthoring } from "./credentials.js";
+} from "../../sandbox/providers/e2b/managed-template.js";
+import { withTaskSandbox } from "../../sandbox/task-context.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../billing/managed.js";
+import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
+import { withUsageLedger } from "../billing/usage.js";
+import { generationStageEnvironment, stageAuthoring } from "../settings/credentials.js";
+import { generationConfigEnvironment } from "../settings/run.js";
+import { generationExecutionBackend } from "../settings/settings.js";
 import { safeHeartbeat } from "./helpers.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "./managed/generation.js";
-import { meteredSandboxExecutor } from "./managed/metered-sandbox.js";
-import { withUsageLedger } from "./managed/usage.js";
-import { generationExecutionBackend } from "./settings.js";
 
 export async function withGenerationRuntime<T>(
   config: SelfBenchWorkerConfig,

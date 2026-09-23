@@ -140,7 +140,7 @@ export async function addPullRequest(
   org: string,
   fullName: string,
   pr: string,
-  generation?: import("../../../src/generation/settings").GenerationSettings,
+  generation?: import("../../../src/generation/settings/settings").GenerationSettings,
 ): Promise<TaskItem> {
   const body = await requestJson<{ task: TaskItem }>(`${repoPath(org, fullName)}/tasks/from-pr`, {
     method: "POST",

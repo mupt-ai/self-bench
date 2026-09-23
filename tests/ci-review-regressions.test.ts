@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts/index.js";
 import type { TaskRecord, TaskStore } from "../src/db/tasks.js";
-import { authoringPrompt } from "../src/generation/authoring.js";
+import { authoringPrompt } from "../src/generation/pipeline/authoring.js";
 import { infrastructureFailureSummary, refreshInProgress } from "../src/generation/tasks/status.js";
 import { candidate } from "./support/workflow-fixture.js";
 

@@ -1,9 +1,9 @@
 import type { BillingModelRates } from "../../db/schema.js";
 import { sha256 } from "../../lib/hash.js";
-import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "../managed/pricing.js";
-import type { TokenUsage } from "../managed/usage.js";
-import { generationModelPricing, generationModels } from "../models.js";
+import { generationModelPricing, generationModels } from "../settings/models.js";
 import type { BillingPolicy } from "./config.js";
+import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "./pricing.js";
+import type { TokenUsage } from "./usage.js";
 
 export interface RateSnapshotSpec {
   readonly configHash: string;

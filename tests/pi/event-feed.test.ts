@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { liveFeed } from "../../src/generation/agent.js";
+import { liveFeed } from "../../src/generation/pipeline/agent.js";
 import { agentFeedEvents } from "../../src/harnesses/pi/agent-feed.js";
 import { PiEventFeed } from "../../src/harnesses/pi/event-feed.js";
 

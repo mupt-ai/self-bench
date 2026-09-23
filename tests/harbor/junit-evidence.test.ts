@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nopGatePassed } from "../../src/generation/verify-report.js";
+import { nopGatePassed } from "../../src/generation/pipeline/verify-report.js";
 import { runCommand } from "../../src/lib/process.js";
 import { shellQuote } from "../../src/lib/util.js";
 
@@ -16,9 +16,7 @@ async function grade(xml: string | undefined, ids = ["suite::a"], exit = 0, link
     const result = await runCommand(
       "python3",
       [
-        fileURLToPath(
-          new URL("../../src/generation/harbor-task/runtime/junit.py", import.meta.url),
-        ),
+        fileURLToPath(new URL("../../src/generation/task/runtime/junit.py", import.meta.url)),
         link ? join(root, "link.xml") : report,
         JSON.stringify(ids),
         String(exit),
@@ -102,11 +100,11 @@ test("generated command wrapper measures real reports and discards stale results
   const root = await mkdtemp(join(tmpdir(), "selfbench-junit-wrapper-"));
   try {
     const reader = fileURLToPath(
-      new URL("../../src/generation/harbor-task/runtime/junit.py", import.meta.url),
+      new URL("../../src/generation/task/runtime/junit.py", import.meta.url),
     );
     const wrapper = (
       await readFile(
-        new URL("../../src/generation/harbor-task/runtime/command.sh", import.meta.url),
+        new URL("../../src/generation/task/runtime/command.sh", import.meta.url),
         "utf8",
       )
     ).replaceAll("/opt/selfbench-runtime/junit.py", reader);

@@ -7,7 +7,6 @@ import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { taskState } from "../../src/api/routes/tasks.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { clearArchivedListingCache } from "../../src/generation/runs/archived.js";
-import { sourcePullRequest } from "../../src/generation/tasks/sync.js";
 import { ingestTasks } from "../support/ingest-tasks.js";
 import {
   type AuthServer,
@@ -129,38 +128,6 @@ describe("task routes", () => {
     });
   });
 
-  test("reads the newest nested definition and refreshes on sync", async () => {
-    const store = await seededStore();
-    const { site, headers, ingest } = await signedIn(store);
-    await ingest("run-three");
-    const before = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
-      tasks: { taskId: string; difficulty: string; state: string; sourcePr?: number }[];
-    };
-    expect(before.tasks).toEqual([
-      expect.objectContaining({
-        taskId: "task-nested",
-        difficulty: "hard",
-        state: "needs_review",
-        sourcePr: 14,
-      }),
-    ]);
-    await store.put(
-      "runs/run-three/verification/c3/round-2/result.json",
-      Buffer.from(JSON.stringify({ kind: "rejected", reason: "verifier: leaks the solution" })),
-      "application/json",
-    );
-    clearArchivedListingCache();
-    const sync = await ingest("run-three");
-    expect(sync).toEqual({ synced: 1 });
-    const after = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
-      tasks: { state: string; reasonSummary?: string }[];
-    };
-    expect(after.tasks[0]).toMatchObject({
-      state: "rejected",
-      reasonSummary: "verifier: leaks the solution",
-    });
-  });
-
   test("a human review overrides the pipeline verdict, survives a sync, and can be cleared", async () => {
     const { site, headers, ingest } = await signedIn(await seededStore());
     await ingest("run-one");
@@ -218,16 +185,6 @@ describe("task routes", () => {
   });
 
   test("pure helpers: PR fallback and task state", () => {
-    expect(
-      sourcePullRequest({ taskId: "w0s0-posthog-pr-91809" }, undefined, "PostHog/posthog"),
-    ).toEqual({
-      sourcePr: 91809,
-      sourceUrl: "https://github.com/PostHog/posthog/pull/91809",
-    });
-    expect(
-      sourcePullRequest({ taskId: "x" }, { sourcePr: 7, sourceUrl: "https://g/pull/7" }, "a/b"),
-    ).toEqual({ sourcePr: 7, sourceUrl: "https://g/pull/7" });
-    expect(sourcePullRequest({ taskId: "no-number-here" }, undefined, "a/b")).toBeUndefined();
     expect(taskState({ pipelineStatus: "accepted" })).toBe("needs_review");
     expect(taskState({ pipelineStatus: "rejected" })).toBe("rejected");
     expect(taskState({ pipelineStatus: "in_progress" })).toBe("in_progress");

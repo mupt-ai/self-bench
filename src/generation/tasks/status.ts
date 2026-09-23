@@ -2,7 +2,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { CandidateWorkflowResult, TaskProgress } from "../../contracts/index.js";
 import type { TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import { syncRun } from "./sync.js";
+import { acceptedTaskFields } from "./rows.js";
 
 export function infrastructureFailureSummary(reason: string): string {
   if (/client_email|GoogleAuth|sign data/i.test(reason)) {
@@ -51,9 +51,7 @@ export interface RefreshOptions {
  */
 export async function refreshInProgress(options: RefreshOptions): Promise<number> {
   const running = (await options.tasks.listForRepo(options.repo.id)).filter(
-    (task) =>
-      task.pipelineStatus === "in_progress" ||
-      (task.pipelineStatus === "accepted" && !task.bundleKey),
+    (task) => task.pipelineStatus === "in_progress",
   );
   let changed = 0;
   for (const task of running) {
@@ -68,34 +66,28 @@ export async function refreshTask(
   task: TaskRecord,
 ): Promise<{ task: TaskRecord; snapshot?: WorkflowSnapshot; changed: boolean }> {
   const { tasks, artifacts, status, repo } = options;
-  if (task.pipelineStatus === "accepted" && !task.bundleKey) {
-    const result = await syncRun({
-      tasks,
-      artifacts,
-      repo,
-      runId: task.runId,
-      repairAcceptedTask: task,
-    }).catch(() => undefined);
-    return {
-      task: (await tasks.find(repo.id, task.runId, task.candidateId)) ?? task,
-      changed: Boolean(result?.synced),
-    };
-  }
   if (task.pipelineStatus !== "in_progress" || !task.workflowId) return { task, changed: false };
   const snapshot = await status
     .snapshot(task.workflowId)
     .catch((): WorkflowSnapshot => ({ kind: "unknown" }));
-  if (
-    snapshot.kind === "completed" &&
-    snapshot.result.progress.status !== "infrastructure_failed"
-  ) {
-    await syncRun({
-      tasks,
-      artifacts,
-      repo,
-      runId: task.runId,
-      completedWorkflowId: task.workflowId,
-    }).catch(() => undefined);
+  if (snapshot.kind === "completed" && snapshot.result.task) {
+    await tasks.upsertMany(
+      [
+        {
+          repoId: repo.id,
+          runId: task.runId,
+          candidateId: task.candidateId,
+          taskId: snapshot.result.task.taskId,
+          ...(task.sourcePr !== undefined ? { sourcePr: task.sourcePr } : {}),
+          ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
+          difficulty: task.difficulty,
+          pipelineStatus: "in_progress",
+          stage: task.stage,
+          ...(await acceptedTaskFields(artifacts, snapshot.result.task)),
+        },
+      ],
+      task.workflowId,
+    );
   }
   const updated = await applySnapshot(task, snapshot, tasks);
   return {

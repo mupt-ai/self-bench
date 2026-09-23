@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dedupeBySourcePr, exportManifest } from "../../src/generation/export.js";
+import { dedupeBySourcePr, exportManifest } from "../../src/generation/pipeline/export.js";
 import { run } from "../support/workflow-fixture.js";
 
 describe("export deduplication by source pull request", () => {

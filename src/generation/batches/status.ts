@@ -1,6 +1,6 @@
 import type { RunStatus } from "../../contracts/index.js";
-import { generationCost } from "../managed/cost-status.js";
-import type { RunUsageSummary } from "../managed/usage.js";
+import { generationCost } from "../billing/cost-status.js";
+import type { RunUsageSummary } from "../billing/usage.js";
 import type { GenerationBatch } from "./types.js";
 
 const EMPTY_USAGE: RunUsageSummary = {

@@ -1,14 +1,14 @@
-import { createArtifactStore } from "../artifacts/index.js";
-import type { SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import { createArtifactStore } from "../../artifacts/index.js";
+import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type {
   AuthoringRoundResult,
   DiscoveryResult,
   ReviewRoundResult,
   VerifyOutcome,
-} from "../contracts/index.js";
-import type { EncryptedRecordStore } from "../db/encrypted-records.js";
-import type { UsageLedger } from "../db/usage.js";
-import { createSandboxExecutor } from "../sandbox/index.js";
+} from "../../contracts/index.js";
+import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import type { UsageLedger } from "../../db/usage.js";
+import { createSandboxExecutor } from "../../sandbox/index.js";
 import { type AuthoringRoundInput, runAuthoringRound } from "./authoring.js";
 import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
 import { type ReviewRoundInput, runReviewRound } from "./review.js";

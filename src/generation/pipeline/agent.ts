@@ -1,16 +1,16 @@
-import type { ArtifactStore } from "../artifacts/index.js";
-import type { ArtifactRef, RunRequest } from "../contracts/index.js";
-import { PiEventFeed } from "../harnesses/pi/event-feed.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../harnesses/pi/model-auth.js";
-import { finalAssistantMessage, sessionProviderError } from "../harnesses/pi/session.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { ArtifactRef, RunRequest } from "../../contracts/index.js";
+import { PiEventFeed } from "../../harnesses/pi/event-feed.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
+import { finalAssistantMessage, sessionProviderError } from "../../harnesses/pi/session.js";
 import {
   type LiveSandbox,
   SandboxExecutionError,
   type SandboxExecutor,
   type SandboxFile,
   type SandboxResult,
-} from "../sandbox/index.js";
-import { githubToken } from "../third_party/github/token.js";
+} from "../../sandbox/index.js";
+import { githubToken } from "../../third_party/github/token.js";
 import { withHeartbeats } from "./helpers.js";
 
 const SESSION_DIRECTORY = "/work/session";

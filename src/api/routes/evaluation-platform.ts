@@ -11,7 +11,7 @@ import {
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
 import { orgRecords } from "../../evaluation/org-records.js";
-import { managedOffer } from "../../generation/managed/generation.js";
+import { managedOffer } from "../../generation/billing/managed.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";

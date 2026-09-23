@@ -3,7 +3,7 @@ import ts from "typescript";
 
 test("new discovery and author entrypoints contain no child starts, parent signals or GitHub I/O", async () => {
   const source = await Bun.file(
-    new URL("../../src/generation/workflows.ts", import.meta.url),
+    new URL("../../src/generation/pipeline/workflows.ts", import.meta.url),
   ).text();
   const file = ts.createSourceFile("workflow.ts", source, ts.ScriptTarget.Latest, true);
   for (const name of ["selfBenchDiscoveryShardWorkflow", "selfBenchAuthorWorkflow"]) {

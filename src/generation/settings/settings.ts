@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { isDigestPinnedOciImage } from "../contracts/config/index.js";
+import { isDigestPinnedOciImage } from "../../contracts/config/index.js";
 import {
   HOSTED_EXECUTION_BACKENDS,
   HOSTED_HARBOR_ENVIRONMENTS,
   type HostedExecutionBackend,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-} from "../contracts/config/providers.js";
-import { normalizeE2BTemplateReference } from "../sandbox/providers/e2b/template.js";
+} from "../../contracts/config/providers.js";
+import { normalizeE2BTemplateReference } from "../../sandbox/providers/e2b/template.js";
 import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */

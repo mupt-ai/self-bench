@@ -6,13 +6,13 @@ import {
   harborEnvironmentLabels,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
-import { generationModelLabel } from "../../../src/generation/models";
+import { generationModelLabel } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,
   type GenerationSettings,
   generationExecutionBackend,
   generationSandboxLabels,
-} from "../../../src/generation/settings";
+} from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
 import { modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";

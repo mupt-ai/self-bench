@@ -4,7 +4,7 @@ import {
   assertEnvironmentEvidence,
   assertEnvironmentPolicy,
   isPlaceholderSecretValue,
-} from "../src/generation/checks/environment-policy.js";
+} from "../src/generation/task/environment-policy.js";
 
 const environment: TaskEnvironment = {
   schemaVersion: 1,

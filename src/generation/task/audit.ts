@@ -1,5 +1,5 @@
 import type { Difficulty, TaskDefinition } from "../../contracts/index.js";
-import { repositoryRelativePath } from "../harbor-task/paths.js";
+import { repositoryRelativePath } from "./paths.js";
 
 export interface StaticAuditReport {
   readonly accepted: boolean;

@@ -1,18 +1,18 @@
 import { Context } from "@temporalio/activity";
 import { z } from "zod";
-import type { ArtifactStore } from "../artifacts/index.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import {
   type Candidate,
   candidateSchema,
   type Difficulty,
   type DiscoveryResult,
   type RunRequest,
-} from "../contracts/index.js";
-import type { SandboxExecutor } from "../sandbox/index.js";
-import { assertProvenanceMatchesPullRequest } from "../third_party/github/provenance.js";
-import { assertPullRequestBelongsToRepository } from "../third_party/github/repository.js";
+} from "../../contracts/index.js";
+import type { SandboxExecutor } from "../../sandbox/index.js";
+import { assertProvenanceMatchesPullRequest } from "../../third_party/github/provenance.js";
+import { assertPullRequestBelongsToRepository } from "../../third_party/github/repository.js";
+import { difficultyThresholds } from "../task/audit.js";
 import { runAgent } from "./agent.js";
-import { difficultyThresholds } from "./checks/audit.js";
 import { parseProvenance, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 

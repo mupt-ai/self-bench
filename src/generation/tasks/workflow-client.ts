@@ -3,11 +3,11 @@ import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
   TaskProgress,
-} from "../contracts/index.js";
-import { heartbeatCost } from "./batches/activity.js";
-import type { WorkflowStarter } from "./tasks/start.js";
-import type { TaskStatusSource, WorkflowSnapshot } from "./tasks/status.js";
-import { candidateStatusQuery, selfBenchAuthorWorkflow } from "./workflows.js";
+} from "../../contracts/index.js";
+import { heartbeatCost } from "../batches/activity.js";
+import { candidateStatusQuery, selfBenchAuthorWorkflow } from "../pipeline/workflows.js";
+import type { WorkflowStarter } from "./start.js";
+import type { TaskStatusSource, WorkflowSnapshot } from "./status.js";
 
 const QUERY_TIMEOUT_MS = 5_000;
 

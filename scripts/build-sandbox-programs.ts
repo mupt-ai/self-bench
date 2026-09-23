@@ -44,12 +44,16 @@ await Promise.all([
 ]);
 
 await Promise.all(
-  ["generation/harbor-task/runtime", "runtime"].map((path) =>
-    cp(join(root, "src/generation/harbor-task/runtime"), join(outputDirectory, path), {
+  ["generation/task/runtime", "runtime"].map((path) =>
+    cp(join(root, "src/generation/task/runtime"), join(outputDirectory, path), {
       recursive: true,
     }),
   ),
 );
-await cp(join(root, "src/generation/prompts"), join(outputDirectory, "generation/prompts"), {
-  recursive: true,
-});
+await cp(
+  join(root, "src/generation/pipeline/prompts"),
+  join(outputDirectory, "generation/pipeline/prompts"),
+  {
+    recursive: true,
+  },
+);

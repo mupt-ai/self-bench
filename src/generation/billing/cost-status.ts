@@ -1,6 +1,6 @@
 import type { GenerationCost } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import { generationModelPricing } from "../models.js";
+import { generationModelPricing } from "../settings/models.js";
 import type { RunUsageSummary } from "./usage.js";
 
 export type CostedSandboxProvider = "docker" | "e2b" | "modal" | "vercel";

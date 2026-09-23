@@ -1,6 +1,6 @@
 import { MAX_CANDIDATES_PER_RUN } from "../../../src/contracts/config/execution-limits";
 import type { BatchStatus } from "../../../src/generation/batches/progress";
-import type { GenerationSettings } from "../../../src/generation/settings";
+import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { checkSessionExpired } from "../session-expired";
 
 export type { BatchStatus };

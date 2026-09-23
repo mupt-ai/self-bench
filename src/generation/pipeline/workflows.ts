@@ -14,14 +14,12 @@ import {
   type CandidateWorkflowResult,
   type DiscoveryResult,
   MAX_AUTHORING_ROUNDS,
-  type RunStatus,
   type TaskProgress,
-} from "../contracts/index.js";
-import { harborTaskQueue } from "../temporal/task-queues.js";
+} from "../../contracts/index.js";
+import { harborTaskQueue } from "../../temporal/task-queues.js";
 import type { DiscoveryShardInput, SelfBenchActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
-export const statusQuery = defineQuery<RunStatus>("status");
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
 
 const retry = { initialInterval: "5 seconds", backoffCoefficient: 2, maximumInterval: "2 minutes" };

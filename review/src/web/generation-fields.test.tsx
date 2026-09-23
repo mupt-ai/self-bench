@@ -6,7 +6,7 @@ import {
   HOSTED_EXECUTION_BACKENDS,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
-import type { GenerationSettings } from "../../../src/generation/settings";
+import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";

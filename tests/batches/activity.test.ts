@@ -3,7 +3,6 @@ import { type Client, defaultPayloadConverter } from "@temporalio/client";
 import {
   activityDetail,
   heartbeatCost,
-  liveBatchStatus,
   normalizeFailure,
   overlayCandidateActivity,
 } from "../../src/generation/batches/activity.js";
@@ -39,41 +38,6 @@ test("heartbeat costs decode valid Temporal payloads and reject unsafe values", 
     ),
   ).toBeUndefined();
   expect(heartbeatCost({ metadata: {}, data: new Uint8Array([1, 2, 3]) })).toBeUndefined();
-});
-
-test("batch progress distinguishes running, queued and unavailable activity state", async () => {
-  const client = {
-    options: { namespace: "default" },
-    connection: {
-      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
-    },
-    workflow: {
-      getHandle: () => ({
-        query: async () => ({
-          runId: "batch-one",
-          phase: "authoring",
-          tasks: ["active", "waiting", "missing"].map((candidateId) => ({
-            candidateId,
-            status: "authoring",
-          })),
-        }),
-        describe: async () => ({ status: { name: "RUNNING" } }),
-      }),
-    },
-    workflowService: {
-      describeWorkflowExecution: async ({ execution }: { execution: { workflowId: string } }) => {
-        if (execution.workflowId.endsWith("missing")) throw new Error("unavailable");
-        return { pendingActivities: [{ state: execution.workflowId.endsWith("active") ? 2 : 1 }] };
-      },
-    },
-  } as unknown as Client;
-  const status = await liveBatchStatus(client, "batch-one");
-  expect(status.activity).toEqual({
-    active: { state: "running" },
-    waiting: { state: "queued" },
-    missing: { state: "unknown" },
-  });
-  expect(status.tasks).toHaveLength(3);
 });
 
 test("a persisted batch status gains the same activity overlay as a live one", async () => {

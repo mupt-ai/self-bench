@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Client } from "@temporalio/client";
-import { temporalStatus } from "../../src/generation/candidate-workflows.js";
+import { temporalStatus } from "../../src/generation/tasks/workflow-client.js";
 
 test("Temporal cancellation tolerates a workflow settling during the request", async () => {
   let workflowState = "RUNNING";

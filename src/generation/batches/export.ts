@@ -9,12 +9,12 @@ import {
   managedE2BTemplateReference,
 } from "../../sandbox/providers/e2b/managed-template.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
-import { generationConfigEnvironment } from "../config.js";
-import { generationEnvironment } from "../credentials.js";
-import { buildExport } from "../export.js";
-import { MANAGED_E2B_TEMPLATE_OWNER } from "../managed/generation.js";
-import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
-import { withUsageLedger } from "../managed/usage.js";
+import { MANAGED_E2B_TEMPLATE_OWNER } from "../billing/managed.js";
+import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
+import { withUsageLedger } from "../billing/usage.js";
+import { buildExport } from "../pipeline/export.js";
+import { generationEnvironment } from "../settings/credentials.js";
+import { generationConfigEnvironment } from "../settings/run.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Resolve only this run's provider account; never launch repo tools in the API process. */

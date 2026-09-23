@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { verifierRuntimeFiles } from "../generation/harbor-task/runtime-assets.js";
+import { verifierRuntimeFiles } from "../generation/task/runtime-assets.js";
 import { projectRoot } from "../lib/project-paths.js";
 import type { SandboxFile } from "./contracts.js";
 import { taskSandbox } from "./task-context.js";

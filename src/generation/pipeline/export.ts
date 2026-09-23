@@ -1,17 +1,17 @@
 import { Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../artifacts/index.js";
-import type { AuthoredTask, RunRequest } from "../contracts/index.js";
-import { type ArtifactRef, taskDefinitionSchema } from "../contracts/index.js";
-import type { SandboxFile } from "../sandbox/contracts.js";
-import { dedupeBySourcePr, exportManifest } from "../sandbox/export-manifest.js";
-import { taskOperation } from "../sandbox/task-operation.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { AuthoredTask, RunRequest } from "../../contracts/index.js";
+import { type ArtifactRef, taskDefinitionSchema } from "../../contracts/index.js";
+import type { SandboxFile } from "../../sandbox/contracts.js";
+import { dedupeBySourcePr, exportManifest } from "../../sandbox/export-manifest.js";
+import { taskOperation } from "../../sandbox/task-operation.js";
 
 export interface ExportInput {
   readonly run: RunRequest;
   readonly tasks: readonly AuthoredTask[];
 }
 
-export { dedupeBySourcePr, exportManifest } from "../sandbox/export-manifest.js";
+export { dedupeBySourcePr, exportManifest } from "../../sandbox/export-manifest.js";
 
 /** Only metadata and opaque artifacts cross the worker. Archive creation is sandbox-owned. */
 export async function buildExport(

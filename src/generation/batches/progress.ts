@@ -1,9 +1,10 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { RunPhase, RunStatus } from "../../contracts/index.js";
 import type { ConnectedRepo } from "../../db/repos.js";
-import type { TaskStore } from "../../db/tasks.js";
+import type { TaskStore, TaskUpsert } from "../../db/tasks.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import { syncRun } from "../tasks/sync.js";
+import { acceptedTaskFields, pipelineStatus } from "../tasks/rows.js";
+import type { GenerationBatch } from "./types.js";
 
 /** What the Temporal server reports about a candidate's current activity attempt. */
 export interface TaskActivityDetail {
@@ -24,67 +25,60 @@ export type BatchStatus = Pick<RunStatus, "runId" | "phase"> &
 const terminalBatch = (phase: RunPhase): boolean =>
   ["complete", "failed", "blocked", "cancelled"].includes(phase);
 
-/** Import artifacts first, then overlay live stages without ever writing human review fields. */
+/**
+ * Writes one task row per candidate straight from the batch record: live progress while it
+ * runs, the verdict when it ends, and the accepted bundle and definition. Reviews are untouched.
+ */
 export async function syncBatchProgress(options: {
   repo: ConnectedRepo;
   tasks: TaskStore;
   artifacts: ArtifactStore;
+  batch: GenerationBatch;
   status: BatchStatus;
 }): Promise<void> {
-  const { repo, tasks, artifacts, status } = options;
-  await syncRun({ repo, tasks, artifacts, runId: status.runId, preserveUnfinished: true });
+  const { repo, tasks, artifacts, batch, status } = options;
   const existing = await tasks.listForRepo(repo.id);
-  for (const progress of status.tasks ?? []) {
+  const interrupted = terminalBatch(status.phase);
+  const rows: TaskUpsert[] = [];
+  for (const item of batch.candidates) {
+    const { candidate } = item;
+    const progress =
+      status.tasks?.find((task) => task.candidateId === candidate.candidateId) ?? item.progress;
+    if (!progress) continue;
     const previous = existing.find(
-      (row) => row.runId === status.runId && row.candidateId === progress.candidateId,
+      (row) => row.runId === status.runId && row.candidateId === candidate.candidateId,
     );
-    const { reason: _previousReason, ...metadata } = previous ?? {};
     const settled = ["accepted", "rejected", "infrastructure_failed"].includes(progress.status);
-    const interrupted = !settled && terminalBatch(status.phase);
-    const cancelled =
-      progress.reason === "Generation cancelled." || (interrupted && status.phase === "cancelled");
-    await tasks.upsertMany([
-      {
-        ...metadata,
-        repoId: repo.id,
-        runId: status.runId,
-        candidateId: progress.candidateId,
-        taskId: progress.taskId,
-        difficulty: progress.difficulty,
-        stage: progress.stage ?? (cancelled ? "cancelled" : progress.status),
-        ...(progress.round !== undefined ? { round: progress.round } : {}),
-        pipelineStatus:
-          progress.status === "accepted"
-            ? "accepted"
-            : progress.status === "rejected"
-              ? "rejected"
-              : progress.status === "infrastructure_failed" || interrupted
-                ? "infrastructure_failed"
-                : "in_progress",
-        ...(progress.reason
-          ? { reason: progress.reason }
-          : interrupted
-            ? {
-                reason:
-                  status.phase === "cancelled" ? "Generation cancelled." : `Batch ${status.phase}`,
-              }
-            : {}),
-      },
-    ]);
+    const stopped = !settled && interrupted;
+    const accepted = item.result?.task && progress.status === "accepted";
+    rows.push({
+      repoId: repo.id,
+      runId: status.runId,
+      candidateId: candidate.candidateId,
+      taskId: progress.taskId,
+      sourcePr: candidate.sourcePr,
+      sourceUrl: candidate.sourceUrl,
+      difficulty: progress.difficulty,
+      stage:
+        progress.stage ?? (stopped && status.phase === "cancelled" ? "cancelled" : progress.status),
+      ...(progress.round !== undefined ? { round: progress.round } : {}),
+      pipelineStatus: stopped ? "infrastructure_failed" : pipelineStatus(progress),
+      ...(progress.reason
+        ? { reason: progress.reason }
+        : stopped
+          ? {
+              reason:
+                status.phase === "cancelled"
+                  ? "Generation cancelled."
+                  : (status.error ?? `Batch ${status.phase}`),
+            }
+          : {}),
+      ...(accepted && item.result?.task
+        ? previous?.bundleKey && previous.definition
+          ? { bundleKey: previous.bundleKey, definition: previous.definition }
+          : await acceptedTaskFields(artifacts, item.result.task)
+        : {}),
+    });
   }
-  // Query handlers may be unavailable after failure/cancellation; settle previously observed rows.
-  if (terminalBatch(status.phase)) {
-    for (const task of await tasks.listForRepo(repo.id)) {
-      if (task.runId !== status.runId || task.pipelineStatus !== "in_progress") continue;
-      await tasks.progress(task.id, {
-        stage: status.phase === "cancelled" ? "cancelled" : task.stage,
-        ...(task.round !== undefined ? { round: task.round } : {}),
-        pipelineStatus: "infrastructure_failed",
-        reason:
-          status.phase === "cancelled"
-            ? "Generation cancelled."
-            : (status.error ?? `Batch ${status.phase} without a task verdict`),
-      });
-    }
-  }
+  await tasks.upsertMany(rows);
 }

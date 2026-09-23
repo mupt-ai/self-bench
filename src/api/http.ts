@@ -93,6 +93,7 @@ class RequestBodyTooLargeError extends Error {
 
 function apiErrorStatus(error: unknown): number {
   if (error instanceof RequestBodyTooLargeError) return 413;
+  if (error instanceof Error && error.name === "RunNotFoundError") return 404;
   if (error instanceof z.ZodError || error instanceof SyntaxError) return 400;
   return 500;
 }

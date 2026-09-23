@@ -6,7 +6,7 @@ import {
   oracleGatePassed,
   renderVerifyReport,
   verifyReportSummary,
-} from "../src/generation/verify-report.js";
+} from "../src/generation/pipeline/verify-report.js";
 
 const greenReport: VerifyReport = {
   schemaVersion: 1,

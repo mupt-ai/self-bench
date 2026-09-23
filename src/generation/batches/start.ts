@@ -6,9 +6,8 @@ import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import { commitSchema, type RunRequest, runRequestSchema } from "../../contracts/index.js";
 import type { ConnectedRepo } from "../../db/repos.js";
 import { apiHeaders, GitHubOAuthError } from "../../third_party/github/oauth.js";
-import { configureGenerationRun } from "../run.js";
-import { buildRunRequest } from "../run-request.js";
-import { type GenerationReference, generationSettingsSchema } from "../settings.js";
+import { buildRunRequest, configureGenerationRun } from "../settings/run.js";
+import { type GenerationReference, generationSettingsSchema } from "../settings/settings.js";
 
 export const batchSubmissionSchema = z
   .object({

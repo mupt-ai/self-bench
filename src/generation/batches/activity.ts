@@ -1,6 +1,5 @@
 import { type Client, defaultPayloadConverter } from "@temporalio/client";
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../contracts/config/execution-limits.js";
-import { queryStatus } from "../run-status.js";
 import type { BatchStatus, TaskActivityDetail } from "./progress.js";
 
 const PENDING_ACTIVITY_SCHEDULED = 1;
@@ -18,12 +17,6 @@ interface PendingActivity {
   lastFailure?: { message?: string | null } | null;
   nextAttemptScheduleTime?: ProtoTimestamp | null;
   heartbeatDetails?: { payloads?: unknown[] | null } | null;
-}
-
-/** Workflow stages describe intent; pending activities distinguish execution from queueing. */
-export async function liveBatchStatus(client: Client, runId: string): Promise<BatchStatus> {
-  const status = (await queryStatus(client.workflow.getHandle(runId))) as BatchStatus;
-  return overlayCandidateActivity(client, status);
 }
 
 /**

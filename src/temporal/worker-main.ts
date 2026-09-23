@@ -5,7 +5,7 @@ import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/confi
 import { createUsageStore } from "../db/usage.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { openWorkerRecords } from "../evaluation/worker-records.js";
-import { createActivities } from "../generation/activities.js";
+import { createActivities } from "../generation/pipeline/activities.js";
 import { runCommand } from "../lib/process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";

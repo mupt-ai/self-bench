@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Context } from "@temporalio/activity";
-import { projectRoot } from "../lib/project-paths.js";
-import type { SandboxCostSnapshot, SandboxRunOptions } from "../sandbox/index.js";
+import { projectRoot } from "../../lib/project-paths.js";
+import type { SandboxCostSnapshot, SandboxRunOptions } from "../../sandbox/index.js";
 import {
   type ProvenanceMessage,
   provenanceMessageSchema,
-} from "../third_party/github/provenance.js";
+} from "../../third_party/github/provenance.js";
 
 /** A bundled program or extension from the package root (dist/…, src/…). */
 export function readAsset(relativePath: string): Promise<Buffer> {

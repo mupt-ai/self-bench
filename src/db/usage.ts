@@ -5,7 +5,7 @@ import {
   rateSnapshotSpec,
   sandboxBillableUnits,
 } from "../generation/billing/policy.js";
-import type { RunUsageSummary, UsageRow } from "../generation/managed/usage.js";
+import type { RunUsageSummary, UsageRow } from "../generation/billing/usage.js";
 import type { Database } from "./client.js";
 import { billingOutbox, billingRateSnapshots, generationUsage, orgBilling } from "./schema.js";
 

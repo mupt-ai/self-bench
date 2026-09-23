@@ -4,9 +4,8 @@ import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { Candidate, CandidateWorkflowInput } from "../../contracts/index.js";
 import type { PullRequestCandidate } from "../../third_party/github/pr-candidate.js";
 import type { ProvenanceMessage } from "../../third_party/github/provenance.js";
-import { configureGenerationRun } from "../run.js";
-import { buildRunRequest } from "../run-request.js";
-import type { GenerationReference } from "../settings.js";
+import { buildRunRequest, configureGenerationRun } from "../settings/run.js";
+import type { GenerationReference } from "../settings/settings.js";
 
 /** Starts one candidate workflow; the Temporal client in production, a recorder in tests. */
 export type WorkflowStarter = (workflowId: string, input: CandidateWorkflowInput) => Promise<void>;

@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
-import { harborRun } from "../../src/generation/harbor-gates.js";
+import { harborRun } from "../../src/generation/pipeline/harbor-gates.js";
 import { harborPythonPath } from "../../src/harnesses/harbor/command.js";
 
 test("generation nop and oracle gates invoke the packaged E2B adapter", async () => {

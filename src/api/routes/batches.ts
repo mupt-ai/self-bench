@@ -15,9 +15,13 @@ import {
   batchSubmissionSchema,
   prepareBatch,
 } from "../../generation/batches/start.js";
+import type { GenerationBatch } from "../../generation/batches/types.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
-import { checkGenerationCredentials, saveGenerationRecords } from "../../generation/credentials.js";
-import { managedOffer } from "../../generation/managed/generation.js";
+import { managedOffer } from "../../generation/billing/managed.js";
+import {
+  checkGenerationCredentials,
+  saveGenerationRecords,
+} from "../../generation/settings/credentials.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -35,6 +39,7 @@ export interface BatchRoutesOptions {
   artifacts: ArtifactStore;
   start: BatchStarter;
   status: (runId: string) => Promise<BatchStatus>;
+  batch: (runId: string) => Promise<GenerationBatch | undefined>;
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
   records?: EncryptedRecordStore;
@@ -158,8 +163,8 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         return true;
       }
       if (!match[5] && request.method === "GET") {
-        const status = await options.status(runId);
-        await syncBatchProgress({ repo, tasks, artifacts, status });
+        const [status, batch] = await Promise.all([options.status(runId), options.batch(runId)]);
+        if (batch) await syncBatchProgress({ repo, tasks, artifacts, batch, status });
         sendJson(response, 200, status);
         return true;
       }

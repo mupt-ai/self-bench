@@ -85,7 +85,7 @@ All paths below are relative to `/api/orgs/:org/repos/:owner/:name`.
 
 A task object carries `runId`, `taskId`, `candidateId`, `difficulty`, `stage`, `pipelineStatus`, the derived `state` (`needs_review`, `accepted`, `rejected`, `failed`, `in_progress`), `reason`, `sourcePr`, `sourceUrl`, `review`, `round`, `workflowId`, `startedBy`, `startedAt`, and `syncedAt`.
 
-`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox: "modal" | "vercel" | "e2b", modelCredentialId, sandboxCredentialId, sandboxImage?, harborEnvironment?: "modal" | "vercel" | "e2b" | "daytona", harborCredentialId? }`; the credential ids come from the organization credentials routes. `sandboxImage` is required for `vercel`, optional for `e2b` (the worker builds the managed template on first use when omitted), and rejected for `modal`; every non-managed sandbox requires a separate `harborEnvironment` and `harborCredentialId`. The full schema is `generationSettingsSchema` in `src/generation/settings.ts`.
+`GenerationSettings` is `{ authorModel, verifierModel, reasoning: "low" | "medium" | "high", sandbox: "modal" | "vercel" | "e2b", modelCredentialId, sandboxCredentialId, sandboxImage?, harborEnvironment?: "modal" | "vercel" | "e2b" | "daytona", harborCredentialId? }`; the credential ids come from the organization credentials routes. `sandboxImage` is required for `vercel`, optional for `e2b` (the worker builds the managed template on first use when omitted), and rejected for `modal`; every non-managed sandbox requires a separate `harborEnvironment` and `harborCredentialId`. The full schema is `generationSettingsSchema` in `src/generation/settings/settings.ts`.
 
 ## Batches
 

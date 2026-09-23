@@ -13,11 +13,11 @@ import { createUserStore } from "../db/users.js";
 import { evaluationStarter } from "../evaluation/start.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
 import { loadStripeConfig } from "../generation/billing/config.js";
+import { generationCost } from "../generation/billing/cost-status.js";
 import { startBillingDispatcher } from "../generation/billing/outbox.js";
-import { temporalStarter, temporalStatus } from "../generation/candidate-workflows.js";
-import { generationRecordPath } from "../generation/credentials.js";
-import { generationCost } from "../generation/managed/cost-status.js";
-import type { GenerationReference } from "../generation/settings.js";
+import { generationRecordPath } from "../generation/settings/credentials.js";
+import type { GenerationReference } from "../generation/settings/settings.js";
+import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
 import type { AuthConfig } from "./auth/config.js";
 import { type ApiKeyRoutes, createApiKeyRoutes } from "./routes/api-keys.js";
 import { createSiteAuth, type SiteAuth } from "./routes/auth.js";
@@ -115,6 +115,7 @@ export async function openSite(
       artifacts,
       start: (input, token) => batches.start(input, token),
       status: (runId) => batches.status(runId),
+      batch: (runId) => batches.read(runId),
       cancel: (runId) => batches.cancel(runId),
       billing: billingStore,
     }),

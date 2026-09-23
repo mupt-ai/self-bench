@@ -1,4 +1,4 @@
-import type { HarborRewards, VerifyReport } from "../contracts/index.js";
+import type { HarborRewards, VerifyReport } from "../../contracts/index.js";
 
 const NOP_EXPECTATIONS: Readonly<Record<string, string>> = {
   patch_applied: "1",

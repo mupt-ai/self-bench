@@ -9,11 +9,11 @@ import {
   saveCredential,
 } from "../../src/evaluation/credentials.js";
 import { orgRecords } from "../../src/evaluation/org-records.js";
-import { withGenerationRuntime } from "../../src/generation/runtime.js";
+import { withGenerationRuntime } from "../../src/generation/pipeline/runtime.js";
 import {
   type GenerationSettings,
   generationSettingsSchema,
-} from "../../src/generation/settings.js";
+} from "../../src/generation/settings/settings.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
 import { providerEnvironment } from "../../src/sandbox/provider-environment.js";
 import {

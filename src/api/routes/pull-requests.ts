@@ -10,10 +10,13 @@ import type { User, UserStore } from "../../db/users.js";
 import { listCredentials } from "../../evaluation/credentials.js";
 import { orgRecords } from "../../evaluation/org-records.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
-import { checkGenerationCredentials, saveGenerationRecords } from "../../generation/credentials.js";
-import { managedOffer } from "../../generation/managed/generation.js";
-import { generationModels } from "../../generation/models.js";
-import { generationSettingsSchema } from "../../generation/settings.js";
+import { managedOffer } from "../../generation/billing/managed.js";
+import {
+  checkGenerationCredentials,
+  saveGenerationRecords,
+} from "../../generation/settings/credentials.js";
+import { generationModels } from "../../generation/settings/models.js";
+import { generationSettingsSchema } from "../../generation/settings/settings.js";
 import {
   startTaskFromPullRequest,
   taskRunId,

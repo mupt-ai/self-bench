@@ -1,6 +1,6 @@
 import { Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../artifacts/index.js";
-import type { SelfBenchConfig } from "../contracts/config/index.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import {
   type ArtifactRef,
   AUTHOR_VERIFY_BUDGET,
@@ -9,12 +9,12 @@ import {
   MAX_AUTHORING_ROUNDS,
   type RunRequest,
   verifyReportSchema,
-} from "../contracts/index.js";
-import { errorMessage } from "../lib/util.js";
-import type { LiveSandbox, SandboxExecutor } from "../sandbox/index.js";
+} from "../../contracts/index.js";
+import { errorMessage } from "../../lib/util.js";
+import type { LiveSandbox, SandboxExecutor } from "../../sandbox/index.js";
+import { difficultyThresholds } from "../task/audit.js";
+import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { runAgent } from "./agent.js";
-import { difficultyThresholds } from "./checks/audit.js";
-import { verifierRuntimeFiles } from "./harbor-task/runtime-assets.js";
 import { readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import { compileAndVerify } from "./verify.js";

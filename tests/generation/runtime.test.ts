@@ -4,13 +4,13 @@ import {
   withExecutionEnvironment,
 } from "../../src/contracts/config/execution-environment.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
-import { agentScript } from "../../src/generation/agent.js";
+import { agentScript } from "../../src/generation/pipeline/agent.js";
 import {
   generationEnvironment,
   generationRecordPath,
   saveGenerationRecords,
-} from "../../src/generation/credentials.js";
-import type { GenerationReference } from "../../src/generation/settings.js";
+} from "../../src/generation/settings/credentials.js";
+import type { GenerationReference } from "../../src/generation/settings/settings.js";
 import { generationSubscriptionAuth } from "../../src/harnesses/codex/subscription.js";
 import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
 import { githubToken } from "../../src/third_party/github/token.js";

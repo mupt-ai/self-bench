@@ -1,4 +1,4 @@
-import { generationModelPricing } from "../models.js";
+import { generationModelPricing } from "../settings/models.js";
 
 // E2B's published compute rates, per vCPU-second and per GiB-second
 // (https://e2b.dev/pricing, as of 2026-09-19). Billing snapshots freeze integer

@@ -4,8 +4,7 @@ import { createArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
-import { createGenerationBatches } from "../generation/batches/service.js";
-import { queryStatus } from "../generation/run-status.js";
+import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
 import { connectTemporalClient } from "../temporal/connection.js";
 import type { AuthConfig } from "./auth/config.js";
 import { sendExpiredSession } from "./auth/session-expired.js";
@@ -45,8 +44,10 @@ export async function startApi(
     (localDatabase
       ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
       : undefined);
-  const runStatus = (runId: string) =>
-    batches ? batches.status(runId) : queryStatus(client.workflow.getHandle(runId));
+  const runStatus = async (runId: string) => {
+    if (!batches) throw new RunNotFoundError(runId);
+    return batches.status(runId);
+  };
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
