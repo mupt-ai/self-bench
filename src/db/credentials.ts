@@ -153,7 +153,7 @@ export function createCredentialStore(db: Database, key: string) {
       const [total] = await db
         .select({ value: count() })
         .from(credentials)
-        .where(eq(credentials.orgId, orgId));
+        .where(and(eq(credentials.orgId, orgId), isNull(credentials.deletedAt)));
       if ((total?.value ?? 0) >= CREDENTIAL_LIMIT) throw new Error("Credential limit reached");
       const { value, tokenId, teamId, projectId } = parsed;
       const secret: CredentialSecret = {

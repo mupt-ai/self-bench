@@ -13,7 +13,14 @@ import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
 import { Breadcrumbs, Notice, PageFrame } from "../ui";
 
+/** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
+  const { org } = useOrg();
+  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  return <TaskPageContent key={JSON.stringify([org.login, owner, name, runId, taskId])} />;
+}
+
+function TaskPageContent() {
   const { org } = useOrg();
   const { owner = "", name = "", runId = "", taskId = "" } = useParams();
   const fullName = `${owner}/${name}`;

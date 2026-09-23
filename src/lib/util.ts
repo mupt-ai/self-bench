@@ -28,3 +28,18 @@ export function tail(value: string, maxBytes = 8_000): string {
   if (bytes.length <= maxBytes) return value;
   return `[truncated ${bytes.length - maxBytes} bytes]\n${bytes.subarray(bytes.length - maxBytes).toString("utf8")}`;
 }
+
+/**
+ * Settles with `operation`, or rejects with the abort reason as soon as `signal` aborts (also
+ * when it already has). A late rejection of the abandoned operation is swallowed, never left
+ * unhandled.
+ */
+export function raceAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  operation.catch(() => undefined);
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}

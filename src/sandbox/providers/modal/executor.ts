@@ -1,5 +1,6 @@
 import { type Image, ModalClient } from "modal";
 import type { SelfBenchConfig } from "../../../contracts/config/index.js";
+import { raceAbort } from "../../../lib/util.js";
 import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
 import { runSandbox, type SandboxSession } from "../../session.js";
 
@@ -63,18 +64,15 @@ export class ModalSandboxExecutor implements SandboxExecutor {
             onOutput(name, typeof next.value === "string" ? Buffer.from(next.value) : next.value);
           }
         };
-        const aborted = new Promise<never>((_, reject) => {
-          if (signal.aborted) reject(signal.reason);
-          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-        });
-        const [exitCode] = await Promise.race([
+        // On abort the session deletes the sandbox next, which ends the process.
+        const [exitCode] = await raceAbort(
           Promise.all([
             process.wait(),
             pump(process.stdout, "stdout"),
             pump(process.stderr, "stderr"),
           ]),
-          aborted,
-        ]);
+          signal,
+        );
         return exitCode;
       },
       destroy: async () => {

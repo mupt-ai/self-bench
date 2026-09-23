@@ -73,6 +73,26 @@ describe("runSandbox", () => {
     expect(fake.events).toEqual(["destroyed"]);
   });
 
+  test("the deadline covers allocation and never returns outputs", async () => {
+    const late = fakeSession(async () => 0);
+    const slow = await runSandbox(
+      () => new Promise((resolve) => setTimeout(() => resolve(late.session), 300)),
+      { ...request, timeoutMs: 100 },
+    );
+    expect(slow).toMatchObject({ exitCode: 124, sandboxId: "unallocated", outputs: {} });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(late.events).toEqual(["destroyed"]);
+    const written = fakeSession(
+      (_command, { signal }) =>
+        new Promise((_resolve, reject) => {
+          written.files.set("/work/out.txt", Buffer.from("partial"));
+          signal.addEventListener("abort", () => reject(signal.reason));
+        }),
+    );
+    const result = await runSandbox(async () => written.session, { ...request, timeoutMs: 100 });
+    expect(result).toMatchObject({ exitCode: 124, outputs: {} });
+  });
+
   test("a lost command is recovered only when every output was written", async () => {
     const finished = fakeSession(async () => {
       finished.files.set("/work/out.txt", Buffer.from("done"));
