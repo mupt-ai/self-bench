@@ -9,7 +9,7 @@ import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import { type CredentialInfo, readAccount, secretPath } from "../evaluation/account.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { generationSubscriptionAuth } from "../harnesses/codex/subscription.js";
-import { HARBOR_E2B_API_KEY, HARBOR_VERCEL_CREDENTIALS } from "../harnesses/harbor/environment.js";
+import { VERIFICATION_CREDENTIALS } from "../sandbox/provider-environment.js";
 import {
   type ManagedOffer,
   managedModelKey,
@@ -170,8 +170,7 @@ export async function generationStageEnvironment(
     "VERCEL_PROJECT_ID",
     "VERCEL_OIDC_TOKEN",
     "DAYTONA_API_KEY",
-    HARBOR_E2B_API_KEY,
-    ...Object.values(HARBOR_VERCEL_CREDENTIALS),
+    ...Object.values(VERIFICATION_CREDENTIALS),
   ])
     delete env[key];
   // Model credential: managed platform access, or one stored credential per stage.
@@ -210,13 +209,14 @@ export async function generationStageEnvironment(
         env.MODAL_TOKEN_ID = secret.tokenId;
         env.MODAL_TOKEN_SECRET = secret.value;
       } else if (kind === "e2b") {
-        env[role === "harbor" ? HARBOR_E2B_API_KEY : "E2B_API_KEY"] = secret.value;
+        env[role === "harbor" ? VERIFICATION_CREDENTIALS.E2B_API_KEY : "E2B_API_KEY"] =
+          secret.value;
       } else if (kind === "daytona") {
         env.DAYTONA_API_KEY = secret.value;
       } else {
         if (!secret.teamId || !secret.projectId)
           throw new Error("Vercel credential is unavailable.");
-        const names = role === "harbor" ? HARBOR_VERCEL_CREDENTIALS : VERCEL_SANDBOX_CREDENTIALS;
+        const names = role === "harbor" ? VERIFICATION_CREDENTIALS : VERCEL_SANDBOX_CREDENTIALS;
         env[names.VERCEL_TOKEN] = secret.value;
         env[names.VERCEL_TEAM_ID] = secret.teamId;
         env[names.VERCEL_PROJECT_ID] = secret.projectId;

@@ -7,9 +7,9 @@ import { orgRecords } from "../src/evaluation/org-records.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { withGenerationRuntime } from "../src/generation/runtime.js";
 import { generationSettingsSchema } from "../src/generation/settings.js";
-import { harborChildEnvironment } from "../src/harnesses/harbor/environment.js";
 import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
+import { providerEnvironment } from "../src/sandbox/provider-environment.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { codexAuth } from "./support/codex-auth.js";
 import { MemoryRecords } from "./support/evaluation-records.js";
@@ -135,7 +135,7 @@ test.each(["batch", "pr"] as const)(
       expect(env.E2B_DOMAIN).toBeUndefined();
       expect(env.MODAL_TOKEN_SECRET).toBeUndefined();
       expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe("harbor-e2b-secret");
-      expect(harborChildEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
+      expect(providerEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
       process.env.SELFBENCH_E2B_TEMPLATE = "changed-host-template";
       const config = loadWorkerConfig({});
       for (const stage of ["author", "verifier"] as const) {

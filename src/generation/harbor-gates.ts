@@ -11,7 +11,6 @@ import {
   harborProcessEnvironment,
   harborRunArguments,
 } from "../harnesses/harbor/command.js";
-import { harborChildEnvironment } from "../harnesses/harbor/environment.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -20,6 +19,7 @@ import {
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { isRecord, tail } from "../lib/util.js";
+import { providerEnvironment } from "../sandbox/provider-environment.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -146,7 +146,7 @@ export async function harborRun(
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
-  const env = harborProcessEnvironment(harborChildEnvironment(executionEnvironment(), environment));
+  const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
   const run = await runCommand(

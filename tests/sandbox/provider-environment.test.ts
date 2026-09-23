@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { harborChildEnvironment } from "../../src/harnesses/harbor/environment.js";
+import { providerEnvironment } from "../../src/sandbox/provider-environment.js";
 
 describe("Harbor child environment", () => {
   test("removes hosted sandbox control credentials while preserving selected Harbor credentials", () => {
@@ -21,7 +21,7 @@ describe("Harbor child environment", () => {
       PATH: "/usr/bin",
     };
 
-    expect(harborChildEnvironment(source)).toEqual({
+    expect(providerEnvironment(source)).toEqual({
       MODAL_TOKEN_ID: "modal-id",
       MODAL_TOKEN_SECRET: "modal-secret",
       PATH: "/usr/bin",
@@ -41,17 +41,17 @@ describe("Harbor child environment", () => {
       DAYTONA_API_KEY: "daytona-key",
       PATH: "/usr/bin",
     };
-    expect(harborChildEnvironment(source, "e2b")).toEqual({
+    expect(providerEnvironment(source, "e2b")).toEqual({
       E2B_API_KEY: "harbor-key",
       E2B_DOMAIN: "custom.e2b.example",
       PATH: "/usr/bin",
     });
     // A local stack shares one E2B key between generation and Harbor.
     const { SELFBENCH_HARBOR_E2B_API_KEY: _unused, ...shared } = source;
-    expect(harborChildEnvironment(shared, "e2b").E2B_API_KEY).toBe("generation-key");
+    expect(providerEnvironment(shared, "e2b").E2B_API_KEY).toBe("generation-key");
     // Other Harbor environments never see E2B settings or the Harbor E2B key.
     for (const environment of ["docker", "modal", "vercel", "daytona"] as const) {
-      const child = harborChildEnvironment(source, environment);
+      const child = providerEnvironment(source, environment);
       expect(Object.keys(child).filter((key) => key.includes("E2B"))).toEqual([]);
       expect(child.DAYTONA_API_KEY).toBe(environment === "daytona" ? "daytona-key" : undefined);
     }
@@ -70,7 +70,7 @@ describe("Harbor child environment", () => {
       E2B_API_KEY: "e2b-key",
       PATH: "/usr/bin",
     };
-    expect(harborChildEnvironment(source, "vercel")).toEqual({
+    expect(providerEnvironment(source, "vercel")).toEqual({
       VERCEL_TOKEN: "harbor-token",
       VERCEL_TEAM_ID: "harbor-team",
       VERCEL_PROJECT_ID: "harbor-project",
@@ -80,7 +80,7 @@ describe("Harbor child environment", () => {
     const shared = Object.fromEntries(
       Object.entries(source).filter(([key]) => !key.startsWith("SELFBENCH_HARBOR_")),
     );
-    expect(harborChildEnvironment(shared, "vercel")).toEqual({
+    expect(providerEnvironment(shared, "vercel")).toEqual({
       VERCEL_TOKEN: "generation-token",
       VERCEL_TEAM_ID: "generation-team",
       VERCEL_PROJECT_ID: "generation-project",
@@ -89,7 +89,7 @@ describe("Harbor child environment", () => {
     // Other Harbor environments never see any Vercel credential.
     for (const environment of ["docker", "modal", "e2b", "daytona"] as const)
       expect(
-        Object.keys(harborChildEnvironment(source, environment)).filter((key) =>
+        Object.keys(providerEnvironment(source, environment)).filter((key) =>
           key.includes("VERCEL"),
         ),
       ).toEqual([]);
@@ -106,11 +106,11 @@ test("gate projection excludes unrelated secrets and refuses partial role creden
     DAYTONA_API_KEY: "daytona",
     E2B_API_KEY: "e2b",
   };
-  expect(harborChildEnvironment(source, "e2b")).toEqual({ PATH: "/bin", E2B_API_KEY: "e2b" });
+  expect(providerEnvironment(source, "e2b")).toEqual({ PATH: "/bin", E2B_API_KEY: "e2b" });
   expect(() =>
-    harborChildEnvironment(
+    providerEnvironment(
       { VERCEL_TOKEN: "ambient", SELFBENCH_HARBOR_VERCEL_TOKEN: "partial" },
       "vercel",
     ),
-  ).toThrow("must include");
+  ).toThrow("credentials are incomplete");
 });

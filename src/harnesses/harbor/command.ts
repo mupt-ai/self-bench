@@ -1,5 +1,5 @@
+import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
-import { harborPythonPath } from "./environment.js";
 
 /** Process policy shared by generation gates and solver trials, not provider lifetimes. */
 export const HARBOR_VERSION = "0.23.0";
@@ -61,4 +61,9 @@ export function assertHarborVersion(actual: string): void {
 
 export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...resolved, PYTHONPATH: harborPythonPath() };
+}
+
+/** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */
+export function harborPythonPath(): string {
+  return fileURLToPath(new URL("./runtime/", import.meta.url));
 }

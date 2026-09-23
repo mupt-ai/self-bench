@@ -14,8 +14,8 @@ import {
   type GenerationSettings,
   generationSettingsSchema,
 } from "../../src/generation/settings.js";
-import { harborChildEnvironment } from "../../src/harnesses/harbor/environment.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
+import { providerEnvironment } from "../../src/sandbox/provider-environment.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
@@ -165,13 +165,13 @@ for (const sandbox of ["e2b", "vercel"] as const) {
               expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe(
                 harborEnvironment === "e2b" ? "modal-secret" : undefined,
               );
-              expect(harborChildEnvironment(env, harbor).E2B_API_KEY).toBe(
+              expect(providerEnvironment(env, harbor).E2B_API_KEY).toBe(
                 harborEnvironment === "e2b" ? "modal-secret" : undefined,
               );
               expect(env.SELFBENCH_HARBOR_VERCEL_TOKEN).toBe(
                 harborEnvironment === "vercel" ? "modal-secret" : undefined,
               );
-              const harborChild = harborChildEnvironment(env, harbor);
+              const harborChild = providerEnvironment(env, harbor);
               expect(harborChild.VERCEL_TOKEN).toBe(
                 harborEnvironment === "vercel" ? "modal-secret" : undefined,
               );

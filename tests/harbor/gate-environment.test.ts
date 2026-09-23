@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import { harborRun } from "../../src/generation/harbor-gates.js";
-import { harborPythonPath } from "../../src/harnesses/harbor/environment.js";
+import { harborPythonPath } from "../../src/harnesses/harbor/command.js";
 
 test("generation nop and oracle gates invoke the packaged E2B adapter", async () => {
   const root = await mkdtemp(join(tmpdir(), "harbor-gate-test-"));
