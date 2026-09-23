@@ -32,6 +32,7 @@ import { withGenerationRuntime } from "./runtime.js";
 import {
   type CompileAndVerifyInput,
   compileTask,
+  finishCompile,
   type VerifyCompiledInput,
   verifyCompiled,
 } from "./verify.js";
@@ -56,6 +57,7 @@ export interface WorkerActivities {
   startAuthoringTurn(input: AuthoringTurnInput): Promise<SandboxJobOutcome>;
   finishAuthoringTurn(input: FinishAuthoringTurnInput): Promise<AuthoringTurnResult>;
   compileTask(input: CompileAndVerifyInput): Promise<SandboxJobOutcome>;
+  finishCompile(input: VerifyCompiledInput): Promise<SandboxJobOutcome>;
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
@@ -100,9 +102,11 @@ export function createActivities(
       runtime(input.run, "author", (sandbox, _harbor, run) =>
         compileTask(store, sandbox, { ...input, run }, callback),
       ),
+    finishCompile: (input) =>
+      runtime(input.run, "author", (sandbox) => finishCompile(sandbox, input)),
     verifyCompiled: (input) =>
-      runtime(input.run, "author", (sandbox, harbor, run) =>
-        verifyCompiled(store, sandbox, harbor, { ...input, run }),
+      runtime(input.run, "author", (_sandbox, harbor, run) =>
+        verifyCompiled(store, harbor, { ...input, run }),
       ),
     startReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>

@@ -109,18 +109,28 @@ export async function compileTask(
 }
 
 /**
- * Harbor's half of the check: it stops the compile sandbox, builds the compiled task, and runs
- * smoke, nop, and oracle. Every result lands in one report for the agent.
+ * Stops the compile sandbox as soon as it reported, on the ordinary queue, so it never waits for
+ * a Harbor slot while it is still billed.
+ */
+export async function finishCompile(
+  sandbox: SandboxExecutor,
+  input: VerifyCompiledInput,
+): Promise<SandboxJobOutcome> {
+  await sandbox.stop(input.compiled.sandbox).catch(() => undefined);
+  return input.compiled;
+}
+
+/**
+ * Harbor's half of the check: it builds the compiled task and runs smoke, nop, and oracle.
+ * Every result lands in one report for the agent.
  */
 export async function verifyCompiled(
   store: ArtifactStore,
-  sandbox: SandboxExecutor,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: VerifyCompiledInput,
 ): Promise<VerifyOutcome> {
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
-  await sandbox.stop(compiled.sandbox).catch(() => undefined);
   return await withHeartbeats(`verifying ${input.task.taskId}`, async (signal) => {
     // The compile job only reports done with its result; anything else was retried in its sandbox.
     const result = compileResultSchema.parse(compiled.inline["result.json"]);

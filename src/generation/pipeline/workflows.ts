@@ -45,7 +45,10 @@ const discovery = proxyActivities<Pick<WorkerActivities, "startDiscoveryShard">>
 );
 const finish =
   proxyActivities<
-    Pick<WorkerActivities, "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound">
+    Pick<
+      WorkerActivities,
+      "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
+    >
   >(finishing);
 const harbor = () =>
   proxyActivities<Pick<WorkerActivities, "verifyCompiled">>({
@@ -70,8 +73,13 @@ export const workflowActivities: SelfBenchActivities = {
     await finish.finishAuthoringTurn({ ...input, outcome: await agents.startAuthoringTurn(input) }),
   runReviewRound: async (input) =>
     await finish.finishReviewRound({ ...input, outcome: await agents.startReviewRound(input) }),
-  compileAndVerify: async (input) =>
-    await harbor().verifyCompiled({ ...input, compiled: await compile.compileTask(input) }),
+  compileAndVerify: async (input) => {
+    const compiled = await compile.compileTask(input);
+    return await harbor().verifyCompiled({
+      ...input,
+      compiled: await finish.finishCompile({ ...input, compiled }),
+    });
+  },
 };
 
 /** Independent discovery unit. Fetching PR metadata and dispatch happen in the API. */
