@@ -11,9 +11,11 @@ import {
   verifyReportSchema,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
-import { runAgent } from "./agent.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
+import type { SandboxCallback } from "./sandbox-job.js";
 import { renderVerifyReport } from "./verify-report.js";
 
 export interface ReviewRoundInput {
@@ -35,14 +37,26 @@ const verdictSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("rejected"), reason: z.string().min(1) }),
 ]);
 
-/** A fresh, read-only reviewer judges one green task: accept, suggest changes, or reject. */
-export async function runReviewRound(
+export interface FinishReviewRoundInput extends ReviewRoundInput {
+  readonly outcome: SandboxJobOutcome;
+}
+
+function roundPrefix({ run, candidate, round }: ReviewRoundInput): string {
+  return `runs/${run.runId}/review/${candidate.candidateId}/round-${round}`;
+}
+
+/**
+ * A fresh, read-only reviewer judges one green task: accept, suggest changes, or reject. The
+ * sandbox reports back through the callback API; `finishReviewRound` reads the verdict. A
+ * reviewer that crashed without a verdict fails in the sandbox, so Temporal retries it.
+ */
+export async function startReviewRound(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
+  callback: SandboxCallback,
   input: ReviewRoundInput,
-): Promise<ReviewRoundResult> {
+): Promise<SandboxJobOutcome> {
   const { run, candidate, task, round } = input;
-  const roundPrefix = `runs/${run.runId}/review/${candidate.candidateId}/round-${round}`;
   const attempt = Context.current().info.attempt;
   const [reportBytes, definitionBytes, extension, program, bundle] = await Promise.all([
     store.get(input.report),
@@ -56,13 +70,13 @@ export async function runReviewRound(
   const definition = taskDefinitionSchema.parse(
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
-  const result = await runAgent({
+  return await startAgent({
     store,
     sandbox,
+    callback,
     run,
     label: `verify-${candidate.candidateId}-r${round}`,
-    prefix: `${roundPrefix}/attempt-${attempt}`,
-    sessionKey: `runs/${run.runId}/review/${candidate.candidateId}/session/round-${round}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    prefix: `${roundPrefix(input)}/attempt-${attempt}`,
     record: { stage: "review", round, attempt },
     workspace: { kind: "task" },
     extension: "/work/reviewer.js",
@@ -78,35 +92,43 @@ export async function runReviewRound(
       { path: "/work/reviewer.js", contents: extension },
     ],
     outputs: [VERDICT],
+    inline: [VERDICT],
+    delivers: [[VERDICT]],
     environment: { SELFBENCH_VERDICT_OUTPUT: "/work/verdict" },
     timeoutMs: 4 * 60 * 60 * 1000,
   });
-  const verdictBytes = result.outputs[VERDICT];
+}
+
+/** Stops the reviewer's sandbox and turns its verdict into the round's result. */
+export async function finishReviewRound(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  input: FinishReviewRoundInput,
+): Promise<ReviewRoundResult> {
+  const { candidate } = input;
+  const result = await finishAgent(store, sandbox, input.outcome);
+  const log = result.log?.uri ?? "none";
+  const verdict = result.inline[VERDICT];
   let outcome: ReviewRoundResult;
-  if (verdictBytes && result.session) {
-    const verdict = verdictSchema.parse(JSON.parse(Buffer.from(verdictBytes).toString("utf8")));
-    await store.put(`${roundPrefix}/verdict.json`, verdictBytes, "application/json");
+  if (verdict !== undefined && result.session) {
+    const parsed = verdictSchema.parse(verdict);
     outcome =
-      verdict.kind === "rejected"
+      parsed.kind === "rejected"
         ? {
             kind: "rejected",
             candidateId: candidate.candidateId,
-            reason: `${verdict.reason}; log: ${result.log.uri}`,
+            reason: `${parsed.reason}; log: ${log}`,
           }
-        : { ...verdict, session: result.session };
-  } else if (result.exitCode !== 0 || result.providerError || !result.session) {
-    throw new Error(
-      `review round ${round} ended without a verdict (exit ${result.exitCode}); log: ${result.log.uri}`,
-    );
+        : { ...parsed, session: result.session };
   } else {
     outcome = {
       kind: "rejected",
       candidateId: candidate.candidateId,
-      reason: `review agent declined the task${result.finalMessage ? `: ${result.finalMessage.slice(0, 1_000)}` : ""}; log: ${result.log.uri}`,
+      reason: `review agent declined the task${result.finalMessage ? `: ${result.finalMessage.slice(0, 1_000)}` : ""}; log: ${log}`,
     };
   }
   await store.put(
-    `${roundPrefix}/result.json`,
+    `${roundPrefix(input)}/result.json`,
     Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`),
     "application/json",
   );

@@ -4,14 +4,8 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
+  StartedSandbox,
 } from "./contracts.js";
-
-export const STANDARD_VERCEL_TIMEOUT_CAP_MS = 2 * 60 * 60 * 1_000;
-export const HOBBY_VERCEL_TIMEOUT_CAP_MS = 45 * 60 * 1_000;
-
-// E2B keeps a sandbox alive for at most 24 hours on Pro and 1 hour on Hobby.
-export const STANDARD_E2B_TIMEOUT_CAP_MS = 24 * 60 * 60 * 1_000;
-export const HOBBY_E2B_TIMEOUT_CAP_MS = 60 * 60 * 1_000;
 
 function parseSandboxTimeoutCapText(value: string): number | undefined {
   const normalized = value.trim().toLowerCase();
@@ -34,20 +28,11 @@ function parseSandboxTimeoutCapText(value: string): number | undefined {
   return amount * multiplier;
 }
 
-/** A configured Vercel timeout cap, defaulting to the paid-team ceiling. */
-export function vercelTimeoutCap(value: string | undefined): number {
-  return providerTimeoutCap(value, STANDARD_VERCEL_TIMEOUT_CAP_MS);
-}
-
-/** A configured E2B timeout cap, defaulting to the Hobby-compatible one hour. */
-export function e2bTimeoutCap(value: string | undefined): number {
-  if (value === undefined) {
-    return HOBBY_E2B_TIMEOUT_CAP_MS;
-  }
-  return providerTimeoutCap(value, STANDARD_E2B_TIMEOUT_CAP_MS);
-}
-
-function providerTimeoutCap(value: string | undefined, maximumMs: number): number {
+/**
+ * A provider's configured sandbox lifetime cap, like `45m` or `2h`: validated against the
+ * provider's own ceiling, which is also the default.
+ */
+export function providerTimeoutCap(value: string | undefined, maximumMs: number): number {
   if (value === undefined) {
     return maximumMs;
   }
@@ -67,12 +52,24 @@ export class TimeoutCappedSandboxExecutor implements SandboxExecutor {
   }
 
   async run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult> {
-    return await this.#delegate.run(
-      request.timeoutMs > this.#timeoutCapMs
-        ? { ...request, timeoutMs: this.#timeoutCapMs }
-        : request,
-      options,
-    );
+    return await this.#delegate.run(this.#capped(request), options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    return this.#delegate.start(this.#capped(request), secretsFor);
+  }
+
+  stop(sandbox: StartedSandbox): Promise<void> {
+    return this.#delegate.stop(sandbox);
+  }
+
+  #capped(request: SandboxRequest): SandboxRequest {
+    return request.timeoutMs > this.#timeoutCapMs
+      ? { ...request, timeoutMs: this.#timeoutCapMs }
+      : request;
   }
 
   close(): void {

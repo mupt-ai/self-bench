@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { z } from "zod";
 import { projectRoot } from "../lib/project-paths.js";
-import { errorMessage } from "../lib/util.js";
+import { bearerToken, errorMessage } from "../lib/util.js";
 
 export async function readBody(
   request: IncomingMessage,
@@ -27,7 +27,7 @@ export function authorized(request: IncomingMessage, token: string | undefined):
 
 /** True only when a token is configured and the request presents exactly that token. */
 export function bearerMatches(request: IncomingMessage, token: string): boolean {
-  const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+  const supplied = bearerToken(request.headers.authorization);
   if (!supplied) return false;
   const expectedBuffer = Buffer.from(token);
   const suppliedBuffer = Buffer.from(supplied);

@@ -30,9 +30,17 @@ export interface SandboxRequest {
   readonly environment?: Readonly<Record<string, string>>;
   readonly secrets?: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
-  readonly inactivityTimeoutMs?: number;
   readonly cpu?: number;
   readonly memoryMiB?: number;
+}
+
+/** Model tokens an agent sandbox consumed, from Pi's per-message usage. */
+export interface ModelUsage {
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly messages: number;
 }
 
 /** Provider/accounting-backed cost observed while one sandbox request is running. */
@@ -47,8 +55,6 @@ export interface SandboxCostSnapshot {
 
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
-  readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
-  readonly onCost?: (cost: SandboxCostSnapshot) => void;
 }
 
 export interface SandboxResult {
@@ -70,11 +76,35 @@ export class SandboxExecutionError extends Error {
   }
 }
 
+/** A sandbox left running by `start`: enough to stop it later and bill for its lifetime. */
+export interface StartedSandbox {
+  readonly sandboxId: string;
+  readonly stage: string;
+  readonly startedAt: string;
+  /** When the provider deletes it on its own. */
+  readonly expiresAt: string;
+  readonly cpu?: number;
+  readonly memoryMiB?: number;
+  /** Set by metering: what its live cost is priced from. */
+  readonly rates?: { readonly model?: string; readonly sandboxProvider?: SandboxProvider };
+}
+
+export type SandboxProvider = "docker" | "e2b" | "modal" | "vercel";
+
 /**
- * Runs one command in a fresh sandbox and deletes the sandbox afterwards. Declared outputs are
- * required after exit 0 and best-effort otherwise; a hard deadline returns exit code 124.
+ * `run` executes one command in a fresh sandbox and deletes the sandbox afterwards. Declared
+ * outputs are required after exit 0 and best-effort otherwise; a hard deadline returns exit
+ * code 124. `start` stages the files and launches the command detached instead, returning while
+ * it runs: the sandbox lives until `stop` or its own timeout. `secretsFor` adds secrets that
+ * depend on the new sandbox.
  */
 export interface SandboxExecutor {
   run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult>;
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ): Promise<StartedSandbox>;
+  /** Deletes a started sandbox; succeeds when it is already gone. `usage` is what it consumed. */
+  stop(sandbox: StartedSandbox, usage?: ModelUsage): Promise<void>;
   close(): void;
 }

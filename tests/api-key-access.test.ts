@@ -6,6 +6,7 @@ import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createRepoStore } from "../src/db/repos.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import type { WorkflowSnapshot } from "../src/generation/tasks/status.js";
+import { bearerToken } from "../src/lib/util.js";
 import { mint, signedIn } from "./support/api-keys.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { type AuthServer, fakeGitHub, startAuthServer } from "./support/site-fixture.js";
@@ -161,4 +162,16 @@ describe("api keys and evaluation mutations", () => {
       await fixture.close();
     }
   });
+});
+
+test("only a well-formed Bearer header carries a token", () => {
+  expect(bearerToken("Bearer abc")).toBe("abc");
+  expect(bearerToken("bearer  abc ")).toBe("abc");
+  expect(bearerToken("abc")).toBeUndefined();
+  expect(bearerToken("Basic abc")).toBeUndefined();
+  expect(bearerToken("Bearer a b")).toBeUndefined();
+  expect(bearerToken("Bearer eyJhYmMi.c2ln_-~+/==")).toBe("eyJhYmMi.c2ln_-~+/==");
+  expect(bearerToken("Bearer a=b")).toBeUndefined();
+  expect(bearerToken('Bearer "abc"')).toBeUndefined();
+  expect(bearerToken(undefined)).toBeUndefined();
 });

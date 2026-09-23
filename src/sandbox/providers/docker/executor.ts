@@ -3,8 +3,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SelfBenchConfig } from "../../../contracts/config/index.js";
 import { runCommand } from "../../../lib/process.js";
-import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
-import { runSandbox, type SandboxSession } from "../../session.js";
+import type {
+  SandboxExecutor,
+  SandboxRequest,
+  SandboxRunOptions,
+  StartedSandbox,
+} from "../../contracts.js";
+import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
 
 /** Local Docker: a sleeping container with a /work volume; commands run with `docker exec`. */
 export class DockerSandboxExecutor implements SandboxExecutor {
@@ -12,6 +17,17 @@ export class DockerSandboxExecutor implements SandboxExecutor {
 
   run(request: SandboxRequest, options?: SandboxRunOptions) {
     return runSandbox(() => this.open(request), request, options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    return startSandbox(() => this.open(request), request, secretsFor);
+  }
+
+  async stop(sandbox: StartedSandbox): Promise<void> {
+    await removeContainer(sandbox.sandboxId);
   }
 
   close(): void {}
@@ -23,8 +39,7 @@ export class DockerSandboxExecutor implements SandboxExecutor {
         .replace(/[^a-z0-9_.-]/g, "-");
     const scratch = await mkdtemp(join(tmpdir(), "selfbench-docker-"));
     const destroy = async () => {
-      await runCommand("docker", ["rm", "--force", name], { allowFailure: true });
-      await runCommand("docker", ["volume", "rm", "--force", name], { allowFailure: true });
+      await removeContainer(name);
       await rm(scratch, { recursive: true, force: true });
     };
     try {
@@ -38,6 +53,7 @@ export class DockerSandboxExecutor implements SandboxExecutor {
         String(request.cpu ?? 4),
         "--memory",
         `${request.memoryMiB ?? 8192}m`,
+        ...(this.config.network ? ["--network", this.config.network] : []),
         "--volume",
         `${name}:/work`,
         "--workdir",
@@ -45,7 +61,8 @@ export class DockerSandboxExecutor implements SandboxExecutor {
         "--entrypoint",
         "sleep",
         this.config.image,
-        "infinity",
+        // A started sandbox nobody stops still ends with its timeout, like the hosted providers.
+        String(Math.ceil(request.timeoutMs / 1000)),
       ]);
     } catch (error) {
       await destroy();
@@ -84,7 +101,20 @@ export class DockerSandboxExecutor implements SandboxExecutor {
         });
         return result.exitCode;
       },
+      spawn: async (command, environment) => {
+        const args = ["exec", "--detach", "--workdir", "/work"];
+        for (const key of Object.keys(environment)) args.push("--env", key);
+        await runCommand("docker", [...args, name, ...command], {
+          env: { ...process.env, ...environment },
+        });
+        await rm(scratch, { recursive: true, force: true });
+      },
       destroy,
     };
   }
+}
+
+async function removeContainer(name: string): Promise<void> {
+  await runCommand("docker", ["rm", "--force", name], { allowFailure: true });
+  await runCommand("docker", ["volume", "rm", "--force", name], { allowFailure: true });
 }

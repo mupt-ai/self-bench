@@ -9,12 +9,14 @@ import {
   type RunRequest,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { assertProvenanceMatchesPullRequest } from "../../third_party/github/provenance.js";
 import { assertPullRequestBelongsToRepository } from "../../third_party/github/repository.js";
 import { difficultyThresholds } from "../task/audit.js";
-import { runAgent } from "./agent.js";
+import { finishAgent, startAgent } from "./agent.js";
 import { parseProvenance, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
+import type { SandboxCallback } from "./sandbox-job.js";
 
 export interface DiscoveryShardInput {
   /** The API already grouped this shard's PRs; otherwise the run's PRs are dealt round-robin. */
@@ -28,6 +30,7 @@ export interface DiscoveryShardInput {
 }
 
 const OUTPUT = "/work/discovery.json";
+const LOG = "modal.log";
 const planSchema = z.object({
   candidates: z.array(
     z.object({
@@ -46,25 +49,37 @@ const planSchema = z.object({
   ),
 });
 
-/** One discovery agent picks candidate PRs from its shard; each becomes a Candidate with its request. */
-export async function discoverCandidateShard(
+export interface FinishDiscoveryShardInput extends DiscoveryShardInput {
+  readonly outcome: SandboxJobOutcome;
+}
+
+async function shardProvenance(store: ArtifactStore, input: DiscoveryShardInput) {
+  const all = parseProvenance(await store.get(input.run.provenance));
+  return input.partitioned
+    ? all
+    : all.filter((_message, index) => index % input.shardCount === input.shardIndex);
+}
+
+/**
+ * One discovery agent picks candidate PRs from its shard. The sandbox reports back through the
+ * callback API; a shard that ends without a plan fails in the sandbox and Temporal retries it.
+ */
+export async function startDiscoveryShard(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
+  callback: SandboxCallback,
   input: DiscoveryShardInput,
-): Promise<DiscoveryResult> {
+): Promise<SandboxJobOutcome> {
   const { run, wave, shardIndex } = input;
-  const all = parseProvenance(await store.get(run.provenance));
-  const shard = input.partitioned
-    ? all
-    : all.filter((_message, index) => index % input.shardCount === shardIndex);
-  const prefix = `runs/${run.runId}/discovery/wave-${wave}/shard-${shardIndex}/attempt-${Context.current().info.attempt}`;
-  const result = await runAgent({
+  const shard = await shardProvenance(store, input);
+  return await startAgent({
     store,
     sandbox,
+    callback,
     run,
     label: `discover-${wave}-${shardIndex}`,
-    prefix,
-    logName: "modal.log",
+    prefix: `runs/${run.runId}/discovery/wave-${wave}/shard-${shardIndex}/attempt-${Context.current().info.attempt}`,
+    logName: LOG,
     workspace: { kind: "clone", commit: run.repository.commit },
     extension: "/work/discovery.ts",
     tools: "read,bash,grep,find,ls,submit_discovery",
@@ -92,19 +107,28 @@ export async function discoverCandidateShard(
       },
     ],
     outputs: [OUTPUT],
+    inline: [OUTPUT],
+    delivers: [[OUTPUT]],
+    requireDelivery: true,
     environment: {
       SELFBENCH_DISCOVERY_EXCLUSIONS: "/work/excluded-source-prs.json",
       SELFBENCH_DISCOVERY_OUTPUT: OUTPUT,
     },
     timeoutMs: 45 * 60 * 1000,
   });
-  const planBytes = result.outputs[OUTPUT];
-  if (result.exitCode !== 0 || !planBytes) {
-    throw new Error(
-      `discovery shard ${wave}/${shardIndex} returned no plan (exit ${result.exitCode}); log: ${result.log.uri}`,
-    );
-  }
-  const plan = planSchema.parse(JSON.parse(Buffer.from(planBytes).toString("utf8")));
+}
+
+/** Stops the shard's sandbox and turns its plan into candidates with their requests. */
+export async function finishDiscoveryShard(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  input: FinishDiscoveryShardInput,
+): Promise<DiscoveryResult> {
+  const { run, wave, shardIndex } = input;
+  const result = await finishAgent(store, sandbox, input.outcome, LOG);
+  const shard = await shardProvenance(store, input);
+  const prefix = input.outcome.prefix;
+  const plan = planSchema.parse(result.inline[OUTPUT]);
   const excluded = new Set(input.excludedSourcePrs);
   const seen = new Set<number>();
   const candidates: Candidate[] = [];

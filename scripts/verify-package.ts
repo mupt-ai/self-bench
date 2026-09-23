@@ -76,6 +76,7 @@ try {
     "dist/generation/pipeline/prompts/authoring.md",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-compiler.bundle.js",
+    "dist/sandbox-job.bundle.js",
     "dist/sandbox-task-operation.bundle.js",
     "dist/sandbox-verifier.bundle.js",
     "dist/review/index.html",

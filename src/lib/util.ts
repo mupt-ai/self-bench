@@ -4,6 +4,14 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * The token in an `Authorization: Bearer <token>` header (RFC 6750 `b64token` syntax); undefined
+ * for any other scheme or shape.
+ */
+export function bearerToken(header: string | undefined): string | undefined {
+  return /^Bearer +([A-Za-z0-9\-._~+/]+=*)$/i.exec(header?.trim() ?? "")?.[1];
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -20,6 +20,7 @@ import {
 import { sendIdentityError } from "./routes/auth.js";
 import { handleRunArtifactRoute } from "./routes/run-artifacts.js";
 import { handleRunRoute } from "./routes/runs.js";
+import { handleSandboxRoute } from "./routes/sandbox.js";
 import { openSite } from "./site.js";
 
 export interface ApiOptions {
@@ -31,6 +32,8 @@ export async function startApi(
   config: SelfBenchConfig,
   options: ApiOptions = {},
 ): Promise<() => Promise<void>> {
+  const secret = config.sandboxCallback?.secret;
+  if (!secret) throw new Error("SELFBENCH_SANDBOX_SECRET is required: sandbox jobs report here");
   const connection = await connectTemporalClient(config.temporal);
   const client = new Client({ connection, namespace: config.temporal.namespace });
   const artifacts = createArtifactStore(config.artifact);
@@ -70,6 +73,9 @@ export async function startApi(
         await sendReviewAsset(response, url.pathname);
         return;
       }
+      // Sandbox jobs authenticate with their own signed grant, not a user or the API token.
+      if (await handleSandboxRoute(request, url, response, { secret, store: artifacts, client }))
+        return;
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
       const user = site ? await site.auth.authenticate(request, config.apiToken) : undefined;
       const allowed = site

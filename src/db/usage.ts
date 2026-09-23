@@ -55,6 +55,7 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
             managedModel: row.managedModel,
             managedSandbox: row.managedSandbox,
             sandboxSeconds: row.sandboxSeconds,
+            ...(row.sandboxId ? { sandboxId: row.sandboxId } : {}),
             ...(row.provider ? { provider: row.provider } : {}),
             ...(row.model ? { model: row.model } : {}),
             ...(row.tokens
@@ -71,6 +72,8 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
             modelBillableUnits: modelUnits,
             sandboxBillableUnits: sandboxUnits,
           })
+          // A retried stop of the same sandbox records nothing and bills nothing twice.
+          .onConflictDoNothing({ target: generationUsage.sandboxId })
           .returning({ id: generationUsage.id });
         const totalUnits = modelUnits + sandboxUnits;
         if (!usage || !snapshot || totalUnits <= 0) return;

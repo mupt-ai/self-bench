@@ -183,3 +183,23 @@ test("failed meter delivery is retried without duplicating the Stripe identifier
     await database.close();
   }
 });
+
+test("a started sandbox is recorded and billed once however often its stop retries", async () => {
+  const { database, org } = await orgFixture();
+  try {
+    await createBillingStore(database.db, true).saveCustomer(org.id, "cus_test");
+    const usage = createUsageStore(database.db);
+    const row = { ...managedRow, orgId: org.id, sandboxId: "sb-1" };
+    await usage.record(row);
+    await usage.record({ ...row, sandboxSeconds: 20 });
+    await usage.record({ ...row, sandboxId: "sb-2" });
+    const rows = await database.db.select().from(generationUsage);
+    expect(rows.map((item) => [item.sandboxId, item.sandboxSeconds])).toEqual([
+      ["sb-1", 10],
+      ["sb-2", 10],
+    ]);
+    expect(await database.db.select().from(billingOutbox)).toHaveLength(2);
+  } finally {
+    await database.close();
+  }
+});

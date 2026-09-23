@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SandboxExecutionError, type SandboxRequest } from "../../src/sandbox/contracts.js";
-import { runSandbox, type SandboxSession } from "../../src/sandbox/session.js";
+import { runSandbox, type SandboxSession, startSandbox } from "../../src/sandbox/session.js";
 
 const request: SandboxRequest = {
   runId: "run",
@@ -20,12 +20,38 @@ function fakeSession(exec: SandboxSession["exec"]) {
     },
     read: async (path) => files.get(path),
     exec,
+    spawn: async (command) => {
+      events.push(`spawned ${command.join(" ")}`);
+    },
     destroy: async () => {
       events.push("destroyed");
     },
   };
   return { session, files, events };
 }
+
+describe("startSandbox", () => {
+  test("stages files, launches the command detached, and leaves the sandbox running", async () => {
+    const fake = fakeSession(async () => 0);
+    const started = await startSandbox(
+      async () => fake.session,
+      { ...request, files: [{ path: "/work/in.txt", contents: "input" }] },
+      (sandbox) => ({ TOKEN: sandbox.sandboxId }),
+    );
+    expect(started).toEqual(expect.objectContaining({ sandboxId: "fake", stage: request.stage }));
+    expect(Buffer.from(fake.files.get("/work/in.txt") ?? []).toString()).toBe("input");
+    expect(fake.events).toEqual(["spawned run"]);
+  });
+
+  test("deletes the sandbox when the command cannot be launched", async () => {
+    const fake = fakeSession(async () => 0);
+    fake.session.spawn = async () => {
+      throw new Error("spawn failed");
+    };
+    await expect(startSandbox(async () => fake.session, request)).rejects.toThrow("spawn failed");
+    expect(fake.events).toEqual(["destroyed"]);
+  });
+});
 
 describe("runSandbox", () => {
   test("stages files, streams output, collects outputs, and always deletes", async () => {

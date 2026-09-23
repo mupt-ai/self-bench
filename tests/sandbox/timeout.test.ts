@@ -4,11 +4,10 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
+  StartedSandbox,
 } from "../../src/sandbox/contracts.js";
-import {
-  HOBBY_VERCEL_TIMEOUT_CAP_MS,
-  TimeoutCappedSandboxExecutor,
-} from "../../src/sandbox/timeout.js";
+import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/vercel/timeout-cap.js";
+import { TimeoutCappedSandboxExecutor } from "../../src/sandbox/timeout.js";
 
 class RecordingExecutor implements SandboxExecutor {
   readonly requests: SandboxRequest[] = [];
@@ -19,15 +18,17 @@ class RecordingExecutor implements SandboxExecutor {
     return { sandboxId: "test", exitCode: 0, stdout: "", stderr: "", outputs: {} };
   }
 
-  async execute(): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    return { exitCode: 0, stdout: "", stderr: "" };
+  async start(request: SandboxRequest): Promise<StartedSandbox> {
+    this.requests.push(request);
+    return {
+      sandboxId: "test",
+      stage: request.stage,
+      startedAt: new Date(0).toISOString(),
+      expiresAt: new Date(request.timeoutMs).toISOString(),
+    };
   }
 
-  async readFile(): Promise<Uint8Array | undefined> {
-    return undefined;
-  }
-
-  async writeFile(): Promise<void> {}
+  async stop(): Promise<void> {}
 
   close(): void {
     this.closed = true;

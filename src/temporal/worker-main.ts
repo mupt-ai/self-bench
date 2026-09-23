@@ -35,7 +35,7 @@ const database =
 const vault = database
   ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")
   : undefined;
-const { compileAndVerify, ...generation } = createActivities(
+const { verifyCompiled, ...generation } = createActivities(
   config,
   vault,
   database ? createUsageStore(database.db) : undefined,
@@ -60,7 +60,7 @@ const workers = await Promise.all([
     connection,
     namespace: config.temporal.namespace,
     taskQueue: harborTaskQueue(config.temporal.taskQueue),
-    activities: { compileAndVerify, executeSolverEvaluation },
+    activities: { verifyCompiled, executeSolverEvaluation },
     maxConcurrentActivityTaskExecutions: harborConcurrency,
   }),
 ]);

@@ -4,8 +4,9 @@ import {
   normalizeE2BDomain,
   normalizeE2BTemplateReference,
 } from "../../sandbox/providers/e2b/template.js";
+import { e2bTimeoutCap } from "../../sandbox/providers/e2b/timeout-cap.js";
+import { vercelTimeoutCap } from "../../sandbox/providers/vercel/timeout-cap.js";
 import { sandboxDockerfileReference } from "../../sandbox/runtime-dockerfile.js";
-import { e2bTimeoutCap, vercelTimeoutCap } from "../../sandbox/timeout.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
@@ -22,12 +23,18 @@ const environmentSchema = z.object({
   SELFBENCH_API_HOST: z.string().default("127.0.0.1"),
   SELFBENCH_API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   SELFBENCH_API_TOKEN: z.string().min(1).optional(),
+  // Signs the grants started sandbox jobs present to the callback API; API and worker share it.
+  SELFBENCH_SANDBOX_SECRET: z.preprocess(emptyStringAsUndefined, z.string().min(32).optional()),
+  // The API origin sandboxes call back to (the public URL; sandboxes run outside our network).
+  SELFBENCH_SANDBOX_CALLBACK_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
   SELFBENCH_ARTIFACT_BACKEND: z.enum(["local", "gcs"]).default("local"),
   SELFBENCH_ARTIFACT_DIR: z.string().default(".selfbench/artifacts"),
   SELFBENCH_GCS_BUCKET: z.string().optional(),
   SELFBENCH_GCS_PREFIX: z.string().default("selfbench"),
   SELFBENCH_EXECUTION_BACKEND: z.enum(EXECUTION_BACKENDS).default("docker"),
   SELFBENCH_DOCKER_IMAGE: z.string().default("selfbench-sandbox:local"),
+  // Docker sandboxes join this network so they can reach the API by its compose service name.
+  SELFBENCH_DOCKER_NETWORK: z.preprocess(emptyStringAsUndefined, z.string().optional()),
   SELFBENCH_HARBOR_ENVIRONMENT: z.preprocess(
     emptyStringAsUndefined,
     z.enum(HARBOR_ENVIRONMENTS).optional(),
@@ -78,7 +85,7 @@ export interface E2BCredentials {
 }
 
 type ExecutionConfig =
-  | { readonly kind: "docker"; readonly image: string }
+  | { readonly kind: "docker"; readonly image: string; readonly network?: string }
   | {
       readonly kind: "modal";
       readonly app: string;
@@ -107,6 +114,11 @@ export interface SelfBenchConfig {
   readonly apiHost: string;
   readonly apiPort: number;
   readonly apiToken?: string;
+  /**
+   * Set when sandbox jobs report back through the callback API instead of holding a worker
+   * connection. The API needs only the secret; the worker also needs the URL.
+   */
+  readonly sandboxCallback?: { readonly secret: string; readonly url?: string };
   readonly buildCommit?: string;
   readonly activityConcurrency: number;
   readonly harborConcurrency?: number; // Harbor slots; the worker sizes to memory when unset.
@@ -156,7 +168,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
   let execution: ExecutionConfig;
   switch (value.SELFBENCH_EXECUTION_BACKEND) {
     case "docker":
-      execution = { kind: "docker", image: value.SELFBENCH_DOCKER_IMAGE };
+      execution = {
+        kind: "docker",
+        image: value.SELFBENCH_DOCKER_IMAGE,
+        ...(value.SELFBENCH_DOCKER_NETWORK ? { network: value.SELFBENCH_DOCKER_NETWORK } : {}),
+      };
       break;
     case "modal":
       execution = {
@@ -205,6 +221,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
     apiHost: value.SELFBENCH_API_HOST,
     apiPort: value.SELFBENCH_API_PORT,
     ...(value.SELFBENCH_API_TOKEN ? { apiToken: value.SELFBENCH_API_TOKEN } : {}),
+    ...(value.SELFBENCH_SANDBOX_SECRET
+      ? {
+          sandboxCallback: {
+            secret: value.SELFBENCH_SANDBOX_SECRET,
+            ...(value.SELFBENCH_SANDBOX_CALLBACK_URL
+              ? { url: value.SELFBENCH_SANDBOX_CALLBACK_URL.replace(/\/+$/, "") }
+              : {}),
+          },
+        }
+      : {}),
     ...(value.SELFBENCH_BUILD_COMMIT
       ? { buildCommit: value.SELFBENCH_BUILD_COMMIT.toLowerCase() }
       : {}),

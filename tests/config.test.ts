@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig, loadWorkerConfig } from "../src/contracts/config/index.js";
 import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
-  HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_E2B_TIMEOUT_CAP_MS,
+} from "../src/sandbox/providers/e2b/timeout-cap.js";
+import {
+  HOBBY_VERCEL_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox/timeout.js";
+} from "../src/sandbox/providers/vercel/timeout-cap.js";
 
 const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 
@@ -268,4 +270,26 @@ describe("SelfBench configuration", () => {
       loadConfig({ ...base, SELFBENCH_VERCEL_IMAGE: `repo@tag@sha256:${"a".repeat(64)}` }),
     ).toThrow("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
   });
+});
+
+describe("sandbox callback configuration", () => {
+  test("is off by default and needs a long secret; the URL loses its trailing slash", () => {
+    expect(loadConfig({}).sandboxCallback).toBeUndefined();
+    expect(() => loadConfig({ SELFBENCH_SANDBOX_SECRET: "short" })).toThrow();
+    const secret = "s".repeat(32);
+    expect(loadConfig({ SELFBENCH_SANDBOX_SECRET: secret }).sandboxCallback).toEqual({ secret });
+    expect(
+      loadConfig({
+        SELFBENCH_SANDBOX_SECRET: secret,
+        SELFBENCH_SANDBOX_CALLBACK_URL: "https://selfbench.example/",
+      }).sandboxCallback,
+    ).toEqual({ secret, url: "https://selfbench.example" });
+  });
+});
+
+test("the worker refuses to register activities without the sandbox callback", async () => {
+  const { createActivities } = await import("../src/generation/pipeline/activities.js");
+  expect(() =>
+    createActivities(loadWorkerConfig({ SELFBENCH_SANDBOX_SECRET: "s".repeat(32) })),
+  ).toThrow("SELFBENCH_SANDBOX_CALLBACK_URL are required");
 });

@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import { CommandExitError, type CommandHandle, E2B } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { raceAbort, shellQuote } from "../../../lib/util.js";
-import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
-import { runSandbox, type SandboxSession } from "../../session.js";
+import type {
+  SandboxExecutor,
+  SandboxRequest,
+  SandboxRunOptions,
+  StartedSandbox,
+} from "../../contracts.js";
+import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
 
@@ -27,6 +32,17 @@ export class E2BSandboxExecutor implements SandboxExecutor {
 
   run(request: SandboxRequest, options?: SandboxRunOptions) {
     return runSandbox(() => this.open(request), request, options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    return startSandbox(() => this.open(request), request, secretsFor);
+  }
+
+  async stop(sandbox: StartedSandbox): Promise<void> {
+    await this.#sandbox.kill(sandbox.sandboxId);
   }
 
   close(): void {}
@@ -59,11 +75,18 @@ export class E2BSandboxExecutor implements SandboxExecutor {
           if (archive) releaseArchiveRead();
         }
       },
+      spawn: async (command, environment) => {
+        const handle = await sandbox.commands.run(command.map(shellQuote).join(" "), {
+          background: true,
+          cwd: "/work",
+          envs: withoutE2BVariables(environment),
+          timeoutMs: 0,
+        });
+        await handle.disconnect();
+      },
       exec: async (command, { environment, signal, onOutput }) => {
         signal.throwIfAborted();
-        const envs = Object.fromEntries(
-          Object.entries(environment).filter(([key]) => !key.startsWith("E2B_")),
-        );
+        const envs = withoutE2BVariables(environment);
         const starting = sandbox.commands.run(command.map(shellQuote).join(" "), {
           background: true,
           cwd: "/work",
@@ -94,6 +117,10 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       },
     };
   }
+}
+
+function withoutE2BVariables(environment: Readonly<Record<string, string>>) {
+  return Object.fromEntries(Object.entries(environment).filter(([key]) => !key.startsWith("E2B_")));
 }
 
 async function acquireArchiveRead(signal: AbortSignal): Promise<void> {

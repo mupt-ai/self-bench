@@ -13,7 +13,6 @@ export interface CommandOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly input?: Uint8Array | string;
   readonly timeoutMs?: number;
-  readonly inactivityTimeoutMs?: number;
   readonly allowFailure?: boolean;
   readonly signal?: AbortSignal;
   readonly onOutput?: CommandOutputHandler;
@@ -26,16 +25,6 @@ export class CommandTimeoutError extends Error {
   ) {
     super(`${command} exceeded ${timeoutMs}ms`);
     this.name = "CommandTimeoutError";
-  }
-}
-
-export class InactivityTimeoutError extends Error {
-  constructor(
-    readonly scope: string,
-    readonly timeoutMs: number,
-  ) {
-    super(`${scope} produced no output for ${timeoutMs}ms`);
-    this.name = "InactivityTimeoutError";
   }
 }
 
@@ -57,40 +46,17 @@ export async function runCommand(
       reject(new Error(`failed to capture ${command} output`));
       return;
     }
-    let inactivityTimer: NodeJS.Timeout | undefined;
     let forceKillTimer: NodeJS.Timeout | undefined;
-    let inactivityError: InactivityTimeoutError | undefined;
     let timeoutError: CommandTimeoutError | undefined;
     let cancellationError: unknown;
-    const clearInactivityTimer = (): void => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-        inactivityTimer = undefined;
-      }
-    };
     const terminate = (): void => {
       child.kill("SIGTERM");
       forceKillTimer ??= setTimeout(() => child.kill("SIGKILL"), 5_000);
       forceKillTimer.unref();
     };
-    const armInactivityTimer = (): void => {
-      clearInactivityTimer();
-      if (!options.inactivityTimeoutMs) {
-        return;
-      }
-      inactivityTimer = setTimeout(() => {
-        inactivityError = new InactivityTimeoutError(
-          `${command} ${args.join(" ")}`,
-          options.inactivityTimeoutMs ?? 0,
-        );
-        terminate();
-      }, options.inactivityTimeoutMs);
-      inactivityTimer.unref();
-    };
     const capture = (stream: "stdout" | "stderr", output: RollingOutput, chunk: Buffer): void => {
       output.push(chunk);
       options.onOutput?.(stream, chunk);
-      armInactivityTimer();
     };
     child.stdout.on("data", (chunk: Buffer) => capture("stdout", stdout, chunk));
     child.stderr.on("data", (chunk: Buffer) => capture("stderr", stderr, chunk));
@@ -112,11 +78,9 @@ export async function runCommand(
         }, options.timeoutMs)
       : undefined;
     timeout?.unref();
-    armInactivityTimer();
 
     child.on("close", (exitCode, signal) => {
       options.signal?.removeEventListener("abort", abort);
-      clearInactivityTimer();
       if (forceKillTimer) {
         clearTimeout(forceKillTimer);
       }
@@ -128,10 +92,6 @@ export async function runCommand(
         stderr: stderr.text(),
         exitCode: timeoutError ? 124 : (exitCode ?? (signal ? 128 : 1)),
       };
-      if (inactivityError) {
-        reject(inactivityError);
-        return;
-      }
       if (cancellationError !== undefined) {
         reject(cancellationError);
         return;

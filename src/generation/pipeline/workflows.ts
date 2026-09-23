@@ -19,39 +19,67 @@ import {
   type TaskProgress,
 } from "../../contracts/index.js";
 import { harborTaskQueue } from "../../temporal/task-queues.js";
-import type { DiscoveryShardInput, SelfBenchActivities } from "./activities.js";
+import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
 
 const retry = { initialInterval: "5 seconds", backoffCoefficient: 2, maximumInterval: "2 minutes" };
-const candidateOptions: ActivityOptions = {
-  startToCloseTimeout: "7 hours",
-  heartbeatTimeout: "10 minutes",
+// A started sandbox heartbeats through the callback API every minute until it reports back.
+const started = (startToCloseTimeout: string, maximumAttempts: number): ActivityOptions => ({
+  startToCloseTimeout,
+  heartbeatTimeout: "5 minutes",
   cancellationType: "WAIT_CANCELLATION_COMPLETED",
-  retry: { ...retry, maximumAttempts: 4 },
-};
-const agents =
-  proxyActivities<Pick<SelfBenchActivities, "runAuthoringTurn" | "runReviewRound">>(
-    candidateOptions,
-  );
-const discovery = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
-  startToCloseTimeout: "1 hour",
-  heartbeatTimeout: "10 minutes",
-  cancellationType: "WAIT_CANCELLATION_COMPLETED",
-  retry: { ...retry, maximumInterval: "1 minute", maximumAttempts: 3 },
+  retry: { ...retry, maximumAttempts },
 });
+const finishing: ActivityOptions = {
+  startToCloseTimeout: "15 minutes",
+  retry: { ...retry, maximumAttempts: 5 },
+};
+const agents = proxyActivities<Pick<WorkerActivities, "startAuthoringTurn" | "startReviewRound">>(
+  started("5 hours", 4),
+);
+const compile = proxyActivities<Pick<WorkerActivities, "compileTask">>(started("1 hour", 4));
+const discovery = proxyActivities<Pick<WorkerActivities, "startDiscoveryShard">>(
+  started("1 hour", 3),
+);
+const finish =
+  proxyActivities<
+    Pick<
+      WorkerActivities,
+      "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
+    >
+  >(finishing);
+const harbor = () =>
+  proxyActivities<Pick<WorkerActivities, "verifyCompiled">>({
+    startToCloseTimeout: "7 hours",
+    heartbeatTimeout: "10 minutes",
+    cancellationType: "WAIT_CANCELLATION_COMPLETED",
+    retry: { ...retry, maximumAttempts: 4 },
+    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+  });
 
-/** The workflow's activities; Harbor verification runs on the memory-sized sibling queue. */
+/**
+ * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
+ * reads what it reported; Harbor checks a compiled task on the memory-sized sibling queue.
+ */
 export const workflowActivities: SelfBenchActivities = {
-  discoverCandidateShard: (input) => discovery.discoverCandidateShard(input),
-  runAuthoringTurn: (input) => agents.runAuthoringTurn(input),
-  runReviewRound: (input) => agents.runReviewRound(input),
-  compileAndVerify: (input) =>
-    proxyActivities<Pick<SelfBenchActivities, "compileAndVerify">>({
-      ...candidateOptions,
-      taskQueue: harborTaskQueue(workflowInfo().taskQueue),
-    }).compileAndVerify(input),
+  discoverCandidateShard: async (input) =>
+    await finish.finishDiscoveryShard({
+      ...input,
+      outcome: await discovery.startDiscoveryShard(input),
+    }),
+  runAuthoringTurn: async (input) =>
+    await finish.finishAuthoringTurn({ ...input, outcome: await agents.startAuthoringTurn(input) }),
+  runReviewRound: async (input) =>
+    await finish.finishReviewRound({ ...input, outcome: await agents.startReviewRound(input) }),
+  compileAndVerify: async (input) => {
+    const compiled = await compile.compileTask(input);
+    return await harbor().verifyCompiled({
+      ...input,
+      compiled: await finish.finishCompile({ ...input, compiled }),
+    });
+  },
 };
 
 /** Independent discovery unit. Fetching PR metadata and dispatch happen in the API. */

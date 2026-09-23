@@ -10,10 +10,8 @@ import {
 } from "../../src/generation/settings/settings.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
 import { providerEnvironment } from "../../src/sandbox/provider-environment.js";
-import {
-  HOBBY_E2B_TIMEOUT_CAP_MS,
-  STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../../src/sandbox/timeout.js";
+import { HOBBY_E2B_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/e2b/timeout-cap.js";
+import { STANDARD_VERCEL_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/vercel/timeout-cap.js";
 import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";

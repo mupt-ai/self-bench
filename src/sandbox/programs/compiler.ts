@@ -8,7 +8,9 @@ import { compileSubmittedTask, TaskCompilerInfrastructureError } from "../task-c
 
 // Trusted compile of one submission (definition.json, test.patch, gold.patch in a tarball):
 // schema, policy, paths, patches, audit, candidate identity, then the rendered Harbor task.
-// Writes /work/result.json {compileErrors, auditBlockers, infrastructure?} and /work/compiled.tar.gz.
+// Writes /work/result.json {compileErrors, auditBlockers} and /work/compiled.tar.gz. When the
+// compiler itself cannot run (e.g. the clone fails) it writes neither and exits 1, so the attempt
+// fails and is retried.
 const work = process.env.SELFBENCH_COMPILER_WORK ?? "/work";
 const submission = join(work, "submission");
 const input = JSON.parse(await readFile(join(work, "input.json"), "utf8"));
@@ -35,7 +37,6 @@ compileErrors.unshift(...unpackErrors);
 const auditBlockers = check.errors
   .filter((error) => error.gate === "audit")
   .map((error) => error.message);
-let infrastructure: string | undefined;
 let bundle: Uint8Array = Buffer.alloc(0);
 if (compileErrors.length === 0) {
   const definition = JSON.parse(definitionJson ?? "{}");
@@ -71,13 +72,13 @@ if (compileErrors.length === 0) {
       const message = process.env.GH_TOKEN
         ? errorMessage(error).replaceAll(process.env.GH_TOKEN, "[redacted]")
         : errorMessage(error);
-      if (error instanceof TaskCompilerInfrastructureError) infrastructure = message;
-      else compileErrors.push(message);
+      if (error instanceof TaskCompilerInfrastructureError) {
+        process.stderr.write(`compiler could not run: ${message}\n`);
+        process.exit(1);
+      }
+      compileErrors.push(message);
     }
   }
 }
 await writeFile(join(work, "compiled.tar.gz"), bundle);
-await writeFile(
-  join(work, "result.json"),
-  JSON.stringify({ compileErrors, auditBlockers, ...(infrastructure ? { infrastructure } : {}) }),
-);
+await writeFile(join(work, "result.json"), JSON.stringify({ compileErrors, auditBlockers }));

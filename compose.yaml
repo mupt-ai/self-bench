@@ -40,6 +40,12 @@ x-selfbench-environment: &selfbench-environment
   # The site database: users, connected repos, and evaluation records. Migrations run at startup.
   SELFBENCH_DATABASE_URL: postgres://selfbench:selfbench@site-postgres:5432/selfbench
   SELFBENCH_EVAL_CREDENTIAL_KEY: ${SELFBENCH_EVAL_CREDENTIAL_KEY:-}
+  # Sandbox jobs report back to the API with grants signed by this shared secret. Docker
+  # sandboxes join this project's network and reach the API by name; Modal or E2B sandboxes
+  # need the tunnel or public origin instead, never the ephemeral host port.
+  SELFBENCH_SANDBOX_SECRET: ${SELFBENCH_SANDBOX_SECRET:-selfbench-local-sandbox-callback-secret}
+  SELFBENCH_SANDBOX_CALLBACK_URL: ${SELFBENCH_SANDBOX_CALLBACK_URL:-http://api:8080}
+  SELFBENCH_DOCKER_NETWORK: ${SELFBENCH_DOCKER_NETWORK:-${COMPOSE_PROJECT_NAME}_default}
 
 services:
   postgres:

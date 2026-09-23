@@ -255,16 +255,14 @@ were accepted, and drops later ones. The manifest's `acceptedCount` and `tasks` 
 
 ### Round artifacts
 
-Each review round stores its decision directly under `runs/<runId>/review/<candidateId>/round-<n>/`
-(`result.json`, `verdict.json`) and each authoring turn under
-`runs/<runId>/authoring/<candidateId>/round-<n>/turn-<k>/` (`result.json`, the draft). The pi session is stored
-per round or turn under `runs/<runId>/<stage>/<candidateId>/session/`. Everything a single attempt produces before
-it is decided lives under `…/attempt-<m>/`: `prompt.md`, `sandbox.log`, `sandbox-result.json` (the provider's
-exit code, the wrapper's own status, pi's exit code, and which declared outputs were collected), and `agent.json`,
-the run's own record (stage, round, turn, attempt, session key, start and finish) that the agent work sheet lists
-instead of parsing artifact paths. A Temporal retry
-therefore never collides with the immutable artifacts of the attempt it replaces; its session is stored with an
-`-attempt-<m>` suffix.
+Each review round stores its decision under `runs/<runId>/review/<candidateId>/round-<n>/result.json` and each
+authoring turn under `runs/<runId>/authoring/<candidateId>/round-<n>/turn-<k>/result.json`; a round's final
+outcome is also written to `round-<n>/result.json`. Everything one sandbox attempt produces lives under its
+`…/attempt-<m>/` folder, uploaded by the sandbox itself: `prompt.md`, the log (`sandbox.log`, or `modal.log` for
+discovery), `session.jsonl`, the redacted live feed under `live/`, the agent's outputs (the handed-off draft, the
+verdict, the discovery plan), and `agent.json`, the run's own record (stage, round, turn, attempt, session key,
+start and finish) that the agent work sheet lists. A Temporal retry therefore never collides with the immutable
+artifacts of the attempt it replaces.
 
 Large request files reach the sandbox by URL rather than upload: the review round asks the artifact store for a V4 signed read URL of the compiled task bundle (two-hour TTL) and the E2B executor has the sandbox `curl` it and verify the SHA-256 in place. Pushing hundreds of MB per sandbox through `files.write` hit the SDK's client-side request timeout once a couple of dozen rounds started together; E2B recommends the pull pattern. Providers without an in-sandbox download step fetch remote files on the worker and upload them inline.
 
@@ -292,6 +290,18 @@ The CLI is the recommended client for run workflows. Every site feature is also 
 | `GET` | `/v1/runs/:runId/bundle?key=...` | Expand a Harbor task bundle into its text files |
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
+
+### Sandbox callback API
+
+Sandbox jobs report back through the API instead of holding a worker connection. The API and the worker share `SELFBENCH_SANDBOX_SECRET`, and the worker needs `SELFBENCH_SANDBOX_CALLBACK_URL`: the public origin for hosted sandboxes, or `http://api:8080` for local Docker sandboxes on the compose network (`SELFBENCH_DOCKER_NETWORK`). Both processes refuse to start without them. Every discovery, authoring, review, and compile sandbox runs this way. The worker starts the sandbox detached and completes the activity asynchronously; a small runner in the sandbox (`src/sandbox/programs/job.ts`) runs the command, heartbeats every minute with the model usage so far (priced into the live cost on progress pages), publishes an agent's redacted live feed, kills a command that is silent for eight minutes, uploads the outputs, and reports the result. An agent that ends without delivering its result (a hand-off, a verdict, a plan) after a failed exit, a provider error, or without a session reports `failed`, so Temporal retries the attempt. A follow-up activity then reads the reported references, stops the sandbox, and bills its lifetime and tokens.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/sandbox/uploads` | Where to PUT one output: a signed GCS URL, or `/api/sandbox/files/:name` on the local store |
+| `PUT` | `/api/sandbox/files/:name` | Receive an upload (local artifact store only) |
+| `POST` | `/api/sandbox/events` | `heartbeat`, `done` (the uploaded files and a small inline result), or `failed` |
+
+Each job authenticates with a grant the worker signs with the shared secret: the Temporal task token of one activity attempt, the one artifact folder it may write, and its sandbox. Nothing is stored server-side. `done` is accepted only for files that exist with the declared SHA-256 and size; the API then completes the activity with their references. A heartbeat to a cancelled, retried, or finished attempt answers `{"continue": false}` and the runner exits. A retried attempt stops the sandbox its predecessor left.
 
 ### Site sign-in (selfbench.dev)
 
