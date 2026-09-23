@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { findModel, thinkingLevels } from "../../../../src/contracts/models";
+import { thinkingLevels } from "../../../../src/contracts/models";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
 
@@ -36,11 +36,6 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
         if (!parsed.data.draft.models.length) {
           parsed.data.draft.models = [{ catalogId: "", credentialId: "", harnesses: [] }];
         }
-        // Drafts saved before the catalog was shared use the old evaluation ids. A submitted
-        // draft keeps them: its comparison was saved with that exact selection.
-        if (!parsed.data.submitted)
-          for (const model of parsed.data.draft.models)
-            model.catalogId = findModel(model.catalogId)?.id ?? model.catalogId;
         return parsed.data;
       }
     } catch {}

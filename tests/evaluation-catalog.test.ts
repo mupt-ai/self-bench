@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { findModel } from "../src/contracts/models.js";
 import { type CatalogModel, catalog, withReferencePricing } from "../src/evaluation/catalog.js";
 import {
   harnessIds,
@@ -38,9 +37,6 @@ test("generation and evaluation read the same catalog", () => {
     expect(entry?.label).toBe(generationModelLabel(id));
     expect(generationModelPricing(id)).toEqual(entry && routeFor(entry, "openrouter")?.pricing);
   }
-  // Runs stored before the catalog was shared still resolve.
-  expect(findModel("openai-sol56")?.id).toBe("gpt-5.6-sol");
-  expect(findModel("router-glm53")?.id).toBe("glm-5.3");
 });
 
 test("an OpenRouter-only model keeps its OpenRouter ID and every harness", () => {

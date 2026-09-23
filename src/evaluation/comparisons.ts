@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { findModel, thinkingLevels } from "../contracts/models.js";
+import { thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
@@ -122,7 +122,7 @@ export async function createComparison(
             model: selected.customModel,
             harnesses: ["pi"],
           }
-        : catalog.find((entry) => entry.id === findModel(selected.catalogId)?.id);
+        : catalog.find((entry) => entry.id === selected.catalogId);
     if (!model || (selected.catalogId !== "custom" && selected.customModel))
       throw new Error("Unknown model");
     const managedModel = selected.credentialId === "managed-model";
@@ -231,9 +231,7 @@ function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluat
       if (trial.status === "completed")
         completed.add(
           configurationTaskKey(
-            run.model === "custom"
-              ? run.modelName.replace(/^[^/]+\//, "")
-              : (findModel(run.model)?.id ?? run.model),
+            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
             run.thinking,
             trial.harness,
             trial.runId,

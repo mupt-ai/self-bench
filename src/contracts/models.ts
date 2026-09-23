@@ -44,8 +44,6 @@ export interface Model {
   readonly thinking?: readonly ThinkingLevel[];
   /** Offered for task authoring and verification. */
   readonly generation?: boolean;
-  /** Evaluation ids from before the catalog was shared, still found on stored runs. */
-  readonly legacyIds?: readonly string[];
 }
 
 export const catalogVersion = "2026-09-23.1";
@@ -63,7 +61,6 @@ export const models: readonly Model[] = [
     rates: { native: [10, 50, 1, 12.5], openRouter: [10, 50, 1, 12.5] },
     thinking: vendorThinking,
     generation: true,
-    legacyIds: ["openai-astra6"],
   },
   {
     id: "gpt-5.6-sol",
@@ -74,7 +71,6 @@ export const models: readonly Model[] = [
     rates: { native: [4, 20, 0.4, 5], openRouter: [2, 10, 0.2, 2.5] },
     thinking: openAiThinking,
     generation: true,
-    legacyIds: ["openai-sol56"],
   },
   {
     id: "gpt-5.6-terra",
@@ -84,7 +80,6 @@ export const models: readonly Model[] = [
     source: "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
     rates: { native: [2, 12, 0.2, 2.5], openRouter: [2, 12, 0.2, 2.5] },
     thinking: openAiThinking,
-    legacyIds: ["openai-terra56"],
   },
   {
     id: "gpt-5.6-luna",
@@ -94,7 +89,6 @@ export const models: readonly Model[] = [
     source: "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
     rates: { native: [0.2, 1.2, 0.02, 0.25], openRouter: [0.2, 1.2, 0.02, 0.25] },
     thinking: openAiThinking,
-    legacyIds: ["openai-luna56"],
   },
   {
     id: "claude-fable-5-1",
@@ -105,7 +99,6 @@ export const models: readonly Model[] = [
     rates: { native: [10, 50, 0.25, 12.5], openRouter: [10, 50, 0.25, 12.5] },
     thinking: vendorThinking,
     generation: true,
-    legacyIds: ["anthropic-fable51"],
   },
   {
     id: "claude-opus-5",
@@ -116,7 +109,6 @@ export const models: readonly Model[] = [
     rates: { native: [5, 25, 0.5, 6.25], openRouter: [5, 25, 0.5, 6.25] },
     thinking: vendorThinking,
     generation: true,
-    legacyIds: ["anthropic-opus5"],
   },
   {
     id: "claude-sonnet-5",
@@ -126,7 +118,6 @@ export const models: readonly Model[] = [
     source: "https://platform.claude.com/docs/en/models/overview",
     rates: { native: [2, 10, 0.2, 2.5], openRouter: [2, 10, 0.2, 2.5] },
     thinking: vendorThinking,
-    legacyIds: ["anthropic-sonnet5"],
   },
   {
     id: "glm-5.3",
@@ -136,7 +127,6 @@ export const models: readonly Model[] = [
     rates: { openRouter: [0.896, 2.816, 0.1664, 0.896] },
     thinking: ["low", "high", "max"],
     generation: true,
-    legacyIds: ["router-glm53"],
   },
   {
     id: "kimi-k3",
@@ -145,14 +135,12 @@ export const models: readonly Model[] = [
     source: "https://openrouter.ai/moonshotai/kimi-k3",
     rates: { openRouter: [1.7, 8.5, 0.17, 1.7] },
     generation: true,
-    legacyIds: ["router-kimi3"],
   },
   {
     id: "gemini-3.8-flash",
     label: "Gemini 3.8 Flash",
     openRouter: "google/gemini-3.8-flash",
     source: "https://openrouter.ai/google/gemini-3.8-flash",
-    legacyIds: ["router-gemini38"],
   },
   {
     id: "deepseek-v4-pro",
@@ -160,13 +148,11 @@ export const models: readonly Model[] = [
     openRouter: "deepseek/deepseek-v4-pro",
     source: "https://openrouter.ai/deepseek/deepseek-v4-pro",
     thinking: ["off", "low", "high", "max"],
-    legacyIds: ["router-deepseek4"],
   },
 ];
 
-/** A catalog model by id, including the evaluation ids used before the catalog was shared. */
 export function findModel(id: string): Model | undefined {
-  return models.find((model) => model.id === id || model.legacyIds?.includes(id));
+  return models.find((model) => model.id === id);
 }
 
 /** Reference pricing for running `model` on its vendor's key or through OpenRouter. */
