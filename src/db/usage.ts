@@ -22,9 +22,11 @@ export interface UsageStoreOptions {
 }
 
 export function createUsageStore(db: Database, options: UsageStoreOptions = {}): UsageLedger {
-  const spec = rateSnapshotSpec(loadBillingPolicy(options.environment));
+  const policy = loadBillingPolicy(options.environment);
   return {
     async record(row) {
+      // Rebuilt per row so refreshed OpenRouter rates freeze into a new snapshot.
+      const spec = rateSnapshotSpec(policy);
       await db.transaction(async (tx) => {
         const snapshot = row.managed
           ? await tx

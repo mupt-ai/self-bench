@@ -7,6 +7,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
+import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityEventInterceptor } from "./activity-events.js";
@@ -22,6 +23,8 @@ import { resolveHarborConcurrency } from "./worker-memory.js";
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
 await checkSandboxBackends(config);
+// Managed usage is billed at OpenRouter's live list prices; see openrouter-rates.ts.
+await keepOpenRouterRatesFresh().ready;
 
 const connection = await connectTemporalWorker(config.temporal);
 // Stored credentials need both the database and the key; without them only local runs work.

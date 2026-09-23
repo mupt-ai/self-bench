@@ -4,7 +4,8 @@
  * per-credential Harbor routes. Browser-safe: the site imports it too.
  *
  * A model with a `vendor` runs on that vendor's own key under its `id`; every model also runs
- * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF.
+ * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF; server
+ * processes replace the OpenRouter rates with OpenRouter's live list prices (openrouter-rates.ts).
  */
 
 export const thinkingLevels = [
@@ -20,7 +21,7 @@ export const thinkingLevels = [
 export type ThinkingLevel = (typeof thinkingLevels)[number];
 
 /** [input, output, cache read, cache write] in $ per million tokens. */
-type Rates = readonly [number, number, number, number];
+export type Rates = readonly [number, number, number, number];
 
 export interface ModelPricing {
   maxInputTokens?: number;
@@ -142,13 +143,22 @@ export const models: readonly Model[] = [
   },
 ];
 
+/** OpenRouter's live list prices by OpenRouter id; empty until a server process loads them. */
+let openRouterRates: ReadonlyMap<string, { readonly rates: Rates; readonly asOf: string }> =
+  new Map();
+
+export function setOpenRouterRates(rates: typeof openRouterRates): void {
+  openRouterRates = rates;
+}
+
 export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);
 }
 
 /** Reference pricing for running `model` on its vendor's key or through OpenRouter. */
 export function modelPricing(model: Model, via: "native" | "openRouter"): ModelPricing | undefined {
-  const rates = model.rates?.[via];
+  const live = via === "openRouter" ? openRouterRates.get(model.openRouter) : undefined;
+  const rates = live?.rates ?? model.rates?.[via];
   if (!rates) return undefined;
   const [input, output, cacheRead, cacheWrite] = rates;
   return {
@@ -162,7 +172,7 @@ export function modelPricing(model: Model, via: "native" | "openRouter"): ModelP
         : model.vendor === "anthropic"
           ? "https://platform.claude.com/docs/en/about-claude/pricing"
           : model.source,
-    asOf: RATES_AS_OF,
+    asOf: live?.asOf ?? RATES_AS_OF,
     maxInputTokens: 200_000,
   };
 }
