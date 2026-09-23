@@ -4,6 +4,11 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The token in an `Authorization: Bearer <token>` header; undefined for any other scheme or shape. */
+export function bearerToken(header: string | undefined): string | undefined {
+  return /^Bearer +(\S+)$/i.exec(header?.trim() ?? "")?.[1];
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

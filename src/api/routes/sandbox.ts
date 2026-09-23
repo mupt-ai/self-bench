@@ -15,6 +15,7 @@ import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef } from "../../contracts/index.js";
 import { costSnapshot } from "../../generation/billing/metered-sandbox.js";
+import { bearerToken } from "../../lib/util.js";
 import { readSandboxGrant, type SandboxGrant } from "../../sandbox/callback-grant.js";
 import {
   type HeartbeatReply,
@@ -45,8 +46,8 @@ export async function handleSandboxRoute(
   options: SandboxRouteOptions,
 ): Promise<boolean> {
   if (!url.pathname.startsWith(PREFIX)) return false;
-  const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
-  const grant = readSandboxGrant(token, options.secret);
+  const token = bearerToken(request.headers.authorization);
+  const grant = token && readSandboxGrant(token, options.secret);
   if (!grant) {
     sendJson(response, 401, { error: "unauthorized" });
     return true;

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { bearerToken } from "../lib/util.js";
 import type { Database } from "./client.js";
 import { apiKeys, users } from "./schema.js";
 import type { ApiKeyRef, User } from "./users.js";
@@ -52,7 +53,7 @@ export function presentedApiKey(headers: {
   const explicit = headers["x-api-key"];
   const header = Array.isArray(explicit) ? explicit[0] : explicit;
   if (header?.trim()) return header.trim();
-  const bearer = headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  const bearer = bearerToken(headers.authorization);
   return bearer?.startsWith(API_KEY_PREFIX) ? bearer : undefined;
 }
 
