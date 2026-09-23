@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CommandTimeoutError, InactivityTimeoutError, runCommand } from "../src/lib/process.js";
+import { CommandTimeoutError, runCommand } from "../src/lib/process.js";
 
 describe("runCommand", () => {
   test("terminates a child when its abort signal fires", async () => {
@@ -25,22 +25,5 @@ describe("runCommand", () => {
     expect(
       await runCommand(request[0], request[1], { allowFailure: true, timeoutMs: 50 }),
     ).toMatchObject({ exitCode: 124 });
-  });
-
-  test("terminates a child after real output stops", async () => {
-    const chunks: number[] = [];
-    const startedAt = Date.now();
-    const command = runCommand(
-      process.execPath,
-      ["-e", 'process.stdout.write("started"); setInterval(() => undefined, 1_000)'],
-      {
-        inactivityTimeoutMs: 50,
-        onOutput: (_stream, chunk) => chunks.push(chunk.byteLength),
-      },
-    );
-
-    await expect(command).rejects.toBeInstanceOf(InactivityTimeoutError);
-    expect(chunks.reduce((total, size) => total + size, 0)).toBe(7);
-    expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 });

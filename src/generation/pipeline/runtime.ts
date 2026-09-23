@@ -7,7 +7,6 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
-import { withTaskSandbox } from "../../sandbox/task-context.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
 import {
@@ -32,10 +31,7 @@ export async function withGenerationRuntime<T>(
   ) => Promise<T>,
   usage?: UsageLedger,
 ) {
-  if (!run.generation)
-    return withTaskSandbox(legacySandbox, () =>
-      action(legacySandbox, config.harborEnvironment, run),
-    );
+  if (!run.generation) return action(legacySandbox, config.harborEnvironment, run);
   let env: NodeJS.ProcessEnv;
   try {
     if (!vault) throw new Error("Generation credentials are not configured on this worker.");
@@ -128,9 +124,7 @@ export async function withGenerationRuntime<T>(
         }),
       async () => {
         try {
-          return await withTaskSandbox(metered, () =>
-            action(metered, selected.harborEnvironment, configuredRun),
-          );
+          return await action(metered, selected.harborEnvironment, configuredRun);
         } finally {
           metered.close();
         }

@@ -10,9 +10,24 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
-import { type AuthoringTurnInput, runAuthoringTurn } from "./authoring.js";
-import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
-import { type ReviewRoundInput, runReviewRound } from "./review.js";
+import {
+  type AuthoringTurnInput,
+  type FinishAuthoringTurnInput,
+  finishAuthoringTurn,
+  startAuthoringTurn,
+} from "./authoring.js";
+import {
+  type DiscoveryShardInput,
+  type FinishDiscoveryShardInput,
+  finishDiscoveryShard,
+  startDiscoveryShard,
+} from "./discovery.js";
+import {
+  type FinishReviewRoundInput,
+  finishReviewRound,
+  type ReviewRoundInput,
+  startReviewRound,
+} from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
 import {
   type CompileAndVerifyInput,
@@ -23,7 +38,10 @@ import {
 
 export type { DiscoveryShardInput };
 
-/** The steps the candidate workflow takes; `compileAndVerify` is two activities in sequence. */
+/**
+ * The steps the workflows take. Each is two activities in sequence: one starts a sandbox that
+ * reports back through the callback API, the next reads what it reported.
+ */
 export interface SelfBenchActivities {
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
   runAuthoringTurn(input: AuthoringTurnInput): Promise<AuthoringTurnResult>;
@@ -32,9 +50,15 @@ export interface SelfBenchActivities {
 }
 
 /** The activities the worker registers. */
-export interface WorkerActivities extends Omit<SelfBenchActivities, "compileAndVerify"> {
+export interface WorkerActivities {
+  startDiscoveryShard(input: DiscoveryShardInput): Promise<SandboxJobOutcome>;
+  finishDiscoveryShard(input: FinishDiscoveryShardInput): Promise<DiscoveryResult>;
+  startAuthoringTurn(input: AuthoringTurnInput): Promise<SandboxJobOutcome>;
+  finishAuthoringTurn(input: FinishAuthoringTurnInput): Promise<AuthoringTurnResult>;
   compileTask(input: CompileAndVerifyInput): Promise<SandboxJobOutcome>;
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
+  startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
+  finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
@@ -56,13 +80,21 @@ export function createActivities(
     action: Parameters<typeof withGenerationRuntime<T>>[5],
   ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
   return {
-    discoverCandidateShard: (input) =>
+    startDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
-        discoverCandidateShard(store, sandbox, { ...input, run }),
+        startDiscoveryShard(store, sandbox, callback, { ...input, run }),
       ),
-    runAuthoringTurn: (input) =>
+    finishDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
-        runAuthoringTurn(store, sandbox, { ...input, run }),
+        finishDiscoveryShard(store, sandbox, { ...input, run }),
+      ),
+    startAuthoringTurn: (input) =>
+      runtime(input.run, "author", (sandbox, _harbor, run) =>
+        startAuthoringTurn(store, sandbox, callback, { ...input, run }),
+      ),
+    finishAuthoringTurn: (input) =>
+      runtime(input.run, "author", (sandbox, _harbor, run) =>
+        finishAuthoringTurn(store, sandbox, { ...input, run }),
       ),
     compileTask: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
@@ -72,9 +104,13 @@ export function createActivities(
       runtime(input.run, "author", (sandbox, harbor, run) =>
         verifyCompiled(store, sandbox, harbor, { ...input, run }),
       ),
-    runReviewRound: (input) =>
+    startReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>
-        runReviewRound(store, sandbox, { ...input, run }),
+        startReviewRound(store, sandbox, callback, { ...input, run }),
+      ),
+    finishReviewRound: (input) =>
+      runtime(input.run, "verifier", (sandbox, _harbor, run) =>
+        finishReviewRound(store, sandbox, { ...input, run }),
       ),
   };
 }

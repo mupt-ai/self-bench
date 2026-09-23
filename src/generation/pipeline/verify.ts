@@ -1,3 +1,4 @@
+import { Context } from "@temporalio/activity";
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
@@ -98,8 +99,9 @@ export async function compileTask(
           contentType: "application/gzip",
         },
       ],
-      result: "/work/result.json",
-      prefix: `${verifyPrefix(input)}/compile`,
+      inline: [{ name: "result.json", path: "/work/result.json" }],
+      log: "compile.log",
+      prefix: `${verifyPrefix(input)}/compile/attempt-${Context.current().info.attempt}`,
     },
     callback,
   );
@@ -118,13 +120,14 @@ export async function verifyCompiled(
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
   await sandbox.stop(compiled.sandbox).catch(() => undefined);
-  return await withHeartbeats(`verifying ${input.task.taskId}`, async (options) => {
-    if (compiled.exitCode !== 0 || compiled.result === undefined) {
+  return await withHeartbeats(`verifying ${input.task.taskId}`, async (signal) => {
+    const compileResult = compiled.inline["result.json"];
+    if (compiled.exitCode !== 0 || compileResult === undefined) {
       throw new Error(
-        `compiler sandbox exited ${compiled.exitCode}; log: ${compiled.files["job.log"]?.uri ?? "none"}`,
+        `compiler sandbox exited ${compiled.exitCode}; log: ${compiled.files["compile.log"]?.uri ?? "none"}`,
       );
     }
-    const result = compileResultSchema.parse(compiled.result);
+    const result = compileResultSchema.parse(compileResult);
     if (result.infrastructure) throw new Error(`compiler could not run: ${result.infrastructure}`);
 
     const bundle = compiled.files["harbor-task.tar.gz"];
@@ -132,7 +135,7 @@ export async function verifyCompiled(
       result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
     const gates =
       task && result.auditBlockers.length === 0
-        ? await runHarborGates(store, task, harborEnvironment, prefix, options.signal)
+        ? await runHarborGates(store, task, harborEnvironment, prefix, signal)
         : notRunGates();
     const partial = {
       schemaVersion: 1 as const,

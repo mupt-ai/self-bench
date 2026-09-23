@@ -12,11 +12,13 @@ import {
   verifyReportSchema,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { difficultyThresholds } from "../task/audit.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
-import { runAgent } from "./agent.js";
+import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
+import type { SandboxCallback } from "./sandbox-job.js";
 import { renderVerifyReport } from "./verify-report.js";
 
 export interface AuthoringTurnInput {
@@ -58,38 +60,55 @@ export function authoringRoundResultKey(runId: string, candidateId: string, roun
   return `runs/${runId}/authoring/${candidateId}/round-${round}/result.json`;
 }
 
+export interface FinishAuthoringTurnInput extends AuthoringTurnInput {
+  readonly outcome: SandboxJobOutcome;
+}
+
+const HAND_OFFS = [
+  { kind: "submitted", directory: SUBMISSION },
+  { kind: "verify", directory: VERIFY_REQUEST },
+] as const;
+const handOffFiles = (directory: string) => [
+  `${directory}/definition.json`,
+  `${directory}/source-task.tar.gz`,
+];
+
+function turnPrefix({ run, candidate, round, turn }: AuthoringTurnInput): string {
+  return `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}/turn-${turn}`;
+}
+
 /**
  * One authoring turn: pi works on the task in a fresh sandbox until it calls `verify` or
- * `submit_task`, both of which end the turn. The workflow verifies the draft and, after a
- * `verify`, starts the next turn with the report.
+ * `submit_task`, both of which end the turn. The sandbox reports back through the callback API;
+ * `finishAuthoringTurn` reads what it handed off. A turn that crashed without handing anything
+ * off fails in the sandbox, so Temporal retries it without charging the candidate.
  */
-export async function runAuthoringTurn(
+export async function startAuthoringTurn(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
+  callback: SandboxCallback,
   input: AuthoringTurnInput,
-): Promise<AuthoringTurnResult> {
+): Promise<SandboxJobOutcome> {
   const { run, candidate, round, turn } = input;
-  const turnPrefix = `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}/turn-${turn}`;
   const attempt = Context.current().info.attempt;
-  const [provenance, extension, checker, session, report, draft] = await Promise.all([
+  const [provenance, extension, checker, report, draft] = await Promise.all([
     store.get(candidate.provenance),
     readAsset("dist/extension-authoring.bundle.js"),
     readAsset("dist/sandbox-check.bundle.js"),
-    input.session ? store.get(input.session) : undefined,
     input.report ? store.get(input.report) : undefined,
     input.draft ? artifactFile(store, input.draft.sourceBundle, DRAFT) : undefined,
   ]);
   const verifyReport =
     report && verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8")));
-  const result = await runAgent({
+  return await startAgent({
     store,
     sandbox,
+    callback,
     run,
     label: `author-${candidate.candidateId}-r${round}-t${turn}`,
-    prefix: `${turnPrefix}/attempt-${attempt}`,
-    sessionKey: `runs/${run.runId}/authoring/${candidate.candidateId}/session/round-${round}-turn-${turn}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    prefix: `${turnPrefix(input)}/attempt-${attempt}`,
     record: { stage: "authoring", round, turn, attempt },
-    ...(session ? { resume: session } : {}),
+    ...(input.session ? { resume: input.session } : {}),
     workspace: { kind: "clone", commit: candidate.baseCommit },
     ...(draft ? { setup: RESTORE_DRAFT } : {}),
     extension: "/work/authoring.js",
@@ -113,10 +132,9 @@ export async function runAuthoringTurn(
       { path: "/work/provenance.json", contents: provenance },
       ...(draft ? [draft] : []),
     ],
-    outputs: [SUBMISSION, VERIFY_REQUEST].flatMap((directory) => [
-      `${directory}/definition.json`,
-      `${directory}/source-task.tar.gz`,
-    ]),
+    outputs: HAND_OFFS.flatMap(({ directory }) => handOffFiles(directory)),
+    inline: HAND_OFFS.map(({ directory }) => `${directory}/definition.json`),
+    delivers: HAND_OFFS.map(({ directory }) => handOffFiles(directory)),
     environment: {
       SELFBENCH_DELIVERABLE: "/work/task",
       SELFBENCH_SUBMISSION: SUBMISSION,
@@ -126,36 +144,47 @@ export async function runAuthoringTurn(
     },
     timeoutMs: 4 * 60 * 60 * 1000,
   });
+}
+
+/** Stops the turn's sandbox and turns what the agent handed off into the turn's result. */
+export async function finishAuthoringTurn(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  input: FinishAuthoringTurnInput,
+): Promise<AuthoringTurnResult> {
+  const { run, candidate, round } = input;
+  const result = await finishAgent(store, sandbox, input.outcome);
   // The extension blocks every tool call after the first hand-off, so at most one is present.
-  const handOff = (["submitted", "verify"] as const)
-    .map((kind) => {
-      const directory = kind === "submitted" ? SUBMISSION : VERIFY_REQUEST;
-      const definition = result.outputs[`${directory}/definition.json`];
-      const bundle = result.outputs[`${directory}/source-task.tar.gz`];
-      return definition && bundle ? { kind, definition, bundle } : undefined;
-    })
-    .find((found) => found !== undefined);
-  let outcome: AuthoringTurnResult;
-  if (handOff && result.session) {
-    outcome = {
-      kind: handOff.kind,
-      task: await storeDraft(store, turnPrefix, candidate, handOff.definition, handOff.bundle),
-      session: result.session,
-    };
-  } else if (result.exitCode !== 0 || result.providerError || !result.session) {
-    // A crashed sandbox or model provider is retried by Temporal, not charged to the candidate.
-    throw new Error(
-      `authoring round ${round} turn ${turn} ended without a submission (exit ${result.exitCode}${result.providerError ? `, provider: ${result.providerError.slice(0, 200)}` : ""}); log: ${result.log.uri}`,
-    );
-  } else {
-    outcome = {
-      kind: "rejected",
-      candidateId: candidate.candidateId,
-      reason: `authoring round ${round}: the agent submitted nothing${result.finalMessage ? `; agent said: ${result.finalMessage.slice(0, 1_000)}` : ""}; log: ${result.log.uri}`,
-    };
-  }
+  const handOff = HAND_OFFS.map(({ kind, directory }) => {
+    const [definition, sourceBundle] = handOffFiles(directory).map((path) => result.outputs[path]);
+    const parsed = result.inline[`${directory}/definition.json`] as
+      | { taskId?: unknown }
+      | undefined;
+    return definition && sourceBundle ? { kind, definition, sourceBundle, parsed } : undefined;
+  }).find((found) => found !== undefined);
+  const log = result.log?.uri ?? "none";
+  const outcome: AuthoringTurnResult =
+    handOff && result.session
+      ? {
+          kind: handOff.kind,
+          task: {
+            candidateId: candidate.candidateId,
+            taskId:
+              typeof handOff.parsed?.taskId === "string" && handOff.parsed.taskId
+                ? handOff.parsed.taskId
+                : candidate.candidateId,
+            definition: handOff.definition,
+            sourceBundle: handOff.sourceBundle,
+          },
+          session: result.session,
+        }
+      : {
+          kind: "rejected",
+          candidateId: candidate.candidateId,
+          reason: `authoring round ${round}: the agent submitted nothing${result.finalMessage ? `; agent said: ${result.finalMessage.slice(0, 1_000)}` : ""}; log: ${log}`,
+        };
   const body = Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`);
-  await store.put(`${turnPrefix}/result.json`, body, "application/json");
+  await store.put(`${turnPrefix(input)}/result.json`, body, "application/json");
   if (outcome.kind !== "verify") {
     await store.put(
       authoringRoundResultKey(run.runId, candidate.candidateId, round),
@@ -222,25 +251,4 @@ export function verifyResultPrompt(report: VerifyReport | undefined, verifiesLef
     verifiesLeft,
     next,
   });
-}
-
-async function storeDraft(
-  store: ArtifactStore,
-  prefix: string,
-  candidate: Candidate,
-  definition: Uint8Array,
-  bundle: Uint8Array,
-) {
-  const parsed = JSON.parse(Buffer.from(definition).toString("utf8")) as { taskId?: unknown };
-  const [definitionRef, bundleRef] = await Promise.all([
-    store.put(`${prefix}/definition.json`, definition, "application/json"),
-    store.put(`${prefix}/source-task.tar.gz`, bundle, "application/gzip"),
-  ]);
-  return {
-    candidateId: candidate.candidateId,
-    taskId:
-      typeof parsed.taskId === "string" && parsed.taskId ? parsed.taskId : candidate.candidateId,
-    definition: definitionRef,
-    sourceBundle: bundleRef,
-  };
 }

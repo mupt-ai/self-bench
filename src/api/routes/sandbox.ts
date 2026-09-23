@@ -14,6 +14,7 @@ import {
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef } from "../../contracts/index.js";
+import { costSnapshot } from "../../generation/billing/metered-sandbox.js";
 import { readSandboxGrant, type SandboxGrant } from "../../sandbox/callback-grant.js";
 import {
   type HeartbeatReply,
@@ -127,13 +128,17 @@ async function handleEvent(
   const taskToken = Buffer.from(grant.taskToken, "base64");
   try {
     if (event.kind === "heartbeat") {
-      // The sandbox rides along as heartbeat details so a retry can stop this one.
-      await client.activity.heartbeat(taskToken, { sandbox: grant.sandbox });
+      // The sandbox rides along so a retry can stop this one; the cost feeds progress pages.
+      await client.activity.heartbeat(taskToken, {
+        sandbox: grant.sandbox,
+        cost: costSnapshot(grant.sandbox, event.usage),
+      });
     } else if (event.kind === "failed") {
       await client.activity.fail(taskToken, ApplicationFailure.retryable(event.message));
     } else {
+      const { kind: _kind, files: declared, ...reported } = event;
       const files: Record<string, ArtifactRef> = {};
-      for (const [name, claimed] of Object.entries(event.files)) {
+      for (const [name, claimed] of Object.entries(declared)) {
         const stored = await store.stat(jobFileKey(grant.prefix, name));
         if (!stored || stored.sha256 !== claimed.sha256 || stored.sizeBytes !== claimed.sizeBytes) {
           sendJson(response, 400, { error: `${name} was not uploaded as declared` });
@@ -142,9 +147,9 @@ async function handleEvent(
         files[name] = { ...stored, contentType: claimed.contentType };
       }
       const outcome: SandboxJobOutcome = {
+        ...reported,
         sandbox: grant.sandbox,
-        exitCode: event.exitCode,
-        ...(event.result !== undefined ? { result: event.result } : {}),
+        prefix: grant.prefix,
         files,
       };
       await client.activity.complete(taskToken, outcome);

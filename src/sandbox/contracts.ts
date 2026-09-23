@@ -30,9 +30,17 @@ export interface SandboxRequest {
   readonly environment?: Readonly<Record<string, string>>;
   readonly secrets?: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
-  readonly inactivityTimeoutMs?: number;
   readonly cpu?: number;
   readonly memoryMiB?: number;
+}
+
+/** Model tokens an agent sandbox consumed, from Pi's per-message usage. */
+export interface ModelUsage {
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly messages: number;
 }
 
 /** Provider/accounting-backed cost observed while one sandbox request is running. */
@@ -47,8 +55,6 @@ export interface SandboxCostSnapshot {
 
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
-  readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
-  readonly onCost?: (cost: SandboxCostSnapshot) => void;
 }
 
 export interface SandboxResult {
@@ -75,9 +81,15 @@ export interface StartedSandbox {
   readonly sandboxId: string;
   readonly stage: string;
   readonly startedAt: string;
+  /** When the provider deletes it on its own. */
+  readonly expiresAt: string;
   readonly cpu?: number;
   readonly memoryMiB?: number;
+  /** Set by metering: what its live cost is priced from. */
+  readonly rates?: { readonly model?: string; readonly sandboxProvider?: SandboxProvider };
 }
+
+export type SandboxProvider = "docker" | "e2b" | "modal" | "vercel";
 
 /**
  * `run` executes one command in a fresh sandbox and deletes the sandbox afterwards. Declared
@@ -92,7 +104,7 @@ export interface SandboxExecutor {
     request: SandboxRequest,
     secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
   ): Promise<StartedSandbox>;
-  /** Deletes a started sandbox; succeeds when it is already gone. */
-  stop(sandbox: StartedSandbox): Promise<void>;
+  /** Deletes a started sandbox; succeeds when it is already gone. `usage` is what it consumed. */
+  stop(sandbox: StartedSandbox, usage?: ModelUsage): Promise<void>;
   close(): void;
 }

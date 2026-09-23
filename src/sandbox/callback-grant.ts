@@ -23,8 +23,15 @@ const grantSchema = z.object({
     sandboxId: z.string().min(1),
     stage: z.string().min(1),
     startedAt: z.string().min(1),
+    expiresAt: z.string().min(1),
     cpu: z.number().optional(),
     memoryMiB: z.number().optional(),
+    rates: z
+      .object({
+        model: z.string().optional(),
+        sandboxProvider: z.enum(["docker", "e2b", "modal", "vercel"]).optional(),
+      })
+      .optional(),
   }),
   expiresAt: z.number(),
 });

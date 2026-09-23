@@ -5,7 +5,12 @@ const secret = "s".repeat(32);
 const grant = {
   taskToken: Buffer.from("task").toString("base64"),
   prefix: "runs/r/verify/c/authoring-round-1/compile/attempt-1",
-  sandbox: { sandboxId: "sb-1", stage: "compile-c", startedAt: "2026-09-23T00:00:00.000Z" },
+  sandbox: {
+    sandboxId: "sb-1",
+    stage: "compile-c",
+    startedAt: "2026-09-23T00:00:00.000Z",
+    expiresAt: "2026-09-23T01:00:00.000Z",
+  },
   expiresAt: 2_000,
 };
 

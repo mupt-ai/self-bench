@@ -1,15 +1,19 @@
 import { CompleteAsyncError, Context } from "@temporalio/activity";
 import { signSandboxGrant } from "../../sandbox/callback-grant.js";
 import type { SandboxExecutor, SandboxRequest, StartedSandbox } from "../../sandbox/index.js";
+import {
+  JOB_DEADLINE_VARIABLE,
+  JOB_SPEC_FILE,
+  type JobSpec,
+} from "../../sandbox/job-runner/spec.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { readAsset } from "./helpers.js";
 
-export interface SandboxJob {
+/** One command to run in a started sandbox, and what to report back when it ends. */
+export interface SandboxJob extends Omit<JobSpec, "command"> {
+  /** `timeoutMs` bounds the command; the sandbox lives a little longer to report. */
   readonly request: SandboxRequest;
-  /** Files the job produces, each stored as `<prefix>/attempt-<n>/<name>`. */
-  readonly outputs: readonly { name: string; path: string; contentType: string }[];
-  /** A small JSON file returned inline as `result`. */
-  readonly result?: string;
+  /** The artifact folder every upload lands in; unique per activity attempt. */
   readonly prefix: string;
 }
 
@@ -20,7 +24,7 @@ export interface SandboxCallback {
 }
 
 const RUNNER = "/work/.selfbench-job.js";
-const SPEC = "/work/.selfbench-job.json";
+const REPORTING_MS = 10 * 60_000;
 
 /**
  * Runs one job in a detached sandbox that reports through the callback API, so this activity
@@ -33,38 +37,34 @@ export async function runSandboxJob(
   callback: SandboxCallback,
 ): Promise<SandboxJobOutcome> {
   const context = Context.current();
-  const prefix = `${job.prefix}/attempt-${context.info.attempt}`;
   // A retry replaces the sandbox the previous attempt left behind.
   const previous = (context.info.heartbeatDetails as { sandbox?: StartedSandbox } | undefined)
     ?.sandbox;
   if (previous) await sandbox.stop(previous).catch(() => undefined);
-  const runner = await readAsset("dist/sandbox-job.bundle.js");
+  const { request, prefix, ...report } = job;
+  const spec: JobSpec = { ...report, command: request.command };
   const started = await sandbox.start(
     {
-      ...job.request,
+      ...request,
+      timeoutMs: request.timeoutMs + REPORTING_MS,
       command: ["node", RUNNER],
       files: [
-        ...(job.request.files ?? []),
-        { path: RUNNER, contents: runner },
-        {
-          path: SPEC,
-          contents: JSON.stringify({
-            command: job.request.command,
-            outputs: job.outputs,
-            ...(job.result ? { result: job.result } : {}),
-          }),
-        },
+        ...(request.files ?? []),
+        { path: RUNNER, contents: await readAsset("dist/sandbox-job.bundle.js") },
+        { path: `/work/${JOB_SPEC_FILE}`, contents: JSON.stringify(spec) },
       ],
     },
     (started) => ({
+      // A provider cap may have shortened the sandbox; the command stops in time to report.
+      [JOB_DEADLINE_VARIABLE]: new Date(Date.parse(started.expiresAt) - REPORTING_MS).toISOString(),
       SELFBENCH_JOB_CALLBACK_URL: callback.url,
       SELFBENCH_JOB_TOKEN: signSandboxGrant(
         {
           taskToken: Buffer.from(context.info.taskToken).toString("base64"),
           prefix,
           sandbox: started,
-          // Outlives the sandbox's own deadline so a late `done` is still accepted.
-          expiresAt: Date.now() + job.request.timeoutMs + 60 * 60_000,
+          // Outlives the sandbox so a late `done` is still accepted.
+          expiresAt: Date.parse(started.expiresAt) + REPORTING_MS,
         },
         callback.secret,
       ),

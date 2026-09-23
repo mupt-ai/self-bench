@@ -14,12 +14,6 @@ export function validateSandboxRequest(request: SandboxRequest): void {
   if (request.timeoutMs > MAX_SANDBOX_TIMEOUT_MS) {
     throw new Error("sandbox timeout cannot exceed 24 hours");
   }
-  if (
-    request.inactivityTimeoutMs !== undefined &&
-    (!Number.isInteger(request.inactivityTimeoutMs) || request.inactivityTimeoutMs < 1)
-  ) {
-    throw new Error("sandbox inactivity timeout must be a positive integer");
-  }
   if (request.command.length === 0 || !request.command[0]) {
     throw new Error("sandbox command must not be empty");
   }

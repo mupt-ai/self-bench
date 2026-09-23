@@ -103,7 +103,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
   // or activity context.
   const activities = createActivities(config);
   await expect(
-    activities.discoverCandidateShard({
+    activities.startDiscoveryShard({
       run,
       wave: 0,
       shardIndex: 0,

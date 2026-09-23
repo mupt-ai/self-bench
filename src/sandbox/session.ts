@@ -1,4 +1,4 @@
-import { InactivityTimeoutError, RollingOutput } from "../lib/process.js";
+import { RollingOutput } from "../lib/process.js";
 import { errorMessage, raceAbort } from "../lib/util.js";
 import {
   isRemoteSandboxFile,
@@ -72,7 +72,7 @@ export async function runSandbox(
   }
   let failed = false;
   try {
-    const result = await runInSession(session, request, options, signal, { stdout, stderr });
+    const result = await runInSession(session, request, signal, { stdout, stderr });
     if (deadline.signal.aborted && !options.signal?.aborted) return timedOut(session.id);
     return result;
   } catch (error) {
@@ -105,6 +105,7 @@ export async function startSandbox(
     sandboxId: session.id,
     stage: request.stage,
     startedAt,
+    expiresAt: new Date(Date.parse(startedAt) + request.timeoutMs).toISOString(),
     ...(request.cpu !== undefined ? { cpu: request.cpu } : {}),
     ...(request.memoryMiB !== undefined ? { memoryMiB: request.memoryMiB } : {}),
   };
@@ -153,43 +154,21 @@ async function stageFiles(
 async function runInSession(
   session: SandboxSession,
   request: SandboxRequest,
-  options: SandboxRunOptions,
   signal: AbortSignal,
   { stdout, stderr }: { stdout: RollingOutput; stderr: RollingOutput },
 ): Promise<SandboxResult> {
   await stageFiles(session, request.files ?? [], signal, (chunk) => stderr.push(chunk));
 
-  const inactivity = new AbortController();
-  let idle: ReturnType<typeof setTimeout> | undefined;
-  const touch = () => {
-    if (!request.inactivityTimeoutMs) return;
-    clearTimeout(idle);
-    idle = setTimeout(
-      () =>
-        inactivity.abort(
-          new InactivityTimeoutError(`sandbox ${session.id}`, request.inactivityTimeoutMs ?? 0),
-        ),
-      request.inactivityTimeoutMs,
-    );
-    idle.unref();
-  };
   let exitCode: number | undefined;
   let failure: unknown;
-  touch();
   try {
     exitCode = await session.exec(request.command, {
       environment: { ...request.environment, ...request.secrets },
-      signal: AbortSignal.any([signal, inactivity.signal]),
-      onOutput: (stream, chunk) => {
-        (stream === "stdout" ? stdout : stderr).push(Buffer.from(chunk));
-        options.onOutput?.(stream, chunk);
-        touch();
-      },
+      signal,
+      onOutput: (stream, chunk) => (stream === "stdout" ? stdout : stderr).push(Buffer.from(chunk)),
     });
   } catch (error) {
-    failure = inactivity.signal.aborted ? inactivity.signal.reason : error;
-  } finally {
-    clearTimeout(idle);
+    failure = error;
   }
   // The deadline or the caller's cancel ends the run here; outputs are not collected.
   signal.throwIfAborted();

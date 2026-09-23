@@ -1,13 +1,8 @@
 import { expect, test } from "bun:test";
 import { createUsageStore } from "../src/db/usage.js";
 import { generationCost } from "../src/generation/billing/cost-status.js";
-import { meteredSandboxExecutor } from "../src/generation/billing/metered-sandbox.js";
+import { costSnapshot, meteredSandboxExecutor } from "../src/generation/billing/metered-sandbox.js";
 import { type StageUsage, withUsageLedger } from "../src/generation/billing/usage.js";
-import type {
-  SandboxCostSnapshot,
-  SandboxExecutor,
-  SandboxRunOptions,
-} from "../src/sandbox/contracts.js";
 import { runOnlyExecutor } from "./support/sandbox-executor.js";
 
 import { testDatabase } from "./support/site-fixture.js";
@@ -105,64 +100,30 @@ test("a settled stage excludes its heartbeat even when the heartbeat is newer", 
   });
 });
 
-test("metering emits live provider-aware costs and records final usage on completion", async () => {
-  const output = `${JSON.stringify({
-    type: "message_end",
-    message: {
-      role: "assistant",
-      usage: { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50 },
-    },
-  })}\n`;
-  const inner: SandboxExecutor = runOnlyExecutor(async (_request, options?: SandboxRunOptions) => {
-    options?.onOutput?.("stdout", new TextEncoder().encode(output));
-    return { sandboxId: "sandbox", exitCode: 0, stdout: output, stderr: "", outputs: {} };
-  });
-  const snapshots: SandboxCostSnapshot[] = [];
-  const recorded: StageUsage[] = [];
-  const executor = meteredSandboxExecutor(inner, {
-    managedModel: false,
-    managedSandbox: false,
-    model: "gpt-6-sol",
-    sandboxProvider: "e2b",
-    provider: "openrouter",
-  });
+test("a running sandbox's live cost is priced from its rates and the tokens it reported", () => {
+  const sandbox = {
+    sandboxId: "sandbox",
+    stage: "author-candidate-r1",
+    startedAt: new Date(10_000).toISOString(),
+    expiresAt: new Date(3_600_000).toISOString(),
+    cpu: 4,
+    memoryMiB: 8192,
+    rates: { model: "gpt-6-sol", sandboxProvider: "e2b" as const },
+  };
+  const usage = { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50, messages: 1 };
 
-  await withUsageLedger(
-    async (usage) => {
-      recorded.push(usage);
-    },
-    () =>
-      executor.run(
-        {
-          runId: "run-cost",
-          stage: "author-candidate-r1",
-          command: ["pi"],
-          timeoutMs: 1_000,
-          cpu: 4,
-          memoryMiB: 8192,
-        },
-        { onCost: (cost) => snapshots.push(cost) },
-      ),
-  );
+  const cost = costSnapshot(sandbox, usage, 70_000);
 
-  expect(snapshots.length).toBeGreaterThanOrEqual(3);
-  expect(snapshots.at(-1)).toMatchObject({
+  expect(cost).toMatchObject({
     stage: "author-candidate-r1",
     state: "estimated",
-    sandboxSeconds: 1,
+    sandboxSeconds: 60,
   });
-  expect(snapshots.at(-1)?.sandboxUsd).toBeGreaterThan(0);
-  expect(snapshots.at(-1)?.modelUsd).toBeGreaterThan(0);
-  expect(recorded).toEqual([
-    expect.objectContaining({
-      stage: "author-candidate-r1",
-      provider: "openrouter",
-      sandboxSeconds: 1,
-      sandboxCostUsd: expect.any(Number),
-      modelCostUsd: expect.any(Number),
-      tokens: { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50 },
-    }),
-  ]);
+  expect(cost.sandboxUsd).toBeGreaterThan(0);
+  expect(cost.modelUsd).toBeGreaterThan(0);
+  expect(costSnapshot({ ...sandbox, rates: { sandboxProvider: "modal" } }, undefined).state).toBe(
+    "unpriced",
+  );
 });
 
 test("usage summaries enforce tenant and candidate stage boundaries", async () => {
@@ -199,31 +160,6 @@ test("usage summaries enforce tenant and candidate stage boundaries", async () =
   }
 });
 
-test("non-E2B providers report their sandbox component as unpriced", async () => {
-  const snapshots: Array<{ state: string; sandboxUsd?: number }> = [];
-  const executor = meteredSandboxExecutor(
-    runOnlyExecutor(async () => ({
-      sandboxId: "sandbox",
-      exitCode: 0,
-      stdout: "",
-      stderr: "",
-      outputs: {},
-    })),
-    {
-      managedModel: false,
-      managedSandbox: false,
-      model: "unknown-model",
-      sandboxProvider: "modal",
-    },
-  );
-  await executor.run(
-    { runId: "run-unpriced", stage: "author-one-r1", command: ["pi"], timeoutMs: 1_000 },
-    { onCost: (cost) => snapshots.push(cost) },
-  );
-  expect(snapshots.at(-1)?.state).toBe("unpriced");
-  expect(snapshots.at(-1)?.sandboxUsd).toBeUndefined();
-});
-
 test("a started sandbox is billed from start to stop", async () => {
   const stopped: string[] = [];
   const recorded: StageUsage[] = [];
@@ -236,7 +172,13 @@ test("a started sandbox is billed from start to stop", async () => {
         stopped.push(sandbox.sandboxId);
       },
     },
-    { managedModel: false, managedSandbox: true, sandboxProvider: "e2b", provider: "e2b" },
+    {
+      managedModel: true,
+      managedSandbox: true,
+      model: "gpt-6-sol",
+      sandboxProvider: "e2b",
+      provider: "openrouter",
+    },
   );
   const startedAt = new Date(Date.now() - 90_000).toISOString();
 
@@ -245,16 +187,28 @@ test("a started sandbox is billed from start to stop", async () => {
       recorded.push(usage);
     },
     () =>
-      executor.stop({ sandboxId: "sb", stage: "compile-c", startedAt, cpu: 4, memoryMiB: 8192 }),
+      executor.stop(
+        {
+          sandboxId: "sb",
+          stage: "author-c",
+          startedAt,
+          expiresAt: startedAt,
+          cpu: 4,
+          memoryMiB: 8192,
+        },
+        { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50, messages: 1 },
+      ),
   );
 
   expect(stopped).toEqual(["sb"]);
   expect(recorded).toEqual([
     expect.objectContaining({
-      stage: "compile-c",
+      stage: "author-c",
       managedSandbox: true,
       sandboxSeconds: expect.any(Number),
       sandboxCostUsd: expect.any(Number),
+      modelCostUsd: expect.any(Number),
+      tokens: { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50 },
     }),
   ]);
   expect(recorded[0]?.sandboxSeconds).toBeGreaterThanOrEqual(90);

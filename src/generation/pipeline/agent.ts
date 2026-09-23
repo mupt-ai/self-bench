@@ -1,15 +1,8 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef, RunRequest } from "../../contracts/index.js";
-import { PiEventFeed } from "../../harnesses/pi/event-feed.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
-import { finalAssistantMessage, sessionProviderError } from "../../harnesses/pi/session.js";
-import { errorMessage } from "../../lib/util.js";
-import {
-  SandboxExecutionError,
-  type SandboxExecutor,
-  type SandboxFile,
-  type SandboxResult,
-} from "../../sandbox/index.js";
+import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
 import {
   AGENT_RECORD_NAME,
@@ -17,7 +10,8 @@ import {
   type AgentRunRecord,
   type AgentRunResult,
 } from "../runs/types.js";
-import { withHeartbeats } from "./helpers.js";
+import { artifactFile } from "./helpers.js";
+import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 
 const SESSION_DIRECTORY = "/work/session";
 const SESSION_OUTPUT = "/work/session.jsonl";
@@ -28,18 +22,17 @@ const INACTIVITY_TIMEOUT_MS = 8 * 60 * 1000;
 export interface AgentRequest {
   readonly store: ArtifactStore;
   readonly sandbox: SandboxExecutor;
+  readonly callback: SandboxCallback;
   readonly run: RunRequest;
   /** Sandbox label, e.g. `author-<candidate>-r2`. */
   readonly label: string;
-  /** Where this attempt's prompt, log, and live feed are written. */
+  /** Where this attempt's prompt, log, live feed, session, and outputs are written. */
   readonly prefix: string;
   readonly logName?: string;
-  /** Where the pi session is stored; omit when the session is not kept. */
-  readonly sessionKey?: string;
-  /** Recorded as `<prefix>/agent.json` and `result.json` so the agent work sheet can list this run. */
+  /** Recorded as `<prefix>/agent.json` so the agent work sheet can list this run. */
   readonly record?: Pick<AgentRunRecord, "stage" | "round" | "turn" | "attempt">;
   /** A previous session to continue. */
-  readonly resume?: Uint8Array;
+  readonly resume?: ArtifactRef;
   /** `clone`: /work/repo at `commit`. `task`: unpack /work/task.tar.gz with the verifier program. */
   readonly workspace:
     | { readonly kind: "clone"; readonly commit: string }
@@ -50,15 +43,24 @@ export interface AgentRequest {
   readonly tools: string;
   readonly prompt: string;
   readonly files: readonly SandboxFile[];
+  /** Files under /work the agent may produce, uploaded when it ends. */
   readonly outputs: readonly string[];
+  /** Outputs that are small JSON documents, also returned inline. */
+  readonly inline?: readonly string[];
+  /** Sets of outputs that each count as a delivered result (see `JobSpec.delivers`). */
+  readonly delivers?: readonly (readonly string[])[];
+  readonly requireDelivery?: boolean;
   readonly environment?: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
 }
 
 export interface AgentResult {
   readonly exitCode: number;
-  readonly outputs: SandboxResult["outputs"];
-  readonly log: ArtifactRef;
+  /** Uploaded outputs by their sandbox path. */
+  readonly outputs: Readonly<Record<string, ArtifactRef>>;
+  /** Inline outputs by their sandbox path. */
+  readonly inline: Readonly<Record<string, unknown>>;
+  readonly log?: ArtifactRef;
   readonly session?: ArtifactRef;
   /** The agent's last message, for explaining a round that delivered nothing. */
   readonly finalMessage?: string;
@@ -66,102 +68,125 @@ export interface AgentResult {
   readonly providerError?: string;
 }
 
-/** Runs pi once in a fresh sandbox and stores its prompt, log, live feed, and session. */
-export async function runAgent(request: AgentRequest): Promise<AgentResult> {
+/** An output's upload name: its path under /work. */
+const outputName = (path: string) => path.replace(/^\/work\//, "");
+
+/**
+ * Starts pi in a detached sandbox that reports through the callback API; the activity completes
+ * when the sandbox reports back, and `finishAgent` then reads the result.
+ */
+export async function startAgent(request: AgentRequest): Promise<SandboxJobOutcome> {
   const { store, run, prefix } = request;
   const [auth, token] = await Promise.all([loadPiModelAuth(), githubToken()]);
+  const secrets = { ...piModelAuthSecrets(auth), ...(token ? { GH_TOKEN: token } : {}) };
   await store.put(`${prefix}/prompt.md`, Buffer.from(request.prompt), "text/markdown");
-  const logKey = `${prefix}/${request.logName ?? "sandbox.log"}`;
-  const record = request.record && {
-    ...request.record,
-    prefix,
-    ...(request.sessionKey ? { session: request.sessionKey } : {}),
-    startedAt: new Date().toISOString(),
-  };
-  const writeJson = (name: string, value: AgentRunRecord | AgentRunResult) =>
-    store.put(`${prefix}/${name}`, Buffer.from(JSON.stringify(value)), "application/json");
-  if (record) await writeJson(AGENT_RECORD_NAME, record);
-  const feed = liveFeed(store, prefix, [auth.apiKey ?? "", auth.authJson ?? "", token ?? ""]);
-  let result: SandboxResult;
-  try {
-    result = await withHeartbeats(`running ${request.label}`, (options) =>
-      request.sandbox.run(
-        {
-          runId: run.runId,
-          stage: request.label,
-          timeoutMs: request.timeoutMs,
-          inactivityTimeoutMs: INACTIVITY_TIMEOUT_MS,
-          command: ["bash", "-lc", agentScript(request)],
-          files: [
-            ...request.files,
-            { path: "/work/prompt.txt", contents: request.prompt },
-            ...(request.resume ? [{ path: RESUMED_SESSION, contents: request.resume }] : []),
-          ],
-          outputPaths: [...request.outputs, SESSION_OUTPUT],
-          secrets: { ...piModelAuthSecrets(auth), ...(token ? { GH_TOKEN: token } : {}) },
-          environment: {
-            ...request.environment,
-            SOURCE_REPO_URL: run.repository.url,
-            ...(request.workspace.kind === "clone"
-              ? { SOURCE_COMMIT: request.workspace.commit }
-              : {}),
-            AUTHOR_MODEL: run.authoring.model,
-            AUTHOR_PROVIDER: auth.provider,
-            AUTHOR_THINKING: run.authoring.reasoningEffort,
-          },
-        },
-        { ...options, onOutput: feed.push },
-      ),
-    );
-  } catch (error) {
-    // The original failure matters more than a failed record update.
-    if (record) {
-      await writeJson(AGENT_RESULT_NAME, {
-        finishedAt: new Date().toISOString(),
-        error: errorMessage(error),
-      }).catch(() => undefined);
-    }
-    if (error instanceof SandboxExecutionError) {
-      const log = await store.put(logKey, logBytes(error.result), "text/plain");
-      throw new Error(`${error.message}; partial log: ${log.uri}`, { cause: error });
-    }
-    throw error;
-  } finally {
-    await feed.close();
-  }
-  const log = await store.put(logKey, logBytes(result), "text/plain");
-  const outputs = Object.fromEntries(
-    Object.entries(result.outputs).filter(([, bytes]) => bytes.length > 0),
-  );
-  const sessionBytes = outputs[SESSION_OUTPUT];
-  const session =
-    request.sessionKey && sessionBytes
-      ? await store.put(request.sessionKey, sessionBytes, "application/x-ndjson")
-      : undefined;
-  const finalMessage = sessionBytes ? finalAssistantMessage(sessionBytes) : undefined;
-  const providerError = sessionBytes ? sessionProviderError(sessionBytes) : undefined;
-  if (record) {
-    await writeJson(AGENT_RESULT_NAME, {
-      finishedAt: new Date().toISOString(),
-      exitCode: result.exitCode,
-      ...(providerError ? { error: providerError.slice(0, 500) } : {}),
+  if (request.record) {
+    await writeRecord(store, {
+      ...request.record,
+      prefix,
+      session: `${prefix}/${outputName(SESSION_OUTPUT)}`,
+      startedAt: new Date().toISOString(),
     });
   }
+  return await runSandboxJob(
+    request.sandbox,
+    {
+      prefix,
+      request: {
+        runId: run.runId,
+        stage: request.label,
+        timeoutMs: request.timeoutMs,
+        command: ["bash", "-lc", agentScript(request)],
+        files: [
+          ...request.files,
+          { path: "/work/prompt.txt", contents: request.prompt },
+          ...(request.resume ? [await artifactFile(store, request.resume, RESUMED_SESSION)] : []),
+        ],
+        secrets,
+        environment: {
+          ...request.environment,
+          SOURCE_REPO_URL: run.repository.url,
+          ...(request.workspace.kind === "clone"
+            ? { SOURCE_COMMIT: request.workspace.commit }
+            : {}),
+          AUTHOR_MODEL: run.authoring.model,
+          AUTHOR_PROVIDER: auth.provider,
+          AUTHOR_THINKING: run.authoring.reasoningEffort,
+        },
+      },
+      outputs: [...request.outputs, SESSION_OUTPUT].map((path) => ({
+        name: outputName(path),
+        path,
+        contentType: contentType(path),
+      })),
+      inline: (request.inline ?? []).map((path) => ({ name: outputName(path), path })),
+      // A result counts as delivered only with the session that produced it.
+      ...(request.delivers
+        ? { delivers: request.delivers.map((paths) => [...paths, SESSION_OUTPUT]) }
+        : {}),
+      ...(request.requireDelivery ? { requireDelivery: true } : {}),
+      log: request.logName ?? "sandbox.log",
+      inactivityMs: INACTIVITY_TIMEOUT_MS,
+      agent: { live: "live", redact: Object.keys(secrets), session: SESSION_OUTPUT },
+    },
+    request.callback,
+  );
+}
+
+/** Stops the agent's sandbox, bills it, and returns what the agent left behind. */
+export async function finishAgent(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  outcome: SandboxJobOutcome,
+  logName = "sandbox.log",
+): Promise<AgentResult> {
+  await sandbox.stop(outcome.sandbox, outcome.usage).catch(() => undefined);
+  const byPath = <T>(entries: Readonly<Record<string, T>>) =>
+    Object.fromEntries(Object.entries(entries).map(([name, value]) => [`/work/${name}`, value]));
+  // Artifacts are write-once: the end goes to result.json beside the start in agent.json.
+  if (await store.stat(`${outcome.prefix}/${AGENT_RECORD_NAME}`)) {
+    const result: AgentRunResult = {
+      finishedAt: new Date().toISOString(),
+      exitCode: outcome.exitCode,
+      ...(outcome.providerError ? { error: outcome.providerError.slice(0, 500) } : {}),
+    };
+    await store.put(
+      `${outcome.prefix}/${AGENT_RESULT_NAME}`,
+      Buffer.from(JSON.stringify(result)),
+      "application/json",
+    );
+  }
+  const log = outcome.files[logName];
+  const session = outcome.files[outputName(SESSION_OUTPUT)];
   return {
-    exitCode: result.exitCode,
-    outputs,
-    log,
+    exitCode: outcome.exitCode,
+    outputs: byPath(outcome.files),
+    inline: byPath(outcome.inline),
+    ...(log ? { log } : {}),
     ...(session ? { session } : {}),
-    ...(finalMessage ? { finalMessage } : {}),
-    ...(providerError ? { providerError } : {}),
+    ...(outcome.finalMessage ? { finalMessage: outcome.finalMessage } : {}),
+    ...(outcome.providerError ? { providerError: outcome.providerError } : {}),
   };
 }
 
-function logBytes(result: Pick<SandboxResult, "stdout" | "stderr">): Buffer {
-  return Buffer.from(`${result.stdout}\n${result.stderr}`);
+function writeRecord(store: ArtifactStore, record: AgentRunRecord) {
+  return store.put(
+    `${record.prefix}/${AGENT_RECORD_NAME}`,
+    Buffer.from(JSON.stringify(record)),
+    "application/json",
+  );
 }
 
-export function agentScript(request: AgentRequest): string {
+function contentType(path: string): string {
+  if (path.endsWith(".json")) return "application/json";
+  if (path.endsWith(".jsonl")) return "application/x-ndjson";
+  if (path.endsWith(".tar.gz")) return "application/gzip";
+  return "application/octet-stream";
+}
+
+export function agentScript(
+  request: Pick<AgentRequest, "workspace" | "resume" | "setup" | "extension" | "tools">,
+): string {
   const workspace =
     request.workspace.kind === "clone"
       ? `if [ -n "\${GH_TOKEN:-}" ]; then
@@ -200,47 +225,6 @@ kill "$heartbeat" 2>/dev/null || true
 session="${RESUMED_SESSION}"
 [ -f "$session" ] || session="$(ls -1 ${SESSION_DIRECTORY}/*.jsonl 2>/dev/null | head -n 1 || true)"
 if [ -n "$session" ]; then cp "$session" ${SESSION_OUTPUT}; fi
-# Providers require every declared output after exit 0; an empty file means "not produced".
-for path in ${[...request.outputs, SESSION_OUTPUT].join(" ")}; do
-  [ -f "$path" ] || { mkdir -p "$(dirname "$path")"; : > "$path"; }
-done
 echo "[selfbench] pi exited with $status"
 exit "$status"`;
-}
-
-/** Publishes the agent's public events as immutable snapshots every two seconds for the UI. */
-export function liveFeed(store: ArtifactStore, prefix: string, secrets: readonly string[]) {
-  const feed = new PiEventFeed(secrets);
-  let sequence = 0;
-  let previous = "";
-  let pending: Promise<void> = Promise.resolve();
-  const flush = () => {
-    pending = pending.then(async () => {
-      const events = feed.events();
-      const snapshot = JSON.stringify(events);
-      if (snapshot === previous || events.length === 0) return;
-      const key = `${prefix}/live/${String(sequence).padStart(8, "0")}.json`;
-      const body = JSON.stringify({ events, capturedAt: new Date().toISOString() });
-      // The feed is observational; a failed snapshot is retried on the next tick.
-      await store.put(key, Buffer.from(body), "application/json").then(
-        () => {
-          previous = snapshot;
-          sequence += 1;
-        },
-        () => undefined,
-      );
-    });
-    return pending;
-  };
-  const timer = setInterval(flush, 2000);
-  timer.unref();
-  return {
-    push: (stream: "stdout" | "stderr", chunk: Uint8Array) => {
-      if (stream === "stdout") feed.push(chunk);
-    },
-    close: async () => {
-      clearInterval(timer);
-      await flush();
-    },
-  };
 }

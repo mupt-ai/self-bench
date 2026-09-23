@@ -22,7 +22,12 @@ class RecordingExecutor implements SandboxExecutor {
 
   async start(request: SandboxRequest): Promise<StartedSandbox> {
     this.requests.push(request);
-    return { sandboxId: "test", stage: request.stage, startedAt: new Date(0).toISOString() };
+    return {
+      sandboxId: "test",
+      stage: request.stage,
+      startedAt: new Date(0).toISOString(),
+      expiresAt: new Date(request.timeoutMs).toISOString(),
+    };
   }
 
   async stop(): Promise<void> {}
