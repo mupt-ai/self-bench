@@ -45,22 +45,10 @@ export interface SandboxCostSnapshot {
   readonly updatedAt: string;
 }
 
-/** File access to a sandbox whose command is still running (the in-session verify mailbox). */
-export interface LiveSandbox {
-  /** Resolves undefined when the file does not exist. */
-  readFile(path: string): Promise<Uint8Array | undefined>;
-  writeFile(path: string, contents: Uint8Array | string): Promise<void>;
-}
-
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
   readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
   readonly onCost?: (cost: SandboxCostSnapshot) => void;
-  /**
-   * Runs concurrently with the main command once it has started; `exited` aborts when the command
-   * finishes. run() waits for it to settle before collecting outputs and rejects if it throws.
-   */
-  readonly onLive?: (sandbox: LiveSandbox, exited: AbortSignal) => Promise<void>;
 }
 
 export interface SandboxResult {

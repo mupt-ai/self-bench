@@ -80,7 +80,7 @@ export function Avatar({ login, url, size = 24 }: { login: string; url?: string;
   if (url) {
     return (
       <img
-        className="block shrink-0 rounded-full bg-accent"
+        className="avatar block shrink-0 rounded-full bg-accent"
         src={url}
         alt=""
         width={size}

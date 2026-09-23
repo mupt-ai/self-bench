@@ -8,7 +8,9 @@ import {
 } from "@temporalio/workflow";
 import {
   type ArtifactRef,
+  AUTHOR_VERIFY_BUDGET,
   type AuthoredTask,
+  type AuthoredTaskDraft,
   type Candidate,
   type CandidateWorkflowInput,
   type CandidateWorkflowResult,
@@ -30,7 +32,7 @@ const candidateOptions: ActivityOptions = {
   retry: { ...retry, maximumAttempts: 4 },
 };
 const agents =
-  proxyActivities<Pick<SelfBenchActivities, "runAuthoringRound" | "runReviewRound">>(
+  proxyActivities<Pick<SelfBenchActivities, "runAuthoringTurn" | "runReviewRound">>(
     candidateOptions,
   );
 const discovery = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
@@ -43,7 +45,7 @@ const discovery = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateSh
 /** The workflow's activities; Harbor verification runs on the memory-sized sibling queue. */
 export const workflowActivities: SelfBenchActivities = {
   discoverCandidateShard: (input) => discovery.discoverCandidateShard(input),
-  runAuthoringRound: (input) => agents.runAuthoringRound(input),
+  runAuthoringTurn: (input) => agents.runAuthoringTurn(input),
   runReviewRound: (input) => agents.runReviewRound(input),
   compileAndVerify: (input) =>
     proxyActivities<Pick<SelfBenchActivities, "compileAndVerify">>({
@@ -85,9 +87,11 @@ export function initialProgress(candidate: Candidate): TaskProgress {
 }
 
 /**
- * Up to MAX_AUTHORING_ROUNDS rounds: the author submits, the worker verifies the submission,
- * and a green task goes to a fresh reviewer who accepts, rejects, or sends suggestions back.
- * Activities that exhaust their retries mark the candidate infrastructure_failed.
+ * Up to MAX_AUTHORING_ROUNDS rounds. Within a round the author works in turns: each `verify` ends
+ * a turn, the worker checks the draft, and the next turn resumes the session with the report. A
+ * submission is verified again, and a green task goes to a fresh reviewer who accepts, rejects, or
+ * sends suggestions back. Activities that exhaust their retries mark the candidate
+ * infrastructure_failed.
  */
 export async function executeCandidate(
   input: CandidateWorkflowInput,
@@ -107,6 +111,7 @@ export async function executeCandidate(
   });
   update({});
   let session: ArtifactRef | undefined;
+  let draft: AuthoredTaskDraft | undefined;
   let lastReport: ArtifactRef | undefined;
   let feedback: string | undefined;
   let lastSummary = "no verification report";
@@ -114,21 +119,49 @@ export async function executeCandidate(
   try {
     for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
       update({ status: "authoring", stage: "authoring", round });
-      const authored = await activities.runAuthoringRound({
-        run,
-        candidate,
-        round,
-        ...(session ? { session } : {}),
-        ...(lastReport ? { report: lastReport } : {}),
-        ...(feedback ? { feedback } : {}),
-      });
-      if (authored.kind === "rejected") return finish("rejected", authored.reason);
-      session = authored.session;
-      update({ status: "verifying", taskId: authored.task.taskId });
+      let turnReport = lastReport;
+      let submitted: AuthoredTaskDraft | undefined;
+      for (let turn = 1; ; turn += 1) {
+        const authored = await activities.runAuthoringTurn({
+          run,
+          candidate,
+          round,
+          turn,
+          verifiesLeft: AUTHOR_VERIFY_BUDGET - (turn - 1),
+          ...(session ? { session } : {}),
+          ...(draft ? { draft } : {}),
+          ...(turnReport ? { report: turnReport } : {}),
+          ...(feedback && turn === 1 ? { feedback } : {}),
+        });
+        if (authored.kind === "rejected") return finish("rejected", authored.reason);
+        session = authored.session;
+        draft = authored.task;
+        if (authored.kind === "submitted") {
+          submitted = authored.task;
+          break;
+        }
+        // The verify tool refuses past the budget; never run checks the budget doesn't cover.
+        if (turn > AUTHOR_VERIFY_BUDGET) break;
+        update({ status: "verifying", taskId: authored.task.taskId });
+        const checked = await activities.compileAndVerify({
+          run,
+          candidate,
+          task: authored.task,
+          stage: "authoring",
+          round,
+          turn,
+        });
+        turnReport = checked.reportRef;
+        update({ status: "authoring" });
+      }
+      if (!submitted) {
+        return finish("rejected", `authoring round ${round}: the agent never submitted a task`);
+      }
+      update({ status: "verifying", taskId: submitted.taskId });
       const verified = await activities.compileAndVerify({
         run,
         candidate,
-        task: authored.task,
+        task: submitted,
         stage: "authoring",
         round,
       });

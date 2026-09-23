@@ -23,6 +23,8 @@ export interface CompileAndVerifyInput {
   readonly task: AuthoredTaskDraft;
   readonly stage: PipelineStage;
   readonly round: number;
+  /** Set for a `verify` the author asked for mid-round: the turn that asked. */
+  readonly turn?: number;
 }
 
 const compileResultSchema = z.object({
@@ -42,7 +44,7 @@ export async function compileAndVerify(
   sandbox: SandboxExecutor,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: CompileAndVerifyInput,
-  prefix = `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}`,
+  prefix = `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}${input.turn ? `-turn-${input.turn}` : ""}`,
 ): Promise<VerifyOutcome> {
   const { run, candidate, stage, round } = input;
   return await withHeartbeats(`verifying ${input.task.taskId}`, async (options) => {

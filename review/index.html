@@ -8,16 +8,47 @@
     <title>SelfBench</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script>
-      // Apply the saved theme before first paint so a dark-mode visitor never sees a flash.
+      // Apply the theme and animation choice before first paint, so nothing flashes. Same rule
+      // as settleTheme in review/src/public-site/theme.ts and the storage in preferences.ts, and
+      // the same script in both sites' index.html: a cookie on selfbench.dev, shared with the
+      // app, plus this origin's local storage. Rewriting both on every visit keeps them fresh.
       try {
-        var theme = localStorage.getItem("selfbench-theme");
+        var shared = /(^|\.)selfbench\.dev$/.test(location.hostname);
+        var scope = "; Path=/; Max-Age=31536000; SameSite=Lax" +
+          (shared ? "; Domain=selfbench.dev" : "") + (location.protocol === "https:" ? "; Secure" : "");
+        var read = function (key) {
+          var match = document.cookie.match(new RegExp("(?:^|; )" + key + "=([^;]*)"));
+          if (match) return decodeURIComponent(match[1]);
+          try { return localStorage.getItem(key); } catch (error) { return null; }
+        };
+        var save = function (key, value) {
+          document.cookie = key + "=" + encodeURIComponent(value) + scope;
+          try { localStorage.setItem(key, value); } catch (error) {}
+        };
+        // Follow the system until the visitor picks; a later system change wins once.
+        var system = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        var saved = read("selfbench-theme");
+        var seen = read("selfbench-system");
+        var known = saved === "dark" || saved === "light";
+        var theme = known && (!seen || seen === system) ? saved : system;
+        save("selfbench-theme", theme);
+        save("selfbench-system", system);
         if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+        var motion = read("selfbench-motion");
+        if (motion) save("selfbench-motion", motion);
+        if (motion === "off") document.documentElement.setAttribute("data-motion", "off");
       } catch (error) {}
     </script>
   </head>
   <body class="h-full bg-(--background) font-sans text-sm leading-normal text-(--foreground) antialiased [text-rendering:optimizeLegibility]">
+    <!-- Referenced by theme.css to tint avatars in dark mode: channels scaled, blue kept most. -->
+    <svg aria-hidden="true" style="position: absolute; width: 0; height: 0">
+      <filter id="ink-cast" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="0.72 0 0 0 0  0 0.78 0 0 0  0 0 0.88 0 0  0 0 0 1 0" />
+      </filter>
+    </svg>
     <div id="root" class="h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

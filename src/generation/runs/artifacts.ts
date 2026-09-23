@@ -1,6 +1,8 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { TaskProgress } from "../../contracts/index.js";
 import {
+  AGENT_RECORD_NAME,
+  type AgentRunRecord,
   ARTIFACT_GROUPS,
   type ArtifactEntry,
   type ArtifactGroup,
@@ -42,7 +44,28 @@ export async function candidateArtifacts(
     }
   }
   bundles.sort(compareBundles);
-  return { runId, taskId: task.taskId, candidateId: task.candidateId, groups, bundles };
+  const agents = await Promise.all(
+    [...groups.authoring, ...groups.review]
+      .filter((entry) => entry.key.endsWith(`/${AGENT_RECORD_NAME}`))
+      .map(async (entry) => {
+        const bytes = await store.getByKey(entry.key).catch(() => undefined);
+        try {
+          return bytes
+            ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as AgentRunRecord)
+            : undefined;
+        } catch {
+          return undefined; // Skipped; the sheet refreshes every few seconds.
+        }
+      }),
+  );
+  return {
+    runId,
+    taskId: task.taskId,
+    candidateId: task.candidateId,
+    groups,
+    bundles,
+    agents: agents.filter((agent) => agent !== undefined),
+  };
 }
 
 function groupPrefix(

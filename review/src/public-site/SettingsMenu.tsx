@@ -2,9 +2,11 @@ import { Check, Settings } from "lucide-react";
 import { useRef, useState } from "react";
 import { PANEL } from "./frame";
 import { applyMotionOff, readMotionOff, rememberMotionOff } from "./motion";
+import { sharedPreferences } from "./preferences";
 import { useDismiss } from "./use-dismiss";
 
-const storage = () => (typeof localStorage === "undefined" ? undefined : localStorage);
+/** Shared with app.selfbench.dev, so the choice carries across (see preferences.ts). */
+const storage = () => sharedPreferences();
 
 /** The gear beside the theme toggle. Its one item turns the site's animations off and on. */
 export function SettingsMenu() {

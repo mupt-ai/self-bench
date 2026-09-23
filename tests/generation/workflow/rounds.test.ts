@@ -32,7 +32,7 @@ describe("SelfBench workflow rounds", () => {
   test("accepts a task whose first authoring round is green and whose verifier accepts", async () => {
     const activities = acceptingActivities([candidate("green", 1)]);
     const calls: string[] = [];
-    const wrap = <K extends "runAuthoringRound" | "compileAndVerify" | "runReviewRound">(
+    const wrap = <K extends "runAuthoringTurn" | "compileAndVerify" | "runReviewRound">(
       name: K,
     ): void => {
       const original = activities[name] as (input: never) => Promise<unknown>;
@@ -44,7 +44,7 @@ describe("SelfBench workflow rounds", () => {
         return await original(input as never);
       };
     };
-    wrap("runAuthoringRound");
+    wrap("runAuthoringTurn");
     wrap("compileAndVerify");
     wrap("runReviewRound");
     const status = recordStatuses();
@@ -53,7 +53,7 @@ describe("SelfBench workflow rounds", () => {
 
     expect(result.acceptedTaskIds).toEqual(["green-task"]);
     expect(calls).toEqual([
-      "runAuthoringRound:1",
+      "runAuthoringTurn:1",
       "compileAndVerify:authoring1",
       "runReviewRound:1",
     ]);
@@ -62,7 +62,7 @@ describe("SelfBench workflow rounds", () => {
   test("resumes the authoring session with the report after a policy error", async () => {
     const activities = acceptingActivities([candidate("policy", 1)]);
     const rounds: { round: number; session: string | undefined; report: string | undefined }[] = [];
-    activities.runAuthoringRound = async ({ candidate: value, round, session, report }) => {
+    activities.runAuthoringTurn = async ({ candidate: value, round, session, report }) => {
       rounds.push({ round, session: session?.uri, report: report?.uri });
       return {
         kind: "submitted",
@@ -91,8 +91,8 @@ describe("SelfBench workflow rounds", () => {
   test("rejects after three red authoring rounds with the last report as the reason", async () => {
     const activities = acceptingActivities([candidate("stubborn", 1)]);
     let authoringRounds = 0;
-    const original = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
+    const original = activities.runAuthoringTurn;
+    activities.runAuthoringTurn = async (input) => {
       authoringRounds += 1;
       return await original(input);
     };
@@ -117,8 +117,8 @@ describe("SelfBench workflow rounds", () => {
   test("sends suggestions to the next author, rechecks its draft, and uses a fresh reviewer", async () => {
     const activities = acceptingActivities([candidate("fixable", 1)]);
     const calls: string[] = [];
-    const author = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
+    const author = activities.runAuthoringTurn;
+    activities.runAuthoringTurn = async (input) => {
       calls.push(`author:${input.round}`);
       if (input.round === 2) {
         expect(input.feedback).toBe(
@@ -153,8 +153,8 @@ describe("SelfBench workflow rounds", () => {
   test("numbers reviews sequentially when a draft fails mechanical checks between them", async () => {
     const activities = acceptingActivities([candidate("review-numbers", 1)]);
     const calls: string[] = [];
-    const author = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
+    const author = activities.runAuthoringTurn;
+    activities.runAuthoringTurn = async (input) => {
       calls.push(`author:${input.round}`);
       return author(input);
     };
@@ -208,8 +208,8 @@ describe("SelfBench workflow rounds", () => {
   test("bounds authoring revisions when reviewers keep requesting changes", async () => {
     const activities = acceptingActivities([candidate("looping", 1)]);
     const authors: number[] = [];
-    const author = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
+    const author = activities.runAuthoringTurn;
+    activities.runAuthoringTurn = async (input) => {
       authors.push(input.round);
       return author(input);
     };

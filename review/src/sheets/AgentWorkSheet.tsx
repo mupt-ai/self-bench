@@ -102,7 +102,7 @@ function AgentPart({
       stopped = true;
     };
   }, [entry, source, round.live, round.session]);
-  const done = Boolean(round.session || round.result);
+  const done = Boolean(round.session) || round.status === "finished";
   const status =
     round.status === "failed" || (failed && !round.status && !active)
       ? "Failed"

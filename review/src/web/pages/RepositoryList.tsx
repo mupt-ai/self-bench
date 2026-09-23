@@ -127,7 +127,7 @@ function OwnerAvatar({ owner }: { owner: string }) {
       width={24}
       height={24}
       loading="lazy"
-      className="size-6 shrink-0 rounded-full bg-muted object-contain"
+      className="avatar size-6 shrink-0 rounded-full bg-muted object-contain"
     />
   );
 }

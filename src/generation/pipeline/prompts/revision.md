@@ -2,7 +2,7 @@
 
 {{reason}}
 
-This is a fresh sandbox: the repository was re-cloned and /work/task is empty, so recreate all four files.
+This is a fresh sandbox: the repository was re-cloned and /work/task holds your last submitted draft.
 
 {{howToWork}}
 {{feedback}}

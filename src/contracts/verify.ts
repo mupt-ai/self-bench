@@ -6,7 +6,7 @@ const pipelineStageSchema = z.enum(["authoring", "review", "verification"]);
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 
 export const MAX_AUTHORING_ROUNDS = 3;
-/** In-session `verify` calls available to each authoring round. */
+/** `verify` calls available to each authoring round; each one ends the agent's turn. */
 export const AUTHOR_VERIFY_BUDGET = 5;
 
 const harborRewardsSchema = z.record(z.string(), z.number());
@@ -60,16 +60,17 @@ const rejectedRoundSchema = z.object({
   reason: z.string().min(1),
 });
 
-const authoringRoundResultSchema = z.discriminatedUnion("kind", [
+/** How an authoring turn ended: the agent asked for a verify, submitted, or delivered nothing. */
+const authoringTurnResultSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal("submitted"),
+    kind: z.enum(["verify", "submitted"]),
     task: authoredTaskDraftSchema,
     session: artifactRefSchema,
   }),
   rejectedRoundSchema,
 ]);
 
-export type AuthoringRoundResult = z.infer<typeof authoringRoundResultSchema>;
+export type AuthoringTurnResult = z.infer<typeof authoringTurnResultSchema>;
 
 export const reviewRoundResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), session: artifactRefSchema, reason: z.string().min(1) }),

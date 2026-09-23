@@ -10,9 +10,9 @@ import {
   taskDefinitionSchema,
   verifyReportSchema,
 } from "../../contracts/index.js";
-import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
+import type { SandboxExecutor } from "../../sandbox/index.js";
 import { runAgent } from "./agent.js";
-import { readAsset } from "./helpers.js";
+import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import { renderVerifyReport } from "./verify-report.js";
 
@@ -49,7 +49,7 @@ export async function runReviewRound(
     store.get(task.definition),
     readAsset("dist/extension-reviewer.bundle.js"),
     readAsset("dist/sandbox-verifier.bundle.js"),
-    bundleFile(store, task.bundle),
+    artifactFile(store, task.bundle, "/work/task.tar.gz"),
   ]);
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8")));
   if (!report.green) throw new Error("review requires a green report");
@@ -63,6 +63,7 @@ export async function runReviewRound(
     label: `verify-${candidate.candidateId}-r${round}`,
     prefix: `${roundPrefix}/attempt-${attempt}`,
     sessionKey: `runs/${run.runId}/review/${candidate.candidateId}/session/round-${round}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    record: { stage: "review", round, attempt },
     workspace: { kind: "task" },
     extension: "/work/reviewer.js",
     tools: "read,grep,find,ls,accept_task,submit_suggestions,reject_task",
@@ -110,11 +111,4 @@ export async function runReviewRound(
     "application/json",
   );
   return outcome;
-}
-
-/** The compiled bundle can be hundreds of MB: let the sandbox pull it from a signed URL when possible. */
-async function bundleFile(store: ArtifactStore, bundle: ArtifactRef): Promise<SandboxFile> {
-  const url = await store.signedReadUrl?.(bundle, 2 * 60 * 60_000).catch(() => undefined);
-  if (url) return { path: "/work/task.tar.gz", url, sha256: bundle.sha256 };
-  return { path: "/work/task.tar.gz", contents: await store.get(bundle) };
 }

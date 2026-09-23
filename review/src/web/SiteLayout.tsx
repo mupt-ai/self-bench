@@ -1,12 +1,12 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
+import { ThemeToggle } from "../public-site/ThemeToggle";
 import { Lockup } from "./Lockup";
 import { pageGutter } from "./layout";
 import { cn } from "./primitives/cn";
 import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
-import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 import { Button } from "./ui";
 
@@ -102,8 +102,8 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
               <Lockup compact />
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <ThemeToggle />
               <UserMenu user={user} onSignOut={signOut} />
+              <ThemeToggle />
               <Button
                 size="icon"
                 variant="ghost"

@@ -1,6 +1,6 @@
-import { ArrowUpRight } from "lucide-react";
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { OutLink } from "./components/OutLink";
 import { CursorAura } from "./effects/CursorAura";
 import { notePath } from "./effects/history-transitions";
 import { lineOf, scrollRoot, select } from "./effects/marks";
@@ -132,19 +132,5 @@ export function PublicLayout() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function OutLink({ href, children }: { href: string; children: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-0.5 hover:text-foreground"
-    >
-      {children}
-      <ArrowUpRight className="size-3" aria-hidden="true" />
-    </a>
   );
 }

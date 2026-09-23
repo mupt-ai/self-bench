@@ -3,14 +3,15 @@ import type { ArtifactRef, RunRequest } from "../../contracts/index.js";
 import { PiEventFeed } from "../../harnesses/pi/event-feed.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
 import { finalAssistantMessage, sessionProviderError } from "../../harnesses/pi/session.js";
+import { errorMessage } from "../../lib/util.js";
 import {
-  type LiveSandbox,
   SandboxExecutionError,
   type SandboxExecutor,
   type SandboxFile,
   type SandboxResult,
 } from "../../sandbox/index.js";
 import { githubToken } from "../../third_party/github/token.js";
+import { AGENT_RECORD_NAME, type AgentRunRecord } from "../runs/types.js";
 import { withHeartbeats } from "./helpers.js";
 
 const SESSION_DIRECTORY = "/work/session";
@@ -30,12 +31,16 @@ export interface AgentRequest {
   readonly logName?: string;
   /** Where the pi session is stored; omit when the session is not kept. */
   readonly sessionKey?: string;
+  /** Recorded as `<prefix>/agent.json` so the agent work sheet can list this run. */
+  readonly record?: Pick<AgentRunRecord, "stage" | "round" | "turn" | "attempt">;
   /** A previous session to continue. */
   readonly resume?: Uint8Array;
   /** `clone`: /work/repo at `commit`. `task`: unpack /work/task.tar.gz with the verifier program. */
   readonly workspace:
     | { readonly kind: "clone"; readonly commit: string }
     | { readonly kind: "task" };
+  /** Shell run in the workspace after it is prepared, before pi starts. */
+  readonly setup?: string;
   readonly extension: string;
   readonly tools: string;
   readonly prompt: string;
@@ -43,8 +48,6 @@ export interface AgentRequest {
   readonly outputs: readonly string[];
   readonly environment?: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
-  /** Runs alongside the agent (the in-session verify mailbox). */
-  readonly whileRunning?: (sandbox: LiveSandbox, exited: AbortSignal) => Promise<void>;
 }
 
 export interface AgentResult {
@@ -64,6 +67,19 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
   const [auth, token] = await Promise.all([loadPiModelAuth(), githubToken()]);
   await store.put(`${prefix}/prompt.md`, Buffer.from(request.prompt), "text/markdown");
   const logKey = `${prefix}/${request.logName ?? "sandbox.log"}`;
+  const record = request.record && {
+    ...request.record,
+    prefix,
+    ...(request.sessionKey ? { session: request.sessionKey } : {}),
+    startedAt: new Date().toISOString(),
+  };
+  const writeRecord = (value: AgentRunRecord) =>
+    store.put(
+      `${prefix}/${AGENT_RECORD_NAME}`,
+      Buffer.from(JSON.stringify(value)),
+      "application/json",
+    );
+  if (record) await writeRecord(record);
   const feed = liveFeed(store, prefix, [auth.apiKey ?? "", auth.authJson ?? "", token ?? ""]);
   let result: SandboxResult;
   try {
@@ -93,14 +109,18 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
             AUTHOR_THINKING: run.authoring.reasoningEffort,
           },
         },
-        {
-          ...options,
-          onOutput: feed.push,
-          ...(request.whileRunning ? { onLive: request.whileRunning } : {}),
-        },
+        { ...options, onOutput: feed.push },
       ),
     );
   } catch (error) {
+    // The original failure matters more than a failed record update.
+    if (record) {
+      await writeRecord({
+        ...record,
+        finishedAt: new Date().toISOString(),
+        error: errorMessage(error),
+      }).catch(() => undefined);
+    }
     if (error instanceof SandboxExecutionError) {
       const log = await store.put(logKey, logBytes(error.result), "text/plain");
       throw new Error(`${error.message}; partial log: ${log.uri}`, { cause: error });
@@ -120,6 +140,14 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
       : undefined;
   const finalMessage = sessionBytes ? finalAssistantMessage(sessionBytes) : undefined;
   const providerError = sessionBytes ? sessionProviderError(sessionBytes) : undefined;
+  if (record) {
+    await writeRecord({
+      ...record,
+      finishedAt: new Date().toISOString(),
+      exitCode: result.exitCode,
+      ...(providerError ? { error: providerError.slice(0, 500) } : {}),
+    });
+  }
   return {
     exitCode: result.exitCode,
     outputs,
@@ -160,7 +188,8 @@ provider="\${AUTHOR_PROVIDER:-}"
 [ -n "$provider" ] || { [ -n "\${OPENAI_API_KEY:-}" ] && provider=openai || provider=openai-codex; }
 ${workspace}
 cd /work/repo
-# Keep output flowing while a tool call (verify) blocks, so the inactivity timeout never fires.
+${request.setup ?? ""}
+# Keep output flowing while a long tool call runs, so the inactivity timeout never fires.
 (while sleep 60; do echo "[selfbench] agent still running" >&2; done) &
 heartbeat=$!
 status=0

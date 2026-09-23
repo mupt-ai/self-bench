@@ -7,6 +7,7 @@ import authoringExtension from "../../../src/harnesses/pi/extensions/authoring.j
 
 interface RegisteredTool {
   name: string;
+  executionMode?: string;
   parameters: { properties?: Record<string, unknown> };
   execute: (
     toolCallId: string,
@@ -15,6 +16,7 @@ interface RegisteredTool {
     content: { type: string; text: string }[];
     details?: Record<string, unknown>;
     isError?: boolean;
+    terminate?: boolean;
   }>;
 }
 
@@ -50,12 +52,22 @@ let root = "";
 let deliverable = "";
 const savedEnvironment = { ...process.env };
 
-function tools(): Map<string, RegisteredTool> {
-  const registered = new Map<string, RegisteredTool>();
+type ToolCallHook = () => { block: boolean; reason: string } | undefined;
+
+function extension(): { tools: Map<string, RegisteredTool>; toolCall: ToolCallHook } {
+  const tools = new Map<string, RegisteredTool>();
+  let toolCall: ToolCallHook = () => undefined;
   authoringExtension({
-    registerTool: (tool: RegisteredTool) => registered.set(tool.name, tool),
+    registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
+    on: (event: string, handler: ToolCallHook) => {
+      if (event === "tool_call") toolCall = handler;
+    },
   } as unknown as ExtensionAPI);
-  return registered;
+  return { tools, toolCall: () => toolCall() };
+}
+
+function tools(): Map<string, RegisteredTool> {
+  return extension().tools;
 }
 
 async function writeDeliverable(overrides: Partial<Record<string, string>> = {}): Promise<void> {
@@ -76,24 +88,6 @@ async function writeDeliverable(overrides: Partial<Record<string, string>> = {})
   );
 }
 
-/** Answers verify requests the way the worker does: `<mailbox>/<n>/ready` → `response.json`. */
-function respond(green: (index: number) => boolean, stopped: { value: boolean }): Promise<void> {
-  return (async () => {
-    for (let index = 1; !stopped.value; ) {
-      const directory = join(root, "mailbox", String(index));
-      if (await readFile(join(directory, "ready")).catch(() => undefined)) {
-        const ok = green(index);
-        await writeFile(
-          join(directory, "response.json"),
-          JSON.stringify({ green: ok, report: `# report ${index}` }),
-        );
-        index += 1;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-  })();
-}
-
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "selfbench-extension-"));
   deliverable = join(root, "task");
@@ -112,7 +106,7 @@ beforeEach(async () => {
   Object.assign(process.env, {
     SELFBENCH_CHECK_PROGRAM: check,
     SELFBENCH_RENDER_OUTPUT: root,
-    SELFBENCH_MAILBOX: join(root, "mailbox"),
+    SELFBENCH_VERIFY_REQUEST: join(root, "verify"),
     SELFBENCH_SUBMISSION: join(root, "submission"),
     SELFBENCH_DELIVERABLE: deliverable,
     SELFBENCH_VERIFY_BUDGET: "2",
@@ -137,28 +131,45 @@ describe("authoring extension directory deliverable", () => {
     expect(Object.keys(verify.parameters.properties ?? {})).toEqual([]);
     expect(Object.keys(submit.parameters.properties ?? {})).toEqual([]);
     await writeDeliverable();
-    const stopped = { value: false };
-    const responder = respond((index) => index === 2, stopped);
 
-    const first = await verify.execute("1", {});
-    expect(first.isError).toBeUndefined();
-    expect(first.content[0]?.text).toContain("green=false. 1 verify call(s) remain");
-    const second = await verify.execute("2", {});
-    expect(second.content[0]?.text).toContain("green=true. 0 verify call(s) remain");
-    const third = await verify.execute("3", {});
-    expect(third.isError).toBe(true);
-    expect(JSON.parse(await readFile(join(root, "mailbox/1/definition.json"), "utf8")).prompt).toBe(
-      "Implement the feature.",
-    );
-
-    const submitted = await submit.execute("4", {});
+    const submitted = await submit.execute("1", {});
     expect(submitted.details).toEqual({ taskId: "ext-task" });
+    expect(submitted.terminate).toBe(true);
     const recorded = JSON.parse(await readFile(join(root, "submission/definition.json"), "utf8"));
     expect(recorded.prompt).toBe("Implement the feature.");
     expect((await readFile(join(root, "submission/source-task.tar.gz"))).length).toBeGreaterThan(0);
-    stopped.value = true;
-    await responder;
-  }, 20_000);
+
+    const requested = await tools().get("verify")?.execute("2", {});
+    expect(requested?.isError).toBeUndefined();
+    expect(requested?.terminate).toBe(true);
+    expect(requested?.content[0]?.text).toContain("report arrives as your next message");
+    expect(JSON.parse(await readFile(join(root, "verify/definition.json"), "utf8")).prompt).toBe(
+      "Implement the feature.",
+    );
+  });
+
+  test("verify ends the turn: every later tool call is blocked", async () => {
+    const { tools: registered, toolCall } = extension();
+    await writeDeliverable();
+    expect(toolCall()).toBeUndefined();
+
+    await registered.get("verify")?.execute("1", {});
+
+    expect(toolCall()).toEqual(expect.objectContaining({ block: true }));
+    // A batch that mixes other tools with verify would prepare them all before verify ran.
+    for (const name of ["verify", "submit_task"]) {
+      expect(registered.get(name)?.executionMode).toBe("sequential");
+    }
+  });
+
+  test("verify refuses once the round's budget is spent", async () => {
+    process.env.SELFBENCH_VERIFY_BUDGET = "0";
+    await writeDeliverable();
+    const refused = await tools().get("verify")?.execute("1", {});
+    expect(refused?.isError).toBe(true);
+    expect(refused?.content[0]?.text).toContain("No verify calls remain");
+    expect(await readdir(join(root, "verify")).catch(() => [])).toEqual([]);
+  });
 
   test("reports missing or inconsistent deliverable files as static-check errors naming the file", async () => {
     const registered = tools();
@@ -184,6 +195,6 @@ describe("authoring extension directory deliverable", () => {
     await writeDeliverable({ "definition.json": "{not json" });
     const invalid = await verify.execute("4", {});
     expect(invalid.content[0]?.text).toContain("[files] definition.json is not valid JSON");
-    expect(await readdir(join(root, "mailbox")).catch(() => [])).toEqual([]);
+    expect(await readdir(join(root, "verify")).catch(() => [])).toEqual([]);
   });
 });

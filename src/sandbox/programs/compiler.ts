@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { staticCheckSubmission } from "../../generation/task/static.js";
 import { extractRegularArchive } from "../../lib/archive.js";
@@ -9,12 +9,18 @@ import { compileSubmittedTask, TaskCompilerInfrastructureError } from "../task-c
 // Trusted compile of one submission (definition.json, test.patch, gold.patch in a tarball):
 // schema, policy, paths, patches, audit, candidate identity, then the rendered Harbor task.
 // Writes /work/result.json {compileErrors, auditBlockers, infrastructure?} and /work/compiled.tar.gz.
-const input = JSON.parse(await readFile("/work/input.json", "utf8"));
-const sourceBundle = await readFile("/work/source-task.tar.gz");
-await extractRegularArchive("/work/source-task.tar.gz", "/work/submission");
+const work = process.env.SELFBENCH_COMPILER_WORK ?? "/work";
+const submission = join(work, "submission");
+const input = JSON.parse(await readFile(join(work, "input.json"), "utf8"));
+const sourceBundle = await readFile(join(work, "source-task.tar.gz"));
+const unpackErrors: string[] = [];
+await mkdir(submission, { recursive: true });
+await extractRegularArchive(join(work, "source-task.tar.gz"), submission).catch((error) =>
+  unpackErrors.push(`[bundle] submission bundle could not be unpacked: ${errorMessage(error)}`),
+);
 const [definitionJson, testPatch, goldPatch] = await Promise.all(
   ["definition.json", "test.patch", "gold.patch"].map((name) =>
-    readFile(join("/work/submission", name), "utf8").catch(() => ""),
+    readFile(join(submission, name), "utf8").catch(() => ""),
   ),
 );
 const check = staticCheckSubmission({
@@ -25,6 +31,7 @@ const check = staticCheckSubmission({
 const compileErrors = check.errors
   .filter((error) => error.gate !== "audit")
   .map((error) => `[${error.gate}] ${error.message}`);
+compileErrors.unshift(...unpackErrors);
 const auditBlockers = check.errors
   .filter((error) => error.gate === "audit")
   .map((error) => error.message);
@@ -69,8 +76,8 @@ if (compileErrors.length === 0) {
     }
   }
 }
-await writeFile("/work/compiled.tar.gz", bundle);
+await writeFile(join(work, "compiled.tar.gz"), bundle);
 await writeFile(
-  "/work/result.json",
+  join(work, "result.json"),
   JSON.stringify({ compileErrors, auditBlockers, ...(infrastructure ? { infrastructure } : {}) }),
 );

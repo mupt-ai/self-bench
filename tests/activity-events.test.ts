@@ -4,7 +4,7 @@ import { activityEventInterceptor } from "../src/temporal/activity-events.js";
 
 const context = {
   info: {
-    activityType: "runAuthoringRound",
+    activityType: "runAuthoringTurn",
     activityId: "1",
     attempt: 2,
     workflowExecution: { workflowId: "batch-one/candidate/one", runId: "r" },
@@ -36,7 +36,7 @@ test("a successful activity logs only its start", async () => {
   expect(JSON.parse(lines[0]?.slice("[selfbench] ".length) ?? "")).toEqual({
     event: "selfbench.activity",
     phase: "start",
-    activityType: "runAuthoringRound",
+    activityType: "runAuthoringTurn",
     activityId: "1",
     workflowId: "batch-one/candidate/one",
     workflowType: "selfBenchAuthorWorkflow",

@@ -108,22 +108,4 @@ describe("runSandbox", () => {
       SandboxExecutionError,
     );
   }, 30_000);
-
-  test("the live hook runs alongside the command and sees it exit", async () => {
-    const fake = fakeSession(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      fake.files.set("/work/out.txt", Buffer.from("x"));
-      return 0;
-    });
-    let sawExit = false;
-    await runSandbox(async () => fake.session, request, {
-      onLive: async (live, exited) => {
-        await live.writeFile("/work/mailbox", "ping");
-        await new Promise((resolve) => exited.addEventListener("abort", resolve, { once: true }));
-        sawExit = true;
-      },
-    });
-    expect(sawExit).toBe(true);
-    expect(Buffer.from(fake.files.get("/work/mailbox") ?? []).toString()).toBe("ping");
-  });
 });
