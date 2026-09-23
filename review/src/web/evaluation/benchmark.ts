@@ -1,3 +1,4 @@
+import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import type { EvaluationRun } from "./api";
 
 export interface BenchmarkPoint {
@@ -15,19 +16,7 @@ export function benchmarkPoints(runs: EvaluationRun[]): BenchmarkPoint[] {
     if (run.status !== "completed" || !run.datasetKey) return [];
     return run.harnesses.flatMap((harness) => {
       const trials = run.trials.filter((trial) => trial.harness === harness);
-      if (
-        !trials.length ||
-        trials.some(
-          (trial) =>
-            trial.status !== "completed" ||
-            !trial.modelVerified ||
-            trial.apiCostUsd === undefined ||
-            !Number.isFinite(trial.apiCostUsd) ||
-            trial.apiCostUsd < 0 ||
-            ![0, 1].includes(trial.rewards.reward ?? -1),
-        )
-      )
-        return [];
+      if (!trials.length || !trials.every(eligibleTrial)) return [];
       return [
         {
           id: `${run.id}/${harness}`,

@@ -15,5 +15,7 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    // With VITE_PUBLIC_DATA=api, reads go to a local SelfBench API, named as for the app.
+    proxy: { "/api/public": process.env.SELFBENCH_VIEW_PROXY ?? "http://127.0.0.1:8080" },
   },
 });

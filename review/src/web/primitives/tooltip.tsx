@@ -10,10 +10,13 @@ export function InfoTooltip({
   label,
   children,
   className,
+  contentClassName,
 }: {
   label: string;
   children?: ReactNode;
   className?: string;
+  /** Classes for the hint's card, for example theme colours instead of the inverted default. */
+  contentClassName?: string;
 }) {
   return (
     <Primitive.Provider delayDuration={150}>
@@ -34,7 +37,9 @@ export function InfoTooltip({
             </button>
           </Primitive.Trigger>
         )}
-        <TooltipContent side="top">{label}</TooltipContent>
+        <TooltipContent side="top" className={contentClassName}>
+          {label}
+        </TooltipContent>
       </Primitive.Root>
     </Primitive.Provider>
   );

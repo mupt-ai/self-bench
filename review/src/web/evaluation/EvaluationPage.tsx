@@ -100,6 +100,9 @@ export function EvaluationPage() {
   return (
     <PageContent>
       <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
+        <Link className={buttonStyles.secondary} to={`/repos/${repo}/releases?release=1`}>
+          Release Results
+        </Link>
         <Link className={buttonStyles.primary} to={`/repos/${repo}/run`}>
           New Comparison
         </Link>

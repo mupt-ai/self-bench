@@ -84,6 +84,11 @@ export async function disconnectRepo(org: string, fullName: string): Promise<voi
   });
 }
 
+/** "1 task", "2 tasks". */
+export function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
 /** "3d ago" style, for last-push columns; falls back to the date when older than a month. */
 export function formatAgo(iso: string | undefined, now = Date.now()): string {
   if (!iso) return "";

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { taskState } from "../../src/api/routes/tasks.js";
+import { taskState } from "../../src/db/task-record.js";
 import { batchSubmissionSchema } from "../../src/generation/batches/start.js";
 import { fixture, ROOT } from "../support/batch-fixture.js";
 

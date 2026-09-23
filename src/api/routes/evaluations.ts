@@ -3,6 +3,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { RepoStore } from "../../db/repos.js";
+import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
@@ -145,12 +146,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           managed: managedOffer(env),
         });
       } else if (section === "options") {
-        const available = (await tasks.listForRepo(repo.id)).filter(
-          (task) =>
-            task.bundleKey &&
-            task.pipelineStatus === "accepted" &&
-            task.review?.decision === "approve",
-        );
+        const available = (await tasks.listForRepo(repo.id)).filter(runnable);
         sendJson(response, 200, {
           tasks: available.map((task) => ({
             runId: task.runId,

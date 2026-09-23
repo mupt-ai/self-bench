@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
+import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
 import type { ManagedOffer } from "../generation/billing/managed.js";
@@ -81,14 +82,7 @@ export async function createComparison(
   const bundles = await Promise.all(
     selection.tasks.map((task) => tasks.find(scope.repoId, task.runId, task.taskId)),
   );
-  if (
-    bundles.some(
-      (task) =>
-        !task?.bundleKey ||
-        task.pipelineStatus !== "accepted" ||
-        task.review?.decision !== "approve",
-    )
-  )
+  if (bundles.some((task) => !task || !runnable(task)))
     throw new Error("Every task must be human-approved in this repository");
   const frozen = bundles.map((task) => {
     if (!task?.bundleKey) throw new Error("Task bundle unavailable");

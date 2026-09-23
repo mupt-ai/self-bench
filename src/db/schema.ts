@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
@@ -8,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -218,5 +220,41 @@ export const generationBatches = pgTable("generation_batches", {
   state: jsonb("state").$type<import("../generation/batches/types.js").GenerationBatch>().notNull(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Public releases: append-only snapshots a workspace published for a public repository. A
+ * line is one workspace plus one GitHub repository id; its current release is the newest row
+ * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never
+ * touches what was published. `payload` is what the public API serves; `detail` is private.
+ */
+export const releases = pgTable(
+  "releases",
+  {
+    id: uuid("id").primaryKey(),
+    orgId: bigint("org_id", { mode: "number" }).notNull(),
+    githubRepoId: bigint("github_repo_id", { mode: "number" }).notNull(),
+    fullName: text("full_name").notNull(),
+    publisherLogin: text("publisher_login").notNull(),
+    /** The line's head when this row was written; null for a line's first release. */
+    predecessorId: uuid("predecessor_id"),
+    releasedBy: bigint("released_by", { mode: "number" }).notNull(),
+    releasedByLogin: text("released_by_login").notNull(),
+    releasedAt: timestamptz("released_at").notNull().defaultNow(),
+    withdrawnAt: timestamptz("withdrawn_at"),
+    withdrawnByLogin: text("withdrawn_by_login"),
+    /** SHA-256 over the published results; an identical release inserts no row. */
+    hash: text("hash").notNull(),
+    payload: jsonb("payload").notNull(),
+    detail: jsonb("detail").notNull(),
+  },
+  (table) => [
+    index("releases_line_time").on(table.orgId, table.githubRepoId, table.releasedAt),
+    index("releases_full_name").on(sql`lower(${table.fullName})`),
+    // Only one successor per row, and only one first release per line.
+    unique("releases_line_predecessor")
+      .on(table.orgId, table.githubRepoId, table.predecessorId)
+      .nullsNotDistinct(),
+  ],
+);
 
 export * from "./billing-schema.js";

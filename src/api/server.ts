@@ -58,6 +58,7 @@ export async function startApi(
       if (site) {
         if (await site.billing.webhook(request, url, response)) return;
         if (await site.auth.handle(request, url, response)) return;
+        if (await site.publicReleases.handle(request, url, response)) return;
         if (request.method === "GET" && isSitePage(url.pathname)) {
           await sendReviewAsset(response, "/");
           return;
@@ -89,6 +90,7 @@ export async function startApi(
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;
         if (await site.evaluations.handle(request, url, response, user)) return;
+        if (await site.releases.handle(request, url, response, user)) return;
         if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }

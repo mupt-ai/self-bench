@@ -4,6 +4,7 @@ import { TaskNotFoundError, tombstoneTask } from "../generation/tasks/deletion.j
 import { reserveTaskStart } from "../generation/tasks/start-reservation.js";
 import type { Database } from "./client.js";
 import { tasks, users } from "./schema.js";
+import { taskFrom } from "./task-record.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
 export type ReviewDecision = "approve" | "reject";
@@ -74,6 +75,8 @@ export interface TaskStore {
   inProgress(repoId: number): Promise<TaskRecord[]>;
   progress(taskRowId: number, patch: TaskProgressPatch): Promise<TaskRecord>;
   listForRepo(repoId: number): Promise<TaskRecord[]>;
+  /** Every task of a repository, deleted ones included; a release records them all. */
+  listWithDeleted(repoId: number): Promise<(TaskRecord & { readonly deleted: boolean })[]>;
   /** By the agent's task id or the candidate id, within one run. */
   find(repoId: number, runId: string, taskOrCandidateId: string): Promise<TaskRecord | undefined>;
   /** Atomically tombstones a terminal task. Repeating a deletion succeeds. */
@@ -193,6 +196,12 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         .orderBy(tasks.runId, tasks.taskId);
       return rows.map(taskFrom);
     },
+    async listWithDeleted(repoId) {
+      const rows = await select()
+        .where(eq(tasks.repoId, repoId))
+        .orderBy(tasks.runId, tasks.taskId);
+      return rows.map((row) => ({ ...taskFrom(row), deleted: row.task.deletedAt !== null }));
+    },
     async find(repoId, runId, taskOrCandidateId) {
       const rows = await select()
         .where(
@@ -256,43 +265,5 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         ...(row.lastPr !== null ? { lastPr: Number(row.lastPr) } : {}),
       }));
     },
-  };
-}
-
-function taskFrom(row: {
-  task: typeof tasks.$inferSelect;
-  reviewedBy: string | null;
-  startedBy: string | null;
-}): TaskRecord {
-  const { task } = row;
-  return {
-    id: task.id,
-    repoId: task.repoId,
-    runId: task.runId,
-    candidateId: task.candidateId,
-    taskId: task.taskId,
-    ...(task.sourcePr !== null ? { sourcePr: task.sourcePr } : {}),
-    ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
-    difficulty: task.difficulty,
-    pipelineStatus: task.pipelineStatus,
-    stage: task.stage,
-    ...(task.round !== null ? { round: task.round } : {}),
-    ...(task.reason ? { reason: task.reason } : {}),
-    ...(task.bundleKey ? { bundleKey: task.bundleKey } : {}),
-    ...(task.definition ? { definition: task.definition } : {}),
-    ...(task.reviewDecision
-      ? {
-          review: {
-            decision: task.reviewDecision,
-            note: task.reviewNote ?? "",
-            decidedBy: row.reviewedBy ?? "",
-            decidedAt: (task.reviewedAt ?? new Date(0)).toISOString(),
-          },
-        }
-      : {}),
-    syncedAt: task.syncedAt.toISOString(),
-    ...(task.workflowId ? { workflowId: task.workflowId } : {}),
-    ...(row.startedBy ? { startedBy: row.startedBy } : {}),
-    ...(task.startedAt ? { startedAt: task.startedAt.toISOString() } : {}),
   };
 }
