@@ -75,8 +75,7 @@ export interface CandidateArtifacts {
   candidateId: string;
   groups: Record<ArtifactGroup, ArtifactEntry[]>;
   bundles: BundleRef[];
-  /** Absent or empty for runs from before agent runs recorded themselves. */
-  agents?: AgentRunRecord[];
+  agents: AgentRunRecord[];
 }
 
 /** One row of the ledger, whichever source it came from. */

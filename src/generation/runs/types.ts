@@ -73,6 +73,6 @@ export interface CandidateArtifacts {
   readonly candidateId: string;
   readonly groups: Readonly<Record<ArtifactGroup, readonly ArtifactEntry[]>>;
   readonly bundles: readonly BundleRef[];
-  /** Agent runs that recorded themselves; runs from before agent.json existed have none. */
+  /** Every agent sandbox run, from the `agent.json` each one writes. */
   readonly agents: readonly AgentRunRecord[];
 }
