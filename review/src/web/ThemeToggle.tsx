@@ -1,11 +1,13 @@
 import { Moon, Sun } from "lucide-react";
 import { useCallback, useState } from "react";
+import { sharedPreferences } from "../public-site/preferences";
+import { applyTheme, readTheme, rememberTheme, type Theme } from "../public-site/theme";
 import { cn } from "./primitives/cn";
-import { applyTheme, readTheme, rememberTheme, type Theme } from "./theme";
 
-const storage = () => (typeof localStorage === "undefined" ? undefined : localStorage);
+/** Shared with selfbench.dev, so the choice carries across (see preferences.ts). */
+const storage = () => sharedPreferences();
 
-/** Light or dark, remembered in this browser and applied before first paint by index.html. */
+/** Light or dark, shared with selfbench.dev and applied before first paint by index.html. */
 export function ThemeToggle({ className }: { className?: string }) {
   const [theme, setTheme] = useState<Theme>(() => readTheme(storage()));
   const toggle = useCallback(() => {

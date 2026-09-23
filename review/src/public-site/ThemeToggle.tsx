@@ -1,8 +1,10 @@
 import { Moon, Sun } from "lucide-react";
 import { useCallback, useState } from "react";
+import { sharedPreferences } from "./preferences";
 import { applyTheme, readTheme, rememberTheme, type Theme } from "./theme";
 
-const storage = () => (typeof localStorage === "undefined" ? undefined : localStorage);
+/** Shared with app.selfbench.dev, so the choice carries across (see preferences.ts). */
+const storage = () => sharedPreferences();
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(() => readTheme(storage()));

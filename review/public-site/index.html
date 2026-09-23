@@ -12,10 +12,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <script>
       // Apply the saved theme and animation choice before first paint, so nothing flashes.
+      // Same rule as review/src/public-site/preferences.ts, and the same script in both sites'
+      // index.html: the cookie on selfbench.dev is shared with the app, local storage is not.
       try {
-        var theme = localStorage.getItem("selfbench-theme");
-        if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
-        if (localStorage.getItem("selfbench-motion") === "off")
+        var shared = /(^|\.)selfbench\.dev$/.test(location.hostname);
+        var scope = "; Path=/; Max-Age=31536000; SameSite=Lax" +
+          (shared ? "; Domain=selfbench.dev" : "") + (location.protocol === "https:" ? "; Secure" : "");
+        var read = function (key) {
+          var match = document.cookie.match(new RegExp("(?:^|; )" + key + "=([^;]*)"));
+          if (match) return decodeURIComponent(match[1]);
+          var saved = null;
+          try { saved = localStorage.getItem(key); } catch (error) {}
+          // A choice saved before the cookie existed: share it from now on.
+          if (saved) document.cookie = key + "=" + encodeURIComponent(saved) + scope;
+          return saved;
+        };
+        if (read("selfbench-theme") === "dark")
+          document.documentElement.setAttribute("data-theme", "dark");
+        if (read("selfbench-motion") === "off")
           document.documentElement.setAttribute("data-motion", "off");
       } catch (error) {}
     </script>

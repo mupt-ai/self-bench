@@ -2,6 +2,7 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
+@import "./palette.css";
 
 /* The Vite root is review/public-site, so Tailwind must be told where the components live. */
 @source "../";
@@ -38,73 +39,6 @@
   --radius-md: 0px;
   --radius-lg: 0px;
   --radius-xl: 0px;
-}
-
-/* Light by default: warm paper, the app's amber kept for fills and accents, never for text. */
-:root {
-  color-scheme: light;
-  --background: hsl(40 22% 94.8%);
-  --foreground: hsl(30 8% 12%);
-  --card: hsl(38 21% 91.8%);
-  --muted: hsl(38 18% 87.5%);
-  --muted-fg: hsl(30 6% 42%);
-  --faint: hsl(30 6% 62%);
-  --border: hsl(35 16% 84%);
-  --input: hsl(35 16% 84%);
-  --accent: hsl(40 22% 90%);
-  --brand: hsl(38 92% 48%);
-  --primary: hsl(30 8% 12%);
-  --primary-fg: hsl(40 22% 94.8%);
-  --ok: hsl(150 45% 34%);
-  --bad: hsl(0 65% 45%);
-  --bad-fg: hsl(0 62% 42%);
-  --warn-fg: hsl(35 80% 38%);
-  /* Card edges and the ruler lines, derived from the text colour so every palette follows. */
-  --panel-border: color-mix(in srgb, var(--foreground) 15%, transparent);
-  --ruler: color-mix(in srgb, var(--foreground) 10%, transparent);
-  /* Background water: dot colour as "r g b" (0-255) and dot opacity. */
-  --ripple: 72 61 46;
-  --ripple-strength: 0.14;
-  --ripple-coverage: 0.55;
-  --ripple-speed: 1;
-  /* Theme-coloured effects. Light mode leans on the gold brand, dark mode on the ink blue. */
-  --aura: color-mix(in srgb, rgb(var(--ripple)) 50%, var(--brand));
-  /* The fire's scorch uses the background water's own colour. */
-  --scorch: rgb(var(--ripple));
-  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-/* Dark mode: ink blue. */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --background: hsl(215 28% 5%);
-  --foreground: hsl(210 20% 86%);
-  --card: hsl(215 24% 8.5%);
-  --muted: hsl(215 18% 10%);
-  --muted-fg: hsl(212 10% 58%);
-  --faint: hsl(212 8% 40%);
-  --border: hsl(215 16% 16%);
-  --input: hsl(215 16% 16%);
-  --accent: hsl(215 18% 10%);
-  --brand: hsl(210 90% 65%);
-  --primary: hsl(0 0% 100%);
-  --primary-fg: hsl(0 0% 0%);
-  --ok: hsl(150 40% 45%);
-  --bad: hsl(0 72% 45%);
-  --bad-fg: hsl(0 70% 62%);
-  --warn-fg: hsl(38 80% 60%);
-  --panel-border: color-mix(in srgb, var(--foreground) 9%, transparent);
-  --ruler: color-mix(in srgb, var(--foreground) 7%, transparent);
-  --ripple: 110 165 255;
-  --ripple-strength: 0.1;
-  --ripple-coverage: 0.6;
-  /* Light dots on a dark ground read as faster movement; slow the water to match. */
-  --ripple-speed: 0.75;
-  /* Calmer than the water: blended toward the hovered card's border colour. */
-  --aura: color-mix(in srgb, rgb(var(--ripple)) 55%, var(--foreground));
-  /* Dimmer than the water in dark mode: blue on near-black glares at full strength. */
-  --scorch: color-mix(in srgb, rgb(var(--ripple)) 62%, var(--background));
 }
 
 /* Light text on dark grounds renders heavier than dark on light; greyscale smoothing evens it. */
