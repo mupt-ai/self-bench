@@ -3,6 +3,7 @@ import type { TaskEnvironment } from "../src/contracts/index.js";
 import {
   assertEnvironmentEvidence,
   assertEnvironmentPolicy,
+  assertServicesSupported,
   isPlaceholderSecretValue,
 } from "../src/generation/task/environment-policy.js";
 
@@ -34,6 +35,16 @@ const environment: TaskEnvironment = {
 describe("environment contracts", () => {
   test("accepts digest-pinned images and literal local service configuration", () => {
     expect(() => assertEnvironmentPolicy(environment)).not.toThrow();
+  });
+
+  test("rejects services where Harbor does not run Docker Compose", () => {
+    expect(() => assertServicesSupported(environment, "e2b")).toThrow(
+      "services (postgres) never start on E2B",
+    );
+    for (const harbor of ["docker", "modal", "vercel", "daytona"] as const) {
+      expect(() => assertServicesSupported(environment, harbor)).not.toThrow();
+    }
+    expect(() => assertServicesSupported({ ...environment, services: [] }, "e2b")).not.toThrow();
   });
 
   test("rejects mutable images, host interpolation, and control characters", () => {

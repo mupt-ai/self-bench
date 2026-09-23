@@ -24,13 +24,28 @@ export const harborEnvironmentLabels = {
  */
 export const HOSTED_EXECUTION_BACKENDS = ["modal", "vercel", "e2b"] as const;
 export type HostedExecutionBackend = (typeof HOSTED_EXECUTION_BACKENDS)[number];
+/**
+ * Harbor environments that run a task's `docker-compose.yaml`, and so its sidecar services. Harbor
+ * 0.23.0's E2B environment builds only the Dockerfile and silently drops the compose file.
+ */
+const COMPOSE_HARBOR_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set([
+  "docker",
+  "modal",
+  "vercel",
+  "daytona",
+]);
+
+export function harborRunsServices(environment: HarborEnvironment): boolean {
+  return COMPOSE_HARBOR_ENVIRONMENTS.has(environment);
+}
+
 /** Harbor environments the hosted site offers; Docker Harbor would also run on the worker. */
 export const HOSTED_HARBOR_ENVIRONMENTS = ["modal", "vercel", "e2b", "daytona"] as const;
 export type HostedHarborEnvironment = (typeof HOSTED_HARBOR_ENVIRONMENTS)[number];
 
 const harborEnvironments: ReadonlySet<string> = new Set(HARBOR_ENVIRONMENTS);
 
-function isHarborEnvironment(value: string): value is HarborEnvironment {
+export function isHarborEnvironment(value: string): value is HarborEnvironment {
   return harborEnvironments.has(value);
 }
 

@@ -140,6 +140,7 @@ export async function startAuthoringTurn(
       SELFBENCH_SUBMISSION: SUBMISSION,
       SELFBENCH_VERIFY_REQUEST: VERIFY_REQUEST,
       SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
+      SELFBENCH_HARBOR_ENVIRONMENT: run.version.harborEnvironment,
       SELFBENCH_VERIFY_BUDGET: String(input.verifiesLeft),
     },
     timeoutMs: 4 * 60 * 60 * 1000,

@@ -2,6 +2,7 @@
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { isHarborEnvironment } from "../../contracts/config/providers.js";
 import { patchApplyCheck } from "../../generation/task/patch.js";
 import { type StaticCheckError, staticCheckSubmission } from "../../generation/task/static.js";
 
@@ -34,7 +35,13 @@ const [definitionJson, testPatch, goldPatch] = await Promise.all([
   readFile(testPath, "utf8"),
   readFile(goldPath, "utf8"),
 ]);
-const result = staticCheckSubmission({ definitionJson, testPatch, goldPatch });
+const harborEnvironment = process.env.SELFBENCH_HARBOR_ENVIRONMENT;
+const result = staticCheckSubmission({
+  definitionJson,
+  testPatch,
+  goldPatch,
+  ...(harborEnvironment && isHarborEnvironment(harborEnvironment) ? { harborEnvironment } : {}),
+});
 const errors: StaticCheckError[] = [...result.errors];
 const patchesWellFormed = !errors.some((error) => error.gate === "patches");
 if (options.repository && patchesWellFormed) {
