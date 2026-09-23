@@ -38,3 +38,12 @@ test("large selections round-trip through task links and saved drafts without tr
   expect(state.draft.tasks).toEqual(tasks);
   expect(restoreRunDraft(JSON.stringify(state), null).draft.tasks).toEqual(tasks);
 });
+
+test("unsubmitted drafts move old catalog ids to the shared ones; submitted drafts keep them", () => {
+  const state = restoreRunDraft(null, null);
+  const old = { catalogId: "openai-sol56", credentialId: "", harnesses: [] };
+  const saved = (submitted: boolean) =>
+    JSON.stringify({ ...state, submitted, draft: { ...state.draft, models: [old] } });
+  expect(restoreRunDraft(saved(false), null).draft.models[0]?.catalogId).toBe("gpt-5.6-sol");
+  expect(restoreRunDraft(saved(true), null).draft.models[0]?.catalogId).toBe("openai-sol56");
+});
