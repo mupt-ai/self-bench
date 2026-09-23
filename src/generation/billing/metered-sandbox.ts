@@ -66,7 +66,10 @@ export function meteredSandboxExecutor(
         return async (sandbox: StartedSandbox, usage?: ModelUsage) => {
           await target.stop(sandbox);
           const seconds = secondsSince(Date.parse(sandbox.startedAt));
-          await recordStageUsage(stageUsage(sandbox.stage, seconds, sandbox, options, usage));
+          await recordStageUsage({
+            ...stageUsage(sandbox.stage, seconds, sandbox, options, usage),
+            sandboxId: sandbox.sandboxId,
+          });
         };
       // Class methods use private fields, so they must be bound to the real instance.
       if (property === "constructor") return Reflect.get(target, property, target);

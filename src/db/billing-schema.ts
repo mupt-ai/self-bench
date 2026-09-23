@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { orgs } from "./schema.js";
 
@@ -60,6 +61,8 @@ export const generationUsage = pgTable(
     modelCostUsd: doublePrecision("model_cost_usd"),
     sandboxSeconds: integer("sandbox_seconds").notNull(),
     sandboxCostUsd: doublePrecision("sandbox_cost_usd"),
+    /** A started sandbox is billed once, however often the activity that stops it retries. */
+    sandboxId: text("sandbox_id"),
     /** Frozen integer rates used to compute billable units; estimates stay in the USD columns. */
     rateSnapshotId: bigint("rate_snapshot_id", { mode: "number" }).references(
       () => billingRateSnapshots.id,
@@ -68,7 +71,10 @@ export const generationUsage = pgTable(
     sandboxBillableUnits: bigint("sandbox_billable_units", { mode: "number" }).notNull().default(0),
     recordedAt: timestamptz("recorded_at").notNull().defaultNow(),
   },
-  (table) => [index("generation_usage_run_id").on(table.runId)],
+  (table) => [
+    index("generation_usage_run_id").on(table.runId),
+    uniqueIndex("generation_usage_sandbox_id").on(table.sandboxId),
+  ],
 );
 
 /** Per-organization Stripe customer and subscription. Absent row means billing was never started. */

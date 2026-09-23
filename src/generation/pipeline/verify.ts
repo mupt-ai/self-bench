@@ -33,8 +33,6 @@ export interface CompileAndVerifyInput {
 const compileResultSchema = z.object({
   compileErrors: z.array(z.string()),
   auditBlockers: z.array(z.string()),
-  /** Set when the compiler could not run (e.g. the repository could not be cloned). */
-  infrastructure: z.string().optional(),
 });
 
 export interface VerifyCompiledInput extends CompileAndVerifyInput {
@@ -100,6 +98,9 @@ export async function compileTask(
         },
       ],
       inline: [{ name: "result.json", path: "/work/result.json" }],
+      // A compiler that crashed or could not run reports no result, and Temporal reruns it.
+      delivers: [["/work/result.json"]],
+      requireDelivery: true,
       log: "compile.log",
       prefix: `${verifyPrefix(input)}/compile/attempt-${Context.current().info.attempt}`,
     },
@@ -121,14 +122,8 @@ export async function verifyCompiled(
   const prefix = verifyPrefix(input);
   await sandbox.stop(compiled.sandbox).catch(() => undefined);
   return await withHeartbeats(`verifying ${input.task.taskId}`, async (signal) => {
-    const compileResult = compiled.inline["result.json"];
-    if (compiled.exitCode !== 0 || compileResult === undefined) {
-      throw new Error(
-        `compiler sandbox exited ${compiled.exitCode}; log: ${compiled.files["compile.log"]?.uri ?? "none"}`,
-      );
-    }
-    const result = compileResultSchema.parse(compileResult);
-    if (result.infrastructure) throw new Error(`compiler could not run: ${result.infrastructure}`);
+    // The compile job only reports done with its result; anything else was retried in its sandbox.
+    const result = compileResultSchema.parse(compiled.inline["result.json"]);
 
     const bundle = compiled.files["harbor-task.tar.gz"];
     const task: AuthoredTask | undefined =

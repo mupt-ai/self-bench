@@ -55,3 +55,26 @@ test("a run the model provider ended records the provider error", async () => {
   const agents = await finish({ exitCode: 1, providerError: "Not Found" });
   expect(agents[0]).toMatchObject({ prefix, exitCode: 1, error: "Not Found" });
 });
+
+test("a retried finish keeps the first result instead of failing on the write-once store", async () => {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-agent-record-"));
+  roots.push(root);
+  const store = new LocalArtifactStore(root);
+  const record = { stage: "review", round: 1, attempt: 1, prefix };
+  await store.put(`${prefix}/agent.json`, Buffer.from(JSON.stringify(record)), "application/json");
+  const outcome: SandboxJobOutcome = {
+    sandbox: { sandboxId: "sb", stage: "review", startedAt: "", expiresAt: "" },
+    prefix,
+    exitCode: 0,
+    files: {},
+    inline: {},
+  };
+  const executor = runOnlyExecutor(async () => {
+    throw new Error("not run");
+  });
+  await finishAgent(store, executor, outcome);
+  const first = await store.getByKey(`${prefix}/result.json`);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await finishAgent(store, executor, outcome);
+  expect(await store.getByKey(`${prefix}/result.json`)).toEqual(first);
+});

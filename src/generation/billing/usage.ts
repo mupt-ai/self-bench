@@ -20,6 +20,8 @@ export interface StageUsage {
   readonly model?: string;
   readonly tokens?: TokenUsage;
   readonly sandboxSeconds: number;
+  /** Set for a started sandbox, which is recorded at most once. */
+  readonly sandboxId?: string;
   readonly cpu?: number;
   readonly memoryMiB?: number;
   readonly sandboxCostUsd?: number;

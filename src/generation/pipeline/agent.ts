@@ -143,8 +143,12 @@ export async function finishAgent(
   await sandbox.stop(outcome.sandbox, outcome.usage).catch(() => undefined);
   const byPath = <T>(entries: Readonly<Record<string, T>>) =>
     Object.fromEntries(Object.entries(entries).map(([name, value]) => [`/work/${name}`, value]));
-  // Artifacts are write-once: the end goes to result.json beside the start in agent.json.
-  if (await store.stat(`${outcome.prefix}/${AGENT_RECORD_NAME}`)) {
+  // Artifacts are write-once: the end goes to result.json beside the start in agent.json, and a
+  // retried finish keeps the result the first one wrote.
+  const [recorded, finished] = await Promise.all(
+    [AGENT_RECORD_NAME, AGENT_RESULT_NAME].map((name) => store.stat(`${outcome.prefix}/${name}`)),
+  );
+  if (recorded && !finished) {
     const result: AgentRunResult = {
       finishedAt: new Date().toISOString(),
       exitCode: outcome.exitCode,
