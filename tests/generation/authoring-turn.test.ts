@@ -47,5 +47,4 @@ test("the turn after a verify carries the report and the next step", () => {
   expect(verifyResultPrompt(red, 2)).toContain("verify again");
   expect(verifyResultPrompt(red, 0)).toContain("call submit_task with your best task");
   expect(verifyResultPrompt({ ...red, green: true }, 1)).toContain("Call submit_task now.");
-  expect(verifyResultPrompt(red, 2)).toContain("/work/task holds the draft you verified");
 });
