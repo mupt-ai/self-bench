@@ -1,14 +1,40 @@
 export type Theme = "light" | "dark";
 
+/** The theme the visitor is shown, saved in the shared preferences (see preferences.ts). */
 export const THEME_KEY = "selfbench-theme";
+/** The system theme when that was last settled, so a later system change can be noticed. */
+export const SYSTEM_KEY = "selfbench-system";
 
-/** Light unless the visitor chose dark here before. The system setting is not consulted. */
-export function readTheme(storage: Pick<Storage, "getItem"> | undefined): Theme {
+type Preferences = Pick<Storage, "getItem" | "setItem">;
+
+const themeOf = (value: string | null | undefined): Theme | undefined =>
+  value === "dark" || value === "light" ? value : undefined;
+
+/** The operating system's light or dark setting. */
+export function systemTheme(): Theme {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+/**
+ * The theme to show, saved for next time. A first visit follows the system. A choice made with
+ * the toggle holds until the system theme changes; that change wins once, and the toggle can
+ * override it again. A choice saved before the system was recorded is kept. The same rule runs
+ * before first paint in both sites' index.html.
+ */
+export function settleTheme(preferences: Preferences | undefined, system: Theme): Theme {
+  let saved: Theme | undefined;
+  let seen: Theme | undefined;
   try {
-    return storage?.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+    saved = themeOf(preferences?.getItem(THEME_KEY));
+    seen = themeOf(preferences?.getItem(SYSTEM_KEY));
   } catch {
-    return "light";
+    // Blocked storage: follow the system.
   }
+  const theme = saved && (seen === undefined || seen === system) ? saved : system;
+  if (theme !== saved || seen !== system) rememberTheme(preferences, theme, system);
+  return theme;
 }
 
 export function applyTheme(
@@ -19,9 +45,15 @@ export function applyTheme(
   else root.removeAttribute("data-theme");
 }
 
-export function rememberTheme(storage: Pick<Storage, "setItem"> | undefined, theme: Theme): void {
+/** Saves the theme with the system theme it was chosen under. */
+export function rememberTheme(
+  preferences: Preferences | undefined,
+  theme: Theme,
+  system: Theme,
+): void {
   try {
-    storage?.setItem(THEME_KEY, theme);
+    preferences?.setItem(THEME_KEY, theme);
+    preferences?.setItem(SYSTEM_KEY, system);
   } catch {
     // Private windows and blocked storage: the choice lasts until the next load.
   }
