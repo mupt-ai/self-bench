@@ -65,7 +65,6 @@ function version(config: SelfBenchConfig, selfbenchCommit: string): RunRequest["
 }
 
 const imageVariables = {
-  modal: "SELFBENCH_MODAL_IMAGE",
   vercel: "SELFBENCH_VERCEL_IMAGE",
   e2b: "SELFBENCH_E2B_TEMPLATE",
 } as const;
@@ -83,7 +82,7 @@ export function generationConfigEnvironment(
     SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(settings),
     ...(backend === "e2b"
       ? { SELFBENCH_E2B_TEMPLATE: image ?? managedE2BTemplateReference() }
-      : image
+      : image && backend !== "modal"
         ? { [imageVariables[backend]]: image }
         : {}),
   };

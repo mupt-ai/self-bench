@@ -4,6 +4,7 @@ import {
   normalizeE2BDomain,
   normalizeE2BTemplateReference,
 } from "../../sandbox/providers/e2b/template.js";
+import { sandboxDockerfileReference } from "../../sandbox/runtime-dockerfile.js";
 import { e2bTimeoutCap, vercelTimeoutCap } from "../../sandbox/timeout.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
@@ -32,7 +33,6 @@ const environmentSchema = z.object({
   ),
   SELFBENCH_MODAL_APP: z.string().default("selfbench"),
   SELFBENCH_MODAL_ENVIRONMENT: z.string().optional(),
-  SELFBENCH_MODAL_IMAGE: z.string().default("node:22-bookworm"),
   SELFBENCH_VERCEL_IMAGE: z.preprocess(emptyStringAsUndefined, z.string().trim().min(1).optional()),
   // Keep provider-specific validation in its provider branch so stale hosted
   // provider variables cannot break an otherwise unrelated worker.
@@ -165,7 +165,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       execution = {
         kind: "modal",
         app: value.SELFBENCH_MODAL_APP,
-        image: value.SELFBENCH_MODAL_IMAGE,
+        image: sandboxDockerfileReference(),
         ...(value.SELFBENCH_MODAL_ENVIRONMENT
           ? { environment: value.SELFBENCH_MODAL_ENVIRONMENT }
           : {}),

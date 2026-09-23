@@ -5,6 +5,7 @@ import { createActivities } from "../src/generation/pipeline/activities.js";
 import { withGenerationRuntime } from "../src/generation/pipeline/runtime.js";
 import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
+import { sandboxDockerfileReference } from "../src/sandbox/runtime-dockerfile.js";
 import { githubToken } from "../src/third_party/github/token.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
@@ -60,7 +61,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
     version: {
       executionBackend: "modal",
       harborEnvironment: "modal",
-      sandboxImage: "node:22-bookworm",
+      sandboxImage: sandboxDockerfileReference(),
     },
     generation: {
       ownerId: f.tenant.id,

@@ -2,11 +2,12 @@ import { type Image, ModalClient } from "modal";
 import type { SelfBenchConfig } from "../../../contracts/config/index.js";
 import { raceAbort } from "../../../lib/util.js";
 import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
+import { parseSandboxDockerfile, readSandboxDockerfile } from "../../runtime-dockerfile.js";
 import { runSandbox, type SandboxSession } from "../../session.js";
 
 type ModalConfig = Extract<SelfBenchConfig["execution"], { kind: "modal" }>;
 
-/** Modal: a named sandbox in the configured app, built from the configured base image. */
+/** Modal: a named sandbox in the configured app, built from the packaged Dockerfile.sandbox. */
 export class ModalSandboxExecutor implements SandboxExecutor {
   #image: Image | undefined;
 
@@ -82,15 +83,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   }
 
   #buildImage(): Image {
-    return this.client.images
-      .fromRegistry(this.config.image)
-      .dockerfileCommands([
-        "USER root",
-        "RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl git jq ripgrep unzip xz-utils && rm -rf /var/lib/apt/lists/*",
-        "RUN curl -fsSL https://github.com/cli/cli/releases/download/v2.89.0/gh_2.89.0_linux_amd64.tar.gz -o /tmp/gh.tar.gz && echo 'd0422caade520530e76c1c558da47daebaa8e1203d6b7ff10ad7d6faba3490d8  /tmp/gh.tar.gz' | sha256sum -c - && tar -xzf /tmp/gh.tar.gz -C /tmp && mv /tmp/gh_2.89.0_linux_amd64/bin/gh /usr/local/bin/gh && rm -rf /tmp/gh.tar.gz /tmp/gh_2.89.0_linux_amd64",
-        "RUN npm install --global --ignore-scripts @earendil-works/pi-coding-agent@0.84.0",
-        "ENV PATH=/root/.local/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin",
-        "WORKDIR /work",
-      ]);
+    const { base, instructions } = parseSandboxDockerfile(readSandboxDockerfile());
+    return this.client.images.fromRegistry(base).dockerfileCommands([...instructions]);
   }
 }
