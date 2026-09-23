@@ -51,6 +51,14 @@ fs.writeFileSync("/work/task/instruction.md", prompt + "\\n");
 '`;
 
 /**
+ * The round's outcome: the submission, or why the round delivered nothing. Tools that package
+ * accepted tasks (tools/build-combined-bundle.ts) read it; per-turn results sit beside it.
+ */
+export function authoringRoundResultKey(runId: string, candidateId: string, round: number) {
+  return `runs/${runId}/authoring/${candidateId}/round-${round}/result.json`;
+}
+
+/**
  * One authoring turn: pi works on the task in a fresh sandbox until it calls `verify` or
  * `submit_task`, both of which end the turn. The workflow verifies the draft and, after a
  * `verify`, starts the next turn with the report.
@@ -145,11 +153,15 @@ export async function runAuthoringTurn(
       reason: `authoring round ${round}: the agent submitted nothing${result.finalMessage ? `; agent said: ${result.finalMessage.slice(0, 1_000)}` : ""}; log: ${result.log.uri}`,
     };
   }
-  await store.put(
-    `${turnPrefix}/result.json`,
-    Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`),
-    "application/json",
-  );
+  const body = Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`);
+  await store.put(`${turnPrefix}/result.json`, body, "application/json");
+  if (outcome.kind !== "verify") {
+    await store.put(
+      authoringRoundResultKey(run.runId, candidate.candidateId, round),
+      body,
+      "application/json",
+    );
+  }
   return outcome;
 }
 

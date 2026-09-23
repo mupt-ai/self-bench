@@ -79,6 +79,7 @@ test("splits authoring rounds into turns, one per verify", () => {
     bundles: [],
     groups: {
       authoring: [
+        entry("round-1/result.json"),
         entry("round-1/turn-1/attempt-1/live/00000000.json"),
         entry("session/round-1-turn-1.jsonl"),
         entry("round-1/turn-1/result.json"),

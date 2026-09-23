@@ -17,6 +17,8 @@ export interface AgentRound {
 
 export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
   const rounds = new Map<string, AgentRound>();
+  // Rows seen only through a round-level result.json; turn-based rounds write one beside their turns.
+  const resultOnly = new Set<string>();
   for (const sourceStage of ["authoring", "review", "verification"] as const) {
     const stage = sourceStage === "verification" ? "review" : sourceStage;
     const prefix = `runs/${artifacts.runId}/${sourceStage}/${artifacts.candidateId}/`;
@@ -42,9 +44,19 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
       };
       if (path.includes("/live/") && (!item.live || entry.key > item.live.key)) item.live = entry;
       if (path.startsWith("session/")) item.session = entry;
-      if (path === `round-${round}${turn ? `/turn-${turn}` : ""}/result.json`) item.result = entry;
+      const isResult = path === `round-${round}${turn ? `/turn-${turn}` : ""}/result.json`;
+      if (isResult) item.result = entry;
+      if (isResult && !rounds.has(id)) resultOnly.add(id);
+      else if (!isResult) resultOnly.delete(id);
       rounds.set(id, item);
     }
+  }
+  for (const id of resultOnly) {
+    const item = rounds.get(id);
+    const hasTurns = [...rounds.values()].some(
+      (other) => other.stage === item?.stage && other.round === item?.round && other.turn,
+    );
+    if (hasTurns) rounds.delete(id);
   }
   const grouped = new Map<string, AgentRound[]>();
   for (const round of rounds.values()) {
