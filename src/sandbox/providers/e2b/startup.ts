@@ -26,7 +26,7 @@ export async function validateE2BWorkerStartup(
   }
   if (!exists) {
     throw new Error(
-      `E2B template ${config.image} does not exist or is not accessible; build it with self-bench setup e2b --name ${config.image}`,
+      `E2B template ${config.image} does not exist or is not accessible; build it with bun scripts/build-e2b-template.ts --name ${config.image}`,
     );
   }
 }

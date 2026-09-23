@@ -55,7 +55,7 @@ try {
   await run("bun", ["add", "--no-save", tarball], installRoot);
   const executable = join(installRoot, "node_modules", ".bin", "self-bench");
   const help = await run(executable, ["--help"], installRoot);
-  if (!help.includes("self-bench setup")) {
+  if (!help.includes("self-bench status")) {
     throw new Error("installed self-bench did not print the expected CLI help");
   }
   const installedRoot = join(installRoot, "node_modules", packageJson.name);

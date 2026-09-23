@@ -6,7 +6,7 @@ export interface CommandResult {
   readonly exitCode: number;
 }
 
-export type CommandOutputHandler = (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
+type CommandOutputHandler = (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
 
 export interface CommandOptions {
   readonly cwd?: string;

@@ -1,7 +1,7 @@
 import type { Candidate, Difficulty } from "../contracts/index.js";
-import { redactSecrets } from "../provenance/redact.js";
-import type { ProvenanceMessage } from "../provenance/types.js";
+import { redactSecrets } from "../lib/redact.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
+import type { ProvenanceMessage } from "./provenance.js";
 
 const MAX_BODY_LENGTH = 12_000;
 

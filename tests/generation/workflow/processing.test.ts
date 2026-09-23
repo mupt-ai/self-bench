@@ -2,80 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, ApplicationFailure, CancelledFailure } from "@temporalio/workflow";
 import type { RunStatus } from "../../../src/contracts/index.js";
-import { executeRun } from "../../../src/generation/workflows.js";
 import {
   acceptingActivities,
+  authorCandidates,
   candidate,
   greenOutcome,
   redReport,
   ref,
-  run,
 } from "../../support/workflow-fixture.js";
 
 describe("SelfBench workflow processing", () => {
-  test("runs every discovered candidate in parallel and exports every accept", async () => {
-    const activities = acceptingActivities([
-      candidate("first", 1),
-      candidate("second", 2),
-      candidate("third", 3),
-    ]);
-    const authored: string[] = [];
-    const original = activities.runAuthoringRound;
-    activities.runAuthoringRound = async (input) => {
-      authored.push(input.candidate.candidateId);
-      if (input.candidate.candidateId === "first") {
-        return { kind: "rejected", candidateId: "first", reason: "not viable" };
-      }
-      return await original(input);
-    };
-    let currentStatus: (() => RunStatus) | undefined;
-
-    const result = await executeRun(run, activities, (status) => {
-      currentStatus = status;
-    });
-
-    expect([...authored].sort()).toEqual(["first", "second", "third"]);
-    expect([...result.acceptedTaskIds].sort()).toEqual(["second-task", "third-task"]);
-    expect(currentStatus?.().accepted).toBe(2);
-    expect(currentStatus?.().rejected).toBe(1);
-    expect(
-      currentStatus?.()
-        .tasks.map((task) => task.candidateId)
-        .sort(),
-    ).toEqual(["first", "second", "third"]);
-  });
-  test("records exhausted Harbor infrastructure failure and replaces the candidate", async () => {
-    const activities = acceptingActivities([candidate("infra", 1), candidate("reserve", 2)]);
-    const original = activities.compileAndVerify;
-    activities.compileAndVerify = async (input) => {
-      if (input.candidate.candidateId === "infra") {
-        throw new Error("Activity task failed", {
-          cause: ApplicationFailure.retryable(
-            "Modal image build failed after retries",
-            "HarborInfrastructureFailure",
-          ),
-        });
-      }
-      return await original(input);
-    };
-    let currentStatus: (() => RunStatus) | undefined;
-
-    const result = await executeRun(run, activities, (status) => {
-      currentStatus = status;
-    });
-
-    expect(result.acceptedTaskIds).toEqual(["reserve-task"]);
-    expect(currentStatus?.().tasks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          candidateId: "infra",
-          difficulty: "hard",
-          status: "infrastructure_failed",
-          reason: "Modal image build failed after retries",
-        }),
-      ]),
-    );
-  });
   test("turns three consecutive infrastructure rounds into an infrastructure failure", async () => {
     const activities = acceptingActivities([candidate("flaky", 1)]);
     activities.compileAndVerify = async ({ task, round }) => ({
@@ -84,7 +20,7 @@ describe("SelfBench workflow processing", () => {
     });
     let currentStatus: (() => RunStatus) | undefined;
 
-    const result = await executeRun(run, activities, (status) => {
+    const result = await authorCandidates(activities, (status) => {
       currentStatus = status;
     });
 
@@ -107,7 +43,7 @@ describe("SelfBench workflow processing", () => {
           }
         : greenOutcome(task, stage, round);
 
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
 
     expect(result.acceptedTaskIds).toEqual(["retry-task"]);
   });
@@ -135,16 +71,11 @@ describe("SelfBench workflow processing", () => {
     };
     let currentStatus: (() => RunStatus) | undefined;
 
-    const result = await executeRun(
-      { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } },
-      activities,
-      (status) => {
-        currentStatus = status;
-      },
-    );
+    const result = await authorCandidates(activities, (status) => {
+      currentStatus = status;
+    });
 
     expect(result.acceptedTaskIds).toEqual(["successful-sibling-task"]);
-    expect(currentStatus?.().phase).toBe("complete");
     expect(currentStatus?.().tasks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -168,13 +99,6 @@ describe("SelfBench workflow processing", () => {
         new CancelledFailure("cancelled"),
       );
     };
-    let currentStatus: (() => RunStatus) | undefined;
-
-    await expect(
-      executeRun(run, activities, (status) => {
-        currentStatus = status;
-      }),
-    ).rejects.toBeInstanceOf(ActivityFailure);
-    expect(currentStatus?.().phase).toBe("cancelled");
+    await expect(authorCandidates(activities)).rejects.toBeInstanceOf(ActivityFailure);
   });
 });

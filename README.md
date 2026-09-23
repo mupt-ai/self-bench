@@ -8,7 +8,7 @@
 
 **self-bench builds private coding-agent benchmarks from work already completed in your repository, so you can compare coding agents and models on tasks drawn from your own codebase.**
 
-It finds completed requests from local coding sessions and merged GitHub pull requests, then reconstructs each task from the commit before the change. For every accepted task, self-bench creates hidden tests and a reference solution, proves that the task fails without a solution and passes with the original implementation, and exports a native task for [Harbor](https://harborframework.com/), a runner for coding-agent evaluations.
+It takes the requests behind merged GitHub pull requests, then reconstructs each task from the commit before the change. For every accepted task, self-bench creates hidden tests and a reference solution, proves that the task fails without a solution and passes with the original implementation, and exports a native task for [Harbor](https://harborframework.com/), a runner for coding-agent evaluations.
 
 SelfBench is sandbox-agnostic: run generation locally with Docker or on Modal, Vercel Sandbox, or E2B. Generation and Harbor validation are configured independently, so Modal is optional.
 
@@ -33,23 +33,18 @@ This path runs the self-bench API, worker, [Temporal](https://temporal.io/), and
 - [Bun](https://bun.sh/) 1.3.14 or newer
 - [uv](https://docs.astral.sh/uv/) for installing Harbor
 - Docker with Compose
-- [`gh`](https://cli.github.com/), authenticated with read access to the repository
+- A GitHub OAuth app for sign-in (see [Site sign-in](docs/operations.md#site-sign-in-selfbenchdev))
 - An OpenAI API key with access to `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`
-- A Git checkout with a GitHub `origin` and completed work in its history
+- A GitHub repository with merged pull requests to author tasks from
 
-Install self-bench and authenticate GitHub:
+Install the self-bench command, which wraps the run API, and set a random token that protects the local self-bench API:
 
 ```bash
 bun add --global self-bench
-gh auth login
-```
-
-Set the GitHub credential used by the local worker, plus a random token that protects the local self-bench API:
-
-```bash
-export GH_TOKEN="$(gh auth token)"
 export SELFBENCH_API_TOKEN="$(openssl rand -hex 24)"
 ```
+
+Set `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SELFBENCH_SESSION_SECRET` in `.env` so the API serves the signed-in site.
 
 Model access for generation comes from managed platform keys or stored organization credentials (see [Credentials](docs/operations.md#credentials)); copy `.env.example` to `.env` and set `SELFBENCH_MANAGED_OPENROUTER_API_KEY` and `SELFBENCH_MANAGED_E2B_API_KEY` to use the platform's accounts.
 
@@ -60,22 +55,18 @@ docker compose --profile sandbox up -d --build
 export SELFBENCH_API_URL="http://$(docker compose port api 8080)"
 ```
 
-This starts Postgres, Temporal, the self-bench API, and a worker, and builds the local sandbox image. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells subsequent CLI commands where to reach the local API. Compose names the project after the checkout directory and publishes ephemeral host ports, so several worktrees run side by side (see [Operations](docs/operations.md#local-stack)). Existing volumes from the old `selfbench` project name keep working with `COMPOSE_PROJECT_NAME=selfbench docker compose --profile sandbox up -d --build`. Set `SELFBENCH_PUBLIC_URL` to the tunnel origin before `up` when serving the signed-in site.
+This starts Postgres, Temporal, the self-bench API, and a worker, and builds the local sandbox image. The worker creates disposable local Docker sandboxes; `SELFBENCH_API_URL` tells the `self-bench` command where to reach the local API. Compose names the project after the checkout directory and publishes ephemeral host ports, so several worktrees run side by side (see [Operations](docs/operations.md#local-stack)). Existing volumes from the old `selfbench` project name keep working with `COMPOSE_PROJECT_NAME=selfbench docker compose --profile sandbox up -d --build`. Set `SELFBENCH_PUBLIC_URL` to the tunnel origin before `up` when serving the signed-in site.
 
 ### 2. Build a benchmark
 
+Open the site at `SELFBENCH_PUBLIC_URL`, sign in with GitHub, connect a repository, and start a batch with easy, medium, and hard counts. self-bench authors tasks from the repository's merged pull requests; a batch may take hours to author, validate, review, and export. Then download the export, which the command verifies with SHA-256:
+
 ```bash
-self-bench run \
-  --repo /absolute/path/to/your/repository \
-  --easy-count 10 \
-  --medium-count 10 \
-  --hard-count 10 \
-  --output ./self-bench-evals.tar.gz
+self-bench list
+self-bench download RUN_ID ./self-bench-evals.tar.gz
 ```
 
 Easy, medium, and hard candidates require at least 20, 50, and 100 changed implementation lines across 1, 2, and 3 paths respectively; the counts are generation budgets, not guarantees that every candidate will pass validation.
-
-The repository must be a Git checkout with a GitHub `origin`. self-bench pins its current `HEAD`, ignores uncommitted changes, and may take hours to author, validate, review, and export the accepted tasks. `--output` waits for completion and verifies the downloaded archive with SHA-256.
 
 ### 3. Evaluate with Harbor
 
@@ -118,7 +109,7 @@ The signed-in site also supports repository-scoped solver runs with live output 
 
 ## Run management
 
-Closing the waiting CLI does not cancel a submitted workflow. If the local worker or Docker stack stops, work pauses until the worker is restarted.
+Batches keep running on the worker after you close the site. If the local worker or Docker stack stops, work pauses until the worker is restarted.
 
 ```bash
 self-bench list                    # find run IDs
@@ -141,8 +132,8 @@ The quickstart uses local Docker sandboxes so it works without a hosted sandbox 
 
 - **Docker:** `SELFBENCH_EXECUTION_BACKEND=docker` keeps generation and validation on your machine. Include `--profile sandbox` so Compose builds the sandbox image.
 - **Modal:** authenticate with `modal token new`, then set `SELFBENCH_EXECUTION_BACKEND=modal`.
-- **Vercel Sandbox:** run `self-bench setup vercel`; Harbor validation defaults to Vercel too. Export the saved `VERCEL_*` and `SELFBENCH_VERCEL_IMAGE` values into the environment Compose reads.
-- **E2B:** build the pinned SelfBench runtime with `self-bench setup e2b --name NAME[:TAG]`; Harbor validation defaults to E2B too.
+- **Vercel Sandbox:** publish the runtime image ([steps](docs/operations.md#publish-the-runtime-image)) and export `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, and `SELFBENCH_VERCEL_IMAGE`; Harbor validation defaults to Vercel too.
+- **E2B:** the worker builds the pinned SelfBench runtime template on first use, or build one with `bun scripts/build-e2b-template.ts --name NAME[:TAG]`; Harbor validation defaults to E2B too.
 - **Temporal Cloud + Modal/E2B:** use a persistent worker for unattended runs and large repositories.
 
 See [Operations and deployment](docs/operations.md) for provider setup, credentials, persistence, object storage, and Temporal Cloud deployment.
@@ -154,17 +145,16 @@ Generation sandboxes and Harbor validation are independent choices. Every genera
 SELFBENCH_EXECUTION_BACKEND=docker docker compose --profile sandbox up -d --build
 SELFBENCH_EXECUTION_BACKEND=modal docker compose up -d --build
 
-# Vercel generation, with Vercel Harbor by default or any other environment
-self-bench setup vercel
+# Vercel generation (after publishing the runtime image), with Vercel Harbor by default or any other environment
 SELFBENCH_EXECUTION_BACKEND=vercel docker compose up -d --build
 SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build
 SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=modal docker compose up -d --build
 SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=e2b docker compose up -d --build
 DAYTONA_API_KEY=... SELFBENCH_EXECUTION_BACKEND=vercel SELFBENCH_HARBOR_ENVIRONMENT=daytona docker compose up -d --build
 
-# E2B generation uses a required prebuilt template; setup never installs at runtime
+# E2B generation uses a prebuilt template; nothing is installed at sandbox runtime
 export E2B_API_KEY=...
-self-bench setup e2b --name selfbench-runtime:v1
+bun scripts/build-e2b-template.ts --name selfbench-runtime:v1
 export SELFBENCH_E2B_TEMPLATE=selfbench-runtime:v1
 SELFBENCH_EXECUTION_BACKEND=e2b docker compose up -d --build
 # SELFBENCH_EXECUTION_BACKEND=e2b SELFBENCH_HARBOR_ENVIRONMENT=docker docker compose up -d --build

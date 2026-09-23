@@ -10,13 +10,13 @@ import {
   type DiscoveryResult,
   type RunRequest,
 } from "../../contracts/index.js";
-import { assertPullRequestBelongsToRepository } from "../../github/repository.js";
-import { githubToken } from "../../github/token.js";
-import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
 import {
   assertProvenanceMatchesPullRequest,
   type ProvenanceMessage,
-} from "../../provenance/index.js";
+} from "../../github/provenance.js";
+import { assertPullRequestBelongsToRepository } from "../../github/repository.js";
+import { githubToken } from "../../github/token.js";
+import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import {
   parseProvenance,
@@ -161,7 +161,6 @@ export async function discoverCandidateShard(
     store,
     run,
     shard,
-    provenance,
     planBytes,
     logs,
     input.targetCounts,
@@ -175,7 +174,6 @@ async function materializeDiscovery(
   store: ArtifactStore,
   run: RunRequest,
   provenance: readonly ProvenanceMessage[],
-  allProvenance: readonly ProvenanceMessage[],
   planBytes: Uint8Array,
   logs: ArtifactRef,
   maxCandidates: Readonly<Record<Difficulty, number>>,
@@ -187,7 +185,7 @@ async function materializeDiscovery(
 
   const candidates: Candidate[] = [];
   for (const raw of plan.candidates) {
-    const message = selectCandidateProvenance(provenance, allProvenance, raw);
+    const message = selectCandidateProvenance(provenance, raw);
     const staged = Buffer.from(
       `${JSON.stringify({ source: message, messages: [{ role: "user", content: message.content }] })}\n`,
     );
@@ -214,9 +212,8 @@ async function materializeDiscovery(
   return { candidates, report };
 }
 
-export function selectCandidateProvenance(
+function selectCandidateProvenance(
   available: readonly ProvenanceMessage[],
-  allProvenance: readonly ProvenanceMessage[],
   candidate: {
     readonly candidateId: string;
     readonly sourcePr: number;
@@ -237,12 +234,7 @@ export function selectCandidateProvenance(
   if (!message) {
     throw new Error(`candidate ${candidate.candidateId} references unknown provenance`);
   }
-  assertProvenanceMatchesPullRequest(
-    message,
-    candidate.sourcePr,
-    candidate.sourceUrl,
-    allProvenance,
-  );
+  assertProvenanceMatchesPullRequest(message, candidate.sourcePr, candidate.sourceUrl);
   return message;
 }
 

@@ -1,12 +1,12 @@
-import { buildRunRequest } from "../api/run-request.js";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { buildCommit } from "../config/build-metadata.js";
 import type { SelfBenchConfig } from "../config/index.js";
 import type { Candidate, CandidateWorkflowInput } from "../contracts/index.js";
 import { configureGenerationRun } from "../generation/run.js";
+import { buildRunRequest } from "../generation/run-request.js";
 import type { GenerationReference } from "../generation/settings.js";
 import type { PullRequestCandidate } from "../github/pr-candidate.js";
-import type { ProvenanceMessage } from "../provenance/types.js";
+import type { ProvenanceMessage } from "../github/provenance.js";
 
 /** Starts one candidate workflow; the Temporal client in production, a recorder in tests. */
 export type WorkflowStarter = (workflowId: string, input: CandidateWorkflowInput) => Promise<void>;
@@ -71,7 +71,6 @@ export async function startTaskFromPullRequest(options: TaskStartOptions): Promi
     },
     selfbenchCommit: buildCommit,
   });
-  if ("replay" in run) throw new Error("unexpected replay request");
   if (options.generation) configureGenerationRun(run, options.generation, config);
   const candidate: Candidate = { ...pullRequest.candidate, provenance: candidateProvenance };
   const workflowId = `${runId}/candidate/${candidate.candidateId}`;

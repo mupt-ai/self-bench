@@ -1,6 +1,6 @@
 import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { isReplayRunRequest, type WorkflowRunInput } from "../contracts/index.js";
+import type { RunRequest } from "../contracts/index.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { generationCost } from "../managed/cost-status.js";
@@ -10,7 +10,6 @@ import { liveBatchStatus, overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
-import { prepareReplayBatch } from "./replay.js";
 import { batchStatus } from "./status.js";
 import { createBatchStore } from "./store.js";
 import { batchExecutions } from "./temporal.js";
@@ -57,14 +56,12 @@ export function createGenerationBatches(
   timer.unref();
   poll();
   return {
-    async start(run: WorkflowRunInput, token: string) {
+    async start(run: RunRequest, token: string) {
       if (await store.read(run.runId))
         throw new Error(
           "Batch ID already exists; inspect it rather than starting another execution",
         );
-      const state = isReplayRunRequest(run)
-        ? await prepareReplayBatch(run, token, artifacts, taskQueue)
-        : await prepareGenerationBatch({ run, token, artifacts, taskQueue });
+      const state = await prepareGenerationBatch({ run, token, artifacts, taskQueue });
       await store.create(state);
       poll();
     },

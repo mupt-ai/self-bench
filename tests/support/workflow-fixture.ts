@@ -5,22 +5,22 @@ import type {
   Difficulty,
   PipelineStage,
   RunRequest,
+  RunStatus,
+  TaskProgress,
   VerifyOutcome,
   VerifyReport,
 } from "../../src/contracts/index.js";
-import type { SelfBenchActivities } from "../../src/generation/activity-types.js";
+import type {
+  DiscoveryShardInput,
+  SelfBenchActivities,
+} from "../../src/generation/activity-types.js";
+import { executeCandidate } from "../../src/generation/workflow/candidate.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",
   sha256: "a".repeat(64),
   sizeBytes: 1,
   contentType: "application/json",
-};
-
-export const combinedProvenance: ArtifactRef = {
-  ...artifact,
-  uri: "file:///combined-provenance.jsonl",
-  contentType: "application/x-ndjson",
 };
 
 export const run: RunRequest = {
@@ -150,17 +150,10 @@ export function greenOutcome(
 
 export function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivities {
   return {
-    collectRunProvenance: async () => artifact,
-    collectExcludedSourcePrs: async () => {
-      throw new Error("unexpected cross-run exclusion");
-    },
     discoverCandidateShard: async ({ shardIndex }) => ({
       candidates: shardIndex === 0 ? discovered : [],
       report: artifact,
     }),
-    rebuildReplayCandidates: async () => {
-      throw new Error("unexpected replay");
-    },
     runAuthoringRound: async ({ candidate: value, round }) => ({
       kind: "submitted",
       task: draft(value.candidateId),
@@ -173,6 +166,30 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),
       reason: "fair benchmark",
     }),
-    buildExport: async () => artifact,
+  };
+}
+
+/**
+ * Runs each discovered candidate through the author/review loop the way selfBenchAuthorWorkflow
+ * does, exposing the candidates' latest progress as a run status.
+ */
+export async function authorCandidates(
+  activities: SelfBenchActivities,
+  install?: (status: () => RunStatus) => void,
+): Promise<{ acceptedTaskIds: string[] }> {
+  const { candidates } = await activities.discoverCandidateShard({
+    shardIndex: 0,
+  } as DiscoveryShardInput);
+  const tasks = new Map<string, TaskProgress>();
+  install?.(() => ({ tasks: [...tasks.values()] }) as unknown as RunStatus);
+  const results = await Promise.all(
+    candidates.map((value) =>
+      executeCandidate({ run, candidate: value }, activities, (progress) =>
+        tasks.set(value.candidateId, progress),
+      ),
+    ),
+  );
+  return {
+    acceptedTaskIds: results.flatMap((result) => (result.task ? [result.task.taskId] : [])),
   };
 }

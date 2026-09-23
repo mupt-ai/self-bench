@@ -1,10 +1,7 @@
 import type { ArtifactStore } from "../artifacts/index.js";
 import { MAX_DISCOVERY_SHARDS } from "../config/execution-limits.js";
 import type { RunRequest } from "../contracts/index.js";
-import { parseProvenance } from "../generation/activity-runtime.js";
-import { collectExcludedSourcePrs } from "../generation/discovery/excluded-source-prs.js";
 import { fetchBatchPullRequests } from "../github/batch-pull-requests.js";
-import { combineRunProvenance } from "../provenance/index.js";
 import { discoveryPrsPerShard, partitionPullRequests, takeNewestShards } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 
@@ -24,16 +21,7 @@ export async function prepareGenerationBatch(options: {
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.endpoint ? { endpoint: options.endpoint } : {}),
   });
-  const local = parseProvenance(await artifacts.get(run.provenance));
-  const messages = combineRunProvenance(run.repository.url, local, github);
-  const excludedSourcePrs = run.excludeRuns?.length
-    ? await collectExcludedSourcePrs(artifacts, run.excludeRuns)
-    : [];
-  const chunks = partitionPullRequests(
-    messages.filter(
-      (message) => message.sourcePr !== undefined && !excludedSourcePrs.includes(message.sourcePr),
-    ),
-  );
+  const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
   if (!chunks.length) throw new Error("No eligible merged PRs found");
   // One discovery agent can fill a small request from a single PR window. Larger
   // requests widen each window rather than exceeding the workflow shard bound.
@@ -66,7 +54,7 @@ export async function prepareGenerationBatch(options: {
             count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
           ]),
         ) as RunRequest["candidateCounts"],
-        excludedSourcePrs,
+        excludedSourcePrs: [],
       },
     });
   }

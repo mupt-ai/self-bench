@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { CancelledFailure, Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../contracts/index.js";
+import { type ProvenanceMessage, provenanceMessageSchema } from "../github/provenance.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { projectRoot } from "../lib/project-paths.js";
 import {
@@ -14,7 +15,6 @@ import {
   sessionProviderError,
   toolCallNames,
 } from "../pi/session.js";
-import { type ProvenanceMessage, provenanceMessageSchema } from "../provenance/index.js";
 import {
   type SandboxCostSnapshot,
   SandboxExecutionError,

@@ -23,7 +23,7 @@ describe("E2B worker startup validation", () => {
       "does not exist or is not accessible",
     );
     await expect(validateE2BWorkerStartup(config, api)).rejects.toThrow(
-      `self-bench setup e2b --name ${config.image}`,
+      `bun scripts/build-e2b-template.ts --name ${config.image}`,
     );
   });
 

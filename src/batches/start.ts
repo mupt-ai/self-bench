@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { buildRunRequest } from "../api/run-request.js";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { buildCommit } from "../config/build-metadata.js";
 import type { SelfBenchConfig } from "../config/index.js";
 import { commitSchema, type RunRequest, runRequestSchema } from "../contracts/index.js";
 import { configureGenerationRun } from "../generation/run.js";
+import { buildRunRequest } from "../generation/run-request.js";
 import { type GenerationReference, generationSettingsSchema } from "../generation/settings.js";
 import { apiHeaders, GitHubOAuthError } from "../github/oauth.js";
 import type { ConnectedRepo } from "../repos/store.js";
@@ -42,9 +42,8 @@ export async function prepareBatch(options: {
     );
   const commit = commitSchema.parse(((await response.json()) as { sha?: unknown }).sha);
   const runId = `batch-${randomUUID()}`;
-  // A real, readable empty local-session input. collectRunProvenance augments this with
-  // merged GitHub PRs using the submitter's token from the encrypted record store (hosted)
-  // or the worker's own credentials. OAuth secrets never enter history.
+  // Run requests carry a provenance artifact; a batch's is empty because prepareGenerationBatch
+  // reads merged PRs straight from GitHub. OAuth secrets never enter history.
   const provenance = await artifacts.put(
     `runs/${runId}/input/provenance.jsonl`,
     Buffer.alloc(0),
@@ -57,7 +56,6 @@ export async function prepareBatch(options: {
     candidateCounts,
     selfbenchCommit: buildCommit,
   });
-  if ("replay" in run) throw new Error("unexpected replay request");
   if (options.generation) configureGenerationRun(run, options.generation, config);
   return run;
 }

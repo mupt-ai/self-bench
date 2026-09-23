@@ -2,12 +2,8 @@ import { z } from "zod";
 import type { SelfBenchConfig } from "../config/index.js";
 import {
   artifactRefSchema,
-  excludeRunsSchema,
   MAX_CANDIDATES_PER_RUN,
-  type ReplayRunRequest,
   type RunRequest,
-  replayRunRequestSchema,
-  replaySchema,
   repositoryRefSchema,
   runRequestSchema,
 } from "../contracts/index.js";
@@ -28,37 +24,17 @@ const submissionSchema = z.object({
     medium: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
     hard: z.number().int().min(0).max(MAX_CANDIDATES_PER_RUN),
   }),
-  excludeRuns: excludeRunsSchema.optional(),
 });
 
-const replaySubmissionSchema = z.object({ ...commonSchema, replay: replaySchema });
+export type RunSubmission = z.input<typeof submissionSchema>;
 
-export type RunSubmission =
-  | z.input<typeof submissionSchema>
-  | z.input<typeof replaySubmissionSchema>;
-
-export function buildRunRequest(
-  config: SelfBenchConfig,
-  submission: RunSubmission,
-): RunRequest | ReplayRunRequest {
-  if ("replay" in submission) {
-    const parsed = replaySubmissionSchema.parse(submission);
-    return replayRunRequestSchema.parse({
-      runId: parsed.runId,
-      replay: parsed.replay,
-      authoring: authoring(parsed.authoringModel),
-      version: version(config, parsed.selfbenchCommit),
-    });
-  }
+export function buildRunRequest(config: SelfBenchConfig, submission: RunSubmission): RunRequest {
   const parsed = submissionSchema.parse(submission);
   return runRequestSchema.parse({
     runId: parsed.runId,
     repository: parsed.repository,
     provenance: parsed.provenance,
     candidateCounts: parsed.candidateCounts,
-    ...(parsed.excludeRuns && parsed.excludeRuns.length > 0
-      ? { excludeRuns: parsed.excludeRuns }
-      : {}),
     authoring: authoring(parsed.authoringModel),
     version: version(config, parsed.selfbenchCommit),
   });

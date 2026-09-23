@@ -1,4 +1,4 @@
-import type { ArtifactRef, Difficulty, RepositoryRef } from "./common.js";
+import type { ArtifactRef, Difficulty } from "./common.js";
 import type { RunRequest } from "./run.js";
 import type { AuthoredTask, Candidate } from "./task.js";
 import type { PipelineStage } from "./verify.js";
@@ -58,7 +58,7 @@ export interface DiscoveryShardProgress {
   readonly error?: string;
 }
 
-export interface DiscoveryProgress {
+interface DiscoveryProgress {
   readonly wave: number;
   readonly totalShards: number;
   readonly completedShards: number;
@@ -82,12 +82,6 @@ export interface RunStatus {
   readonly error?: string;
 }
 
-export interface RunResult {
-  readonly runId: string;
-  readonly export: ArtifactRef;
-  readonly acceptedTaskIds: readonly string[];
-}
-
 /** Input of one candidate child workflow. */
 export interface CandidateWorkflowInput {
   readonly run: RunRequest;
@@ -104,11 +98,4 @@ export interface CandidateWorkflowResult {
 export interface DiscoveryResult {
   readonly candidates: readonly Candidate[];
   readonly report: ArtifactRef;
-}
-
-/** Candidates and run metadata rebuilt from a source run for a replay. */
-export interface ReplayMaterial {
-  readonly candidates: readonly Candidate[];
-  readonly repository: RepositoryRef;
-  readonly provenance: ArtifactRef;
 }

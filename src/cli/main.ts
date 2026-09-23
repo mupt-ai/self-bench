@@ -1,26 +1,10 @@
 import { download, passthrough } from "./api-client.js";
-import { associate } from "./associate.js";
 import { printHelp } from "./help.js";
-import { replay } from "./replay.js";
-import { run } from "./run.js";
-import { setup } from "./setup.js";
 import { fail, requiredArgument } from "./values.js";
 
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
   switch (command) {
-    case "setup":
-      await setup(rest);
-      break;
-    case "run":
-      await run(rest);
-      break;
-    case "associate":
-      await associate(rest);
-      break;
-    case "replay":
-      await replay(rest);
-      break;
     case "status":
       await passthrough("GET", `/v1/runs/${requiredArgument(rest, "run ID")}`);
       break;

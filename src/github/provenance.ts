@@ -1,40 +1,42 @@
-import { runCommand } from "../lib/process.js";
-import { redactSecrets } from "../provenance/redact.js";
-import { isRecord, nonnegativeNumber, positiveIntegerValue } from "../provenance/shared.js";
-import type { ProvenanceMessage } from "../provenance/types.js";
+import { z } from "zod";
+import { redactSecrets } from "../lib/redact.js";
 import { assertPullRequestBelongsToRepository, githubRepository } from "./repository.js";
 
-const GITHUB_PULL_REQUEST_LIMIT = 500;
 const MAX_GITHUB_BODY_LENGTH = 12_000;
 
-export async function collectGitHubPullRequestProvenance(
-  repositoryUrl: string,
-  token?: string,
-  signal?: AbortSignal,
-): Promise<ProvenanceMessage[]> {
-  const repository = githubRepository(repositoryUrl);
-  const result = await runCommand(
-    "gh",
-    [
-      "pr",
-      "list",
-      "--repo",
-      repository,
-      "--state",
-      "merged",
-      "--limit",
-      String(GITHUB_PULL_REQUEST_LIMIT),
-      "--json",
-      "number,title,body,url,author,isDraft,additions,deletions,changedFiles",
-    ],
-    {
-      env: token ? { ...process.env, GH_TOKEN: token } : process.env,
-      ...(signal ? { signal } : {}),
-    },
-  );
-  return extractGitHubPullRequestProvenance(result.stdout, repositoryUrl);
-}
+/**
+ * The request a task is authored from: a merged PR's title and body. Runs recorded before local
+ * agent sessions were dropped may still hold codex, claude-code, pi, or generic messages.
+ */
+const provenanceMessageBaseSchema = z.object({
+  sessionId: z.string().min(1),
+  messageIndex: z.number().int().nonnegative(),
+  content: z.string().min(1),
+});
 
+const localProvenanceMessageSchema = provenanceMessageBaseSchema
+  .extend({
+    sourceType: z.enum(["codex", "claude-code", "pi", "generic"]),
+    sourcePr: z.number().int().positive().optional(),
+    sourceUrl: z.string().url().optional(),
+  })
+  .refine(
+    (message) => (message.sourcePr === undefined) === (message.sourceUrl === undefined),
+    "sourcePr and sourceUrl must be supplied together",
+  );
+
+export const provenanceMessageSchema = z.union([
+  localProvenanceMessageSchema,
+  provenanceMessageBaseSchema.extend({
+    sourceType: z.literal("github-pull-request"),
+    sourcePr: z.number().int().positive(),
+    sourceUrl: z.string().url(),
+  }),
+]);
+
+export type ProvenanceMessage = z.infer<typeof provenanceMessageSchema>;
+
+/** Merged, human-authored PRs large enough to author from, as provenance messages. */
 export function extractGitHubPullRequestProvenance(
   raw: string,
   repositoryUrl: string,
@@ -79,4 +81,29 @@ function isHumanAuthor(value: unknown): boolean {
     return false;
   }
   return !value.login.toLowerCase().endsWith("[bot]");
+}
+
+/** A discovered candidate must point at provenance from its own pull request. */
+export function assertProvenanceMatchesPullRequest(
+  message: ProvenanceMessage,
+  sourcePr: number,
+  sourceUrl: string,
+): void {
+  if (message.sourcePr !== sourcePr || message.sourceUrl !== sourceUrl) {
+    throw new Error(
+      `pull request ${sourceUrl}#${sourcePr} does not match provenance ${message.sourceUrl}#${message.sourcePr}`,
+    );
+  }
+}
+
+function positiveIntegerValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function nonnegativeNumber(value: unknown): number {
+  return typeof value === "number" && value >= 0 ? value : 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

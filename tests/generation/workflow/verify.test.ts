@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { executeRun } from "../../../src/generation/workflows.js";
 import {
   acceptingActivities,
+  authorCandidates,
   candidate,
   draft,
   redReport,
   ref,
-  run,
 } from "../../support/workflow-fixture.js";
 
 describe("SelfBench in-session verify", () => {
@@ -36,7 +35,7 @@ describe("SelfBench in-session verify", () => {
       return { kind: "accepted", session: ref("file:///verifier-session"), reason: "fair" };
     };
 
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
 
     expect(result.acceptedTaskIds).toEqual(["verified-task"]);
     expect(compileCalls).toBe(0);
@@ -78,7 +77,7 @@ describe("SelfBench in-session verify", () => {
           }
         : await original(input);
 
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
 
     expect(result.acceptedTaskIds).toEqual(["budget-task"]);
     expect(authorRounds).toEqual([1, 2, 3]);

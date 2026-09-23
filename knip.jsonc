@@ -30,6 +30,5 @@
     "src/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
   },
   // Resolved through createRequire; the CLI is installed by the operator.
-  "ignoreDependencies": ["@openai/codex"],
-  "ignoreBinaries": ["vercel"]
+  "ignoreDependencies": ["@openai/codex"]
 }

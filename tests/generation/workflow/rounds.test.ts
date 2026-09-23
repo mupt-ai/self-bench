@@ -1,14 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { RunStatus, TaskProgress } from "../../../src/contracts/index.js";
-import { executeRun } from "../../../src/generation/workflows.js";
 import {
   acceptingActivities,
+  authorCandidates,
   candidate,
   draft,
   greenOutcome,
   redReport,
   ref,
-  run,
 } from "../../support/workflow-fixture.js";
 
 function recordStatuses(): {
@@ -50,7 +49,7 @@ describe("SelfBench workflow rounds", () => {
     wrap("runReviewRound");
     const status = recordStatuses();
 
-    const result = await executeRun(run, activities, status.install);
+    const result = await authorCandidates(activities, status.install);
 
     expect(result.acceptedTaskIds).toEqual(["green-task"]);
     expect(calls).toEqual([
@@ -81,7 +80,7 @@ describe("SelfBench workflow rounds", () => {
           }
         : greenOutcome(task, stage, round);
 
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
 
     expect(result.acceptedTaskIds).toEqual(["policy-task"]);
     expect(rounds).toEqual([
@@ -108,7 +107,7 @@ describe("SelfBench workflow rounds", () => {
     };
     const status = recordStatuses();
 
-    const result = await executeRun(run, activities, status.install);
+    const result = await authorCandidates(activities, status.install);
 
     expect(result.acceptedTaskIds).toEqual([]);
     expect(authoringRounds).toBe(3);
@@ -148,7 +147,7 @@ describe("SelfBench workflow rounds", () => {
           }
         : { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
     };
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
     expect(result.acceptedTaskIds).toEqual(["fixable-task"]);
     expect(calls).toEqual(["author:1", "checks:1", "review:1", "author:2", "checks:2", "review:2"]);
   });
@@ -179,7 +178,7 @@ describe("SelfBench workflow rounds", () => {
         : { kind: "accepted", session: ref("file:///v2"), reason: "fair" };
     };
 
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
 
     expect(result.acceptedTaskIds).toEqual(["review-numbers-task"]);
     expect(calls).toEqual(["author:1", "review:1", "author:2", "author:3", "review:2"]);
@@ -203,7 +202,7 @@ describe("SelfBench workflow rounds", () => {
             report: redReport(stage, round, task.taskId, { oracle: true }),
             reportRef: ref("file:///red"),
           };
-    const result = await executeRun(run, activities);
+    const result = await authorCandidates(activities);
     expect(result.acceptedTaskIds).toEqual([]);
     expect(reviews).toEqual([1]);
   });
@@ -222,7 +221,7 @@ describe("SelfBench workflow rounds", () => {
       suggestions: "Use a public seam",
     });
     let current: (() => RunStatus) | undefined;
-    const result = await executeRun(run, activities, (status) => {
+    const result = await authorCandidates(activities, (status) => {
       current = status;
     });
     expect(result.acceptedTaskIds).toEqual([]);
@@ -239,7 +238,7 @@ describe("SelfBench workflow rounds", () => {
     });
     let currentStatus: (() => RunStatus) | undefined;
 
-    await executeRun(run, activities, (status) => {
+    await authorCandidates(activities, (status) => {
       currentStatus = status;
     });
 

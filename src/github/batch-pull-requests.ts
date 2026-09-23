@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { ProvenanceMessage } from "../provenance/types.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
+import type { ProvenanceMessage } from "./provenance.js";
 import { extractGitHubPullRequestProvenance } from "./provenance.js";
 import { githubRepository } from "./repository.js";
 

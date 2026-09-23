@@ -99,12 +99,9 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       },
     );
   }
-  // Provenance and discovery must resolve this run's credentials before touching any sandbox
+  // Discovery must resolve this run's credentials before touching any sandbox
   // or activity context.
   const activities = createActivities(config);
-  await expect(activities.collectRunProvenance(run)).rejects.toThrow(
-    "credentials are not configured",
-  );
   await expect(
     activities.discoverCandidateShard({
       run,

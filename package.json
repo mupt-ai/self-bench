@@ -59,7 +59,6 @@
     "check:unused": "knip"
   },
   "dependencies": {
-    "@clack/prompts": "1.7.0",
     "@google-cloud/storage": "^7.22.0",
     "@openai/codex": "0.153.4",
     "@radix-ui/react-dropdown-menu": "2.1.24",

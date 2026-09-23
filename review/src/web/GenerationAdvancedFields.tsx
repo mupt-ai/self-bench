@@ -202,7 +202,7 @@ export function AdvancedFields({
         <label className={`${fieldStyles} content-start`} htmlFor="generation-image">
           <span className="flex items-center gap-1.5">
             Vercel Runtime Image
-            <InfoTooltip label="Use the digest-pinned image from self-bench setup vercel." />
+            <InfoTooltip label="Use the digest-pinned image published from Dockerfile.sandbox." />
           </span>
           <Input
             id="generation-image"

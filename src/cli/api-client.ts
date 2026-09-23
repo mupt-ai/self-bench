@@ -55,7 +55,7 @@ export async function download(runId: string, outputPath: string): Promise<void>
   console.log(JSON.stringify({ runId, output: destination }, null, 2));
 }
 
-export async function requestJson(
+async function requestJson(
   path: string,
   options: { method: "GET" | "POST"; body?: Uint8Array; contentType?: string },
 ): Promise<Record<string, unknown>> {

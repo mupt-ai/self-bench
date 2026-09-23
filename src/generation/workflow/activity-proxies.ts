@@ -15,9 +15,9 @@ const candidateOptions: ActivityOptions = {
 };
 
 const candidateActivities =
-  proxyActivities<
-    Pick<SelfBenchActivities, "runAuthoringRound" | "runReviewRound" | "buildExport">
-  >(candidateOptions);
+  proxyActivities<Pick<SelfBenchActivities, "runAuthoringRound" | "runReviewRound">>(
+    candidateOptions,
+  );
 
 // The queue name depends on the running workflow, so the proxy is created per call.
 const compileAndVerify: SelfBenchActivities["compileAndVerify"] = (input) =>
@@ -25,23 +25,6 @@ const compileAndVerify: SelfBenchActivities["compileAndVerify"] = (input) =>
     ...candidateOptions,
     taskQueue: harborTaskQueue(workflowInfo().taskQueue),
   }).compileAndVerify(input);
-
-const provenanceActivities = proxyActivities<
-  Pick<
-    SelfBenchActivities,
-    "collectRunProvenance" | "collectExcludedSourcePrs" | "rebuildReplayCandidates"
-  >
->({
-  startToCloseTimeout: "5 minutes",
-  heartbeatTimeout: "3 minutes",
-  cancellationType: "WAIT_CANCELLATION_COMPLETED",
-  retry: {
-    initialInterval: "5 seconds",
-    backoffCoefficient: 2,
-    maximumInterval: "1 minute",
-    maximumAttempts: 3,
-  },
-});
 
 const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
   startToCloseTimeout: "1 hour",
@@ -56,12 +39,8 @@ const discoveryActivities = proxyActivities<Pick<SelfBenchActivities, "discoverC
 });
 
 export const workflowActivities: SelfBenchActivities = {
-  collectRunProvenance: provenanceActivities.collectRunProvenance,
-  collectExcludedSourcePrs: provenanceActivities.collectExcludedSourcePrs,
-  rebuildReplayCandidates: provenanceActivities.rebuildReplayCandidates,
   discoverCandidateShard: discoveryActivities.discoverCandidateShard,
   runAuthoringRound: candidateActivities.runAuthoringRound,
   compileAndVerify,
   runReviewRound: candidateActivities.runReviewRound,
-  buildExport: candidateActivities.buildExport,
 };

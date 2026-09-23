@@ -4,7 +4,7 @@ import {
   partitionPullRequests,
   takeNewestShards,
 } from "../../src/batches/shards.js";
-import type { ProvenanceMessage } from "../../src/provenance/types.js";
+import type { ProvenanceMessage } from "../../src/github/provenance.js";
 
 function message(pr: number, index = 0): ProvenanceMessage {
   return {

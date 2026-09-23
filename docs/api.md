@@ -151,19 +151,17 @@ Metered Stripe billing applies only to managed model and sandbox usage. Organiza
 
 `GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 
-## Run artifacts and CLI routes
+## Run artifacts and run routes
 
-The site's task pages read bundles and raw artifacts through the run routes that the CLI also uses. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. See [Operations](operations.md#http-api) for run submission details.
+The site's task pages read bundles and raw artifacts through the run routes that the CLI also uses. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. Start runs with the batch routes above.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check (unauthenticated) |
-| `GET` | `/v1/runs` | Every run Temporal knows plus archived runs |
-| `POST` | `/v1/runs` | Start a candidate workflow or a replay |
+| `GET` | `/v1/runs` | Every batch plus archived runs |
 | `GET` | `/v1/runs/:runId` | Run status |
 | `POST` | `/v1/runs/:runId/cancel` | Request cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download the export archive |
-| `POST` | `/v1/provenance?runId=…` | Store provenance JSONL for a run |
 | `GET` | `/v1/runs/:runId/artifacts?key=…&start=…` | Stream one artifact, optionally from a byte offset |
 | `GET` | `/v1/runs/:runId/bundle?key=…` | Expand a Harbor task bundle into its text files |
 

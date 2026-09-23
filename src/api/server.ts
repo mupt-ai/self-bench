@@ -94,13 +94,10 @@ export async function startApi(
       if (await handleRunArtifactRoute(request, url, response, artifacts)) return;
       if (
         await handleRunRoute(request, url, response, {
-          config,
           client,
           artifacts,
           batches,
           statusFor: runStatus,
-          githubToken: async () =>
-            user && site ? site.users.gitHubToken(user.githubId) : process.env.GH_TOKEN,
         })
       )
         return;
