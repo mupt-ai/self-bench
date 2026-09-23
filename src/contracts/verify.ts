@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type ArtifactRef, artifactRefSchema } from "./common.js";
-import { type AuthoredTask, authoredTaskDraftSchema, authoredTaskSchema } from "./task.js";
+import { type AuthoredTask, authoredTaskDraftSchema } from "./task.js";
 
 const pipelineStageSchema = z.enum(["authoring", "review", "verification"]);
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
@@ -54,25 +54,17 @@ export interface VerifyOutcome {
   readonly task?: AuthoredTask;
 }
 
-/** A green in-session verify whose payload equals the final submission; the worker reuses it. */
-const verifiedSubmissionSchema = z.object({
-  report: artifactRefSchema,
-  task: authoredTaskSchema,
-});
-
 const rejectedRoundSchema = z.object({
   kind: z.literal("rejected"),
   candidateId: z.string().min(1),
   reason: z.string().min(1),
 });
 
-export const authoringRoundResultSchema = z.discriminatedUnion("kind", [
+const authoringRoundResultSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("submitted"),
     task: authoredTaskDraftSchema,
     session: artifactRefSchema,
-    verifyCalls: z.number().int().nonnegative().optional(),
-    verified: verifiedSubmissionSchema.optional(),
   }),
   rejectedRoundSchema,
 ]);

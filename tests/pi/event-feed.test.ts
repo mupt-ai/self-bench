@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { withAgentFeed } from "../../src/generation/agent/feed.js";
+import { liveFeed } from "../../src/generation/agent.js";
 import { agentFeedEvents } from "../../src/harnesses/pi/agent-feed.js";
 import { PiEventFeed } from "../../src/harnesses/pi/event-feed.js";
 
@@ -143,32 +143,23 @@ test("archived conversations redact credentials and omit prompts and reasoning",
   ]);
 });
 
-test("feed flushes on completion and failure without starting a sandbox", async () => {
+test("feed publishes a snapshot when it closes", async () => {
   const root = await mkdtemp(join(tmpdir(), "agent-feed-"));
   const store = new LocalArtifactStore(root);
   try {
-    const result = await withAgentFeed(store, "round-1/attempt-1", [], async (output) => {
-      output(
-        "stdout",
-        line({
-          type: "message_update",
-          assistantMessageEvent: { type: "text_delta", delta: "Working" },
-        }),
-      );
-      return 42;
-    });
-    expect(result).toBe(42);
+    const feed = liveFeed(store, "round-1/attempt-1", []);
+    feed.push(
+      "stdout",
+      line({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "Working" },
+      }),
+    );
+    await feed.close();
     const saved = await store.getByKey("round-1/attempt-1/live/00000000.json");
     expect(JSON.parse(Buffer.from(saved ?? []).toString()).events).toEqual([
       { kind: "message", text: "Working" },
     ]);
-    await expect(
-      withAgentFeed(store, "round-2/attempt-1", [], async (output) => {
-        output("stdout", line({ type: "tool_execution_start", toolCallId: "a", toolName: "bash" }));
-        throw new Error("sandbox failed");
-      }),
-    ).rejects.toThrow("sandbox failed");
-    expect(await store.getByKey("round-2/attempt-1/live/00000000.json")).toBeDefined();
   } finally {
     await rm(root, { recursive: true, force: true });
   }

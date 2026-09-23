@@ -12,9 +12,9 @@ import {
   managedE2BTemplateReference,
 } from "../sandbox/providers/e2b/managed-template.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
-import { safeHeartbeat } from "./activity-runtime.js";
 import { generationConfigEnvironment } from "./config.js";
 import { generationStageEnvironment, stageAuthoring } from "./credentials.js";
+import { safeHeartbeat } from "./helpers.js";
 import { MANAGED_E2B_TEMPLATE_OWNER } from "./managed/generation.js";
 import { meteredSandboxExecutor } from "./managed/metered-sandbox.js";
 import { withUsageLedger } from "./managed/usage.js";

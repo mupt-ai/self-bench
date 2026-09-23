@@ -73,7 +73,7 @@ try {
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
-    "dist/sandbox-author.bundle.js",
+    "dist/generation/prompts/authoring.md",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-compiler.bundle.js",
     "dist/sandbox-task-operation.bundle.js",

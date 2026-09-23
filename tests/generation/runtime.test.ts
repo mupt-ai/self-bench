@@ -4,7 +4,7 @@ import {
   withExecutionEnvironment,
 } from "../../src/contracts/config/execution-environment.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
-import { authoringRoundScript, reviewRoundScript } from "../../src/generation/agent/scripts.js";
+import { agentScript } from "../../src/generation/agent.js";
 import {
   generationEnvironment,
   generationRecordPath,
@@ -133,8 +133,12 @@ test("generation credentials cannot be substituted and concurrent activity envir
     ),
   );
   expect(executionEnvironment()).toBe(process.env);
-  for (const script of [authoringRoundScript(false), reviewRoundScript(false)]) {
-    expect(script).toContain(`--thinking "\${AUTHOR_THINKING:-high}"`);
-    expect(script).not.toContain("--thinking high");
-  }
+  const script = agentScript({
+    workspace: { kind: "task" },
+    extension: "/work/reviewer.js",
+    tools: "read",
+    outputs: [],
+  } as unknown as Parameters<typeof agentScript>[0]);
+  expect(script).toContain(`--thinking "\${AUTHOR_THINKING:-high}"`);
+  expect(script).not.toContain("--thinking high");
 });

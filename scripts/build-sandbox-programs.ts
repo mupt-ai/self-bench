@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "..");
 const outputDirectory = join(root, "dist");
 
-const programs = ["author", "check", "verifier", "compiler", "task-operation"] as const;
+const programs = ["check", "verifier", "compiler", "task-operation"] as const;
 
 const extensions = ["authoring", "reviewer"] as const;
 
@@ -50,3 +50,6 @@ await Promise.all(
     }),
   ),
 );
+await cp(join(root, "src/generation/prompts"), join(outputDirectory, "generation/prompts"), {
+  recursive: true,
+});

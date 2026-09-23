@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
-import { runHarborGate } from "../../src/generation/verify/harbor-gate.js";
+import { harborRun } from "../../src/generation/harbor-gates.js";
 import { harborPythonPath } from "../../src/harnesses/harbor/environment.js";
 
 test("generation nop and oracle gates invoke the packaged E2B adapter", async () => {
@@ -29,15 +29,7 @@ fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_resu
     for (const agent of ["nop", "oracle"] as const) {
       await withExecutionEnvironment(
         { PATH: root, CAPTURE: capture, SELFBENCH_HARBOR_E2B_API_KEY: "test-key" },
-        () =>
-          runHarborGate(
-            root,
-            join(root, "jobs"),
-            agent,
-            "task",
-            "e2b",
-            new AbortController().signal,
-          ),
+        () => harborRun(root, root, "task", agent, "e2b", new AbortController().signal),
       );
       const recorded = JSON.parse(await readFile(capture, "utf8"));
       expect(recorded.args[recorded.args.indexOf("--env") + 1]).toBe("e2b");
@@ -62,7 +54,7 @@ test("gate version mismatch prevents any trial command", async () => {
     await chmod(executable, 0o700);
     await expect(
       withExecutionEnvironment({ PATH: root }, () =>
-        runHarborGate(root, root, "nop", "task", "docker", new AbortController().signal),
+        harborRun(root, root, "task", "nop", "docker", new AbortController().signal),
       ),
     ).rejects.toThrow("does not match");
     expect(await Bun.file(marker).exists()).toBe(false);

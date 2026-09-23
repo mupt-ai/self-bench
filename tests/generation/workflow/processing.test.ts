@@ -12,27 +12,6 @@ import {
 } from "../../support/workflow-fixture.js";
 
 describe("SelfBench workflow processing", () => {
-  test("turns three consecutive infrastructure rounds into an infrastructure failure", async () => {
-    const activities = acceptingActivities([candidate("flaky", 1)]);
-    activities.compileAndVerify = async ({ task, round }) => ({
-      report: redReport("authoring", round, task.taskId, { infrastructure: "ImageBuildError" }),
-      reportRef: ref(`file:///report-${round}`),
-    });
-    let currentStatus: (() => RunStatus) | undefined;
-
-    const result = await authorCandidates(activities, (status) => {
-      currentStatus = status;
-    });
-
-    expect(result.acceptedTaskIds).toEqual([]);
-    expect(currentStatus?.().tasks).toEqual([
-      expect.objectContaining({
-        candidateId: "flaky",
-        status: "infrastructure_failed",
-        reason: expect.stringContaining("3 consecutive authoring rounds"),
-      }),
-    ]);
-  });
   test("counts an infrastructure round as a round the author can retry", async () => {
     const activities = acceptingActivities([candidate("retry", 1)]);
     activities.compileAndVerify = async ({ task, stage, round }) =>

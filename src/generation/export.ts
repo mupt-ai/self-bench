@@ -1,10 +1,15 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
+import type { AuthoredTask, RunRequest } from "../contracts/index.js";
 import { type ArtifactRef, taskDefinitionSchema } from "../contracts/index.js";
 import type { SandboxFile } from "../sandbox/contracts.js";
 import { dedupeBySourcePr, exportManifest } from "../sandbox/export-manifest.js";
 import { taskOperation } from "../sandbox/task-operation.js";
-import type { ExportInput } from "./activity-types.js";
+
+export interface ExportInput {
+  readonly run: RunRequest;
+  readonly tasks: readonly AuthoredTask[];
+}
 
 export { dedupeBySourcePr, exportManifest } from "../sandbox/export-manifest.js";
 

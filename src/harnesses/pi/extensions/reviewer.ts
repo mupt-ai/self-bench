@@ -22,27 +22,9 @@ export default function reviewerExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "accept_task",
     label: "Accept SelfBench task",
-    description: "Accept a fair task after the latest report is GREEN.",
+    description: "Accept the task as a fair benchmark.",
     parameters: Type.Object(
-      {
-        reason: Type.String({ minLength: 1 }),
-        findings: Type.Array(
-          Type.Object(
-            {
-              artifact: Type.String({ minLength: 1 }),
-              disposition: Type.Union([
-                Type.Literal("base_contract"),
-                Type.Literal("prompt_contract"),
-                Type.Literal("external_contract"),
-                Type.Literal("not_contract"),
-              ]),
-              evidence: Type.String({ minLength: 1 }),
-            },
-            { additionalProperties: false },
-          ),
-        ),
-        counterexample: Type.String({ minLength: 1 }),
-      },
+      { reason: Type.String({ minLength: 1 }) },
       { additionalProperties: false },
     ),
     async execute(_toolCallId, input) {

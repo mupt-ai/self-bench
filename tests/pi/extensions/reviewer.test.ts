@@ -3,8 +3,6 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { reviewRoundScript } from "../../../src/generation/agent/scripts.js";
-import { authoringResumePrompt } from "../../../src/generation/authoring/prompt.js";
 import reviewerExtension from "../../../src/harnesses/pi/extensions/reviewer.js";
 
 test("reviewer exposes only verdict tools and records feedback without creating task files", async () => {
@@ -41,22 +39,4 @@ test("reviewer exposes only verdict tools and records feedback without creating 
     else process.env.SELFBENCH_VERDICT_OUTPUT = previous;
     await rm(root, { recursive: true, force: true });
   }
-});
-
-test("reviewer launcher has no shell or write tools and author receives review feedback", () => {
-  const script = reviewRoundScript(false);
-  const tools = /--tools ([^ ]+)/.exec(script)?.[1]?.split(",");
-  expect(tools).toEqual([
-    "read",
-    "grep",
-    "find",
-    "ls",
-    "accept_task",
-    "submit_suggestions",
-    "reject_task",
-  ]);
-  expect(script).not.toContain("/work/fix");
-  expect(authoringResumePrompt(2, "GREEN report", "Remove private-helper coupling")).toContain(
-    "Remove private-helper coupling",
-  );
 });

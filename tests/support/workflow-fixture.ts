@@ -10,11 +10,8 @@ import type {
   VerifyOutcome,
   VerifyReport,
 } from "../../src/contracts/index.js";
-import type {
-  DiscoveryShardInput,
-  SelfBenchActivities,
-} from "../../src/generation/activity-types.js";
-import { executeCandidate } from "../../src/generation/workflow/candidate.js";
+import type { DiscoveryShardInput, SelfBenchActivities } from "../../src/generation/activities.js";
+import { executeCandidate } from "../../src/generation/workflows.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",
@@ -158,7 +155,6 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       kind: "submitted",
       task: draft(value.candidateId),
       session: ref(`file:///${value.candidateId}/authoring/session/round-${round}.jsonl`),
-      verifyCalls: 0,
     }),
     compileAndVerify: async ({ task, stage, round }) => greenOutcome(task, stage, round),
     runReviewRound: async ({ candidate: value, round }) => ({

@@ -1,63 +1,58 @@
 import { createArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import type {
+  AuthoringRoundResult,
+  DiscoveryResult,
+  ReviewRoundResult,
+  VerifyOutcome,
+} from "../contracts/index.js";
 import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import type { UsageLedger } from "../db/usage.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
-import type { SelfBenchActivities } from "./activity-types.js";
-import { runAuthoringRound } from "./authoring/round.js";
-import { discoverCandidateShard } from "./discovery/activity.js";
-import { runReviewRound } from "./review/round.js";
+import { type AuthoringRoundInput, runAuthoringRound } from "./authoring.js";
+import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
+import { type ReviewRoundInput, runReviewRound } from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
-import { compileAndVerify } from "./verify/compile-and-verify.js";
+import { type CompileAndVerifyInput, compileAndVerify } from "./verify.js";
 
+export type { DiscoveryShardInput };
+
+export interface SelfBenchActivities {
+  discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
+  runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
+  compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
+  runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
+}
+
+/** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
 export function createActivities(
   config: SelfBenchWorkerConfig,
   records?: EncryptedRecordStore,
   usage?: UsageLedger,
 ): SelfBenchActivities {
   const store = createArtifactStore(config.artifact);
-  const sandbox = createSandboxExecutor(config.execution);
+  const fallback = createSandboxExecutor(config.execution);
+  const runtime = <T>(
+    run: AuthoringRoundInput["run"],
+    stage: "author" | "verifier",
+    action: Parameters<typeof withGenerationRuntime<T>>[5],
+  ) => withGenerationRuntime(config, records, run, stage, fallback, action, usage);
   return {
     discoverCandidateShard: (input) =>
-      withGenerationRuntime(
-        config,
-        records,
-        input.run,
-        "author",
-        sandbox,
-        (executor, _environment, run) => discoverCandidateShard(store, executor, { ...input, run }),
-        usage,
+      runtime(input.run, "author", (sandbox, _harbor, run) =>
+        discoverCandidateShard(store, sandbox, { ...input, run }),
       ),
     runAuthoringRound: (input) =>
-      withGenerationRuntime(
-        config,
-        records,
-        input.run,
-        "author",
-        sandbox,
-        (executor, environment, run) =>
-          runAuthoringRound(store, executor, environment, { ...input, run }),
-        usage,
+      runtime(input.run, "author", (sandbox, harbor, run) =>
+        runAuthoringRound(store, sandbox, harbor, { ...input, run }),
       ),
     compileAndVerify: (input) =>
-      withGenerationRuntime(
-        config,
-        records,
-        input.run,
-        "author",
-        sandbox,
-        (_executor, environment, run) => compileAndVerify(store, environment, { ...input, run }),
-        usage,
+      runtime(input.run, "author", (sandbox, harbor, run) =>
+        compileAndVerify(store, sandbox, harbor, { ...input, run }),
       ),
     runReviewRound: (input) =>
-      withGenerationRuntime(
-        config,
-        records,
-        input.run,
-        "verifier",
-        sandbox,
-        (executor, _environment, run) => runReviewRound(store, executor, { ...input, run }),
-        usage,
+      runtime(input.run, "verifier", (sandbox, _harbor, run) =>
+        runReviewRound(store, sandbox, { ...input, run }),
       ),
   };
 }

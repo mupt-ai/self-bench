@@ -11,7 +11,7 @@ import type {
   TaskProgress,
 } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import type { DiscoveryShardInput } from "../activity-types.js";
+import type { DiscoveryShardInput } from "../activities.js";
 import { heartbeatCost } from "./activity.js";
 
 type ExecutionSnapshot<T> =

@@ -137,7 +137,6 @@ describe("SelfBench workflow rounds", () => {
     };
     activities.runReviewRound = async (input) => {
       calls.push(`review:${input.round}`);
-      expect(input.session).toBeUndefined();
       return input.round === 1
         ? {
             kind: "suggestions",

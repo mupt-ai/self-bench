@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nopGatePassed } from "../../src/generation/verify/report.js";
+import { nopGatePassed } from "../../src/generation/verify-report.js";
 import { runCommand } from "../../src/lib/process.js";
 import { shellQuote } from "../../src/lib/util.js";
 

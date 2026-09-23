@@ -7,7 +7,7 @@ import type {
   TaskProgress,
 } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import type { DiscoveryShardInput } from "../activity-types.js";
+import type { DiscoveryShardInput } from "../activities.js";
 
 interface BatchShard {
   workflowId: string;

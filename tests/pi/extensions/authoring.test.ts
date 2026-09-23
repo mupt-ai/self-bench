@@ -76,32 +76,18 @@ async function writeDeliverable(overrides: Partial<Record<string, string>> = {})
   );
 }
 
-/** Answers mailbox requests like the worker supervisor would. */
-function respond(green: (id: string) => boolean, stopped: { value: boolean }): Promise<void> {
-  const requests = join(root, "mailbox/requests");
-  const responses = join(root, "mailbox/responses");
-  const seen = new Set<string>();
+/** Answers verify requests the way the worker does: `<mailbox>/<n>/ready` → `response.json`. */
+function respond(green: (index: number) => boolean, stopped: { value: boolean }): Promise<void> {
   return (async () => {
-    while (!stopped.value) {
-      const names = await readdir(requests).catch(() => [] as string[]);
-      for (const name of names) {
-        if (!name.endsWith(".json") || seen.has(name)) {
-          continue;
-        }
-        seen.add(name);
-        const id = name.slice(0, -5);
-        const ok = green(id);
-        await mkdir(responses, { recursive: true });
+    for (let index = 1; !stopped.value; ) {
+      const directory = join(root, "mailbox", String(index));
+      if (await readFile(join(directory, "ready")).catch(() => undefined)) {
+        const ok = green(index);
         await writeFile(
-          join(responses, name),
-          JSON.stringify({
-            id,
-            kind: "report",
-            green: ok,
-            summary: ok ? "green" : "red",
-            rendered: `# report ${id}`,
-          }),
+          join(directory, "response.json"),
+          JSON.stringify({ green: ok, report: `# report ${index}` }),
         );
+        index += 1;
       }
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
@@ -127,11 +113,9 @@ beforeEach(async () => {
     SELFBENCH_CHECK_PROGRAM: check,
     SELFBENCH_RENDER_OUTPUT: root,
     SELFBENCH_MAILBOX: join(root, "mailbox"),
-    SELFBENCH_TASK_OUTPUT: join(root, "tasks"),
+    SELFBENCH_SUBMISSION: join(root, "submission"),
     SELFBENCH_DELIVERABLE: deliverable,
     SELFBENCH_VERIFY_BUDGET: "2",
-    SELFBENCH_VERIFY_POLL_MS: "5",
-    SELFBENCH_VERIFY_TIMEOUT_MS: "2000",
   });
 });
 
@@ -154,11 +138,7 @@ describe("authoring extension directory deliverable", () => {
     expect(Object.keys(submit.parameters.properties ?? {})).toEqual([]);
     await writeDeliverable();
     const stopped = { value: false };
-    let calls = 0;
-    const responder = respond(() => {
-      calls += 1;
-      return calls === 2;
-    }, stopped);
+    const responder = respond((index) => index === 2, stopped);
 
     const first = await verify.execute("1", {});
     expect(first.isError).toBeUndefined();
@@ -167,17 +147,18 @@ describe("authoring extension directory deliverable", () => {
     expect(second.content[0]?.text).toContain("green=true. 0 verify call(s) remain");
     const third = await verify.execute("3", {});
     expect(third.isError).toBe(true);
+    expect(JSON.parse(await readFile(join(root, "mailbox/1/definition.json"), "utf8")).prompt).toBe(
+      "Implement the feature.",
+    );
 
     const submitted = await submit.execute("4", {});
-    expect(submitted.details).toEqual({ taskId: "ext-task", verified: true });
-    const recorded = JSON.parse(
-      await readFile(join(root, "tasks/ext-task/definition.json"), "utf8"),
-    );
+    expect(submitted.details).toEqual({ taskId: "ext-task" });
+    const recorded = JSON.parse(await readFile(join(root, "submission/definition.json"), "utf8"));
     expect(recorded.prompt).toBe("Implement the feature.");
-    expect(await readFile(join(root, "tasks/ext-task/test.patch"), "utf8")).toBe("diff --git a b");
+    expect((await readFile(join(root, "submission/source-task.tar.gz"))).length).toBeGreaterThan(0);
     stopped.value = true;
     await responder;
-  });
+  }, 20_000);
 
   test("reports missing or inconsistent deliverable files as static-check errors naming the file", async () => {
     const registered = tools();
@@ -203,22 +184,6 @@ describe("authoring extension directory deliverable", () => {
     await writeDeliverable({ "definition.json": "{not json" });
     const invalid = await verify.execute("4", {});
     expect(invalid.content[0]?.text).toContain("[files] definition.json is not valid JSON");
-    expect(await readdir(join(root, "mailbox/requests")).catch(() => [])).toEqual([]);
-  });
-
-  test("marks a submission unverified when the files changed after the green verify", async () => {
-    const registered = tools();
-    const verify = registered.get("verify") as RegisteredTool;
-    const submit = registered.get("submit_task") as RegisteredTool;
-    await writeDeliverable();
-    const stopped = { value: false };
-    const responder = respond(() => true, stopped);
-
-    await verify.execute("1", {});
-    await writeDeliverable({ "test.patch": "diff --git a b\n+changed" });
-    const submitted = await submit.execute("2", {});
-    expect(submitted.details).toEqual({ taskId: "ext-task", verified: false });
-    stopped.value = true;
-    await responder;
+    expect(await readdir(join(root, "mailbox")).catch(() => [])).toEqual([]);
   });
 });

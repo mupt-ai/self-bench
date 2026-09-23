@@ -9,40 +9,6 @@ import {
 } from "../../support/workflow-fixture.js";
 
 describe("SelfBench in-session verify", () => {
-  test("skips the worker verify when the submission matches a green in-session verify", async () => {
-    const activities = acceptingActivities([candidate("verified", 1)]);
-    activities.runAuthoringRound = async ({ candidate: value, round }) => {
-      const task = draft(value.candidateId);
-      return {
-        kind: "submitted",
-        task,
-        session: ref(`file:///session-${round}`),
-        verifyCalls: 2,
-        verified: {
-          report: ref("file:///verified/report.json"),
-          task: { ...task, bundle: ref("file:///verified/harbor-task.tar.gz") },
-        },
-      };
-    };
-    let compileCalls = 0;
-    activities.compileAndVerify = async () => {
-      compileCalls += 1;
-      throw new Error("worker verify must be skipped");
-    };
-    const verifierInputs: { report: string; bundle: string }[] = [];
-    activities.runReviewRound = async ({ report, task }) => {
-      verifierInputs.push({ report: report.uri, bundle: task.bundle.uri });
-      return { kind: "accepted", session: ref("file:///verifier-session"), reason: "fair" };
-    };
-
-    const result = await authorCandidates(activities);
-
-    expect(result.acceptedTaskIds).toEqual(["verified-task"]);
-    expect(compileCalls).toBe(0);
-    expect(verifierInputs).toEqual([
-      { report: "file:///verified/report.json", bundle: "file:///verified/harbor-task.tar.gz" },
-    ]);
-  });
   test("starts each authoring round with a fresh verify budget and sequential reviews", async () => {
     const assigned = candidate("budget", 1);
     const activities = acceptingActivities([assigned]);
