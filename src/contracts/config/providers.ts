@@ -39,3 +39,7 @@ export function matchingHarborEnvironment(
 ): HarborEnvironment | undefined {
   return isHarborEnvironment(backend) ? backend : undefined;
 }
+
+export function isDigestPinnedOciImage(image: string): boolean {
+  return /^[^@\s]+@sha256:[0-9a-f]{64}$/i.test(image);
+}

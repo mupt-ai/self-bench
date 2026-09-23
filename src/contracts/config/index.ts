@@ -11,6 +11,7 @@ import {
   EXECUTION_BACKENDS,
   HARBOR_ENVIRONMENTS,
   type HarborEnvironment,
+  isDigestPinnedOciImage,
   matchingHarborEnvironment,
 } from "./providers.js";
 import { defaultActivityConcurrency } from "./worker-capacity.js";
@@ -127,10 +128,6 @@ export interface SelfBenchConfig {
 
 export interface SelfBenchWorkerConfig extends Omit<SelfBenchConfig, "execution"> {
   readonly execution: WorkerExecutionConfig;
-}
-
-export function isDigestPinnedOciImage(image: string): boolean {
-  return /^[^@\s]+@sha256:[0-9a-f]{64}$/i.test(image);
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBenchConfig {
