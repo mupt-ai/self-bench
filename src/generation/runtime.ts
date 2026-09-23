@@ -10,8 +10,11 @@ import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
 import { withUsageLedger } from "../managed/usage.js";
 import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../sandbox/index.js";
+import {
+  ensureManagedE2BTemplate,
+  managedE2BTemplateReference,
+} from "../sandbox/providers/e2b/managed-template.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
-import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import { safeHeartbeat } from "./activity-runtime.js";
 import { generationConfigEnvironment } from "./config.js";
 import { generationStageEnvironment, stageAuthoring } from "./credentials.js";

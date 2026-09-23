@@ -1,8 +1,8 @@
 import type { SandboxInfo } from "e2b";
-import { normalizeE2BDomain, normalizeE2BTemplateReference } from "../../../setup/e2b/template.js";
 import type { SandboxRequest } from "../../contracts.js";
 import { validateSandboxRequest } from "../../request-validation.js";
 import type { E2BExecutionConfig, E2BLifecycleTimings } from "./config.js";
+import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./template.js";
 
 export function validateConfig(config: E2BExecutionConfig): E2BExecutionConfig {
   const image = normalizeE2BTemplateReference(config.image);

@@ -8,8 +8,8 @@ import {
   MANAGED_E2B_TEMPLATE_MEMORY_MIB,
   managedE2BTemplateRecordPath,
   managedE2BTemplateReference,
-} from "../src/setup/e2b/managed.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+} from "../../../../src/sandbox/providers/e2b/managed-template.js";
+import { MemoryRecords } from "../../../support/evaluation-records.js";
 
 const CREDENTIALS = { apiKey: "e2b-key" } as const;
 

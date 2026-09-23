@@ -1,4 +1,4 @@
-import { managedE2BTemplateReference } from "../setup/e2b/managed.js";
+import { managedE2BTemplateReference } from "../sandbox/providers/e2b/managed-template.js";
 import type { GenerationSettings } from "./settings.js";
 import { generationExecutionBackend, generationHarborEnvironment } from "./settings.js";
 

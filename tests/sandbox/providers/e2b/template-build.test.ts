@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import type { BuildInfo, LogEntry, TemplateClass } from "e2b";
-import { buildSelfBenchE2BTemplate, type E2BTemplateBuildApi } from "../src/setup/e2b/index.js";
+import {
+  buildSelfBenchE2BTemplate,
+  type E2BTemplateBuildApi,
+} from "../../../../src/sandbox/providers/e2b/template-build.js";
 
 const credentials = { apiKey: "e2b_test_key" };
 
@@ -45,8 +48,12 @@ class FakeE2BTemplateBuildApi implements E2BTemplateBuildApi {
 
 describe("buildSelfBenchE2BTemplate", () => {
   test("keeps the work directory writable and excludes common local secrets from context", async () => {
-    const dockerfile = await Bun.file(resolve(import.meta.dir, "../Dockerfile.sandbox")).text();
-    const dockerignore = await Bun.file(resolve(import.meta.dir, "../.dockerignore")).text();
+    const dockerfile = await Bun.file(
+      resolve(import.meta.dir, "../../../../Dockerfile.sandbox"),
+    ).text();
+    const dockerignore = await Bun.file(
+      resolve(import.meta.dir, "../../../../.dockerignore"),
+    ).text();
     expect(dockerfile).toContain("RUN mkdir -p /work && chmod 0777 /work\n\nWORKDIR /work");
     expect(dockerfile).not.toContain("@openai/codex");
     expect(dockerignore).toContain(".env\n");

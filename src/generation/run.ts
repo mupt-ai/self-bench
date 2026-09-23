@@ -1,6 +1,6 @@
 import { loadConfig, type SelfBenchConfig } from "../config/index.js";
 import type { RunRequest } from "../contracts/index.js";
-import { managedE2BTemplateReference } from "../setup/e2b/managed.js";
+import { managedE2BTemplateReference } from "../sandbox/providers/e2b/managed-template.js";
 import { generationConfigEnvironment } from "./config.js";
 import type { GenerationReference } from "./settings.js";
 

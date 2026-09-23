@@ -10,8 +10,11 @@ import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
 import { withUsageLedger } from "../managed/usage.js";
 import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor } from "../sandbox/index.js";
+import {
+  ensureManagedE2BTemplate,
+  managedE2BTemplateReference,
+} from "../sandbox/providers/e2b/managed-template.js";
 import { withTaskSandbox } from "../sandbox/task-context.js";
-import { ensureManagedE2BTemplate, managedE2BTemplateReference } from "../setup/e2b/managed.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Resolve only this run's provider account; never launch repo tools in the API process. */

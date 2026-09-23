@@ -1,11 +1,9 @@
 import { z } from "zod";
 import {
-  HOBBY_E2B_TIMEOUT_CAP_MS,
-  parseSandboxTimeoutCapText,
-  STANDARD_E2B_TIMEOUT_CAP_MS,
-  STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../sandbox/timeout.js";
-import { normalizeE2BDomain, normalizeE2BTemplateReference } from "../setup/e2b/template.js";
+  normalizeE2BDomain,
+  normalizeE2BTemplateReference,
+} from "../sandbox/providers/e2b/template.js";
+import { e2bTimeoutCap, vercelTimeoutCap } from "../sandbox/timeout.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
@@ -275,24 +273,6 @@ function e2bCredentials(environment: NodeJS.ProcessEnv): E2BCredentials {
   }
   const domain = normalizeE2BDomain(environment.E2B_DOMAIN);
   return { apiKey, ...(domain ? { domain } : {}) };
-}
-
-function vercelTimeoutCap(value: string | undefined): number {
-  return providerTimeoutCap(value, STANDARD_VERCEL_TIMEOUT_CAP_MS);
-}
-
-function e2bTimeoutCap(value: string | undefined): number {
-  if (value === undefined) {
-    return HOBBY_E2B_TIMEOUT_CAP_MS;
-  }
-  return providerTimeoutCap(value, STANDARD_E2B_TIMEOUT_CAP_MS);
-}
-
-function providerTimeoutCap(value: string | undefined, maximumMs: number): number {
-  if (value === undefined) {
-    return maximumMs;
-  }
-  return z.number().int().min(100).max(maximumMs).parse(parseSandboxTimeoutCapText(value));
 }
 
 function fail(message: string): never {

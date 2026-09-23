@@ -7,7 +7,7 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../config/providers.js";
-import { normalizeE2BTemplateReference } from "../setup/e2b/template.js";
+import { normalizeE2BTemplateReference } from "../sandbox/providers/e2b/template.js";
 import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
