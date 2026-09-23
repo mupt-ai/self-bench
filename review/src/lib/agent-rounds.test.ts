@@ -96,7 +96,7 @@ test("lists recorded agent runs in start order with turns, retries, and outcomes
     agents: [
       record(2, 2, "2026-09-23T10:20:00Z"),
       record(1, 1, "2026-09-23T10:00:00Z", { finishedAt: "2026-09-23T10:05:00Z", exitCode: 0 }),
-      record(2, 1, "2026-09-23T10:10:00Z"),
+      record(2, 1, "2026-09-23T10:10:00Z", { finishedAt: "2026-09-23T10:15:00Z", exitCode: 0 }),
     ],
   } as unknown as CandidateArtifacts;
 

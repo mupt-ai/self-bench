@@ -36,10 +36,8 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
           undefined,
         );
       const session = entries.find((entry) => entry.key === record.session);
-      const failed =
-        Boolean(record.error) ||
-        (record.exitCode ?? 0) !== 0 ||
-        (!record.finishedAt && later(record));
+      // A retried attempt failed even if its sandbox exited cleanly: the activity did not finish.
+      const failed = Boolean(record.error) || (record.exitCode ?? 0) !== 0 || later(record);
       return {
         id: record.prefix,
         stage: record.stage,
