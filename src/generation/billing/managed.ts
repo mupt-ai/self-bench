@@ -1,3 +1,5 @@
+import type { HarborEnvironment } from "../../contracts/config/providers.js";
+
 /**
  * Managed generation runs model calls and sandboxes on SelfBench's own provider accounts
  * instead of an organization's credentials. What the deployment offers follows directly
@@ -50,6 +52,14 @@ export function managedHarborEnvironment(env: NodeJS.ProcessEnv): "modal" | "e2b
   return env[MANAGED_MODAL_TOKEN_ID]?.trim() && env[MANAGED_MODAL_TOKEN_SECRET]?.trim()
     ? "modal"
     : "e2b";
+}
+
+/**
+ * The managed Harbor environment a run was created with. Workers honor the stamp rather than
+ * the live keys, so enabling or rotating the platform Modal token never breaks in-flight runs.
+ */
+export function stampedManagedHarbor(stamped: HarborEnvironment): "modal" | "e2b" {
+  return stamped === "modal" ? "modal" : "e2b";
 }
 
 /** The Modal SDK environment for managed Harbor verification on the platform account. */

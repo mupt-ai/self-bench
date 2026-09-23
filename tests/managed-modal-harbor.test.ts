@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { managedHarborEnvironment } from "../src/generation/billing/managed.js";
+import {
+  managedHarborEnvironment,
+  stampedManagedHarbor,
+} from "../src/generation/billing/managed.js";
 import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { generationConfigEnvironment } from "../src/generation/settings/run.js";
 import type { GenerationReference } from "../src/generation/settings/settings.js";
@@ -66,4 +69,37 @@ test("managed Modal verification gets the platform token, never the worker's own
     MODAL_TOKEN_SECRET: "worker-secret",
   });
   expect(e2bOnly.MODAL_TOKEN_SECRET).toBeUndefined();
+});
+
+test("workers honor the stamped Harbor environment when the platform Modal token changes", async () => {
+  const vault = memoryVault();
+  const reference: GenerationReference = {
+    ownerId: 1,
+    orgId: 1,
+    repoId: 1,
+    settings: managedSettings,
+  };
+  await vault.records.write("generations/run-stamped", reference, 0);
+  // Created on E2B before the token was provisioned; the worker now has it.
+  const stampedE2b = stampedManagedHarbor("e2b");
+  expect(
+    generationConfigEnvironment(managedSettings, platformModal, undefined, stampedE2b)
+      .SELFBENCH_HARBOR_ENVIRONMENT,
+  ).toBe("e2b");
+  const env = await generationEnvironment(
+    vault,
+    "run-stamped",
+    reference,
+    platformModal,
+    stampedE2b,
+  );
+  expect(env.MODAL_TOKEN_ID).toBeUndefined();
+  // Created on Modal; the stamp keeps it there and fails clearly once the token is gone.
+  expect(
+    generationConfigEnvironment(managedSettings, platform, undefined, stampedManagedHarbor("modal"))
+      .SELFBENCH_HARBOR_ENVIRONMENT,
+  ).toBe("modal");
+  await expect(
+    generationEnvironment(vault, "run-stamped", reference, platform, "modal"),
+  ).rejects.toThrow("Managed Modal verification is not configured");
 });

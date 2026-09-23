@@ -70,15 +70,14 @@ export function generationConfigEnvironment(
   settings: GenerationSettings,
   base: NodeJS.ProcessEnv,
   image = settings.sandboxImage,
+  /** Managed runs: the Harbor environment stamped at creation; new runs read the live keys. */
+  managedHarbor = managedHarborEnvironment(base),
 ): NodeJS.ProcessEnv {
   const backend = generationExecutionBackend(settings.sandbox);
   return {
     ...base,
     SELFBENCH_EXECUTION_BACKEND: backend,
-    SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(
-      settings,
-      managedHarborEnvironment(base),
-    ),
+    SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(settings, managedHarbor),
     ...sandboxImageEnvironment(backend, image),
   };
 }

@@ -7,6 +7,7 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
+import { stampedManagedHarbor } from "../billing/managed.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
 import {
@@ -35,7 +36,13 @@ export async function withGenerationRuntime<T>(
   let env: NodeJS.ProcessEnv;
   try {
     if (!vault) throw new Error("Generation credentials are not configured on this worker.");
-    env = await generationEnvironment(vault, run.runId, run.generation, process.env);
+    env = await generationEnvironment(
+      vault,
+      run.runId,
+      run.generation,
+      process.env,
+      stampedManagedHarbor(run.version.harborEnvironment),
+    );
   } catch (error) {
     throw ApplicationFailure.nonRetryable(
       error instanceof Error ? error.message : "Generation credentials unavailable",
@@ -60,7 +67,12 @@ export async function withGenerationRuntime<T>(
     )
       throw new Error("Generation runtime does not match its saved configuration.");
     selected = loadWorkerConfig(
-      generationConfigEnvironment(settings, env, run.version.sandboxImage),
+      generationConfigEnvironment(
+        settings,
+        env,
+        run.version.sandboxImage,
+        stampedManagedHarbor(run.version.harborEnvironment),
+      ),
     );
     if (selected.harborEnvironment !== run.version.harborEnvironment)
       throw new Error("Harbor verification does not match its saved configuration.");

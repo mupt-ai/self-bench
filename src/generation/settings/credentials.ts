@@ -152,6 +152,8 @@ export async function generationEnvironment(
   runId: string,
   reference: GenerationReference,
   base: NodeJS.ProcessEnv,
+  /** Managed runs: the Harbor environment stamped on the run at creation. */
+  managedHarbor: "modal" | "e2b" = managedHarborEnvironment(base),
 ): Promise<NodeJS.ProcessEnv> {
   const saved = await records.read<GenerationReference>(generationRecordPath(runId));
   if (!saved || !isDeepStrictEqual(saved.value, reference))
@@ -189,8 +191,7 @@ export async function generationEnvironment(
       env,
       providerCredentialEnvironment("e2b", { value: managed.apiKey, domain: managed.domain }),
     );
-    if (managedHarborEnvironment(base) === "modal")
-      Object.assign(env, managedModalEnvironment(base));
+    if (managedHarbor === "modal") Object.assign(env, managedModalEnvironment(base));
   } else
     for (const { role, id, kind } of sandboxCredentials(settings)) {
       const secret = await credentials.secret(orgId, id ?? "");
