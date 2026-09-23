@@ -25,7 +25,7 @@ interface PublicRepository {
 }
 
 /** The workspace that ran and released the evals. Never the person who pressed Release. */
-interface PublicPublisher {
+export interface PublicPublisher {
   login: string;
   kind: "org" | "user";
   avatarUrl?: string;
@@ -82,7 +82,7 @@ export interface PublicRepoPage {
   lines: PublicLineSummary[];
 }
 
-type PickRole = "cheapest" | "mostAccurate";
+export type PickRole = "cheapest" | "mostAccurate";
 
 /** A frontier setting singled out on cards and the picks strip, with every role it holds. */
 export interface PublicPick {

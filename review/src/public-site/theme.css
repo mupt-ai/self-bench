@@ -1,0 +1,180 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* The Vite root is review/public-site, so Tailwind must be told where the components live. */
+@source "../";
+@source "../../public-site";
+
+/* Same token names as the app's theme.css, so shared components render in both palettes. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-accent: var(--accent);
+  --color-brand: var(--brand);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-destructive: var(--bad-fg);
+  --color-destructive-background: var(--bad);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-success: var(--ok);
+  --color-warning: var(--warn-fg);
+  --color-sidebar: var(--background);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-accent: var(--accent);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--brand);
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
+
+/* Light by default: warm paper, the app's amber kept for fills and accents, never for text. */
+:root {
+  color-scheme: light;
+  --background: hsl(40 22% 94.8%);
+  --foreground: hsl(30 8% 12%);
+  --card: hsl(38 21% 91.8%);
+  --muted: hsl(38 18% 87.5%);
+  --muted-fg: hsl(30 6% 42%);
+  --faint: hsl(30 6% 62%);
+  --border: hsl(35 16% 84%);
+  --input: hsl(35 16% 84%);
+  --accent: hsl(40 22% 90%);
+  --brand: hsl(38 92% 48%);
+  --primary: hsl(30 8% 12%);
+  --primary-fg: hsl(40 22% 94.8%);
+  --ok: hsl(150 45% 34%);
+  --bad: hsl(0 65% 45%);
+  --bad-fg: hsl(0 62% 42%);
+  --warn-fg: hsl(35 80% 38%);
+  /* Card edges and the ruler lines, derived from the text colour so every palette follows. */
+  --panel-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --ruler: color-mix(in srgb, var(--foreground) 10%, transparent);
+  /* Background water: dot colour as "r g b" (0-255) and dot opacity. */
+  --ripple: 72 61 46;
+  --ripple-strength: 0.14;
+  --ripple-coverage: 0.55;
+  --ripple-speed: 1;
+  /* Theme-coloured effects. Light mode leans on the gold brand, dark mode on the ink blue. */
+  --aura: color-mix(in srgb, rgb(var(--ripple)) 50%, var(--brand));
+  /* The fire's scorch uses the background water's own colour. */
+  --scorch: rgb(var(--ripple));
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Dark mode: ink blue. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: hsl(215 28% 5%);
+  --foreground: hsl(210 20% 86%);
+  --card: hsl(215 24% 8.5%);
+  --muted: hsl(215 18% 10%);
+  --muted-fg: hsl(212 10% 58%);
+  --faint: hsl(212 8% 40%);
+  --border: hsl(215 16% 16%);
+  --input: hsl(215 16% 16%);
+  --accent: hsl(215 18% 10%);
+  --brand: hsl(210 90% 65%);
+  --primary: hsl(0 0% 100%);
+  --primary-fg: hsl(0 0% 0%);
+  --ok: hsl(150 40% 45%);
+  --bad: hsl(0 72% 45%);
+  --bad-fg: hsl(0 70% 62%);
+  --warn-fg: hsl(38 80% 60%);
+  --panel-border: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --ruler: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --ripple: 110 165 255;
+  --ripple-strength: 0.1;
+  --ripple-coverage: 0.6;
+  /* Light dots on a dark ground read as faster movement; slow the water to match. */
+  --ripple-speed: 0.75;
+  /* Calmer than the water: blended toward the hovered card's border colour. */
+  --aura: color-mix(in srgb, rgb(var(--ripple)) 55%, var(--foreground));
+  /* Dimmer than the water in dark mode: blue on near-black glares at full strength. */
+  --scorch: color-mix(in srgb, rgb(var(--ripple)) 62%, var(--background));
+}
+
+/* Light text on dark grounds renders heavier than dark on light; greyscale smoothing evens it. */
+:root[data-theme="dark"] body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode dims logos and casts them toward the ink blue, so white marks stop glaring. */
+:root[data-theme="dark"] img.avatar {
+  filter: url(#ink-cast);
+}
+
+/*
+ * A repository card's hover state, also forced on the snapshot taken during a page transition
+ * through `data-active` (set by holdHover in effects/marks.ts).
+ */
+@custom-variant card-on (&:where(.group:hover *, .group:focus-visible *, .group[data-active] *));
+
+/* The page colour sits on html so the water canvas can draw between it and the content. */
+html {
+  background: var(--background);
+}
+
+/* "Disable Animations" in the settings menu: every transition and animation becomes instant. */
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  animation: none !important;
+}
+
+/* The /pitchforks easter egg: villagers bob as they walk; torch flames flicker. */
+@keyframes mob-bob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes mob-flame {
+  50% {
+    opacity: 0.55;
+    transform: translateY(1px);
+  }
+}
+.mob-bob {
+  animation: mob-bob 320ms steps(1) infinite;
+}
+.mob-flame {
+  animation: mob-flame 180ms steps(1) infinite;
+  filter: drop-shadow(0 0 2px #f97316) drop-shadow(0 0 5px rgb(249 115 22 / 0.55));
+}
+/*
+ * A shout: pops in at the speaker, then drifts up a little and fades where it was said. It
+ * stays low, behind the passing mob, to keep clear of the headline just above the bar.
+ */
+@keyframes mob-shout {
+  0% {
+    opacity: 0;
+    transform: translate(-30%, 3px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-30%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-30%, -5px);
+  }
+}
+.mob-shout {
+  animation: mob-shout 1500ms ease-out forwards;
+}
