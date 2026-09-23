@@ -203,15 +203,12 @@ jobs:
           curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_PUBLIC_URL/healthz"
           status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_PUBLIC_URL/api/session")
           test "$status" = 401 || { echo "Anonymous session was not rejected (HTTP $status)"; exit 1; }
-          # The public results site, when configured: its own page and API, and none of the app's
-          # surface.
-          if [ -n "$SELFBENCH_RESULTS_SITE_URL" ]; then
-            curl --fail --silent --show-error --max-time 30 "$SELFBENCH_RESULTS_SITE_URL/" | grep -q 'name="selfbench-app-url"' \
-              || { echo "The results site did not serve its own page"; exit 1; }
-            curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_RESULTS_SITE_URL/api/public/releases"
-            status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_RESULTS_SITE_URL/api/session")
-            test "$status" = 404 || { echo "The results site exposes the app's API (HTTP $status)"; exit 1; }
-          fi
+          # The public results site: its own page and API, and none of the app's surface.
+          curl --fail --silent --show-error --max-time 30 "$SELFBENCH_RESULTS_SITE_URL/" | grep -q 'name="selfbench-app-url"' \
+            || { echo "The results site did not serve its own page"; exit 1; }
+          curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_RESULTS_SITE_URL/api/public/releases"
+          status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_RESULTS_SITE_URL/api/session")
+          test "$status" = 404 || { echo "The results site exposes the app's API (HTTP $status)"; exit 1; }
       - name: Record Deployment
         if: ${{ !inputs.infrastructure_only }}
         env:
