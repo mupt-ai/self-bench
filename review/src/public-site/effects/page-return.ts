@@ -1,3 +1,4 @@
+import { scrollArea } from "../scroll-area";
 import { burn } from "./burn";
 import { disassemble } from "./disassemble";
 import {
@@ -129,13 +130,14 @@ const WAIT_MS = 600;
  * from where the title was.
  */
 export function returnHome(line: string, go: () => void): void {
-  const scroller = document.querySelector<HTMLElement>(select.scrollRoot);
-  const layout = scroller?.parentElement;
-  if (!transitionsOn() || !scroller || !layout) {
+  const area = scrollArea();
+  const layout = area?.content.parentElement;
+  if (!transitionsOn() || !area || !layout) {
     go();
     return;
   }
-  const frame = scroller.getBoundingClientRect();
+  const scroller = area.content;
+  const frame = area.view();
   const title = new Map(
     PARTS.flatMap((part) => {
       const element = scroller.querySelector<HTMLElement>(select.flightTo(part));
@@ -156,7 +158,7 @@ export function returnHome(line: string, go: () => void): void {
     frame.top,
     ...[...titleBlock, ...faded].map((element) => element.getBoundingClientRect().bottom),
   );
-  const sheet = beginWithSheet(scroller, layout);
+  const sheet = beginWithSheet(area, layout);
   const run = currentTransition();
   go();
 

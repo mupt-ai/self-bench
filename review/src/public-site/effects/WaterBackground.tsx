@@ -97,7 +97,7 @@ function readWater(root: HTMLElement) {
  * drawn once, still, for visitors whose system prefers less motion, and not drawn at all when
  * they turn animations off in the settings menu.
  */
-export function WaterBackground() {
+export function WaterBackground({ bands = false }: { bands?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const element = canvas.current;
@@ -185,5 +185,16 @@ export function WaterBackground() {
       window.removeEventListener("resize", restart);
     };
   }, []);
-  return <canvas ref={canvas} className="pointer-events-none fixed inset-0 -z-10 h-full w-full" />;
+  // `bands`: a second copy shown only over the pinned header and footer (whose backgrounds
+  // hide the first), drawn to the same viewport, so the water runs on unbroken behind them.
+  return (
+    <canvas
+      ref={canvas}
+      className={
+        bands
+          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_65px,transparent_65px_calc(100%-49px),black_calc(100%-49px))]"
+          : "pointer-events-none fixed inset-0 -z-10 h-full w-full"
+      }
+    />
+  );
 }

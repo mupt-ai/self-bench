@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { motionOff } from "../motion";
+import { scrollArea } from "../scroll-area";
 import { assembleForReveal } from "./assemble-reveal";
 import { burn } from "./burn";
 import { type Box, flightPath, paceFlight, settleTime } from "./flight-path";
@@ -8,6 +9,12 @@ import { beginWithSheet, fly, inside, measure, union, whenFound } from "./transi
 import { currentTransition, stillRunning } from "./transition-run";
 
 const FLIGHT_MS = 620;
+/**
+ * How close (in pixels) every flying part must be to its spot before the rest of the page
+ * starts assembling. The flight's ease-out spends its last stretch creeping the final few
+ * pixels; waiting for all of it leaves a visible pause between the title and the page.
+ */
+const NEAR_REST_PX = 6;
 /** Parts hidden on a hovered card, which fade in as they fly. */
 const FADE_IN = new Set(["description", "stars"]);
 
@@ -30,7 +37,7 @@ export function plainClick(event: MouseEvent): boolean {
  */
 export function revealNavigate(event: MouseEvent<HTMLElement>, go: () => void): void {
   if (event.defaultPrevented || !plainClick(event)) return;
-  if (!transitionsOn() || !document.querySelector(select.scrollRoot)) return;
+  if (!transitionsOn() || !scrollArea()) return;
   event.preventDefault();
   openFromCard(event.currentTarget, go);
 }
@@ -45,16 +52,16 @@ export function revealNavigate(event: MouseEvent<HTMLElement>, go: () => void): 
  *    grow into them (parts marked `flightFrom` land on the matching `flightTo`; see marks.ts).
  *    They fly beneath the burning sheet, paced so they only ever cross burned-through paper.
  *    Each flying piece is a copy of its landing spot, so the hand-over at the end is exact.
- * 3. As soon as they have visibly come to rest, the rest of the page is assembled below the
+ * 3. As they come to rest (within a few pixels), the rest of the page is assembled below the
  *    title: a ragged frontier creeps down and each block of the page clicks into place.
  *
  * `go` performs the navigation; for history navigation it is already under way and `go`
  * does nothing.
  */
 export function openFromCard(card: HTMLElement | null, go: () => void): void {
-  const scroller = document.querySelector<HTMLElement>(select.scrollRoot);
-  const layout = scroller?.parentElement;
-  if (!scroller || !layout) {
+  const area = scrollArea();
+  const layout = area?.content.parentElement;
+  if (!area || !layout) {
     go();
     return;
   }
@@ -66,12 +73,12 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
   );
   // The frozen copy keeps the card in its hover state rather than snapping back.
   if (card) holdHover(card, true);
-  const sheet = beginWithSheet(scroller, layout);
+  const sheet = beginWithSheet(area, layout);
   const run = currentTransition();
   if (card) holdHover(card, false);
-  const frame = scroller.getBoundingClientRect();
+  const frame = area.view();
   // The title lands near the top left of the content column; the fire leans that way.
-  const column = scroller.querySelector("main")?.getBoundingClientRect() ?? frame;
+  const column = area.content.querySelector("main")?.getBoundingClientRect() ?? frame;
   const toward = { x: column.left - frame.left + 180, y: 60 };
   const start = card?.getBoundingClientRect() ?? {
     left: frame.left + frame.width / 2,
@@ -84,13 +91,13 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
   const from = new Map([...sources].map(([key, source]) => [key, measure(source)]));
 
   // Hidden until the title lands, then assembled block by block below it.
-  const content = scroller.querySelector("main");
-  const hidden = content ? assembleForReveal(content, scroller) : undefined;
+  const content = area.content.querySelector("main");
+  const hidden = content ? assembleForReveal(content, area) : undefined;
   go();
-  scroller.scrollTop = 0;
+  area.scrollTo(0);
   whenFound(
     [...sources.keys()],
-    (key) => scroller.querySelector<HTMLElement>(select.flightTo(key)),
+    (key) => area.content.querySelector<HTMLElement>(select.flightTo(key)),
     (targets) => {
       // The sheet's copies of the flying parts give way to the flyers.
       for (const key of targets.keys())
@@ -121,10 +128,10 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
             : Promise.resolve(undefined);
         }),
       );
-      // The rest of the page starts the moment the title has visibly come to rest (within a
-      // pixel of its spot), worked out from the flight itself, and never before the fire has
-      // cleared the title area.
-      const rests = pace.delay + settleTime([...paths.values()]) * pace.duration;
+      // The rest of the page starts as the title comes to rest (within a few pixels of its
+      // spot), worked out from the flight itself, and never before the fire has cleared the
+      // title area.
+      const rests = pace.delay + settleTime([...paths.values()], NEAR_REST_PX) * pace.duration;
       let started = () => {};
       const revealStarted = new Promise<void>((resolve) => {
         started = resolve;
@@ -134,7 +141,7 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
           if (!stillRunning(run)) return;
           // Assembly starts under the title block, which is already in place, and under any
           // lines marked to fade in rather than assemble.
-          const faded = [...scroller.querySelectorAll(select.revealFade)];
+          const faded = [...area.content.querySelectorAll(select.revealFade)];
           const below = Math.max(
             frame.top,
             ...[...targets.values(), ...faded].map((part) => part.getBoundingClientRect().bottom),

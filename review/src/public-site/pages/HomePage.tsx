@@ -7,6 +7,7 @@ import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
+import { scrollArea } from "../scroll-area";
 import type { PublicSource } from "../source";
 import { useSource } from "../source-context";
 import { useTitle } from "../use-title";
@@ -47,8 +48,6 @@ function useHomeData(source: PublicSource) {
   return { data, failed: failed && !data };
 }
 
-const scroller = () => document.querySelector<HTMLElement>(select.scrollRoot);
-
 export function HomePage() {
   useTitle("Self-Bench · dari.dev");
   const { data, failed } = useHomeData(useSource());
@@ -69,21 +68,22 @@ export function HomePage() {
   // Typing a search replaces the entry, which gives it a new key; that is not an arrival.
   const replaced = useNavigationType() === "REPLACE";
   useLayoutEffect(() => {
-    const area = scroller();
+    const area = scrollArea();
     if (!data || !area || restored.current === location.key) return;
     restored.current = location.key;
     if (replaced) return;
     const view = homeView(location.key) ?? homeView(restoreFrom);
-    area.scrollTop = view?.scrollTop ?? 0;
-    const card = view?.anchor && select.cardFor(area, view.anchor.line);
-    if (card && view?.anchor) area.scrollTop += card.getBoundingClientRect().top - view.anchor.top;
+    area.scrollTo(view?.scrollTop ?? 0);
+    const card = view?.anchor && select.cardFor(area.content, view.anchor.line);
+    if (card && view?.anchor)
+      area.scrollTo(area.top() + card.getBoundingClientRect().top - view.anchor.top);
   }, [data, restoreFrom, location.key, replaced]);
 
   // Records the view when history leaves this page.
   const save = useCallback(
     (leavingFor?: string) => {
       saveHomeView(location.key, {
-        scrollTop: scroller()?.scrollTop ?? 0,
+        scrollTop: window.scrollY,
         query,
         anchor: undefined,
       });
@@ -100,7 +100,7 @@ export function HomePage() {
   const opened = (card: PublicRepoSummary, element: HTMLElement) => {
     const line = `${card.repository.fullName}/${card.publisher.login}`;
     saveHomeView(location.key, {
-      scrollTop: scroller()?.scrollTop ?? 0,
+      scrollTop: window.scrollY,
       query,
       anchor: { line, top: element.getBoundingClientRect().top },
     });

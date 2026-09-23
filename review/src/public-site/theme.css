@@ -61,6 +61,15 @@
 /* The page colour sits on html so the water canvas can draw between it and the content. */
 html {
   background: var(--background);
+  /* The window scrolls the page; its scrollbar is the right ruler line (RulerScrollbar). */
+  scrollbar-width: none;
+  /*
+   * The header and footer are pinned over the page (PublicLayout), so what shows of it is the
+   * band between them: focus, find-in-page, and scrollIntoView bring things into that band,
+   * not under the header or footer. Keep in step with their heights.
+   */
+  scroll-padding-top: 65px;
+  scroll-padding-bottom: 49px;
 }
 
 /* "Disable Animations" in the settings menu: every transition and animation becomes instant. */

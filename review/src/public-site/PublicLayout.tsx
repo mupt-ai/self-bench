@@ -3,12 +3,13 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { OutLink } from "./components/OutLink";
 import { CursorAura } from "./effects/CursorAura";
 import { notePath } from "./effects/history-transitions";
-import { lineOf, scrollRoot, select } from "./effects/marks";
+import { lineOf, scrollRoot, select, siteEdge } from "./effects/marks";
 import { returnHome } from "./effects/page-return";
 import { plainClick } from "./effects/page-reveal";
 import { WaterBackground } from "./effects/WaterBackground";
 import { EDGE_FRAME, FRAME, RULER_WIDTH } from "./frame";
 import { followJourney, homeView, journeyFrom, repositoryOf } from "./home-view";
+import { RulerScrollbar } from "./RulerScrollbar";
 import { SettingsMenu } from "./SettingsMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -24,9 +25,14 @@ const styleLab = import.meta.env.DEV
   : undefined;
 const StyleLab = styleLab ? lazy(styleLab) : undefined;
 
+/** Heights of the pinned header and footer, their border lines included. */
+const HEADER = "h-[65px]";
+const FOOTER = "h-[49px]";
+
 /**
- * The frame every public page shares. Only the middle scrolls, so the header and footer keep
- * a constant size. Two ruler lines run the full height at the frame's edges.
+ * The frame every public page shares. The window scrolls, with the header and footer pinned
+ * over it (see scroll-area.ts), so the browser's own scrolling, rubber-band included, applies
+ * to the page. Two ruler lines run the full height at the frame's edges.
  */
 export function PublicLayout() {
   const location = useLocation();
@@ -57,7 +63,7 @@ export function PublicLayout() {
     );
   };
   return (
-    <div className="relative isolate flex h-dvh flex-col text-foreground">
+    <div className="relative isolate min-h-dvh pt-[65px] pb-[49px] text-foreground">
       <WaterBackground />
       <CursorAura />
       {/* Referenced by theme.css to tint logos in dark mode: channels scaled, blue kept most. */}
@@ -73,8 +79,26 @@ export function PublicLayout() {
         aria-hidden="true"
         className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler)`}
       />
-      <header className="shrink-0 border-b border-border">
-        <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
+      <RulerScrollbar />
+      {/*
+        The page scrolls under the pinned header and footer, so they hide it with the page's
+        colour; a second copy of the water, shown only over those two strips, keeps the water
+        running on unbroken behind them.
+      */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none fixed inset-x-0 top-0 z-[7] ${HEADER} bg-background`}
+      />
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[7] ${FOOTER} bg-background`}
+      />
+      <WaterBackground bands />
+      <header
+        {...siteEdge("top")}
+        className={`fixed inset-x-0 top-0 z-[7] ${HEADER} border-b border-border`}
+      >
+        <div className={`${EDGE_FRAME} flex h-full items-center justify-between gap-4`}>
           <Link
             to="/"
             onClick={goHome}
@@ -107,22 +131,22 @@ export function PublicLayout() {
           </nav>
         </div>
       </header>
-      <div
-        {...scrollRoot}
-        className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]"
-      >
+      <div {...scrollRoot}>
         <main className={`${FRAME} py-10`}>
           <Outlet />
         </main>
-        {/* Content passing under the footer softens slightly instead of being cut off hard. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none sticky bottom-0 -mt-6 h-6 backdrop-blur-[1.5px] [mask-image:linear-gradient(to_top,black,transparent)]"
-        />
       </div>
-      <footer className="shrink-0 border-t border-border">
+      {/* Content passing under the footer softens slightly instead of being cut off hard. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-[49px] z-[7] h-6 backdrop-blur-[1.5px] [mask-image:linear-gradient(to_top,black,transparent)]"
+      />
+      <footer
+        {...siteEdge("bottom")}
+        className={`fixed inset-x-0 bottom-0 z-[7] ${FOOTER} border-t border-border`}
+      >
         <div
-          className={`${EDGE_FRAME} flex items-center justify-between gap-3 py-4 font-mono text-xs font-semibold text-foreground/90`}
+          className={`${EDGE_FRAME} flex h-full items-center justify-between gap-3 font-mono text-xs font-semibold text-foreground/90`}
         >
           <span>selfbench.dev</span>
           <span className="flex gap-4">
