@@ -39,5 +39,8 @@ resource "google_compute_instance" "app" {
   lifecycle {
     # A boot image/startup-script change can otherwise replace the VM.
     prevent_destroy = true
+    # The startup script only provisions a new VM; deploy-host.sh installs what a release
+    # needs on an existing one. Editing the script must not force a replacement.
+    ignore_changes = [metadata_startup_script]
   }
 }
