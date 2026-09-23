@@ -11,7 +11,12 @@ import {
   type SandboxResult,
 } from "../../sandbox/index.js";
 import { githubToken } from "../../third_party/github/token.js";
-import { AGENT_RECORD_NAME, type AgentRunRecord } from "../runs/types.js";
+import {
+  AGENT_RECORD_NAME,
+  AGENT_RESULT_NAME,
+  type AgentRunRecord,
+  type AgentRunResult,
+} from "../runs/types.js";
 import { withHeartbeats } from "./helpers.js";
 
 const SESSION_DIRECTORY = "/work/session";
@@ -31,7 +36,7 @@ export interface AgentRequest {
   readonly logName?: string;
   /** Where the pi session is stored; omit when the session is not kept. */
   readonly sessionKey?: string;
-  /** Recorded as `<prefix>/agent.json` so the agent work sheet can list this run. */
+  /** Recorded as `<prefix>/agent.json` and `result.json` so the agent work sheet can list this run. */
   readonly record?: Pick<AgentRunRecord, "stage" | "round" | "turn" | "attempt">;
   /** A previous session to continue. */
   readonly resume?: Uint8Array;
@@ -73,13 +78,9 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
     ...(request.sessionKey ? { session: request.sessionKey } : {}),
     startedAt: new Date().toISOString(),
   };
-  const writeRecord = (value: AgentRunRecord) =>
-    store.put(
-      `${prefix}/${AGENT_RECORD_NAME}`,
-      Buffer.from(JSON.stringify(value)),
-      "application/json",
-    );
-  if (record) await writeRecord(record);
+  const writeJson = (name: string, value: AgentRunRecord | AgentRunResult) =>
+    store.put(`${prefix}/${name}`, Buffer.from(JSON.stringify(value)), "application/json");
+  if (record) await writeJson(AGENT_RECORD_NAME, record);
   const feed = liveFeed(store, prefix, [auth.apiKey ?? "", auth.authJson ?? "", token ?? ""]);
   let result: SandboxResult;
   try {
@@ -115,8 +116,7 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
   } catch (error) {
     // The original failure matters more than a failed record update.
     if (record) {
-      await writeRecord({
-        ...record,
+      await writeJson(AGENT_RESULT_NAME, {
         finishedAt: new Date().toISOString(),
         error: errorMessage(error),
       }).catch(() => undefined);
@@ -141,8 +141,7 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
   const finalMessage = sessionBytes ? finalAssistantMessage(sessionBytes) : undefined;
   const providerError = sessionBytes ? sessionProviderError(sessionBytes) : undefined;
   if (record) {
-    await writeRecord({
-      ...record,
+    await writeJson(AGENT_RESULT_NAME, {
       finishedAt: new Date().toISOString(),
       exitCode: result.exitCode,
       ...(providerError ? { error: providerError.slice(0, 500) } : {}),
