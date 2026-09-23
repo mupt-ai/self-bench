@@ -11,8 +11,8 @@ import {
 import type { GenerationOptions } from "./GenerationFields";
 
 export const defaultGenerationSettings: GenerationSettings = {
-  authorModel: "gpt-5.6-sol",
-  verifierModel: "gpt-5.6-sol",
+  authorModel: "gpt-6-sol",
+  verifierModel: "gpt-6-sol",
   reasoning: "high",
   modelAccess: "managed",
   sandbox: "managed",

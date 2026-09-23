@@ -13,7 +13,7 @@ const submission = {
     contentType: "application/x-ndjson",
   },
   candidateCounts: { easy: 1, medium: 0, hard: 0 },
-  authoringModel: "gpt-5.6-sol",
+  authoringModel: "gpt-6-sol",
   selfbenchCommit: "c".repeat(40),
 };
 

@@ -31,7 +31,7 @@ async function configured() {
   );
   const generation = {
     authorModel: "gpt-6-astra",
-    verifierModel: "gpt-5.6-sol",
+    verifierModel: "gpt-6-sol",
     reasoning: "low",
     modelAccess: "credential",
     sandbox: "modal",
@@ -91,7 +91,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       async (sandbox, environment, configured) => {
         expect(sandbox.constructor.name).toBe("ModalSandboxExecutor");
         expect(environment).toBe("modal");
-        expect(configured.authoring.model).toBe(stage === "author" ? "gpt-6-astra" : "gpt-5.6-sol");
+        expect(configured.authoring.model).toBe(stage === "author" ? "gpt-6-astra" : "gpt-6-sol");
         expect(configured.authoring.reasoningEffort).toBe("low");
       },
     );

@@ -40,7 +40,7 @@ test("comparisons accept eleven scoped approved tasks without truncation", async
       {
         path: `${fixture.base}/comparisons`,
         body: {
-          models: [{ catalogId: "gpt-5.6-sol", credentialId: modelKey, harnesses: ["codex"] }],
+          models: [{ catalogId: "gpt-6-sol", credentialId: modelKey, harnesses: ["codex"] }],
           sandbox: "e2b",
           sandboxCredentialId: sandboxKey,
         },

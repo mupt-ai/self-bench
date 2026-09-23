@@ -51,7 +51,7 @@ describe("generation submissions", () => {
     });
     const generation = {
       authorModel: "gpt-6-astra",
-      verifierModel: "gpt-5.6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "medium",
       modelAccess: "credential",
       sandbox: "modal",

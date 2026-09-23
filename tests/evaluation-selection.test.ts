@@ -25,7 +25,7 @@ test("one model row resolves its saved route and rejects unsupported thinking be
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [
-        { catalogId: "gpt-5.6-sol", credentialId: router, harnesses: ["pi"], thinking: "max" },
+        { catalogId: "gpt-6-sol", credentialId: router, harnesses: ["pi"], thinking: "max" },
       ],
       sandbox: "e2b",
       sandboxCredentialId: sandbox,
@@ -34,7 +34,7 @@ test("one model row resolves its saved route and rejects unsupported thinking be
     expect(fixture.starts).toHaveLength(0);
     draft.models = [
       {
-        catalogId: "gpt-5.6-sol",
+        catalogId: "gpt-6-sol",
         credentialId: router,
         harnesses: ["codex"],
         thinking: "default",
@@ -43,19 +43,19 @@ test("one model row resolves its saved route and rejects unsupported thinking be
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(0);
     draft.models = [
-      { catalogId: "gpt-5.6-sol", credentialId: router, harnesses: ["pi"], thinking: "xhigh" },
+      { catalogId: "gpt-6-sol", credentialId: router, harnesses: ["pi"], thinking: "xhigh" },
     ];
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     expect(fixture.starts[0]).toMatchObject({
-      model: "gpt-5.6-sol",
-      modelName: "openrouter/openai/gpt-5.6-sol",
+      model: "gpt-6-sol",
+      modelName: "openrouter/openai/gpt-6-sol",
       thinking: "xhigh",
       harnesses: ["pi"],
       pricing: { input: 2 },
       credentials: { provider: "openrouter" },
     });
     draft.models = [
-      { catalogId: "gpt-5.6-sol", credentialId: router, harnesses: ["codex"], thinking: "xhigh" },
+      { catalogId: "gpt-6-sol", credentialId: router, harnesses: ["codex"], thinking: "xhigh" },
     ];
     draft.id = crypto.randomUUID();
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
@@ -86,7 +86,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
       skipCompleted: false,
       models: [
         {
-          catalogId: "gpt-5.6-sol",
+          catalogId: "gpt-6-sol",
           credentialId,
           harnesses: ["pi"],
           thinking: "high",
@@ -96,7 +96,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing evaluation input");
-    const completed = initialEvaluation(input, "GPT-5.6 Sol");
+    const completed = initialEvaluation(input, "GPT-6 Sol");
     completed.status = "completed";
     completed.sandbox = "modal";
     completed.credentials = {
@@ -143,7 +143,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
     const credentialId = await save("openrouter");
     const secondCredentialId = await save("openrouter");
     const sandboxCredentialId = await save("e2b");
-    const selection = { catalogId: "gpt-5.6-sol", credentialId, thinking: "default" };
+    const selection = { catalogId: "gpt-6-sol", credentialId, thinking: "default" };
     const draft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
@@ -157,7 +157,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(2);
     expect(fixture.starts[1]).toMatchObject({
-      modelName: "openrouter/openai/gpt-5.6-sol",
+      modelName: "openrouter/openai/gpt-6-sol",
       credentials: { provider: "openrouter" },
       harnesses: ["mini-swe-agent"],
     });

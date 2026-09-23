@@ -11,7 +11,7 @@ import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 
 const managedSettings = {
-  authorModel: "gpt-5.6-sol",
+  authorModel: "gpt-6-sol",
   verifierModel: "claude-fable-5-1",
   reasoning: "high",
   modelAccess: "managed",
@@ -21,10 +21,10 @@ const managedSettings = {
 test("managed defaults are valid and every model is servable through managed OpenRouter", () => {
   expect(generationSettingsSchema.safeParse(managedSettings).success).toBe(true);
   for (const model of [
-    "gpt-5.6-sol",
+    "gpt-6-sol",
     "gpt-6-astra",
     "claude-fable-5-1",
-    "claude-opus-5",
+    "claude-opus-5-5",
     "glm-5.3",
     "kimi-k3",
   ])
@@ -58,16 +58,16 @@ test("managed defaults are valid and every model is servable through managed Ope
 });
 
 test("model routes resolve per credential kind", () => {
-  expect(generationModelRoute("gpt-5.6-sol", undefined)).toEqual({
+  expect(generationModelRoute("gpt-6-sol", undefined)).toEqual({
     provider: "openrouter",
-    model: "openai/gpt-5.6-sol",
+    model: "openai/gpt-6-sol",
   });
   expect(generationModelRoute("claude-fable-5-1", { kind: "openai", auth: "codex-login" })).toEqual(
     { provider: "openai-codex", model: "anthropic/claude-fable-5.1" },
   );
-  expect(generationModelRoute("claude-opus-5", { kind: "anthropic", auth: "api-key" })).toEqual({
+  expect(generationModelRoute("claude-opus-5-5", { kind: "anthropic", auth: "api-key" })).toEqual({
     provider: "anthropic",
-    model: "claude-opus-5",
+    model: "claude-opus-5-5",
   });
   expect(generationModelRoute("glm-5.3", { kind: "openrouter", auth: "api-key" })).toEqual({
     provider: "openrouter",
@@ -93,7 +93,7 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
     repoId: 1,
     settings: {
       ...managedSettings,
-      verifierModel: "gpt-5.6-sol",
+      verifierModel: "gpt-6-sol",
       sandbox: "modal",
       modelAccess: "credential",
       modelCredentialId: model.id,
@@ -144,11 +144,11 @@ test("managed usage metering vault tokens and sandbox seconds with costs", async
       run: async () => ({ sandboxId: "s", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
       close: () => {},
     },
-    { managedModel: true, managedSandbox: true, model: "gpt-5.6-sol" },
+    { managedModel: true, managedSandbox: true, model: "gpt-6-sol" },
   );
   expect(managedSandboxCostUsd(3600, 4, 8192)).toBeCloseTo(0.3312, 4);
   expect(
-    managedModelCostUsd("gpt-5.6-sol", {
+    managedModelCostUsd("gpt-6-sol", {
       input: 1_000_000,
       output: 0,
       cacheRead: 0,

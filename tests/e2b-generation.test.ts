@@ -81,7 +81,7 @@ test.each(["batch", "pr"] as const)(
         {},
       );
       const settings = {
-        authorModel: "gpt-5.6-sol",
+        authorModel: "gpt-6-sol",
         verifierModel: "gpt-6-astra",
         reasoning: "high",
         modelAccess: "credential",

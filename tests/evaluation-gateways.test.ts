@@ -9,7 +9,7 @@ import type { EvaluationInput } from "../src/evaluation/types.js";
 import { runCommand } from "../src/lib/process.js";
 
 test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
-  expect(solverArguments("task", "jobs", "codex", "openai/gpt-5.6-sol", "modal")).toContain(
+  expect(solverArguments("task", "jobs", "codex", "openai/gpt-6-sol", "modal")).toContain(
     "harbor_gateway:SelfBenchCodex",
   );
   const result = await runCommand("python3", [
@@ -82,12 +82,12 @@ test("only gateway routes offer every harness; direct keys keep their native har
         );
     }
   }
-  const model = catalog.find((entry) => entry.id === "gpt-5.6-sol");
+  const model = catalog.find((entry) => entry.id === "gpt-6-sol");
   if (!model) throw new Error("Missing model fixture");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("mini-swe-agent");
   expect(routeFor(model, "openai")?.harnesses).not.toContain("claude-code");
-  const anthropic = catalog.find((entry) => entry.id === "claude-opus-5");
+  const anthropic = catalog.find((entry) => entry.id === "claude-opus-5-5");
   if (!anthropic) throw new Error("Missing model fixture");
   expect(routeFor(anthropic, "anthropic")?.harnesses).not.toContain("codex");
   expect(routeFor(model, "vercel")).toBeUndefined();

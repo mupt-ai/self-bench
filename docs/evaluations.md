@@ -54,7 +54,7 @@ export OPENAI_API_KEY=...
 harbor run \
   --path ./selected-task/harbor-task \
   --agent codex \
-  --model gpt-5.6-sol \
+  --model gpt-6-sol \
   --ak version=0.146.1 \
   --ak reasoning_effort=high \
   --env modal \
@@ -83,9 +83,9 @@ Then pass the directory and desired models to `harbor run`:
 harbor run \
   --path ./self-bench-tasks \
   --agent codex \
-  --model gpt-5.6-luna \
-  --model gpt-5.6-terra \
-  --model gpt-5.6-sol \
+  --model gpt-6-luna \
+  --model gpt-6-sol \
+  --model gpt-6-astra \
   --ak version=0.146.1 \
   --ak reasoning_effort=high \
   --env modal \

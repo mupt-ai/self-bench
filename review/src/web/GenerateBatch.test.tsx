@@ -40,7 +40,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       return optionsFail
         ? Response.json({ error: "Settings unavailable" }, { status: 503 })
         : Response.json({
-            models: ["gpt-5.6-sol", "gpt-6-astra"],
+            models: ["gpt-6-sol", "gpt-6-astra"],
             sandboxes: ["modal", "e2b"],
             available: optionsAvailable,
             managed: { models: false, sandbox: false },
@@ -104,7 +104,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       container.querySelector<HTMLSelectElement>('select[aria-label="Modal Credential"]')?.value,
     ).toBe(sandboxId);
     await select("Author Model", "gpt-6-astra");
-    await select("Verifier Model", "gpt-5.6-sol");
+    await select("Verifier Model", "gpt-6-sol");
     await select("Reasoning", "low");
     await select("Modal Credential", "");
     await select("Model Credential", modelId);
@@ -130,7 +130,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
         candidateCounts: { easy: 1, medium: 1, hard: 1 },
         generation: {
           authorModel: "gpt-6-astra",
-          verifierModel: "gpt-5.6-sol",
+          verifierModel: "gpt-6-sol",
           reasoning: "low",
           modelAccess: "credential",
           sandbox: "modal",

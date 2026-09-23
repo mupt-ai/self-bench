@@ -35,8 +35,8 @@ test("unconfirmed batch starts retain the run ID for navigation without resubmit
       { org: "team", fullName: "owner/repo" },
       { easy: 1, medium: 0, hard: 0 },
       {
-        authorModel: "gpt-5.6-sol",
-        verifierModel: "gpt-5.6-sol",
+        authorModel: "gpt-6-sol",
+        verifierModel: "gpt-6-sol",
         reasoning: "high",
         modelAccess: "credential",
         sandbox: "modal",

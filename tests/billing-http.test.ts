@@ -207,8 +207,8 @@ test("managed generation is gated when Stripe is configured and unblocked for cr
     const vault = memoryVault();
     const f = await fixture({ vault, billing: true });
     const managed = {
-      authorModel: "gpt-5.6-sol",
-      verifierModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "high",
       modelAccess: "managed",
       sandbox: "managed",

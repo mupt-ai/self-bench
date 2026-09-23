@@ -22,7 +22,7 @@ const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel", "dayt
   }),
 );
 const base: GenerationSettings = {
-  authorModel: "gpt-5.6-sol",
+  authorModel: "gpt-6-sol",
   verifierModel: "gpt-6-astra",
   reasoning: "high",
   modelAccess: "credential",
@@ -86,7 +86,7 @@ test("managed model access and sandbox are offered only when the deployment flag
   expect(html).toContain('value="managed"');
   expect(html).toContain(">Managed</option>");
   expect(html).toContain("Generation");
-  expect(html).toContain("GPT-5.6 Sol / GPT-6 Astra · High Reasoning · Managed");
+  expect(html).toContain("GPT-6 Sol / GPT-6 Astra · High Reasoning · Managed");
   expect(html).not.toContain("Model Credential");
   expect(html).not.toContain("both authors and verifies");
 });
@@ -119,22 +119,22 @@ test("managed capabilities are gated independently by the deployment's keys", ()
 test("collapsed generation summary is a short fact line", () => {
   expect(
     generationSettingsSummary({
-      authorModel: "gpt-5.6-sol",
-      verifierModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "high",
       modelAccess: "managed",
       sandbox: "managed",
     }),
-  ).toBe("GPT-5.6 Sol · High Reasoning · Managed");
+  ).toBe("GPT-6 Sol · High Reasoning · Managed");
   expect(
     generationSettingsSummary({
-      authorModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
       verifierModel: "gpt-6-astra",
       reasoning: "medium",
       modelAccess: "credential",
       sandbox: "modal",
     }),
-  ).toBe("GPT-5.6 Sol / GPT-6 Astra · Medium Reasoning · My Credentials · Modal");
+  ).toBe("GPT-6 Sol / GPT-6 Astra · Medium Reasoning · My Credentials · Modal");
 });
 
 test.each(["modal", "e2b", "vercel"] as const)(

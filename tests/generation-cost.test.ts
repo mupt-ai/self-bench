@@ -23,7 +23,7 @@ const emptyUsage = {
 const now = "2026-01-01T00:00:00.000Z";
 
 test("generation costs distinguish priced, partial, unpriced, and unknown providers", () => {
-  expect(generationCost(emptyUsage, undefined, "gpt-5.6-sol")).toMatchObject({
+  expect(generationCost(emptyUsage, undefined, "gpt-6-sol")).toMatchObject({
     state: "unknown",
     sandboxSeconds: 0,
   });
@@ -33,7 +33,7 @@ test("generation costs distinguish priced, partial, unpriced, and unknown provid
     });
   }
   expect(
-    generationCost(emptyUsage, "vercel", "gpt-5.6-sol", {
+    generationCost(emptyUsage, "vercel", "gpt-6-sol", {
       stage: "author-candidate-r1",
       state: "partial",
       sandboxSeconds: 7,
@@ -50,7 +50,7 @@ test("generation costs distinguish priced, partial, unpriced, and unknown provid
     generationCost(
       { ...emptyUsage, modelCostUsd: 0.03, sandboxCostUsd: 0.04, sandboxSeconds: 10 },
       "e2b",
-      "gpt-5.6-sol",
+      "gpt-6-sol",
       {
         stage: "author-candidate-r1",
         state: "estimated",
@@ -93,7 +93,7 @@ test("a settled stage excludes its heartbeat even when the heartbeat is newer", 
     sandboxUsd: 0.01,
     modelUsd: 0.02,
   };
-  expect(generationCost(settled, "e2b", "gpt-5.6-sol", [heartbeat, nextStage])).toEqual({
+  expect(generationCost(settled, "e2b", "gpt-6-sol", [heartbeat, nextStage])).toEqual({
     state: "estimated",
     usd: 0.1,
     sandboxUsd: 0.05,
@@ -123,7 +123,7 @@ test("metering emits live provider-aware costs and records final usage on comple
   const executor = meteredSandboxExecutor(inner, {
     managedModel: false,
     managedSandbox: false,
-    model: "gpt-5.6-sol",
+    model: "gpt-6-sol",
     sandboxProvider: "e2b",
     provider: "openrouter",
   });

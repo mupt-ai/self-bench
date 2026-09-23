@@ -37,8 +37,8 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
     ownerId: 1,
     repoId: 1,
     settings: {
-      authorModel: "gpt-5.6-sol",
-      verifierModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
+      verifierModel: "gpt-6-sol",
       reasoning: "high",
       modelAccess: "credential",
       sandbox: "modal",
@@ -92,7 +92,7 @@ test("generation credentials cannot be substituted and concurrent activity envir
     ownerId: 1,
     repoId: 1,
     settings: {
-      authorModel: "gpt-5.6-sol",
+      authorModel: "gpt-6-sol",
       verifierModel: "gpt-6-astra",
       reasoning: "low",
       modelAccess: "credential",
