@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
-import { taskState } from "../../src/api/routes/tasks.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
+import { taskState } from "../../src/db/task-record.js";
 import { clearArchivedListingCache } from "../../src/generation/runs/archived.js";
 import { ingestTasks } from "../support/ingest-tasks.js";
 import {

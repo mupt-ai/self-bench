@@ -1,69 +1,22 @@
-import type { ThinkingLevel } from "../../../src/contracts/models";
-import type { Harness } from "../../../src/evaluation/models";
+import type {
+  PublishedRelease,
+  ReleasePublisher,
+  ReleaseRepository,
+  ReleaseSetting,
+} from "../../../src/public/release-types";
 
 /**
- * The public data contract: what selfbench.dev pages consume. Aggregates only. Nothing per
- * task, no credentials, no transcripts. Produced later by the release builder; today by
- * fixtures behind `PublicSource`.
+ * The public data contract: what selfbench.dev pages consume. The release shapes are the
+ * server's (`src/public/release-types.ts`), named here for the pages; the rest are the site's
+ * own views of them.
  */
-export const PUBLIC_SCHEMA_VERSION = 1;
+export { RELEASE_SCHEMA_VERSION as PUBLIC_SCHEMA_VERSION } from "../../../src/public/release-types";
 
-type PublicProvider = "openai" | "anthropic" | "openrouter" | "custom";
-type PublicSignIn = "api-key" | "codex-login";
-
-/** A repository as GitHub identifies it. The id is the stable key across renames. */
-interface PublicRepository {
-  id: number;
-  fullName: string;
-  /** Card metadata, refreshed independently of results. */
-  description?: string;
-  language?: string;
-  defaultBranch?: string;
-  stars?: number;
-  pushedAt?: string;
-  ownerAvatarUrl?: string;
-}
-
-/** The workspace that ran and released the evals. Never the person who pressed Release. */
-export interface PublicPublisher {
-  login: string;
-  kind: "org" | "user";
-  avatarUrl?: string;
-}
-
-/** One model configuration, scored over every task in the release. */
-export interface PublicSetting {
-  /** Opaque and stable within a release line; safe to use as a React key or URL fragment. */
-  id: string;
-  model: { catalogId: string; name: string; label: string };
-  harness: Harness;
-  reasoningLevel: ThinkingLevel;
-  provider: PublicProvider;
-  signIn: PublicSignIn;
-  /** True for a custom OpenAI-compatible endpoint; the host is not public. */
-  custom: boolean;
-  tasks: number;
-  passed: number;
-  /** Percentage, 0 to 100. */
-  accuracy: number;
-  costPerTaskUsd: number;
-  totalCostUsd: number;
-  onFrontier: boolean;
-}
-
+type PublicRepository = ReleaseRepository;
+export type PublicPublisher = ReleasePublisher;
+export type PublicSetting = ReleaseSetting;
 /** One release of one repository by one publisher: the unit a repository page shows. */
-export interface PublicRelease {
-  schemaVersion: typeof PUBLIC_SCHEMA_VERSION;
-  releaseId: string;
-  releasedAt: string;
-  repository: PublicRepository;
-  publisher: PublicPublisher;
-  /** Number of tasks every setting was scored over. */
-  tasks: number;
-  settings: PublicSetting[];
-  /** Setting ids on the accuracy-versus-cost Pareto frontier. */
-  frontier: string[];
-}
+export type PublicRelease = PublishedRelease;
 
 /** One release line of a repository, for the switcher and search results. */
 interface PublicLineSummary {

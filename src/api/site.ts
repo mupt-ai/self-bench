@@ -4,6 +4,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { createApiKeyStore } from "../db/api-keys.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
+import { createReleaseStore } from "../db/releases.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
 import { createTaskStore } from "../db/tasks.js";
@@ -25,7 +26,9 @@ import { type BatchRoutes, createBatchRoutes } from "./routes/batches.js";
 import { type BillingRoutes, createBillingRoutes } from "./routes/billing.js";
 import { createEvaluationRoutes } from "./routes/evaluations.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./routes/github-repos.js";
+import { createPublicReleaseRoutes, type PublicReleaseRoutes } from "./routes/public-releases.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./routes/pull-requests.js";
+import { createReleaseRoutes, type ReleaseRoutes } from "./routes/releases.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./routes/repos.js";
 import { createTaskRoutes, type TaskRoutes } from "./routes/tasks.js";
 
@@ -40,6 +43,9 @@ interface Site {
   readonly pullRequests: PullRequestRoutes;
   readonly evaluations: ReturnType<typeof createEvaluationRoutes>;
   readonly billing: BillingRoutes;
+  readonly releases: ReleaseRoutes;
+  /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
+  readonly publicReleases: PublicReleaseRoutes;
   readonly database: OpenDatabase;
   generationBatches: ReturnType<typeof createGenerationBatches>;
   close(): Promise<void>;
@@ -62,6 +68,7 @@ export async function openSite(
   const tasks = createTaskStore(database.db);
   const runs = createRunStore(database.db);
   const usage = createUsageStore(database.db);
+  const releases = createReleaseStore(database.db);
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
     ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
@@ -100,6 +107,20 @@ export async function openSite(
       start: evaluationStarter(client, config.temporal.taskQueue),
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
+    releases: createReleaseRoutes({
+      db: database.db,
+      artifacts,
+      users,
+      repos,
+      releases,
+      publicUrl,
+      githubApiUrl: auth.githubApiUrl,
+      resultsSiteUrl: (process.env.SELFBENCH_RESULTS_SITE_URL || "https://selfbench.dev").replace(
+        /\/+$/,
+        "",
+      ),
+    }),
+    publicReleases: createPublicReleaseRoutes(releases),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
     batches: createBatchRoutes({
       config,

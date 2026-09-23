@@ -114,6 +114,26 @@ Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`. Runs start only thr
 | `GET` | `/comparisons/:id` | One comparison with per-model run status |
 | `POST` | `/comparisons/:id/resume` | Re-dispatches unconfirmed runs with the same run ids; `202` |
 
+## Releases
+
+Relative to `/api/orgs/:org/repos/:owner/:name/releases`. A release publishes accuracy and cost for the settings a member ticks on selfbench.dev. The server builds every release from the workspace's own tasks and runs; the request names only settings. Rows are append-only: a line (one workspace, one GitHub repository id) shows its newest release that is not withdrawn.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Every release of the line, newest first (`releases`), and `resultsSiteUrl` |
+| `GET` | `/preview` | What could be released now: approved `tasks`, candidate `settings` with coverage and default ticks, `removed` and `unrun` tasks, and a `fingerprint`; plus the line's `head` and `current` release |
+| `POST` | `/` | Body: `settings` (setting keys from the preview), `head` (the head id the preview showed, or `null`), `fingerprint`. `201` with the new release; `200` with `unchanged: true` when the results equal the current release; `409` with a fresh preview when someone released meanwhile or results changed; `400` when the repository is not public on GitHub or the settings share no approved task |
+| `POST` | `/:id/withdraw` | Hides a release from the public; the line falls back to its previous release |
+
+## Public releases
+
+Anonymous, read-only, and served before sign-in. Only each release's public payload: repository, publisher workspace, task count, and per-setting aggregates.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/public/releases` | Every line's current release (`lines`) |
+| `GET` | `/api/public/repos/:owner/:name` | The current release of each line of one repository; `404` when nothing is released |
+
 ## Organization credentials
 
 Credentials are shared by everyone in the organization and encrypted at rest. Reads need membership; writes need the `admin` role.

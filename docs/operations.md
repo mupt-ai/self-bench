@@ -364,6 +364,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_SESSION_SECRET` | — | API; 32+ characters, signs session cookies and seals GitHub tokens |
 | `SELFBENCH_ALLOWED_GITHUB_ORGS` | unset | API; comma-separated GitHub org logins whose active members may sign in |
 | `SELFBENCH_PUBLIC_URL` | `http://127.0.0.1:8080` | API; public origin, forms the OAuth callback URL. Set to the assigned host port (`docker compose port api 8080`) or a reverse-proxy hostname |
+| `SELFBENCH_RESULTS_SITE_URL` | `https://selfbench.dev` | API; origin of the public results site, for links from the Releases tab to released pages |
 | `SELFBENCH_DATABASE_URL` | compose: `site-postgres` | API and worker; Postgres holding users, connected repos, and evaluation records |
 | `SELFBENCH_EVAL_CREDENTIAL_KEY` | — | API and worker; 32-byte hex key encrypting saved evaluation credentials |
 | `SELFBENCH_STRIPE_SECRET_KEY` | unset | API; with webhook secret and price id enables metered billing |

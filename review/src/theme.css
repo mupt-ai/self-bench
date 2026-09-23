@@ -17,6 +17,7 @@
   --color-accent: var(--accent);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-fg);
+  --color-check: var(--check);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-fg);
   --color-destructive: var(--bad-fg);
@@ -47,6 +48,8 @@
   --viewer-panel: hsl(38 19% 89.8%);
   --input: hsl(35 16% 80%);
   --brand-fg: hsl(32 90% 32%);
+  /* Ticks in checkboxes: blue in both themes. */
+  --check: hsl(212 78% 46%);
   --panel-edge: var(--panel-border);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
 
@@ -62,6 +65,7 @@
   --viewer-panel: hsl(215 20% 7%);
   --input: hsl(215 16% 20%);
   --brand-fg: hsl(210 90% 70%);
+  --check: hsl(210 90% 65%);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 

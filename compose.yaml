@@ -112,6 +112,8 @@ services:
       # Browser origin / OAuth callback. Set this to the tunnel or reverse-proxy URL
       # before `up`; do not use the ephemeral host port from `docker compose port`.
       SELFBENCH_PUBLIC_URL: ${SELFBENCH_PUBLIC_URL:-http://127.0.0.1:8080}
+      # Where released results are shown, for links from the Releases tab.
+      SELFBENCH_RESULTS_SITE_URL: ${SELFBENCH_RESULTS_SITE_URL:-}
       SELFBENCH_STRIPE_SECRET_KEY: ${SELFBENCH_STRIPE_SECRET_KEY:-}
       SELFBENCH_STRIPE_WEBHOOK_SECRET: ${SELFBENCH_STRIPE_WEBHOOK_SECRET:-}
       SELFBENCH_STRIPE_PRICE_ID: ${SELFBENCH_STRIPE_PRICE_ID:-}

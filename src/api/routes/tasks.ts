@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { GenerationCost } from "../../contracts/index.js";
 import type { RepoStore } from "../../db/repos.js";
+import { type TaskState, taskState } from "../../db/task-record.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import { candidateArtifacts } from "../../generation/runs/artifacts.js";
@@ -24,15 +25,6 @@ const tasksRoute = new RegExp(`^/api/orgs/${ORG}/repos/${REPO}/tasks$`);
 const taskRoute = new RegExp(
   `^/api/orgs/${ORG}/repos/${REPO}/tasks/${RUN_ID}/${TASK_ID}(?:/(review|artifacts|cancel))?$`,
 );
-
-/** How a task stands after the pipeline and, when present, a human. */
-export type TaskState =
-  | "needs_review"
-  | "accepted"
-  | "rejected"
-  | "failed"
-  | "cancelled"
-  | "in_progress";
 
 export interface TaskListItem {
   readonly runId: string;
@@ -211,27 +203,6 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       return false;
     },
   };
-}
-
-/** Pipeline verdict first, then the human's: a review overrides whatever the run concluded. */
-export function taskState(
-  task: Pick<TaskRecord, "pipelineStatus"> & {
-    stage?: string;
-    review?: { decision: ReviewDecision };
-  },
-): TaskState {
-  if (task.stage === "cancelled") return "cancelled";
-  if (task.review) return task.review.decision === "approve" ? "accepted" : "rejected";
-  switch (task.pipelineStatus) {
-    case "accepted":
-      return "needs_review";
-    case "rejected":
-      return "rejected";
-    case "infrastructure_failed":
-      return "failed";
-    default:
-      return "in_progress";
-  }
 }
 
 export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem {

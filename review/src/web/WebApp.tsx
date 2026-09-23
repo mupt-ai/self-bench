@@ -15,6 +15,7 @@ import { RepoPage } from "./pages/RepoPage";
 import { ReposPage } from "./pages/ReposPage";
 import { TaskPage } from "./pages/TaskPage";
 import { RepoLayout } from "./RepoLayout";
+import { ReleasesPage } from "./releases/ReleasesPage";
 import { SiteLayout } from "./SiteLayout";
 import {
   fetchSession,
@@ -74,6 +75,7 @@ export function WebApp() {
                     <Route path="add-prs" element={<AddPrPage />} />
                     <Route path="evaluations" element={<EvaluationPage />} />
                     <Route path="results" element={<EvaluationPage />} />
+                    <Route path="releases" element={<ReleasesPage />} />
                     <Route path="dataset" element={<Navigate to=".." replace />} />
                     <Route path="run" element={<RunPage />} />
                     <Route
