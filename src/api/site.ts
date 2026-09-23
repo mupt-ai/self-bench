@@ -4,12 +4,12 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { createApiKeyStore } from "../db/api-keys.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
-import { createEncryptedRecords } from "../db/encrypted-records.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
 import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
+import { createVault } from "../db/vault.js";
 import { evaluationStarter } from "../evaluation/start.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
 import { loadStripeConfig } from "../generation/billing/config.js";
@@ -63,16 +63,17 @@ export async function openSite(
   const runs = createRunStore(database.db);
   const usage = createUsageStore(database.db);
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
-  const generationRecords =
-    process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && generationQueue
-      ? createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
-      : undefined;
+  const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
+    ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
+    : undefined;
+  // Hosted generation also needs its own queue; without one only evaluations use the vault.
+  const generationVault = generationQueue ? vault : undefined;
   const batches = createGenerationBatches(
     database.db,
     client,
     artifacts,
     generationQueue ?? config.temporal.taskQueue,
-    generationRecords,
+    generationVault,
   );
   return {
     users,
@@ -95,18 +96,14 @@ export async function openSite(
       tasks,
       artifacts,
       publicUrl,
-      ...(process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
-        ? {
-            records: createEncryptedRecords(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY),
-          }
-        : {}),
+      ...(vault ? { vault } : {}),
       start: evaluationStarter(client, config.temporal.taskQueue),
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     repos: createConnectedRepoRoutes({ config: auth, users, repos }),
     batches: createBatchRoutes({
       config,
-      ...(generationRecords ? { records: generationRecords } : {}),
+      ...(generationVault ? { vault: generationVault } : {}),
       auth,
       users,
       repos,
@@ -125,10 +122,10 @@ export async function openSite(
       tasks,
       artifacts,
       status: temporalStatus(client),
-      ...(generationRecords
+      ...(generationVault
         ? {
             cost: async (runId, orgId, candidateId, live) => {
-              const saved = await generationRecords.read<GenerationReference>(
+              const saved = await generationVault.records.read<GenerationReference>(
                 generationRecordPath(runId),
               );
               const generation = saved?.value;
@@ -147,7 +144,7 @@ export async function openSite(
     pullRequests: createPullRequestRoutes({
       config,
       auth,
-      ...(generationRecords ? { records: generationRecords } : {}),
+      ...(generationVault ? { vault: generationVault } : {}),
       users,
       repos,
       tasks,

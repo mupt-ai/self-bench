@@ -3,8 +3,8 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
 import { createUsageStore } from "../../db/usage.js";
+import type { Vault } from "../../db/vault.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { overlayCandidateActivity } from "./activity.js";
@@ -28,7 +28,7 @@ export function createGenerationBatches(
   client: Client,
   artifacts: ArtifactStore,
   taskQueue: string,
-  records?: EncryptedRecordStore,
+  vault?: Vault,
 ) {
   const store = createBatchStore(db);
   const usage = createUsageStore(db);
@@ -44,7 +44,7 @@ export function createGenerationBatches(
     // No DB transaction is held while rendering/downloading bundles. Immutable export writes
     // can be resumed after a crash; completion is conditional on still being exporting.
     if (exporting) {
-      const reference = await exportBatch(exporting, artifacts, records, usage);
+      const reference = await exportBatch(exporting, artifacts, vault, usage);
       await store.completeExport(exporting.run.runId, reference);
     }
   };

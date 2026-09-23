@@ -1,4 +1,4 @@
-import { referencePricing } from "../../evaluation/catalog-pricing.js";
+import { referencePricing } from "../../evaluation/catalog.js";
 
 /**
  * The models the hosted site offers for authoring and verification, and the credentials that

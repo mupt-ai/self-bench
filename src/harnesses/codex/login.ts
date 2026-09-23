@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { type EncryptedRecordStore, RecordStoreError } from "../../db/encrypted-records.js";
-import type { CredentialInfo } from "../../evaluation/account.js";
-import { credentialSchema, saveCredential } from "../../evaluation/credentials.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import {
+  type CredentialInfo,
+  type CredentialStore,
+  credentialSchema,
+} from "../../db/credentials.js";
+import { RecordStoreError } from "../../db/encrypted-records.js";
 import { type CodexDeviceCode, type CodexLoginProcess, startCodexLogin } from "./login-process.js";
 
 export interface CodexLoginStatus {
@@ -113,26 +115,21 @@ export function createCodexLogins(start = startCodexLogin, lifetimeMs = 15 * 60_
     status(orgId: number, userId: number, id: string): CodexLoginStatus {
       return { ...get(orgId, userId, id).view };
     },
-    async complete(orgId: number, userId: number, id: string, records: EncryptedRecordStore) {
+    async complete(orgId: number, userId: number, id: string, credentials: CredentialStore) {
       const attempt = get(orgId, userId, id);
       if (attempt.view.credential) return attempt.view.credential;
       if (attempt.saving) return attempt.saving;
       if (!attempt.auth || attempt.view.status !== "ready")
         throw new RecordStoreError(409, "Finish signing in with ChatGPT first.");
       attempt.view.status = "saving";
-      // A migration key also makes retries safe after a partial storage write.
-      attempt.saving = saveCredential(
-        orgRecords(records, orgId),
-        orgId,
-        {
-          name: attempt.name,
-          kind: "openai",
-          auth: "codex-login",
-          value: attempt.auth,
-        },
-        {},
-        `codex-login:${id}`,
-      )
+      // The attempt ID doubles as the credential ID, so a retried save never duplicates.
+      attempt.saving = credentials
+        .create(
+          orgId,
+          { name: attempt.name, kind: "openai", auth: "codex-login", value: attempt.auth },
+          {},
+          id,
+        )
         .then((credential) => {
           delete attempt.auth;
           attempt.view.credential = credential;

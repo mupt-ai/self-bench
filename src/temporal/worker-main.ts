@@ -2,9 +2,10 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
+import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
-import { openWorkerRecords } from "../evaluation/worker-records.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { runCommand } from "../lib/process.js";
 import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
@@ -24,15 +25,22 @@ const config = loadWorkerConfig();
 await checkSandboxBackends(config);
 
 const connection = await connectTemporalWorker(config.temporal);
-const credentials = await openWorkerRecords();
+// Stored credentials need both the database and the key; without them only local runs work.
+const database =
+  process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_DATABASE_URL
+    ? await openDatabase(process.env.SELFBENCH_DATABASE_URL)
+    : undefined;
+const vault = database
+  ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")
+  : undefined;
 const { compileAndVerify, ...generation } = createActivities(
   config,
-  credentials?.records,
-  credentials ? createUsageStore(credentials.db) : undefined,
+  vault,
+  database ? createUsageStore(database.db) : undefined,
 );
 const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
-  credentials?.records,
+  vault,
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 
@@ -60,7 +68,7 @@ console.log(
 try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
-  await credentials?.close();
+  await database?.close();
 }
 
 /** Fail at startup, not on the first activity, when a configured sandbox backend is unusable. */

@@ -132,27 +132,27 @@ describe("api keys and evaluation mutations", () => {
       const reader = await fixture.apiKeys.create(fixture.user.id, { name: "r", scope: "read" });
       const body = JSON.stringify({ name: "openai", kind: "openai", value: "model-secret" });
       const foreignOrigin = { origin: "https://evil.example" };
-      const cookieCrossSite = await fixture.request(`${fixture.base}/credentials`, {
+      const cookieCrossSite = await fixture.request("/api/orgs/avyay/credentials", {
         method: "POST",
         headers: foreignOrigin,
         body,
       });
       expect(cookieCrossSite.status).toBe(403);
       const keyed = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { method: "POST", headers: { ...foreignOrigin, "x-api-key": writer.secret }, body },
         null,
       );
       expect(keyed.status).toBe(201);
       const listed = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { headers: { "x-api-key": reader.secret } },
         null,
       );
       expect(listed.status).toBe(200);
       expect((await listed.json()).credentials).toHaveLength(1);
       const readOnly = await fixture.request(
-        `${fixture.base}/credentials`,
+        "/api/orgs/avyay/credentials",
         { method: "POST", headers: { "x-api-key": reader.secret }, body },
         null,
       );

@@ -4,8 +4,8 @@
     "src/api/cli/bin.ts!",
     "src/api/main.ts!",
     "src/temporal/worker-main.ts!",
-    // Documented standalone worker, separate from the combined worker.
-    "src/evaluation/worker-main.ts!",
+    // The one-time evaluation records migration, run by operators from the API image.
+    "src/db/records-migration.ts!",
     // Temporal loads workflows and Pi loads extensions by path, not imports.
     "src/temporal/workflows.ts!",
     "src/evaluation/workflow.ts!",

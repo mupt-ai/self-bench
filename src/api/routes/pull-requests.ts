@@ -3,12 +3,10 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import { HOSTED_EXECUTION_BACKENDS } from "../../contracts/config/providers.js";
 import type { BillingStore } from "../../db/billing.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
 import type { RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
-import { listCredentials } from "../../evaluation/credentials.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import type { Vault } from "../../db/vault.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
@@ -46,7 +44,7 @@ export interface PullRequestRoutesOptions {
   readonly artifacts: ArtifactStore;
   readonly start: WorkflowStarter;
   readonly fetchImpl?: typeof fetch;
-  readonly records?: EncryptedRecordStore;
+  readonly vault?: Vault;
   readonly billing?: BillingStore;
 }
 
@@ -96,10 +94,8 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         sendJson(response, 200, {
           models: generationModels,
           sandboxes: HOSTED_EXECUTION_BACKENDS,
-          credentials: options.records
-            ? await listCredentials(orgRecords(options.records, tenant.id), tenant.id)
-            : [],
-          available: !!options.records,
+          credentials: options.vault ? await options.vault.credentials.list(tenant.id) : [],
+          available: !!options.vault,
           managed: managedOffer(),
           billing: { ...billing, canManage: tenant.role === "admin" },
         });
@@ -123,13 +119,13 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
         : undefined;
       if (generation) {
-        if (!options.records) {
+        if (!options.vault) {
           sendJson(response, 503, { error: "Generation credential storage is not configured." });
           return true;
         }
         try {
           await checkGenerationCredentials(
-            orgRecords(options.records, tenant.id),
+            options.vault.credentials,
             tenant.id,
             generation.settings,
             managedOffer(),
@@ -184,8 +180,8 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         config,
         artifacts,
         start: async (workflowId, input) => {
-          if (generation && options.records)
-            await saveGenerationRecords(options.records, row.runId, generation, token);
+          if (generation && options.vault)
+            await saveGenerationRecords(options.vault.records, row.runId, generation, token);
           await start(workflowId, input);
         },
         repository: repo,

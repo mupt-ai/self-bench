@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router";
-import { harnessLabels } from "../../../../src/evaluation/harnesses";
+import { harnessLabels } from "../../../../src/evaluation/models";
 import { buttonStyles, DataTable, Notice, RunStatus } from "../ui";
 import type { EvaluationRun, EvaluationTrial } from "./api";
 import { thinkingLabel } from "./run-presentation";

@@ -1,8 +1,8 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { loadWorkerConfig } from "../../contracts/config/index.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import {
   ensureManagedE2BTemplate,
@@ -13,7 +13,7 @@ import { MANAGED_E2B_TEMPLATE_OWNER } from "../billing/managed.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
 import { buildExport } from "../pipeline/export.js";
-import { generationEnvironment } from "../settings/credentials.js";
+import { credentialOrg, generationEnvironment } from "../settings/credentials.js";
 import { generationConfigEnvironment } from "../settings/run.js";
 import type { GenerationBatch } from "./types.js";
 
@@ -21,14 +21,14 @@ import type { GenerationBatch } from "./types.js";
 export async function exportBatch(
   batch: GenerationBatch,
   artifacts: ArtifactStore,
-  records?: EncryptedRecordStore,
+  vault?: Vault,
   usage?: UsageLedger,
 ) {
   const generation = batch.run.generation;
   let env = process.env;
   if (generation) {
-    if (!records) throw Error("Export credentials unavailable");
-    env = await generationEnvironment(records, batch.run.runId, generation, env);
+    if (!vault) throw Error("Export credentials unavailable");
+    env = await generationEnvironment(vault, batch.run.runId, generation, env);
     env = generationConfigEnvironment(generation.settings, env, batch.run.version.sandboxImage);
   }
   const config = loadWorkerConfig(env);
@@ -37,12 +37,12 @@ export async function exportBatch(
     const credentialId = managed
       ? MANAGED_E2B_TEMPLATE_OWNER
       : generation?.settings.sandboxCredentialId;
-    if (!records || !generation || !credentialId)
+    if (!vault || !generation || !credentialId)
       throw new Error("Managed export template credentials unavailable");
     await ensureManagedE2BTemplate({
       reference: config.execution.image,
       credentials: config.execution.credentials,
-      records: managed ? records : orgRecords(records, generation.orgId),
+      records: managed ? vault.records : orgRecords(vault.records, credentialOrg(generation)),
       credentialId,
     });
   }

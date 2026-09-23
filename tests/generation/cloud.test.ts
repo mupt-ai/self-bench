@@ -2,13 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { executionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import { loadWorkerConfig } from "../../src/contracts/config/index.js";
 import { HOSTED_EXECUTION_BACKENDS } from "../../src/contracts/config/providers.js";
-import { secretPath } from "../../src/evaluation/account.js";
-import {
-  credentialSchema,
-  listCredentials,
-  saveCredential,
-} from "../../src/evaluation/credentials.js";
-import { orgRecords } from "../../src/evaluation/org-records.js";
+import { credentialSchema } from "../../src/db/credentials.js";
 import { withGenerationRuntime } from "../../src/generation/pipeline/runtime.js";
 import {
   type GenerationSettings,
@@ -20,7 +14,7 @@ import {
   HOBBY_E2B_TIMEOUT_CAP_MS,
   STANDARD_VERCEL_TIMEOUT_CAP_MS,
 } from "../../src/sandbox/timeout.js";
-import { MemoryRecords } from "../support/evaluation-records.js";
+import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
 
@@ -34,16 +28,13 @@ afterEach(async () => {
 for (const sandbox of ["e2b", "vercel"] as const) {
   for (const harborEnvironment of ["modal", "vercel", "e2b", "daytona"] as const) {
     test(`${sandbox} generation persists provider runtime and uses scoped credentials with ${harborEnvironment} verification`, async () => {
-      const records = new MemoryRecords();
-      const scoped = orgRecords(records, 2);
-      const model = await saveCredential(
-        scoped,
+      const vault = memoryVault();
+      const model = await vault.credentials.create(
         2,
         { name: "Model", kind: "openai", auth: "api-key", value: "model-secret" },
         {},
       );
-      const cloud = await saveCredential(
-        scoped,
+      const cloud = await vault.credentials.create(
         2,
         {
           name: "Cloud",
@@ -54,8 +45,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         },
         {},
       );
-      const modal = await saveCredential(
-        scoped,
+      const modal = await vault.credentials.create(
         2,
         {
           name: "Verifier",
@@ -82,7 +72,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         harborCredentialId: modal.id,
       };
       const { site, headers, started } = await prFixture({
-        records,
+        vault,
         pullRequests: { 57: pullRequest(57) },
       });
       server = site;
@@ -140,7 +130,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         for (const stage of ["author", "verifier"] as const) {
           await withGenerationRuntime(
             config,
-            records,
+            vault,
             run,
             stage,
             legacy,
@@ -184,16 +174,16 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         }
         const tampered = { ...run, version: { ...run.version, sandboxImage: "other-runtime" } };
         await expect(
-          withGenerationRuntime(config, records, tampered, "author", legacy, async () => {
+          withGenerationRuntime(config, vault, tampered, "author", legacy, async () => {
             throw new Error("must not run");
           }),
         ).rejects.toThrow("saved configuration");
-        await scoped.destroy(secretPath(2, cloud.id));
+        await vault.credentials.remove(2, cloud.id);
         await expect(
-          withGenerationRuntime(config, records, run, "author", legacy, async () => {
+          withGenerationRuntime(config, vault, run, "author", legacy, async () => {
             throw new Error("must not run");
           }),
-        ).rejects.toThrow("credential is unavailable");
+        ).rejects.toThrow("credential from your account");
       } finally {
         legacy.close();
       }
@@ -275,11 +265,11 @@ test("Vercel credential fields are required, provider-specific, and never listed
     { ...draft, tokenId: "modal-token" },
   ])
     expect(credentialSchema.safeParse(invalid).success).toBe(false);
-  const records = new MemoryRecords();
-  const saved = await saveCredential(records, 7, draft, {});
-  const stored = (await records.read(secretPath(7, saved.id)))?.value;
+  const vault = memoryVault();
+  const saved = await vault.credentials.create(7, draft, {});
+  const stored = await vault.credentials.secret(7, saved.id);
   expect(stored).toEqual({ value: "token-secret", teamId: "team_one", projectId: "prj_one" });
-  const listed = JSON.stringify(await listCredentials(records, 7));
+  const listed = JSON.stringify(await vault.credentials.list(7));
   for (const privateValue of ["token-secret", "team_one", "prj_one"])
     expect(listed).not.toContain(privateValue);
 });

@@ -3,12 +3,11 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import { MAX_CANDIDATES_PER_RUN } from "../../contracts/config/execution-limits.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { BillingStore } from "../../db/billing.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
 import type { RepoStore } from "../../db/repos.js";
 import type { RunStore } from "../../db/runs.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import type { Vault } from "../../db/vault.js";
 import { type BatchStatus, syncBatchProgress } from "../../generation/batches/progress.js";
 import {
   type BatchStarter,
@@ -42,7 +41,7 @@ export interface BatchRoutesOptions {
   batch: (runId: string) => Promise<GenerationBatch | undefined>;
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
-  records?: EncryptedRecordStore;
+  vault?: Vault;
   billing?: BillingStore;
 }
 export interface BatchRoutes {
@@ -93,13 +92,13 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
             }
           : undefined;
         if (generation) {
-          if (!options.records) {
+          if (!options.vault) {
             sendJson(response, 503, { error: "Generation credential storage is not configured." });
             return true;
           }
           try {
             await checkGenerationCredentials(
-              orgRecords(options.records, tenant.id),
+              options.vault.credentials,
               tenant.id,
               generation.settings,
               managedOffer(),
@@ -131,8 +130,8 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         });
         // Persist ownership BEFORE starting paid work. A failed/ambiguous start remains visible
         // and recoverable under this repo rather than leaving an unowned running workflow.
-        if (generation && options.records)
-          await saveGenerationRecords(options.records, input.runId, generation, token);
+        if (generation && options.vault)
+          await saveGenerationRecords(options.vault.records, input.runId, generation, token);
         const run = await runs.attachRun(repo.id, input.runId, user.id);
         try {
           await options.start(input, token);

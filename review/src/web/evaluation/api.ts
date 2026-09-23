@@ -1,7 +1,5 @@
-import type { EvaluationChoices } from "../../../../src/evaluation/types";
-
 export type { EvaluationRun, EvaluationTrial, Harness } from "../../../../src/evaluation/types";
-export interface EvaluationOptions extends EvaluationChoices {
+export interface EvaluationOptions {
   tasks: { runId: string; taskId: string; difficulty: string }[];
 }
 export function evaluationUrl(org: string, repo: string): string {

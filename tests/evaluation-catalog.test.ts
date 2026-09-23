@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
-import { type CatalogModel, catalog } from "../src/evaluation/catalog.js";
-import { withReferencePricing } from "../src/evaluation/catalog-pricing.js";
-import { harnessIds } from "../src/evaluation/harnesses.js";
+import { type CatalogModel, catalog, withReferencePricing } from "../src/evaluation/catalog.js";
 import {
+  harnessIds,
   modelRoutes,
   thinkingArguments,
   thinkingOptions,
-} from "../src/evaluation/model-options.js";
+} from "../src/evaluation/models.js";
 
 test("current catalog exposes explicit model IDs and dated provider pricing", () => {
   expect(new Set(catalog.map((model) => model.id)).size).toBe(catalog.length);

@@ -100,29 +100,19 @@ Relative to `/api/orgs/:org/repos/:owner/:name`.
 
 ## Evaluations
 
-Relative to `/api/orgs/:org/repos/:owner/:name`. Single-model evaluation runs use the operator-configured model list; model comparisons (below) use organization credentials.
+Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`. Runs start only through model comparisons, which use organization credentials.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/evaluations` | Past and running evaluations (`runs`), trial logs omitted |
-| `GET` | `/evaluations/options` | Configured `models` (each with its `harnesses`), `sandboxes`, `harborVersion`, whether personal setups are `configurable`, and the approved `tasks` that may be evaluated |
-| `POST` | `/evaluations` | Body `{ "id": uuid, "model", "harnesses": [...], "sandbox", "tasks": [{ "runId", "taskId" }] }`. Starts an evaluation; `202` with the run. Repeating the same `id` and selection resumes rather than duplicates; a different selection under a known `id` answers `409` |
-| `GET` | `/evaluations/:id` | One evaluation with every trial's log, steps, and artifact names |
-| `GET` | `/evaluations/:id/artifacts?name=…` | Downloads one trial artifact as text |
-| `POST` | `/evaluations/profiles` | Body per `setupSchema` in `src/evaluation/profiles.ts` (`provider`, `model`, `modelApiKey`, `sandbox`, sandbox credentials, optional `pricing`). Saves a personal model setup; `201` |
-
-## Model comparisons
-
-Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`.
-
-| Method | Path | Purpose |
-| --- | --- | --- |
+| `GET` | `/` | Past and running evaluations (`runs`), trial logs omitted |
+| `GET` | `/options` | The approved `tasks` that may be evaluated |
+| `GET` | `/:id` | One evaluation with every trial's log, steps, and artifact names |
+| `GET` | `/:id/artifacts?name=…` | Downloads one trial artifact as text |
 | `GET` | `/catalog` | The model catalog with reference pricing: `version`, `models`, `sandboxes`, `customHosts`, and the available managed model/sandbox offer |
 | `GET` | `/comparisons` | Comparisons of this repository with live status (`comparisons`) |
 | `POST` | `/comparisons` | Body per `comparisonSchema` in `src/evaluation/comparisons.ts`: `id` (uuid), `tasks`, `models` (`catalogId`, `credentialId`, `harnesses`, optional `customModel` and `thinking`), `sandbox`, the sandbox credential, and optional `skipCompleted`. Managed deployments also accept the catalog-advertised managed credential choices. Creates and dispatches the comparison; `202`. A `submissionError` field means some runs were not confirmed and should be resumed |
 | `GET` | `/comparisons/:id` | One comparison with per-model run status |
 | `POST` | `/comparisons/:id/resume` | Re-dispatches unconfirmed runs with the same run ids; `202` |
-| `*` | `/credentials…` | Alias of the organization credential routes below |
 
 ## Organization credentials
 
@@ -131,7 +121,7 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/orgs/:org/credentials` | Stored credentials without their secrets (`credentials`) and whether the caller `canManage` them |
-| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/evaluation/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
+| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/db/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
 | `POST` | `/api/orgs/:org/credentials/:id/delete` | Deletes a credential; `400` while a comparison still references it |
 | `POST` | `/api/orgs/:org/credentials/codex-login` | Body `{ "name": "Codex" }`. Starts a ChatGPT device sign-in for Codex; `202` with the session id and instructions |
 | `GET` | `/api/orgs/:org/credentials/codex-login/:id` | Sign-in status |

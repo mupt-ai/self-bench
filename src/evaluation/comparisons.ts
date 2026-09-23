@@ -1,16 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { EncryptedRecordStore } from "../db/encrypted-records.js";
+import type { ComparisonRecord } from "../db/comparisons.js";
 import type { TaskStore } from "../db/tasks.js";
+import type { Vault } from "../db/vault.js";
 import type { ManagedOffer } from "../generation/billing/managed.js";
-import { type ComparisonRecord, readAccount, updateAccount } from "./account.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
-import { harnessIds } from "./harnesses.js";
-import { routeFor, thinkingLevels, thinkingOptions } from "./model-options.js";
-import { modelIdPattern } from "./providers.js";
+import {
+  evaluationTaskKey,
+  harnessIds,
+  modelIdPattern,
+  routeFor,
+  thinkingLevels,
+  thinkingOptions,
+} from "./models.js";
 import { getEvaluation, listEvaluations } from "./store.js";
-import { evaluationTaskKey } from "./task-identity.js";
 import type { EvaluationInput } from "./types.js";
 
 export const comparisonSchema = z
@@ -45,13 +49,12 @@ export const comparisonSchema = z
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 export interface ComparisonScope {
   repoId: number;
-  ownerId: number;
-  credentialOrgId?: number;
+  orgId: number;
   tenant: string;
   login: string;
 }
 export async function createComparison(
-  records: EncryptedRecordStore,
+  { credentials, comparisons }: Pick<Vault, "credentials" | "comparisons">,
   tasks: TaskStore,
   store: ArtifactStore,
   managed: ManagedOffer,
@@ -60,11 +63,13 @@ export async function createComparison(
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   const signature = JSON.stringify(selection);
-  const previous = (await readAccount(records, scope.ownerId)).comparisons.find(
-    (entry) => entry.id === selection.id,
-  );
+  const previous = await comparisons.find(selection.id);
   if (previous) {
-    if (previous.repoId !== scope.repoId || previous.signature !== signature)
+    if (
+      previous.orgId !== scope.orgId ||
+      previous.repoId !== scope.repoId ||
+      previous.signature !== signature
+    )
       throw new Error("Comparison ID belongs to a different selection");
     return previous;
   }
@@ -92,122 +97,118 @@ export async function createComparison(
   const completed = selection.skipCompleted
     ? completedConfigurationTasks(await listEvaluations(store, scope.repoId))
     : new Set<string>();
-  return updateAccount(records, scope.ownerId, async (account) => {
-    const existing = account.comparisons.find((entry) => entry.id === selection.id);
-    if (existing) {
-      if (existing.repoId !== scope.repoId || existing.signature !== signature)
-        throw new Error("Comparison ID belongs to a different selection");
-      return existing;
+  if ((await comparisons.countForOrg(scope.orgId)) >= 500)
+    throw new Error("Comparison retention limit reached; contact an operator");
+  const saved = new Map(
+    (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
+  );
+  const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
+  const sandbox = managedSandbox
+    ? { id: "managed-sandbox", kind: "e2b" as const }
+    : saved.get(selection.sandboxCredentialId);
+  if (managedSandbox && !managed.sandbox)
+    throw new Error("Managed sandboxes are not available on this deployment.");
+  if (sandbox?.kind !== selection.sandbox) throw new Error("Select your saved sandbox credential");
+  const seen = new Set<string>();
+  const createdAt = new Date().toISOString();
+  const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
+    const model: CatalogModel | undefined =
+      selected.catalogId === "custom" && selected.customModel
+        ? {
+            id: "custom",
+            label: "Custom model",
+            source: "",
+            provider: "custom",
+            model: selected.customModel,
+            harnesses: ["pi"],
+          }
+        : catalog.find((entry) => entry.id === selected.catalogId);
+    if (!model || (selected.catalogId !== "custom" && selected.customModel))
+      throw new Error("Unknown model");
+    const managedModel = selected.credentialId === "managed-model";
+    const credential = managedModel
+      ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
+      : saved.get(selected.credentialId);
+    const route = credential ? routeFor(model, credential.kind) : undefined;
+    if (managedModel && !managed.models)
+      throw new Error("Managed models are not available on this deployment.");
+    if (!credential || !route) throw new Error("Select your matching provider credential");
+    if (
+      credential.auth === "codex-login" &&
+      selected.harnesses.some((harness) => harness !== "codex")
+    )
+      throw new Error("Codex sign-in can only be used with the Codex harness");
+    if (
+      selected.harnesses.some((harness) => !route.harnesses.includes(harness)) ||
+      new Set(selected.harnesses).size !== selected.harnesses.length
+    )
+      throw new Error("Unsupported or repeated harness");
+    const levels = thinkingOptions(model, selected.harnesses);
+    const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
+    if (!levels.includes(thinking))
+      throw new Error("Unsupported thinking level for this model and harness");
+    const modelIdentity = selected.catalogId === "custom" ? route.model : selected.catalogId;
+    for (const harness of selected.harnesses) {
+      const pair = configurationIdentity(modelIdentity, thinking, harness);
+      if (seen.has(pair))
+        throw new Error("Select each model, harness, and thinking configuration once");
+      seen.add(pair);
     }
-    if (account.comparisons.length >= 500)
-      throw new Error("Comparison retention limit reached; contact an operator");
-    const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
-    const sandbox = managedSandbox
-      ? { id: "managed-sandbox", kind: "e2b" as const }
-      : account.credentials.find(
-          (entry) => entry.id === selection.sandboxCredentialId && !entry.deleted,
-        );
-    if (managedSandbox && !managed.sandbox)
-      throw new Error("Managed sandboxes are not available on this deployment.");
-    if (sandbox?.kind !== selection.sandbox)
-      throw new Error("Select your saved sandbox credential");
-    const seen = new Set<string>();
-    const createdAt = new Date().toISOString();
-    const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
-      const model: CatalogModel | undefined =
-        selected.catalogId === "custom" && selected.customModel
-          ? {
-              id: "custom",
-              label: "Custom model",
-              source: "",
-              provider: "custom",
-              model: selected.customModel,
-              harnesses: ["pi"],
-            }
-          : catalog.find((entry) => entry.id === selected.catalogId);
-      if (!model || (selected.catalogId !== "custom" && selected.customModel))
-        throw new Error("Unknown model");
-      const managedModel = selected.credentialId === "managed-model";
-      const credential = managedModel
-        ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
-        : account.credentials.find((entry) => entry.id === selected.credentialId && !entry.deleted);
-      const route = credential ? routeFor(model, credential.kind) : undefined;
-      if (managedModel && !managed.models)
-        throw new Error("Managed models are not available on this deployment.");
-      if (!credential || !route) throw new Error("Select your matching provider credential");
-      if (
-        credential.auth === "codex-login" &&
-        selected.harnesses.some((harness) => harness !== "codex")
-      )
-        throw new Error("Codex sign-in can only be used with the Codex harness");
-      if (
-        selected.harnesses.some((harness) => !route.harnesses.includes(harness)) ||
-        new Set(selected.harnesses).size !== selected.harnesses.length
-      )
-        throw new Error("Unsupported or repeated harness");
-      const levels = thinkingOptions(model, selected.harnesses);
-      const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
-      if (!levels.includes(thinking))
-        throw new Error("Unsupported thinking level for this model and harness");
-      const modelIdentity = selected.catalogId === "custom" ? route.model : selected.catalogId;
-      for (const harness of selected.harnesses) {
-        const pair = configurationIdentity(modelIdentity, thinking, harness);
-        if (seen.has(pair))
-          throw new Error("Select each model, harness, and thinking configuration once");
-        seen.add(pair);
-      }
-      const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
-      const groups = selection.skipCompleted
-        ? selected.harnesses.map((harness) => ({
-            harnesses: [harness],
-            tasks: frozen.filter(
-              (task) =>
-                !completed.has(
-                  configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
-                ),
-            ),
-          }))
-        : [{ harnesses: selected.harnesses, tasks: frozen }];
-      return groups
-        .filter((group) => group.tasks.length > 0)
-        .map(
-          (group): EvaluationInput => ({
-            id: randomUUID(),
-            model: selected.catalogId,
-            modelName,
-            thinking,
-            harnesses: group.harnesses,
-            sandbox: selection.sandbox,
-            tasks: group.tasks,
-            repoId: scope.repoId,
-            tenant: scope.tenant,
-            startedBy: scope.login,
-            createdAt,
-            ...(route.pricing ? { pricing: route.pricing } : {}),
-            credentialOwnerId: scope.ownerId,
-            ...(scope.credentialOrgId ? { credentialOrgId: scope.credentialOrgId } : {}),
-            comparisonId: selection.id,
-            credentials: {
-              modelCredentialId: credential.id,
-              sandboxCredentialId: sandbox.id,
-              provider: route.provider,
-            },
-          }),
-        );
-    });
-    if (inputs.length === 0)
-      throw new Error("Every selected configuration and task already has a completed result.");
-    const record: ComparisonRecord = {
-      id: selection.id,
-      repoId: scope.repoId,
-      ownerId: scope.ownerId,
-      createdAt,
-      signature,
-      inputs,
-    };
-    account.comparisons.push(record);
-    return record;
+    const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
+    const groups = selection.skipCompleted
+      ? selected.harnesses.map((harness) => ({
+          harnesses: [harness],
+          tasks: frozen.filter(
+            (task) =>
+              !completed.has(
+                configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
+              ),
+          ),
+        }))
+      : [{ harnesses: selected.harnesses, tasks: frozen }];
+    return groups
+      .filter((group) => group.tasks.length > 0)
+      .map(
+        (group): EvaluationInput => ({
+          id: randomUUID(),
+          model: selected.catalogId,
+          modelName,
+          thinking,
+          harnesses: group.harnesses,
+          sandbox: selection.sandbox,
+          tasks: group.tasks,
+          repoId: scope.repoId,
+          tenant: scope.tenant,
+          startedBy: scope.login,
+          createdAt,
+          ...(route.pricing ? { pricing: route.pricing } : {}),
+          credentialOrgId: scope.orgId,
+          comparisonId: selection.id,
+          credentials: {
+            modelCredentialId: credential.id,
+            sandboxCredentialId: sandbox.id,
+            provider: route.provider,
+          },
+        }),
+      );
   });
+  if (inputs.length === 0)
+    throw new Error("Every selected configuration and task already has a completed result.");
+  const record = await comparisons.insert({
+    id: selection.id,
+    orgId: scope.orgId,
+    repoId: scope.repoId,
+    createdAt,
+    signature,
+    inputs,
+  });
+  if (
+    record.orgId !== scope.orgId ||
+    record.repoId !== scope.repoId ||
+    record.signature !== signature
+  )
+    throw new Error("Comparison ID belongs to a different selection");
+  return record;
 }
 function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
   return JSON.stringify([model, thinking ?? "default", harness]);
@@ -269,5 +270,26 @@ export async function dispatchComparison(
   for (const input of record.inputs) {
     const run = await getEvaluation(store, record.repoId, input.id);
     if (!run || run.status === "queued") await start(input);
+  }
+}
+
+/** A credential cannot be deleted while a comparison that uses it still has runs to start. */
+export async function assertCredentialUnused(
+  comparisons: Vault["comparisons"],
+  store: ArtifactStore,
+  orgId: number,
+  id: string,
+) {
+  for (const comparison of await comparisons.listForOrg(orgId)) {
+    for (const input of comparison.inputs) {
+      if (
+        input.credentials?.modelCredentialId !== id &&
+        input.credentials?.sandboxCredentialId !== id
+      )
+        continue;
+      const run = await getEvaluation(store, input.repoId, input.id);
+      if (!run || run.status === "queued" || run.status === "running")
+        throw new Error("Credential is needed by an active or pending comparison");
+    }
   }
 }

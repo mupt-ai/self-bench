@@ -1,9 +1,7 @@
 import { expect, test } from "bun:test";
-import { listCredentials } from "../../src/evaluation/credentials.js";
-import { orgRecords } from "../../src/evaluation/org-records.js";
 import { createCodexLogins } from "../../src/harnesses/codex/login.js";
 import { evaluationServer } from "../support/evaluation-fixture.js";
-import { MemoryRecords } from "../support/evaluation-records.js";
+import { memoryVault } from "../support/evaluation-vault.js";
 
 const auth = JSON.stringify({
   tokens: { access_token: "test-access-never-return", refresh_token: "test-refresh-never-return" },
@@ -41,7 +39,7 @@ async function settle() {
 
 test("device sign-in saves once, keeps secrets out of status, and enforces ceremony ownership", async () => {
   const fixture = loginFixture();
-  const records = new MemoryRecords();
+  const records = memoryVault().credentials;
   try {
     const pending = await fixture.logins.start(4, 7, " Team Codex ");
     await settle();
@@ -66,8 +64,8 @@ test("device sign-in saves once, keeps secrets out of status, and enforces cerem
     expect(saved[0]?.name).toBe("Team Codex");
     expect(JSON.stringify(saved)).not.toContain("test-refresh");
     expect((await fixture.logins.complete(4, 7, pending.id, records)).id).toBe(saved[0]?.id);
-    expect(await listCredentials(orgRecords(records, 4), 4)).toHaveLength(1);
-    expect(await listCredentials(orgRecords(records, 5), 5)).toHaveLength(0);
+    expect(await records.list(4)).toHaveLength(1);
+    expect(await records.list(5)).toHaveLength(0);
   } finally {
     await fixture.logins.close();
   }
@@ -75,17 +73,18 @@ test("device sign-in saves once, keeps secrets out of status, and enforces cerem
 
 test("failed saves can retry without signing in again", async () => {
   const fixture = loginFixture();
-  class FlakyRecords extends MemoryRecords {
-    fail = true;
-    override async write(path: string, value: unknown, version: number) {
-      if (this.fail) {
-        this.fail = false;
+  const stored = memoryVault().credentials;
+  let fail = true;
+  const records: typeof stored = {
+    ...stored,
+    async create(...args) {
+      if (fail) {
+        fail = false;
         throw new Error("Storage offline");
       }
-      return super.write(path, value, version);
-    }
-  }
-  const records = new FlakyRecords();
+      return stored.create(...args);
+    },
+  };
   try {
     const pending = await fixture.logins.start(4, 7, "Codex");
     await settle();
@@ -96,7 +95,7 @@ test("failed saves can retry without signing in again", async () => {
     );
     expect(fixture.logins.status(4, 7, pending.id).status).toBe("ready");
     await fixture.logins.complete(4, 7, pending.id, records);
-    expect(await listCredentials(orgRecords(records, 4), 4)).toHaveLength(1);
+    expect(await stored.list(4)).toHaveLength(1);
   } finally {
     await fixture.logins.close();
   }
@@ -129,8 +128,7 @@ test("cancellation and expiry discard sign-ins; invalid credentials never become
 
 test("HTTP sign-in requires admin, same origin and current user; completion exposes only saved metadata", async () => {
   const fixture = loginFixture();
-  const records = new MemoryRecords();
-  const site = await evaluationServer(records, fixture.logins);
+  const site = await evaluationServer(memoryVault(), fixture.logins);
   const base = "/api/orgs/avyay/credentials/codex-login";
   const post = (body: object) => ({ method: "POST", body: JSON.stringify(body) });
   try {

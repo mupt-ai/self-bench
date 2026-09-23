@@ -1,45 +1,34 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import type { ComparisonRecord } from "../../db/comparisons.js";
+import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
-import { evaluationSandboxes } from "../../evaluation/config.js";
-import { harnessIds } from "../../evaluation/harnesses.js";
+import type { Vault } from "../../db/vault.js";
 import {
-  evaluationPrefix,
-  getEvaluation,
-  initialEvaluation,
-  listEvaluations,
-  saveEvaluation,
-} from "../../evaluation/store.js";
+  catalog,
+  catalogVersion,
+  hostedSandboxes,
+  withReferencePricing,
+} from "../../evaluation/catalog.js";
+import {
+  comparisonSchema,
+  comparisonStatus,
+  createComparison,
+  dispatchComparison,
+} from "../../evaluation/comparisons.js";
+import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
+import { managedOffer } from "../../generation/billing/managed.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
-import { codexLoginRoutes } from "./codex-login.js";
-import { platformRoutes } from "./evaluation-platform.js";
-import { availableChoices, handleSetup } from "./evaluation-profiles.js";
-import { orgCredentialRoutes } from "./org-credentials.js";
+import { credentialRoutes } from "./credentials.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|profiles|[a-f0-9-]{36}))?(?:\/artifacts)?$/;
-const requestSchema = z
-  .object({
-    id: z.uuid().transform((value) => value.toLowerCase()),
-    model: z.string().min(1).max(60),
-    harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
-    sandbox: z.enum(evaluationSandboxes),
-    tasks: z
-      .array(
-        z
-          .object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) })
-          .strict(),
-      )
-      .min(1),
-  })
-  .strict();
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume))?$/;
+
 export interface EvaluationRoutesOptions {
   users: UserStore;
   repos: RepoStore;
@@ -48,9 +37,10 @@ export interface EvaluationRoutesOptions {
   publicUrl: string;
   start(input: EvaluationInput): Promise<void>;
   env?: NodeJS.ProcessEnv;
-  records?: EncryptedRecordStore;
+  vault?: Vault;
   codexLogins?: CodexLogins;
 }
+
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
   const { users, repos, tasks, artifacts } = options;
   return {
@@ -60,9 +50,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       response: ServerResponse,
       user: User,
     ): Promise<boolean> {
-      if (await codexLoginRoutes(options, request, url, response, user)) return true;
-      if (await orgCredentialRoutes(options, request, url, response, user)) return true;
-      if (await platformRoutes(options, request, url, response, user)) return true;
+      if (await credentialRoutes(options, request, url, response, user)) return true;
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;
       response.setHeader("cache-control", "no-store");
@@ -73,195 +61,141 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         return true;
       }
       const env = options.env ?? process.env;
-      if (match[4] === "profiles") {
-        await handleSetup(
-          request,
-          response,
-          artifacts,
-          {
-            repoId: repo.id,
-            ownerId: user.githubId,
-            tenant: tenant.login,
-            publicUrl: options.publicUrl,
-            trusted: trustedMutation(request, options.publicUrl, user),
-          },
-          env,
-        );
-        return true;
-      }
-      if (request.method === "GET") {
-        if (match[4] === "options") {
-          const available = (await tasks.listForRepo(repo.id)).filter(
-            (task) =>
-              task.bundleKey &&
-              task.pipelineStatus === "accepted" &&
-              task.review?.decision === "approve",
-          );
-          sendJson(response, 200, {
-            ...(await availableChoices(artifacts, repo.id, user.githubId, tenant.login, env)),
-            tasks: available.map((task) => ({
-              runId: task.runId,
-              taskId: task.taskId,
-              difficulty: task.difficulty,
-            })),
-          });
-        } else if (match[4]) {
-          const run = await getEvaluation(artifacts, repo.id, match[4]);
-          if (!run) {
-            sendJson(response, 404, { error: "Evaluation not found" });
-            return true;
-          }
-          if (url.pathname.endsWith("/artifacts")) {
-            const name = url.searchParams.get("name") ?? "";
-            if (!run.trials.some((trial) => trial.artifacts.includes(name))) {
-              sendJson(response, 404, { error: "Artifact not found" });
-              return true;
-            }
-            const bytes = await artifacts.getByKey(
-              `${evaluationPrefix(repo.id, run.id)}artifacts/${name}`,
-            );
-            if (!bytes) {
-              sendJson(response, 404, { error: "Artifact not found" });
-              return true;
-            }
-            response.writeHead(200, {
-              "content-type": "text/plain; charset=utf-8",
-              "x-content-type-options": "nosniff",
-              "content-disposition": "attachment; filename=solver-artifact.txt",
-            });
-            response.end(bytes);
-          } else sendJson(response, 200, run);
-        } else {
-          sendJson(response, 200, {
-            runs: (await listEvaluations(artifacts, repo.id)).map((run) => ({
-              ...run,
-              trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
-            })),
-          });
+      const [section, id, action] = [match[4], match[5], match[6]];
+      if (section === "comparisons") {
+        if (
+          request.method !== "GET" &&
+          (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user))
+        ) {
+          sendJson(response, 403, { error: "Same-origin JSON request required" });
+          return true;
         }
+        try {
+          if (!options.vault) throw new RecordStoreError(503);
+          const vault = options.vault;
+          const resume = async (record: ComparisonRecord, message: string) => {
+            let submissionError: string | undefined;
+            try {
+              await dispatchComparison(artifacts, record, options.start);
+            } catch {
+              submissionError = message;
+            }
+            sendJson(response, 202, {
+              ...(await comparisonStatus(artifacts, record)),
+              submissionError,
+            });
+          };
+          if (request.method === "POST" && !id) {
+            const draft = comparisonSchema.parse(
+              JSON.parse((await readBody(request, 30_000)).toString()),
+            );
+            const record = await createComparison(
+              vault,
+              tasks,
+              artifacts,
+              managedOffer(env),
+              { repoId: repo.id, orgId: tenant.id, tenant: tenant.login, login: user.login },
+              draft,
+            );
+            await resume(
+              record,
+              "Comparison saved. Some submissions were not confirmed; resume safely using this comparison.",
+            );
+          } else if (request.method === "GET" && !id) {
+            const records = await vault.comparisons.listForRepo(repo.id);
+            sendJson(response, 200, {
+              comparisons: await Promise.all(
+                records.map((record) => comparisonStatus(artifacts, record)),
+              ),
+            });
+          } else {
+            const record = id ? await vault.comparisons.find(id) : undefined;
+            if (!record || record.repoId !== repo.id)
+              sendJson(response, 404, { error: "Comparison not found" });
+            else if (request.method === "GET" && !action)
+              sendJson(response, 200, await comparisonStatus(artifacts, record));
+            else if (request.method === "POST" && action === "resume")
+              await resume(record, "Submission not confirmed. Resume uses the same run IDs.");
+            else sendJson(response, 405, { error: "Method not allowed" });
+          }
+        } catch (error) {
+          if (error instanceof RecordStoreError)
+            sendJson(response, error.status, { error: error.message });
+          else
+            sendJson(response, 400, {
+              error:
+                error instanceof Error && error.name !== "ZodError"
+                  ? error.message
+                  : "Invalid selection or credential fields",
+            });
+        }
+        request.resume();
         return true;
       }
-      if (request.method !== "POST" || match[4]) {
+      if (request.method !== "GET" || action) {
         sendJson(response, 405, { error: "Method not allowed" });
         return true;
       }
-      if (!trustedMutation(request, options.publicUrl, user)) {
-        sendJson(response, 403, { error: "Same-origin JSON request required" });
-        return true;
-      }
-      let body: z.infer<typeof requestSchema>;
-      try {
-        body = requestSchema.parse(JSON.parse((await readBody(request, 16_384)).toString("utf8")));
-      } catch {
-        sendJson(response, 400, { error: "Invalid evaluation selection" });
-        return true;
-      }
-      const choices = await availableChoices(artifacts, repo.id, user.githubId, tenant.login, env);
-      const model = choices.models.find((candidate) => candidate.id === body.model);
-      if (
-        !model ||
-        (model.sandbox
-          ? model.sandbox !== body.sandbox
-          : !choices.sandboxes.includes(body.sandbox)) ||
-        body.harnesses.some((harness) => !model.harnesses.includes(harness)) ||
-        new Set(body.harnesses).size !== body.harnesses.length ||
-        new Set(body.tasks.map((task) => `${task.runId}/${task.taskId}`)).size !== body.tasks.length
-      ) {
-        sendJson(response, 400, {
-          error: "Select configured models, harnesses, sandbox and unique tasks",
+      if (section === "catalog") {
+        sendJson(response, 200, {
+          version: catalogVersion,
+          models: catalog.map(withReferencePricing),
+          sandboxes: hostedSandboxes,
+          customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
+          managed: managedOffer(env),
         });
-        return true;
-      }
-      const selected = await Promise.all(
-        body.tasks.map((task) => tasks.find(repo.id, task.runId, task.taskId)),
-      );
-      if (
-        selected.some(
+      } else if (section === "options") {
+        const available = (await tasks.listForRepo(repo.id)).filter(
           (task) =>
-            !task?.bundleKey ||
-            task.pipelineStatus !== "accepted" ||
-            task.review?.decision !== "approve",
-        )
-      ) {
-        sendJson(response, 400, {
-          error:
-            "Every task must belong to this repository and have a human-approved Harbor bundle",
+            task.bundleKey &&
+            task.pipelineStatus === "accepted" &&
+            task.review?.decision === "approve",
+        );
+        sendJson(response, 200, {
+          tasks: available.map((task) => ({
+            runId: task.runId,
+            taskId: task.taskId,
+            difficulty: task.difficulty,
+          })),
         });
-        return true;
-      }
-      if (
-        new Set(selected.map((task) => `${task?.runId}/${task?.taskId}`)).size !== selected.length
-      ) {
-        sendJson(response, 400, { error: "Select each task only once" });
-        return true;
-      }
-      const existing = await getEvaluation(artifacts, repo.id, body.id);
-      if (existing) {
-        if (
-          existing.model !== body.model ||
-          existing.sandbox !== body.sandbox ||
-          JSON.stringify(existing.harnesses) !== JSON.stringify(body.harnesses) ||
-          JSON.stringify(
-            existing.trials.map((trial) => `${trial.runId}/${trial.taskId}/${trial.harness}`),
-          ) !==
-            JSON.stringify(
-              body.tasks.flatMap((task) =>
-                body.harnesses.map((harness) => `${task.runId}/${task.taskId}/${harness}`),
-              ),
-            )
-        ) {
-          sendJson(response, 409, { error: "This request ID belongs to a different selection" });
-          return true;
-        }
-        if (existing.status === "queued") {
-          const saved = await artifacts.getByKey(
-            `${evaluationPrefix(repo.id, body.id)}request.json`,
-          );
-          if (!saved) throw new Error("Evaluation request snapshot is missing");
-          await options.start(JSON.parse(Buffer.from(saved).toString("utf8")) as EvaluationInput);
-        }
-        sendJson(response, 202, existing);
-        return true;
-      }
-      let input: EvaluationInput = {
-        ...body,
-        modelName: model.model,
-        ...(model.id.startsWith("saved-") ? { credentialOwnerId: user.githubId } : {}),
-        ...(model.pricing ? { pricing: model.pricing } : {}),
-        repoId: repo.id,
-        tenant: tenant.login,
-        startedBy: user.login,
-        createdAt: new Date().toISOString(),
-        tasks: selected.map((task) => {
-          if (!task?.bundleKey) throw new Error("Task bundle is missing");
-          return { runId: task.runId, taskId: task.taskId, bundleKey: task.bundleKey };
-        }),
-      };
-      const requestKey = `${evaluationPrefix(repo.id, body.id)}request.json`;
-      const savedRequest = await artifacts.getByKey(requestKey);
-      if (savedRequest) {
-        const previous = JSON.parse(Buffer.from(savedRequest).toString("utf8")) as EvaluationInput;
-        const signature = (value: EvaluationInput) =>
-          JSON.stringify({
-            model: value.model,
-            modelName: value.modelName,
-            sandbox: value.sandbox,
-            harnesses: value.harnesses,
-            tasks: value.tasks.map(({ runId, taskId }) => ({ runId, taskId })),
-          });
-        if (signature(previous) !== signature(input)) {
-          sendJson(response, 409, { error: "This request ID belongs to a different selection" });
-          return true;
-        }
-        input = previous;
+      } else if (section) {
+        const run = await getEvaluation(artifacts, repo.id, section);
+        if (!run) sendJson(response, 404, { error: "Evaluation not found" });
+        else if (id === "artifacts") await sendArtifact(artifacts, repo.id, run, url, response);
+        else if (!id) sendJson(response, 200, run);
+        else sendJson(response, 404, { error: "Not found" });
       } else {
-        await artifacts.put(requestKey, Buffer.from(JSON.stringify(input)), "application/json");
+        sendJson(response, 200, {
+          runs: (await listEvaluations(artifacts, repo.id)).map((run) => ({
+            ...run,
+            trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
+          })),
+        });
       }
-      const run = initialEvaluation(input, model.label);
-      await saveEvaluation(artifacts, run);
-      await options.start(input);
-      sendJson(response, 202, run);
       return true;
     },
   };
+}
+
+async function sendArtifact(
+  artifacts: ArtifactStore,
+  repoId: number,
+  run: NonNullable<Awaited<ReturnType<typeof getEvaluation>>>,
+  url: URL,
+  response: ServerResponse,
+) {
+  const name = url.searchParams.get("name") ?? "";
+  const bytes = run.trials.some((trial) => trial.artifacts.includes(name))
+    ? await artifacts.getByKey(`${evaluationPrefix(repoId, run.id)}artifacts/${name}`)
+    : undefined;
+  if (!bytes) {
+    sendJson(response, 404, { error: "Artifact not found" });
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": "text/plain; charset=utf-8",
+    "x-content-type-options": "nosniff",
+    "content-disposition": "attachment; filename=solver-artifact.txt",
+  });
+  response.end(bytes);
 }

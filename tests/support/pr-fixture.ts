@@ -5,8 +5,8 @@ import { SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import type { CandidateWorkflowInput } from "../../src/contracts/index.js";
+import type { Vault } from "../../src/db/vault.js";
 import type { WorkflowSnapshot } from "../../src/generation/tasks/status.js";
-import type { MemoryRecords } from "./evaluation-records.js";
 import { cookieValue, fakeGitHub, startAuthServer, testAuthConfig } from "./site-fixture.js";
 export const MERGE = "a".repeat(40);
 export const pullRequest = (number: number, extra: Record<string, unknown> = {}) => ({
@@ -24,7 +24,7 @@ export const pullRequest = (number: number, extra: Record<string, unknown> = {})
 });
 
 export async function prFixture(options: {
-  records?: MemoryRecords;
+  vault?: Vault;
   pullRequests?: Record<number, Record<string, unknown>>;
   snapshots?: Record<string, WorkflowSnapshot>;
 }) {
@@ -36,7 +36,7 @@ export async function prFixture(options: {
   const started: { workflowId: string; input: CandidateWorkflowInput }[] = [];
   const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "site-pr-")));
   const server = await startAuthServer({
-    ...(options.records ? { records: options.records } : {}),
+    ...(options.vault ? { vault: options.vault } : {}),
     config: testAuthConfig,
     artifacts,
     fetchImpl: hub.fetch,

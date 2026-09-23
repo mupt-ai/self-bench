@@ -36,6 +36,20 @@ Self-managed workers (started outside Compose, e.g. the cloud topology below) ma
 
 Sandbox-provider credentials are separate. Modal accepts its mounted profile or token pair. Vercel workers use `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` environment variables. E2B workers use `E2B_API_KEY` and optionally `E2B_DOMAIN`; The E2B template script reads the same values but does not save them. Keep provider credentials on the worker. The API receives provider/template metadata for run manifests but never needs Vercel or E2B control credentials.
 
+### Moving stored credentials to their tables (one time)
+
+Organization credentials and evaluation comparisons used to live inside encrypted per-account blobs in `evaluation_records`. They now live in the `credentials` table (one row per credential, secret column sealed with `SELFBENCH_EVAL_CREDENTIAL_KEY`) and the `comparisons` table. Migration `0010_credentials_and_comparisons` creates the empty tables; `src/db/records-migration.ts` copies the data. It keeps every credential and comparison ID, maps personal accounts to the user's personal organization, records deleted credentials as soft-deleted rows without a secret, and skips IDs already copied, so it is safe to rerun. It never deletes the source records, so rolling the code back needs no data restore (credentials added after the cutover exist only in the new tables).
+
+Run it only with a separate deployment authorization, against the database the API uses:
+
+1. Stop new submissions: stop the API and worker (`docker compose stop api worker`, or the equivalent for your topology). Credentials created between the copy and the cutover would otherwise be missed.
+2. Take a database backup.
+3. Dry run from the new release's API image, which already carries `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY`: `docker compose run --rm --no-deps api node dist/db/records-migration.js`. It applies pending schema migrations, then prints counts of accounts, live and deleted credentials, comparisons, and any skipped accounts. It writes no rows. It never prints secrets.
+4. Apply: the same command with `--apply`. Rerun the dry run and confirm the counts match `select count(*) from credentials` and `select count(*) from comparisons`.
+5. Start the API and worker on the new release. Spot-check **Settings → Credentials** and **Results → comparisons** for one organization.
+
+The old `accounts/…` and `credentials/…` records can be deleted in a later release once the new tables are confirmed. Generation run records (`generations/<runId>`) and managed E2B template locks stay in `evaluation_records`.
+
 ## Execution backends and Harbor
 
 SelfBench uses one provider for discovery, authoring-round, and verification-round sandboxes. It separately invokes Harbor for the build, smoke, nop, and oracle gates of every in-session `verify` and every submission. While an agent session runs, the worker polls the live sandbox's `/work/mailbox` through the provider's exec and file API (Docker `exec`/`cp`, Modal exec and filesystem, E2B commands and files, Vercel `runCommand` and file reads), so those APIs must stay reachable for the whole session. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.

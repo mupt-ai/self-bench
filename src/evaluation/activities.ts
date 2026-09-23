@@ -1,6 +1,6 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { EncryptedRecordStore } from "../db/encrypted-records.js";
+import type { Vault } from "../db/vault.js";
 import { executeEvaluation } from "./runner.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationInput } from "./types.js";
@@ -11,17 +11,17 @@ export interface EvaluationActivities {
 }
 export function createEvaluationActivities(
   store: ArtifactStore,
-  records?: EncryptedRecordStore,
+  vault?: Vault,
 ): EvaluationActivities {
   return {
     async executeSolverEvaluation(input) {
       const context = Context.current();
       const timer = setInterval(() => context.heartbeat(), 10_000);
       try {
-        if (input.credentials && !(await getEvaluation(store, input.repoId, input.id)))
+        if (!(await getEvaluation(store, input.repoId, input.id)))
           await saveEvaluation(store, initialEvaluation(input, input.modelName));
         await executeEvaluation(store, input, {
-          ...(records ? { records } : {}),
+          ...(vault ? { vault } : {}),
           signal: context.cancellationSignal,
           heartbeat: () => context.heartbeat(),
         });

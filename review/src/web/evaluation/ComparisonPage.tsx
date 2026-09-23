@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useParams } from "react-router";
 import type { comparisonStatus } from "../../../../src/evaluation/comparisons";
-import { harnessLabels } from "../../../../src/evaluation/harnesses";
+import { harnessLabels } from "../../../../src/evaluation/models";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, buttonStyles, Notice, PageContent, PageHeader } from "../ui";

@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "../../../../src/evaluation/model-options";
+import type { ThinkingLevel } from "../../../../src/evaluation/models";
 
 const thinkingLabels: Record<ThinkingLevel, string> = {
   default: "model default",

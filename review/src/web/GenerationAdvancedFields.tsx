@@ -5,7 +5,7 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../../src/contracts/config/providers";
-import type { CredentialInfo } from "../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../src/db/credentials";
 import { generationModelLabel } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,

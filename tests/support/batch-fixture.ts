@@ -10,11 +10,11 @@ import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { loadConfig } from "../../src/contracts/config/index.js";
 import type { Candidate, RunRequest, TaskProgress } from "../../src/contracts/index.js";
 import { createBillingStore } from "../../src/db/billing.js";
-import type { EncryptedRecordStore } from "../../src/db/encrypted-records.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createRunStore } from "../../src/db/runs.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
+import type { Vault } from "../../src/db/vault.js";
 import type { BatchStatus } from "../../src/generation/batches/progress.js";
 import { testDatabase } from "./site-fixture.js";
 
@@ -28,7 +28,7 @@ export async function fixture(
     failStart?: boolean;
     failAttach?: boolean;
     sha?: string;
-    records?: EncryptedRecordStore;
+    vault?: Vault;
     billing?: boolean;
   } = {},
 ) {
@@ -65,7 +65,7 @@ export async function fixture(
   const seen = new Map<string, TaskProgress>();
   const routes = createBatchRoutes({
     config: loadConfig({}),
-    ...(options.records ? { records: options.records } : {}),
+    ...(options.vault ? { vault: options.vault } : {}),
     auth: { githubApiUrl: "https://github.invalid" },
     users,
     repos,
@@ -87,7 +87,7 @@ export async function fixture(
     start: async (input) => {
       expect((await runs.runsFor(repo.id)).some((run) => run.runId === input.runId)).toBe(true);
       if (input.generation)
-        expect((await options.records?.read(`generations/${input.runId}`))?.value).toEqual(
+        expect((await options.vault?.records.read(`generations/${input.runId}`))?.value).toEqual(
           input.generation,
         );
       if (options.failStart) throw new Error("ambiguous transport failure");

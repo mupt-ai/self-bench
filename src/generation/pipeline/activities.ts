@@ -6,8 +6,8 @@ import type {
   ReviewRoundResult,
   VerifyOutcome,
 } from "../../contracts/index.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
+import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import { type AuthoringRoundInput, runAuthoringRound } from "./authoring.js";
 import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
@@ -27,7 +27,7 @@ export interface SelfBenchActivities {
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
 export function createActivities(
   config: SelfBenchWorkerConfig,
-  records?: EncryptedRecordStore,
+  vault?: Vault,
   usage?: UsageLedger,
 ): SelfBenchActivities {
   const store = createArtifactStore(config.artifact);
@@ -36,7 +36,7 @@ export function createActivities(
     run: AuthoringRoundInput["run"],
     stage: "author" | "verifier",
     action: Parameters<typeof withGenerationRuntime<T>>[5],
-  ) => withGenerationRuntime(config, records, run, stage, fallback, action, usage);
+  ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
   return {
     discoverCandidateShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>

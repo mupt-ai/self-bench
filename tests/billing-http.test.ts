@@ -6,7 +6,7 @@ import { createBillingRoutes } from "../src/api/routes/billing.js";
 import { createBillingStore } from "../src/db/billing.js";
 import { createUserStore } from "../src/db/users.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
-import { MemoryRecords } from "./support/evaluation-records.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 const stripe = {
@@ -204,8 +204,8 @@ test("managed generation is gated when Stripe is configured and unblocked for cr
   process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY = "platform-openrouter";
   process.env.SELFBENCH_MANAGED_E2B_API_KEY = "platform-e2b";
   try {
-    const records = new MemoryRecords();
-    const f = await fixture({ records, billing: true });
+    const vault = memoryVault();
+    const f = await fixture({ vault, billing: true });
     const managed = {
       authorModel: "gpt-5.6-sol",
       verifierModel: "gpt-5.6-sol",

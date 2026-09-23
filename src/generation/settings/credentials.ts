@@ -5,9 +5,9 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
+import type { CredentialStore } from "../../db/credentials.js";
 import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
-import { type CredentialInfo, readAccount, secretPath } from "../../evaluation/account.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import type { Vault } from "../../db/vault.js";
 import { generationSubscriptionAuth } from "../../harnesses/codex/subscription.js";
 import { VERIFICATION_CREDENTIALS } from "../../sandbox/provider-environment.js";
 import {
@@ -65,25 +65,22 @@ export async function saveGenerationRecords(
   await records.write(generationGitHubTokenPath(runId), { value: githubToken }, 0);
 }
 
-/** The stored credential backing the models; undefined under managed model access. */
-function stageCredential(settings: GenerationSettings): string | undefined {
-  return settings.modelAccess === "managed" ? undefined : settings.modelCredentialId;
+/** The organization whose credentials a run uses. */
+export function credentialOrg(reference: GenerationReference): number {
+  return reference.orgId ?? reference.ownerId;
 }
 
 /** Validates the selected credentials; managed selections only require the offered flag. */
 export async function checkGenerationCredentials(
-  records: EncryptedRecordStore,
-  ownerId: number,
+  credentials: CredentialStore,
+  orgId: number,
   settings: GenerationSettings,
   offer: ManagedOffer,
 ) {
   if (settings.modelAccess === "managed") {
     if (!offer.models) throw new Error("Managed models are not available on this deployment.");
   } else {
-    const account = await readAccount(records, ownerId);
-    const model = account.credentials.find(
-      (item) => item.id === settings.modelCredentialId && !item.deleted,
-    );
+    const model = await credentials.find(orgId, settings.modelCredentialId ?? "");
     const compatible =
       model &&
       (model.kind === "openai"
@@ -99,8 +96,7 @@ export async function checkGenerationCredentials(
   if (settings.sandbox === "managed" && !offer.sandbox)
     throw new Error("Managed sandboxes are not available on this deployment.");
   for (const { id, kind } of sandboxCredentials(settings)) {
-    const account = await readAccount(records, ownerId);
-    const sandbox = account.credentials.find((item) => item.id === id && !item.deleted);
+    const sandbox = await credentials.find(orgId, id ?? "");
     if (sandbox?.kind !== kind || sandbox.auth !== "api-key")
       throw new Error(`Choose a ${credentialLabels[kind]} credential from your account.`);
   }
@@ -108,7 +104,7 @@ export async function checkGenerationCredentials(
 
 /** The Pi provider and provider-specific model id one stage's model invocation uses. */
 export async function stageAuthoring(
-  records: EncryptedRecordStore,
+  credentials: CredentialStore,
   reference: GenerationReference,
   stage: "author" | "verifier",
 ): Promise<{ provider: string; model: string; reasoningEffort: string }> {
@@ -120,9 +116,9 @@ export async function stageAuthoring(
       model: generationModelRoute(model, undefined).model,
       reasoningEffort: settings.reasoning,
     };
-  const account = await readAccount(records, reference.ownerId);
-  const credential = account.credentials.find(
-    (item) => item.id === settings.modelCredentialId && !item.deleted,
+  const credential = await credentials.find(
+    credentialOrg(reference),
+    settings.modelCredentialId ?? "",
   );
   const route = generationModelRoute(model, {
     kind: credential?.kind ?? "",
@@ -132,8 +128,8 @@ export async function stageAuthoring(
 }
 
 /** Resolves this run's environment, including only the selected stage's model credential. */
-export async function generationStageEnvironment(
-  records: EncryptedRecordStore,
+export async function generationEnvironment(
+  { records, credentials }: Pick<Vault, "records" | "credentials">,
   runId: string,
   reference: GenerationReference,
   base: NodeJS.ProcessEnv,
@@ -141,13 +137,8 @@ export async function generationStageEnvironment(
   const saved = await records.read<GenerationReference>(generationRecordPath(runId));
   if (!saved || !isDeepStrictEqual(saved.value, reference))
     throw new Error("Generation does not match its saved configuration.");
-  const scoped = reference.orgId ? orgRecords(records, reference.orgId) : records;
-  await checkGenerationCredentials(
-    scoped,
-    reference.ownerId,
-    reference.settings,
-    managedOffer(base),
-  );
+  const orgId = credentialOrg(reference);
+  await checkGenerationCredentials(credentials, orgId, reference.settings, managedOffer(base));
   const settings = reference.settings;
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;
@@ -177,9 +168,11 @@ export async function generationStageEnvironment(
   if (settings.modelAccess === "managed") {
     env.OPENROUTER_API_KEY = managedModelKey(base);
   } else {
-    const credential = await readModelCredential(scoped, reference);
+    const credential = await credentials.find(orgId, settings.modelCredentialId ?? "");
+    const secret = credential && (await credentials.secret(orgId, credential.id))?.value;
+    if (!credential || !secret) throw new Error("Model credential is unavailable.");
     if (credential.auth === "codex-login")
-      env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(credential.secret);
+      env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(secret);
     else
       env[
         credential.kind === "anthropic"
@@ -187,7 +180,7 @@ export async function generationStageEnvironment(
           : credential.kind === "openrouter"
             ? "OPENROUTER_API_KEY"
             : "OPENAI_API_KEY"
-      ] = credential.secret;
+      ] = secret;
   }
   // Sandbox: the platform's managed E2B account, or one credential per role.
   if (settings.sandbox === "managed") {
@@ -196,13 +189,7 @@ export async function generationStageEnvironment(
     if (managed.domain) env.E2B_DOMAIN = managed.domain;
   } else
     for (const { role, id, kind } of sandboxCredentials(settings)) {
-      const sandbox = await scoped.read<{
-        value: string;
-        tokenId?: string;
-        teamId?: string;
-        projectId?: string;
-      }>(secretPath(reference.ownerId, id ?? ""));
-      const secret = sandbox?.value;
+      const secret = await credentials.secret(orgId, id ?? "");
       if (!secret?.value) throw new Error(`${credentialLabels[kind]} credential is unavailable.`);
       if (kind === "modal") {
         if (!secret.tokenId) throw new Error("Modal credential is unavailable.");
@@ -223,29 +210,4 @@ export async function generationStageEnvironment(
       }
     }
   return env;
-}
-
-async function readModelCredential(
-  records: EncryptedRecordStore,
-  reference: GenerationReference,
-): Promise<{ kind: CredentialInfo["kind"]; auth: CredentialInfo["auth"]; secret: string }> {
-  const settings = reference.settings;
-  const id = stageCredential(settings);
-  const saved = (await readAccount(records, reference.ownerId)).credentials.find(
-    (item) => item.id === id && !item.deleted,
-  );
-  if (!saved) throw new Error("Model credential is unavailable.");
-  const secret = await records.read<{ value: string }>(secretPath(reference.ownerId, saved.id));
-  if (!secret?.value.value) throw new Error("Model credential is unavailable.");
-  return { kind: saved.kind, auth: saved.auth, secret: secret.value.value };
-}
-
-/** Legacy-shaped wrapper: resolves the author stage's environment. */
-export async function generationEnvironment(
-  records: EncryptedRecordStore,
-  runId: string,
-  reference: GenerationReference,
-  base: NodeJS.ProcessEnv,
-): Promise<NodeJS.ProcessEnv> {
-  return await generationStageEnvironment(records, runId, reference, base);
 }

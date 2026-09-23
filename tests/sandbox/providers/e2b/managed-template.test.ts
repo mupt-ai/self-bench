@@ -9,7 +9,7 @@ import {
   managedE2BTemplateRecordPath,
   managedE2BTemplateReference,
 } from "../../../../src/sandbox/providers/e2b/managed-template.js";
-import { MemoryRecords } from "../../../support/evaluation-records.js";
+import { MemoryRecords } from "../../../support/evaluation-vault.js";
 
 const CREDENTIALS = { apiKey: "e2b-key" } as const;
 

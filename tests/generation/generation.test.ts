@@ -2,13 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { loadWorkerConfig } from "../../src/contracts/config/index.js";
 import { tasks as taskRows } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
-import { saveCredential } from "../../src/evaluation/credentials.js";
-import { orgRecords } from "../../src/evaluation/org-records.js";
 import { managedOffer } from "../../src/generation/billing/managed.js";
 import { withGenerationRuntime } from "../../src/generation/pipeline/runtime.js";
 import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
-import { MemoryRecords } from "../support/evaluation-records.js";
+import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
 
@@ -25,15 +23,13 @@ async function boot(options: Parameters<typeof prFixture>[0]) {
 
 describe("generation submissions", () => {
   test("generation settings are scoped, validated and persisted without secrets in workflows", async () => {
-    const records = new MemoryRecords();
-    const model = await saveCredential(
-      orgRecords(records, 2),
+    const vault = memoryVault();
+    const model = await vault.credentials.create(
       2,
       { name: "Test Model", kind: "openai", auth: "api-key", value: "mock-model-secret" },
       {},
     );
-    const sandbox = await saveCredential(
-      orgRecords(records, 2),
+    const sandbox = await vault.credentials.create(
       2,
       {
         name: "Test Modal",
@@ -44,14 +40,13 @@ describe("generation submissions", () => {
       },
       {},
     );
-    const foreign = await saveCredential(
-      records,
-      2,
+    const foreign = await vault.credentials.create(
+      3,
       { name: "Other", kind: "openai", auth: "api-key", value: "foreign-secret" },
       {},
     );
     const { site, headers, started } = await boot({
-      records,
+      vault,
       pullRequests: { 57: pullRequest(57) },
     });
     const generation = {
@@ -91,9 +86,9 @@ describe("generation submissions", () => {
     });
     expect(JSON.stringify(started)).not.toContain("mock-model-secret");
     expect(JSON.stringify(started)).not.toContain("mock-sandbox-secret");
-    expect((await records.read(`generations/${started[0]?.input.run.runId}`))?.value).toMatchObject(
-      { settings: generation },
-    );
+    expect(
+      (await vault.records.read(`generations/${started[0]?.input.run.runId}`))?.value,
+    ).toMatchObject({ settings: generation });
     const run = started[0]?.input.run;
     if (!run) throw new Error("Missing submitted run");
     const config = loadWorkerConfig({});
@@ -101,7 +96,7 @@ describe("generation submissions", () => {
     for (const stage of ["author", "verifier"] as const) {
       await withGenerationRuntime(
         config,
-        records,
+        vault,
         run,
         stage,
         legacy,

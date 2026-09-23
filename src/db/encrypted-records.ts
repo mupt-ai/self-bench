@@ -64,3 +64,15 @@ export function createEncryptedRecords(db: Database, key: string): EncryptedReco
     },
   };
 }
+
+/** Organization-scoped records never overlap run-scoped paths. */
+export function orgRecords(records: EncryptedRecordStore, orgId: number): EncryptedRecordStore {
+  if (!Number.isSafeInteger(orgId) || orgId <= 0)
+    throw new Error("Invalid credential organization");
+  const prefix = `organizations/${orgId}/`;
+  return {
+    read: (path) => records.read(`${prefix}${path}`),
+    write: (path, value, version) => records.write(`${prefix}${path}`, value, version),
+    destroy: (path) => records.destroy(`${prefix}${path}`),
+  };
+}

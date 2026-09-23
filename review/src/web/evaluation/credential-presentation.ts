@@ -1,4 +1,4 @@
-import type { CredentialInfo } from "../../../../src/evaluation/account";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 
 export const providers = [
   { id: "openai", label: "OpenAI" },

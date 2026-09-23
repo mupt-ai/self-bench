@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { harnessLabels } from "../../../../src/evaluation/harnesses";
+import { harnessLabels } from "../../../../src/evaluation/models";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";

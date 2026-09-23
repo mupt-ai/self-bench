@@ -1,7 +1,6 @@
-import type { Harness } from "./harnesses.js";
-import type { ThinkingLevel } from "./model-options.js";
+import type { Harness, ThinkingLevel } from "./models.js";
 
-export type { Harness } from "./harnesses.js";
+export type { Harness } from "./models.js";
 
 type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
 export interface EvaluationPricing {
@@ -77,18 +76,4 @@ export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
   trials: EvaluationTrial[];
   finishedAt?: string;
   error?: string;
-}
-export interface EvaluationModel {
-  id: string;
-  label: string;
-  model: string;
-  harnesses: Harness[];
-  pricing?: EvaluationPricing;
-  sandbox?: EvaluationSandbox;
-}
-export interface EvaluationChoices {
-  models: EvaluationModel[];
-  sandboxes: EvaluationSandbox[];
-  harborVersion: string;
-  configurable?: boolean;
 }

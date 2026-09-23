@@ -1,7 +1,21 @@
-import type { CatalogModel } from "./catalog.js";
-import { withReferencePricing } from "./catalog-pricing.js";
-import { harnessIds } from "./harnesses.js";
-import type { Harness } from "./types.js";
+import { type CatalogModel, withReferencePricing } from "./catalog.js";
+
+export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
+export type Harness = (typeof harnessIds)[number];
+export const harnessLabels: Record<Harness, string> = {
+  codex: "Codex",
+  "claude-code": "Claude Code",
+  pi: "Pi",
+  "mini-swe-agent": "Mini-SWE-Agent",
+  "terminus-2": "Terminus 2",
+};
+export const harnessOptions = harnessIds.map((id) => ({ id, label: harnessLabels[id] }));
+
+export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
+
+export function evaluationTaskKey(runId: string, taskId: string): string {
+  return JSON.stringify([runId, taskId]);
+}
 
 export const thinkingLevels = [
   "default",

@@ -156,7 +156,7 @@ export interface AuthServer {
 }
 
 export interface AuthServerOptions {
-  readonly records?: import("../../src/db/encrypted-records.js").EncryptedRecordStore;
+  readonly vault?: import("../../src/db/vault.js").Vault;
   readonly config?: AuthConfig;
   readonly fetchImpl?: typeof fetch;
   readonly artifacts?: ArtifactStore;
@@ -202,7 +202,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
   const pullRequestRoutes =
     options.artifacts && options.start
       ? createPullRequestRoutes({
-          ...(options.records ? { records: options.records } : {}),
+          ...(options.vault ? { vault: options.vault } : {}),
           config: loadConfig({}),
           auth: config,
           users,

@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
-import { credentialSchema } from "../src/evaluation/credentials.js";
-import { gatewayTrial } from "../src/evaluation/gateway-execution.js";
-import { harnessIds } from "../src/evaluation/harnesses.js";
-import { modelRoutes, routeFor } from "../src/evaluation/model-options.js";
+import { gatewayTrial } from "../src/evaluation/execution.js";
+import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { runCommand } from "../src/lib/process.js";

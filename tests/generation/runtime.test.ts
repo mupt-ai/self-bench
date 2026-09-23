@@ -3,7 +3,6 @@ import {
   executionEnvironment,
   withExecutionEnvironment,
 } from "../../src/contracts/config/execution-environment.js";
-import { saveCredential } from "../../src/evaluation/credentials.js";
 import { agentScript } from "../../src/generation/pipeline/agent.js";
 import {
   generationEnvironment,
@@ -15,12 +14,11 @@ import { generationSubscriptionAuth } from "../../src/harnesses/codex/subscripti
 import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
 import { githubToken } from "../../src/third_party/github/token.js";
 import { codexAccess, codexAuth } from "../support/codex-auth.js";
-import { MemoryRecords } from "../support/evaluation-records.js";
+import { memoryVault } from "../support/evaluation-vault.js";
 
 test("saved ChatGPT logins use subscription authentication without inheriting an API key", async () => {
-  const records = new MemoryRecords();
-  const credential = await saveCredential(
-    records,
+  const vault = memoryVault();
+  const credential = await vault.credentials.create(
     1,
     {
       name: "ChatGPT",
@@ -30,8 +28,7 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
     },
     {},
   );
-  const sandbox = await saveCredential(
-    records,
+  const sandbox = await vault.credentials.create(
     1,
     { name: "Modal", kind: "modal", auth: "api-key", value: "sandbox-secret", tokenId: "id" },
     {},
@@ -49,13 +46,13 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
       sandboxCredentialId: sandbox.id,
     },
   };
-  await records.write(generationRecordPath("codex-run"), reference, 0);
+  await vault.records.write(generationRecordPath("codex-run"), reference, 0);
   const base = {
     OPENAI_API_KEY: "host-key",
     SELFBENCH_PI_AUTH_JSON: "host-subscription",
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
   };
-  const env = await generationEnvironment(records, "codex-run", reference, base);
+  const env = await generationEnvironment(vault, "codex-run", reference, base);
   expect(env.OPENAI_API_KEY).toBeUndefined();
   expect(base.OPENAI_API_KEY).toBe("host-key");
   await withExecutionEnvironment(env, async () => {
@@ -80,15 +77,13 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
 });
 
 test("generation credentials cannot be substituted and concurrent activity environments stay isolated", async () => {
-  const records = new MemoryRecords();
-  const model = await saveCredential(
-    records,
+  const vault = memoryVault();
+  const model = await vault.credentials.create(
     1,
     { name: "Model", kind: "openai", auth: "api-key", value: "model-one" },
     {},
   );
-  const sandbox = await saveCredential(
-    records,
+  const sandbox = await vault.credentials.create(
     1,
     { name: "Modal", kind: "modal", auth: "api-key", value: "sandbox-one", tokenId: "id-one" },
     {},
@@ -106,8 +101,8 @@ test("generation credentials cannot be substituted and concurrent activity envir
       sandboxCredentialId: sandbox.id,
     },
   };
-  await saveGenerationRecords(records, "run-one", reference, "github-one");
-  const env = await generationEnvironment(records, "run-one", reference, {
+  await saveGenerationRecords(vault.records, "run-one", reference, "github-one");
+  const env = await generationEnvironment(vault, "run-one", reference, {
     OPENAI_API_KEY: "host-key",
     MODAL_TOKEN_SECRET: "host-modal",
     GH_TOKEN: "host-github",
@@ -117,9 +112,9 @@ test("generation credentials cannot be substituted and concurrent activity envir
   expect(env.GH_TOKEN).toBe("github-one");
   await withExecutionEnvironment(env, async () => expect(await githubToken()).toBe("github-one"));
   await expect(
-    generationEnvironment(records, "run-one", { ...reference, ownerId: 2 }, {}),
+    generationEnvironment(vault, "run-one", { ...reference, ownerId: 2 }, {}),
   ).rejects.toThrow("saved configuration");
-  await expect(generationEnvironment(records, "run-missing", reference, {})).rejects.toThrow(
+  await expect(generationEnvironment(vault, "run-missing", reference, {})).rejects.toThrow(
     "saved configuration",
   );
   await Promise.all(

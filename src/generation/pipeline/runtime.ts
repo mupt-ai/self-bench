@@ -3,9 +3,9 @@ import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
-import type { EncryptedRecordStore } from "../../db/encrypted-records.js";
+import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
-import { orgRecords } from "../../evaluation/org-records.js";
+import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import {
   ensureManagedE2BTemplate,
@@ -15,14 +15,14 @@ import { withTaskSandbox } from "../../sandbox/task-context.js";
 import { MANAGED_E2B_TEMPLATE_OWNER } from "../billing/managed.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
-import { generationStageEnvironment, stageAuthoring } from "../settings/credentials.js";
+import { credentialOrg, generationEnvironment, stageAuthoring } from "../settings/credentials.js";
 import { generationConfigEnvironment } from "../settings/run.js";
 import { generationExecutionBackend } from "../settings/settings.js";
 import { safeHeartbeat } from "./helpers.js";
 
 export async function withGenerationRuntime<T>(
   config: SelfBenchWorkerConfig,
-  records: EncryptedRecordStore | undefined,
+  vault: Vault | undefined,
   run: RunRequest,
   stage: "author" | "verifier",
   legacySandbox: SandboxExecutor,
@@ -39,8 +39,8 @@ export async function withGenerationRuntime<T>(
     );
   let env: NodeJS.ProcessEnv;
   try {
-    if (!records) throw new Error("Generation credentials are not configured on this worker.");
-    env = await generationStageEnvironment(records, run.runId, run.generation, process.env);
+    if (!vault) throw new Error("Generation credentials are not configured on this worker.");
+    env = await generationEnvironment(vault, run.runId, run.generation, process.env);
   } catch (error) {
     throw ApplicationFailure.nonRetryable(
       error instanceof Error ? error.message : "Generation credentials unavailable",
@@ -48,10 +48,9 @@ export async function withGenerationRuntime<T>(
     );
   }
   const settings = run.generation.settings;
-  const scoped = run.generation.orgId ? orgRecords(records, run.generation.orgId) : records;
   let authoring: { provider: string; model: string; reasoningEffort: string };
   try {
-    authoring = await stageAuthoring(scoped, run.generation, stage);
+    authoring = await stageAuthoring(vault.credentials, run.generation, stage);
   } catch (error) {
     throw ApplicationFailure.nonRetryable(
       error instanceof Error ? error.message : "Generation credentials unavailable",
@@ -86,7 +85,7 @@ export async function withGenerationRuntime<T>(
   ) {
     const managed = settings.sandbox === "managed";
     const credentialId = managed ? MANAGED_E2B_TEMPLATE_OWNER : settings.sandboxCredentialId;
-    if (!credentialId || !records)
+    if (!credentialId)
       throw ApplicationFailure.nonRetryable(
         "Managed E2B template build is not configured on this worker.",
         "GenerationConfiguration",
@@ -96,7 +95,7 @@ export async function withGenerationRuntime<T>(
         reference: selected.execution.image,
         credentials: selected.execution.credentials,
         // A platform template is shared across organizations, so its build lock is global.
-        records: managed ? records : orgRecords(records, run.generation.orgId),
+        records: managed ? vault.records : orgRecords(vault.records, credentialOrg(run.generation)),
         credentialId,
         onLog: safeHeartbeat,
         signal: Context.current().cancellationSignal,

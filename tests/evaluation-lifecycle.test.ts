@@ -4,19 +4,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createEvaluationActivities } from "../src/evaluation/activities.js";
-import { HARBOR_VERSION } from "../src/evaluation/config.js";
 import { executeEvaluation } from "../src/evaluation/runner.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
+import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
-import { evaluationEnv, evaluationInput } from "./support/evaluation-fixture.js";
+import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
 test("multiple tasks and harnesses run once each; a zero score still completes", async () => {
   const root = await mkdtemp(join(tmpdir(), "evaluation-matrix-"));
   try {
     const store = new LocalArtifactStore(join(root, "store"));
-    const input = evaluationInput();
-    input.harnesses = ["codex", "pi"];
-    input.tasks.push({ runId: "run-one", taskId: "task-two", bundleKey: "tasks/task.tar.gz" });
+    const vault = memoryVault();
+    const input = await credentialedInput(vault, (value) => {
+      value.harnesses = ["codex", "pi"];
+      value.tasks.push({ runId: "run-one", taskId: "task-two", bundleKey: "tasks/task.tar.gz" });
+    });
     await mkdir(join(root, "task"));
     await writeFile(join(root, "task", "task.toml"), 'version = "1.0"');
     await runCommand("tar", [
@@ -34,7 +37,8 @@ test("multiple tasks and harnesses run once each; a zero score still completes",
     await saveEvaluation(store, initialEvaluation(input, "Test"));
     const calls: string[] = [];
     await executeEvaluation(store, input, {
-      env: evaluationEnv,
+      env: {},
+      vault,
       command: async (_name, args) => {
         if (args[0] === "--version") return { exitCode: 0, stdout: HARBOR_VERSION, stderr: "" };
         const jobs = args[args.indexOf("--jobs-dir") + 1];
@@ -89,13 +93,15 @@ test("an already-cancelled evaluation does not invoke a solver", async () => {
   const root = await mkdtemp(join(tmpdir(), "evaluation-cancelled-"));
   try {
     const store = new LocalArtifactStore(root);
-    const input = evaluationInput();
+    const vault = memoryVault();
+    const input = await credentialedInput(vault);
     await saveEvaluation(store, initialEvaluation(input, "Test"));
     const controller = new AbortController();
     controller.abort();
     const calls: string[][] = [];
     await executeEvaluation(store, input, {
-      env: evaluationEnv,
+      env: {},
+      vault,
       signal: controller.signal,
       command: async (_name, args) => {
         calls.push([...args]);
