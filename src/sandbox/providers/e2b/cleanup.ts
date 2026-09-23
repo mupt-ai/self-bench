@@ -1,4 +1,5 @@
 import { type Sandbox, type SandboxInfo, SandboxNotFoundError } from "e2b";
+import { errorMessage } from "../../../lib/util.js";
 import type { E2BLifecycleTimings, E2BSleep } from "./config.js";
 import { raceWithSignal } from "./lifecycle.js";
 import type { E2BSandboxApi, E2BSandboxHandle } from "./types.js";
@@ -163,8 +164,4 @@ function cleanupOptions(
   requestTimeoutMs: number,
 ): Parameters<typeof Sandbox.kill>[1] {
   return { requestTimeoutMs, signal };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -8,6 +8,7 @@ import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts/
 import { harborChildEnvironment } from "../../harbor/environment.js";
 import type { HarborJobResult } from "../../harbor/results.js";
 import { runCommand } from "../../lib/process.js";
+import { errorMessage } from "../../lib/util.js";
 import {
   activityLifetimeSignal,
   withActivityHeartbeats,
@@ -208,7 +209,7 @@ async function harborRun(
     if (error instanceof CancelledFailure || !isHarborInfrastructureApplicationFailure(error)) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     const buildLog = await modalBuildLogTail(message, (command, args) => {
       signal.throwIfAborted();
       return runCommand(command, args, {

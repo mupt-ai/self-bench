@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { redactSecrets } from "../lib/redact.js";
+import { isRecord } from "../lib/util.js";
 import { assertPullRequestBelongsToRepository, githubRepository } from "./repository.js";
 
 const MAX_GITHUB_BODY_LENGTH = 12_000;
@@ -102,8 +103,4 @@ function positiveIntegerValue(value: unknown): number | undefined {
 
 function nonnegativeNumber(value: unknown): number {
   return typeof value === "number" && value >= 0 ? value : 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

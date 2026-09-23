@@ -2,8 +2,8 @@ import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TaskDefinition } from "../../contracts/index.js";
 import { patchPaths } from "../../lib/patch-paths.js";
+import { shellQuote } from "../../lib/util.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
-import { shellQuote } from "./paths.js";
 
 function tomlString(value: string): string {
   return JSON.stringify(value);

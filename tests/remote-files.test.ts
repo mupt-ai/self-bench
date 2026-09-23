@@ -11,7 +11,7 @@ describe("remote sandbox files", () => {
     });
     expect(script).toContain("mkdir -p \"$(dirname '/work/task.tar.gz')\"");
     expect(script).toContain("curl -fsSL --retry 5 --retry-all-errors");
-    expect(script).toContain("-o '/work/task.tar.gz' 'https://storage.example/bundle?sig=a'\\''b'");
+    expect(script).toContain(`-o '/work/task.tar.gz' 'https://storage.example/bundle?sig=a'"'"'b'`);
     expect(script).toContain("'abc123' '/work/task.tar.gz'");
     expect(script).toContain("sha256sum -c -");
   });

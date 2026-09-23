@@ -1,5 +1,6 @@
 import type { CommandHandle, CommandResult } from "e2b";
 import { InactivityTimeoutError, type RollingOutput } from "../../../lib/process.js";
+import { shellQuote } from "../../../lib/util.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";
@@ -163,10 +164,6 @@ export function e2bBacking(sandbox: E2BSandboxHandle): LiveSandboxBacking {
 
 function shellCommand(command: readonly string[]): string {
   return command.map(shellQuote).join(" ");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 function workloadEnvironment(request: SandboxRequest): Record<string, string> {

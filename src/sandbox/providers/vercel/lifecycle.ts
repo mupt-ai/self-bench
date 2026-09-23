@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { APIError, Sandbox } from "@vercel/sandbox";
+import { errorMessage } from "../../../lib/util.js";
 import type { VercelExecutionConfig } from "./validation.js";
 
 export const VERCEL_CLEANUP_TIMEOUT_MS = 60_000;
@@ -157,8 +158,4 @@ function createErrorConfirmsNoAllocation(error: unknown): boolean {
   if (!(error instanceof APIError)) return false;
   const status = error.response.status;
   return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 499;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

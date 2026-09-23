@@ -1,6 +1,7 @@
 import { executionEnvironment } from "../../config/execution-environment.js";
 import { harborChildEnvironment } from "../../harbor/environment.js";
 import { type CommandResult, runCommand } from "../../lib/process.js";
+import { errorMessage, tail } from "../../lib/util.js";
 
 /** Harbor's default Modal app; image builds for its sandboxes log under it. */
 export const HARBOR_MODAL_APP = "__harbor__";
@@ -33,7 +34,7 @@ export async function modalBuildLogTail(
   try {
     result = await run("modal", ["app", "logs", HARBOR_MODAL_APP, "--tail", String(LOG_ENTRIES)]);
   } catch (error) {
-    return unavailable(imageId, error instanceof Error ? error.message : String(error));
+    return unavailable(imageId, errorMessage(error));
   }
   if (result.exitCode !== 0) {
     return unavailable(imageId, result.stderr.trim() || `modal exited ${result.exitCode}`);
@@ -48,18 +49,11 @@ export async function modalBuildLogTail(
   if (!selected) {
     return unavailable(imageId, `no recent log entries in Modal app ${HARBOR_MODAL_APP}`);
   }
-  return `Modal build log for ${imageId} (tail of \`modal app logs ${HARBOR_MODAL_APP}\`):\n${tail(selected)}`;
+  return `Modal build log for ${imageId} (tail of \`modal app logs ${HARBOR_MODAL_APP}\`):\n${tail(selected, LOG_TAIL_BYTES)}`;
 }
 
 function unavailable(imageId: string, reason: string): string {
   return `Modal build log for ${imageId} could not be fetched (${tail(reason, 300)}); open the image in the Modal dashboard for the full build output.`;
-}
-
-function tail(value: string, maxBytes = LOG_TAIL_BYTES): string {
-  const buffer = Buffer.from(value);
-  return buffer.length <= maxBytes
-    ? value
-    : `[truncated ${buffer.length - maxBytes} bytes]\n${buffer.subarray(-maxBytes).toString("utf8")}`;
 }
 
 async function defaultRunner(

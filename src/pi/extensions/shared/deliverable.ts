@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { errorMessage } from "../../../lib/util.js";
 import { failure, type ToolFailure } from "./static-check.js";
 
 export interface TaskDeliverable {
@@ -36,9 +37,7 @@ export function loadTaskDeliverable(root: string): TaskDeliverable | ToolFailure
     }
     definition = parsed as Record<string, unknown>;
   } catch (error) {
-    return deliverableFailure(root, [
-      `definition.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-    ]);
+    return deliverableFailure(root, [`definition.json is not valid JSON: ${errorMessage(error)}`]);
   }
   const instruction = readFileSync(join(root, "instruction.md"), "utf8").trim();
   const testPatch = readFileSync(join(root, "test.patch"), "utf8");

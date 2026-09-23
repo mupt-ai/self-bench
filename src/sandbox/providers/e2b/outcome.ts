@@ -1,5 +1,6 @@
 import { AuthenticationError, InvalidArgumentError } from "e2b";
 import type { RollingOutput } from "../../../lib/process.js";
+import { errorMessage } from "../../../lib/util.js";
 import { SandboxExecutionError, type SandboxRequest, type SandboxResult } from "../../contracts.js";
 import { attachCleanupFailure } from "../../ownership.js";
 import { raceWithSignal } from "./lifecycle.js";
@@ -66,8 +67,4 @@ export function sanitizeCleanupError(error: unknown, redactedValue: string): Err
   );
   sanitized.name = "E2BSandboxCleanupError";
   return sanitized;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

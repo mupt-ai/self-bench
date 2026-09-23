@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { executionEnvironment } from "../config/execution-environment.js";
+import { isRecord } from "../lib/util.js";
 
 type PiModelAuthProvider = "openai" | "openai-codex" | "anthropic" | "openrouter";
 
@@ -64,8 +65,4 @@ export async function loadPiSubscriptionAuth(): Promise<string> {
     throw new Error("Pi auth does not contain an openai-codex subscription credential");
   }
   return JSON.stringify({ "openai-codex": credential });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

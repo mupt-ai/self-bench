@@ -1,3 +1,4 @@
+import { errorMessage } from "../lib/util.js";
 import type { LiveSandbox } from "./contracts.js";
 
 export const MAILBOX_DIRECTORY = "/work/mailbox";
@@ -114,7 +115,7 @@ async function respond(
   try {
     request = parseRequest(id, bytes);
   } catch (error) {
-    return { id, kind: "error", message: `unreadable verify request: ${messageOf(error)}` };
+    return { id, kind: "error", message: `unreadable verify request: ${errorMessage(error)}` };
   }
   try {
     return await options.handle(request);
@@ -122,7 +123,11 @@ async function respond(
     if (options.isFatal?.(error)) {
       throw error;
     }
-    return { id, kind: "error", message: `verification failed on the worker: ${messageOf(error)}` };
+    return {
+      id,
+      kind: "error",
+      message: `verification failed on the worker: ${errorMessage(error)}`,
+    };
   }
 }
 
@@ -191,8 +196,4 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
       resolve();
     }
   });
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

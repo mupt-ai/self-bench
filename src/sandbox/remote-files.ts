@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { shellQuote } from "../lib/util.js";
 import {
   type InlineSandboxFile,
   isRemoteSandboxFile,
@@ -49,8 +50,4 @@ export async function materializeRemoteFiles(
     inline.push({ path: file.path, contents });
   }
   return inline;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }

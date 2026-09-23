@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fail } from "../lib/util.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -59,8 +60,4 @@ export function loadAuthConfig(
       .map((login) => login.trim().toLowerCase())
       .filter(Boolean),
   };
-}
-
-function fail(message: string): never {
-  throw new Error(message);
 }

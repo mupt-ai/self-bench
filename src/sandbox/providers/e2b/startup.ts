@@ -1,5 +1,6 @@
 import { E2B } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../config/index.js";
+import { errorMessage } from "../../../lib/util.js";
 import { raceWithSignal } from "./lifecycle.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
@@ -37,8 +38,4 @@ function createE2BStartupApi(config: E2BExecutionConfig): E2BStartupApi {
     exists: async (template, signal) =>
       await client.Template.exists(template, { requestTimeoutMs: 30_000, signal }),
   };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -14,6 +14,7 @@ import {
   readHarborJobResult,
 } from "../../harbor/results.js";
 import { runCommand } from "../../lib/process.js";
+import { errorMessage, isRecord } from "../../lib/util.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 
@@ -57,7 +58,7 @@ export async function runHarborGate(
     assertHarborVersion(version.stdout);
   } catch (error) {
     throw ApplicationFailure.create({
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
       type: HARBOR_INFRASTRUCTURE_FAILURE_TYPE,
     });
   }
@@ -136,7 +137,4 @@ export function rewards(trial: unknown): Record<string, unknown> {
 }
 export function exception(trial: unknown): unknown {
   return isRecord(trial) ? trial.exception_info : undefined;
-}
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

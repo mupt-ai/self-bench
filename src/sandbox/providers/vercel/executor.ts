@@ -1,5 +1,6 @@
 import type { Sandbox } from "@vercel/sandbox";
 import { RollingOutput } from "../../../lib/process.js";
+import { errorMessage } from "../../../lib/util.js";
 import type {
   SandboxExecResult,
   SandboxExecutor,
@@ -234,8 +235,4 @@ function sanitizeCleanupError(error: unknown, redactedValue: string): Error {
   );
   sanitized.name = "VercelSandboxCleanupError";
   return sanitized;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

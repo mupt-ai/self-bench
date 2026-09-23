@@ -1,5 +1,6 @@
 import type { Context, Info } from "@temporalio/activity";
 import type { ActivityInterceptorsFactory } from "@temporalio/worker";
+import { errorMessage } from "../lib/util.js";
 
 /**
  * One line per activity start and failure, machine-readable and prefixed so operators can grep
@@ -41,7 +42,7 @@ export function activityEventInterceptor(
               ...base,
               phase: "error",
               durationMs: now() - started,
-              error: error instanceof Error ? error.message : String(error),
+              error: errorMessage(error),
             }),
           );
           throw error;

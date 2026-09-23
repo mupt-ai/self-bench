@@ -1,6 +1,7 @@
+import { fail } from "../lib/util.js";
 import { download, passthrough } from "./api-client.js";
 import { printHelp } from "./help.js";
-import { fail, requiredArgument } from "./values.js";
+import { requiredArgument } from "./values.js";
 
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;

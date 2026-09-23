@@ -8,6 +8,7 @@ import {
   RecordStoreError,
 } from "../../../evaluation/encrypted-records.js";
 import { projectRoot } from "../../../lib/project-paths.js";
+import { errorMessage } from "../../../lib/util.js";
 import { buildSelfBenchE2BTemplate } from "./template-build.js";
 
 /** The resources every SelfBench stage requests; E2B fixes them when the template is built. */
@@ -208,8 +209,4 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
     };
     signal?.addEventListener("abort", abort, { once: true });
   });
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

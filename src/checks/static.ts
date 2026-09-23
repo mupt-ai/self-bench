@@ -13,6 +13,7 @@ import {
 import { verifierRuntimeFiles } from "../harbor/task/runtime-assets.js";
 import { isBaseOnlyTestPatch } from "../harbor/task/test-patch.js";
 import { solutionScript, testScript } from "../harbor/task/verifier.js";
+import { errorMessage } from "../lib/util.js";
 import { auditTaskDefinition } from "./audit.js";
 import { assertEnvironmentPolicy } from "./environment-policy.js";
 import { malformedPatchProblems } from "./patch.js";
@@ -122,7 +123,10 @@ function parseDefinition(json: string, errors: StaticCheckError[]): TaskDefiniti
   try {
     raw = JSON.parse(json);
   } catch (error) {
-    errors.push({ gate: "schema", message: `definition is not valid JSON: ${messageOf(error)}` });
+    errors.push({
+      gate: "schema",
+      message: `definition is not valid JSON: ${errorMessage(error)}`,
+    });
     return undefined;
   }
   const parsed = taskDefinitionSchema.safeParse(raw);
@@ -142,10 +146,6 @@ function guard(errors: StaticCheckError[], gate: StaticCheckGate, action: () => 
   try {
     action();
   } catch (error) {
-    errors.push({ gate, message: messageOf(error) });
+    errors.push({ gate, message: errorMessage(error) });
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

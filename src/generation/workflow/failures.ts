@@ -1,5 +1,6 @@
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, ApplicationFailure } from "@temporalio/workflow";
+import { errorMessage } from "../../lib/util.js";
 
 export function isExhaustedActivityFailure(error: unknown): error is ActivityFailure {
   return (
@@ -9,7 +10,7 @@ export function isExhaustedActivityFailure(error: unknown): error is ActivityFai
 
 export function infrastructureFailureMessage(error: unknown): string {
   let cause = error;
-  let message = error instanceof Error ? error.message : String(error);
+  let message = errorMessage(error);
   while (cause instanceof Error) {
     if (cause instanceof ApplicationFailure && cause.type === "HarborInfrastructureFailure") {
       return cause.message;

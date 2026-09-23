@@ -2,6 +2,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchConfig } from "../../config/index.js";
 import type { ArtifactRef } from "../../contracts/index.js";
 import { runCommand } from "../../lib/process.js";
+import { errorMessage } from "../../lib/util.js";
 import { COMPOSE_DIAGNOSTICS_MARKER, excerptLog } from "./log-excerpt.js";
 
 export interface GateLog {
@@ -51,7 +52,7 @@ export async function composeDiagnostics(
   }).catch((error: unknown) => ({
     exitCode: 1,
     stdout: "",
-    stderr: error instanceof Error ? error.message : String(error),
+    stderr: errorMessage(error),
   }));
   const services = ps.stdout.trim().split("\n").slice(1).filter(Boolean);
   if (ps.exitCode !== 0 || services.length === 0) {

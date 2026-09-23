@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isRecord } from "../lib/util.js";
 
 interface HarborVerifierOutput {
   readonly combined?: string;
@@ -101,10 +102,6 @@ async function readOptionalText(path: string): Promise<string | undefined> {
   return await readFile(path, "utf8").catch((error: unknown) =>
     isNotFound(error) ? undefined : Promise.reject(error),
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isNotFound(error: unknown): boolean {

@@ -12,6 +12,7 @@ import {
   verifyReportSchema,
 } from "../../contracts/index.js";
 import { githubToken } from "../../github/token.js";
+import { errorMessage } from "../../lib/util.js";
 import { SandboxExecutionError } from "../../sandbox/contracts.js";
 import { submissionPatches } from "../../sandbox/submission.js";
 import { activityLifetimeSignal, withActivityHeartbeats } from "../activity-runtime.js";
@@ -202,5 +203,5 @@ function checkCandidateIdentity(
 }
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }

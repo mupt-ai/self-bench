@@ -1,6 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { Sandbox, Secret } from "modal";
 import { InactivityTimeoutError, RollingOutput } from "../../../lib/process.js";
+import { errorMessage } from "../../../lib/util.js";
 import {
   SandboxExecutionError,
   type SandboxRequest,
@@ -153,7 +154,7 @@ export async function runModalCommand(
   } catch (error) {
     const primary = executionError ?? processError ?? error;
     const failure = new SandboxExecutionError(
-      `${primary instanceof Error ? primary.message : String(primary)}; sandbox ${sandbox.sandboxId}`,
+      `${errorMessage(primary)}; sandbox ${sandbox.sandboxId}`,
       result(),
       { cause: primary },
     );

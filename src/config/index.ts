@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fail } from "../lib/util.js";
 import {
   normalizeE2BDomain,
   normalizeE2BTemplateReference,
@@ -273,8 +274,4 @@ function e2bCredentials(environment: NodeJS.ProcessEnv): E2BCredentials {
   }
   const domain = normalizeE2BDomain(environment.E2B_DOMAIN);
   return { apiKey, ...(domain ? { domain } : {}) };
-}
-
-function fail(message: string): never {
-  throw new Error(message);
 }

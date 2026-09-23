@@ -39,7 +39,3 @@ export function assertSafePatchPaths(patch: string, label = "patch"): void {
 export function repositoryRelativePath(task: TaskDefinition, path: string): string {
   return posix.normalize(posix.join(task.workdir, path)).replace(/^\.\//, "");
 }
-
-export function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
