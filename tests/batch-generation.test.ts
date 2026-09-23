@@ -79,7 +79,10 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
   // The hosted worker has no GitHub login; provenance and discovery use the submitter's token.
   expect(env.GH_TOKEN).toBe("secret-token");
   await withExecutionEnvironment(env, async () => expect(await githubToken()).toBe("secret-token"));
-  const config = loadWorkerConfig({});
+  const config = loadWorkerConfig({
+    SELFBENCH_SANDBOX_SECRET: "s".repeat(32),
+    SELFBENCH_SANDBOX_CALLBACK_URL: "https://selfbench.example",
+  });
   const legacy = createSandboxExecutor(config.execution);
   for (const stage of ["author", "verifier"] as const) {
     await withGenerationRuntime(

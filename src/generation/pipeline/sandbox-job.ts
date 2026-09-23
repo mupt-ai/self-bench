@@ -1,10 +1,8 @@
 import { CompleteAsyncError, Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../../artifacts/index.js";
-import type { ArtifactRef } from "../../contracts/index.js";
 import { signSandboxGrant } from "../../sandbox/callback-grant.js";
 import type { SandboxExecutor, SandboxRequest, StartedSandbox } from "../../sandbox/index.js";
-import { jobFileKey, type SandboxJobOutcome } from "../../sandbox/jobs.js";
-import { readAsset, withHeartbeats } from "./helpers.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { readAsset } from "./helpers.js";
 
 export interface SandboxJob {
   readonly request: SandboxRequest;
@@ -15,7 +13,7 @@ export interface SandboxJob {
   readonly prefix: string;
 }
 
-/** Where sandboxes report back; set when the API and the worker share a sandbox secret. */
+/** Where sandboxes report back, and the secret the API checks their grants with. */
 export interface SandboxCallback {
   readonly secret: string;
   readonly url: string;
@@ -23,23 +21,19 @@ export interface SandboxCallback {
 
 const RUNNER = "/work/.selfbench-job.js";
 const SPEC = "/work/.selfbench-job.json";
-const LOG = "job.log";
 
 /**
- * Runs one job in a sandbox and returns what it produced. With a callback the sandbox is started
- * detached and reports through the API, so this activity completes asynchronously: nothing on the
- * worker waits on it and no output passes through the worker. Without one the job runs attached
- * and the worker stores the outputs itself.
+ * Runs one job in a detached sandbox that reports through the callback API, so this activity
+ * completes asynchronously: nothing on the worker waits on it and no output passes through the
+ * worker. The API completes the activity with what the job uploaded.
  */
 export async function runSandboxJob(
-  store: ArtifactStore,
   sandbox: SandboxExecutor,
   job: SandboxJob,
-  callback?: SandboxCallback,
+  callback: SandboxCallback,
 ): Promise<SandboxJobOutcome> {
   const context = Context.current();
   const prefix = `${job.prefix}/attempt-${context.info.attempt}`;
-  if (!callback) return await runAttached(store, sandbox, job, prefix);
   // A retry replaces the sandbox the previous attempt left behind.
   const previous = (context.info.heartbeatDetails as { sandbox?: StartedSandbox } | undefined)
     ?.sandbox;
@@ -78,46 +72,4 @@ export async function runSandboxJob(
   );
   context.heartbeat({ sandbox: started });
   throw new CompleteAsyncError();
-}
-
-async function runAttached(
-  store: ArtifactStore,
-  sandbox: SandboxExecutor,
-  job: SandboxJob,
-  prefix: string,
-): Promise<SandboxJobOutcome> {
-  const result = await withHeartbeats(`running ${job.request.stage}`, (options) =>
-    sandbox.run(
-      {
-        ...job.request,
-        outputPaths: [
-          ...job.outputs.map((output) => output.path),
-          ...(job.result ? [job.result] : []),
-        ],
-      },
-      options,
-    ),
-  );
-  const files: Record<string, ArtifactRef> = {};
-  for (const output of job.outputs) {
-    const bytes = result.outputs[output.path];
-    if (bytes?.length) {
-      files[output.name] = await store.put(
-        jobFileKey(prefix, output.name),
-        bytes,
-        output.contentType,
-      );
-    }
-  }
-  files[LOG] = await store.put(
-    jobFileKey(prefix, LOG),
-    Buffer.from(`${result.stdout}\n${result.stderr}`),
-    "text/plain",
-  );
-  const inline = job.result ? result.outputs[job.result] : undefined;
-  return {
-    exitCode: result.exitCode,
-    files,
-    ...(inline?.length ? { result: JSON.parse(Buffer.from(inline).toString("utf8")) } : {}),
-  };
 }

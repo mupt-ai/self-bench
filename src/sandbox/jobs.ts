@@ -39,8 +39,8 @@ export interface HeartbeatReply {
 
 /** What a sandbox job produced. */
 export interface SandboxJobOutcome {
-  /** The detached sandbox, still running until someone stops it; absent for attached runs. */
-  readonly sandbox?: StartedSandbox;
+  /** The sandbox that ran the job, still running until someone stops it. */
+  readonly sandbox: StartedSandbox;
   readonly exitCode: number;
   readonly result?: unknown;
   readonly files: Readonly<Record<string, ArtifactRef>>;

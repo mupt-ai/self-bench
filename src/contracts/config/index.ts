@@ -32,6 +32,8 @@ const environmentSchema = z.object({
   SELFBENCH_GCS_PREFIX: z.string().default("selfbench"),
   SELFBENCH_EXECUTION_BACKEND: z.enum(EXECUTION_BACKENDS).default("docker"),
   SELFBENCH_DOCKER_IMAGE: z.string().default("selfbench-sandbox:local"),
+  // Docker sandboxes join this network so they can reach the API by its compose service name.
+  SELFBENCH_DOCKER_NETWORK: z.preprocess(emptyStringAsUndefined, z.string().optional()),
   SELFBENCH_HARBOR_ENVIRONMENT: z.preprocess(
     emptyStringAsUndefined,
     z.enum(HARBOR_ENVIRONMENTS).optional(),
@@ -82,7 +84,7 @@ export interface E2BCredentials {
 }
 
 type ExecutionConfig =
-  | { readonly kind: "docker"; readonly image: string }
+  | { readonly kind: "docker"; readonly image: string; readonly network?: string }
   | {
       readonly kind: "modal";
       readonly app: string;
@@ -165,7 +167,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
   let execution: ExecutionConfig;
   switch (value.SELFBENCH_EXECUTION_BACKEND) {
     case "docker":
-      execution = { kind: "docker", image: value.SELFBENCH_DOCKER_IMAGE };
+      execution = {
+        kind: "docker",
+        image: value.SELFBENCH_DOCKER_IMAGE,
+        ...(value.SELFBENCH_DOCKER_NETWORK ? { network: value.SELFBENCH_DOCKER_NETWORK } : {}),
+      };
       break;
     case "modal":
       execution = {

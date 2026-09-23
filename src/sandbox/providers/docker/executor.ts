@@ -53,6 +53,7 @@ export class DockerSandboxExecutor implements SandboxExecutor {
         String(request.cpu ?? 4),
         "--memory",
         `${request.memoryMiB ?? 8192}m`,
+        ...(this.config.network ? ["--network", this.config.network] : []),
         "--volume",
         `${name}:/work`,
         "--workdir",

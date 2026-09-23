@@ -53,7 +53,7 @@ export async function compileTask(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
   input: CompileAndVerifyInput,
-  callback?: SandboxCallback,
+  callback: SandboxCallback,
 ): Promise<SandboxJobOutcome> {
   const { run, candidate } = input;
   const [program, token, source] = await Promise.all([
@@ -62,7 +62,6 @@ export async function compileTask(
     artifactFile(store, input.task.sourceBundle, "/work/source-task.tar.gz"),
   ]);
   return await runSandboxJob(
-    store,
     sandbox,
     {
       request: {
@@ -118,7 +117,7 @@ export async function verifyCompiled(
 ): Promise<VerifyOutcome> {
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
-  if (compiled.sandbox) await sandbox.stop(compiled.sandbox).catch(() => undefined);
+  await sandbox.stop(compiled.sandbox).catch(() => undefined);
   return await withHeartbeats(`verifying ${input.task.taskId}`, async (options) => {
     if (compiled.exitCode !== 0 || compiled.result === undefined) {
       throw new Error(

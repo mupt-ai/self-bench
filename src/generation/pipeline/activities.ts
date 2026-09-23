@@ -45,10 +45,11 @@ export function createActivities(
 ): WorkerActivities {
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
-  const callback =
-    config.sandboxCallback?.url !== undefined
-      ? { secret: config.sandboxCallback.secret, url: config.sandboxCallback.url }
-      : undefined;
+  const { secret, url } = config.sandboxCallback ?? {};
+  if (!secret || !url) {
+    throw new Error("SELFBENCH_SANDBOX_SECRET and SELFBENCH_SANDBOX_CALLBACK_URL are required");
+  }
+  const callback = { secret, url };
   const runtime = <T>(
     run: AuthoringTurnInput["run"],
     stage: "author" | "verifier",

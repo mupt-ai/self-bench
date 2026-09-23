@@ -284,3 +284,10 @@ describe("sandbox callback configuration", () => {
     ).toEqual({ secret, url: "https://selfbench.example" });
   });
 });
+
+test("the worker refuses to register activities without the sandbox callback", async () => {
+  const { createActivities } = await import("../src/generation/pipeline/activities.js");
+  expect(() =>
+    createActivities(loadWorkerConfig({ SELFBENCH_SANDBOX_SECRET: "s".repeat(32) })),
+  ).toThrow("SELFBENCH_SANDBOX_CALLBACK_URL are required");
+});
