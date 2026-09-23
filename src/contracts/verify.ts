@@ -5,7 +5,9 @@ import { type AuthoredTask, authoredTaskDraftSchema } from "./task.js";
 const pipelineStageSchema = z.enum(["authoring", "review", "verification"]);
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 
-export const MAX_AUTHORING_ROUNDS = 3;
+/** Author → verify → review rounds per candidate, unless the run's settings choose otherwise. */
+export const DEFAULT_AUTHORING_ROUNDS = 3;
+export const MAX_AUTHORING_ROUNDS = 5;
 /** In-session `verify` calls available to each authoring round. */
 export const AUTHOR_VERIFY_BUDGET = 5;
 

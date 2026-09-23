@@ -6,7 +6,7 @@ import {
   AUTHOR_VERIFY_BUDGET,
   type AuthoringRoundResult,
   type Candidate,
-  MAX_AUTHORING_ROUNDS,
+  DEFAULT_AUTHORING_ROUNDS,
   type RunRequest,
   verifyReportSchema,
 } from "../../contracts/index.js";
@@ -84,6 +84,7 @@ export async function runAuthoringRound(
           verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8"))),
         ),
       input.feedback,
+      run.generation?.settings.authoringRounds,
     ),
     files: [
       ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
@@ -140,6 +141,7 @@ export function authoringPrompt(
   round: number,
   report?: string,
   feedback?: string,
+  rounds = DEFAULT_AUTHORING_ROUNDS,
 ): string {
   const tiers = Object.entries(difficultyThresholds)
     .map(
@@ -151,7 +153,7 @@ export function authoringPrompt(
     howToWork: renderPrompt("how-to-work", {
       verifyBudget: AUTHOR_VERIFY_BUDGET,
       round,
-      rounds: MAX_AUTHORING_ROUNDS,
+      rounds,
     }),
     feedback: feedback ? renderPrompt("feedback", { feedback }) : "",
   };

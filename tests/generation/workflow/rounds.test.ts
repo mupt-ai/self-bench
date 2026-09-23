@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RunStatus, TaskProgress } from "../../../src/contracts/index.js";
+import { generationSettingsSchema } from "../../../src/generation/settings/settings.js";
 import {
   acceptingActivities,
   authorCandidates,
@@ -8,6 +9,7 @@ import {
   greenOutcome,
   redReport,
   ref,
+  run,
 } from "../../support/workflow-fixture.js";
 
 function recordStatuses(): {
@@ -227,6 +229,47 @@ describe("SelfBench workflow rounds", () => {
     expect(authors).toEqual([1, 2, 3]);
     expect(current?.().tasks[0]?.reason).toContain("authoring exhausted 3 rounds");
     expect(current?.().tasks[0]?.reason).toContain("Use a public seam");
+  });
+  test("a run's authoring rounds setting bounds the loop", async () => {
+    const activities = acceptingActivities([candidate("short", 1)]);
+    const authors: number[] = [];
+    const author = activities.runAuthoringRound;
+    activities.runAuthoringRound = async (input) => {
+      authors.push(input.round);
+      return author(input);
+    };
+    activities.runReviewRound = async ({ round }) => ({
+      kind: "suggestions",
+      session: ref(`file:///v${round}`),
+      summary: "Still coupled",
+      suggestions: "Use a public seam",
+    });
+    let current: (() => RunStatus) | undefined;
+    const generation = {
+      ownerId: 1,
+      repoId: 1,
+      settings: {
+        authorModel: "gpt-5.6-sol",
+        verifierModel: "gpt-5.6-sol",
+        reasoning: "high",
+        modelAccess: "managed",
+        sandbox: "managed",
+        authoringRounds: 2,
+      },
+    } as const;
+    await authorCandidates(
+      activities,
+      (status) => {
+        current = status;
+      },
+      { ...run, generation },
+    );
+    expect(authors).toEqual([1, 2]);
+    expect(current?.().tasks[0]?.reason).toContain("authoring exhausted 2 rounds");
+    for (const authoringRounds of [0, 6, 1.5])
+      expect(
+        generationSettingsSchema.safeParse({ ...generation.settings, authoringRounds }).success,
+      ).toBe(false);
   });
   test("rejects when the review agent declines", async () => {
     const activities = acceptingActivities([candidate("declined", 1)]);

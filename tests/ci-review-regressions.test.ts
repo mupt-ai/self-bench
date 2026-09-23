@@ -23,6 +23,10 @@ test("review feedback is the reason to revise even when mechanical gates are gre
   expect(failed).toContain("fresh sandbox");
   expect(failed).not.toContain("reviewer requested revisions");
   expect(authoringPrompt(candidate("prompt", 1), 1)).not.toContain("fresh sandbox");
+  expect(authoringPrompt(candidate("prompt", 1), 1)).toContain("(round 1 of 3)");
+  expect(authoringPrompt(candidate("prompt", 1), 1, undefined, undefined, 5)).toContain(
+    "(round 1 of 5)",
+  );
 });
 
 test("prompt sections stay explicit and ordered", () => {

@@ -14,6 +14,7 @@ import {
   generationSandboxLabels,
 } from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
+import { TuningFields } from "./GenerationTuningFields";
 import { modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
@@ -67,26 +68,7 @@ export function AdvancedFields({
           </label>
         ))}
       </div>
-      <div className={pairRow}>
-        <label htmlFor="generation-reasoning" className={`${fieldStyles} content-start`}>
-          Reasoning
-          <Select
-            id="generation-reasoning"
-            aria-label="Reasoning"
-            value={value.reasoning}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                reasoning: event.target.value as GenerationSettings["reasoning"],
-              })
-            }
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </Select>
-        </label>
-      </div>
+      <TuningFields value={value} onChange={onChange} />
       <div className={pairRow}>
         <label htmlFor="generation-model-access" className={`${fieldStyles} content-start`}>
           <span className="flex items-center gap-1.5">

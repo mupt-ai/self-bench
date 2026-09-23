@@ -63,7 +63,7 @@ The Harbor gates prove:
 2. `oracle`: the reference patch applies and every selected test passes;
 3. determinism: the fail-to-pass selection passes a second time with the oracle.
 
-**Review rounds.** A fresh read-only agent reviews each mechanically green authoring revision, including its instruction, patches, environment, mechanical check report, and coupling evidence. It can accept the task, reject it, or return suggestions to the authoring agent. It cannot edit files or submit a fix. Suggestions start the next authoring round; the author makes changes and repeats the mechanical check before another independent review. The candidate has at most three authoring rounds.
+**Review rounds.** A fresh read-only agent reviews each mechanically green authoring revision, including its instruction, patches, environment, and mechanical check report. It can accept the task, reject it, or return suggestions to the authoring agent. It cannot edit files or submit a fix. Suggestions start the next authoring round; the author makes changes and repeats the mechanical check before another independent review. A candidate gets three authoring rounds by default; a run can choose 1–5 with **Authoring Rounds** in the advanced generation settings (`authoringRounds`).
 
 Every candidate in the discovered pool runs as its own child workflow in parallel; the requested counts size the pool (discovery targets 1.5 times the request per tier, dealt across its shards) rather than capping the result, so a run can export more accepted tasks than it asked for. Nothing is replaced or backfilled: a rejected candidate is simply a rejection in the run status.
 

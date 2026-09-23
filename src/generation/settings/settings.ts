@@ -7,6 +7,7 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
+import { MAX_AUTHORING_ROUNDS } from "../../contracts/verify.js";
 import { normalizeE2BTemplateReference } from "../../sandbox/providers/e2b/template.js";
 import { generationModels } from "./models.js";
 
@@ -39,6 +40,8 @@ export const generationSettingsSchema = z
     authorModel: z.enum(generationModels),
     verifierModel: z.enum(generationModels),
     reasoning: z.enum(["low", "medium", "high"]),
+    /** Author → verify → review rounds per candidate; unset means the default. */
+    authoringRounds: z.number().int().min(1).max(MAX_AUTHORING_ROUNDS).optional(),
     /**
      * "managed" routes model calls through OpenRouter behind a platform key the server
      * holds; "credential" runs the models on the organization's own stored credential.

@@ -175,6 +175,7 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
 export async function authorCandidates(
   activities: SelfBenchActivities,
   install?: (status: () => RunStatus) => void,
+  runRequest: RunRequest = run,
 ): Promise<{ acceptedTaskIds: string[] }> {
   const { candidates } = await activities.discoverCandidateShard({
     shardIndex: 0,
@@ -183,7 +184,7 @@ export async function authorCandidates(
   install?.(() => ({ tasks: [...tasks.values()] }) as unknown as RunStatus);
   const results = await Promise.all(
     candidates.map((value) =>
-      executeCandidate({ run, candidate: value }, activities, (progress) =>
+      executeCandidate({ run: runRequest, candidate: value }, activities, (progress) =>
         tasks.set(value.candidateId, progress),
       ),
     ),

@@ -12,8 +12,8 @@ import {
   type Candidate,
   type CandidateWorkflowInput,
   type CandidateWorkflowResult,
+  DEFAULT_AUTHORING_ROUNDS,
   type DiscoveryResult,
-  MAX_AUTHORING_ROUNDS,
   type TaskProgress,
 } from "../../contracts/index.js";
 import { harborTaskQueue } from "../../temporal/task-queues.js";
@@ -85,7 +85,7 @@ export function initialProgress(candidate: Candidate): TaskProgress {
 }
 
 /**
- * Up to MAX_AUTHORING_ROUNDS rounds: the author submits, the worker verifies the submission,
+ * Up to the run's authoring rounds (default 3): the author submits, the worker verifies the submission,
  * and a green task goes to a fresh reviewer who accepts, rejects, or sends suggestions back.
  * Activities that exhaust their retries mark the candidate infrastructure_failed.
  */
@@ -112,7 +112,8 @@ export async function executeCandidate(
   let lastSummary = "no verification report";
   let reviews = 0;
   try {
-    for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
+    const rounds = run.generation?.settings.authoringRounds ?? DEFAULT_AUTHORING_ROUNDS;
+    for (let round = 1; round <= rounds; round += 1) {
       update({ status: "authoring", stage: "authoring", round });
       const authored = await activities.runAuthoringRound({
         run,
@@ -153,7 +154,7 @@ export async function executeCandidate(
       feedback = `${verdict.summary}\n\n${verdict.suggestions}`;
       lastSummary = `reviewer requested changes: ${feedback}`;
     }
-    return finish("rejected", `authoring exhausted ${MAX_AUTHORING_ROUNDS} rounds; ${lastSummary}`);
+    return finish("rejected", `authoring exhausted ${rounds} rounds; ${lastSummary}`);
   } catch (error) {
     if (isCancellation(error)) throw error;
     return finish("infrastructure_failed", rootMessage(error));
