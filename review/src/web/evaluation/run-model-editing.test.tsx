@@ -9,7 +9,7 @@ import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 const astra: CatalogModel = {
-  id: "openai-astra6",
+  id: "gpt-6-astra",
   provider: "openai",
   model: "gpt-6-astra",
   label: "GPT-6 Astra",

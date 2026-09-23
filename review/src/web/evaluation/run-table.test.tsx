@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import { thinkingLevels } from "../../../../src/evaluation/models";
 import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
 import { RunModelRow } from "./RunModelRow";
@@ -15,7 +15,7 @@ test("thinking levels use lowercase in selectors and run summaries", () => {
   const html = renderToStaticMarkup(
     <RunModelRow
       model={{
-        id: "openai-astra6",
+        id: "gpt-6-astra",
         label: "GPT-6 Astra",
         provider: "openai",
         model: "gpt-6-astra",
@@ -195,7 +195,7 @@ test("replacement keeps the original credential category regardless of the defau
 
 test("harness dropdown follows the selected credential's route", () => {
   const astra: CatalogModel = {
-    id: "openai-astra6",
+    id: "gpt-6-astra",
     label: "GPT-6 Astra",
     provider: "openai",
     model: "gpt-6-astra",

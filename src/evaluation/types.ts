@@ -1,17 +1,9 @@
-import type { Harness, ThinkingLevel } from "./models.js";
+import type { ModelPricing, ThinkingLevel } from "../contracts/models.js";
+import type { Harness } from "./models.js";
 
 export type { Harness } from "./models.js";
 
 type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
-export interface EvaluationPricing {
-  maxInputTokens?: number;
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  source: string;
-  asOf: string;
-}
 interface EvaluationTask {
   runId: string;
   taskId: string;
@@ -29,7 +21,7 @@ export interface EvaluationInput {
   harnesses: Harness[];
   sandbox: EvaluationSandbox;
   tasks: EvaluationTask[];
-  pricing?: EvaluationPricing;
+  pricing?: ModelPricing;
   credentialOwnerId?: number;
   credentialOrgId?: number;
   comparisonId?: string;

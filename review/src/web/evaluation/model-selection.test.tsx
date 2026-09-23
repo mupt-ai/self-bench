@@ -33,7 +33,7 @@ test("requested harness chooses a compatible credential and respects login restr
 });
 
 test("duplicates match model, effective thinking level, and harness, not credential", () => {
-  const astra: CatalogModel = { ...model, id: "openai-astra6", provider: "openai" };
+  const astra: CatalogModel = { ...model, id: "gpt-6-astra", provider: "openai" };
   const selection: ComparisonDraft["models"][number] = {
     catalogId: astra.id,
     credentialId: "first",

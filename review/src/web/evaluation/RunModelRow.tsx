@@ -1,12 +1,8 @@
+import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import {
-  harnessOptions,
-  routeFor,
-  thinkingLevels,
-  thinkingOptions,
-} from "../../../../src/evaluation/models";
+import { harnessOptions, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
 import { nextModelSelection } from "./model-selection";

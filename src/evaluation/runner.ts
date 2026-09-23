@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { HarborEnvironment } from "../contracts/config/providers.js";
+import type { ThinkingLevel } from "../contracts/models.js";
 import type { Vault } from "../db/vault.js";
 import {
   assertHarborVersion,
@@ -14,7 +15,7 @@ import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
-import { type ThinkingLevel, thinkingArguments } from "./models.js";
+import { thinkingArguments } from "./models.js";
 import {
   boundedSteps,
   collectOutput,
