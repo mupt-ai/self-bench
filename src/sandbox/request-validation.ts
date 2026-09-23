@@ -40,7 +40,7 @@ export function validateSandboxRequest(request: SandboxRequest): void {
   }
 }
 
-export function assertSandboxWorkPath(path: string): void {
+function assertSandboxWorkPath(path: string): void {
   const normalized = posix.normalize(path);
   if (
     path.includes("\0") ||

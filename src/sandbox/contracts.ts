@@ -1,4 +1,4 @@
-export interface InlineSandboxFile {
+interface InlineSandboxFile {
   readonly path: string;
   readonly contents: Uint8Array | string;
 }
@@ -35,11 +35,6 @@ export interface SandboxRequest {
   readonly memoryMiB?: number;
 }
 
-interface SandboxProgress {
-  readonly stream: "stdout" | "stderr";
-  readonly bytes: number;
-}
-
 /** Provider/accounting-backed cost observed while one sandbox request is running. */
 export interface SandboxCostSnapshot {
   readonly stage: string;
@@ -50,16 +45,8 @@ export interface SandboxCostSnapshot {
   readonly updatedAt: string;
 }
 
-export interface SandboxExecResult {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/** A sandbox whose main command is still running; used for the worker↔agent mailbox. */
+/** File access to a sandbox whose command is still running (the in-session verify mailbox). */
 export interface LiveSandbox {
-  readonly sandboxId: string;
-  execute(command: readonly string[]): Promise<SandboxExecResult>;
   /** Resolves undefined when the file does not exist. */
   readFile(path: string): Promise<Uint8Array | undefined>;
   writeFile(path: string, contents: Uint8Array | string): Promise<void>;
@@ -67,7 +54,6 @@ export interface LiveSandbox {
 
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
-  readonly onProgress?: (progress: SandboxProgress) => void;
   readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
   readonly onCost?: (cost: SandboxCostSnapshot) => void;
   /**
@@ -97,19 +83,10 @@ export class SandboxExecutionError extends Error {
 }
 
 /**
- * Provider-independent ownership contract:
- * - required outputs must exist after successful execution;
- * - cleanup/ownership failures reject, regardless of wrapper exit status;
- * - partial diagnostics may accompany SandboxExecutionError, never proof of disposal.
- * E2B/Vercel hard deadlines return124 only after ownership settles. Docker/Modal
- * deadlines throw; callers must not interpret a thrown timeout as success.
- * Provider-specific absence proofs and late-allocation recovery stay in adapters.
+ * Runs one command in a fresh sandbox and deletes the sandbox afterwards. Declared outputs are
+ * required after exit 0 and best-effort otherwise; a hard deadline returns exit code 124.
  */
 export interface SandboxExecutor {
   run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult>;
-  /** The following act on a sandbox whose run() is in progress. */
-  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult>;
-  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined>;
-  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void>;
   close(): void;
 }

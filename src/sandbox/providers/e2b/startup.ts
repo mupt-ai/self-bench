@@ -1,7 +1,6 @@
 import { E2B } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { errorMessage } from "../../../lib/util.js";
-import { raceWithSignal } from "./lifecycle.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;
 
@@ -18,7 +17,13 @@ export async function validateE2BWorkerStartup(
   const signal = AbortSignal.timeout(timeoutMs);
   let exists: boolean;
   try {
-    exists = await raceWithSignal(resolved.exists(config.image, signal), signal);
+    // The SDK does not always honor the signal, so the bound is enforced here.
+    exists = await Promise.race([
+      resolved.exists(config.image, signal),
+      new Promise<never>((_, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+      ),
+    ]);
   } catch (error) {
     throw new Error(
       `E2B startup validation could not access template ${config.image}: ${errorMessage(error)}`,

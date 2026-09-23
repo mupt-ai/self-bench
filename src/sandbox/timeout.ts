@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type {
-  SandboxExecResult,
   SandboxExecutor,
   SandboxRequest,
   SandboxResult,
@@ -74,18 +73,6 @@ export class TimeoutCappedSandboxExecutor implements SandboxExecutor {
         : request,
       options,
     );
-  }
-
-  execute(sandboxId: string, command: readonly string[]): Promise<SandboxExecResult> {
-    return this.#delegate.execute(sandboxId, command);
-  }
-
-  readFile(sandboxId: string, path: string): Promise<Uint8Array | undefined> {
-    return this.#delegate.readFile(sandboxId, path);
-  }
-
-  writeFile(sandboxId: string, path: string, contents: Uint8Array | string): Promise<void> {
-    return this.#delegate.writeFile(sandboxId, path, contents);
   }
 
   close(): void {

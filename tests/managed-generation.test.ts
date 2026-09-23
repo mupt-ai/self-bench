@@ -146,9 +146,6 @@ test("managed usage metering records tokens and sandbox seconds with costs", asy
   meteredSandboxExecutor(
     {
       run: async () => ({ sandboxId: "s", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
-      execute: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
-      readFile: async () => undefined,
-      writeFile: async () => undefined,
       close: () => {},
     },
     { managedModel: true, managedSandbox: true, model: "gpt-5.6-sol" },

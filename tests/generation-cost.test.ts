@@ -116,9 +116,6 @@ test("metering emits live provider-aware costs and records final usage on comple
       options?.onOutput?.("stdout", new TextEncoder().encode(output));
       return { sandboxId: "sandbox", exitCode: 0, stdout: output, stderr: "", outputs: {} };
     },
-    execute: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
-    readFile: async () => undefined,
-    writeFile: async () => undefined,
     close: () => {},
   };
   const snapshots: SandboxCostSnapshot[] = [];
@@ -208,9 +205,6 @@ test("non-E2B providers report their sandbox component as unpriced", async () =>
   const executor = meteredSandboxExecutor(
     {
       run: async () => ({ sandboxId: "sandbox", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
-      execute: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
-      readFile: async () => undefined,
-      writeFile: async () => undefined,
       close: () => {},
     },
     {
