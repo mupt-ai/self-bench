@@ -10,7 +10,6 @@ import type { SelfBenchConfig } from "../config.js";
 import { openDatabase } from "../db/client.js";
 import { queryStatus } from "../generation/run-status.js";
 import { connectTemporalClient } from "../temporal/connection.js";
-import type { ViewerInfo } from "../viewer/types.js";
 import {
   authorized,
   bearerMatches,
@@ -20,9 +19,9 @@ import {
   sendJson,
   sendReviewAsset,
 } from "./http.js";
+import { handleRunArtifactRoute } from "./run-artifact-routes.js";
 import { handleRunRoute } from "./run-routes.js";
 import { openSite } from "./site.js";
-import { handleViewerRoute } from "./viewer-routes.js";
 
 export interface ApiOptions {
   /** When set, the API also serves the selfbench.dev site: GitHub sign-in and session cookies. */
@@ -58,10 +57,6 @@ export async function startApi(
       if (site) {
         if (await site.billing.webhook(request, url, response)) return;
         if (await site.auth.handle(request, url, response)) return;
-        if (request.method === "GET" && url.pathname === "/v1/viewer") {
-          sendJson(response, 200, { modes: ["runs"], auth: "github" } satisfies ViewerInfo);
-          return;
-        }
         if (request.method === "GET" && isSitePage(url.pathname)) {
           await sendReviewAsset(response, "/");
           return;
@@ -96,10 +91,7 @@ export async function startApi(
         if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }
-      if (
-        await handleViewerRoute(request, url, response, { store: artifacts, statusFor: runStatus })
-      )
-        return;
+      if (await handleRunArtifactRoute(request, url, response, artifacts)) return;
       if (
         await handleRunRoute(request, url, response, {
           config,

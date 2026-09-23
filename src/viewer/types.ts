@@ -1,15 +1,5 @@
 import type { Difficulty, TaskProgress } from "../contracts.js";
 
-const VIEWER_MODES = ["runs", "local"] as const;
-type ViewerMode = (typeof VIEWER_MODES)[number];
-
-export interface ViewerInfo {
-  readonly modes: readonly ViewerMode[];
-  readonly root?: string;
-  /** Present when the server requires GitHub sign-in; the bundle then renders the site shell. */
-  readonly auth?: "github";
-}
-
 export interface TaskFileEntry {
   readonly path: string;
   readonly sizeBytes: number;
@@ -19,14 +9,6 @@ export interface TaskFileEntry {
 export interface TaskFiles {
   readonly taskId: string;
   readonly files: readonly TaskFileEntry[];
-}
-
-export interface LocalTaskSummary {
-  readonly taskId: string;
-  readonly path: string;
-  readonly name?: string;
-  readonly difficulty?: string;
-  readonly fileCount: number;
 }
 
 const CANDIDATE_STAGES = [

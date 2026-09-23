@@ -16,7 +16,6 @@ Usage:
   self-bench cancel RUN_ID
   self-bench download RUN_ID OUTPUT.tar.gz
   self-bench list
-  self-bench view TASKS_DIR [--port N] [--host HOST]
 
 Start the local stack with docker compose from a checkout: each directory is its own Compose
 project, so worktrees run side by side. Host ports are ephemeral (docker compose port api 8080).
@@ -40,9 +39,5 @@ earlier runs whose source pull requests discovery must skip, whatever their outc
 drops accepted tasks that repeat a source pull request and lists them in its manifest.
 
 The replay command skips discovery: the worker rebuilds the named candidates from the source run's stored
-provenance, discovery reports, and authored definitions, then runs authoring and review fresh.
-
-The view command serves the Harbor viewer over any directory of Harbor tasks (directories containing
-task.toml, searched four levels deep) without Temporal or an API token. The same viewer is served by the
-self-bench API at / and adds a run mode that shows every candidate, its stage, artifacts, and logs.`);
+provenance, discovery reports, and authored definitions, then runs authoring and review fresh.`);
 }

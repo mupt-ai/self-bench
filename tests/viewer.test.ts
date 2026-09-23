@@ -11,18 +11,8 @@ import {
 } from "../src/viewer/archived.js";
 import { candidateArtifacts } from "../src/viewer/artifacts.js";
 import { clearBundleCache, expandBundle } from "../src/viewer/bundle.js";
-import {
-  candidateStage,
-  listCandidates,
-  reasonSummary,
-  testRunner,
-} from "../src/viewer/candidates.js";
-import { startViewServer } from "../src/viewer/local-server.js";
-import {
-  readTaskDirectory,
-  resolveTaskDirectory,
-  scanHarborTasks,
-} from "../src/viewer/task-files.js";
+import { reasonSummary, testRunner } from "../src/viewer/candidates.js";
+import { readTaskDirectory } from "../src/viewer/task-files.js";
 
 const roots: string[] = [];
 
@@ -51,32 +41,6 @@ async function writeHarborTask(directory: string, name: string): Promise<void> {
 }
 
 describe("candidate classification", () => {
-  test("derives the pipeline stage from status and reason", () => {
-    expect(candidateStage({ status: "accepted" })).toBe("accepted");
-    expect(candidateStage({ status: "infrastructure_failed" })).toBe("infrastructure");
-    expect(candidateStage({ status: "verifying" })).toBe("in_progress");
-    expect(
-      candidateStage({ status: "rejected", reason: "authoring tests never fail; log: gs://x" }),
-    ).toBe("authoring");
-    expect(
-      candidateStage({ status: "rejected", reason: "verifier tests are coupled; log: gs://x" }),
-    ).toBe("review");
-    expect(
-      candidateStage({ status: "rejected", reason: "hard mode requires at least 3 files" }),
-    ).toBe("audit");
-    expect(
-      candidateStage({
-        status: "rejected",
-        reason: "validation repair failed after its single activity attempt",
-      }),
-    ).toBe("validation");
-    expect(candidateStage({ status: "rejected", reason: "test repair failed" })).toBe("review");
-    expect(
-      candidateStage({ status: "rejected", reason: "environment authoring failed in sb-1" }),
-    ).toBe("environment");
-    expect(candidateStage({ status: "rejected", reason: "pytest ... FAILED" })).toBe("preflight");
-  });
-
   test("names the test runner and summarizes noisy reasons", () => {
     expect(testRunner("pnpm --filter=@posthog/frontend jest {tests}")).toBe("jest");
     expect(testRunner("pytest -c pytest.ini {tests}")).toBe("pytest");
@@ -90,7 +54,7 @@ describe("candidate classification", () => {
 });
 
 describe("artifact store listing", () => {
-  test("lists keys under a prefix and joins candidate definitions", async () => {
+  test("lists keys under a prefix and groups candidate artifacts", async () => {
     const root = await temporaryRoot();
     const store = new LocalArtifactStore(root);
     const definition = {
@@ -120,21 +84,6 @@ describe("artifact store listing", () => {
     const listed = await store.list("runs/run-1/audits/task-a");
     expect(listed.map((entry) => entry.key)).toEqual(["runs/run-1/audits/task-a/abc.json"]);
     expect(await store.list("runs/run-1/missing")).toEqual([]);
-
-    const candidates = await listCandidates(store, {
-      runId: "run-1",
-      phase: "complete",
-      requested: 1,
-      requestedByDifficulty: { easy: 0, medium: 1, hard: 0 },
-      discovered: 1,
-      accepted: 1,
-      rejected: 0,
-      tasks: [
-        { taskId: "task-a", candidateId: "cand-a", difficulty: "medium", status: "accepted" },
-      ],
-    });
-    expect(candidates.candidates[0]?.definition?.runner).toBe("jest");
-    expect(candidates.candidates[0]?.definition?.passToPass).toBe(2);
 
     const artifacts = await candidateArtifacts(store, "run-1", {
       taskId: "task-a",
@@ -230,20 +179,13 @@ describe("artifact store listing", () => {
 });
 
 describe("harbor task directories and bundles", () => {
-  test("scans, reads, and guards task directories", async () => {
+  test("reads task directories", async () => {
     const root = await temporaryRoot();
     await writeHarborTask(join(root, "alpha"), "selfbench/alpha");
-    await writeHarborTask(join(root, "nested/beta/harbor-task"), "selfbench/beta");
-    const tasks = await scanHarborTasks(root);
-    expect(tasks.map((task) => task.taskId)).toEqual(["alpha", "nested/beta"]);
-    expect(tasks[0]?.name).toBe("selfbench/alpha");
-    expect(tasks[0]?.difficulty).toBe("medium");
-
-    const files = await readTaskDirectory(resolveTaskDirectory(root, "alpha"), "alpha");
+    const files = await readTaskDirectory(join(root, "alpha"), "alpha");
     const byPath = new Map(files.files.map((file) => [file.path, file]));
     expect(byPath.get("instruction.md")?.text).toBe("Do the thing.\n");
     expect(byPath.get("environment/repo.tar.gz")?.text).toBeUndefined();
-    expect(() => resolveTaskDirectory(root, "../etc")).toThrow();
   });
 
   test("expands a stored bundle once and serves it from the cache", async () => {
@@ -262,30 +204,5 @@ describe("harbor task directories and bundles", () => {
     const second = await expandBundle(store, key);
     expect(second.files.length).toBe(first.files.length);
     await expect(expandBundle(store, "runs/run-2/missing.tar.gz")).rejects.toThrow("not found");
-  });
-
-  test("serves a local directory over HTTP", async () => {
-    const root = await temporaryRoot();
-    await writeHarborTask(join(root, "delta"), "selfbench/delta");
-    const server = await startViewServer({ root, host: "127.0.0.1", port: 0 });
-    try {
-      const info = (await (await fetch(`${server.url}/v1/viewer`)).json()) as { modes: string[] };
-      expect(info.modes).toEqual(["local"]);
-      const tasks = (await (await fetch(`${server.url}/v1/local/tasks`)).json()) as {
-        taskId: string;
-      }[];
-      expect(tasks.map((task) => task.taskId)).toEqual(["delta"]);
-      const files = (await (await fetch(`${server.url}/v1/local/task?id=delta`)).json()) as {
-        files: { path: string }[];
-      };
-      expect(files.files.map((file) => file.path)).toContain("environment/Dockerfile");
-      expect((await fetch(`${server.url}/v1/local/task?id=../x`)).status).toBe(400);
-      // The favicon is routed to the review build, which may not exist when tests run.
-      const favicon = await fetch(`${server.url}/dari-logo.svg`);
-      if (favicon.ok) expect(favicon.headers.get("content-type")).toBe("image/svg+xml");
-      else expect(await favicon.json()).toEqual({ error: "asset not found" });
-    } finally {
-      await server.stop();
-    }
   });
 });

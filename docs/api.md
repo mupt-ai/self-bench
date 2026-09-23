@@ -6,7 +6,7 @@ All responses are JSON unless noted. Errors carry `{ "error": "message" }` and s
 
 ## Authentication
 
-There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz`, `/v1/viewer`, and `POST /api/stripe/webhook` are open.
+There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open.
 
 | Method | Header | Reaches |
 | --- | --- | --- |
@@ -158,15 +158,12 @@ The site's task pages read bundles and raw artifacts through the run routes that
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness check (unauthenticated) |
-| `GET` | `/v1/viewer` | Viewer capabilities (unauthenticated) |
 | `GET` | `/v1/runs` | Every run Temporal knows plus archived runs |
 | `POST` | `/v1/runs` | Start a candidate workflow or a replay |
 | `GET` | `/v1/runs/:runId` | Run status |
 | `POST` | `/v1/runs/:runId/cancel` | Request cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download the export archive |
 | `POST` | `/v1/provenance?runId=…` | Store provenance JSONL for a run |
-| `GET` | `/v1/runs/:runId/candidates` | Every candidate of a run |
-| `GET` | `/v1/runs/:runId/candidates/:taskId/artifacts` | Artifact keys for one candidate |
 | `GET` | `/v1/runs/:runId/artifacts?key=…&start=…` | Stream one artifact, optionally from a byte offset |
 | `GET` | `/v1/runs/:runId/bundle?key=…` | Expand a Harbor task bundle into its text files |
 

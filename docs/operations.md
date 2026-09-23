@@ -369,17 +369,9 @@ that file over the provider's reported exit code (a provider hard timeout stays 
 observed to lose a long command's stream after the script finished and report a spurious exit code or a gRPC
 "terminated" error; with the status file collected, such a failure becomes a normal round result instead of a retry.
 
-## Harbor viewer
+## Task pages
 
-The API serves a browser viewer at `/`. It has two sources, chosen by the server that serves it: a self-bench run (every candidate, including rejected and infrastructure-failed ones, with the artifacts and logs each stage wrote) when served by the API, and a local directory of Harbor tasks when served by `self-bench view`. Each task shows the compiled environment (task.toml, Dockerfiles, services, resources), the setup, smoke, and test commands with the selected tests, the instruction beside the gold and held-out test patches, and a file tree of everything in the bundle. In run mode the pipeline sheet lists each stage's artifacts with a one-line summary of what it concluded.
-
-The same viewer runs without Temporal or a token over any directory of Harbor tasks:
-
-```bash
-self-bench view ./self-bench-tasks --port 8090
-```
-
-Directories are recognized by a `task.toml` up to four levels deep, so an extracted self-bench export, a single task, or a Harbor tasks directory all work. Deep links carry `#run=`, `#task=`, and `#tab=`.
+Each task in the web app shows the compiled environment (task.toml, Dockerfiles, services, resources), the setup, smoke, and test commands with the selected tests, the instruction beside the gold and held-out test patches, and a file tree of everything in the bundle. The pipeline sheet lists each stage's artifacts with a one-line summary of what it concluded. The pages read bundles and artifacts through `GET /v1/runs/:runId/bundle` and `GET /v1/runs/:runId/artifacts`.
 
 ## HTTP API
 
@@ -394,9 +386,6 @@ The CLI is the recommended client for run workflows. Every site feature is also 
 | `GET` | `/v1/runs/:runId` | Read progress and rejection reasons |
 | `POST` | `/v1/runs/:runId/cancel` | Request Temporal cancellation |
 | `GET` | `/v1/runs/:runId/export` | Download a completed export |
-| `GET` | `/v1/viewer` | Viewer capabilities (`modes`) |
-| `GET` | `/v1/runs/:runId/candidates` | Every candidate with stage, reason, and definition summary |
-| `GET` | `/v1/runs/:runId/candidates/:taskId/artifacts` | Artifact keys grouped by pipeline stage, plus bundles |
 | `GET` | `/v1/runs/:runId/artifacts?key=...` | Stream one artifact under `runs/:runId/` |
 | `GET` | `/v1/runs/:runId/bundle?key=...` | Expand a Harbor task bundle into its text files |
 
@@ -415,7 +404,7 @@ Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site:
 | `*` | `/api/api-keys…` | Personal API keys: list, create (secret shown once), revoke |
 | `*` | `/api/orgs/:org/…` | Repositories, tasks, batches, evaluations, comparisons, and credentials; see the [API reference](api.md) |
 
-The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token; `/v1/viewer` stays public so the bundle can tell which host it is on. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests. `self-bench view <dir>` never requires sign-in.
+The session is a signed, HttpOnly, SameSite=Lax cookie valid for 30 days (Secure when `SELFBENCH_PUBLIC_URL` is https). Users live in the `users` table of `SELFBENCH_DATABASE_URL`; migrations run at startup. The user's GitHub token is stored encrypted under a key derived from `SELFBENCH_SESSION_SECRET` and is never sent to the browser. With sign-in enabled, `/v1/*` and `/api/*` answer 401 unless the request carries a valid session, a personal API key (`Authorization: Bearer sbk_…` or `X-API-Key`), or the operator bearer token. API keys are stored as SHA-256 hashes in the `api_keys` table and act as their owner; `read`-scoped keys may only send `GET` requests.
 
 Set `SELFBENCH_ALLOWED_GITHUB_ORGS` (comma-separated logins, case-insensitive) to limit sign-in to active members of those organizations. Non-members are refused at the callback and land on `/login?error=organization`; existing sessions re-verify membership against GitHub with a five-minute cache, and a removed member is denied with `organization_required` instead of waiting for the 30-day cookie to expire. Without the setting, sign-in stays open to everyone.
 
