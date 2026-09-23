@@ -16,7 +16,11 @@ export function RepoLayout() {
       repoId={{ org: context.org.login, fullName: repo }}
     >
       <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <div className={cn("shrink-0 pt-8", pageGutter)}>
+        {/* Both parts reserve the scrollbar's slot, so the tabs and the page below them line up
+            whether or not the page is tall enough to scroll. */}
+        <div
+          className={cn("shrink-0 overflow-y-hidden pt-8 [scrollbar-gutter:stable]", pageGutter)}
+        >
           <div className={pageContainer}>
             <Breadcrumbs
               items={[
@@ -39,7 +43,10 @@ export function RepoLayout() {
           </div>
         </div>
         <div
-          className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain py-8", pageGutter)}
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain py-8 [scrollbar-gutter:stable]",
+            pageGutter,
+          )}
           data-slot="repository-content"
         >
           <div className={pageContainer}>
