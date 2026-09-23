@@ -1,4 +1,5 @@
-import type { Harness, ThinkingLevel } from "../../../src/evaluation/models";
+import type { ThinkingLevel } from "../../../src/contracts/models";
+import type { Harness } from "../../../src/evaluation/models";
 
 /**
  * The public data contract: what selfbench.dev pages consume. Aggregates only. Nothing per

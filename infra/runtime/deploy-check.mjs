@@ -1,6 +1,6 @@
 // Mounted into the built application container. Never prints credentials.
 import { Client } from '/app/node_modules/@temporalio/client/lib/index.js';
-import { loadConfig } from '/app/dist/config.js';
+import { loadConfig } from '/app/dist/contracts/config/index.js';
 import { connectTemporalClient } from '/app/dist/temporal/connection.js';
 const config = loadConfig();
 const connection = await connectTemporalClient(config.temporal);
