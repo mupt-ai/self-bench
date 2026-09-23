@@ -8,6 +8,7 @@ import {
   runRequestSchema,
 } from "../../contracts/index.js";
 import { sandboxImageEnvironment } from "../../sandbox/runtime-image.js";
+import { managedHarborEnvironment } from "../billing/managed.js";
 import {
   type GenerationReference,
   type GenerationSettings,
@@ -74,7 +75,10 @@ export function generationConfigEnvironment(
   return {
     ...base,
     SELFBENCH_EXECUTION_BACKEND: backend,
-    SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(settings),
+    SELFBENCH_HARBOR_ENVIRONMENT: generationHarborEnvironment(
+      settings,
+      managedHarborEnvironment(base),
+    ),
     ...sandboxImageEnvironment(backend, image),
   };
 }

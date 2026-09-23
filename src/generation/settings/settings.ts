@@ -24,12 +24,16 @@ export function generationExecutionBackend(sandbox: GenerationSandbox): HostedEx
   return sandbox === "managed" ? "e2b" : sandbox;
 }
 
-/** The Harbor environment verification runs in for a sandbox choice. */
+/**
+ * The Harbor environment verification runs in for a sandbox choice. Managed runs verify
+ * wherever the deployment's platform accounts allow (`managedHarborEnvironment`).
+ */
 export function generationHarborEnvironment(
   settings: Pick<GenerationSettings, "sandbox" | "harborEnvironment">,
+  managed: HostedHarborEnvironment,
 ): HostedHarborEnvironment {
   return settings.sandbox === "managed"
-    ? "e2b"
+    ? managed
     : (settings.harborEnvironment ?? (settings.sandbox as HostedHarborEnvironment));
 }
 

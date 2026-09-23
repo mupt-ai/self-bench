@@ -18,6 +18,8 @@ import type { SandboxRuntimeOwner } from "../../sandbox/runtime-image.js";
 import {
   MANAGED_E2B_TEMPLATE_OWNER,
   type ManagedOffer,
+  managedHarborEnvironment,
+  managedModalEnvironment,
   managedModelKey,
   managedOffer,
   managedSandboxCredentials,
@@ -187,6 +189,8 @@ export async function generationEnvironment(
       env,
       providerCredentialEnvironment("e2b", { value: managed.apiKey, domain: managed.domain }),
     );
+    if (managedHarborEnvironment(base) === "modal")
+      Object.assign(env, managedModalEnvironment(base));
   } else
     for (const { role, id, kind } of sandboxCredentials(settings)) {
       const secret = await credentials.secret(orgId, id ?? "");
