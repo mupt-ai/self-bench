@@ -37,7 +37,10 @@ interface FakeRepository {
  * database is emptied and reused: each PGlite instance keeps its memory, so one per test
  * file, not one per test.
  */
-export async function releaseServer(shared?: TestDatabase) {
+export async function releaseServer(
+  shared?: TestDatabase,
+  resultsSiteUrl: string | null = "https://selfbench.example",
+) {
   const directory = await mkdtemp(join(tmpdir(), "release-routes-"));
   const artifacts = new LocalArtifactStore(directory);
   const database = shared ?? (await testDatabase());
@@ -142,7 +145,7 @@ export async function releaseServer(shared?: TestDatabase) {
     releases,
     publicUrl,
     githubApiUrl: testAuthConfig.githubApiUrl,
-    resultsSiteUrl: "https://selfbench.example",
+    resultsSiteUrl,
     fetchImpl: githubFetch,
   });
   const publicRoutes = createPublicReleaseRoutes(releases);

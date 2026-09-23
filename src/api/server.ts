@@ -56,6 +56,8 @@ export async function startApi(
         return;
       }
       if (site) {
+        // The public results site's host is answered entirely by the public site.
+        if (await site.resultsSite?.handle(request, url, response)) return;
         if (await site.billing.webhook(request, url, response)) return;
         if (await site.auth.handle(request, url, response)) return;
         if (await site.publicReleases.handle(request, url, response)) return;

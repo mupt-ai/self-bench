@@ -58,5 +58,8 @@ if [[ -n "${GITHUB_ENV:-}" ]]; then
   printf 'RUNTIME_SECRET_VERSIONS=%s\n' "$RUNTIME_SECRET_VERSIONS" >> "$GITHUB_ENV"
 fi
 [[ "${SELFBENCH_PUBLIC_URL:-}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || die 'Configure the public HTTPS origin.'
+# Optional; when set, the results site's origin must be HTTPS, and the deploy checks it.
+[[ -z "${SELFBENCH_RESULTS_SITE_URL:-}" || "${SELFBENCH_RESULTS_SITE_URL}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] \
+  || die 'Configure the results site as an HTTPS origin, or leave it unset.'
 [[ "${SELFBENCH_ACTIVITY_CONCURRENCY:-}" =~ ^([1-9][0-9]?|100)$ ]] || die 'Configure activity concurrency as an integer from 1 to 100.'
 echo "Verified deploy source $GITHUB_SHA and runtime settings."

@@ -55,6 +55,7 @@ jobs:
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+      SELFBENCH_RESULTS_SITE_URL: ${{ vars.SELFBENCH_RESULTS_SITE_URL }}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
       RELEASE_PRERELEASE: ${{ toJSON(github.event.release.prerelease) }}
       RELEASE_DRAFT: ${{ toJSON(github.event.release.draft) }}
@@ -202,6 +203,15 @@ jobs:
           curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_PUBLIC_URL/healthz"
           status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_PUBLIC_URL/api/session")
           test "$status" = 401 || { echo "Anonymous session was not rejected (HTTP $status)"; exit 1; }
+          # The public results site, when configured: its own page and API, and none of the app's
+          # surface.
+          if [ -n "$SELFBENCH_RESULTS_SITE_URL" ]; then
+            curl --fail --silent --show-error --max-time 30 "$SELFBENCH_RESULTS_SITE_URL/" | grep -q 'name="selfbench-app-url"' \
+              || { echo "The results site did not serve its own page"; exit 1; }
+            curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_RESULTS_SITE_URL/api/public/releases"
+            status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_RESULTS_SITE_URL/api/session")
+            test "$status" = 404 || { echo "The results site exposes the app's API (HTTP $status)"; exit 1; }
+          fi
       - name: Record Deployment
         if: ${{ !inputs.infrastructure_only }}
         env:
@@ -211,5 +221,5 @@ jobs:
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
-            echo "HTTPS health, anonymous auth rejection and VM worker checks passed."
+            echo "HTTPS health, anonymous auth rejection, results site and VM worker checks passed."
           } >> "$GITHUB_STEP_SUMMARY"

@@ -117,3 +117,12 @@ test("declining a newly eligible setting is recorded, so the next dialog leaves 
     next.preview.settings.find((setting: { label: string }) => setting.label === "LUNA")?.ticked,
   ).toBe(false);
 });
+
+test("with no results site configured, the list offers no public link", async () => {
+  const bare = await releaseServer(database, null);
+  try {
+    expect((await (await bare.request(bare.base)).json()).resultsSiteUrl).toBeNull();
+  } finally {
+    await bare.close();
+  }
+});

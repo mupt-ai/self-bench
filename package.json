@@ -34,7 +34,7 @@
     "uuid": "11.1.1"
   },
   "scripts": {
-    "build": "bun run clean && bun run build:server && bun run build:review",
+    "build": "bun run clean && bun run build:server && bun run build:review && bun run build:public",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "cli": "bun run src/api/cli/bin.ts",
     "build:public": "vite build --config review/vite.public.config.ts",

@@ -54,8 +54,8 @@ export interface ReleaseRoutesOptions {
   readonly releases: ReleaseStore;
   readonly publicUrl: string;
   readonly githubApiUrl: string;
-  /** Origin of the results site, for links to released pages. */
-  readonly resultsSiteUrl: string;
+  /** Origin of the results site, for links to released pages; null when there is none. */
+  readonly resultsSiteUrl: string | null;
   readonly fetchImpl?: typeof fetch;
 }
 
