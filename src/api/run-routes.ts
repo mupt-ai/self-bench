@@ -2,11 +2,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { pipeline } from "node:stream/promises";
 import type { Client } from "@temporalio/client";
 import { z } from "zod";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import type { createGenerationBatches } from "../batches/service.js";
-import type { SelfBenchConfig } from "../config.js";
-import type { RunStatus } from "../contracts.js";
-import { listArchivedRuns } from "../viewer/archived.js";
+import type { SelfBenchConfig } from "../config/index.js";
+import type { RunStatus } from "../contracts/index.js";
+import { listArchivedRuns } from "../runs/archived.js";
 import { readBody, sendJson } from "./http.js";
 import { buildRunRequest } from "./run-request.js";
 

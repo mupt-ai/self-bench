@@ -1,26 +1,26 @@
 import { CancelledFailure, Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../../artifacts.js";
-import type { SelfBenchConfig } from "../../config.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import { matchingGreenVerify, submissionHash } from "../../checks/submission-hash.js";
+import type { SelfBenchConfig } from "../../config/index.js";
 import type {
   ArtifactRef,
   AuthoredTask,
   Candidate,
   PipelineStage,
   RunRequest,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import type { LiveSandbox } from "../../sandbox/index.js";
 import {
   type MailboxRequest,
   type MailboxResponse,
   superviseMailbox,
 } from "../../sandbox/supervisor.js";
-import { matchingGreenVerify, submissionHash } from "../../submission-hash.js";
-import { renderVerifyReport, verifyReportSummary } from "../../verify-report.js";
 import { activityLifetimeSignal } from "../activity-runtime.js";
 import {
   compileAndVerify,
   isVerificationInfrastructureFailure,
 } from "../verify/compile-and-verify.js";
+import { renderVerifyReport, verifyReportSummary } from "../verify/report.js";
 import { materializeDraft } from "./drafts.js";
 
 export interface SessionVerifyContext {

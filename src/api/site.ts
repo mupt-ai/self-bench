@@ -1,5 +1,5 @@
 import type { Client } from "@temporalio/client";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import { type ApiKeyRoutes, createApiKeyRoutes } from "../auth/api-key-routes.js";
 import { createApiKeyStore } from "../auth/api-keys.js";
 import type { AuthConfig } from "../auth/config.js";
@@ -11,7 +11,7 @@ import { loadStripeConfig } from "../billing/config.js";
 import { startBillingDispatcher } from "../billing/outbox.js";
 import { type BillingRoutes, createBillingRoutes } from "../billing/routes.js";
 import { createBillingStore } from "../billing/store.js";
-import type { SelfBenchConfig } from "../config.js";
+import type { SelfBenchConfig } from "../config/index.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createEncryptedRecords } from "../evaluation/encrypted-records.js";
 import { createEvaluationRoutes } from "../evaluation/routes.js";

@@ -12,7 +12,7 @@ import type {
   ReviewRoundResult,
   RunRequest,
   VerifyOutcome,
-} from "../contracts.js";
+} from "../contracts/index.js";
 
 export interface DiscoveryShardInput {
   /** The application already grouped this immutable PR chunk. No worker-side repartitioning. */

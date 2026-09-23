@@ -1,5 +1,5 @@
 import { ModalClient } from "modal";
-import type { SelfBenchWorkerConfig } from "../config.js";
+import type { SelfBenchWorkerConfig } from "../config/index.js";
 import { DockerSandboxExecutor } from "./providers/docker/executor.js";
 import { E2BSandboxExecutor } from "./providers/e2b/executor.js";
 import { ModalSandboxExecutor } from "./providers/modal/executor.js";

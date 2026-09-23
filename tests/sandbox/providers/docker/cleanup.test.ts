@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { RollingOutput, type runCommand } from "../../../../src/process.js";
+import { RollingOutput, type runCommand } from "../../../../src/lib/process.js";
 import {
   cleanupDockerResources,
   DockerCleanupError,

@@ -1,4 +1,4 @@
-import type { SelfBenchWorkerConfig } from "../../../config.js";
+import type { SelfBenchWorkerConfig } from "../../../config/index.js";
 
 export type E2BExecutionConfig = Extract<
   SelfBenchWorkerConfig["execution"],

@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { setupE2B } from "../setup/e2b/index.js";
 import { setupVercel } from "../setup/vercel/index.js";
-import { SetupCanceledError } from "../terminal-prompts.js";
+import { SetupCanceledError } from "./terminal-prompts.js";
 import { fail } from "./values.js";
 
 export async function setup(args: string[]): Promise<void> {

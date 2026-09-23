@@ -5,7 +5,7 @@ import type {
   DiscoveryResult,
   RunRequest,
   TaskProgress,
-} from "../contracts.js";
+} from "../contracts/index.js";
 import type { DiscoveryShardInput } from "../generation/activity-types.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 

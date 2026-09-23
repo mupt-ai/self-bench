@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import type { TaskProgress } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { TaskProgress } from "../contracts/index.js";
 import {
   ARTIFACT_GROUPS,
   type ArtifactEntry,

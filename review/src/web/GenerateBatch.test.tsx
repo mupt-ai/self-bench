@@ -3,7 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
-import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/config/execution-limits";
 import { GenerateBatch } from "./GenerateBatch";
 
 test("batch creation is one dialog that closes and opens the submitted batch once", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InactivityTimeoutError } from "../../../../src/process.js";
+import { InactivityTimeoutError } from "../../../../src/lib/process.js";
 import { VercelSandboxExecutor } from "../../../../src/sandbox/providers/vercel/executor.js";
 import {
   vercelFixtureConfig as config,

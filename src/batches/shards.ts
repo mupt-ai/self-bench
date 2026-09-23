@@ -1,4 +1,4 @@
-import { DISCOVERY_POOL_MULTIPLIER } from "../execution-limits.js";
+import { DISCOVERY_POOL_MULTIPLIER } from "../config/execution-limits.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
 
 const DEFAULT_PRS_PER_SHARD = 25;

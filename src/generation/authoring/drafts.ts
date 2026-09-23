@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../../artifacts.js";
-import type { AuthoredTaskDraft } from "../../contracts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { AuthoredTaskDraft } from "../../contracts/index.js";
 import { taskOperation } from "../../sandbox/task-operation.js";
 
 /**

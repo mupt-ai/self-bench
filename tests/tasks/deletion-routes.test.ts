@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
 import { SESSION_COOKIE } from "../../src/auth/session.js";
-import { clearArchivedListingCache } from "../../src/viewer/archived.js";
+import { clearArchivedListingCache } from "../../src/runs/archived.js";
 import { ingestTasks } from "../support/ingest-tasks.js";
 import {
   type AuthServer,

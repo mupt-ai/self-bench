@@ -1,6 +1,6 @@
 import { Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../artifacts.js";
-import { type ArtifactRef, taskDefinitionSchema } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { type ArtifactRef, taskDefinitionSchema } from "../contracts/index.js";
 import type { SandboxFile } from "../sandbox/contracts.js";
 import { dedupeBySourcePr, exportManifest } from "../sandbox/export-manifest.js";
 import { taskOperation } from "../sandbox/task-operation.js";

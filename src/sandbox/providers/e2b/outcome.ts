@@ -1,5 +1,5 @@
 import { AuthenticationError, InvalidArgumentError } from "e2b";
-import type { RollingOutput } from "../../../process.js";
+import type { RollingOutput } from "../../../lib/process.js";
 import { SandboxExecutionError, type SandboxRequest, type SandboxResult } from "../../contracts.js";
 import { attachCleanupFailure } from "../../ownership.js";
 import { raceWithSignal } from "./lifecycle.js";

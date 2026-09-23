@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { Sandbox, Secret } from "modal";
-import { InactivityTimeoutError, RollingOutput } from "../../../process.js";
+import { InactivityTimeoutError, RollingOutput } from "../../../lib/process.js";
 import {
   SandboxExecutionError,
   type SandboxRequest,

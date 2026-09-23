@@ -1,13 +1,13 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { collectRepositoryProvenanceWithMetadata } from "../provenance.js";
 import {
   associationSessionSummaries,
   createProvenanceAssociationManifest,
   resolveMergedPullRequest,
   writeProvenanceAssociationManifest,
-} from "../provenance-associations.js";
+} from "../provenance/associations/index.js";
+import { collectRepositoryProvenanceWithMetadata } from "../provenance/index.js";
 import { resolveRepository } from "./repository.js";
 import { fail, positiveInteger } from "./values.js";
 

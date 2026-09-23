@@ -1,12 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import { tenantFor } from "../auth/tenant.js";
 import type { User, UserStore } from "../auth/users.js";
-import type { GenerationCost } from "../contracts.js";
+import type { GenerationCost } from "../contracts/index.js";
 import type { RepoStore } from "../repos/store.js";
+import { candidateArtifacts } from "../runs/artifacts.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
-import { candidateArtifacts } from "../viewer/artifacts.js";
 import { TaskNotFoundError } from "./deletion.js";
 import { refreshInProgress, refreshTask, type TaskStatusSource } from "./status.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "./store.js";

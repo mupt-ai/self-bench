@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SelfBenchConfig } from "../config.js";
+import type { SelfBenchConfig } from "../config/index.js";
 import {
   artifactRefSchema,
   excludeRunsSchema,
@@ -10,7 +10,7 @@ import {
   replaySchema,
   repositoryRefSchema,
   runRequestSchema,
-} from "../contracts.js";
+} from "../contracts/index.js";
 
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 const commonSchema = {

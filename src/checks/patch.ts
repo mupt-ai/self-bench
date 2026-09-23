@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "./process.js";
-import { patchPaths } from "./repair.js";
+import { patchPaths } from "../lib/patch-paths.js";
+import { runCommand } from "../lib/process.js";
 
 export interface PatchApplyCheckInput {
   readonly repository: string;

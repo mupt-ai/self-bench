@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { sha256 } from "../hash.js";
-import { runCommand } from "../process.js";
+import { sha256 } from "../lib/hash.js";
+import { runCommand } from "../lib/process.js";
 
 /** Accepted bundles are immutable. Packaging must not rewrite the tests that were verified. */
 export async function packageExport(): Promise<void> {

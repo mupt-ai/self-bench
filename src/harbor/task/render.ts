@@ -1,7 +1,7 @@
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { TaskDefinition } from "../../contracts.js";
-import { patchPaths } from "../../repair.js";
+import type { TaskDefinition } from "../../contracts/index.js";
+import { patchPaths } from "../../lib/patch-paths.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { shellQuote } from "./paths.js";
 

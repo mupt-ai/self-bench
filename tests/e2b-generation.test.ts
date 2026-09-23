@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { loadWorkerConfig } from "../src/config.js";
-import type { RunRequest } from "../src/contracts.js";
+import { executionEnvironment } from "../src/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/config/index.js";
+import type { RunRequest } from "../src/contracts/index.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
-import { executionEnvironment } from "../src/execution-environment.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { withGenerationRuntime } from "../src/generation/runtime.js";
 import { generationSettingsSchema } from "../src/generation/settings.js";

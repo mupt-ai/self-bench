@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import type { ArtifactRef } from "../contracts.js";
+import type { ArtifactRef } from "../contracts/index.js";
 import type { Database } from "../db/client.js";
 import { generationBatches } from "../db/schema.js";
 import type { GenerationBatch } from "./types.js";

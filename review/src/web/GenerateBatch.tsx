@@ -1,7 +1,7 @@
 import { Layers } from "lucide-react";
 import React from "react";
 import { Link } from "react-router";
-import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/config/execution-limits";
 import {
   type BatchRepoId,
   BatchRequestError,

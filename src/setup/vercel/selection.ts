@@ -1,4 +1,4 @@
-import type { SetupPrompter } from "../../terminal-prompts.js";
+import type { SetupPrompter } from "../../cli/terminal-prompts.js";
 import type { VercelProject, VercelTeam } from "./cli.js";
 import type { VercelProfile } from "./profile.js";
 import type { VercelSetupCli, VercelSetupServices } from "./setup-types.js";

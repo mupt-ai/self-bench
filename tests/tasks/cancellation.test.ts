@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { OAUTH_STATE_COOKIE } from "../../src/auth/routes.js";
 import { SESSION_COOKIE } from "../../src/auth/session.js";
 import { repos } from "../../src/db/schema.js";

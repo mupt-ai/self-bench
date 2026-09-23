@@ -1,4 +1,4 @@
-import { redactSecrets } from "./provenance/redact.js";
+import { redactSecrets } from "../provenance/redact.js";
 
 export interface AgentFeedEvent {
   kind: "message" | "tool" | "result" | "error";

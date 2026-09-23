@@ -1,6 +1,6 @@
 import { ApplicationFailure } from "@temporalio/common";
-import type { SelfBenchConfig } from "../../config.js";
-import { executionEnvironment } from "../../execution-environment.js";
+import { executionEnvironment } from "../../config/execution-environment.js";
+import type { SelfBenchConfig } from "../../config/index.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -13,7 +13,7 @@ import {
   harborInfrastructureError,
   readHarborJobResult,
 } from "../../harbor/results.js";
-import { runCommand } from "../../process.js";
+import { runCommand } from "../../lib/process.js";
 
 const HARBOR_INFRASTRUCTURE_FAILURE_TYPE = "HarborInfrastructureFailure";
 

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { HarborEnvironment } from "../providers.js";
+import type { HarborEnvironment } from "../config/providers.js";
 
 /** Vercel settings a Vercel Harbor environment needs; Harbor resolves team and project from them. */
 const VERCEL_HARBOR_SETTINGS = ["VERCEL_TOKEN", "VERCEL_TEAM_ID", "VERCEL_PROJECT_ID"] as const;

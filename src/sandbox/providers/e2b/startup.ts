@@ -1,5 +1,5 @@
 import { E2B } from "e2b";
-import type { SelfBenchWorkerConfig } from "../../../config.js";
+import type { SelfBenchWorkerConfig } from "../../../config/index.js";
 import { raceWithSignal } from "./lifecycle.js";
 
 type E2BExecutionConfig = Extract<SelfBenchWorkerConfig["execution"], { readonly kind: "e2b" }>;

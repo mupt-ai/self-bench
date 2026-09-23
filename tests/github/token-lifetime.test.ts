@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
-import { withExecutionEnvironment } from "../../src/execution-environment.js";
+import { withExecutionEnvironment } from "../../src/config/execution-environment.js";
 import { githubToken } from "../../src/github/token.js";
-import * as process from "../../src/process.js";
+import * as process from "../../src/lib/process.js";
 
 afterEach(() => mock.restore());
 

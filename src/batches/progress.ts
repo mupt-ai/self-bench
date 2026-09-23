@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import type { RunPhase, RunStatus } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { RunPhase, RunStatus } from "../contracts/index.js";
 import type { ConnectedRepo } from "../repos/store.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { TaskStore } from "../tasks/store.js";

@@ -3,7 +3,7 @@ import { advanceBatch } from "../../src/batches/advance.js";
 import { batchStatus } from "../../src/batches/status.js";
 import type { BatchExecutions } from "../../src/batches/temporal.js";
 import type { GenerationBatch } from "../../src/batches/types.js";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/execution-limits.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/config/execution-limits.js";
 import { artifact, candidate, run } from "../support/workflow-fixture.js";
 
 function batch(): GenerationBatch {

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context } from "@temporalio/activity";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import * as runtime from "../../src/generation/activity-runtime.js";
 import { SessionVerifier } from "../../src/generation/authoring/session-verify.js";
 import * as harbor from "../../src/generation/verify/harbor-gate.js";

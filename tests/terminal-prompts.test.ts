@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
-import { SetupCanceledError, TerminalPrompter } from "../src/terminal-prompts.js";
+import { SetupCanceledError, TerminalPrompter } from "../src/cli/terminal-prompts.js";
 
 describe("TerminalPrompter", () => {
   test("live-filters searchable choices by label, hint, or value", async () => {

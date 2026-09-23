@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileHarborTask, refreshHarborTask } from "../../src/harbor/task/compiler.js";
 import { dependencyManifestPatch } from "../../src/harbor/task/dependencies.js";
-import { sha256 } from "../../src/hash.js";
-import { runCommand } from "../../src/process.js";
+import { sha256 } from "../../src/lib/hash.js";
+import { runCommand } from "../../src/lib/process.js";
 
 const roots: string[] = [];
 

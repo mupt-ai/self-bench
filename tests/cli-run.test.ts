@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256 } from "../src/hash.js";
-import { runCommand } from "../src/process.js";
+import { sha256 } from "../src/lib/hash.js";
+import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
 
@@ -121,7 +121,7 @@ describe("SelfBench CLI run", () => {
       const child = Bun.spawn(
         [
           process.execPath,
-          "src/cli.ts",
+          "src/cli/bin.ts",
           "run",
           "--repo",
           repository,
@@ -189,16 +189,19 @@ describe("SelfBench CLI run", () => {
     });
 
     try {
-      const child = Bun.spawn([process.execPath, "src/cli.ts", "download", "example-run", output], {
-        cwd: join(import.meta.dir, ".."),
-        env: {
-          ...process.env,
-          SELFBENCH_API_TOKEN: "",
-          SELFBENCH_API_URL: `http://127.0.0.1:${server.port}`,
+      const child = Bun.spawn(
+        [process.execPath, "src/cli/bin.ts", "download", "example-run", output],
+        {
+          cwd: join(import.meta.dir, ".."),
+          env: {
+            ...process.env,
+            SELFBENCH_API_TOKEN: "",
+            SELFBENCH_API_URL: `http://127.0.0.1:${server.port}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
         },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      );
       const [exitCode, stderr] = await Promise.all([
         child.exited,
         new Response(child.stderr).text(),

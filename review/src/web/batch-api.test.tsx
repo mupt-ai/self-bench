@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/config/execution-limits";
 import { BatchRequestError, batchIsTerminal, startBatch, validCandidateCounts } from "./batch-api";
 import { GenerateBatch } from "./GenerateBatch";
 

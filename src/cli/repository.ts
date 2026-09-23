@@ -1,6 +1,6 @@
-import { buildCommit } from "../build-metadata.js";
-import { runCommand } from "../process.js";
-import { projectRoot } from "../project-paths.js";
+import { buildCommit } from "../config/build-metadata.js";
+import { runCommand } from "../lib/process.js";
+import { projectRoot } from "../lib/project-paths.js";
 
 export async function resolveRepository(path: string): Promise<{ url: string; commit: string }> {
   const [remote, commit] = await Promise.all([

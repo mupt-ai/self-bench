@@ -1,6 +1,6 @@
-import type { VercelCredentials } from "../../config.js";
-import type { SetupPrompter } from "../../terminal-prompts.js";
-import type { SetupReporter } from "../../terminal-reporter.js";
+import type { SetupPrompter } from "../../cli/terminal-prompts.js";
+import type { SetupReporter } from "../../cli/terminal-reporter.js";
+import type { VercelCredentials } from "../../config/index.js";
 import type { VercelProject, VercelTeam } from "./cli.js";
 import type { VercelCapability } from "./probe.js";
 import type { VercelProfile, VercelProfileData } from "./profile.js";

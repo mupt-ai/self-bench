@@ -1,10 +1,10 @@
 import { expect, mock, test } from "bun:test";
-import type { ArtifactStore } from "../../src/artifacts.js";
+import type { ArtifactStore } from "../../src/artifacts/index.js";
 import { createUserStore } from "../../src/auth/users.js";
 import { createRepoStore } from "../../src/repos/store.js";
+import { clearArchivedListingCache } from "../../src/runs/archived.js";
 import { refreshInProgress } from "../../src/tasks/status.js";
 import { createTaskStore } from "../../src/tasks/store.js";
-import { clearArchivedListingCache } from "../../src/viewer/archived.js";
 import { testAuthConfig, testDatabase } from "../support/site-fixture.js";
 
 test("completed workflows persist bundles and repair incomplete accepted rows", async () => {

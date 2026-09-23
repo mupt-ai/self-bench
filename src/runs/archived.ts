@@ -1,8 +1,8 @@
-import type { ArtifactStore } from "../artifacts.js";
-import type { Difficulty } from "../contracts.js";
-import { parallelMap } from "../parallel.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { Difficulty } from "../contracts/index.js";
+import { parallelMap } from "../lib/parallel.js";
 import { latestBundleKey, latestDefinitionKey } from "./archived-keys.js";
-import { reasonSummary, summarizeDefinition } from "./candidates.js";
+import { reasonSummary, summarizeDefinition } from "./candidate-summary.js";
 import type { ArtifactEntry, CandidateList, CandidateStage, CandidateSummary } from "./types.js";
 
 const DEFINITION_CONCURRENCY = 16;

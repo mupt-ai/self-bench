@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { generationSubscriptionAuth } from "../../src/codex/subscription.js";
+import {
+  executionEnvironment,
+  withExecutionEnvironment,
+} from "../../src/config/execution-environment.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
-import { executionEnvironment, withExecutionEnvironment } from "../../src/execution-environment.js";
 import { authoringRoundScript, reviewRoundScript } from "../../src/generation/agent/scripts.js";
 import {
   generationEnvironment,

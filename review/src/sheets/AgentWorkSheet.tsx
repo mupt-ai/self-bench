@@ -1,5 +1,5 @@
 import React from "react";
-import { type AgentFeedEvent, agentFeedEvents } from "../../../src/agent-feed";
+import { type AgentFeedEvent, agentFeedEvents } from "../../../src/pi/agent-feed";
 import { AgentTraceEvent } from "../components/AgentTraceEvent";
 import { notice, sheetBody } from "../components/viewer-ui";
 import { type AgentRound, agentRounds } from "../lib/agent-rounds";

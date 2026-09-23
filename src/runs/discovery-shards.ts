@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import type { DiscoveryShardProgress } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { DiscoveryShardProgress } from "../contracts/index.js";
 
 const SHARD_PATH = /^wave-(\d+)\/shard-(\d+)\/attempt-(\d+)\/(?:live\/(\d+)\.json|modal\.log)$/;
 

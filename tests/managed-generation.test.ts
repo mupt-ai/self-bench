@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import { withExecutionEnvironment } from "../src/config/execution-environment.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
-import { withExecutionEnvironment } from "../src/execution-environment.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { generationModelRoute } from "../src/generation/models.js";
 import type { GenerationReference } from "../src/generation/settings.js";

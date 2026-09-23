@@ -5,7 +5,7 @@ import type {
   CandidateWorkflowResult,
   RunRequest,
   TaskProgress,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import type { SelfBenchActivities } from "../activity-types.js";
 import { executeCandidate, initialProgress } from "./candidate.js";
 import { infrastructureFailureMessage } from "./failures.js";

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { executionEnvironment } from "../execution-environment.js";
+import { executionEnvironment } from "../config/execution-environment.js";
 
 type PiModelAuthProvider = "openai" | "openai-codex" | "anthropic" | "openrouter";
 

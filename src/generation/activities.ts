@@ -1,5 +1,5 @@
-import { createArtifactStore } from "../artifacts.js";
-import type { SelfBenchWorkerConfig } from "../config.js";
+import { createArtifactStore } from "../artifacts/index.js";
+import type { SelfBenchWorkerConfig } from "../config/index.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import type { UsageLedger } from "../managed/usage-store.js";
 import { createSandboxExecutor } from "../sandbox/index.js";

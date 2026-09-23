@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
-import { waitForRun } from "../run-wait.js";
 import { download, requestJson } from "./api-client.js";
 import { resolveSelfBenchCommit } from "./repository.js";
+import { waitForRun } from "./run-wait.js";
 import { asPolledRunStatus, defaultRunId, fail } from "./values.js";
 
 /** Re-runs known candidates of an earlier run through fresh authoring and review. */

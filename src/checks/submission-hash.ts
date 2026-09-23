@@ -1,4 +1,4 @@
-import { sha256 } from "./hash.js";
+import { sha256 } from "../lib/hash.js";
 
 export interface SubmissionPayload {
   /** The definition as an object or its JSON text; hashed in compact canonical-order form. */

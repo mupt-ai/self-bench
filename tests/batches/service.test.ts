@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Client } from "@temporalio/client";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import * as exporter from "../../src/batches/export.js";
 import { createGenerationBatches } from "../../src/batches/service.js";
 import { createBatchStore } from "../../src/batches/store.js";

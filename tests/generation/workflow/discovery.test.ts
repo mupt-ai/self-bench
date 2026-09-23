@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, CancelledFailure } from "@temporalio/workflow";
-import type { Difficulty, RunStatus } from "../../../src/contracts.js";
 import {
   MAX_CONCURRENT_CANDIDATE_WORKFLOWS,
   MAX_DISCOVERY_SHARDS,
-} from "../../../src/execution-limits.js";
+} from "../../../src/config/execution-limits.js";
+import type { Difficulty, RunStatus } from "../../../src/contracts/index.js";
 import { discoveryShardTargets } from "../../../src/generation/workflow/discovery.js";
 import { executeRun } from "../../../src/generation/workflows.js";
 import {

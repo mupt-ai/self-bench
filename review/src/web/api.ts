@@ -1,4 +1,4 @@
-import type { GenerationCost } from "../../../src/contracts";
+import type { GenerationCost } from "../../../src/contracts/index";
 import { checkSessionExpired } from "../session-expired";
 
 export interface Repo {

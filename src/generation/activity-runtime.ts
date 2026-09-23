@@ -4,18 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { CancelledFailure, Context } from "@temporalio/activity";
-import { extractRegularArchive } from "../archive.js";
-import type { ArtifactStore } from "../artifacts.js";
-import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../contracts.js";
-
+import type { ArtifactStore } from "../artifacts/index.js";
+import { type ArtifactRef, type AuthoredTask, taskDefinitionSchema } from "../contracts/index.js";
+import { extractRegularArchive } from "../lib/archive.js";
+import { projectRoot } from "../lib/project-paths.js";
 import {
   assertPiSessionFile,
   finalAssistantMessage,
   sessionProviderError,
   toolCallNames,
 } from "../pi/session.js";
-import { projectRoot } from "../project-paths.js";
-import { type ProvenanceMessage, provenanceMessageSchema } from "../provenance.js";
+import { type ProvenanceMessage, provenanceMessageSchema } from "../provenance/index.js";
 import {
   type SandboxCostSnapshot,
   SandboxExecutionError,

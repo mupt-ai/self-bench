@@ -1,15 +1,14 @@
 import { Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../../artifacts.js";
-import type { ArtifactRef } from "../../contracts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { ArtifactRef } from "../../contracts/index.js";
 import {
   type ReviewRoundResult,
   reviewRoundResultSchema,
   verifyReportSchema,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
 import { PI_SESSION_OUTPUT_PATH, sessionArtifactKey } from "../../pi/session.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
-import { renderVerifyReport } from "../../verify-report.js";
 import {
   readAsset,
   runSandboxWithFailureLog,
@@ -21,6 +20,7 @@ import { withAgentFeed } from "../agent/feed.js";
 import { reconcileWrapperStatus, WRAPPER_STATUS_PATH } from "../agent/round-outcome.js";
 import { reviewRoundScript } from "../agent/scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, REVIEW_TIMEOUT_MS } from "../agent/timeouts.js";
+import { renderVerifyReport } from "../verify/report.js";
 import { buildReviewMaterial } from "./material.js";
 import { resolveReviewOutcome, VERDICT_PATH } from "./outcome.js";
 import { reviewPrompt } from "./prompt.js";

@@ -1,14 +1,14 @@
 import { writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { assertPullRequestBelongsToRepository, githubRepository } from "./github/repository.js";
-import { sha256 } from "./hash.js";
-import { runCommand } from "./process.js";
-import type { LocalSessionMetadata, ProvenanceMessage } from "./provenance.js";
+import { assertPullRequestBelongsToRepository, githubRepository } from "../../github/repository.js";
+import { sha256 } from "../../lib/hash.js";
+import { runCommand } from "../../lib/process.js";
+import type { LocalSessionMetadata, ProvenanceMessage } from "../index.js";
 
 export type {
   MergedPullRequest,
   ProvenanceAssociationManifest,
-} from "./provenance-associations/shared.js";
+} from "./shared.js";
 
 import {
   compareAssociationMessages,
@@ -20,7 +20,7 @@ import {
   parseSessionSelector,
   provenanceAssociationManifestSchema,
   sessionSelector,
-} from "./provenance-associations/shared.js";
+} from "./shared.js";
 
 export interface AssociationSessionSummary {
   readonly selector: string;
@@ -178,4 +178,4 @@ export async function resolveMergedPullRequest(
   return { sourcePr, sourceUrl: parsed.url };
 }
 
-export { applyProvenanceAssociationManifests } from "./provenance-associations/apply.js";
+export { applyProvenanceAssociationManifests } from "./apply.js";

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { ArtifactStore } from "../../artifacts.js";
-import type { ReviewRoundResult } from "../../contracts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { ReviewRoundResult } from "../../contracts/index.js";
 import { PI_SESSION_OUTPUT_PATH } from "../../pi/session.js";
 import type { StoredPiSession } from "../activity-runtime.js";
 import type { ReviewRoundInput } from "../activity-types.js";

@@ -1,4 +1,4 @@
-import { runCommand } from "../process.js";
+import { runCommand } from "../lib/process.js";
 import { redactSecrets } from "../provenance/redact.js";
 import { isRecord, nonnegativeNumber, positiveIntegerValue } from "../provenance/shared.js";
 import type { ProvenanceMessage } from "../provenance/types.js";

@@ -2,8 +2,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { extractRegularArchive } from "../../archive.js";
-import { runCommand } from "../../process.js";
+import { extractRegularArchive } from "../../lib/archive.js";
+import { runCommand } from "../../lib/process.js";
 import { packageExport } from "../export-package.js";
 import { verifierMaterial } from "../verifier-material.js";
 

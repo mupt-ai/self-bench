@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CommandOutputHandler, CommandResult } from "../../process.js";
+import type { CommandOutputHandler, CommandResult } from "../../lib/process.js";
 import {
   commandFailure,
   compareVersion,

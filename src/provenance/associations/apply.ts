@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { assertPullRequestBelongsToRepository, githubRepository } from "../github/repository.js";
-import { sha256 } from "../hash.js";
-import type { ProvenanceMessage } from "../provenance.js";
+import { assertPullRequestBelongsToRepository, githubRepository } from "../../github/repository.js";
+import { sha256 } from "../../lib/hash.js";
+import type { ProvenanceMessage } from "../index.js";
 import {
   compareAssociationMessages,
   isLocalSourceType,

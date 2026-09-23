@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadWorkerConfig } from "../../src/config.js";
+import { loadWorkerConfig } from "../../src/config/index.js";
 import { tasks as taskRows } from "../../src/db/schema.js";
 import { saveCredential } from "../../src/evaluation/credentials.js";
 import { orgRecords } from "../../src/evaluation/org-records.js";

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { loadWorkerConfig } from "../src/config.js";
+import { withExecutionEnvironment } from "../src/config/execution-environment.js";
+import { loadWorkerConfig } from "../src/config/index.js";
 import { saveCredential } from "../src/evaluation/credentials.js";
 import { orgRecords } from "../src/evaluation/org-records.js";
-import { withExecutionEnvironment } from "../src/execution-environment.js";
 import { createActivities } from "../src/generation/activities.js";
 import { generationEnvironment } from "../src/generation/credentials.js";
 import { withGenerationRuntime } from "../src/generation/runtime.js";

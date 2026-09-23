@@ -1,6 +1,6 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { CancelledFailure, Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../../src/artifacts.js";
+import type { ArtifactStore } from "../../src/artifacts/index.js";
 import {
   runSandboxWithFailureLog,
   withActivityHeartbeats,

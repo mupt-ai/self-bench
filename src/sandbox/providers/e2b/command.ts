@@ -1,5 +1,5 @@
 import type { CommandHandle, CommandResult } from "e2b";
-import { InactivityTimeoutError, type RollingOutput } from "../../../process.js";
+import { InactivityTimeoutError, type RollingOutput } from "../../../lib/process.js";
 import type { SandboxRequest, SandboxResult, SandboxRunOptions } from "../../contracts.js";
 import type { LiveSandboxBacking, Supervision } from "../../live.js";
 import { readOutputWithRetry } from "../../output-retry.js";

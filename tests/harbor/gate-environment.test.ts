@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withExecutionEnvironment } from "../../src/execution-environment.js";
+import { withExecutionEnvironment } from "../../src/config/execution-environment.js";
 import { runHarborGate } from "../../src/generation/verify/harbor-gate.js";
 import { harborPythonPath } from "../../src/harbor/environment.js";
 

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ModalClient, Sandbox } from "modal";
-import type { ArtifactStore } from "../../../../src/artifacts.js";
+import type { ArtifactStore } from "../../../../src/artifacts/index.js";
 import { runSandboxWithFailureLog } from "../../../../src/generation/activity-runtime.js";
 import { WRAPPER_STATUS_PATH } from "../../../../src/generation/agent/round-outcome.js";
 import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";

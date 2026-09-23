@@ -1,4 +1,4 @@
-import type { GenerationCost } from "../contracts.js";
+import type { GenerationCost } from "../contracts/index.js";
 import { generationModelPricing } from "../generation/models.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { RunUsageSummary } from "./usage.js";

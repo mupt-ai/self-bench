@@ -1,5 +1,5 @@
-import type { TaskDefinition } from "../../contracts.js";
-import { patchPaths } from "../../repair.js";
+import type { TaskDefinition } from "../../contracts/index.js";
+import { patchPaths } from "../../lib/patch-paths.js";
 import { repositoryRelativePath, shellQuote } from "./paths.js";
 
 export function solutionScript(): string {

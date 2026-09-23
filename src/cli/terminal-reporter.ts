@@ -1,7 +1,7 @@
 import type { Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
 import { cancel as cancelPrompt, intro, log, outro, spinner } from "@clack/prompts";
-import { type CommandOutputHandler, RollingOutput } from "./process.js";
+import { type CommandOutputHandler, RollingOutput } from "../lib/process.js";
 import { SetupCanceledError } from "./terminal-prompts.js";
 
 export interface SetupTaskLabels {

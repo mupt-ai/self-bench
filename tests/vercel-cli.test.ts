@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { CommandOutputHandler, CommandResult } from "../src/process.js";
+import type { CommandOutputHandler, CommandResult } from "../src/lib/process.js";
 import { VercelCli, type VercelCommandRunner } from "../src/setup/vercel/cli.js";
 
 class FakeRunner implements VercelCommandRunner {

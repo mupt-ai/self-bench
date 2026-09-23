@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { type CommandOutputHandler, type CommandResult, runCommand } from "../../process.js";
+import { type CommandOutputHandler, type CommandResult, runCommand } from "../../lib/process.js";
 
 export interface VercelCommandRunner {
   capture(

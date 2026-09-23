@@ -1,20 +1,20 @@
 export {
   collectGitHubPullRequestProvenance,
   extractGitHubPullRequestProvenance,
-} from "./github/provenance.js";
+} from "../github/provenance.js";
 export {
   collectRepositoryProvenance,
   collectRepositoryProvenanceWithMetadata,
-} from "./provenance/local.js";
-export { redactSecrets } from "./provenance/redact.js";
+} from "./local.js";
+export { redactSecrets } from "./redact.js";
 export {
   assertProvenanceMatchesPullRequest,
   combineRunProvenance,
-} from "./provenance/selection.js";
-export { extractProvenanceMessages } from "./provenance/session.js";
+} from "./selection.js";
+export { extractProvenanceMessages } from "./session.js";
 export type {
   LocalSessionMetadata,
   ProvenanceMessage,
   SessionProvenanceFormat,
-} from "./provenance/types.js";
-export { provenanceMessageSchema } from "./provenance/types.js";
+} from "./types.js";
+export { provenanceMessageSchema } from "./types.js";

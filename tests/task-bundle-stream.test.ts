@@ -3,10 +3,10 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { LocalArtifactStore, verifiedArtifactReadStream } from "../src/artifacts.js";
-import type { ArtifactRef, AuthoredTask } from "../src/contracts.js";
+import { LocalArtifactStore, verifiedArtifactReadStream } from "../src/artifacts/index.js";
+import type { ArtifactRef, AuthoredTask } from "../src/contracts/index.js";
 import { withTaskBundle } from "../src/generation/activity-runtime.js";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
 afterEach(async () => {

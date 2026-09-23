@@ -1,7 +1,7 @@
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
-import type { ArtifactStore } from "../../artifacts.js";
-import { provenanceMessageSchema } from "../../provenance.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import { provenanceMessageSchema } from "../../provenance/index.js";
 import { parseProvenance, safeHeartbeat } from "../activity-runtime.js";
 
 /** Shards probed per discovery wave; must cover every shard count a past run may have used. */

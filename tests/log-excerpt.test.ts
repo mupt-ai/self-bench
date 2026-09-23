@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { COMPOSE_DIAGNOSTICS_MARKER, excerptLog, filterProgressNoise } from "../src/log-excerpt.js";
+import {
+  COMPOSE_DIAGNOSTICS_MARKER,
+  excerptLog,
+  filterProgressNoise,
+} from "../src/generation/verify/log-excerpt.js";
 
 const progress = Array.from({ length: 300 }, (_unused, index) =>
   [

@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { CommandResult } from "../../process.js";
+import type { CommandResult } from "../../lib/process.js";
 
 export const MINIMUM_CLI_VERSION = [59, 1, 3] as const;
 export const VERCEL_CLI_PAGE_SIZE = "100";

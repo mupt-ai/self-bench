@@ -1,11 +1,11 @@
 import type { Client } from "@temporalio/client";
-import type { ArtifactStore } from "../artifacts.js";
-import { isReplayRunRequest, type WorkflowRunInput } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { isReplayRunRequest, type WorkflowRunInput } from "../contracts/index.js";
 import type { Database } from "../db/client.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { generationCost } from "../managed/cost-status.js";
 import { createUsageStore } from "../managed/usage-store.js";
-import { loadDiscoveryShards, mergeDiscoveryShards } from "../viewer/discovery.js";
+import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { liveBatchStatus, overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
 import { exportBatch } from "./export.js";

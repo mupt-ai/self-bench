@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import { evaluationChoices } from "./config.js";
 import { type EvaluationSetup, listSetups, saveSetup, setupSchema } from "./profiles.js";
 

@@ -1,4 +1,5 @@
 import { isCancellation } from "@temporalio/workflow";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../config/execution-limits.js";
 import {
   type Candidate,
   type Difficulty,
@@ -9,9 +10,8 @@ import {
   type RunStatus,
   type TaskProgress,
   type WorkflowRunInput,
-} from "../../contracts.js";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../execution-limits.js";
-import { parallelMap } from "../../parallel.js";
+} from "../../contracts/index.js";
+import { parallelMap } from "../../lib/parallel.js";
 import type { ExportInput, SelfBenchActivities } from "../activity-types.js";
 import {
   type CandidateChildren,

@@ -1,4 +1,4 @@
-import type { Difficulty, TaskProgress } from "../contracts.js";
+import type { Difficulty, TaskProgress } from "../contracts/index.js";
 
 export interface TaskFileEntry {
   readonly path: string;

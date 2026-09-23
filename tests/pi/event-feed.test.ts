@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentFeedEvents } from "../../src/agent-feed.js";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { withAgentFeed } from "../../src/generation/agent/feed.js";
+import { agentFeedEvents } from "../../src/pi/agent-feed.js";
 import { PiEventFeed } from "../../src/pi/event-feed.js";
 
 const line = (event: unknown) => Buffer.from(`${JSON.stringify(event)}\n`);

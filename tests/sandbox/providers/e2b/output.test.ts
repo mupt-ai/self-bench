@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "../../../../src/process.js";
+import { runCommand } from "../../../../src/lib/process.js";
 import { E2BSandboxExecutor } from "../../../../src/sandbox/providers/e2b/executor.js";
 import { readOutputThroughCommand } from "../../../../src/sandbox/providers/e2b/output.js";
 import type { E2BSandboxHandle } from "../../../../src/sandbox/providers/e2b/types.js";

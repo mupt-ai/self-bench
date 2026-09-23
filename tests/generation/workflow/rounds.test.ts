@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { RunStatus, TaskProgress } from "../../../src/contracts.js";
+import type { RunStatus, TaskProgress } from "../../../src/contracts/index.js";
 import { executeRun } from "../../../src/generation/workflows.js";
 import {
   acceptingActivities,

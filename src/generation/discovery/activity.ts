@@ -1,7 +1,7 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
-import type { ArtifactStore } from "../../artifacts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import {
   type ArtifactRef,
   type Candidate,
@@ -9,11 +9,14 @@ import {
   type Difficulty,
   type DiscoveryResult,
   type RunRequest,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import { assertPullRequestBelongsToRepository } from "../../github/repository.js";
 import { githubToken } from "../../github/token.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
-import { assertProvenanceMatchesPullRequest, type ProvenanceMessage } from "../../provenance.js";
+import {
+  assertProvenanceMatchesPullRequest,
+  type ProvenanceMessage,
+} from "../../provenance/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import {
   parseProvenance,

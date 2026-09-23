@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
+import { HARBOR_ENVIRONMENTS } from "../../src/config/providers.js";
 import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
 } from "../../src/harbor/command.js";
-import { HARBOR_ENVIRONMENTS } from "../../src/providers.js";
 
 test("all Harbor providers share invocation policy without acquiring solver retry semantics in gates", () => {
   for (const environment of HARBOR_ENVIRONMENTS) {

@@ -1,5 +1,5 @@
 import type { BatchStatus } from "../../../src/batches/progress";
-import { MAX_CANDIDATES_PER_RUN } from "../../../src/execution-limits";
+import { MAX_CANDIDATES_PER_RUN } from "../../../src/config/execution-limits";
 import type { GenerationSettings } from "../../../src/generation/settings";
 import { checkSessionExpired } from "../session-expired";
 

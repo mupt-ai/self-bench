@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { readBody, sendJson, trustedMutation } from "../api/http.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import { tenantFor } from "../auth/tenant.js";
 import type { User, UserStore } from "../auth/users.js";
 import type { CodexLogins } from "../codex/login.js";

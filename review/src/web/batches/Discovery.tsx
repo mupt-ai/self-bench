@@ -1,4 +1,4 @@
-import type { DiscoveryShardProgress } from "../../../../src/contracts";
+import type { DiscoveryShardProgress } from "../../../../src/contracts/index";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
 import { GenerationCost } from "../GenerationCost";
 import { EmptyState, SectionHeader } from "../ui";

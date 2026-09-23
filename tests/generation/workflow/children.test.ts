@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { RetryState } from "@temporalio/common";
 import { ActivityFailure, ApplicationFailure, ChildWorkflowFailure } from "@temporalio/workflow";
-import type { RunStatus, TaskProgress } from "../../../src/contracts.js";
+import type { RunStatus, TaskProgress } from "../../../src/contracts/index.js";
 import {
   type CandidateChildren,
   inProcessCandidates,

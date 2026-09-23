@@ -1,4 +1,4 @@
-import type { RunStatus } from "../contracts.js";
+import type { RunStatus } from "../contracts/index.js";
 import { generationCost } from "../managed/cost-status.js";
 import type { RunUsageSummary } from "../managed/usage.js";
 import type { GenerationBatch } from "./types.js";

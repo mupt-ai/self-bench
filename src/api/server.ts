@@ -1,12 +1,12 @@
 import { createServer } from "node:http";
 import { Client } from "@temporalio/client";
-import { createArtifactStore } from "../artifacts.js";
+import { createArtifactStore } from "../artifacts/index.js";
 import { apiKeyDenies } from "../auth/api-keys.js";
 import type { AuthConfig } from "../auth/config.js";
 import { sendIdentityError } from "../auth/routes.js";
 import { sendExpiredSession } from "../auth/session-expired.js";
 import { createGenerationBatches } from "../batches/service.js";
-import type { SelfBenchConfig } from "../config.js";
+import type { SelfBenchConfig } from "../config/index.js";
 import { openDatabase } from "../db/client.js";
 import { queryStatus } from "../generation/run-status.js";
 import { connectTemporalClient } from "../temporal/connection.js";

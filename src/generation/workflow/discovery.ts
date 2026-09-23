@@ -1,17 +1,17 @@
 import { ApplicationFailure } from "@temporalio/common";
 import { isCancellation } from "@temporalio/workflow";
+import {
+  DISCOVERY_POOL_MULTIPLIER,
+  MAX_CANDIDATES_PER_RUN,
+  MAX_DISCOVERY_SHARDS,
+} from "../../config/execution-limits.js";
 import type {
   Candidate,
   Difficulty,
   DiscoveryProgress,
   DiscoveryResult,
   RunRequest,
-} from "../../contracts.js";
-import {
-  DISCOVERY_POOL_MULTIPLIER,
-  MAX_CANDIDATES_PER_RUN,
-  MAX_DISCOVERY_SHARDS,
-} from "../../execution-limits.js";
+} from "../../contracts/index.js";
 import type { DiscoveryShardInput, SelfBenchActivities } from "../activity-types.js";
 import { isExhaustedActivityFailure } from "./failures.js";
 

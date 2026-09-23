@@ -1,17 +1,17 @@
 import { ApplicationFailure } from "@temporalio/common";
 import { z } from "zod";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import {
   type Candidate,
   candidateSchema,
   commitSchema,
   type ReplayMaterial,
   type ReplayRunRequest,
-} from "../contracts.js";
+} from "../contracts/index.js";
 import { githubRepository } from "../github/repository.js";
 import { githubToken } from "../github/token.js";
-import { runCommand } from "../process.js";
-import { provenanceMessageSchema } from "../provenance.js";
+import { runCommand } from "../lib/process.js";
+import { provenanceMessageSchema } from "../provenance/index.js";
 import { safeHeartbeat } from "./activity-runtime.js";
 
 const MAX_DISCOVERY_ATTEMPTS = 5;

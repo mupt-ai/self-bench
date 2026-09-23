@@ -1,4 +1,4 @@
-import type { TaskEnvironment } from "./contracts.js";
+import type { TaskEnvironment } from "../contracts/index.js";
 
 const secretName = /(?:TOKEN|SECRET|PRIVATE_KEY|ACCESS_KEY|API_KEY|CREDENTIAL)/i;
 const passwordName = /PASSWORD/i;

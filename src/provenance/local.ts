@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import { runCommand } from "../process.js";
+import { runCommand } from "../lib/process.js";
 import { extractProvenanceMessages } from "./session.js";
 import type {
   LocalSessionMetadata,

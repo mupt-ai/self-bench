@@ -7,7 +7,7 @@ import {
   GcsArtifactStore,
   LocalArtifactStore,
   verifiedArtifactReadStream,
-} from "../src/artifacts.js";
+} from "../src/artifacts/index.js";
 
 const roots: string[] = [];
 

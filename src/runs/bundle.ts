@@ -3,9 +3,9 @@ import { lstat, mkdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { extractRegularArchive } from "../archive.js";
-import type { ArtifactStore } from "../artifacts.js";
-import { sha256 } from "../hash.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { extractRegularArchive } from "../lib/archive.js";
+import { sha256 } from "../lib/hash.js";
 import { isHarborTaskDirectory, readTaskDirectory } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
 

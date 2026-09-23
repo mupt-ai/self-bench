@@ -1,6 +1,6 @@
 import type { BillingModelRates } from "../db/schema.js";
 import { generationModelPricing, generationModels } from "../generation/models.js";
-import { sha256 } from "../hash.js";
+import { sha256 } from "../lib/hash.js";
 import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "../managed/pricing.js";
 import type { TokenUsage } from "../managed/usage.js";
 import type { BillingPolicy } from "./config.js";

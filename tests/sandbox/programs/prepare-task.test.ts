@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runCommand } from "../../../src/process.js";
+import { runCommand } from "../../../src/lib/process.js";
 import { prepareTaskWorkspace } from "../../../src/sandbox/programs/prepare-task.js";
 
 const roots: string[] = [];

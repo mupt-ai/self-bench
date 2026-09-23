@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InactivityTimeoutError } from "../../../../src/process.js";
+import { InactivityTimeoutError } from "../../../../src/lib/process.js";
 import { SandboxExecutionError } from "../../../../src/sandbox/contracts.js";
 import { E2BSandboxExecutor } from "../../../../src/sandbox/providers/e2b/executor.js";
 import {

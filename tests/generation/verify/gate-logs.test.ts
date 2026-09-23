@@ -4,8 +4,8 @@ import {
   composeProjectName,
   isUnhealthyServiceFailure,
 } from "../../../src/generation/verify/gate-logs.js";
-import { COMPOSE_DIAGNOSTICS_MARKER } from "../../../src/log-excerpt.js";
-import type { runCommand } from "../../../src/process.js";
+import { COMPOSE_DIAGNOSTICS_MARKER } from "../../../src/generation/verify/log-excerpt.js";
+import type { runCommand } from "../../../src/lib/process.js";
 
 type Runner = typeof runCommand;
 

@@ -1,4 +1,4 @@
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../config/execution-limits.js";
 import type { BatchExecutions } from "./temporal.js";
 import type { GenerationBatch } from "./types.js";
 

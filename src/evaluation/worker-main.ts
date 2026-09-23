@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
-import { createArtifactStore } from "../artifacts.js";
-import { loadConfig } from "../config.js";
+import { createArtifactStore } from "../artifacts/index.js";
+import { loadConfig } from "../config/index.js";
 import { connectTemporalWorker } from "../temporal/connection.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import { createEvaluationActivities } from "./activities.js";

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { ArtifactStore } from "../../src/artifacts.js";
+import type { ArtifactStore } from "../../src/artifacts/index.js";
 import { repos } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/tasks/store.js";
 import { syncRun } from "../../src/tasks/sync.js";

@@ -1,4 +1,10 @@
 import { Link } from "react-router";
+import {
+  executionBackendLabels,
+  HOSTED_HARBOR_ENVIRONMENTS,
+  type HostedHarborEnvironment,
+  harborEnvironmentLabels,
+} from "../../../src/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import { generationModelLabel } from "../../../src/generation/models";
 import {
@@ -7,12 +13,6 @@ import {
   generationExecutionBackend,
   generationSandboxLabels,
 } from "../../../src/generation/settings";
-import {
-  executionBackendLabels,
-  HOSTED_HARBOR_ENVIRONMENTS,
-  type HostedHarborEnvironment,
-  harborEnvironmentLabels,
-} from "../../../src/providers";
 import type { GenerationOptions } from "./GenerationFields";
 import { modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";

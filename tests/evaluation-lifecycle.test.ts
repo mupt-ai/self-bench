@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createEvaluationActivities } from "../src/evaluation/activities.js";
 import { HARBOR_VERSION } from "../src/evaluation/config.js";
 import { executeEvaluation } from "../src/evaluation/runner.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 import { evaluationEnv, evaluationInput } from "./support/evaluation-fixture.js";
 
 test("multiple tasks and harnesses run once each; a zero score still completes", async () => {

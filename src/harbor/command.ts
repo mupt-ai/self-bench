@@ -1,4 +1,4 @@
-import type { HarborEnvironment } from "../providers.js";
+import type { HarborEnvironment } from "../config/providers.js";
 import { harborPythonPath } from "./environment.js";
 
 /** Process policy shared by generation gates and solver trials, not provider lifetimes. */

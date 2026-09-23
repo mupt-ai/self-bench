@@ -2,17 +2,17 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
-import { runCommand } from "../src/process.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
+import { runCommand } from "../../src/lib/process.js";
 import {
   archivedCandidates,
   clearArchivedListingCache,
   listArchivedRuns,
-} from "../src/viewer/archived.js";
-import { candidateArtifacts } from "../src/viewer/artifacts.js";
-import { clearBundleCache, expandBundle } from "../src/viewer/bundle.js";
-import { reasonSummary, testRunner } from "../src/viewer/candidates.js";
-import { readTaskDirectory } from "../src/viewer/task-files.js";
+} from "../../src/runs/archived.js";
+import { candidateArtifacts } from "../../src/runs/artifacts.js";
+import { clearBundleCache, expandBundle } from "../../src/runs/bundle.js";
+import { reasonSummary, testRunner } from "../../src/runs/candidate-summary.js";
+import { readTaskDirectory } from "../../src/runs/task-files.js";
 
 const roots: string[] = [];
 

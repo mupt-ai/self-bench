@@ -1,5 +1,5 @@
-import { executionEnvironment } from "../execution-environment.js";
-import { runCommand } from "../process.js";
+import { executionEnvironment } from "../config/execution-environment.js";
+import { runCommand } from "../lib/process.js";
 
 export async function githubToken(signal?: AbortSignal): Promise<string | undefined> {
   signal?.throwIfAborted();

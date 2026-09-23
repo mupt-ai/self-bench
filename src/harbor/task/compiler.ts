@@ -1,9 +1,12 @@
 import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type TaskDefinition, taskDefinitionSchema } from "../../contracts.js";
-import { assertEnvironmentEvidence, assertEnvironmentPolicy } from "../../environment.js";
-import { sha256 } from "../../hash.js";
-import { runCommand } from "../../process.js";
+import {
+  assertEnvironmentEvidence,
+  assertEnvironmentPolicy,
+} from "../../checks/environment-policy.js";
+import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
+import { sha256 } from "../../lib/hash.js";
+import { runCommand } from "../../lib/process.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { dependencyManifestPatch } from "./dependencies.js";
 import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";

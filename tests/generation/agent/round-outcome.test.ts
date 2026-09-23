@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../../../src/artifacts.js";
+import { LocalArtifactStore } from "../../../src/artifacts/index.js";
 import { runSandboxWithFailureLog } from "../../../src/generation/activity-runtime.js";
 import {
   archiveSandboxResult,

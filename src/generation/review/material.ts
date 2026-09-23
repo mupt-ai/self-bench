@@ -1,6 +1,6 @@
-import type { ArtifactStore } from "../../artifacts.js";
-import type { AuthoredTask, TaskDefinition } from "../../contracts.js";
-import type { CouplingEvidence } from "../../coupling.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { CouplingEvidence } from "../../checks/coupling.js";
+import type { AuthoredTask, TaskDefinition } from "../../contracts/index.js";
 import { taskOperation } from "../../sandbox/task-operation.js";
 export interface ReviewMaterial {
   readonly definition: TaskDefinition;

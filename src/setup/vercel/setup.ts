@@ -5,8 +5,8 @@ import {
   isInteractiveTerminal,
   SetupCanceledError,
   TerminalPrompter,
-} from "../../terminal-prompts.js";
-import { TerminalSetupReporter } from "../../terminal-reporter.js";
+} from "../../cli/terminal-prompts.js";
+import { TerminalSetupReporter } from "../../cli/terminal-reporter.js";
 import { VercelCli } from "./cli.js";
 import { probeVercelCapability, type VercelCapability } from "./probe.js";
 import {

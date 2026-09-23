@@ -1,7 +1,8 @@
 import { CancelledFailure, Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../../artifacts.js";
-import { auditTaskDefinition } from "../../audit.js";
-import type { SelfBenchConfig } from "../../config.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import { auditTaskDefinition } from "../../checks/audit.js";
+import { assertEnvironmentPolicy } from "../../checks/environment-policy.js";
+import type { SelfBenchConfig } from "../../config/index.js";
 import {
   type AuthoredTask,
   type TaskDefinition,
@@ -9,15 +10,14 @@ import {
   type VerifyOutcome,
   type VerifyReport,
   verifyReportSchema,
-} from "../../contracts.js";
-import { assertEnvironmentPolicy } from "../../environment.js";
+} from "../../contracts/index.js";
 import { githubToken } from "../../github/token.js";
 import { SandboxExecutionError } from "../../sandbox/contracts.js";
 import { submissionPatches } from "../../sandbox/submission.js";
-import { isGreen, renderVerifyReport } from "../../verify-report.js";
 import { activityLifetimeSignal, withActivityHeartbeats } from "../activity-runtime.js";
 import type { CompileAndVerifyInput } from "../activity-types.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
+import { isGreen, renderVerifyReport } from "./report.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "./task-compiler.js";
 
 /**
@@ -186,7 +186,7 @@ function checkCandidateIdentity(
     ["sourceUrl", definition.sourceUrl, candidate.sourceUrl],
     ["baseCommit", definition.baseCommit.toLowerCase(), candidate.baseCommit.toLowerCase()],
   ].filter(([, actual, expected]) => actual !== expected);
-  const tier: Record<import("../../contracts.js").Difficulty, number> = {
+  const tier: Record<import("../../contracts/index.js").Difficulty, number> = {
     easy: 1,
     medium: 2,
     hard: 3,

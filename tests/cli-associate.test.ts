@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256 } from "../src/hash.js";
-import { runCommand } from "../src/process.js";
+import { sha256 } from "../src/lib/hash.js";
+import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
 
@@ -67,7 +67,7 @@ printf '%s\\n' '{"number":42,"url":"https://github.com/example/project/pull/42",
     await chmod(gh, 0o755);
 
     const listChild = Bun.spawn(
-      [process.execPath, "src/cli.ts", "associate", "--repo", repository, "--list-sessions"],
+      [process.execPath, "src/cli/bin.ts", "associate", "--repo", repository, "--list-sessions"],
       {
         cwd: join(import.meta.dir, ".."),
         env: {
@@ -103,7 +103,7 @@ printf '%s\\n' '{"number":42,"url":"https://github.com/example/project/pull/42",
     const child = Bun.spawn(
       [
         process.execPath,
-        "src/cli.ts",
+        "src/cli/bin.ts",
         "associate",
         "--repo",
         repository,

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 describe("SelfBench CLI setup", () => {
   test("setup vercel fails before external work when no interactive terminal is attached", async () => {
-    const child = Bun.spawn([process.execPath, "src/cli.ts", "setup", "vercel", "--verbose"], {
+    const child = Bun.spawn([process.execPath, "src/cli/bin.ts", "setup", "vercel", "--verbose"], {
       cwd: join(import.meta.dir, ".."),
       env: process.env,
       stdout: "pipe",
@@ -31,7 +31,7 @@ describe("SelfBench CLI setup", () => {
         "invalid E2B template reference",
       ],
     ] as const) {
-      const child = Bun.spawn([process.execPath, "src/cli.ts", ...args], {
+      const child = Bun.spawn([process.execPath, "src/cli/bin.ts", ...args], {
         cwd: projectRoot,
         env: environment,
         stdout: "pipe",

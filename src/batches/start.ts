@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { buildRunRequest } from "../api/run-request.js";
-import type { ArtifactStore } from "../artifacts.js";
-import { buildCommit } from "../build-metadata.js";
-import type { SelfBenchConfig } from "../config.js";
-import { commitSchema, type RunRequest, runRequestSchema } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { buildCommit } from "../config/build-metadata.js";
+import type { SelfBenchConfig } from "../config/index.js";
+import { commitSchema, type RunRequest, runRequestSchema } from "../contracts/index.js";
 import { configureGenerationRun } from "../generation/run.js";
 import { type GenerationReference, generationSettingsSchema } from "../generation/settings.js";
 import { apiHeaders, GitHubOAuthError } from "../github/oauth.js";

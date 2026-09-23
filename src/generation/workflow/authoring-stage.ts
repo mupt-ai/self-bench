@@ -1,5 +1,5 @@
-import { type ArtifactRef, type Candidate, MAX_AUTHORING_ROUNDS } from "../../contracts.js";
-import { verifyReportSummary } from "../../verify-report.js";
+import { type ArtifactRef, type Candidate, MAX_AUTHORING_ROUNDS } from "../../contracts/index.js";
+import { verifyReportSummary } from "../verify/report.js";
 import { reviewAuthoredTask } from "./review-stage.js";
 import { infrastructureCounter, rejected, type StageContext, type StageOutcome } from "./stage.js";
 

@@ -9,6 +9,7 @@ import {
   setHandler,
   workflowInfo,
 } from "@temporalio/workflow";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../config/execution-limits.js";
 import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
@@ -17,8 +18,7 @@ import type {
   RunStatus,
   TaskProgress,
   WorkflowRunInput,
-} from "../contracts.js";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
+} from "../contracts/index.js";
 import type { DiscoveryShardInput } from "./activity-types.js";
 import { workflowActivities } from "./workflow/activity-proxies.js";
 import { executeCandidate, initialProgress } from "./workflow/candidate.js";

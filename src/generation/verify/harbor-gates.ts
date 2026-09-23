@@ -1,14 +1,13 @@
 import { copyFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CancelledFailure } from "@temporalio/activity";
-import type { ArtifactStore } from "../../artifacts.js";
-import type { SelfBenchConfig } from "../../config.js";
-import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts.js";
-import { executionEnvironment } from "../../execution-environment.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import { executionEnvironment } from "../../config/execution-environment.js";
+import type { SelfBenchConfig } from "../../config/index.js";
+import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts/index.js";
 import { harborChildEnvironment } from "../../harbor/environment.js";
 import type { HarborJobResult } from "../../harbor/results.js";
-import { runCommand } from "../../process.js";
-import { nopGatePassed, oracleGatePassed } from "../../verify-report.js";
+import { runCommand } from "../../lib/process.js";
 import {
   activityLifetimeSignal,
   withActivityHeartbeats,
@@ -30,6 +29,7 @@ import {
   smokeAndNopScript,
 } from "./harbor-gate-script.js";
 import { modalBuildLogTail } from "./modal-build-log.js";
+import { nopGatePassed, oracleGatePassed } from "./report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
 

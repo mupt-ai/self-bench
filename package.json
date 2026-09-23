@@ -13,7 +13,7 @@
   },
   "type": "module",
   "bin": {
-    "self-bench": "dist/cli.js"
+    "self-bench": "dist/cli/bin.js"
   },
   "files": [
     "dist",
@@ -36,7 +36,7 @@
   "scripts": {
     "build": "bun run clean && bun run build:server && bun run build:review",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "cli": "bun run src/cli.ts",
+    "cli": "bun run src/cli/bin.ts",
     "build:review": "vite build --config review/vite.config.ts",
     "build:server": "tsc -p tsconfig.build.json && bun scripts/build-sandbox-programs.ts && bun run build:metadata",
     "build:metadata": "bun scripts/write-build-metadata.ts",

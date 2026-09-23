@@ -1,4 +1,4 @@
-import type { GenerationCost as GenerationCostValue } from "../../../src/contracts";
+import type { GenerationCost as GenerationCostValue } from "../../../src/contracts/index";
 
 export function GenerationCost({ cost }: { cost: GenerationCostValue | undefined }) {
   const value = costLabel(cost);

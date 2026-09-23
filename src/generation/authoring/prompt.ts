@@ -1,5 +1,9 @@
-import { difficultyThresholds } from "../../audit.js";
-import { AUTHOR_VERIFY_BUDGET, type Candidate, MAX_AUTHORING_ROUNDS } from "../../contracts.js";
+import { difficultyThresholds } from "../../checks/audit.js";
+import {
+  AUTHOR_VERIFY_BUDGET,
+  type Candidate,
+  MAX_AUTHORING_ROUNDS,
+} from "../../contracts/index.js";
 import { joinPromptSections } from "../agent/prompt-sections.js";
 
 const assignment = (candidate: Candidate): string => `# Build One Eval Task

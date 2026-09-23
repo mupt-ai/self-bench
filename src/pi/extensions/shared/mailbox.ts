@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { type SubmissionPayload, submissionHash } from "../../../submission-hash.js";
+import { type SubmissionPayload, submissionHash } from "../../../checks/submission-hash.js";
 
 const DEFAULT_MAILBOX = "/work/mailbox";
 const DEFAULT_POLL_MS = 2_000;

@@ -1,16 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractRegularArchive } from "../archive.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { HarborEnvironment } from "../config/providers.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
 } from "../harbor/command.js";
-import { runCommand } from "../process.js";
-import type { HarborEnvironment } from "../providers.js";
+import { extractRegularArchive } from "../lib/archive.js";
+import { runCommand } from "../lib/process.js";
 import { solverEnvironment } from "./config.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution } from "./credential-execution.js";

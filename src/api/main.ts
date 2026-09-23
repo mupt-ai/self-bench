@@ -1,5 +1,5 @@
 import { loadAuthConfig } from "../auth/config.js";
-import { loadConfig } from "../config.js";
+import { loadConfig } from "../config/index.js";
 import { startApi } from "./server.js";
 
 const config = loadConfig();

@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  HOBBY_E2B_TIMEOUT_CAP_MS,
+  parseSandboxTimeoutCapText,
+  STANDARD_E2B_TIMEOUT_CAP_MS,
+  STANDARD_VERCEL_TIMEOUT_CAP_MS,
+} from "../sandbox/timeout.js";
+import { normalizeE2BDomain, normalizeE2BTemplateReference } from "../setup/e2b/template.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
@@ -6,13 +13,6 @@ import {
   type HarborEnvironment,
   matchingHarborEnvironment,
 } from "./providers.js";
-import {
-  HOBBY_E2B_TIMEOUT_CAP_MS,
-  parseSandboxTimeoutCapText,
-  STANDARD_E2B_TIMEOUT_CAP_MS,
-  STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "./sandbox/timeout.js";
-import { normalizeE2BDomain, normalizeE2BTemplateReference } from "./setup/e2b/template.js";
 import { defaultActivityConcurrency } from "./worker-capacity.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { z } from "zod";
-import { projectRoot } from "../project-paths.js";
+import { projectRoot } from "../lib/project-paths.js";
 
 export async function readBody(
   request: IncomingMessage,

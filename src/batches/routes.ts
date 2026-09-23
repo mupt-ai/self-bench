@@ -1,15 +1,15 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../api/http.js";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
 import type { User, UserStore } from "../auth/users.js";
 import { managedBillingRefusal } from "../billing/eligibility.js";
 import type { BillingStore } from "../billing/store.js";
-import type { SelfBenchConfig } from "../config.js";
+import { MAX_CANDIDATES_PER_RUN } from "../config/execution-limits.js";
+import type { SelfBenchConfig } from "../config/index.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import { MAX_CANDIDATES_PER_RUN } from "../execution-limits.js";
 import { checkGenerationCredentials, saveGenerationRecords } from "../generation/credentials.js";
 import { GitHubOAuthError } from "../github/oauth.js";
 import { managedOffer } from "../managed/generation.js";

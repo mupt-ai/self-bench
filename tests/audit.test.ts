@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { auditTaskDefinition } from "../src/audit.js";
-import type { Difficulty, TaskDefinition } from "../src/contracts.js";
+import { auditTaskDefinition } from "../src/checks/audit.js";
+import type { Difficulty, TaskDefinition } from "../src/contracts/index.js";
 
 const definition: TaskDefinition = {
   schemaVersion: 2,

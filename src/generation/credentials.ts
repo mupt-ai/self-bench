@@ -1,5 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
 import { generationSubscriptionAuth } from "../codex/subscription.js";
+import {
+  executionBackendLabels,
+  type HostedExecutionBackend,
+  type HostedHarborEnvironment,
+  harborEnvironmentLabels,
+} from "../config/providers.js";
 import { type CredentialInfo, readAccount, secretPath } from "../evaluation/account.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
@@ -10,12 +16,6 @@ import {
   managedOffer,
   managedSandboxCredentials,
 } from "../managed/generation.js";
-import {
-  executionBackendLabels,
-  type HostedExecutionBackend,
-  type HostedHarborEnvironment,
-  harborEnvironmentLabels,
-} from "../providers.js";
 import { generationModelCredentialKinds, generationModelRoute } from "./models.js";
 import type { GenerationReference, GenerationSettings } from "./settings.js";
 

@@ -1,5 +1,5 @@
 import type { Client } from "@temporalio/client";
-import type { RunPhase, RunStatus } from "../contracts.js";
+import type { RunPhase, RunStatus } from "../contracts/index.js";
 import { statusQuery } from "./workflows.js";
 
 export async function queryStatus(

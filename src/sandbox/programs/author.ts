@@ -2,7 +2,7 @@
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runCommand } from "../../process.js";
+import { runCommand } from "../../lib/process.js";
 
 const [tasksRoot, outputArchive, outputDefinition] = process.argv.slice(2);
 if (!tasksRoot || !outputArchive || !outputDefinition) {

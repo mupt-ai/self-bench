@@ -1,8 +1,8 @@
 import { buildRunRequest } from "../api/run-request.js";
-import type { ArtifactStore } from "../artifacts.js";
-import { buildCommit } from "../build-metadata.js";
-import type { SelfBenchConfig } from "../config.js";
-import type { Candidate, CandidateWorkflowInput } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { buildCommit } from "../config/build-metadata.js";
+import type { SelfBenchConfig } from "../config/index.js";
+import type { Candidate, CandidateWorkflowInput } from "../contracts/index.js";
 import { configureGenerationRun } from "../generation/run.js";
 import type { GenerationReference } from "../generation/settings.js";
 import type { PullRequestCandidate } from "../github/pr-candidate.js";

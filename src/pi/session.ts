@@ -1,4 +1,4 @@
-import type { PipelineStage } from "../contracts.js";
+import type { PipelineStage } from "../contracts/index.js";
 
 /** Directory pi writes session files into inside the sandbox. */
 export const PI_SESSION_DIRECTORY = "/work/session";

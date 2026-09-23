@@ -7,7 +7,7 @@ import { harnessIds } from "../src/evaluation/harnesses.js";
 import { modelRoutes, routeFor } from "../src/evaluation/model-options.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 
 test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
   expect(solverArguments("task", "jobs", "codex", "openai/gpt-5.6-sol", "modal")).toContain(

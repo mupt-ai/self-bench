@@ -1,5 +1,5 @@
 import { type Image, ModalClient, type Secret } from "modal";
-import type { SelfBenchConfig } from "../../../config.js";
+import type { SelfBenchConfig } from "../../../config/index.js";
 import type {
   SandboxExecResult,
   SandboxExecutor,

@@ -1,4 +1,4 @@
-import type { ArtifactRef, AuthoredTask, Candidate } from "../../contracts.js";
+import type { ArtifactRef, AuthoredTask, Candidate } from "../../contracts/index.js";
 import { rejected, type StageContext, type StageOutcome } from "./stage.js";
 
 /** A fresh, read-only review of one mechanically green authoring revision. */

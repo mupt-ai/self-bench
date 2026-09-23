@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
-import { SetupCanceledError } from "../src/terminal-prompts.js";
-import { TerminalSetupReporter } from "../src/terminal-reporter.js";
+import { SetupCanceledError } from "../src/cli/terminal-prompts.js";
+import { TerminalSetupReporter } from "../src/cli/terminal-reporter.js";
 
 describe("TerminalSetupReporter", () => {
   test("shows a live timer and collapses successful command output", async () => {

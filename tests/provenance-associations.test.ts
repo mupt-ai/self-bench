@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256 } from "../src/hash.js";
-import { extractProvenanceMessages, type ProvenanceMessage } from "../src/provenance.js";
+import { sha256 } from "../src/lib/hash.js";
 import {
   applyProvenanceAssociationManifests,
   associationSessionSummaries,
   createProvenanceAssociationManifest,
-} from "../src/provenance-associations.js";
+} from "../src/provenance/associations/index.js";
+import { extractProvenanceMessages, type ProvenanceMessage } from "../src/provenance/index.js";
 
 const repositoryUrl = "https://github.com/example/project.git";
 const sourceUrl = "https://github.com/example/project/pull/42";

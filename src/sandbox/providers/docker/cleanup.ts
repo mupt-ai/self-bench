@@ -1,4 +1,4 @@
-import { type CommandResult, runCommand } from "../../../process.js";
+import { type CommandResult, runCommand } from "../../../lib/process.js";
 
 const CLEANUP_COMMAND_TIMEOUT_MS = 10_000;
 type Resource = "container" | "volume";

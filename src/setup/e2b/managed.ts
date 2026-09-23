@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { E2B } from "e2b";
-import type { E2BCredentials } from "../../config.js";
+import type { E2BCredentials } from "../../config/index.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../evaluation/encrypted-records.js";
-import { projectRoot } from "../../project-paths.js";
+import { projectRoot } from "../../lib/project-paths.js";
 import { buildSelfBenchE2BTemplate } from "./build.js";
 
 /** The resources every SelfBench stage requests; E2B fixes them when the template is built. */

@@ -1,4 +1,4 @@
-import type { TaskDefinition } from "../../contracts.js";
+import type { TaskDefinition } from "../../contracts/index.js";
 import { assertSafePatchPaths } from "./paths.js";
 
 export function isBaseOnlyTestPatch(definition: TaskDefinition, patch: string): boolean {

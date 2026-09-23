@@ -4,7 +4,7 @@ import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
   TaskProgress,
-} from "../contracts.js";
+} from "../contracts/index.js";
 import type { WorkflowStarter } from "../tasks/start.js";
 import type { TaskStatusSource, WorkflowSnapshot } from "../tasks/status.js";
 import { candidateStatusQuery, selfBenchAuthorWorkflow } from "./workflows.js";

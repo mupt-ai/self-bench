@@ -1,4 +1,4 @@
-import type { ArtifactRef, AuthoredTask, RunRequest, TaskProgress } from "../../contracts.js";
+import type { ArtifactRef, AuthoredTask, RunRequest, TaskProgress } from "../../contracts/index.js";
 import type { SelfBenchActivities } from "../activity-types.js";
 
 /** Consecutive rounds whose verify hit Harbor infrastructure before the candidate stops counting rounds. */

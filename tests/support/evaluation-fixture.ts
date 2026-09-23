@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/auth/api-keys.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";

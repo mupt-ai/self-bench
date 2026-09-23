@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import type { E2BCredentials } from "../../config.js";
+import type { E2BCredentials } from "../../config/index.js";
 import { buildSelfBenchE2BTemplate } from "./build.js";
 
 export async function setupE2B(args: string[]): Promise<void> {

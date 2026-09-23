@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type PolledRunStatus, waitForRun } from "../src/run-wait.js";
+import { type PolledRunStatus, waitForRun } from "../src/cli/run-wait.js";
 
 describe("waitForRun", () => {
   test("waits for completion and reports only phase changes", async () => {

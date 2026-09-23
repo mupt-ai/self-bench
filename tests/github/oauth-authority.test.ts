@@ -4,7 +4,7 @@ import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bearerMatches } from "../../src/api/http.js";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createSiteAuth } from "../../src/auth/routes.js";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/auth/session.js";
 import { repos, tasks, users } from "../../src/db/schema.js";

@@ -1,4 +1,4 @@
-import { type AgentFeedEvent, agentFeedEvents } from "../agent-feed.js";
+import { type AgentFeedEvent, agentFeedEvents } from "./agent-feed.js";
 
 interface PiEvent {
   type: string;

@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import { commitSchema, type ReplayRunRequest, type RunRequest } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { commitSchema, type ReplayRunRequest, type RunRequest } from "../contracts/index.js";
 import { rebuildReplayCandidates } from "../generation/replay.js";
 import { apiHeaders } from "../github/oauth.js";
 import type { GenerationBatch } from "./types.js";

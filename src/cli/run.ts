@@ -1,12 +1,12 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { MAX_CANDIDATES_PER_RUN } from "../contracts.js";
-import { collectRepositoryProvenance } from "../provenance.js";
-import { applyProvenanceAssociationManifests } from "../provenance-associations.js";
-import { waitForRun } from "../run-wait.js";
+import { MAX_CANDIDATES_PER_RUN } from "../contracts/index.js";
+import { applyProvenanceAssociationManifests } from "../provenance/associations/index.js";
+import { collectRepositoryProvenance } from "../provenance/index.js";
 import { download, requestJson } from "./api-client.js";
 import { resolveRepository, resolveSelfBenchCommit } from "./repository.js";
+import { waitForRun } from "./run-wait.js";
 import { asPolledRunStatus, defaultRunId, fail, nonnegativeInteger } from "./values.js";
 
 export async function run(args: string[]): Promise<void> {

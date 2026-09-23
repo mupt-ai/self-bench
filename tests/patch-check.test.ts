@@ -2,8 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { exportIgnoredPaths, malformedPatchProblems, patchApplyCheck } from "../src/patch-check.js";
-import { runCommand } from "../src/process.js";
+import {
+  exportIgnoredPaths,
+  malformedPatchProblems,
+  patchApplyCheck,
+} from "../src/checks/patch.js";
+import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
 

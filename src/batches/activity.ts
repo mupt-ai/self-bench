@@ -1,5 +1,5 @@
 import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../execution-limits.js";
+import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../config/execution-limits.js";
 import { queryStatus } from "../generation/run-status.js";
 import type { BatchStatus, TaskActivityDetail } from "./progress.js";
 

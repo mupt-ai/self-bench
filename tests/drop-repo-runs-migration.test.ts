@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { LocalArtifactStore } from "../src/artifacts.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createUserStore } from "../src/auth/users.js";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";

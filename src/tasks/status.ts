@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import type { CandidateWorkflowResult, TaskProgress } from "../contracts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import type { CandidateWorkflowResult, TaskProgress } from "../contracts/index.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import type { TaskRecord, TaskStore } from "./store.js";
 import { syncRun } from "./sync.js";

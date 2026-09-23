@@ -4,7 +4,7 @@ import type {
   CandidateWorkflowInput,
   CandidateWorkflowResult,
   TaskProgress,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import type { SelfBenchActivities } from "../activity-types.js";
 import { authorWithVerification } from "./authoring-stage.js";
 import {

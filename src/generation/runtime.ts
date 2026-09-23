@@ -1,10 +1,10 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
-import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../config.js";
-import type { RunRequest } from "../contracts.js";
+import { withExecutionEnvironment } from "../config/execution-environment.js";
+import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../config/index.js";
+import type { RunRequest } from "../contracts/index.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
-import { withExecutionEnvironment } from "../execution-environment.js";
 import { MANAGED_E2B_TEMPLATE_OWNER } from "../managed/generation.js";
 import { meteredSandboxExecutor } from "../managed/metered-sandbox.js";
 import { withUsageLedger } from "../managed/usage.js";

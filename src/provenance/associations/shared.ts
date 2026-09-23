@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SessionProvenanceFormat } from "../provenance.js";
+import type { SessionProvenanceFormat } from "../index.js";
 
 const localSourceTypeSchema = z.enum(["pi", "claude-code", "codex"]);
 export type LocalSourceType = z.infer<typeof localSourceTypeSchema>;

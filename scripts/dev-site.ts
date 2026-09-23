@@ -11,7 +11,7 @@
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { readEnvFile } from "../src/env-file.js";
+import { readEnvFile } from "../src/lib/env-file.js";
 
 const root = resolve(import.meta.dir, "..");
 const VITE_PORT = Number(process.env.SELFBENCH_SITE_PORT ?? 5173);

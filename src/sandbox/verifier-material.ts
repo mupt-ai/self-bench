@@ -1,14 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../archive.js";
-import { taskDefinitionSchema } from "../contracts.js";
 import {
   buildCouplingEvidence,
   discoverContractArtifacts,
   scanBaseContractArtifacts,
-} from "../coupling.js";
+} from "../checks/coupling.js";
+import { taskDefinitionSchema } from "../contracts/index.js";
 import { repositoryRelativePath } from "../harbor/task/paths.js";
-import { patchPaths } from "../repair.js";
+import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../lib/archive.js";
+import { patchPaths } from "../lib/patch-paths.js";
 export async function verifierMaterial(root: string): Promise<void> {
   await extractRegularArchive("/work/task.tar.gz", root);
   const taskDirectory = join(root, "harbor-task");

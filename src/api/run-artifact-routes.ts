@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { pipeline } from "node:stream/promises";
-import type { ArtifactStore } from "../artifacts.js";
-import { artifactContentType, isRunArtifactKey } from "../viewer/artifacts.js";
-import { BundleNotFoundError, expandBundle } from "../viewer/bundle.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { artifactContentType, isRunArtifactKey } from "../runs/artifacts.js";
+import { BundleNotFoundError, expandBundle } from "../runs/bundle.js";
 import { sendJson } from "./http.js";
 
 const RUN_ID = "([a-z0-9][a-z0-9-]{2,62})";

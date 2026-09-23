@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runCommand } from "./process.js";
+import { runCommand } from "../lib/process.js";
 
 type ContractArtifactCategory = "endpoint_path" | "field_name" | "header_name" | "media_type";
 

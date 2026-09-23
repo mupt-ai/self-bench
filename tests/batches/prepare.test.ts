@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../../src/artifacts.js";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { prepareGenerationBatch } from "../../src/batches/prepare.js";
-import { MAX_DISCOVERY_SHARDS } from "../../src/execution-limits.js";
+import { MAX_DISCOVERY_SHARDS } from "../../src/config/execution-limits.js";
 import { run } from "../support/workflow-fixture.js";
 
 test("caps independent discovery while covering enough PRs for a max-size run", async () => {

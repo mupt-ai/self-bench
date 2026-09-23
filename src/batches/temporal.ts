@@ -9,7 +9,7 @@ import type {
   CandidateWorkflowResult,
   DiscoveryResult,
   TaskProgress,
-} from "../contracts.js";
+} from "../contracts/index.js";
 import type { DiscoveryShardInput } from "../generation/activity-types.js";
 import type { SandboxCostSnapshot } from "../sandbox/contracts.js";
 import { heartbeatCost } from "./activity.js";

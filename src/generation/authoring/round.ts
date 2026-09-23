@@ -1,13 +1,13 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
-import type { ArtifactStore } from "../../artifacts.js";
-import type { SelfBenchConfig } from "../../config.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { SelfBenchConfig } from "../../config/index.js";
 import {
   AUTHOR_VERIFY_BUDGET,
   type AuthoringRoundResult,
   authoringRoundResultSchema,
   verifyReportSchema,
-} from "../../contracts.js";
+} from "../../contracts/index.js";
 import { githubToken } from "../../github/token.js";
 import { verifierRuntimeFiles } from "../../harbor/task/runtime-assets.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../pi/model-auth.js";
@@ -18,7 +18,6 @@ import {
 } from "../../pi/session.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import { MAILBOX_DIRECTORY } from "../../sandbox/supervisor.js";
-import { renderVerifyReport } from "../../verify-report.js";
 import {
   readAsset,
   runSandboxWithFailureLog,
@@ -37,6 +36,7 @@ import {
 } from "../agent/round-outcome.js";
 import { authoringRoundScript } from "../agent/scripts.js";
 import { AGENT_INACTIVITY_TIMEOUT_MS, AUTHORING_TIMEOUT_MS } from "../agent/timeouts.js";
+import { renderVerifyReport } from "../verify/report.js";
 import { authoringPrompt, authoringResumePrompt } from "./prompt.js";
 import { SessionVerifier } from "./session-verify.js";
 import { readSubmission } from "./submissions.js";

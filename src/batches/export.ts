@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "../artifacts.js";
-import { loadWorkerConfig } from "../config.js";
+import type { ArtifactStore } from "../artifacts/index.js";
+import { loadWorkerConfig } from "../config/index.js";
 import type { EncryptedRecordStore } from "../evaluation/encrypted-records.js";
 import { orgRecords } from "../evaluation/org-records.js";
 import { generationConfigEnvironment } from "../generation/config.js";

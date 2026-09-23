@@ -7,7 +7,7 @@ import {
   extractProvenanceMessages,
   type ProvenanceMessage,
   redactSecrets,
-} from "../src/provenance.js";
+} from "../src/provenance/index.js";
 
 describe("provenance sanitization", () => {
   test("extracts human Codex messages and ignores injected context", () => {

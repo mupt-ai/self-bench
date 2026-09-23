@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { executionBackendLabels, HOSTED_EXECUTION_BACKENDS } from "../../../src/config/providers";
 import type { CredentialInfo } from "../../../src/evaluation/account";
 import type { GenerationSettings } from "../../../src/generation/settings";
-import { executionBackendLabels, HOSTED_EXECUTION_BACKENDS } from "../../../src/providers";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";

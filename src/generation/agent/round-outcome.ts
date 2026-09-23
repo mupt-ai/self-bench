@@ -1,4 +1,4 @@
-import type { ArtifactStore } from "../../artifacts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import { boundedTail } from "../verify/harbor-gate.js";
 
 /** Tool calls that end an agent session with a deliverable the worker must be able to collect. */

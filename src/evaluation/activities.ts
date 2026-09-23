@@ -1,5 +1,5 @@
 import { Context } from "@temporalio/activity";
-import type { ArtifactStore } from "../artifacts.js";
+import type { ArtifactStore } from "../artifacts/index.js";
 import type { EncryptedRecordStore } from "./encrypted-records.js";
 import { executeEvaluation } from "./runner.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "./store.js";

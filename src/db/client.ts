@@ -2,7 +2,7 @@ import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
-import { projectRoot } from "../project-paths.js";
+import { projectRoot } from "../lib/project-paths.js";
 import * as schema from "./schema.js";
 
 /** Any Drizzle Postgres database over our schema: postgres-js in production, PGlite in tests. */

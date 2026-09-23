@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { evaluationChoices, HARBOR_VERSION, solverEnvironment } from "../src/evaluation/config.js";
 import {
   collectOutput,
@@ -19,7 +19,7 @@ import {
   listEvaluations,
   saveEvaluation,
 } from "../src/evaluation/store.js";
-import { runCommand } from "../src/process.js";
+import { runCommand } from "../src/lib/process.js";
 import { evaluationEnv, evaluationInput } from "./support/evaluation-fixture.js";
 
 const directories: string[] = [];

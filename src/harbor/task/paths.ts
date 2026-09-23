@@ -1,6 +1,6 @@
 import { posix, resolve, sep } from "node:path";
-import type { TaskDefinition } from "../../contracts.js";
-import { patchPaths } from "../../repair.js";
+import type { TaskDefinition } from "../../contracts/index.js";
+import { patchPaths } from "../../lib/patch-paths.js";
 
 export function assertSafeTaskPaths(task: TaskDefinition): void {
   for (const path of [

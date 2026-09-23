@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
-import * as processes from "../../../../src/process.js";
+import * as processes from "../../../../src/lib/process.js";
 import { DockerSandboxExecutor } from "../../../../src/sandbox/providers/docker/executor.js";
 
 const ok = { exitCode: 0, stdout: "", stderr: "" };

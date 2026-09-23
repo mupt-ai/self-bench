@@ -1,7 +1,7 @@
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../../archive.js";
-import { runCommand } from "../../process.js";
+import { extractRegularArchive, REPOSITORY_SNAPSHOT_ARCHIVE_OPTIONS } from "../../lib/archive.js";
+import { runCommand } from "../../lib/process.js";
 
 export interface PreparedTaskWorkspace {
   readonly extractedDirectory: string;

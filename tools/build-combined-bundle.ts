@@ -8,10 +8,10 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { extractRegularArchive } from "../src/archive.js";
+import { extractRegularArchive } from "../src/lib/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
-import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts.js";
-import { runCommand } from "../src/process.js";
+import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts/index.js";
+import { runCommand } from "../src/lib/process.js";
 import type { TaskCompilerServices } from "../src/sandbox/task-compiler.js";
 import { compileSubmittedTask } from "../src/sandbox/task-compiler.js";
 

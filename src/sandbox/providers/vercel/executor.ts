@@ -1,5 +1,5 @@
 import type { Sandbox } from "@vercel/sandbox";
-import { RollingOutput } from "../../../process.js";
+import { RollingOutput } from "../../../lib/process.js";
 import type {
   SandboxExecResult,
   SandboxExecutor,

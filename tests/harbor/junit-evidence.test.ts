@@ -3,9 +3,9 @@ import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nopGatePassed } from "../../src/generation/verify/report.js";
 import { shellQuote } from "../../src/harbor/task/paths.js";
-import { runCommand } from "../../src/process.js";
-import { nopGatePassed } from "../../src/verify-report.js";
+import { runCommand } from "../../src/lib/process.js";
 
 async function grade(xml: string | undefined, ids = ["suite::a"], exit = 0, link = false) {
   const root = await mkdtemp(join(tmpdir(), "selfbench-junit-test-"));

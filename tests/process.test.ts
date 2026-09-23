@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CommandTimeoutError, InactivityTimeoutError, runCommand } from "../src/process.js";
+import { CommandTimeoutError, InactivityTimeoutError, runCommand } from "../src/lib/process.js";
 
 describe("runCommand", () => {
   test("terminates a child when its abort signal fires", async () => {

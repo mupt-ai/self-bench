@@ -1,4 +1,4 @@
-import type { ArtifactStore } from "../../artifacts.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import { PiEventFeed } from "../../pi/event-feed.js";
 import type { SandboxRunOptions } from "../../sandbox/index.js";
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts.js";
+import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createRepoStore } from "../src/repos/store.js";
 import type { WorkflowSnapshot } from "../src/tasks/status.js";
 import { createTaskStore } from "../src/tasks/store.js";

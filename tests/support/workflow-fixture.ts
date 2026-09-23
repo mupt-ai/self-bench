@@ -7,7 +7,7 @@ import type {
   RunRequest,
   VerifyOutcome,
   VerifyReport,
-} from "../../src/contracts.js";
+} from "../../src/contracts/index.js";
 import type { SelfBenchActivities } from "../../src/generation/activity-types.js";
 
 export const artifact: ArtifactRef = {

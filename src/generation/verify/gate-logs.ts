@@ -1,8 +1,8 @@
-import type { ArtifactStore } from "../../artifacts.js";
-import type { SelfBenchConfig } from "../../config.js";
-import type { ArtifactRef } from "../../contracts.js";
-import { COMPOSE_DIAGNOSTICS_MARKER, excerptLog } from "../../log-excerpt.js";
-import { runCommand } from "../../process.js";
+import type { ArtifactStore } from "../../artifacts/index.js";
+import type { SelfBenchConfig } from "../../config/index.js";
+import type { ArtifactRef } from "../../contracts/index.js";
+import { runCommand } from "../../lib/process.js";
+import { COMPOSE_DIAGNOSTICS_MARKER, excerptLog } from "./log-excerpt.js";
 
 export interface GateLog {
   readonly logTail: string;

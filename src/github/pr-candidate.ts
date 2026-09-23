@@ -1,4 +1,4 @@
-import type { Candidate, Difficulty } from "../contracts.js";
+import type { Candidate, Difficulty } from "../contracts/index.js";
 import { redactSecrets } from "../provenance/redact.js";
 import type { ProvenanceMessage } from "../provenance/types.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
