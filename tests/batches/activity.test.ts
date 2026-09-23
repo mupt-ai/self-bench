@@ -56,7 +56,7 @@ test("a persisted batch status gains the same activity overlay as a live one", a
               state: 1,
               attempt: 3,
               maximumAttempts: 4,
-              activityType: { name: "runAuthoringRound" },
+              activityType: { name: "runAuthoringTurn" },
               lastFailure: {
                 message:
                   "authoring round 1: the model provider failed mid-session (Codex error: The usage limit has been reached) before a terminal tool call; log: gs://bucket/runs/batch-one/authoring/one/round-1/attempt-2/sandbox.log",
@@ -80,7 +80,7 @@ test("a persisted batch status gains the same activity overlay as a live one", a
   expect(status.activity).toEqual({
     one: {
       state: "queued",
-      activityType: "runAuthoringRound",
+      activityType: "runAuthoringTurn",
       attempt: 3,
       maximumAttempts: 4,
       lastFailure:

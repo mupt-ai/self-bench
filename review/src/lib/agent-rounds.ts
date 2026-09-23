@@ -5,6 +5,8 @@ export interface AgentRound {
   title: string;
   stage: "authoring" | "review";
   round: number;
+  /** Authoring turns within a round (each `verify` ends one); absent for older runs and reviews. */
+  turn?: number;
   attempt: number;
   /** The canonical round result belongs to the attempt that ultimately decided the round. */
   status?: "finished" | "failed";
@@ -21,29 +23,32 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
     for (const entry of artifacts.groups[sourceStage] ?? []) {
       const path = entry.key.slice(prefix.length);
       const match =
-        /^(?:round-(\d+)(?:\/attempt-(\d+))?\/|session\/round-(\d+)(?:-attempt-(\d+))?\.jsonl$)/.exec(
+        /^(?:round-(\d+)(?:\/turn-(\d+))?(?:\/attempt-(\d+))?\/|session\/round-(\d+)(?:-turn-(\d+))?(?:-attempt-(\d+))?\.jsonl$)/.exec(
           path,
         );
       if (!entry.key.startsWith(prefix) || !match) continue;
-      const round = Number(match[1] ?? match[3]);
-      const attempt = Number(match[2] ?? match[4] ?? 1);
-      const id = `${stage}-${round}-${attempt}`;
+      const round = Number(match[1] ?? match[4]);
+      const turnMatch = match[2] ?? match[5];
+      const turn = turnMatch ? Number(turnMatch) : undefined;
+      const attempt = Number(match[3] ?? match[6] ?? 1);
+      const id = `${stage}-${round}-${turn ?? 0}-${attempt}`;
       const item = rounds.get(id) ?? {
         id,
         stage,
         round,
+        ...(turn ? { turn } : {}),
         attempt,
-        title: `${stage === "authoring" ? "Authoring" : "Review"} Part ${round}`,
+        title: `${stage === "authoring" ? "Authoring" : "Review"} Part ${round}${turn ? `, Turn ${turn}` : ""}`,
       };
       if (path.includes("/live/") && (!item.live || entry.key > item.live.key)) item.live = entry;
       if (path.startsWith("session/")) item.session = entry;
-      if (path === `round-${round}/result.json`) item.result = entry;
+      if (path === `round-${round}${turn ? `/turn-${turn}` : ""}/result.json`) item.result = entry;
       rounds.set(id, item);
     }
   }
   const grouped = new Map<string, AgentRound[]>();
   for (const round of rounds.values()) {
-    const key = `${round.stage}-${round.round}`;
+    const key = `${round.stage}-${round.round}-${round.turn ?? 0}`;
     const group = grouped.get(key) ?? [];
     group.push(round);
     grouped.set(key, group);
@@ -66,6 +71,7 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
     (a, b) =>
       a.round - b.round ||
       Number(a.stage === "review") - Number(b.stage === "review") ||
+      (a.turn ?? 0) - (b.turn ?? 0) ||
       a.attempt - b.attempt,
   );
 }

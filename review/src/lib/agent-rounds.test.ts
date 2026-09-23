@@ -66,3 +66,36 @@ test("marks retries before a round result as failed", () => {
     "finished",
   ]);
 });
+
+test("splits authoring rounds into turns, one per verify", () => {
+  const entry = (suffix: string) => ({
+    key: `runs/run-123/authoring/candidate/${suffix}`,
+    sizeBytes: 10,
+  });
+  const artifacts = {
+    runId: "run-123",
+    taskId: "task",
+    candidateId: "candidate",
+    bundles: [],
+    groups: {
+      authoring: [
+        entry("round-1/turn-1/attempt-1/live/00000000.json"),
+        entry("session/round-1-turn-1.jsonl"),
+        entry("round-1/turn-1/result.json"),
+        entry("round-1/turn-2/attempt-1/prompt.md"),
+        entry("round-1/turn-2/attempt-2/prompt.md"),
+        entry("session/round-1-turn-2-attempt-2.jsonl"),
+        entry("round-1/turn-2/result.json"),
+      ],
+    },
+  } as unknown as CandidateArtifacts;
+
+  const rounds = agentRounds(artifacts);
+  expect(rounds.map((round) => [round.title, round.attempt, round.status])).toEqual([
+    ["Authoring Part 1, Turn 1", 1, "finished"],
+    ["Authoring Part 1, Turn 2", 1, "failed"],
+    ["Authoring Part 1, Turn 2", 2, "finished"],
+  ]);
+  expect(rounds[0]?.live?.key).toEndWith("00000000.json");
+  expect(rounds[2]?.session?.key).toEndWith("round-1-turn-2-attempt-2.jsonl");
+});

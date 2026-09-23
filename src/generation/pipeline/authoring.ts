@@ -1,90 +1,99 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import {
   type ArtifactRef,
   AUTHOR_VERIFY_BUDGET,
-  type AuthoringRoundResult,
+  type AuthoredTaskDraft,
+  type AuthoringTurnResult,
   type Candidate,
   MAX_AUTHORING_ROUNDS,
   type RunRequest,
+  type VerifyReport,
   verifyReportSchema,
 } from "../../contracts/index.js";
-import { errorMessage } from "../../lib/util.js";
-import type { LiveSandbox, SandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxExecutor } from "../../sandbox/index.js";
 import { difficultyThresholds } from "../task/audit.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { runAgent } from "./agent.js";
-import { readAsset } from "./helpers.js";
+import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
-import { compileAndVerify } from "./verify.js";
 import { renderVerifyReport } from "./verify-report.js";
 
-export interface AuthoringRoundInput {
+export interface AuthoringTurnInput {
   readonly run: RunRequest;
   readonly candidate: Candidate;
   readonly round: number;
-  /** The previous round's session and verify report, for rounds after the first. */
+  /** Turns within a round, from 1; every turn after the first follows one `verify`. */
+  readonly turn: number;
+  /** The conversation so far, resumed in this turn's fresh sandbox. */
   readonly session?: ArtifactRef;
+  /** The latest draft, restored into /work/task. */
+  readonly draft?: AuthoredTaskDraft;
+  /** Turn 1: the previous round's report. Later turns: the report of the verify just run. */
   readonly report?: ArtifactRef;
-  /** Reviewer suggestions for this round. */
+  /** Reviewer suggestions for this round (turn 1 only). */
   readonly feedback?: string;
+  readonly verifiesLeft: number;
 }
 
-const MAILBOX = "/work/mailbox";
 const SUBMISSION = "/work/submission";
+const VERIFY_REQUEST = "/work/verify";
+const DRAFT = "/work/draft.tar.gz";
+// Unpacks the draft and splits its prompt back out into instruction.md, as the agent wrote it.
+export const RESTORE_DRAFT = `mkdir -p /work/task
+tar -xzf ${DRAFT} -C /work/task
+node -e '
+const fs = require("fs");
+const path = "/work/task/definition.json";
+const { prompt, ...definition } = JSON.parse(fs.readFileSync(path, "utf8"));
+fs.writeFileSync(path, JSON.stringify(definition, null, 2) + "\\n");
+fs.writeFileSync("/work/task/instruction.md", prompt + "\\n");
+'`;
 
 /**
- * One authoring round: pi writes the task, checks it with `verify` (the worker runs the full
- * compile + Harbor check for each request it finds in the sandbox mailbox), then submits.
+ * One authoring turn: pi works on the task in a fresh sandbox until it calls `verify` or
+ * `submit_task`, both of which end the turn. The workflow verifies the draft and, after a
+ * `verify`, starts the next turn with the report.
  */
-export async function runAuthoringRound(
+export async function runAuthoringTurn(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
-  harborEnvironment: SelfBenchConfig["harborEnvironment"],
-  input: AuthoringRoundInput,
-): Promise<AuthoringRoundResult> {
-  const { run, candidate, round } = input;
-  const roundPrefix = `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}`;
+  input: AuthoringTurnInput,
+): Promise<AuthoringTurnResult> {
+  const { run, candidate, round, turn } = input;
+  const turnPrefix = `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}/turn-${turn}`;
   const attempt = Context.current().info.attempt;
-  const prefix = `${roundPrefix}/attempt-${attempt}`;
-  const [provenance, extension, checker, session, report] = await Promise.all([
+  const [provenance, extension, checker, session, report, draft] = await Promise.all([
     store.get(candidate.provenance),
     readAsset("dist/extension-authoring.bundle.js"),
     readAsset("dist/sandbox-check.bundle.js"),
     input.session ? store.get(input.session) : undefined,
     input.report ? store.get(input.report) : undefined,
+    input.draft ? artifactFile(store, input.draft.sourceBundle, DRAFT) : undefined,
   ]);
-  const verify = (definition: Uint8Array, bundle: Uint8Array, index: number) =>
-    verifyDraft(
-      store,
-      sandbox,
-      harborEnvironment,
-      input,
-      `${prefix}/verify-${index}`,
-      definition,
-      bundle,
-    );
+  const verifyReport =
+    report && verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8")));
   const result = await runAgent({
     store,
     sandbox,
     run,
-    label: `author-${candidate.candidateId}-r${round}`,
-    prefix,
-    sessionKey: `runs/${run.runId}/authoring/${candidate.candidateId}/session/round-${round}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
+    label: `author-${candidate.candidateId}-r${round}-t${turn}`,
+    prefix: `${turnPrefix}/attempt-${attempt}`,
+    sessionKey: `runs/${run.runId}/authoring/${candidate.candidateId}/session/round-${round}-turn-${turn}${attempt > 1 ? `-attempt-${attempt}` : ""}.jsonl`,
     ...(session ? { resume: session } : {}),
     workspace: { kind: "clone", commit: candidate.baseCommit },
+    ...(draft ? { setup: RESTORE_DRAFT } : {}),
     extension: "/work/authoring.js",
     tools: "read,bash,grep,find,ls,verify,submit_task",
-    prompt: authoringPrompt(
-      candidate,
-      round,
-      report &&
-        renderVerifyReport(
-          verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8"))),
-        ),
-      input.feedback,
-    ),
+    prompt:
+      turn === 1
+        ? authoringPrompt(
+            candidate,
+            round,
+            verifyReport && renderVerifyReport(verifyReport),
+            input.feedback,
+          )
+        : verifyResultPrompt(verifyReport, input.verifiesLeft),
     files: [
       ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
         path: `/work/${path}`,
@@ -93,31 +102,41 @@ export async function runAuthoringRound(
       { path: "/work/authoring.js", contents: extension },
       { path: "/work/sandbox-check.js", contents: checker },
       { path: "/work/provenance.json", contents: provenance },
+      ...(draft ? [draft] : []),
     ],
-    outputs: [`${SUBMISSION}/definition.json`, `${SUBMISSION}/source-task.tar.gz`],
+    outputs: [SUBMISSION, VERIFY_REQUEST].flatMap((directory) => [
+      `${directory}/definition.json`,
+      `${directory}/source-task.tar.gz`,
+    ]),
     environment: {
       SELFBENCH_DELIVERABLE: "/work/task",
       SELFBENCH_SUBMISSION: SUBMISSION,
+      SELFBENCH_VERIFY_REQUEST: VERIFY_REQUEST,
       SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
-      SELFBENCH_MAILBOX: MAILBOX,
-      SELFBENCH_VERIFY_BUDGET: String(AUTHOR_VERIFY_BUDGET),
+      SELFBENCH_VERIFY_BUDGET: String(input.verifiesLeft),
     },
     timeoutMs: 4 * 60 * 60 * 1000,
-    whileRunning: (live, exited) => answerVerifyRequests(live, exited, verify),
   });
-  const definition = result.outputs[`${SUBMISSION}/definition.json`];
-  const bundle = result.outputs[`${SUBMISSION}/source-task.tar.gz`];
-  let outcome: AuthoringRoundResult;
-  if (definition && bundle && result.session) {
+  // The extension blocks every tool call after the first hand-off, so at most one is present.
+  const handOff = (["submitted", "verify"] as const)
+    .map((kind) => {
+      const directory = kind === "submitted" ? SUBMISSION : VERIFY_REQUEST;
+      const definition = result.outputs[`${directory}/definition.json`];
+      const bundle = result.outputs[`${directory}/source-task.tar.gz`];
+      return definition && bundle ? { kind, definition, bundle } : undefined;
+    })
+    .find((found) => found !== undefined);
+  let outcome: AuthoringTurnResult;
+  if (handOff && result.session) {
     outcome = {
-      kind: "submitted",
-      task: await storeDraft(store, roundPrefix, candidate, definition, bundle),
+      kind: handOff.kind,
+      task: await storeDraft(store, turnPrefix, candidate, handOff.definition, handOff.bundle),
       session: result.session,
     };
   } else if (result.exitCode !== 0 || result.providerError || !result.session) {
     // A crashed sandbox or model provider is retried by Temporal, not charged to the candidate.
     throw new Error(
-      `authoring round ${round} ended without a submission (exit ${result.exitCode}${result.providerError ? `, provider: ${result.providerError.slice(0, 200)}` : ""}); log: ${result.log.uri}`,
+      `authoring round ${round} turn ${turn} ended without a submission (exit ${result.exitCode}${result.providerError ? `, provider: ${result.providerError.slice(0, 200)}` : ""}); log: ${result.log.uri}`,
     );
   } else {
     outcome = {
@@ -127,7 +146,7 @@ export async function runAuthoringRound(
     };
   }
   await store.put(
-    `${roundPrefix}/result.json`,
+    `${turnPrefix}/result.json`,
     Buffer.from(`${JSON.stringify(outcome, null, 2)}\n`),
     "application/json",
   );
@@ -176,6 +195,22 @@ export function authoringPrompt(
   });
 }
 
+/** The next turn's message after a `verify`: the report and what to do with it. */
+export function verifyResultPrompt(report: VerifyReport | undefined, verifiesLeft: number): string {
+  if (!report) throw new Error("a turn after verify needs the verify report");
+  const next = report.green
+    ? "Call submit_task now."
+    : verifiesLeft > 0
+      ? "Fix what the report names and verify again."
+      : "No verify calls remain: call submit_task with your best task, or explain why it can't be made fair.";
+  return renderPrompt("verify-result", {
+    report: renderVerifyReport(report).trim(),
+    green: String(report.green),
+    verifiesLeft,
+    next,
+  });
+}
+
 async function storeDraft(
   store: ArtifactStore,
   prefix: string,
@@ -195,59 +230,4 @@ async function storeDraft(
     definition: definitionRef,
     sourceBundle: bundleRef,
   };
-}
-
-/** Runs the full check on one in-session verify request and renders the report for the agent. */
-async function verifyDraft(
-  store: ArtifactStore,
-  sandbox: SandboxExecutor,
-  harborEnvironment: SelfBenchConfig["harborEnvironment"],
-  input: AuthoringRoundInput,
-  prefix: string,
-  definition: Uint8Array,
-  bundle: Uint8Array,
-): Promise<{ green: boolean; report: string }> {
-  const task = await storeDraft(store, prefix, input.candidate, definition, bundle);
-  const outcome = await compileAndVerify(
-    store,
-    sandbox,
-    harborEnvironment,
-    { run: input.run, candidate: input.candidate, task, stage: "authoring", round: input.round },
-    prefix,
-  );
-  return { green: outcome.report.green, report: renderVerifyReport(outcome.report) };
-}
-
-/**
- * The worker side of `verify`: the tool writes `<mailbox>/<n>/{definition.json,source-task.tar.gz}`
- * then `ready`, and waits for `response.json`. Requests are numbered from 1 and answered in order.
- */
-async function answerVerifyRequests(
-  live: LiveSandbox,
-  exited: AbortSignal,
-  verify: (definition: Uint8Array, bundle: Uint8Array, index: number) => Promise<unknown>,
-): Promise<void> {
-  for (let index = 1; !exited.aborted; ) {
-    const directory = `${MAILBOX}/${index}`;
-    const ready = await live.readFile(`${directory}/ready`).catch(() => undefined);
-    if (!ready) {
-      await new Promise((resolve) => setTimeout(resolve, 5_000).unref());
-      continue;
-    }
-    const [definition, bundle] = await Promise.all([
-      live.readFile(`${directory}/definition.json`),
-      live.readFile(`${directory}/source-task.tar.gz`),
-    ]);
-    let response: unknown;
-    try {
-      if (!definition || !bundle) throw new Error("verify request is incomplete");
-      response = await verify(definition, bundle, index);
-    } catch (error) {
-      if (Context.current().cancellationSignal.aborted) throw error;
-      response = { error: errorMessage(error) };
-    }
-    if (exited.aborted) return;
-    await live.writeFile(`${directory}/response.json`, JSON.stringify(response));
-    index += 1;
-  }
 }

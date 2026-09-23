@@ -154,7 +154,7 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       candidates: shardIndex === 0 ? discovered : [],
       report: artifact,
     }),
-    runAuthoringRound: async ({ candidate: value, round }) => ({
+    runAuthoringTurn: async ({ candidate: value, round }) => ({
       kind: "submitted",
       task: draft(value.candidateId),
       session: ref(`file:///${value.candidateId}/authoring/session/round-${round}.jsonl`),

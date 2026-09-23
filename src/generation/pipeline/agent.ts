@@ -4,7 +4,6 @@ import { PiEventFeed } from "../../harnesses/pi/event-feed.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
 import { finalAssistantMessage, sessionProviderError } from "../../harnesses/pi/session.js";
 import {
-  type LiveSandbox,
   SandboxExecutionError,
   type SandboxExecutor,
   type SandboxFile,
@@ -36,6 +35,8 @@ export interface AgentRequest {
   readonly workspace:
     | { readonly kind: "clone"; readonly commit: string }
     | { readonly kind: "task" };
+  /** Shell run in the workspace after it is prepared, before pi starts. */
+  readonly setup?: string;
   readonly extension: string;
   readonly tools: string;
   readonly prompt: string;
@@ -43,8 +44,6 @@ export interface AgentRequest {
   readonly outputs: readonly string[];
   readonly environment?: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
-  /** Runs alongside the agent (the in-session verify mailbox). */
-  readonly whileRunning?: (sandbox: LiveSandbox, exited: AbortSignal) => Promise<void>;
 }
 
 export interface AgentResult {
@@ -93,11 +92,7 @@ export async function runAgent(request: AgentRequest): Promise<AgentResult> {
             AUTHOR_THINKING: run.authoring.reasoningEffort,
           },
         },
-        {
-          ...options,
-          onOutput: feed.push,
-          ...(request.whileRunning ? { onLive: request.whileRunning } : {}),
-        },
+        { ...options, onOutput: feed.push },
       ),
     );
   } catch (error) {
@@ -160,7 +155,8 @@ provider="\${AUTHOR_PROVIDER:-}"
 [ -n "$provider" ] || { [ -n "\${OPENAI_API_KEY:-}" ] && provider=openai || provider=openai-codex; }
 ${workspace}
 cd /work/repo
-# Keep output flowing while a tool call (verify) blocks, so the inactivity timeout never fires.
+${request.setup ?? ""}
+# Keep output flowing while a long tool call runs, so the inactivity timeout never fires.
 (while sleep 60; do echo "[selfbench] agent still running" >&2; done) &
 heartbeat=$!
 status=0

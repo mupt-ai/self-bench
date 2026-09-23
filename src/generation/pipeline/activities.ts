@@ -1,7 +1,7 @@
 import { createArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type {
-  AuthoringRoundResult,
+  AuthoringTurnResult,
   DiscoveryResult,
   ReviewRoundResult,
   VerifyOutcome,
@@ -9,7 +9,7 @@ import type {
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
-import { type AuthoringRoundInput, runAuthoringRound } from "./authoring.js";
+import { type AuthoringTurnInput, runAuthoringTurn } from "./authoring.js";
 import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
 import { type ReviewRoundInput, runReviewRound } from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
@@ -19,7 +19,7 @@ export type { DiscoveryShardInput };
 
 export interface SelfBenchActivities {
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
-  runAuthoringRound(input: AuthoringRoundInput): Promise<AuthoringRoundResult>;
+  runAuthoringTurn(input: AuthoringTurnInput): Promise<AuthoringTurnResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
   runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
 }
@@ -33,7 +33,7 @@ export function createActivities(
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
   const runtime = <T>(
-    run: AuthoringRoundInput["run"],
+    run: AuthoringTurnInput["run"],
     stage: "author" | "verifier",
     action: Parameters<typeof withGenerationRuntime<T>>[5],
   ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
@@ -42,9 +42,9 @@ export function createActivities(
       runtime(input.run, "author", (sandbox, _harbor, run) =>
         discoverCandidateShard(store, sandbox, { ...input, run }),
       ),
-    runAuthoringRound: (input) =>
-      runtime(input.run, "author", (sandbox, harbor, run) =>
-        runAuthoringRound(store, sandbox, harbor, { ...input, run }),
+    runAuthoringTurn: (input) =>
+      runtime(input.run, "author", (sandbox, _harbor, run) =>
+        runAuthoringTurn(store, sandbox, { ...input, run }),
       ),
     compileAndVerify: (input) =>
       runtime(input.run, "author", (sandbox, harbor, run) =>
