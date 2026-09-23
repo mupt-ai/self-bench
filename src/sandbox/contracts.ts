@@ -70,11 +70,29 @@ export class SandboxExecutionError extends Error {
   }
 }
 
+/** A sandbox left running by `start`: enough to stop it later and bill for its lifetime. */
+export interface StartedSandbox {
+  readonly sandboxId: string;
+  readonly stage: string;
+  readonly startedAt: string;
+  readonly cpu?: number;
+  readonly memoryMiB?: number;
+}
+
 /**
- * Runs one command in a fresh sandbox and deletes the sandbox afterwards. Declared outputs are
- * required after exit 0 and best-effort otherwise; a hard deadline returns exit code 124.
+ * `run` executes one command in a fresh sandbox and deletes the sandbox afterwards. Declared
+ * outputs are required after exit 0 and best-effort otherwise; a hard deadline returns exit
+ * code 124. `start` stages the files and launches the command detached instead, returning while
+ * it runs: the sandbox lives until `stop` or its own timeout. `secretsFor` adds secrets that
+ * depend on the new sandbox.
  */
 export interface SandboxExecutor {
   run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult>;
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ): Promise<StartedSandbox>;
+  /** Deletes a started sandbox; succeeds when it is already gone. */
+  stop(sandbox: StartedSandbox): Promise<void>;
   close(): void;
 }

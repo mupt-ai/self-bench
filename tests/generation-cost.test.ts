@@ -8,6 +8,8 @@ import type {
   SandboxExecutor,
   SandboxRunOptions,
 } from "../src/sandbox/contracts.js";
+import { runOnlyExecutor } from "./support/sandbox-executor.js";
+
 import { testDatabase } from "./support/site-fixture.js";
 
 const emptyUsage = {
@@ -111,13 +113,10 @@ test("metering emits live provider-aware costs and records final usage on comple
       usage: { input: 1_000, output: 500, cacheRead: 100, cacheWrite: 50 },
     },
   })}\n`;
-  const inner: SandboxExecutor = {
-    run: async (_request, options?: SandboxRunOptions) => {
-      options?.onOutput?.("stdout", new TextEncoder().encode(output));
-      return { sandboxId: "sandbox", exitCode: 0, stdout: output, stderr: "", outputs: {} };
-    },
-    close: () => {},
-  };
+  const inner: SandboxExecutor = runOnlyExecutor(async (_request, options?: SandboxRunOptions) => {
+    options?.onOutput?.("stdout", new TextEncoder().encode(output));
+    return { sandboxId: "sandbox", exitCode: 0, stdout: output, stderr: "", outputs: {} };
+  });
   const snapshots: SandboxCostSnapshot[] = [];
   const recorded: StageUsage[] = [];
   const executor = meteredSandboxExecutor(inner, {
@@ -203,10 +202,13 @@ test("usage summaries enforce tenant and candidate stage boundaries", async () =
 test("non-E2B providers report their sandbox component as unpriced", async () => {
   const snapshots: Array<{ state: string; sandboxUsd?: number }> = [];
   const executor = meteredSandboxExecutor(
-    {
-      run: async () => ({ sandboxId: "sandbox", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
-      close: () => {},
-    },
+    runOnlyExecutor(async () => ({
+      sandboxId: "sandbox",
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      outputs: {},
+    })),
     {
       managedModel: false,
       managedSandbox: false,
@@ -220,4 +222,40 @@ test("non-E2B providers report their sandbox component as unpriced", async () =>
   );
   expect(snapshots.at(-1)?.state).toBe("unpriced");
   expect(snapshots.at(-1)?.sandboxUsd).toBeUndefined();
+});
+
+test("a started sandbox is billed from start to stop", async () => {
+  const stopped: string[] = [];
+  const recorded: StageUsage[] = [];
+  const executor = meteredSandboxExecutor(
+    {
+      ...runOnlyExecutor(async () => {
+        throw new Error("not run");
+      }),
+      stop: async (sandbox) => {
+        stopped.push(sandbox.sandboxId);
+      },
+    },
+    { managedModel: false, managedSandbox: true, sandboxProvider: "e2b", provider: "e2b" },
+  );
+  const startedAt = new Date(Date.now() - 90_000).toISOString();
+
+  await withUsageLedger(
+    async (usage) => {
+      recorded.push(usage);
+    },
+    () =>
+      executor.stop({ sandboxId: "sb", stage: "compile-c", startedAt, cpu: 4, memoryMiB: 8192 }),
+  );
+
+  expect(stopped).toEqual(["sb"]);
+  expect(recorded).toEqual([
+    expect.objectContaining({
+      stage: "compile-c",
+      managedSandbox: true,
+      sandboxSeconds: expect.any(Number),
+      sandboxCostUsd: expect.any(Number),
+    }),
+  ]);
+  expect(recorded[0]?.sandboxSeconds).toBeGreaterThanOrEqual(90);
 });

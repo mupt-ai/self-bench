@@ -4,6 +4,7 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
+  StartedSandbox,
 } from "../../src/sandbox/contracts.js";
 import {
   HOBBY_VERCEL_TIMEOUT_CAP_MS,
@@ -19,15 +20,12 @@ class RecordingExecutor implements SandboxExecutor {
     return { sandboxId: "test", exitCode: 0, stdout: "", stderr: "", outputs: {} };
   }
 
-  async execute(): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    return { exitCode: 0, stdout: "", stderr: "" };
+  async start(request: SandboxRequest): Promise<StartedSandbox> {
+    this.requests.push(request);
+    return { sandboxId: "test", stage: request.stage, startedAt: new Date(0).toISOString() };
   }
 
-  async readFile(): Promise<Uint8Array | undefined> {
-    return undefined;
-  }
-
-  async writeFile(): Promise<void> {}
+  async stop(): Promise<void> {}
 
   close(): void {
     this.closed = true;

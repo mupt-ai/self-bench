@@ -22,6 +22,10 @@ const environmentSchema = z.object({
   SELFBENCH_API_HOST: z.string().default("127.0.0.1"),
   SELFBENCH_API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   SELFBENCH_API_TOKEN: z.string().min(1).optional(),
+  // Signs the grants started sandbox jobs present to the callback API; API and worker share it.
+  SELFBENCH_SANDBOX_SECRET: z.preprocess(emptyStringAsUndefined, z.string().min(32).optional()),
+  // The API origin sandboxes call back to (the public URL; sandboxes run outside our network).
+  SELFBENCH_SANDBOX_CALLBACK_URL: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
   SELFBENCH_ARTIFACT_BACKEND: z.enum(["local", "gcs"]).default("local"),
   SELFBENCH_ARTIFACT_DIR: z.string().default(".selfbench/artifacts"),
   SELFBENCH_GCS_BUCKET: z.string().optional(),
@@ -107,6 +111,11 @@ export interface SelfBenchConfig {
   readonly apiHost: string;
   readonly apiPort: number;
   readonly apiToken?: string;
+  /**
+   * Set when sandbox jobs report back through the callback API instead of holding a worker
+   * connection. The API needs only the secret; the worker also needs the URL.
+   */
+  readonly sandboxCallback?: { readonly secret: string; readonly url?: string };
   readonly buildCommit?: string;
   readonly activityConcurrency: number;
   readonly harborConcurrency?: number; // Harbor slots; the worker sizes to memory when unset.
@@ -205,6 +214,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
     apiHost: value.SELFBENCH_API_HOST,
     apiPort: value.SELFBENCH_API_PORT,
     ...(value.SELFBENCH_API_TOKEN ? { apiToken: value.SELFBENCH_API_TOKEN } : {}),
+    ...(value.SELFBENCH_SANDBOX_SECRET
+      ? {
+          sandboxCallback: {
+            secret: value.SELFBENCH_SANDBOX_SECRET,
+            ...(value.SELFBENCH_SANDBOX_CALLBACK_URL
+              ? { url: value.SELFBENCH_SANDBOX_CALLBACK_URL.replace(/\/+$/, "") }
+              : {}),
+          },
+        }
+      : {}),
     ...(value.SELFBENCH_BUILD_COMMIT
       ? { buildCommit: value.SELFBENCH_BUILD_COMMIT.toLowerCase() }
       : {}),

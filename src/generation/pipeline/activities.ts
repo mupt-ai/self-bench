@@ -9,14 +9,21 @@ import type {
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { type AuthoringTurnInput, runAuthoringTurn } from "./authoring.js";
 import { type DiscoveryShardInput, discoverCandidateShard } from "./discovery.js";
 import { type ReviewRoundInput, runReviewRound } from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
-import { type CompileAndVerifyInput, compileAndVerify } from "./verify.js";
+import {
+  type CompileAndVerifyInput,
+  compileTask,
+  type VerifyCompiledInput,
+  verifyCompiled,
+} from "./verify.js";
 
 export type { DiscoveryShardInput };
 
+/** The steps the candidate workflow takes; `compileAndVerify` is two activities in sequence. */
 export interface SelfBenchActivities {
   discoverCandidateShard(input: DiscoveryShardInput): Promise<DiscoveryResult>;
   runAuthoringTurn(input: AuthoringTurnInput): Promise<AuthoringTurnResult>;
@@ -24,14 +31,24 @@ export interface SelfBenchActivities {
   runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
 }
 
+/** The activities the worker registers. */
+export interface WorkerActivities extends Omit<SelfBenchActivities, "compileAndVerify"> {
+  compileTask(input: CompileAndVerifyInput): Promise<SandboxJobOutcome>;
+  verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
+}
+
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
 export function createActivities(
   config: SelfBenchWorkerConfig,
   vault?: Vault,
   usage?: UsageLedger,
-): SelfBenchActivities {
+): WorkerActivities {
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
+  const callback =
+    config.sandboxCallback?.url !== undefined
+      ? { secret: config.sandboxCallback.secret, url: config.sandboxCallback.url }
+      : undefined;
   const runtime = <T>(
     run: AuthoringTurnInput["run"],
     stage: "author" | "verifier",
@@ -46,9 +63,13 @@ export function createActivities(
       runtime(input.run, "author", (sandbox, _harbor, run) =>
         runAuthoringTurn(store, sandbox, { ...input, run }),
       ),
-    compileAndVerify: (input) =>
+    compileTask: (input) =>
+      runtime(input.run, "author", (sandbox, _harbor, run) =>
+        compileTask(store, sandbox, { ...input, run }, callback),
+      ),
+    verifyCompiled: (input) =>
       runtime(input.run, "author", (sandbox, harbor, run) =>
-        compileAndVerify(store, sandbox, harbor, { ...input, run }),
+        verifyCompiled(store, sandbox, harbor, { ...input, run }),
       ),
     runReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>

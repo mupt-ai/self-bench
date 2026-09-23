@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "..");
 const outputDirectory = join(root, "dist");
 
-const programs = ["check", "verifier", "compiler", "task-operation"] as const;
+const programs = ["check", "verifier", "compiler", "task-operation", "job"] as const;
 
 const extensions = ["authoring", "reviewer"] as const;
 

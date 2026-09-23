@@ -19,7 +19,7 @@ import {
   type TaskProgress,
 } from "../../contracts/index.js";
 import { harborTaskQueue } from "../../temporal/task-queues.js";
-import type { DiscoveryShardInput, SelfBenchActivities } from "./activities.js";
+import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
@@ -35,6 +35,13 @@ const agents =
   proxyActivities<Pick<SelfBenchActivities, "runAuthoringTurn" | "runReviewRound">>(
     candidateOptions,
   );
+// The compile sandbox reports back through the API and heartbeats every minute while it runs.
+const compile = proxyActivities<Pick<WorkerActivities, "compileTask">>({
+  startToCloseTimeout: "1 hour",
+  heartbeatTimeout: "5 minutes",
+  cancellationType: "WAIT_CANCELLATION_COMPLETED",
+  retry: { ...retry, maximumAttempts: 4 },
+});
 const discovery = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateShard">>({
   startToCloseTimeout: "1 hour",
   heartbeatTimeout: "10 minutes",
@@ -42,16 +49,21 @@ const discovery = proxyActivities<Pick<SelfBenchActivities, "discoverCandidateSh
   retry: { ...retry, maximumInterval: "1 minute", maximumAttempts: 3 },
 });
 
-/** The workflow's activities; Harbor verification runs on the memory-sized sibling queue. */
+/**
+ * The workflow's activities. `compileAndVerify` compiles in its own sandbox, then Harbor checks
+ * the result on the memory-sized sibling queue.
+ */
 export const workflowActivities: SelfBenchActivities = {
   discoverCandidateShard: (input) => discovery.discoverCandidateShard(input),
   runAuthoringTurn: (input) => agents.runAuthoringTurn(input),
   runReviewRound: (input) => agents.runReviewRound(input),
-  compileAndVerify: (input) =>
-    proxyActivities<Pick<SelfBenchActivities, "compileAndVerify">>({
+  compileAndVerify: async (input) => {
+    const compiled = await compile.compileTask(input);
+    return await proxyActivities<Pick<WorkerActivities, "verifyCompiled">>({
       ...candidateOptions,
       taskQueue: harborTaskQueue(workflowInfo().taskQueue),
-    }).compileAndVerify(input),
+    }).verifyCompiled({ ...input, compiled });
+  },
 };
 
 /** Independent discovery unit. Fetching PR metadata and dispatch happen in the API. */

@@ -125,6 +125,17 @@ export class LocalArtifactStore implements ArtifactStore {
     }
   }
 
+  async stat(key: string): Promise<Omit<ArtifactRef, "contentType"> | undefined> {
+    const path = this.#pathFor(key);
+    try {
+      await this.#assertRegularFile(path);
+    } catch (error) {
+      if (isNotFound(error)) return undefined;
+      throw error;
+    }
+    return { uri: pathToFileURL(path).href, ...(await fileDigest(path)) };
+  }
+
   async openReadByKey(
     key: string,
     options: { readonly start?: number } = {},

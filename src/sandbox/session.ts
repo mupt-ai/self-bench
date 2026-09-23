@@ -6,6 +6,7 @@ import {
   type SandboxRequest,
   type SandboxResult,
   type SandboxRunOptions,
+  type StartedSandbox,
 } from "./contracts.js";
 import { readOutputWithRetry } from "./output-retry.js";
 import { remoteFileFetchScript } from "./remote-files.js";
@@ -27,6 +28,8 @@ export interface SandboxSession {
   read(path: string, signal?: AbortSignal): Promise<Uint8Array | undefined>;
   /** Runs a command in /work until it exits or `signal` aborts (then it must reject). */
   exec(command: readonly string[], options: ExecOptions): Promise<number>;
+  /** Starts a command in /work and returns once it is running; it outlives this process. */
+  spawn(command: readonly string[], environment: Readonly<Record<string, string>>): Promise<void>;
   destroy(): Promise<void>;
 }
 
@@ -86,14 +89,51 @@ export async function runSandbox(
   }
 }
 
-async function runInSession(
-  session: SandboxSession,
+/**
+ * Allocates a sandbox, stages the files, and launches the command detached. The sandbox is
+ * deleted only if starting fails; afterwards it belongs to the caller.
+ */
+export async function startSandbox(
+  open: () => Promise<SandboxSession>,
   request: SandboxRequest,
-  options: SandboxRunOptions,
+  secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+): Promise<StartedSandbox> {
+  validateSandboxRequest(request);
+  const startedAt = new Date().toISOString();
+  const session = await open();
+  const started: StartedSandbox = {
+    sandboxId: session.id,
+    stage: request.stage,
+    startedAt,
+    ...(request.cpu !== undefined ? { cpu: request.cpu } : {}),
+    ...(request.memoryMiB !== undefined ? { memoryMiB: request.memoryMiB } : {}),
+  };
+  try {
+    await stageFiles(
+      session,
+      request.files ?? [],
+      AbortSignal.timeout(request.timeoutMs),
+      () => {},
+    );
+    await session.spawn(request.command, {
+      ...request.environment,
+      ...request.secrets,
+      ...secretsFor?.(started),
+    });
+  } catch (error) {
+    await session.destroy().catch(() => undefined);
+    throw error;
+  }
+  return started;
+}
+
+async function stageFiles(
+  session: SandboxSession,
+  files: NonNullable<SandboxRequest["files"]>,
   signal: AbortSignal,
-  { stdout, stderr }: { stdout: RollingOutput; stderr: RollingOutput },
-): Promise<SandboxResult> {
-  for (const file of request.files ?? []) {
+  onLog: (chunk: Buffer) => void,
+): Promise<void> {
+  for (const file of files) {
     signal.throwIfAborted();
     if (!isRemoteSandboxFile(file)) {
       const contents =
@@ -104,10 +144,20 @@ async function runInSession(
     const exit = await session.exec(["bash", "-lc", remoteFileFetchScript(file)], {
       environment: {},
       signal,
-      onOutput: (_stream, chunk) => stderr.push(Buffer.from(chunk)),
+      onOutput: (_stream, chunk) => onLog(Buffer.from(chunk)),
     });
     if (exit !== 0) throw new Error(`sandbox ${session.id} could not fetch ${file.path}`);
   }
+}
+
+async function runInSession(
+  session: SandboxSession,
+  request: SandboxRequest,
+  options: SandboxRunOptions,
+  signal: AbortSignal,
+  { stdout, stderr }: { stdout: RollingOutput; stderr: RollingOutput },
+): Promise<SandboxResult> {
+  await stageFiles(session, request.files ?? [], signal, (chunk) => stderr.push(chunk));
 
   const inactivity = new AbortController();
   let idle: ReturnType<typeof setTimeout> | undefined;

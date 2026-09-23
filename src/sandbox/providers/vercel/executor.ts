@@ -1,7 +1,12 @@
 import { APIError, type Command, Sandbox } from "@vercel/sandbox";
 import { sleep } from "../../../lib/util.js";
-import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
-import { runSandbox, type SandboxSession } from "../../session.js";
+import type {
+  SandboxExecutor,
+  SandboxRequest,
+  SandboxRunOptions,
+  StartedSandbox,
+} from "../../contracts.js";
+import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
 import { preventAmbiguousVercelCommandStartRetries, VercelCommandStartError } from "./fetch.js";
 import { type VercelExecutionConfig, validateConfig, validateRequest } from "./validation.js";
 
@@ -19,6 +24,23 @@ export class VercelSandboxExecutor implements SandboxExecutor {
 
   run(request: SandboxRequest, options?: SandboxRunOptions) {
     return runSandbox(() => this.open(request), request, options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    return startSandbox(() => this.open(request), request, secretsFor);
+  }
+
+  async stop(sandbox: StartedSandbox): Promise<void> {
+    const found = await Sandbox.get({
+      ...this.#config.credentials,
+      fetch: this.#fetch,
+      name: sandbox.sandboxId,
+      resume: false,
+    }).catch(() => undefined);
+    await found?.delete({ signal: AbortSignal.timeout(60_000) });
   }
 
   close(): void {}
@@ -54,6 +76,16 @@ export class VercelSandboxExecutor implements SandboxExecutor {
         for await (const event of command.logs({ signal }))
           onOutput(event.stream, Buffer.from(event.data));
         return (await command.wait({ signal })).exitCode;
+      },
+      spawn: async ([cmd, ...args], environment) => {
+        await session.runCommand({
+          cmd: cmd ?? "true",
+          args,
+          cwd: "/work",
+          detached: true,
+          env: { ...environment },
+          timeoutMs: request.timeoutMs,
+        });
       },
       destroy: () => sandbox.delete({ signal: AbortSignal.timeout(60_000) }),
     };

@@ -269,3 +269,18 @@ describe("SelfBench configuration", () => {
     ).toThrow("SELFBENCH_VERCEL_IMAGE must be pinned by sha256 digest");
   });
 });
+
+describe("sandbox callback configuration", () => {
+  test("is off by default and needs a long secret; the URL loses its trailing slash", () => {
+    expect(loadConfig({}).sandboxCallback).toBeUndefined();
+    expect(() => loadConfig({ SELFBENCH_SANDBOX_SECRET: "short" })).toThrow();
+    const secret = "s".repeat(32);
+    expect(loadConfig({ SELFBENCH_SANDBOX_SECRET: secret }).sandboxCallback).toEqual({ secret });
+    expect(
+      loadConfig({
+        SELFBENCH_SANDBOX_SECRET: secret,
+        SELFBENCH_SANDBOX_CALLBACK_URL: "https://selfbench.example/",
+      }).sandboxCallback,
+    ).toEqual({ secret, url: "https://selfbench.example" });
+  });
+});

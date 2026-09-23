@@ -6,7 +6,7 @@ import { Storage } from "@google-cloud/storage";
 import type { ArtifactRef } from "../contracts/index.js";
 import { sha256 } from "../lib/hash.js";
 import { copyWithDigest, verifiedArtifactReadStream, verifyArtifact } from "./common.js";
-import type { ArtifactEntry, ArtifactStore } from "./types.js";
+import type { ArtifactEntry, ArtifactStore, ArtifactUpload, SignedUpload } from "./types.js";
 
 export class GcsArtifactStore implements ArtifactStore {
   readonly #storage = new Storage();
@@ -118,6 +118,39 @@ export class GcsArtifactStore implements ArtifactStore {
       expires: Date.now() + ttlMs,
     });
     return url;
+  }
+
+  async signedWriteUrl(key: string, upload: ArtifactUpload, ttlMs: number): Promise<SignedUpload> {
+    const headers = {
+      "x-goog-meta-sha256": upload.sha256,
+      "x-goog-if-generation-match": "0",
+    };
+    const [url] = await this.#storage
+      .bucket(this.#bucket)
+      .file(this.#objectFor(key))
+      .getSignedUrl({
+        version: "v4",
+        action: "write",
+        expires: Date.now() + ttlMs,
+        contentType: upload.contentType,
+        extensionHeaders: headers,
+      });
+    return { url, headers: { ...headers, "content-type": upload.contentType } };
+  }
+
+  async stat(key: string): Promise<Omit<ArtifactRef, "contentType"> | undefined> {
+    const object = this.#objectFor(key);
+    const [metadata] = await this.#storage
+      .bucket(this.#bucket)
+      .file(object)
+      .getMetadata()
+      .catch((error: unknown) => {
+        if ((error as { code?: unknown }).code === 404) return [undefined];
+        throw error;
+      });
+    const sha256 = metadata?.metadata?.sha256;
+    if (!metadata || typeof sha256 !== "string") return undefined;
+    return { uri: `gs://${this.#bucket}/${object}`, sha256, sizeBytes: Number(metadata.size) };
   }
 
   async openRead(reference: ArtifactRef): Promise<Readable> {

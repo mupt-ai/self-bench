@@ -9,6 +9,7 @@ import type { GenerationReference } from "../src/generation/settings/settings.js
 import { generationSettingsSchema } from "../src/generation/settings/settings.js";
 import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { runOnlyExecutor } from "./support/sandbox-executor.js";
 
 const managedSettings = {
   authorModel: "gpt-6-sol",
@@ -140,10 +141,13 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
 
 test("managed usage metering vault tokens and sandbox seconds with costs", async () => {
   meteredSandboxExecutor(
-    {
-      run: async () => ({ sandboxId: "s", exitCode: 0, stdout: "", stderr: "", outputs: {} }),
-      close: () => {},
-    },
+    runOnlyExecutor(async () => ({
+      sandboxId: "s",
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      outputs: {},
+    })),
     { managedModel: true, managedSandbox: true, model: "gpt-6-sol" },
   );
   expect(managedSandboxCostUsd(3600, 4, 8192)).toBeCloseTo(0.3312, 4);

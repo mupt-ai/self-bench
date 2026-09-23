@@ -4,6 +4,7 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
+  StartedSandbox,
 } from "./contracts.js";
 
 export const STANDARD_VERCEL_TIMEOUT_CAP_MS = 2 * 60 * 60 * 1_000;
@@ -67,12 +68,24 @@ export class TimeoutCappedSandboxExecutor implements SandboxExecutor {
   }
 
   async run(request: SandboxRequest, options?: SandboxRunOptions): Promise<SandboxResult> {
-    return await this.#delegate.run(
-      request.timeoutMs > this.#timeoutCapMs
-        ? { ...request, timeoutMs: this.#timeoutCapMs }
-        : request,
-      options,
-    );
+    return await this.#delegate.run(this.#capped(request), options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    return this.#delegate.start(this.#capped(request), secretsFor);
+  }
+
+  stop(sandbox: StartedSandbox): Promise<void> {
+    return this.#delegate.stop(sandbox);
+  }
+
+  #capped(request: SandboxRequest): SandboxRequest {
+    return request.timeoutMs > this.#timeoutCapMs
+      ? { ...request, timeoutMs: this.#timeoutCapMs }
+      : request;
   }
 
   close(): void {

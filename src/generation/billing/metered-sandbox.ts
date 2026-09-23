@@ -3,6 +3,7 @@ import type {
   SandboxRequest,
   SandboxResult,
   SandboxRunOptions,
+  StartedSandbox,
 } from "../../sandbox/contracts.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "./pricing.js";
 import { PiUsageMeter, recordStageUsage, type StageUsage } from "./usage.js";
@@ -33,6 +34,16 @@ export function meteredSandboxExecutor(
       if (property === "run")
         return (request: SandboxRequest, runOptions?: SandboxRunOptions) =>
           runMetered(target, request, runOptions, options);
+      // A started sandbox is billed for its whole life, from start to stop.
+      if (property === "stop")
+        return async (sandbox: StartedSandbox) => {
+          await target.stop(sandbox);
+          const seconds = Math.max(
+            1,
+            Math.ceil((Date.now() - Date.parse(sandbox.startedAt)) / 1000),
+          );
+          await recordStageUsage(sandboxUsage(sandbox.stage, seconds, sandbox, options));
+        };
       // Class methods use private fields, so they must be bound to the real instance.
       if (property === "constructor") return Reflect.get(target, property, target);
       const value = Reflect.get(target, property, target);
@@ -93,17 +104,7 @@ async function runMetered(
     const usage = meter.usage();
     const modelCostUsd = options.model ? managedModelCostUsd(options.model, usage) : undefined;
     const entry: StageUsage = {
-      stage: request.stage,
-      managed: options.managedModel || options.managedSandbox,
-      managedModel: options.managedModel,
-      managedSandbox: options.managedSandbox,
-      sandboxSeconds: seconds,
-      ...(options.provider ? { provider: options.provider } : {}),
-      ...(request.cpu !== undefined ? { cpu: request.cpu } : {}),
-      ...(request.memoryMiB !== undefined ? { memoryMiB: request.memoryMiB } : {}),
-      ...(pricedSandbox
-        ? { sandboxCostUsd: managedSandboxCostUsd(seconds, request.cpu, request.memoryMiB) }
-        : {}),
+      ...sandboxUsage(request.stage, seconds, request, options),
       ...(usage.messages > 0
         ? {
             ...(options.model ? { model: options.model } : {}),
@@ -119,4 +120,25 @@ async function runMetered(
     };
     await recordStageUsage(entry);
   }
+}
+
+function sandboxUsage(
+  stage: string,
+  seconds: number,
+  size: { readonly cpu?: number; readonly memoryMiB?: number },
+  options: MeteredSandboxOptions,
+): StageUsage {
+  return {
+    stage,
+    managed: options.managedModel || options.managedSandbox,
+    managedModel: options.managedModel,
+    managedSandbox: options.managedSandbox,
+    sandboxSeconds: seconds,
+    ...(options.provider ? { provider: options.provider } : {}),
+    ...(size.cpu !== undefined ? { cpu: size.cpu } : {}),
+    ...(size.memoryMiB !== undefined ? { memoryMiB: size.memoryMiB } : {}),
+    ...(options.sandboxProvider === "e2b"
+      ? { sandboxCostUsd: managedSandboxCostUsd(seconds, size.cpu, size.memoryMiB) }
+      : {}),
+  };
 }

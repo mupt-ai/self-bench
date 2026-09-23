@@ -293,6 +293,18 @@ The CLI is the recommended client for run workflows. Every site feature is also 
 
 `/healthz` is unauthenticated. Every other route requires `Authorization: Bearer $SELFBENCH_API_TOKEN` when the token is configured. Startup fails if the API binds beyond loopback without a token.
 
+### Sandbox callback API
+
+When `SELFBENCH_SANDBOX_SECRET` is set on the API and the worker, and the worker also has `SELFBENCH_SANDBOX_CALLBACK_URL` (the public origin; sandboxes run outside our network), sandbox jobs report back through the API instead of holding a worker connection. Today that covers the trusted compile. The worker starts the sandbox detached and completes the activity asynchronously; a small runner in the sandbox (`src/sandbox/programs/job.ts`) runs the command, heartbeats every minute, uploads the outputs, and reports the result.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/sandbox/uploads` | Where to PUT one output: a signed GCS URL, or `/api/sandbox/files/:name` on the local store |
+| `PUT` | `/api/sandbox/files/:name` | Receive an upload (local artifact store only) |
+| `POST` | `/api/sandbox/events` | `heartbeat`, `done` (the uploaded files and a small inline result), or `failed` |
+
+Each job authenticates with a grant the worker signs with the shared secret: the Temporal task token of one activity attempt, the one artifact folder it may write, and its sandbox. Nothing is stored server-side. `done` is accepted only for files that exist with the declared SHA-256 and size; the API then completes the activity with their references. A heartbeat to a cancelled, retried, or finished attempt answers `{"continue": false}` and the runner exits. A retried attempt stops the sandbox its predecessor left, and Harbor's verify activity stops the compile sandbox and bills its whole lifetime. Without the settings, jobs run attached as before.
+
 ### Site sign-in (selfbench.dev)
 
 Setting `GITHUB_OAUTH_CLIENT_ID` turns the same API into the selfbench.dev site: the bundle in `dist/review` renders the login page and signed-in shell instead of the Harbor Ledger, and these routes appear:

@@ -1,9 +1,14 @@
 import { type Image, ModalClient } from "modal";
 import type { SelfBenchConfig } from "../../../contracts/config/index.js";
 import { raceAbort } from "../../../lib/util.js";
-import type { SandboxExecutor, SandboxRequest, SandboxRunOptions } from "../../contracts.js";
+import type {
+  SandboxExecutor,
+  SandboxRequest,
+  SandboxRunOptions,
+  StartedSandbox,
+} from "../../contracts.js";
 import { parseSandboxDockerfile, readSandboxDockerfile } from "../../runtime-dockerfile.js";
-import { runSandbox, type SandboxSession } from "../../session.js";
+import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
 
 type ModalConfig = Extract<SelfBenchConfig["execution"], { kind: "modal" }>;
 
@@ -17,14 +22,27 @@ export class ModalSandboxExecutor implements SandboxExecutor {
   ) {}
 
   run(request: SandboxRequest, options?: SandboxRunOptions) {
-    return runSandbox(() => this.open(request), request, options);
+    return runSandbox(() => this.open(request, true), request, options);
+  }
+
+  start(
+    request: SandboxRequest,
+    secretsFor?: (sandbox: StartedSandbox) => Readonly<Record<string, string>>,
+  ) {
+    // No idle timeout: nothing stays attached to a started command.
+    return startSandbox(() => this.open(request, false), request, secretsFor);
+  }
+
+  async stop(sandbox: StartedSandbox): Promise<void> {
+    const found = await this.client.sandboxes.fromId(sandbox.sandboxId).catch(() => undefined);
+    await found?.terminate({ wait: true });
   }
 
   close(): void {
     this.client.close();
   }
 
-  private async open(request: SandboxRequest): Promise<SandboxSession> {
+  private async open(request: SandboxRequest, idle: boolean): Promise<SandboxSession> {
     const environment = this.config.environment ? { environment: this.config.environment } : {};
     const app = await this.client.apps.fromName(this.config.app, {
       createIfMissing: true,
@@ -38,7 +56,7 @@ export class ModalSandboxExecutor implements SandboxExecutor {
       );
     const sandbox = await this.client.sandboxes.create(app, this.#image, {
       timeoutMs: request.timeoutMs,
-      idleTimeoutMs: Math.min(request.timeoutMs, 10 * 60 * 1000),
+      ...(idle ? { idleTimeoutMs: Math.min(request.timeoutMs, 10 * 60 * 1000) } : {}),
       cpu: request.cpu ?? 4,
       memoryMiB: request.memoryMiB ?? 8192,
       workdir: "/work",
@@ -75,6 +93,18 @@ export class ModalSandboxExecutor implements SandboxExecutor {
           signal,
         );
         return exitCode;
+      },
+      spawn: async (command, env) => {
+        const secrets =
+          Object.keys(env).length > 0
+            ? [await this.client.secrets.fromObject({ ...env }, environment)]
+            : [];
+        const process = await sandbox.exec([...command], {
+          stdout: "ignore",
+          stderr: "ignore",
+          ...(secrets.length > 0 ? { secrets } : {}),
+        });
+        await process.closeStdin();
       },
       destroy: async () => {
         await sandbox.terminate({ wait: true });

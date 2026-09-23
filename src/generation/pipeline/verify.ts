@@ -11,10 +11,12 @@ import type {
   VerifyReport,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
+import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
-import { readAsset, withHeartbeats } from "./helpers.js";
+import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
+import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
 
 export interface CompileAndVerifyInput {
@@ -34,27 +36,36 @@ const compileResultSchema = z.object({
   infrastructure: z.string().optional(),
 });
 
+export interface VerifyCompiledInput extends CompileAndVerifyInput {
+  readonly compiled: SandboxJobOutcome;
+}
+
+/** Every artifact of one check lands under this folder. */
+function verifyPrefix(input: CompileAndVerifyInput): string {
+  return `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}${input.turn ? `-turn-${input.turn}` : ""}`;
+}
+
 /**
- * The full check of one submission. The compiler sandbox validates the definition, patches,
- * environment policy, audit, and candidate identity, then renders the Harbor task; Harbor then
- * builds it and runs smoke, nop, and oracle. Every result lands in one report for the agent.
+ * The trusted compile of one submission, in its own sandbox: it validates the definition,
+ * patches, environment policy, audit, and candidate identity, then renders the Harbor task.
  */
-export async function compileAndVerify(
+export async function compileTask(
   store: ArtifactStore,
   sandbox: SandboxExecutor,
-  harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: CompileAndVerifyInput,
-  prefix = `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}${input.turn ? `-turn-${input.turn}` : ""}`,
-): Promise<VerifyOutcome> {
-  const { run, candidate, stage, round } = input;
-  return await withHeartbeats(`verifying ${input.task.taskId}`, async (options) => {
-    const [program, sourceBundle, token] = await Promise.all([
-      readAsset("dist/sandbox-compiler.bundle.js"),
-      store.get(input.task.sourceBundle),
-      githubToken(),
-    ]);
-    const compiled = await sandbox.run(
-      {
+  callback?: SandboxCallback,
+): Promise<SandboxJobOutcome> {
+  const { run, candidate } = input;
+  const [program, token, source] = await Promise.all([
+    readAsset("dist/sandbox-compiler.bundle.js"),
+    githubToken(),
+    artifactFile(store, input.task.sourceBundle, "/work/source-task.tar.gz"),
+  ]);
+  return await runSandboxJob(
+    store,
+    sandbox,
+    {
+      request: {
         runId: run.runId,
         stage: `compile-${candidate.candidateId}`,
         timeoutMs: 30 * 60_000,
@@ -77,28 +88,49 @@ export async function compileAndVerify(
               },
             }),
           },
-          { path: "/work/source-task.tar.gz", contents: sourceBundle },
+          source,
         ],
         secrets: token ? { GH_TOKEN: token } : {},
-        outputPaths: ["/work/result.json", "/work/compiled.tar.gz"],
       },
-      options,
-    );
-    const resultBytes = compiled.outputs["/work/result.json"];
-    if (compiled.exitCode !== 0 || !resultBytes) {
+      outputs: [
+        {
+          name: "harbor-task.tar.gz",
+          path: "/work/compiled.tar.gz",
+          contentType: "application/gzip",
+        },
+      ],
+      result: "/work/result.json",
+      prefix: `${verifyPrefix(input)}/compile`,
+    },
+    callback,
+  );
+}
+
+/**
+ * Harbor's half of the check: it stops the compile sandbox, builds the compiled task, and runs
+ * smoke, nop, and oracle. Every result lands in one report for the agent.
+ */
+export async function verifyCompiled(
+  store: ArtifactStore,
+  sandbox: SandboxExecutor,
+  harborEnvironment: SelfBenchConfig["harborEnvironment"],
+  input: VerifyCompiledInput,
+): Promise<VerifyOutcome> {
+  const { stage, round, compiled } = input;
+  const prefix = verifyPrefix(input);
+  if (compiled.sandbox) await sandbox.stop(compiled.sandbox).catch(() => undefined);
+  return await withHeartbeats(`verifying ${input.task.taskId}`, async (options) => {
+    if (compiled.exitCode !== 0 || compiled.result === undefined) {
       throw new Error(
-        `compiler sandbox exited ${compiled.exitCode}: ${compiled.stderr.slice(-2_000)}`,
+        `compiler sandbox exited ${compiled.exitCode}; log: ${compiled.files["job.log"]?.uri ?? "none"}`,
       );
     }
-    const result = compileResultSchema.parse(JSON.parse(Buffer.from(resultBytes).toString("utf8")));
+    const result = compileResultSchema.parse(compiled.result);
     if (result.infrastructure) throw new Error(`compiler could not run: ${result.infrastructure}`);
 
-    let task: AuthoredTask | undefined;
-    const bundle = compiled.outputs["/work/compiled.tar.gz"];
-    if (result.compileErrors.length === 0 && bundle?.length) {
-      const bundleRef = await store.put(`${prefix}/harbor-task.tar.gz`, bundle, "application/gzip");
-      task = { ...input.task, bundle: bundleRef };
-    }
+    const bundle = compiled.files["harbor-task.tar.gz"];
+    const task: AuthoredTask | undefined =
+      result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
     const gates =
       task && result.auditBlockers.length === 0
         ? await runHarborGates(store, task, harborEnvironment, prefix, options.signal)
