@@ -5,9 +5,8 @@ import {
   type HostedExecutionBackend,
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
-  isDigestPinnedOciImage,
 } from "../../contracts/config/providers.js";
-import { normalizeE2BTemplateReference } from "../../sandbox/providers/e2b/template.js";
+import { sandboxImageIssue } from "../../sandbox/runtime-image-rules.js";
 import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
@@ -89,32 +88,9 @@ export const generationSettingsSchema = z
         path: ["sandboxCredentialId"],
         message: `Choose a ${generationSandboxLabels[value.sandbox]} credential.`,
       });
-    if (value.sandbox === "vercel" && !isDigestPinnedOciImage(value.sandboxImage ?? ""))
-      context.addIssue({
-        code: "custom",
-        path: ["sandboxImage"],
-        message: "Vercel requires a runtime image pinned by sha256 digest.",
-      });
-    // E2B needs no image: the worker builds the managed SelfBench template in the user's
-    // account. An explicit reference is an override for a template the user built themselves.
-    if (value.sandbox === "e2b" && value.sandboxImage !== undefined) {
-      try {
-        if (normalizeE2BTemplateReference(value.sandboxImage).split(":")[0] === "base")
-          throw new Error();
-      } catch {
-        context.addIssue({
-          code: "custom",
-          path: ["sandboxImage"],
-          message: "E2B requires a prebuilt SelfBench template, not base.",
-        });
-      }
-    } else if (value.sandbox === "modal" && value.sandboxImage !== undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["sandboxImage"],
-        message: "Modal does not use a runtime image.",
-      });
-    }
+    const imageIssue = sandboxImageIssue(value.sandbox, value.sandboxImage);
+    if (imageIssue)
+      context.addIssue({ code: "custom", path: ["sandboxImage"], message: imageIssue });
     if (!value.harborEnvironment)
       context.addIssue({
         code: "custom",

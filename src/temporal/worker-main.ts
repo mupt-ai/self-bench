@@ -1,14 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
-import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../contracts/config/index.js";
+import { loadWorkerConfig } from "../contracts/config/index.js";
 import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
-import { runCommand } from "../lib/process.js";
-import { validateE2BWorkerStartup } from "../sandbox/providers/e2b/startup.js";
+import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
@@ -69,15 +68,4 @@ try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
   await database?.close();
-}
-
-/** Fail at startup, not on the first activity, when a configured sandbox backend is unusable. */
-async function checkSandboxBackends(worker: SelfBenchWorkerConfig): Promise<void> {
-  if (worker.execution.kind === "docker" || worker.harborEnvironment === "docker") {
-    await runCommand("docker", ["info"], { timeoutMs: 30_000 });
-    await runCommand("docker", ["compose", "version"], { timeoutMs: 30_000 });
-  }
-  if (worker.execution.kind === "e2b") {
-    await validateE2BWorkerStartup(worker.execution);
-  }
 }

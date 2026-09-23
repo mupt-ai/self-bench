@@ -57,7 +57,7 @@ function version(config: SelfBenchConfig, selfbenchCommit: string): RunRequest["
     executionBackend: config.execution.kind,
     harborEnvironment: config.harborEnvironment,
     sandboxImage: config.execution.image,
-    ...(config.execution.kind === "vercel" || config.execution.kind === "e2b"
+    ...("timeoutCapMs" in config.execution
       ? { sandboxTimeoutCapMs: config.execution.timeoutCapMs }
       : {}),
     schema: 2,
