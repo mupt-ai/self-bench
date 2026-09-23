@@ -55,7 +55,7 @@ type ArtifactGroup =
   | "repairs"
   | "provenance";
 
-/** One agent sandbox run, as recorded in its `agent.json`. */
+/** One agent sandbox run, as recorded in its `agent.json` and `result.json`. */
 export interface AgentRunRecord {
   stage: "authoring" | "review";
   round: number;

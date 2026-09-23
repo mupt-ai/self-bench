@@ -2,7 +2,9 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { TaskProgress } from "../../contracts/index.js";
 import {
   AGENT_RECORD_NAME,
+  AGENT_RESULT_NAME,
   type AgentRunRecord,
+  type AgentRunResult,
   ARTIFACT_GROUPS,
   type ArtifactEntry,
   type ArtifactGroup,
@@ -44,18 +46,19 @@ export async function candidateArtifacts(
     }
   }
   bundles.sort(compareBundles);
+  const agentEntries = [...groups.authoring, ...groups.review];
+  const keys = new Set(agentEntries.map((entry) => entry.key));
   const agents = await Promise.all(
-    [...groups.authoring, ...groups.review]
+    agentEntries
       .filter((entry) => entry.key.endsWith(`/${AGENT_RECORD_NAME}`))
       .map(async (entry) => {
-        const bytes = await store.getByKey(entry.key).catch(() => undefined);
-        try {
-          return bytes
-            ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as AgentRunRecord)
-            : undefined;
-        } catch {
-          return undefined; // Skipped; the sheet refreshes every few seconds.
-        }
+        const record = await readJson<AgentRunRecord>(store, entry.key);
+        if (!record) return undefined; // Skipped; the sheet refreshes every few seconds.
+        const resultKey = `${entry.key.slice(0, -AGENT_RECORD_NAME.length)}${AGENT_RESULT_NAME}`;
+        const result = keys.has(resultKey)
+          ? await readJson<AgentRunResult>(store, resultKey)
+          : undefined;
+        return { ...record, ...result };
       }),
   );
   return {
@@ -66,6 +69,15 @@ export async function candidateArtifacts(
     bundles,
     agents: agents.filter((agent) => agent !== undefined),
   };
+}
+
+async function readJson<T>(store: ArtifactStore, key: string): Promise<T | undefined> {
+  const bytes = await store.getByKey(key).catch(() => undefined);
+  try {
+    return bytes ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as T) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function groupPrefix(

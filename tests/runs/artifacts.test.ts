@@ -75,6 +75,22 @@ describe("artifact store listing", () => {
       Buffer.from(JSON.stringify(record)),
       "application/json",
     );
+    const finished = {
+      ...record,
+      turn: 1,
+      prefix: "runs/run-1/authoring/cand-a/round-1/turn-1/attempt-1",
+      startedAt: "2026-09-23T09:00:00Z",
+    };
+    await store.put(
+      `${finished.prefix}/agent.json`,
+      Buffer.from(JSON.stringify(finished)),
+      "application/json",
+    );
+    await store.put(
+      `${finished.prefix}/result.json`,
+      Buffer.from(JSON.stringify({ finishedAt: "2026-09-23T09:30:00Z", exitCode: 0 })),
+      "application/json",
+    );
 
     const listed = await store.list("runs/run-1/audits/task-a");
     expect(listed.map((entry) => entry.key)).toEqual(["runs/run-1/audits/task-a/abc.json"]);
@@ -85,7 +101,10 @@ describe("artifact store listing", () => {
       candidateId: "cand-a",
     });
     expect(artifacts.groups.audits).toHaveLength(1);
-    expect(artifacts.agents).toEqual([record]);
+    expect(artifacts.agents).toEqual([
+      { ...finished, finishedAt: "2026-09-23T09:30:00Z", exitCode: 0 },
+      record,
+    ]);
     expect(artifacts.groups.provenance.map((entry) => entry.key)).toEqual([
       "runs/run-1/provenance/cand-a.json",
     ]);

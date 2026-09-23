@@ -47,8 +47,10 @@ export const ARTIFACT_GROUPS = [
 export type ArtifactGroup = (typeof ARTIFACT_GROUPS)[number];
 
 export const AGENT_RECORD_NAME = "agent.json";
+/** Written once when the run ends; artifacts are write-once, so `agent.json` is never rewritten. */
+export const AGENT_RESULT_NAME = "result.json";
 
-/** What one agent sandbox run records about itself in `<prefix>/agent.json`. */
+/** What one agent sandbox run records about itself: `agent.json` merged with its `result.json`. */
 export interface AgentRunRecord {
   readonly stage: "authoring" | "review";
   readonly round: number;
@@ -67,12 +69,15 @@ export interface AgentRunRecord {
   readonly error?: string;
 }
 
+/** The fields `result.json` adds to a run's `agent.json`. */
+export type AgentRunResult = Pick<AgentRunRecord, "finishedAt" | "exitCode" | "error">;
+
 export interface CandidateArtifacts {
   readonly runId: string;
   readonly taskId: string;
   readonly candidateId: string;
   readonly groups: Readonly<Record<ArtifactGroup, readonly ArtifactEntry[]>>;
   readonly bundles: readonly BundleRef[];
-  /** Every agent sandbox run, from the `agent.json` each one writes. */
+  /** Every agent sandbox run, from the `agent.json` and `result.json` each one writes. */
   readonly agents: readonly AgentRunRecord[];
 }
