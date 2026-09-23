@@ -14,5 +14,5 @@
     "target": "ES2022",
     "types": ["bun", "vite/client"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "public-site", "vite.config.ts", "vite.public.config.ts"]
 }

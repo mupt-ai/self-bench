@@ -6,6 +6,7 @@
       "tests/**/*.ts",
       "scripts/**/*.ts",
       "review/src/**/*.{ts,tsx}",
+      "review/public-site/**/*.{ts,tsx}",
       "review/vite.config.ts"
     ]
   },
