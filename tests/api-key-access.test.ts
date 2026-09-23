@@ -170,5 +170,8 @@ test("only a well-formed Bearer header carries a token", () => {
   expect(bearerToken("abc")).toBeUndefined();
   expect(bearerToken("Basic abc")).toBeUndefined();
   expect(bearerToken("Bearer a b")).toBeUndefined();
+  expect(bearerToken("Bearer eyJhYmMi.c2ln_-~+/==")).toBe("eyJhYmMi.c2ln_-~+/==");
+  expect(bearerToken("Bearer a=b")).toBeUndefined();
+  expect(bearerToken('Bearer "abc"')).toBeUndefined();
   expect(bearerToken(undefined)).toBeUndefined();
 });
