@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Context } from "@temporalio/activity";
+import { CompleteAsyncError, type Context } from "@temporalio/activity";
 import { activityEventInterceptor } from "../src/temporal/activity-events.js";
 
 const context = {
@@ -58,4 +58,11 @@ test("a failed activity logs the failure message and duration, then rethrows", a
     error: "authoring round 1: the model provider failed; log: gs://x",
   });
   expect(lines[1]).not.toContain("secret stack");
+});
+
+test("an activity handed to a started sandbox is not logged as a failure", async () => {
+  const { lines, execute } = interceptor();
+  const handedOff = new CompleteAsyncError();
+  await expect(execute(async () => Promise.reject(handedOff))).rejects.toBe(handedOff);
+  expect(lines).toHaveLength(1);
 });
