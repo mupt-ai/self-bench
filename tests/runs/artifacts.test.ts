@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { listArchivedRuns } from "../../src/generation/runs/archived.js";
 import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
-import { clearBundleCache, expandBundle } from "../../src/generation/runs/bundle.js";
+import { expandBundle } from "../../src/generation/runs/bundle.js";
 import { readTaskDirectory } from "../../src/generation/runs/task-files.js";
 import { runCommand } from "../../src/lib/process.js";
 
@@ -13,7 +13,6 @@ const roots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-  await clearBundleCache();
 });
 
 async function temporaryRoot(): Promise<string> {
@@ -129,7 +128,7 @@ describe("harbor task directories and bundles", () => {
     expect(byPath.get("environment/repo.tar.gz")?.text).toBeUndefined();
   });
 
-  test("expands a stored bundle once and serves it from the cache", async () => {
+  test("expands a stored bundle on each request", async () => {
     const root = await temporaryRoot();
     const source = join(root, "source");
     await writeHarborTask(join(source, "harbor-task"), "selfbench/gamma");

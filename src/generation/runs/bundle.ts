@@ -1,54 +1,41 @@
 import { createWriteStream } from "node:fs";
-import { lstat, mkdir, rename, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { extractRegularArchive } from "../../lib/archive.js";
-import { sha256 } from "../../lib/hash.js";
 import { isHarborTaskDirectory, readTaskDirectory } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
 
 const inFlight = new Map<string, Promise<TaskFiles>>();
 
-function bundleCacheRoot(): string {
-  return join(tmpdir(), "selfbench-viewer-bundles");
-}
-
 export async function expandBundle(store: ArtifactStore, key: string): Promise<TaskFiles> {
   const pending = inFlight.get(key);
   if (pending) return pending;
-  const promise = expandUncached(store, key).finally(() => inFlight.delete(key));
+  const promise = expand(store, key).finally(() => inFlight.delete(key));
   inFlight.set(key, promise);
   return promise;
 }
 
-async function expandUncached(store: ArtifactStore, key: string): Promise<TaskFiles> {
-  const cacheDirectory = join(bundleCacheRoot(), sha256(key));
-  const ready = join(cacheDirectory, "ready");
-  if (!(await exists(ready))) {
-    await materialize(store, key, cacheDirectory);
+// Expanded per request and removed afterwards: a persistent cache here once grew without bound
+// on the API's boot disk and helped fill it.
+async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-viewer-bundle-"));
+  try {
+    const body = await store.openReadByKey(key);
+    if (!body) {
+      throw new BundleNotFoundError(key);
+    }
+    const archive = join(root, "bundle.tar.gz");
+    await pipeline(body, createWriteStream(archive, { mode: 0o600 }));
+    const extracted = join(root, "extracted");
+    await mkdir(extracted);
+    await extractRegularArchive(archive, extracted);
+    return await readTaskDirectory(await locateTaskDirectory(extracted), taskIdFromKey(key));
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
-  const taskDirectory = await locateTaskDirectory(ready);
-  return readTaskDirectory(taskDirectory, taskIdFromKey(key));
-}
-
-async function materialize(store: ArtifactStore, key: string, cacheDirectory: string) {
-  const staging = join(cacheDirectory, "staging");
-  await rm(staging, { recursive: true, force: true });
-  await mkdir(staging, { recursive: true, mode: 0o700 });
-  const archive = join(staging, "bundle.tar.gz");
-  const body = await store.openReadByKey(key);
-  if (!body) {
-    throw new BundleNotFoundError(key);
-  }
-  await pipeline(body, createWriteStream(archive, { mode: 0o600 }));
-  const extracted = join(staging, "extracted");
-  await mkdir(extracted);
-  await extractRegularArchive(archive, extracted);
-  await rm(archive, { force: true });
-  await rename(extracted, join(cacheDirectory, "ready"));
-  await rm(staging, { recursive: true, force: true });
 }
 
 async function locateTaskDirectory(root: string): Promise<string> {
@@ -67,21 +54,8 @@ function taskIdFromKey(key: string): string {
   return taskSegment ?? name.replace(/\.tar\.gz$/, "");
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export class BundleNotFoundError extends Error {
   constructor(key: string) {
     super(`bundle not found: ${key}`);
   }
-}
-
-export async function clearBundleCache(): Promise<void> {
-  await rm(bundleCacheRoot(), { recursive: true, force: true });
 }
