@@ -69,10 +69,7 @@ export async function advanceBatch(
       item.cancelled = true;
       delete item.cost;
     });
-    if (
-      all.every((item) => item.result !== undefined || item.error !== undefined || item.cancelled)
-    )
-      batch.phase = "cancelled";
+    if (all.every((item) => settled(item) || item.cancelled)) batch.phase = "cancelled";
     return;
   }
   if (batch.phase === "discovering") {
