@@ -40,3 +40,11 @@ variable "operator_members" {
   description = "Explicit user/group principals approved to administer this environment."
   type        = set(string)
 }
+variable "alert_email" {
+  type    = string
+  default = null
+}
+variable "public_host" {
+  type    = string
+  default = null
+}

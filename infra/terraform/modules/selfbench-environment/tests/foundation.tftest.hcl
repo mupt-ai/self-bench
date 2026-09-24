@@ -101,6 +101,37 @@ run "reject_moving_image" {
   variables { boot_image = "projects/debian-cloud/global/images/family/debian-12" }
   expect_failures = [var.boot_image]
 }
+run "alerts_opt_in" {
+  command = plan
+  assert {
+    condition     = length(google_monitoring_alert_policy.disk_full) == 0 && length(google_monitoring_uptime_check_config.api) == 0
+    error_message = "Alerts need an explicit address."
+  }
+  assert {
+    condition     = length(google_project_iam_member.runtime_telemetry) == 2
+    error_message = "The runtime must be able to write Ops Agent metrics and logs."
+  }
+}
+run "alerts_with_uptime_check" {
+  command = plan
+  variables {
+    alert_email = "oncall@example.com"
+    public_host = "app.selfbench.example"
+  }
+  assert {
+    condition     = length(google_monitoring_alert_policy.disk_full) == 1 && length(google_monitoring_alert_policy.api_down) == 1
+    error_message = "Disk and uptime alerts should both be created."
+  }
+  assert {
+    condition     = google_monitoring_uptime_check_config.api[0].http_check[0].path == "/healthz" && google_monitoring_uptime_check_config.api[0].monitored_resource[0].labels.host == "app.selfbench.example"
+    error_message = "The uptime check must probe the public /healthz."
+  }
+}
+run "reject_host_with_scheme" {
+  command = plan
+  variables { public_host = "https://app.selfbench.example" }
+  expect_failures = [var.public_host]
+}
 run "reject_small_boot_disk" {
   command = plan
   variables { boot_disk_size_gb = 50 }

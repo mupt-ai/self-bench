@@ -23,6 +23,8 @@ module "selfbench" {
   cloud_sql_tier              = var.cloud_sql_tier
   cloud_sql_availability_type = var.cloud_sql_availability_type
   cloud_sql_retained_backups  = var.cloud_sql_retained_backups
+  alert_email                 = var.alert_email
+  public_host                 = var.public_host
 }
 output "deployment" {
   value = module.selfbench.deployment

@@ -145,6 +145,15 @@ The workflow:
 
 GitHub environment protection is the approval boundary. Terraform provides state locking. The workflow does not maintain a custom plan-manifest service or a separate private plan bucket.
 
+## Alerts
+
+Set `alert_email` and `public_host` (for example `app.selfbench.dev`) in `TF_INPUTS_JSON` to email that address when:
+
+- `https://<public_host>/healthz` fails from multiple regions;
+- the VM's root filesystem is more than 80% used. The Ops Agent that `deploy-host.sh` installs reports this metric.
+
+Both default to null, which creates no alert resources. Before setting them, grant the plan role `monitoring.{alertPolicies,notificationChannels,uptimeCheckConfigs}.{get,list}` and the apply role the same permissions plus `create`, `update`, and `delete`.
+
 ## Operational Notes
 
 - Dev and prod must not share projects, buckets, databases, Temporal namespaces, OAuth apps, or secrets.

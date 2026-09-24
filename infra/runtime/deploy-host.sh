@@ -43,6 +43,13 @@ exec 9>"$state/deploy.lock"
 flock -n 9 || fail "another deployment is running"
 release="$state/releases/$release_id"
 
+# Disk and memory metrics for the Terraform boot-disk alert. Monitoring must never block a release.
+if ! systemctl is-active --quiet google-cloud-ops-agent; then
+  curl -fsSL https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh -o "$state/add-ops-agent-repo.sh" \
+    && bash "$state/add-ops-agent-repo.sh" --also-install \
+    || echo "Ops Agent install failed; disk alerts will have no data." >&2
+fi
+
 # Every release pulls a new image; without pruning they accumulate until the boot disk
 # fills and the running API can no longer serve. Artifact Registry keeps every digest,
 # so only the running image (the rollback target) and the incoming one stay local.

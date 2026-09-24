@@ -87,3 +87,21 @@ variable "operator_members" {
     error_message = "Operators must be explicit user:email or group:email members."
   }
 }
+variable "alert_email" {
+  description = "Address alerted when the API is down or the boot disk fills; null creates no alerts."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.alert_email == null || can(regex("^[^@[:space:]]+@[^@[:space:]]+$", var.alert_email))
+    error_message = "Alert email must be a single address."
+  }
+}
+variable "public_host" {
+  description = "Public API hostname probed at /healthz (for example app.selfbench.dev); null skips the uptime check."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.public_host == null || can(regex("^[a-z0-9.-]+\\.[a-z]+$", var.public_host))
+    error_message = "Public host must be a bare hostname, without scheme or path."
+  }
+}
