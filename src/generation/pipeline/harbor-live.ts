@@ -24,7 +24,8 @@ const OUTPUT_TAIL = 8_000;
 const STEP_LIMIT = 200;
 
 /**
- * Publishes a Harbor run's progress as immutable `<prefix>/live/<run>-<seq>.json` snapshots so
+ * Publishes a Harbor run's progress as immutable `<prefix>/live/<attempt>-<run>-<seq>.json`
+ * snapshots (the attempt keeps a retried verification's keys fresh and sorting last) so
  * the task page can follow verification before the report exists. Snapshots are observational:
  * a failed write is retried on the next tick and never fails the gate.
  */
@@ -32,8 +33,9 @@ export function harborLiveFeed(
   store: ArtifactStore,
   prefix: string,
   run: HarborLiveRun,
-  jobsDirectory: string,
-  secrets: readonly string[],
+  /** This run's own job directory, so the oracle run never shows the nop run's trial log. */
+  jobDirectory: string,
+  { attempt, secrets }: { readonly attempt: number; readonly secrets: readonly string[] },
 ) {
   const startedAt = new Date().toISOString();
   let output = "";
@@ -45,11 +47,11 @@ export function harborLiveFeed(
     secrets.reduce((value, secret) => value.split(secret).join("[redacted]"), text);
   const flush = () => {
     pending = pending.then(async () => {
-      const steps = (await trialLogs(jobsDirectory)).slice(-STEP_LIMIT).map(redact);
+      const steps = (await trialLogs(jobDirectory)).slice(-STEP_LIMIT).map(redact);
       const body = { run, steps, output: redact(tail(output, OUTPUT_TAIL)) };
       const snapshot = JSON.stringify(body);
       if (snapshot === previous && Date.now() - writtenAt < HEARTBEAT_MS) return;
-      const key = `${prefix}/live/${run}-${String(sequence).padStart(6, "0")}.json`;
+      const key = `${prefix}/live/${String(attempt).padStart(2, "0")}-${run}-${String(sequence).padStart(6, "0")}.json`;
       const live: HarborLiveSnapshot = { ...body, startedAt, capturedAt: new Date().toISOString() };
       await store.put(key, Buffer.from(JSON.stringify(live)), "application/json").then(
         () => {
@@ -75,13 +77,13 @@ export function harborLiveFeed(
   };
 }
 
-/** Every trial log under Harbor's jobs directory, oldest trial first. */
-async function trialLogs(jobsDirectory: string): Promise<string[]> {
-  const entries = await readdir(jobsDirectory, { recursive: true }).catch(() => []);
+/** Every trial log under one Harbor job directory, oldest trial first. */
+async function trialLogs(jobDirectory: string): Promise<string[]> {
+  const entries = await readdir(jobDirectory, { recursive: true }).catch(() => []);
   const logs = entries.filter((entry) => entry.endsWith("trial.log")).sort();
   const lines: string[] = [];
   for (const log of logs) {
-    const text = await readFile(join(jobsDirectory, log), "utf8").catch(() => "");
+    const text = await readFile(join(jobDirectory, log), "utf8").catch(() => "");
     lines.push(...text.split("\n").filter((line) => line.trim()));
   }
   return lines;

@@ -54,8 +54,12 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
       );
   const report = file("report.json");
   const reportText = file("report.md");
-  const nopLive = latest(/\/live\/nop-\d+\.json$/);
-  const oracleLive = latest(/\/live\/oracle-\d+\.json$/);
+  // A retried verification publishes under a later attempt; only its snapshots are current.
+  const attempt = latest(/\/live\/\d+-(nop|oracle)-\d+\.json$/)?.key.match(/\/live\/(\d+)-/)?.[1];
+  const nopLive = attempt ? latest(new RegExp(`/live/${attempt}-nop-\\d+\\.json$`)) : undefined;
+  const oracleLive = attempt
+    ? latest(new RegExp(`/live/${attempt}-oracle-\\d+\\.json$`))
+    : undefined;
   const compiled = entries.some((entry) => entry.key.endsWith("/harbor-task.tar.gz"));
   const nopDone = Boolean(file("smoke-nop.json"));
   const oracleDone = Boolean(file("oracle.json"));

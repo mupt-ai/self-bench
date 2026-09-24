@@ -1,6 +1,7 @@
 import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
@@ -163,7 +164,11 @@ export async function harborRun(
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
   const feed =
-    live && harborLiveFeed(live.store, live.prefix, live.run, jobsDirectory, providerSecrets(env));
+    live &&
+    harborLiveFeed(live.store, live.prefix, live.run, join(jobsDirectory, jobName), {
+      attempt: activityAttempt(),
+      secrets: providerSecrets(env),
+    });
   const run = await runCommand(
     "harbor",
     harborRunArguments({
@@ -192,6 +197,15 @@ export async function harborRun(
   if (infrastructure)
     throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
   return result;
+}
+
+/** The Temporal attempt, so a retried verification publishes under fresh live keys. */
+function activityAttempt(): number {
+  try {
+    return Context.current().info.attempt;
+  } catch {
+    return 1; // Not inside an activity (tests, local runs).
+  }
 }
 
 /** Credential values Harbor's process holds, so live output never republishes them. */

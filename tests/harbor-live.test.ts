@@ -17,13 +17,19 @@ test("publishes Harbor milestones and output as redacted, immutable snapshots", 
   const trial = join(root, "jobs", "job-1", "trial-1");
   await mkdir(trial, { recursive: true });
   await writeFile(join(trial, "trial.log"), "Selected strategy: _ModalDirect\nBuilding image\n");
+  // Another run's job in the same jobs directory must not leak into this run's snapshots.
+  await mkdir(join(root, "jobs", "job-0", "trial-0"), { recursive: true });
+  await writeFile(join(root, "jobs", "job-0", "trial-0", "trial.log"), "nop finished\n");
   const prefix = "runs/run-1/verify/candidate/authoring-round-1-turn-1";
-  const feed = harborLiveFeed(store, prefix, "nop", join(root, "jobs"), ["as-secret-token"]);
+  const feed = harborLiveFeed(store, prefix, "nop", join(root, "jobs", "job-1"), {
+    attempt: 2,
+    secrets: ["as-secret-token"],
+  });
   feed.push("stdout", Buffer.from("token as-secret-token in output\n"));
   await feed.close();
 
   const keys = (await store.list(`${prefix}/live`)).map((entry) => entry.key);
-  expect(keys).toEqual([`${prefix}/live/nop-000000.json`]);
+  expect(keys).toEqual([`${prefix}/live/02-nop-000000.json`]);
   const snapshot = JSON.parse(
     Buffer.from((await store.getByKey(keys[0] ?? "")) ?? new Uint8Array()).toString("utf8"),
   ) as HarborLiveSnapshot;
