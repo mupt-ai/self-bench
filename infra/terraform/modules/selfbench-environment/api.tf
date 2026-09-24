@@ -37,7 +37,9 @@ resource "google_cloud_run_v2_service" "api" {
   labels              = local.labels
   deletion_protection = var.environment == "prod"
   # Only the load balancer reaches it, so the client IP it appends to X-Forwarded-For is real.
-  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  # The site is public: anyone the load balancer forwards may invoke it.
+  ingress              = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  invoker_iam_disabled = true
   template {
     service_account                  = google_service_account.api.email
     timeout                          = "900s"

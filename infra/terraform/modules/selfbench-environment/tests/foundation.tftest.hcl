@@ -42,8 +42,8 @@ run "api_on_cloud_run" {
     redirect_domains = { "www.selfbench.example" = "selfbench.example" }
   }
   assert {
-    condition     = google_cloud_run_v2_service.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
-    error_message = "Only the load balancer may reach the API, or X-Forwarded-For could be forged."
+    condition     = google_cloud_run_v2_service.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" && google_cloud_run_v2_service.api.invoker_iam_disabled
+    error_message = "Only the load balancer reaches the API, and it may invoke it for anyone."
   }
   assert {
     condition     = google_cloud_run_v2_service.api.template[0].vpc_access[0].egress == "PRIVATE_RANGES_ONLY"

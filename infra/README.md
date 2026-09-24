@@ -137,7 +137,7 @@ Before the first release to an environment:
 1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps`, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
 2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in `TF_INPUTS_JSON`, and release.
 3. Add each CNAME under `deployment.api.dns_authorizations`, and point each domain's A record at `deployment.api.address`. The certificate becomes active a few minutes after the CNAMEs resolve (`gcloud certificate-manager certificates describe selfbench-<env>-api`).
-4. Terraform forgets the old VM rather than deleting it. Delete it: `gcloud compute instances update selfbench-<env> --zone=<zone> --no-deletion-protection && gcloud compute instances delete selfbench-<env> --zone=<zone>`.
+4. Terraform forgets the old VM and its static address rather than deleting them. Delete them: `gcloud compute instances update selfbench-<env> --zone=<zone> --no-deletion-protection && gcloud compute instances delete selfbench-<env> --zone=<zone> && gcloud compute addresses delete selfbench-<env> --region=<region>`.
 
 ## Operational Notes
 

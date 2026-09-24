@@ -31,6 +31,7 @@ interface PendingLogin {
 }
 
 const recordPath = (id: string) => `codex-login/${id}`;
+const transient = (response: Response) => response.status === 429 || response.status >= 500;
 
 /**
  * Short-lived, user-scoped ceremonies with no in-process state: each status poll asks OpenAI
@@ -122,8 +123,8 @@ export function createCodexLogins(request: typeof fetch = fetch, lifetimeMs = 15
         JSON.stringify({ device_auth_id: login.deviceAuthId, user_code: login.userCode }),
         "application/json",
       ).catch(() => undefined);
-      // Not approved yet (403/404), or a transient network error: the next poll asks again.
-      if (!poll || poll.status === 403 || poll.status === 404)
+      // Not approved yet (403/404) or a transient failure: the next poll asks again.
+      if (!poll || poll.status === 403 || poll.status === 404 || transient(poll))
         return { ...view, status: "waiting" };
       const code = poll.ok ? await poll.json().catch(() => undefined) : undefined;
       if (typeof code?.authorization_code !== "string" || typeof code?.code_verifier !== "string")
@@ -139,7 +140,8 @@ export function createCodexLogins(request: typeof fetch = fetch, lifetimeMs = 15
         }).toString(),
         "application/x-www-form-urlencoded",
       ).catch(() => undefined);
-      const tokens = exchange?.ok ? await exchange.json().catch(() => undefined) : undefined;
+      if (!exchange || transient(exchange)) return { ...view, status: "waiting" };
+      const tokens = exchange.ok ? await exchange.json().catch(() => undefined) : undefined;
       const parsed = credentialSchema.safeParse({
         name: login.name,
         kind: "openai",

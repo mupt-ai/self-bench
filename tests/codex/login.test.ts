@@ -13,7 +13,7 @@ const idToken = [
 
 /** OpenAI's device-code endpoints: pending until approved, then one authorization code. */
 function openAI(lifetimeMs?: number) {
-  const state = { approved: false, calls: [] as string[], tokenStatus: 200 };
+  const state = { approved: false, calls: [] as string[], pollStatus: 0, tokenStatus: 200 };
   const request = (async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
     state.calls.push(path);
@@ -24,6 +24,7 @@ function openAI(lifetimeMs?: number) {
         device_auth_id: "device-1",
         user_code: "TEST-CODE",
       });
+      if (state.pollStatus) return new Response(null, { status: state.pollStatus });
       return state.approved
         ? Response.json({ authorization_code: "code", code_challenge: "c", code_verifier: "v" })
         : new Response(null, { status: 403 });
@@ -89,6 +90,12 @@ test("cancellation, expiry and a rejected exchange end the sign-in", async () =>
 
   const rejected = await logins.start(vault, 4, 7, "Codex");
   state.approved = true;
+  // OpenAI throttling or an outage is not a verdict: the sign-in keeps waiting.
+  state.pollStatus = 503;
+  expect((await logins.status(vault, 4, 7, rejected.id)).status).toBe("waiting");
+  state.pollStatus = 0;
+  state.tokenStatus = 429;
+  expect((await logins.status(vault, 4, 7, rejected.id)).status).toBe("waiting");
   state.tokenStatus = 400;
   const failed = await logins.status(vault, 4, 7, rejected.id);
   expect(failed.status).toBe("failed");
