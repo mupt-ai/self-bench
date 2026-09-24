@@ -94,28 +94,31 @@ const slots = proxyActivities<WorkflowSlotActivities>({
 
 /**
  * Runs a managed workflow only once it holds one of the platform's workflow slots, waiting its
- * turn on durable timers. A workflow that is cancelled or fails may leave its sandbox running,
- * so its slot drains instead of freeing at once. Workflows started earlier skip this.
+ * turn on durable timers. A workflow that is cancelled, fails, or reports an infrastructure
+ * failure (`failed`) may leave its sandbox running, so its slot drains instead of freeing at
+ * once. Workflows started earlier skip this.
  */
-async function withWorkflowSlot<T>(run: RunRequest, action: () => Promise<T>): Promise<T> {
+async function withWorkflowSlot<T>(
+  run: RunRequest,
+  action: () => Promise<T>,
+  failed: (result: T) => boolean = () => false,
+): Promise<T> {
   const generation = run.generation;
   if (generation?.settings.sandbox !== "managed" || !patched("workflow-slots")) return action();
   const { workflowId, runId } = workflowInfo();
   const id = `${workflowId}/${runId}`;
   const orgId = String(generation.orgId ?? generation.ownerId);
-  let finished = false;
+  let clean = false;
   try {
     for (let wait = 5; !(await slots.acquireWorkflowSlot({ id, orgId })); ) {
       await sleep(`${wait} seconds`);
       wait = Math.min(wait * 2, 30);
     }
     const result = await action();
-    finished = true;
+    clean = !failed(result);
     return result;
   } finally {
-    await CancellationScope.nonCancellable(() =>
-      slots.releaseWorkflowSlot({ id, drain: !finished }),
-    );
+    await CancellationScope.nonCancellable(() => slots.releaseWorkflowSlot({ id, drain: !clean }));
   }
 }
 
@@ -132,10 +135,14 @@ export async function selfBenchAuthorWorkflow(
 ): Promise<CandidateWorkflowResult> {
   let current = initialProgress(input.candidate);
   setHandler(candidateStatusQuery, () => current);
-  return withWorkflowSlot(input.run, () =>
-    executeCandidate(input, workflowActivities, (progress) => {
-      current = progress;
-    }),
+  return withWorkflowSlot(
+    input.run,
+    () =>
+      executeCandidate(input, workflowActivities, (progress) => {
+        current = progress;
+      }),
+    // A stage that exhausted its retries may never have stopped its sandbox.
+    (result) => result.progress.status === "infrastructure_failed",
   );
 }
 
