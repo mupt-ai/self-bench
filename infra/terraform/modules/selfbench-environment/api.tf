@@ -119,7 +119,7 @@ resource "google_compute_backend_service" "api" {
   name                  = "${local.name}-api"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   protocol              = "HTTPS"
-  # Kept from the VM's former Caddy proxy.
+  # No MIME sniffing, and only the origin in cross-site referrers.
   custom_response_headers = [
     "X-Content-Type-Options: nosniff",
     "Referrer-Policy: strict-origin-when-cross-origin",
