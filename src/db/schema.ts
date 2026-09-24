@@ -222,6 +222,17 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
+ * One row per managed sandbox stage waiting for or holding a slot. See `src/db/sandbox-slots.ts`.
+ */
+export const sandboxSlots = pgTable("sandbox_slots", {
+  id: text("id").primaryKey(),
+  orgId: text("org_id").notNull(),
+  requestedAt: timestamptz("requested_at").notNull().defaultNow(),
+  grantedAt: timestamptz("granted_at"),
+  expiresAt: timestamptz("expires_at").notNull(),
+});
+
+/**
  * Public releases: append-only snapshots a workspace published for a public repository. A
  * line is one workspace plus one GitHub repository id; its current release is the newest row
  * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never

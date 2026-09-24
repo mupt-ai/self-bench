@@ -1,9 +1,13 @@
 import {
   type ActivityOptions,
+  CancellationScope,
   defineQuery,
   isCancellation,
+  patched,
   proxyActivities,
   setHandler,
+  sleep,
+  uuid4,
   workflowInfo,
 } from "@temporalio/workflow";
 import {
@@ -16,10 +20,12 @@ import {
   type CandidateWorkflowResult,
   type DiscoveryResult,
   MAX_AUTHORING_ROUNDS,
+  type RunRequest,
   type TaskProgress,
 } from "../../contracts/index.js";
 import { harborTaskQueue } from "../../temporal/task-queues.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
+import type { SandboxSlotActivities } from "./sandbox-slots.js";
 import { verifyReportSummary } from "./verify-report.js";
 
 export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
@@ -59,26 +65,62 @@ const harbor = () =>
     taskQueue: harborTaskQueue(workflowInfo().taskQueue),
   });
 
+const slots = proxyActivities<SandboxSlotActivities>({
+  startToCloseTimeout: "1 minute",
+  retry: { ...retry, maximumAttempts: 10 },
+});
+
+/**
+ * Runs a stage on the managed E2B account only once it holds one of the platform's sandbox
+ * slots, waiting its turn on durable timers. A stage that ends abnormally may leave its sandbox
+ * running, so its slot drains instead of freeing at once. Workflows started earlier skip this.
+ */
+async function withSandboxSlot<T>(run: RunRequest, action: () => Promise<T>): Promise<T> {
+  const generation = run.generation;
+  if (generation?.settings.sandbox !== "managed" || !patched("sandbox-slots")) return action();
+  const id = `${workflowInfo().workflowId}/${uuid4()}`;
+  const orgId = String(generation.orgId ?? generation.ownerId);
+  let finished = false;
+  try {
+    for (let wait = 5; !(await slots.acquireSandboxSlot({ id, orgId })); ) {
+      await sleep(`${wait} seconds`);
+      wait = Math.min(wait * 2, 30);
+    }
+    const result = await action();
+    finished = true;
+    return result;
+  } finally {
+    await CancellationScope.nonCancellable(() =>
+      slots.releaseSandboxSlot({ id, drain: !finished }),
+    );
+  }
+}
+
 /**
  * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
  * reads what it reported; Harbor checks a compiled task on the memory-sized sibling queue.
  */
 export const workflowActivities: SelfBenchActivities = {
-  discoverCandidateShard: async (input) =>
-    await finish.finishDiscoveryShard({
-      ...input,
-      outcome: await discovery.startDiscoveryShard(input),
-    }),
-  runAuthoringTurn: async (input) =>
-    await finish.finishAuthoringTurn({ ...input, outcome: await agents.startAuthoringTurn(input) }),
-  runReviewRound: async (input) =>
-    await finish.finishReviewRound({ ...input, outcome: await agents.startReviewRound(input) }),
+  discoverCandidateShard: (input) =>
+    withSandboxSlot(input.run, async () =>
+      finish.finishDiscoveryShard({
+        ...input,
+        outcome: await discovery.startDiscoveryShard(input),
+      }),
+    ),
+  runAuthoringTurn: (input) =>
+    withSandboxSlot(input.run, async () =>
+      finish.finishAuthoringTurn({ ...input, outcome: await agents.startAuthoringTurn(input) }),
+    ),
+  runReviewRound: (input) =>
+    withSandboxSlot(input.run, async () =>
+      finish.finishReviewRound({ ...input, outcome: await agents.startReviewRound(input) }),
+    ),
   compileAndVerify: async (input) => {
-    const compiled = await compile.compileTask(input);
-    return await harbor().verifyCompiled({
-      ...input,
-      compiled: await finish.finishCompile({ ...input, compiled }),
-    });
+    const compiled = await withSandboxSlot(input.run, async () =>
+      finish.finishCompile({ ...input, compiled: await compile.compileTask(input) }),
+    );
+    return await harbor().verifyCompiled({ ...input, compiled });
   },
 };
 

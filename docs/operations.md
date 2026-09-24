@@ -334,6 +334,8 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 
 A batch is not a Temporal workflow. The API's batch reconciler (`src/generation/batches/service.ts`) stores each batch in Postgres, polls every five seconds, and starts independent workflows as the batch advances: one `selfBenchDiscoveryShardWorkflow` per discovery shard, then one `selfBenchAuthorWorkflow` per candidate, which runs that candidate's authoring and review loops and returns its final progress plus the accepted task. The reconciler reads each workflow's result, replaces rejected candidates from the leftover pool, and builds the export once every tier is filled or the pool is exhausted. A cancelled dispatch reserves its workflow ID with the no-op `selfBenchCancelledDispatchWorkflow`.
 
+Managed E2B sandbox stages (discovery, authoring turns, review rounds, compile) queue for a platform-wide slot in `sandbox_slots` before starting: at most `SELFBENCH_SANDBOX_LIMIT` run at once, first come first served, and no organization holds more than `SELFBENCH_ORG_SANDBOX_LIMIT`. A waiting stage polls on durable workflow timers, so it holds no worker slot and uses none of its retries. A stage that ends abnormally keeps its slot for 70 minutes, since its sandbox may still run until E2B's one-hour cap; a slot leaked by a terminated workflow expires after 24 hours.
+
 To inspect one candidate, open its author workflow in the Temporal UI; its history shows that candidate's activities, retries, and timeouts alone, and the `candidateStatus` query returns its current progress.
 
 ## Configuration
@@ -352,6 +354,8 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
+| `SELFBENCH_SANDBOX_LIMIT` | `100` | Worker; managed E2B sandboxes running at once across the platform |
+| `SELFBENCH_ORG_SANDBOX_LIMIT` | `20` | Worker; managed E2B sandboxes one organization may hold at once |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |
