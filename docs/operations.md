@@ -113,7 +113,7 @@ Modal sandboxes are built from the packaged `Dockerfile.sandbox`: its pinned `FR
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring turns and review rounds each request four hours.
+Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. To add Harbor slots beyond one worker's 10, run Harbor-only workers (`SELFBENCH_WORKER_QUEUES=harbor`). The hosted runtime's `harbor-worker` compose service runs `SELFBENCH_HARBOR_WORKERS` replicas (a deploy variable, 0 to 8). Each replica gets a 5 GiB memory limit, which sizes it to 10 slots, so the VM needs about 5 GiB per replica beyond the API and combined worker. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring turns and review rounds each request four hours.
 
 ### E2B
 
@@ -352,6 +352,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
+| `SELFBENCH_WORKER_QUEUES` | `all` | Worker; `harbor` polls only `<task queue>-harbor`, for Harbor-only replicas |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |

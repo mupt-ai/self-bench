@@ -131,6 +131,7 @@ Configure `dev` and `prod` GitHub environments. Production should require review
 | `SELFBENCH_PUBLIC_URL` | Public HTTPS origin |
 | `SELFBENCH_RESULTS_SITE_URL` | Results site HTTPS origin, checked after each deploy |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | Worker concurrency from 1 to 100 |
+| `SELFBENCH_HARBOR_WORKERS` | Optional Harbor-only worker replicas from 0 to 8 (default 0); each adds 10 Harbor slots and needs ~5 GiB of VM memory |
 
 The workflow:
 

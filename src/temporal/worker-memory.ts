@@ -22,3 +22,11 @@ function availableMemoryBytes(): number {
   }
   return totalmem();
 }
+
+/** `harbor` runs a Harbor-only replica that polls only the Harbor queue, adding Harbor slots. */
+export function workerQueues(env: NodeJS.ProcessEnv = process.env): "all" | "harbor" {
+  const value = env.SELFBENCH_WORKER_QUEUES?.trim() || "all";
+  if (value !== "all" && value !== "harbor")
+    throw new Error("SELFBENCH_WORKER_QUEUES must be all or harbor");
+  return value;
+}

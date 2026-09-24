@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import { harborSlotsForMemory } from "../src/contracts/config/worker-capacity.js";
 import { harborTaskQueue } from "../src/temporal/task-queues.js";
-import { resolveHarborConcurrency } from "../src/temporal/worker-memory.js";
+import { resolveHarborConcurrency, workerQueues } from "../src/temporal/worker-memory.js";
 
 const GiB = 1024 ** 3;
 
@@ -33,4 +33,13 @@ test("the resolved Harbor concurrency keeps the hard cap for direct callers", ()
 
 test("the Harbor queue is derived from the worker queue", () => {
   expect(harborTaskQueue("selfbench-prod")).toBe("selfbench-prod-harbor");
+});
+
+test("a Harbor-only replica is sized to the compose memory limit and must be requested", () => {
+  // infra/runtime/compose.yaml gives each harbor-worker replica 5 GiB.
+  expect(harborSlotsForMemory(5 * GiB)).toBe(10);
+  expect(workerQueues({})).toBe("all");
+  expect(workerQueues({ SELFBENCH_WORKER_QUEUES: "" })).toBe("all");
+  expect(workerQueues({ SELFBENCH_WORKER_QUEUES: "harbor" })).toBe("harbor");
+  expect(() => workerQueues({ SELFBENCH_WORKER_QUEUES: "generation" })).toThrow();
 });

@@ -25,6 +25,8 @@ release_id=$(jq -er '.release_id | select(test("^[0-9a-f]{40}-[1-9][0-9]*-[1-9][
 image=$(jq -er '.image | select(type == "string")' "$request")
 registry=$(jq -er '.registry | select(test("^[a-z]+-[a-z]+[0-9]-docker\\.pkg\\.dev$"))' "$request")
 concurrency=$(jq -er '.activity_concurrency | select(test("^([1-9][0-9]?|100)$"))' "$request")
+# Older release requests predate Harbor-only replicas.
+harbor_workers=$(jq -er '(.harbor_workers // "0") | select(test("^[0-8]$"))' "$request")
 [[ $project =~ ^selfbench-$environment-[a-z0-9-]+[a-z0-9]$ ]] || fail "invalid project"
 [[ $image =~ ^$registry/$project/selfbench/selfbench@sha256:[0-9a-f]{64}$ ]] || fail "image is not an immutable digest from the target project"
 [[ $(jq -r '.secret_versions | type' "$request") == object ]] || fail "invalid secret versions"
@@ -59,6 +61,7 @@ cat > "$release/release.env" <<EOF
 SELFBENCH_ENVIRONMENT=$environment
 SELFBENCH_IMAGE=$image
 SELFBENCH_ACTIVITY_CONCURRENCY=$concurrency
+SELFBENCH_HARBOR_WORKERS=$harbor_workers
 SELFBENCH_SHARED_ENV_FILE=$release/shared.env
 SELFBENCH_API_ENV_FILE=$release/api.env
 SELFBENCH_WORKER_ENV_FILE=$release/worker.env
@@ -77,7 +80,7 @@ printf '%s' "$token" | docker login --username oauth2accesstoken --password-stdi
 check=(docker run --rm --env-file "$release/shared.env" --env-file "$release/worker.env"
   -v "$release/deploy-check.mjs:/app/deploy-check.mjs:ro" "$image" node /app/deploy-check.mjs)
 "${compose[@]}" stop api
-"${compose[@]}" stop worker
+"${compose[@]}" stop worker harbor-worker
 migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
 docker run --rm --env-file "$release/shared.env" "$image" node --input-type=module -e "$migration"
 "${compose[@]}" up -d --wait --wait-timeout 180

@@ -57,6 +57,7 @@ jobs:
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
       SELFBENCH_RESULTS_SITE_URL: ${{ vars.SELFBENCH_RESULTS_SITE_URL }}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
+      SELFBENCH_HARBOR_WORKERS: ${{ vars.SELFBENCH_HARBOR_WORKERS || '0' }}
       RELEASE_PRERELEASE: ${{ toJSON(github.event.release.prerelease) }}
       RELEASE_DRAFT: ${{ toJSON(github.event.release.draft) }}
     steps:
@@ -187,6 +188,7 @@ jobs:
               --arg release_id "$release_id" --arg image "$SELFBENCH_IMAGE" --arg registry "$REGISTRY" \
               --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
               --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
+              --arg harbor_workers "$SELFBENCH_HARBOR_WORKERS" \
               '$ARGS.named' > "$staging/request.json"
           # One SSH session: a second OS Login cert after scp can fail with publickey on first-time profiles.
           remote="set -euo pipefail; mkdir -p /tmp/selfbench-release-$release_id; tar -C /tmp/selfbench-release-$release_id -xzf -;"

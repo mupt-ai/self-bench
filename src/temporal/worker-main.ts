@@ -13,15 +13,17 @@ import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 import { harborTaskQueue } from "./task-queues.js";
-import { resolveHarborConcurrency } from "./worker-memory.js";
+import { resolveHarborConcurrency, workerQueues } from "./worker-memory.js";
 
 /**
  * The combined worker: generation and evaluation workflows and their sandbox activities on the
  * configured task queue, plus the Harbor activities on a sibling queue. Each Harbor activity
- * hosts a ~300 MiB Python client, so that queue's concurrency is sized to memory.
+ * hosts a ~300 MiB Python client, so that queue's concurrency is sized to memory. With
+ * `SELFBENCH_WORKER_QUEUES=harbor` it polls only the Harbor queue, adding Harbor slots.
  */
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
+const harborOnly = workerQueues() === "harbor";
 await checkSandboxBackends(config);
 // Managed usage is billed at OpenRouter's live list prices; see openrouter-rates.ts.
 await keepOpenRouterRatesFresh().ready;
@@ -46,26 +48,33 @@ const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 
-const workers = await Promise.all([
-  Worker.create({
-    connection,
-    namespace: config.temporal.namespace,
-    taskQueue: config.temporal.taskQueue,
-    workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
-    activities: { ...generation, ...evaluation },
-    maxConcurrentActivityTaskExecutions: config.activityConcurrency,
-    interceptors: { activity: [activityEventInterceptor()] },
-  }),
-  Worker.create({
-    connection,
-    namespace: config.temporal.namespace,
-    taskQueue: harborTaskQueue(config.temporal.taskQueue),
-    activities: { verifyCompiled, executeSolverEvaluation },
-    maxConcurrentActivityTaskExecutions: harborConcurrency,
-  }),
-]);
+const harborWorker = Worker.create({
+  connection,
+  namespace: config.temporal.namespace,
+  taskQueue: harborTaskQueue(config.temporal.taskQueue),
+  activities: { verifyCompiled, executeSolverEvaluation },
+  maxConcurrentActivityTaskExecutions: harborConcurrency,
+});
+const workers = await Promise.all(
+  harborOnly
+    ? [harborWorker]
+    : [
+        Worker.create({
+          connection,
+          namespace: config.temporal.namespace,
+          taskQueue: config.temporal.taskQueue,
+          workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
+          activities: { ...generation, ...evaluation },
+          maxConcurrentActivityTaskExecutions: config.activityConcurrency,
+          interceptors: { activity: [activityEventInterceptor()] },
+        }),
+        harborWorker,
+      ],
+);
 console.log(
-  `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency} and Harbor concurrency ${harborConcurrency}`,
+  harborOnly
+    ? `SelfBench Harbor worker polling ${config.temporal.namespace}/${harborTaskQueue(config.temporal.taskQueue)} with Harbor concurrency ${harborConcurrency}`
+    : `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency} and Harbor concurrency ${harborConcurrency}`,
 );
 try {
   await Promise.all(workers.map((worker) => worker.run()));
