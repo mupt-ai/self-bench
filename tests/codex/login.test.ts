@@ -96,9 +96,14 @@ test("cancellation, expiry and a rejected exchange end the sign-in", async () =>
   state.pollStatus = 0;
   state.tokenStatus = 429;
   expect((await logins.status(vault, 4, 7, rejected.id)).status).toBe("waiting");
+  // The one-time code was kept: the retry exchanges it without asking OpenAI for it again.
+  const polls = state.calls.filter((path) => path === "/api/accounts/deviceauth/token").length;
   state.tokenStatus = 400;
   const failed = await logins.status(vault, 4, 7, rejected.id);
   expect(failed.status).toBe("failed");
+  expect(state.calls.filter((path) => path === "/api/accounts/deviceauth/token")).toHaveLength(
+    polls,
+  );
   await expect(logins.status(vault, 4, 7, rejected.id)).rejects.toThrow("expired");
   expect(await vault.credentials.list(4)).toHaveLength(0);
 

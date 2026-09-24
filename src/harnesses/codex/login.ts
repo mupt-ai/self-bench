@@ -28,6 +28,8 @@ interface PendingLogin {
   deviceAuthId: string;
   userCode: string;
   expiresAt: string;
+  /** OpenAI's one-time code, kept once approved so a failed exchange can be retried. */
+  authorization?: { code: string; verifier: string };
 }
 
 const recordPath = (id: string) => `codex-login/${id}`;
@@ -54,7 +56,7 @@ export function createCodexLogins(request: typeof fetch = fetch, lifetimeMs = 15
       Date.parse(record.value.expiresAt) <= Date.now()
     )
       throw new RecordStoreError(410, "This sign-in has expired. Start a new sign-in.");
-    return record.value;
+    return record;
   };
   const discard = (vault: Vault, orgId: number, id: string) =>
     orgRecords(vault.records, orgId).destroy(recordPath(id));
@@ -108,7 +110,7 @@ export function createCodexLogins(request: typeof fetch = fetch, lifetimeMs = 15
       const credential = await vault.credentials.find(orgId, id);
       if (credential)
         return { id, status: "saved", expiresAt: new Date().toISOString(), credential };
-      const login = await pending(vault, orgId, userId, id);
+      const { value: login, version } = await pending(vault, orgId, userId, id);
       const view = {
         id,
         expiresAt: login.expiresAt,
@@ -118,29 +120,40 @@ export function createCodexLogins(request: typeof fetch = fetch, lifetimeMs = 15
         await discard(vault, orgId, id);
         return { ...view, status: "failed", error };
       };
-      const poll = await post(
-        "/api/accounts/deviceauth/token",
-        JSON.stringify({ device_auth_id: login.deviceAuthId, user_code: login.userCode }),
-        "application/json",
-      ).catch(() => undefined);
-      // Not approved yet (403/404) or a transient failure: the next poll asks again.
-      if (!poll || poll.status === 403 || poll.status === 404 || transient(poll))
-        return { ...view, status: "waiting" };
-      const code = poll.ok ? await poll.json().catch(() => undefined) : undefined;
-      if (typeof code?.authorization_code !== "string" || typeof code?.code_verifier !== "string")
-        return failed("Sign-in was not completed. The code may have expired; try again.");
+      let authorization = login.authorization;
+      if (!authorization) {
+        const poll = await post(
+          "/api/accounts/deviceauth/token",
+          JSON.stringify({ device_auth_id: login.deviceAuthId, user_code: login.userCode }),
+          "application/json",
+        ).catch(() => undefined);
+        // Not approved yet (403/404) or a transient failure: the next poll asks again.
+        if (!poll || poll.status === 403 || poll.status === 404 || transient(poll))
+          return { ...view, status: "waiting" };
+        const code = poll.ok ? await poll.json().catch(() => undefined) : undefined;
+        if (typeof code?.authorization_code !== "string" || typeof code?.code_verifier !== "string")
+          return failed("Sign-in was not completed. The code may have expired; try again.");
+        authorization = { code: code.authorization_code, verifier: code.code_verifier };
+      }
       const exchange = await post(
         "/oauth/token",
         new URLSearchParams({
           grant_type: "authorization_code",
-          code: code.authorization_code,
+          code: authorization.code,
           redirect_uri: `${ISSUER}/deviceauth/callback`,
           client_id: CLIENT_ID,
-          code_verifier: code.code_verifier,
+          code_verifier: authorization.verifier,
         }).toString(),
         "application/x-www-form-urlencoded",
       ).catch(() => undefined);
-      if (!exchange || transient(exchange)) return { ...view, status: "waiting" };
+      if (!exchange || transient(exchange)) {
+        // The code is one-time: keep it so the next poll retries the exchange, not the approval.
+        if (!login.authorization)
+          await orgRecords(vault.records, orgId)
+            .write(recordPath(id), { ...login, authorization }, version)
+            .catch(() => undefined);
+        return { ...view, status: "waiting" };
+      }
       const tokens = exchange.ok ? await exchange.json().catch(() => undefined) : undefined;
       const parsed = credentialSchema.safeParse({
         name: login.name,
