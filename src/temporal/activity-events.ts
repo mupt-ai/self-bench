@@ -1,4 +1,4 @@
-import type { Context, Info } from "@temporalio/activity";
+import { CompleteAsyncError, type Context, type Info } from "@temporalio/activity";
 import type { ActivityInterceptorsFactory } from "@temporalio/worker";
 import { errorMessage } from "../lib/util.js";
 
@@ -37,6 +37,8 @@ export function activityEventInterceptor(
         try {
           return await next(input);
         } catch (error) {
+          // A started sandbox completes the activity later through the callback API.
+          if (error instanceof CompleteAsyncError) throw error;
           write(
             activityEventLine({
               ...base,

@@ -96,7 +96,10 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
         runId: run.runId,
         stage: request.label,
         timeoutMs: request.timeoutMs,
-        command: ["bash", "-lc", agentScript(request)],
+        // Not a login shell: started straight from the job runner, bash would be at SHLVL 1 and
+        // the image's ~/.bash_logout (clear_console, which fails without a console) would turn
+        // pi's exit code into 1.
+        command: ["bash", "-c", agentScript(request)],
         files: [
           ...request.files,
           { path: "/work/prompt.txt", contents: request.prompt },
