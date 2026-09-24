@@ -28,18 +28,6 @@ resource "google_compute_firewall" "iap_ssh" {
     ports    = ["22"]
   }
 }
-resource "google_compute_firewall" "web" {
-  count                   = var.enable_public_web ? 1 : 0
-  project                 = var.project_id
-  name                    = "${local.name}-web"
-  network                 = google_compute_network.app.id
-  source_ranges           = ["0.0.0.0/0"]
-  target_service_accounts = [google_service_account.runtime.email]
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443"]
-  }
-}
 resource "google_compute_address" "app" {
   project    = var.project_id
   region     = var.region

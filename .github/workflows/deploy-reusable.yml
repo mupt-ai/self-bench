@@ -130,8 +130,6 @@ jobs:
           jq -e --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" \
               '.project_id == $project and .environment == $environment' <<<"$deployment" >/dev/null \
             || { echo 'Terraform outputs belong to a different environment.' >&2; exit 1; }
-          jq -e '.enable_public_web == true or ((.api_domains // []) | length > 0)' <<<"$TF_INPUTS_JSON" >/dev/null \
-            || { echo 'DNS/TLS and public web ingress must be configured first.' >&2; exit 1; }
           jq -e '.database != null' <<<"$deployment" >/dev/null \
             || { echo 'External databases require a reviewed backup adapter.' >&2; exit 1; }
           jq -r '
@@ -140,10 +138,8 @@ jobs:
             "zone=\(.zone)",
             "instance=\(.instance)",
             "database_instance=\(.database.instance | split(":")[-1])",
-            # `//` would also replace false; only an explicit false moves the API off the VM.
-            "vm_serves_api=\(.vm_serves_api != false)",
-            "api_service=\(.api.service // "")",
-            "api_region=\(.api.region // "")"
+            "api_service=\(.api.service)",
+            "api_region=\(.api.region)"
           ' <<<"$deployment" >> "$GITHUB_OUTPUT"
       - name: Authenticate Docker to Artifact Registry
         if: ${{ !inputs.infrastructure_only }}
@@ -172,7 +168,7 @@ jobs:
         run: gcloud sql backups create --instance="$INSTANCE" --project="$GCP_PROJECT_ID" --quiet
         env:
           INSTANCE: ${{ steps.coordinates.outputs.database_instance }}
-      - name: Migrate and Roll Out on the VM
+      - name: Migrate and Roll Out the Worker on the VM
         if: ${{ !inputs.infrastructure_only }}
         env:
           SELFBENCH_IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
@@ -180,7 +176,6 @@ jobs:
           REGISTRY: ${{ steps.coordinates.outputs.registry }}
           ZONE: ${{ steps.coordinates.outputs.zone }}
           INSTANCE: ${{ steps.coordinates.outputs.instance }}
-          VM_SERVES_API: ${{ steps.coordinates.outputs.vm_serves_api }}
         run: |
           set -euo pipefail
           digest="${SELFBENCH_IMAGE#"$IMAGE_PREFIX"@}"
@@ -191,7 +186,7 @@ jobs:
           jq -Sc -n --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" --arg sha "$GITHUB_SHA" \
               --arg release_id "$release_id" --arg image "$SELFBENCH_IMAGE" --arg registry "$REGISTRY" \
               --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
-              --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" --argjson api_on_vm "$VM_SERVES_API" \
+              --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
               '$ARGS.named' > "$staging/request.json"
           # One SSH session: a second OS Login cert after scp can fail with publickey on first-time profiles.
           remote="set -euo pipefail; mkdir -p /tmp/selfbench-release-$release_id; tar -C /tmp/selfbench-release-$release_id -xzf -;"
@@ -204,7 +199,7 @@ jobs:
             --tunnel-through-iap --quiet --command="$remote" -- -T
       # Migrations already ran on the VM. A revision that fails to start never takes traffic.
       - name: Roll Out the API on Cloud Run
-        if: ${{ !inputs.infrastructure_only && steps.coordinates.outputs.api_service != '' }}
+        if: ${{ !inputs.infrastructure_only }}
         env:
           SELFBENCH_IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
           SERVICE: ${{ steps.coordinates.outputs.api_service }}
@@ -240,6 +235,5 @@ jobs:
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
-            echo "HTTPS health, anonymous auth rejection, results site and VM worker checks passed."
-            [[ -z "$API_SERVICE" ]] || echo "API revision rolled out on Cloud Run service \`${API_SERVICE}\`."
+            echo "API on Cloud Run service \`${API_SERVICE}\`; HTTPS health, anonymous auth rejection, results site and VM worker checks passed."
           } >> "$GITHUB_STEP_SUMMARY"

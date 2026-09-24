@@ -6,12 +6,13 @@ variables {
   region      = "us-central1"
   zone        = "us-central1-a"
   boot_image  = "projects/debian-cloud/global/images/debian-12-bookworm-v20260901"
+  api_domains = ["app.selfbench.example", "selfbench.example"]
 }
 run "dev_foundation" {
   command = plan
   assert {
-    condition     = length(google_compute_firewall.web) == 0
-    error_message = "Public web access must be opt-in."
+    condition     = keys(google_secret_manager_secret_iam_member.runtime_reader) == ["shared-env", "worker-env"]
+    error_message = "The worker VM must not read the API's secret."
   }
   assert {
     condition     = google_compute_firewall.iap_ssh.source_ranges == toset(["35.235.240.0/20"])
@@ -83,14 +84,6 @@ run "external_database" {
     error_message = "External DB mode must not create Cloud SQL or SQL peering."
   }
 }
-run "public_web_opt_in" {
-  command = plan
-  variables { enable_public_web = true }
-  assert {
-    condition     = length(google_compute_firewall.web) == 1
-    error_message = "Explicit public web opt-in should create one firewall rule."
-  }
-}
 run "reject_unknown_environment" {
   command = plan
   variables { environment = "staging" }
@@ -101,53 +94,40 @@ run "reject_moving_image" {
   variables { boot_image = "projects/debian-cloud/global/images/family/debian-12" }
   expect_failures = [var.boot_image]
 }
-run "api_on_vm_by_default" {
-  command = plan
-  assert {
-    condition     = length(google_cloud_run_v2_service.api) == 0 && length(google_compute_global_forwarding_rule.api_https) == 0
-    error_message = "Cloud Run and the load balancer must be opt-in."
-  }
-  assert {
-    condition     = output.deployment.api == null && output.deployment.vm_serves_api
-    error_message = "Without Cloud Run the VM serves the API."
-  }
-}
 run "api_on_cloud_run" {
   command = plan
   variables {
-    api_domains      = ["app.selfbench.example", "selfbench.example"]
     redirect_domains = { "www.selfbench.example" = "selfbench.example" }
-    vm_serves_api    = false
   }
   assert {
-    condition     = google_cloud_run_v2_service.api[0].ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+    condition     = google_cloud_run_v2_service.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
     error_message = "Only the load balancer may reach the API, or X-Forwarded-For could be forged."
   }
   assert {
-    condition     = google_cloud_run_v2_service.api[0].template[0].scaling[0].max_instance_count == 1 && google_cloud_run_v2_service.api[0].template[0].scaling[0].min_instance_count == 1
+    condition     = google_cloud_run_v2_service.api.template[0].scaling[0].max_instance_count == 1 && google_cloud_run_v2_service.api.template[0].scaling[0].min_instance_count == 1
     error_message = "In-memory Codex logins need exactly one always-warm instance."
   }
   assert {
-    condition     = google_cloud_run_v2_service.api[0].template[0].vpc_access[0].egress == "PRIVATE_RANGES_ONLY"
+    condition     = google_cloud_run_v2_service.api.template[0].vpc_access[0].egress == "PRIVATE_RANGES_ONLY"
     error_message = "The API reaches private Cloud SQL through the VPC."
   }
   assert {
-    condition     = google_service_account.api[0].account_id == "selfbench-dev-api" && keys(google_secret_manager_secret_iam_member.api_reader) == ["api-env", "shared-env"]
+    condition     = google_service_account.api.account_id == "selfbench-dev-api" && keys(google_secret_manager_secret_iam_member.api_reader) == ["api-env", "shared-env"]
     error_message = "The API has its own identity and never reads the worker's secret."
   }
   assert {
-    condition     = length(google_certificate_manager_dns_authorization.api) == 3 && google_compute_url_map.api[0].path_matcher[0].default_url_redirect[0].host_redirect == "selfbench.example"
+    condition     = length(google_certificate_manager_dns_authorization.api) == 3 && google_compute_url_map.api.path_matcher[0].default_url_redirect[0].host_redirect == "selfbench.example"
     error_message = "Every served or redirected host needs a certificate, and www redirects to the apex."
   }
   assert {
-    condition     = !output.deployment.vm_serves_api && output.deployment.api.service == "selfbench-dev-api"
-    error_message = "The deployment output must tell the release where the API runs."
+    condition     = output.deployment.api.service == "selfbench-dev-api"
+    error_message = "The deployment output must name the service each release deploys."
   }
 }
-run "reject_api_nowhere" {
+run "reject_no_api_domain" {
   command = plan
-  variables { vm_serves_api = false }
-  expect_failures = [var.vm_serves_api]
+  variables { api_domains = [] }
+  expect_failures = [var.api_domains]
 }
 run "reject_small_boot_disk" {
   command = plan

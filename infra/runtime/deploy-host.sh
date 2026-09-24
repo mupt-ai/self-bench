@@ -25,8 +25,6 @@ release_id=$(jq -er '.release_id | select(test("^[0-9a-f]{40}-[1-9][0-9]*-[1-9][
 image=$(jq -er '.image | select(type == "string")' "$request")
 registry=$(jq -er '.registry | select(test("^[a-z]+-[a-z]+[0-9]-docker\\.pkg\\.dev$"))' "$request")
 concurrency=$(jq -er '.activity_concurrency | select(test("^([1-9][0-9]?|100)$"))' "$request")
-# Older requests predate Cloud Run and always mean the VM serves the API.
-api_on_vm=$(jq -er 'if has("api_on_vm") then .api_on_vm | select(type == "boolean") else true end' "$request")
 [[ $project =~ ^selfbench-$environment-[a-z0-9-]+[a-z0-9]$ ]] || fail "invalid project"
 [[ $image =~ ^$registry/$project/selfbench/selfbench@sha256:[0-9a-f]{64}$ ]] || fail "image is not an immutable digest from the target project"
 [[ $(jq -r '.secret_versions | type' "$request") == object ]] || fail "invalid secret versions"
@@ -70,7 +68,8 @@ source_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 install -m 0600 "$source_dir/compose.yaml" "$release/compose.yaml"
 install -m 0644 "$source_dir/deploy-check.mjs" "$release/deploy-check.mjs"
 
-for role in shared api worker; do
+# The API's bundle is Cloud Run's; this VM runs only the worker.
+for role in shared worker; do
   version=$(jq -er --arg role "$role" '.secret_versions[$role] | tostring | select(test("^[1-9][0-9]*$"))' "$request")
   url="https://secretmanager.googleapis.com/v1/projects/$project/secrets/selfbench-$role-env/versions/$version:access"
   curl --fail --silent --show-error --max-time 30 -H "Authorization: Bearer $token" "$url" \
@@ -83,12 +82,8 @@ SELFBENCH_ENVIRONMENT=$environment
 SELFBENCH_IMAGE=$image
 SELFBENCH_ACTIVITY_CONCURRENCY=$concurrency
 SELFBENCH_SHARED_ENV_FILE=$release/shared.env
-SELFBENCH_API_ENV_FILE=$release/api.env
 SELFBENCH_WORKER_ENV_FILE=$release/worker.env
 EOF
-if [[ $api_on_vm == true ]]; then
-  echo "COMPOSE_PROFILES=api" >> "$release/release.env"
-fi
 chmod 0600 "$release/release.env"
 
 compose=(docker compose --env-file "$release/release.env" -f "$release/compose.yaml")
@@ -102,12 +97,11 @@ printf '%s' "$token" | docker login --username oauth2accesstoken --password-stdi
 
 check=(docker run --rm --env-file "$release/shared.env" --env-file "$release/worker.env"
   -v "$release/deploy-check.mjs:/app/deploy-check.mjs:ro" "$image" node /app/deploy-check.mjs)
-"${compose[@]}" stop api
-[[ $api_on_vm == true ]] || "${compose[@]}" rm --force api
 "${compose[@]}" stop worker
 migration="const {openDatabase}=await import('/app/dist/db/client.js'); const c=await openDatabase(process.env.SELFBENCH_DATABASE_URL); await c.close();"
 docker run --rm --env-file "$release/shared.env" "$image" node --input-type=module -e "$migration"
-"${compose[@]}" up -d --wait --wait-timeout 180
+# --remove-orphans drops the API container releases before Cloud Run left behind.
+"${compose[@]}" up -d --wait --wait-timeout 180 --remove-orphans
 
 for attempt in {1..12}; do
   if "${check[@]}" worker; then
@@ -116,9 +110,10 @@ for attempt in {1..12}; do
   [[ $attempt -lt 12 ]] || fail "worker did not register with Temporal"
   sleep 5
 done
-if [[ $api_on_vm == true ]]; then
-  curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8080/healthz >/dev/null
+# The site moved to Cloud Run; stop the old host proxy (its firewall rule is gone too).
+if systemctl is-enabled --quiet caddy 2>/dev/null; then
+  systemctl disable --now caddy
 fi
 printf '%s\n' "$release" > "$state/current-release"
 prune_images
-echo "Release, migrations, API health and recent worker polling verified."
+echo "Release, migrations and recent worker polling verified."

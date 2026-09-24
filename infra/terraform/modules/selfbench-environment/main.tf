@@ -8,7 +8,8 @@ locals {
   apis = toset(concat([
     "compute.googleapis.com", "artifactregistry.googleapis.com", "storage.googleapis.com",
     "secretmanager.googleapis.com", "iam.googleapis.com", "iap.googleapis.com",
-    "oslogin.googleapis.com", "iamcredentials.googleapis.com",
+    "oslogin.googleapis.com", "iamcredentials.googleapis.com", "run.googleapis.com",
+    "certificatemanager.googleapis.com",
   ], var.create_cloud_sql ? ["sqladmin.googleapis.com", "servicenetworking.googleapis.com"] : []))
 }
 resource "google_project_service" "api" {

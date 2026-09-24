@@ -16,10 +16,6 @@ variable "machine_type" {
   type    = string
   default = "e2-standard-2"
 }
-variable "enable_public_web" {
-  type    = bool
-  default = false
-}
 variable "create_cloud_sql" {
   type    = bool
   default = true
@@ -41,14 +37,9 @@ variable "operator_members" {
   type        = set(string)
 }
 variable "api_domains" {
-  type    = list(string)
-  default = []
+  type = list(string)
 }
 variable "redirect_domains" {
   type    = map(string)
   default = {}
-}
-variable "vm_serves_api" {
-  type    = bool
-  default = true
 }

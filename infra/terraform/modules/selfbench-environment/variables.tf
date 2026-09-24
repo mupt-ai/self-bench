@@ -45,11 +45,6 @@ variable "boot_disk_size_gb" {
     error_message = "The boot disk must be at least 100 GB; it was 50 GB when it filled in September 2026."
   }
 }
-variable "enable_public_web" {
-  description = "Open 80/443 only after domain, TLS proxy and authentication are configured."
-  type        = bool
-  default     = false
-}
 variable "create_cloud_sql" {
   description = "Proposed managed DB. False means an external managed database must be configured before release."
   type        = bool
@@ -88,25 +83,15 @@ variable "operator_members" {
   }
 }
 variable "api_domains" {
-  description = "Hostnames the API serves from Cloud Run behind a global load balancer (for example [\"app.selfbench.dev\", \"selfbench.dev\"]); empty keeps the API on the VM only."
+  description = "Hostnames the API serves from Cloud Run behind the global load balancer, for example [\"app.selfbench.dev\", \"selfbench.dev\"]."
   type        = list(string)
-  default     = []
   validation {
-    condition     = alltrue([for domain in var.api_domains : can(regex("^[a-z0-9.-]+\\.[a-z]+$", domain))])
-    error_message = "API domains must be bare hostnames."
+    condition     = length(var.api_domains) > 0 && alltrue([for domain in var.api_domains : can(regex("^[a-z0-9.-]+\\.[a-z]+$", domain))])
+    error_message = "List at least one bare hostname for the API."
   }
 }
 variable "redirect_domains" {
   description = "Hostnames the load balancer permanently redirects to another host, for example { \"www.selfbench.dev\" = \"selfbench.dev\" }."
   type        = map(string)
   default     = {}
-}
-variable "vm_serves_api" {
-  description = "Whether the VM still runs the API. Set false only after DNS points at the load balancer; the VM then runs the worker alone."
-  type        = bool
-  default     = true
-  validation {
-    condition     = var.vm_serves_api || length(var.api_domains) > 0
-    error_message = "The API must run somewhere: keep it on the VM until api_domains puts it on Cloud Run."
-  }
 }

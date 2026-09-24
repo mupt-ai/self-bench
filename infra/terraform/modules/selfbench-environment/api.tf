@@ -3,48 +3,36 @@
 # Terraform owns the service's shape; each release deploys its image and pinned secret
 # versions with `gcloud run deploy`, so those fields are ignored here.
 locals {
-  cloud_run  = length(var.api_domains) > 0
-  lb_domains = local.cloud_run ? concat(var.api_domains, keys(var.redirect_domains)) : []
-}
-
-resource "google_project_service" "cloud_run" {
-  for_each           = local.cloud_run ? toset(["run.googleapis.com", "certificatemanager.googleapis.com"]) : toset([])
-  project            = var.project_id
-  service            = each.value
-  disable_on_destroy = false
+  lb_domains = concat(var.api_domains, keys(var.redirect_domains))
 }
 
 # The API's own identity: artifacts, the shared and API secrets, and URL signing. Never the
 # worker's secret.
 resource "google_service_account" "api" {
-  count        = local.cloud_run ? 1 : 0
   project      = var.project_id
   account_id   = "${local.name}-api"
   display_name = "SelfBench ${var.environment} API on Cloud Run"
   depends_on   = [google_project_service.api]
 }
 resource "google_storage_bucket_iam_member" "api_artifacts" {
-  count  = local.cloud_run ? 1 : 0
   bucket = google_storage_bucket.artifacts.name
   role   = "roles/storage.objectUser"
-  member = "serviceAccount:${google_service_account.api[0].email}"
+  member = "serviceAccount:${google_service_account.api.email}"
 }
 resource "google_secret_manager_secret_iam_member" "api_reader" {
-  for_each  = local.cloud_run ? toset(["shared-env", "api-env"]) : toset([])
+  for_each  = toset(["shared-env", "api-env"])
   project   = var.project_id
   secret_id = google_secret_manager_secret.runtime[each.value].secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.api[0].email}"
+  member    = "serviceAccount:${google_service_account.api.email}"
 }
 resource "google_service_account_iam_member" "api_signer" {
-  count              = local.cloud_run ? 1 : 0
-  service_account_id = google_service_account.api[0].name
+  service_account_id = google_service_account.api.name
   role               = google_project_iam_custom_role.artifact_signer.name
-  member             = "serviceAccount:${google_service_account.api[0].email}"
+  member             = "serviceAccount:${google_service_account.api.email}"
 }
 
 resource "google_cloud_run_v2_service" "api" {
-  count               = local.cloud_run ? 1 : 0
   project             = var.project_id
   location            = var.region
   name                = "${local.name}-api"
@@ -53,7 +41,7 @@ resource "google_cloud_run_v2_service" "api" {
   # Only the load balancer reaches it, so X-Forwarded-For always carries its two hops.
   ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   template {
-    service_account                  = google_service_account.api[0].email
+    service_account                  = google_service_account.api.email
     timeout                          = "900s"
     max_instance_request_concurrency = 250
     # Exactly one instance: Codex sign-in keeps its pending login process in memory, and the
@@ -99,45 +87,41 @@ resource "google_cloud_run_v2_service" "api" {
       template[0].containers[0].volume_mounts,
     ]
   }
-  depends_on = [google_project_service.cloud_run]
+  depends_on = [google_project_service.api]
 }
 
 resource "google_compute_global_address" "api" {
-  count      = local.cloud_run ? 1 : 0
   project    = var.project_id
   name       = "${local.name}-api"
   depends_on = [google_project_service.api]
 }
 resource "google_compute_region_network_endpoint_group" "api" {
-  count                 = local.cloud_run ? 1 : 0
   project               = var.project_id
   region                = var.region
   name                  = "${local.name}-api"
   network_endpoint_type = "SERVERLESS"
   cloud_run {
-    service = google_cloud_run_v2_service.api[0].name
+    service = google_cloud_run_v2_service.api.name
   }
 }
 resource "google_compute_backend_service" "api" {
-  count                 = local.cloud_run ? 1 : 0
   project               = var.project_id
   name                  = "${local.name}-api"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   protocol              = "HTTPS"
-  # What the VM's Caddy added.
+  # Kept from the VM's former Caddy proxy.
   custom_response_headers = [
     "X-Content-Type-Options: nosniff",
     "Referrer-Policy: strict-origin-when-cross-origin",
   ]
   backend {
-    group = google_compute_region_network_endpoint_group.api[0].id
+    group = google_compute_region_network_endpoint_group.api.id
   }
 }
 resource "google_compute_url_map" "api" {
-  count           = local.cloud_run ? 1 : 0
   project         = var.project_id
   name            = "${local.name}-api"
-  default_service = google_compute_backend_service.api[0].id
+  default_service = google_compute_backend_service.api.id
   dynamic "host_rule" {
     for_each = var.redirect_domains
     content {
@@ -166,10 +150,9 @@ resource "google_certificate_manager_dns_authorization" "api" {
   project    = var.project_id
   name       = "${local.name}-${replace(each.key, ".", "-")}"
   domain     = each.key
-  depends_on = [google_project_service.cloud_run]
+  depends_on = [google_project_service.api]
 }
 resource "google_certificate_manager_certificate" "api" {
-  count   = local.cloud_run ? 1 : 0
   project = var.project_id
   name    = "${local.name}-api"
   managed {
@@ -178,39 +161,35 @@ resource "google_certificate_manager_certificate" "api" {
   }
 }
 resource "google_certificate_manager_certificate_map" "api" {
-  count      = local.cloud_run ? 1 : 0
   project    = var.project_id
   name       = "${local.name}-api"
-  depends_on = [google_project_service.cloud_run]
+  depends_on = [google_project_service.api]
 }
 resource "google_certificate_manager_certificate_map_entry" "api" {
   for_each     = toset(local.lb_domains)
   project      = var.project_id
   name         = "${local.name}-${replace(each.key, ".", "-")}"
-  map          = google_certificate_manager_certificate_map.api[0].name
-  certificates = [google_certificate_manager_certificate.api[0].id]
+  map          = google_certificate_manager_certificate_map.api.name
+  certificates = [google_certificate_manager_certificate.api.id]
   hostname     = each.key
 }
 resource "google_compute_target_https_proxy" "api" {
-  count           = local.cloud_run ? 1 : 0
   project         = var.project_id
   name            = "${local.name}-api"
-  url_map         = google_compute_url_map.api[0].id
-  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.api[0].id}"
+  url_map         = google_compute_url_map.api.id
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.api.id}"
 }
 resource "google_compute_global_forwarding_rule" "api_https" {
-  count                 = local.cloud_run ? 1 : 0
   project               = var.project_id
   name                  = "${local.name}-api-https"
   load_balancing_scheme = "EXTERNAL_MANAGED"
-  ip_address            = google_compute_global_address.api[0].id
+  ip_address            = google_compute_global_address.api.id
   port_range            = "443"
-  target                = google_compute_target_https_proxy.api[0].id
+  target                = google_compute_target_https_proxy.api.id
 }
 
 # Plain HTTP only redirects to HTTPS.
 resource "google_compute_url_map" "api_http" {
-  count   = local.cloud_run ? 1 : 0
   project = var.project_id
   name    = "${local.name}-api-http"
   default_url_redirect {
@@ -219,17 +198,15 @@ resource "google_compute_url_map" "api_http" {
   }
 }
 resource "google_compute_target_http_proxy" "api" {
-  count   = local.cloud_run ? 1 : 0
   project = var.project_id
   name    = "${local.name}-api-http"
-  url_map = google_compute_url_map.api_http[0].id
+  url_map = google_compute_url_map.api_http.id
 }
 resource "google_compute_global_forwarding_rule" "api_http" {
-  count                 = local.cloud_run ? 1 : 0
   project               = var.project_id
   name                  = "${local.name}-api-http"
   load_balancing_scheme = "EXTERNAL_MANAGED"
-  ip_address            = google_compute_global_address.api[0].id
+  ip_address            = google_compute_global_address.api.id
   port_range            = "80"
-  target                = google_compute_target_http_proxy.api[0].id
+  target                = google_compute_target_http_proxy.api.id
 }

@@ -18,7 +18,6 @@ SELFBENCH_ENVIRONMENT=dev \
 SELFBENCH_IMAGE=us-central1-docker.pkg.dev/selfbench-dev-example/selfbench/selfbench@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
 SELFBENCH_ACTIVITY_CONCURRENCY=1 \
 SELFBENCH_SHARED_ENV_FILE="$scratch/shared.env" \
-SELFBENCH_API_ENV_FILE="$scratch/api.env" \
 SELFBENCH_WORKER_ENV_FILE="$scratch/worker.env" \
   docker compose -f infra/runtime/compose.yaml config --quiet
 
