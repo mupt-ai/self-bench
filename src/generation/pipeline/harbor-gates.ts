@@ -1,7 +1,6 @@
 import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
@@ -21,7 +20,8 @@ import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
-import { type HarborLiveRun, harborLiveFeed } from "./harbor-live.js";
+import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
+import { activityAttempt } from "./helpers.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -68,9 +68,16 @@ export async function runHarborGates(
     await writeFile(archive, await store.get(task.bundle));
     await extractRegularArchive(archive, root, { signal });
     const directory = join(root, "harbor-task");
+    // Artifacts are write-once: a retried verification keeps its gate outputs in its own folder.
+    const attempt = activityAttempt();
+    const gateOutputs = attempt > 1 ? `${prefix}/attempt-${attempt}` : prefix;
     const log = async (name: string, raw: string) => ({
       logTail: tail(raw.trim(), 4_000),
-      log: await store.put(`${prefix}/${name}`, Buffer.from(raw || "(empty log)\n"), "text/plain"),
+      log: await store.put(
+        `${gateOutputs}/${name}`,
+        Buffer.from(raw || "(empty log)\n"),
+        "text/plain",
+      ),
     });
     const gates = notRunGates();
 
@@ -85,7 +92,7 @@ export async function runHarborGates(
       signal,
       live("nop"),
     );
-    await storeResult(store, `${prefix}/smoke-nop`, first);
+    await storeResult(store, `${gateOutputs}/smoke-nop`, first);
     const buildError = trialError(first.trial);
     if (buildError) {
       gates.build = {
@@ -129,7 +136,7 @@ export async function runHarborGates(
       signal,
       live("oracle"),
     );
-    await storeResult(store, `${prefix}/oracle`, oracle);
+    await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
     const oracleRewards = oracleError ? {} : numericRewards(rewards(oracle.trial));
     gates.oracle = {
@@ -197,22 +204,6 @@ export async function harborRun(
   if (infrastructure)
     throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
   return result;
-}
-
-/** The Temporal attempt, so a retried verification publishes under fresh live keys. */
-function activityAttempt(): number {
-  try {
-    return Context.current().info.attempt;
-  } catch {
-    return 1; // Not inside an activity (tests, local runs).
-  }
-}
-
-/** Credential values Harbor's process holds, so live output never republishes them. */
-function providerSecrets(env: NodeJS.ProcessEnv): string[] {
-  return Object.entries(env)
-    .filter(([key, value]) => /TOKEN|SECRET|KEY/.test(key) && value && value.length >= 8)
-    .map(([, value]) => value as string);
 }
 
 async function storeResult(

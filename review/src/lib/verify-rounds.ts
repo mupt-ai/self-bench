@@ -61,8 +61,11 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     ? latest(new RegExp(`/live/${attempt}-oracle-\\d+\\.json$`))
     : undefined;
   const compiled = entries.some((entry) => entry.key.endsWith("/harbor-task.tar.gz"));
-  const nopDone = Boolean(file("smoke-nop.json"));
-  const oracleDone = Boolean(file("oracle.json"));
+  // Retries keep their gate outputs under attempt-<n>/, so an earlier attempt's never counts.
+  const gateFile = (name: string) =>
+    Number(attempt ?? 1) > 1 ? file(`attempt-${Number(attempt)}/${name}`) : file(name);
+  const nopDone = Boolean(gateFile("smoke-nop.json"));
+  const oracleDone = Boolean(gateFile("oracle.json"));
   const done = Boolean(report);
   const state = (finished: boolean, started: boolean): VerifyStepState =>
     finished ? "done" : started && !done ? "running" : "pending";
