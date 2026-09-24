@@ -46,6 +46,35 @@ test("execution explains why a run is unavailable", () => {
   expect(runButton(renderExecution(false, 2))).toContain('disabled=""');
 });
 
+test("managed execution hides provider credentials and does not name its backend", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <RunExecution
+        repo="mupt-ai/self-bench"
+        draft={{
+          id: "preview",
+          tasks: [],
+          models: [],
+          sandbox: "managed",
+          sandboxCredentialId: "managed-sandbox",
+        }}
+        credentials={[]}
+        sandboxes={["managed", "e2b"]}
+        submitted={false}
+        busy={false}
+        ready={true}
+        tasksReady={true}
+        pairs={1}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  expect(html).toContain('value="managed" selected=""');
+  expect(html).not.toContain("Sandbox Credential");
+  expect(html).toContain("SelfBench&#x27;s platform account");
+});
+
 test("ready execution shows the trial total and enables the run action", () => {
   const html = renderExecution(true, 2);
   expect(html).toContain("Total Trials");

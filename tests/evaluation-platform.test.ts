@@ -54,12 +54,26 @@ test("managed evaluations use the platform model and sandbox credentials", async
           thinking: "high",
         },
       ],
-      sandbox: "e2b",
+      sandbox: "managed",
       sandboxCredentialId: "managed-sandbox",
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing managed evaluation input");
+    expect(
+      (
+        await fixture.request(
+          `${fixture.base}/comparisons`,
+          post({
+            ...draft,
+            id: crypto.randomUUID(),
+            sandboxCredentialId: crypto.randomUUID(),
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    expect(fixture.starts).toHaveLength(1);
+    expect(input.sandbox).toBe("e2b");
     const execution = await credentialExecution(input, home, env, records);
     expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
     expect(execution.child.E2B_API_KEY).toBe("managed-sandbox-secret");

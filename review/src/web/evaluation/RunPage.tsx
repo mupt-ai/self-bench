@@ -15,7 +15,7 @@ import { customModel, hasDuplicateModelSelections } from "./model-selection";
 import { RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
-import { restoreRunDraft } from "./run-draft";
+import { preferManagedSandbox, restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
 export function RunPage() {
   const scope = useEvaluationScope();
@@ -62,6 +62,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           setModels(result.models);
           setSandboxes(result.sandboxes);
           setManaged(result.managed ?? { models: false, sandbox: false });
+          if (result.managed?.sandbox) setState(preferManagedSandbox);
         }
       },
       (cause) => {
@@ -126,7 +127,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       ? [
           {
             id: "managed-sandbox",
-            name: "Managed E2B",
+            name: "Managed",
             kind: "e2b" as const,
             auth: "api-key" as const,
             createdAt: "",
@@ -146,7 +147,10 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     selected.length <= 12 &&
     availableCredentials.some(
       (credential) =>
-        credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
+        credential.id === draft.sandboxCredentialId &&
+        (draft.sandbox === "managed"
+          ? credential.id === "managed-sandbox"
+          : credential.kind === draft.sandbox),
     ) &&
     selected.every((selection) => {
       const model =
@@ -280,7 +284,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           repo={repo}
           draft={draft}
           credentials={availableCredentials}
-          sandboxes={sandboxes}
+          sandboxes={managed.sandbox ? ["managed", ...sandboxes] : sandboxes}
           submitted={state.submitted}
           busy={busy}
           ready={ready}

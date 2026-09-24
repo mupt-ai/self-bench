@@ -21,7 +21,7 @@ export function RunExecution({
   repo: string;
   draft: ComparisonDraft;
   credentials: CredentialInfo[];
-  sandboxes: HostedSandbox[];
+  sandboxes: (HostedSandbox | "managed")[];
   submitted: boolean;
   busy: boolean;
   ready: boolean;
@@ -54,38 +54,46 @@ export function RunExecution({
             onChange={(event) =>
               onChange({
                 ...draft,
-                sandbox: event.target.value as HostedSandbox,
-                sandboxCredentialId: "",
+                sandbox: event.target.value as HostedSandbox | "managed",
+                sandboxCredentialId: event.target.value === "managed" ? "managed-sandbox" : "",
               })
             }
           >
             {sandboxes.map((sandbox) => (
               <option key={sandbox} value={sandbox}>
-                {sandbox === "e2b" ? "E2B" : sandbox === "modal" ? "Modal" : "Daytona"}
+                {sandbox === "managed"
+                  ? "Managed"
+                  : sandbox === "e2b"
+                    ? "E2B"
+                    : sandbox === "modal"
+                      ? "Modal"
+                      : "Daytona"}
               </option>
             ))}
           </Select>
         </label>
-        <label className={fieldStyles} htmlFor="runpage-field-1">
-          Sandbox Credential
-          <Select
-            id="runpage-field-1"
-            aria-label="Sandbox Credential"
-            value={draft.sandboxCredentialId}
-            onChange={(event) => onChange({ ...draft, sandboxCredentialId: event.target.value })}
-          >
-            <option value="" disabled>
-              Select Credential
-            </option>
-            {credentials
-              .filter((entry) => entry.kind === draft.sandbox)
-              .map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-          </Select>
-        </label>
+        {draft.sandbox !== "managed" && (
+          <label className={fieldStyles} htmlFor="runpage-field-1">
+            Sandbox Credential
+            <Select
+              id="runpage-field-1"
+              aria-label="Sandbox Credential"
+              value={draft.sandboxCredentialId}
+              onChange={(event) => onChange({ ...draft, sandboxCredentialId: event.target.value })}
+            >
+              <option value="" disabled>
+                Select Credential
+              </option>
+              {credentials
+                .filter((entry) => entry.kind === draft.sandbox)
+                .map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </option>
+                ))}
+            </Select>
+          </label>
+        )}
       </fieldset>
       <div className="border-t border-border p-4">
         <dl className="mb-4 space-y-2 text-sm">
@@ -126,7 +134,9 @@ export function RunExecution({
           </p>
         )}
         <p className="mt-3 text-xs leading-5 text-muted-foreground">
-          Model and sandbox usage is billed by your providers.
+          {draft.sandbox === "managed"
+            ? "Managed sandbox usage runs on SelfBench's platform account. Model usage follows the selected model credential."
+            : "Model and sandbox usage is billed by your providers."}
         </p>
       </div>
     </aside>

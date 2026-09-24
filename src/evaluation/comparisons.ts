@@ -42,7 +42,7 @@ export const comparisonSchema = z
       )
       .min(1)
       .max(12),
-    sandbox: z.enum(hostedSandboxes),
+    sandbox: z.enum(["managed", ...hostedSandboxes]),
     sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
     skipCompleted: z.boolean().optional(),
   })
@@ -96,13 +96,22 @@ export async function createComparison(
   const saved = new Map(
     (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
   );
-  const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
+  // Accept saved E2B comparisons created before Managed was a distinct choice.
+  const managedSandbox =
+    selection.sandbox === "managed" ||
+    (selection.sandbox === "e2b" && selection.sandboxCredentialId === "managed-sandbox");
+  if (managedSandbox && !managed.sandbox)
+    throw new Error("Managed sandboxes are not available on this deployment.");
   const sandbox = managedSandbox
     ? { id: "managed-sandbox", kind: "e2b" as const }
     : saved.get(selection.sandboxCredentialId);
-  if (managedSandbox && !managed.sandbox)
-    throw new Error("Managed sandboxes are not available on this deployment.");
-  if (sandbox?.kind !== selection.sandbox) throw new Error("Select your saved sandbox credential");
+  if (
+    !sandbox ||
+    (managedSandbox
+      ? selection.sandboxCredentialId !== "managed-sandbox"
+      : sandbox.kind !== selection.sandbox)
+  )
+    throw new Error("Select your matching sandbox credential");
   const seen = new Set<string>();
   const createdAt = new Date().toISOString();
   const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
@@ -169,7 +178,7 @@ export async function createComparison(
           modelName,
           thinking,
           harnesses: group.harnesses,
-          sandbox: selection.sandbox,
+          sandbox: selection.sandbox === "managed" ? "e2b" : selection.sandbox,
           tasks: group.tasks,
           repoId: scope.repoId,
           tenant: scope.tenant,
