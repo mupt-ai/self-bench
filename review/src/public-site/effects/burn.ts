@@ -1,3 +1,4 @@
+import { clipCells } from "./clip";
 import { resolveRgb } from "./color";
 import { bayer } from "./dither";
 import { currentTransition, stillRunning } from "./transition-run";
@@ -108,15 +109,11 @@ export function burn(sheet: HTMLElement, origin: Origin, options: BurnOptions = 
   const { toward, inward = false, keepClear, duration = DURATION_MS } = options;
   const width = Math.ceil(sheet.clientWidth / CELL);
   const height = Math.ceil(sheet.clientHeight / CELL);
-  const mask = document.createElement("canvas");
   const char = document.createElement("canvas");
-  for (const canvas of [mask, char]) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  const maskContext = mask.getContext("2d");
+  char.width = width;
+  char.height = height;
   const charContext = char.getContext("2d");
-  if (!maskContext || !charContext || width === 0 || height === 0) {
+  if (!charContext || width === 0 || height === 0) {
     sheet.remove();
     return { clearedAt: () => 0, touchedAt: () => Number.POSITIVE_INFINITY, start: () => {} };
   }
@@ -130,7 +127,6 @@ export function burn(sheet: HTMLElement, origin: Origin, options: BurnOptions = 
   });
   char.dataset.scorch = "";
   sheet.append(char);
-  const holes = maskContext.createImageData(width, height);
   const scorched = charContext.createImageData(width, height);
   const [red, green, blue, alpha] = scorch();
   const ragged = raggedness(width, height, 16, RAGGED);
@@ -205,8 +201,6 @@ export function burn(sheet: HTMLElement, origin: Origin, options: BurnOptions = 
     return whenFront(first - CHAR_BAND);
   };
 
-  sheet.style.setProperty("mask-size", `${width * CELL}px ${height * CELL}px`);
-  sheet.style.setProperty("mask-repeat", "no-repeat");
   let began = 0;
   let fireIn = 0;
   const run = currentTransition();
@@ -217,34 +211,42 @@ export function burn(sheet: HTMLElement, origin: Origin, options: BurnOptions = 
     const dissolve = (now - began) / KEEP_FADE_MS;
     // Starts a band behind the origin, so the first frame already shows scorching.
     const front = -CHAR_BAND * 0.5 + eased(progress) * travel;
-    const hole = holes.data;
     const ink = scorched.data;
+    // The paper left: each row's runs of dots that have not burned through.
+    const paper = clipCells(CELL);
     for (let y = 0; y < height; y++) {
+      let run = -1;
       for (let x = 0; x < width; x++) {
         const index = y * width + x;
+        let kept: boolean;
         if (clear[index]) {
           // Dissolves, dithered, from paper to clear; never scorched.
-          hole[index * 4 + 3] = dissolve > bayer(x, y) ? 0 : 255;
+          kept = dissolve <= bayer(x, y);
           ink[index * 4 + 3] = 0;
-          continue;
+        } else {
+          const behind = front - (distance[index] ?? 0);
+          // Holes open across the band behind the front, with ripple rings running through it.
+          const open = behind / HOLE_BAND + 0.04 * Math.sin(behind * 0.5);
+          kept = open <= bayer(x, y) + 0.03;
+          // Scorch builds up ahead of the holes and is complete where they begin.
+          const heat = Math.min(1, (behind + CHAR_BAND) / CHAR_BAND);
+          const on = heat > 0 && heat * 0.5 > bayer(x + 1, y + 2);
+          ink[index * 4] = red;
+          ink[index * 4 + 1] = green;
+          ink[index * 4 + 2] = blue;
+          ink[index * 4 + 3] = on ? alpha : 0;
         }
-        const behind = front - (distance[index] ?? 0);
-        const threshold = bayer(x, y);
-        // Holes open across the band behind the front, with ripple rings running through it.
-        const open = behind / HOLE_BAND + 0.04 * Math.sin(behind * 0.5);
-        hole[index * 4 + 3] = open > threshold + 0.03 ? 0 : 255;
-        // Scorch builds up ahead of the holes and is complete where they begin.
-        const heat = Math.min(1, (behind + CHAR_BAND) / CHAR_BAND);
-        const on = heat > 0 && heat * 0.5 > bayer(x + 1, y + 2);
-        ink[index * 4] = red;
-        ink[index * 4 + 1] = green;
-        ink[index * 4 + 2] = blue;
-        ink[index * 4 + 3] = on ? alpha : 0;
+        if (kept && run < 0) run = x;
+        if (!kept && run >= 0) {
+          paper.run(run, x);
+          run = -1;
+        }
       }
+      if (run >= 0) paper.run(run, width);
+      paper.endRow();
     }
     charContext.putImageData(scorched, 0, 0);
-    maskContext.putImageData(holes, 0, 0);
-    sheet.style.setProperty("mask-image", `url(${mask.toDataURL()})`);
+    sheet.style.setProperty("clip-path", paper.css());
     if (progress < 1) requestAnimationFrame(frame);
     else sheet.remove();
   };

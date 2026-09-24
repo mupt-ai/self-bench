@@ -9,7 +9,6 @@ const SWEEP_MS = 300;
 const JITTER_MS = 70;
 /** How long one block takes to shrink away. */
 const PLACE_MS = 110;
-const MASK_SCALE = 0.5;
 const FADE_MS = 200;
 
 /**
@@ -18,6 +17,10 @@ const FADE_MS = 200;
  * `keepAbove` (a viewport y); everything above that line stays. Lines marked to fade (the
  * "Run by" line) fade out whole instead, over `fadeMs`. Resolves when only the kept part is left; the sheet
  * itself (the paper) is untouched, for the fire to burn afterwards.
+ *
+ * The blocks go by drawing the paper over them, on a canvas above the copy: the paper is one
+ * plain colour, and the copy itself is never redrawn. (Masking or clipping the copy instead
+ * made WebKit redraw the whole page every frame.)
  */
 export function disassemble(
   sheet: HTMLElement,
@@ -27,17 +30,34 @@ export function disassemble(
   const inner = sheet.firstElementChild;
   if (!(inner instanceof HTMLElement)) return Promise.resolve();
   const frame = sheet.getBoundingClientRect();
-  const box = inner.getBoundingClientRect();
   const keep = Math.max(frame.top, Math.min(keepAbove, frame.bottom));
   const width = Math.ceil(frame.width);
   const height = Math.ceil(frame.height);
-  const mask = document.createElement("canvas");
-  mask.width = Math.ceil(width * MASK_SCALE);
-  mask.height = Math.ceil(height * MASK_SCALE);
-  const context = mask.getContext("2d");
+  const scale = window.devicePixelRatio || 1;
+  const cover = document.createElement("canvas");
+  cover.width = Math.round(width * scale);
+  cover.height = Math.round(height * scale);
+  const context = cover.getContext("2d");
   if (!context || width <= 0 || height <= 0) return Promise.resolve();
-  context.scale(MASK_SCALE, MASK_SCALE);
-  context.fillStyle = "#000";
+  Object.assign(cover.style, {
+    position: "absolute",
+    left: "0",
+    top: "0",
+    width: `${width}px`,
+    height: `${height}px`,
+  });
+  context.fillStyle = getComputedStyle(sheet).backgroundColor;
+  inner.after(cover);
+  // Leaves the copy showing through a rectangle of the sheet, on whole device pixels so that
+  // neighbouring blocks meet without a seam.
+  const pixel = (value: number) => Math.round(value * scale);
+  const uncover = (left: number, top: number, across: number, down: number) =>
+    context.clearRect(
+      pixel(left),
+      pixel(top),
+      pixel(left + across) - pixel(left),
+      pixel(top + down) - pixel(top),
+    );
 
   const fading = [...inner.querySelectorAll<HTMLElement>(select.revealFade)];
   for (const element of fading) {
@@ -68,9 +88,6 @@ export function disassemble(
     }
   }
   const last = Math.max(fadeMs, ...pieces.map((piece) => piece.at + PLACE_MS));
-  inner.style.setProperty("mask-size", `${width}px ${height}px`);
-  inner.style.setProperty("mask-position", `${frame.left - box.left}px ${frame.top - box.top}px`);
-  inner.style.setProperty("mask-repeat", "no-repeat");
 
   const run = currentTransition();
   return new Promise((resolve) => {
@@ -78,19 +95,18 @@ export function disassemble(
     const frameStep = (now: number) => {
       if (!stillRunning(run)) return;
       const elapsed = now - begin;
-      context.clearRect(0, 0, width, height);
-      context.fillRect(0, 0, width, keep - frame.top);
+      context.fillRect(0, 0, cover.width, cover.height);
+      uncover(0, 0, width, keep - frame.top);
       for (const rect of open)
-        context.fillRect(rect.left - frame.left, rect.top - frame.top, rect.width, rect.height);
+        uncover(rect.left - frame.left, rect.top - frame.top, rect.width, rect.height);
       for (const piece of pieces) {
         const t = (elapsed - piece.at) / PLACE_MS;
         if (t >= 1) continue;
         // Shrinks toward its centre, slowly at first and then quickly away.
         const side = t <= 0 ? TILE : TILE * (1 - t * t);
         const inset = (TILE - side) / 2;
-        context.fillRect(piece.x + inset, piece.y + inset, side, side);
+        uncover(piece.x + inset, piece.y + inset, side, side);
       }
-      inner.style.setProperty("mask-image", `url(${mask.toDataURL()})`);
       if (elapsed < last) requestAnimationFrame(frameStep);
       else resolve();
     };
