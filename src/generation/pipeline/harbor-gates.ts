@@ -20,6 +20,8 @@ import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
+import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
+import { activityAttempt } from "./helpers.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -66,15 +68,31 @@ export async function runHarborGates(
     await writeFile(archive, await store.get(task.bundle));
     await extractRegularArchive(archive, root, { signal });
     const directory = join(root, "harbor-task");
+    // Artifacts are write-once: a retried verification keeps its gate outputs in its own folder.
+    const attempt = activityAttempt();
+    const gateOutputs = attempt > 1 ? `${prefix}/attempt-${attempt}` : prefix;
     const log = async (name: string, raw: string) => ({
       logTail: tail(raw.trim(), 4_000),
-      log: await store.put(`${prefix}/${name}`, Buffer.from(raw || "(empty log)\n"), "text/plain"),
+      log: await store.put(
+        `${gateOutputs}/${name}`,
+        Buffer.from(raw || "(empty log)\n"),
+        "text/plain",
+      ),
     });
     const gates = notRunGates();
 
     await writeFile(join(directory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
-    const first = await harborRun(directory, root, task.taskId, "nop", harborEnvironment, signal);
-    await storeResult(store, `${prefix}/smoke-nop`, first);
+    const live = (run: HarborLiveRun) => ({ store, prefix, run });
+    const first = await harborRun(
+      directory,
+      root,
+      task.taskId,
+      "nop",
+      harborEnvironment,
+      signal,
+      live("nop"),
+    );
+    await storeResult(store, `${gateOutputs}/smoke-nop`, first);
     const buildError = trialError(first.trial);
     if (buildError) {
       gates.build = {
@@ -116,8 +134,9 @@ export async function runHarborGates(
       "oracle",
       harborEnvironment,
       signal,
+      live("oracle"),
     );
-    await storeResult(store, `${prefix}/oracle`, oracle);
+    await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
     const oracleRewards = oracleError ? {} : numericRewards(rewards(oracle.trial));
     gates.oracle = {
@@ -143,12 +162,20 @@ export async function harborRun(
   agent: "nop" | "oracle",
   environment: SelfBenchConfig["harborEnvironment"],
   signal: AbortSignal,
+  /** Where to publish progress snapshots while the run is in flight. */
+  live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
   const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
+  const feed =
+    live &&
+    harborLiveFeed(live.store, live.prefix, live.run, join(jobsDirectory, jobName), {
+      attempt: activityAttempt(),
+      secrets: providerSecrets(env),
+    });
   const run = await runCommand(
     "harbor",
     harborRunArguments({
@@ -159,8 +186,14 @@ export async function harborRun(
       environment,
       quiet: false,
     }),
-    { allowFailure: true, env, timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate, signal },
-  );
+    {
+      allowFailure: true,
+      env,
+      timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
+      signal,
+      ...(feed ? { onOutput: feed.push } : {}),
+    },
+  ).finally(() => feed?.close());
   if (run.exitCode !== 0) {
     throw new Error(
       `Harbor ${agent} exited ${run.exitCode} for ${taskId}:\n${tail(`${run.stdout}\n${run.stderr}`.trim())}`,

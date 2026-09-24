@@ -59,16 +59,18 @@ resource "google_secret_manager_secret" "runtime" {
   }
   depends_on = [google_project_service.api]
 }
+# The worker never reads the API's secret.
 resource "google_secret_manager_secret_iam_member" "runtime_reader" {
-  for_each  = google_secret_manager_secret.runtime
+  for_each  = toset(["shared", "worker"])
   project   = var.project_id
-  secret_id = each.value.secret_id
+  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
 # Verifier material is delivered to hosted sandboxes through short-lived signed GCS URLs.
-# ADC on a VM has no local signing key; authorize ONLY signBlob on its own service account.
+# Cloud Run's metadata-server credentials have no local signing key; authorize ONLY signBlob on
+# the signer's own service account.
 resource "google_project_iam_custom_role" "artifact_signer" {
   project     = var.project_id
   role_id     = "selfbenchArtifactSigner"

@@ -74,7 +74,9 @@ export function RunExecution({
             value={draft.sandboxCredentialId}
             onChange={(event) => onChange({ ...draft, sandboxCredentialId: event.target.value })}
           >
-            <option value="">Select Credential</option>
+            <option value="" disabled>
+              Select Credential
+            </option>
             {credentials
               .filter((entry) => entry.kind === draft.sandbox)
               .map((entry) => (

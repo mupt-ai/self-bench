@@ -72,13 +72,12 @@ export function createRateLimiter(options: RateLimitOptions) {
 export type RateLimiter = ReturnType<typeof createRateLimiter>;
 
 /**
- * The client's IP. In production the API listens on loopback behind Caddy, which sets
- * `X-Forwarded-For` to the real peer and drops any value the client sent, so the last entry is
- * trustworthy. Without the header, the socket's address.
+ * The client's IP. In production the API runs on Cloud Run behind Google's load balancer, which
+ * appends the client it saw and then its own address to `X-Forwarded-For`, so the second-to-last
+ * entry is trustworthy; anything earlier came from the client. Without it, the socket's address.
  */
 export function clientIp(request: IncomingMessage): string {
   const forwarded = request.headers["x-forwarded-for"];
-  const header = Array.isArray(forwarded) ? forwarded.at(-1) : forwarded;
-  const last = header?.split(",").at(-1)?.trim();
-  return last || request.socket.remoteAddress || "unknown";
+  const header = Array.isArray(forwarded) ? forwarded.join(",") : forwarded;
+  return header?.split(",").at(-2)?.trim() || request.socket.remoteAddress || "unknown";
 }

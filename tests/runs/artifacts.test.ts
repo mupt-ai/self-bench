@@ -5,15 +5,13 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { listArchivedRuns } from "../../src/generation/runs/archived.js";
 import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
-import { clearBundleCache, expandBundle } from "../../src/generation/runs/bundle.js";
-import { readTaskDirectory } from "../../src/generation/runs/task-files.js";
+import { expandBundle } from "../../src/generation/runs/bundle.js";
 import { runCommand } from "../../src/lib/process.js";
 
 const roots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-  await clearBundleCache();
 });
 
 async function temporaryRoot(): Promise<string> {
@@ -120,30 +118,44 @@ describe("artifact store listing", () => {
 });
 
 describe("harbor task directories and bundles", () => {
-  test("reads task directories", async () => {
+  async function storeBundle(root: string, key: string, wrapped: boolean) {
+    const source = join(root, "source");
+    await writeHarborTask(wrapped ? join(source, "harbor-task") : source, "selfbench/gamma");
+    const archive = join(root, "bundle.tar.gz");
+    await runCommand("tar", ["-czf", archive, "-C", source, "."]);
+    const store = new LocalArtifactStore(join(root, "store"));
+    await store.putFile(key, archive, "application/gzip");
+    return store;
+  }
+
+  test("streams a stored bundle into viewer files", async () => {
     const root = await temporaryRoot();
-    await writeHarborTask(join(root, "alpha"), "selfbench/alpha");
-    const files = await readTaskDirectory(join(root, "alpha"), "alpha");
-    const byPath = new Map(files.files.map((file) => [file.path, file]));
+    const key = "runs/run-2/environments/gamma/h/initial/trusted-compiler-v1/harbor-task.tar.gz";
+    const store = await storeBundle(root, key, true);
+
+    const bundle = await expandBundle(store, key);
+    expect(bundle.taskId).toBe("gamma");
+    expect(bundle.files.map((file) => file.path)).toEqual([
+      "environment/Dockerfile",
+      "environment/repo.tar.gz",
+      "instruction.md",
+      "task.toml",
+      "tests/test.patch",
+    ]);
+    const byPath = new Map(bundle.files.map((file) => [file.path, file]));
     expect(byPath.get("instruction.md")?.text).toBe("Do the thing.\n");
-    expect(byPath.get("environment/repo.tar.gz")?.text).toBeUndefined();
+    expect(byPath.get("environment/repo.tar.gz")).toEqual({
+      path: "environment/repo.tar.gz",
+      sizeBytes: 4,
+    });
+    await expect(expandBundle(store, "runs/run-2/missing.tar.gz")).rejects.toThrow("not found");
   });
 
-  test("expands a stored bundle once and serves it from the cache", async () => {
+  test("reads a bundle whose task sits at the archive root", async () => {
     const root = await temporaryRoot();
-    const source = join(root, "source");
-    await writeHarborTask(join(source, "harbor-task"), "selfbench/gamma");
-    const archive = join(root, "bundle.tar.gz");
-    await runCommand("tar", ["-czf", archive, "-C", source, "harbor-task"]);
-    const store = new LocalArtifactStore(join(root, "store"));
-    const key = "runs/run-2/environments/gamma/h/initial/trusted-compiler-v1/harbor-task.tar.gz";
-    await store.putFile(key, archive, "application/gzip");
-
-    const first = await expandBundle(store, key);
-    expect(first.taskId).toBe("gamma");
-    expect(first.files.some((file) => file.path === "task.toml")).toBe(true);
-    const second = await expandBundle(store, key);
-    expect(second.files.length).toBe(first.files.length);
-    await expect(expandBundle(store, "runs/run-2/missing.tar.gz")).rejects.toThrow("not found");
+    const key = "runs/run-3/authoring/cand-a/source-task.tar.gz";
+    const bundle = await expandBundle(await storeBundle(root, key, false), key);
+    expect(bundle.taskId).toBe("cand-a");
+    expect(bundle.files.some((file) => file.path === "task.toml")).toBe(true);
   });
 });

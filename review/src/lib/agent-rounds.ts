@@ -6,6 +6,7 @@ export interface AgentRound {
   stage: "authoring" | "review";
   round: number;
   attempt: number;
+  startedAt: string;
   status?: "finished" | "failed";
   live?: ArtifactEntry;
   session?: ArtifactEntry;
@@ -40,6 +41,7 @@ export function agentRounds(artifacts: CandidateArtifacts): AgentRound[] {
         stage: record.stage,
         round: record.round,
         attempt: record.attempt,
+        startedAt: record.startedAt,
         title: `${record.stage === "authoring" ? "Authoring" : "Review"} Part ${record.round}${record.turn ? `, Turn ${record.turn}` : ""}`,
         ...(failed
           ? { status: "failed" as const }

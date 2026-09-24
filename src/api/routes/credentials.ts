@@ -10,7 +10,7 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/codex-login(?:\/([a-f0-9-]{36})(?:\/(complete|cancel))?)?|\/([a-f0-9-]{36})\/delete)?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/codex-login(?:\/([a-f0-9-]{36})(?:\/(cancel))?)?|\/([a-f0-9-]{36})\/delete)?$/;
 const codexStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 
 /** Organization credentials: anyone in the org lists them; only admins add or delete them. */
@@ -41,20 +41,19 @@ export async function credentialRoutes(
   const [loginId, loginAction, deleteId] = [match[2], match[3], match[4]];
   try {
     if (!options.vault) throw new RecordStoreError(503);
-    const { credentials, comparisons } = options.vault;
+    const vault = options.vault;
+    const { credentials, comparisons } = vault;
     if (codex) {
       const logins = options.codexLogins ?? codexLogins;
       if (!mutation && loginId && !loginAction)
-        sendJson(response, 200, logins.status(org.id, user.id, loginId));
+        sendJson(response, 200, await logins.status(vault, org.id, user.id, loginId));
       else if (mutation && !loginId) {
         const { name } = codexStartSchema.parse(
           JSON.parse((await readBody(request, 1024)).toString()),
         );
-        sendJson(response, 202, await logins.start(org.id, user.id, name));
-      } else if (mutation && loginId && loginAction === "complete")
-        sendJson(response, 200, await logins.complete(org.id, user.id, loginId, credentials));
-      else if (mutation && loginId && loginAction === "cancel") {
-        await logins.cancel(org.id, user.id, loginId);
+        sendJson(response, 202, await logins.start(vault, org.id, user.id, name));
+      } else if (mutation && loginId && loginAction === "cancel") {
+        await logins.cancel(vault, org.id, user.id, loginId);
         sendJson(response, 200, { cancelled: true });
       } else sendJson(response, 405, { error: "Method not allowed" });
     } else if (!mutation && !deleteId) {

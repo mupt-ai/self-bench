@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import { canHover } from "../mobile/device";
 import { motionOff } from "../motion";
 import { scrollArea } from "../scroll-area";
 import { assembleForReveal } from "./assemble-reveal";
@@ -71,11 +72,15 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
       source,
     ]),
   );
-  // The frozen copy keeps the card in its hover state rather than snapping back.
-  if (card) holdHover(card, true);
+  // The frozen copy keeps the card in its hover look (card-on in theme.css) rather than snapping
+  // back, if it showed it: under a mouse, or focused from the keyboard. A tapped card never did
+  // (and :hover stays stuck on after a tap), so it is left as it was.
+  const shown =
+    card !== null && ((canHover() && card.matches(":hover")) || card.matches(":focus-visible"));
+  if (card && shown) holdHover(card, true);
   const sheet = beginWithSheet(area, layout);
   const run = currentTransition();
-  if (card) holdHover(card, false);
+  if (card && shown) holdHover(card, false);
   const frame = area.view();
   // The title lands near the top left of the content column; the fire leans that way.
   const column = area.content.querySelector("main")?.getBoundingClientRect() ?? frame;
@@ -118,7 +123,8 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
           const path = paths.get(key);
           return path
             ? fly(path, target, layout, pace, {
-                fadeIn: FADE_IN.has(key),
+                // Parts the hover look hides fade in on the way; a tapped card never hid them.
+                fadeIn: shown && FADE_IN.has(key),
                 aboveSheet: false,
                 rewrapFrom:
                   key === "description"

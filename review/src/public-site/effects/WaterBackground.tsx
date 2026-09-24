@@ -61,7 +61,10 @@ void main() {
   shade = clamp(shade * (0.35 + 0.65 * edge) * coverage, 0.0, 1.0);
   // Strictly above the threshold, so flat water draws nothing at all.
   float dot4 = step(bayer4(gl_FragCoord.xy) + 0.04, shade);
-  gl_FragColor = vec4(tint, dot4 * strength);
+  // Premultiplied (the canvas default), so a pixel without a dot is (0,0,0,0) and composites
+  // as empty in every browser, rather than relying on the browser honouring unpremultiplied.
+  float alpha = dot4 * strength;
+  gl_FragColor = vec4(tint * alpha, alpha);
 }`;
 
 const MODES: Record<string, number> = { out: 0, in: 1, rain: 2 };
@@ -101,7 +104,7 @@ export function WaterBackground({ bands = false }: { bands?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const element = canvas.current;
-    const gl = element?.getContext("webgl", { premultipliedAlpha: false, antialias: false });
+    const gl = element?.getContext("webgl", { antialias: false });
     if (!element || !gl) return;
     const shader = (type: number, source: string) => {
       const created = gl.createShader(type);
@@ -192,7 +195,7 @@ export function WaterBackground({ bands = false }: { bands?: boolean }) {
       ref={canvas}
       className={
         bands
-          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_65px,transparent_65px_calc(100%-49px),black_calc(100%-49px))]"
+          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_var(--bar-top),transparent_var(--bar-top)_calc(100%-var(--bar-bottom)),black_calc(100%-var(--bar-bottom)))]"
           : "pointer-events-none fixed inset-0 -z-10 h-full w-full"
       }
     />

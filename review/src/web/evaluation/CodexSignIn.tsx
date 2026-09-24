@@ -9,13 +9,11 @@ export function CodexSignIn({
   org,
   name,
   onActiveChange,
-  onSavingChange,
   onDone,
 }: {
   org: string;
   name: string;
   onActiveChange(active: boolean): void;
-  onSavingChange(saving: boolean): void;
   onDone(): Promise<void>;
 }) {
   const url = `/api/orgs/${encodeURIComponent(org)}/credentials/codex-login`;
@@ -50,31 +48,16 @@ export function CodexSignIn({
       try {
         const next = await evaluationRequest<CodexLoginStatus>(`${url}/${sessionId}`);
         if (stale()) return;
-        if (next.status === "ready") {
-          setSession({ ...next, status: "saving" });
-          onSavingChange(true);
-          const credential = await evaluationRequest<NonNullable<CodexLoginStatus["credential"]>>(
-            `${url}/${sessionId}/complete`,
-            {},
-          );
-          if (!stale()) {
-            setSession({ ...next, status: "saved", credential });
-            onSavingChange(false);
-            onActiveChange(false);
-            void completed.current();
-          }
-          return;
-        }
         setSession(next);
         if (next.status === "failed" || next.status === "saved") {
           onActiveChange(false);
           if (next.status === "saved") void completed.current();
           return;
         }
-        timer = setTimeout(poll, 1500);
+        // Each poll asks OpenAI once; its device flow allows one check every five seconds.
+        timer = setTimeout(poll, 5000);
       } catch (cause) {
         if (!stale()) {
-          onSavingChange(false);
           setError(cause instanceof Error ? cause.message : "Could not check sign-in. Try again.");
         }
       }
@@ -84,7 +67,7 @@ export function CodexSignIn({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [sessionId, error, url, onActiveChange, onSavingChange]);
+  }, [sessionId, error, url, onActiveChange]);
   const start = async () => {
     generation.current += 1;
     setSession(undefined);
@@ -141,7 +124,7 @@ export function CodexSignIn({
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
-      ) : starting || session?.status === "starting" ? (
+      ) : starting ? (
         <div role="status" aria-label="Preparing Sign-In" className="panel space-y-4 p-4">
           <Skeleton className="h-4 w-44" />
           <Skeleton className="h-12 w-full" />
@@ -212,7 +195,7 @@ export function CodexSignIn({
               className="size-1.5 animate-pulse rounded-full bg-brand motion-reduce:animate-none"
               aria-hidden="true"
             />
-            {session?.status === "saving" ? "Saving…" : "Waiting for approval…"}
+            Waiting for approval…
           </p>
         </div>
       )}

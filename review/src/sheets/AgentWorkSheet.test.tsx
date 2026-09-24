@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("./AgentWorkSheet.tsx", import.meta.url), "utf8");
+const source = [
+  readFileSync(new URL("./AgentWorkSheet.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("./WorkPart.tsx", import.meta.url), "utf8"),
+].join("\n");
 
 test("keeps the round title and untruncated status on one compact row", () => {
   expect(source).toContain("!gap-2");

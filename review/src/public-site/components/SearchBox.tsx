@@ -37,7 +37,7 @@ export function SearchBox({
       />
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-sm text-foreground/60 transition-opacity duration-200 ${
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-sm text-foreground/60 touch:text-base transition-opacity duration-200 ${
           focused || query ? "opacity-0" : "opacity-100"
         }`}
       >
@@ -51,7 +51,7 @@ export function SearchBox({
         // Keep focus in the box, so the caret stays for the next search.
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => change("")}
-        className={`absolute right-2 inline-flex size-7 items-center justify-center text-muted-foreground transition-[opacity,rotate,scale] duration-200 hover:text-foreground ${
+        className={`hit absolute right-2 inline-flex size-7 items-center justify-center text-muted-foreground transition-[opacity,rotate,scale] duration-200 hover:text-foreground ${
           query
             ? "scale-100 rotate-0 opacity-100"
             : "pointer-events-none scale-50 -rotate-90 opacity-0"

@@ -61,10 +61,12 @@ test("refusals are reported at most once a minute per client", () => {
   expect(reports).toEqual(["a:client", "a:client"]);
 });
 
-test("the client is the last forwarded address, else the socket's", () => {
+test("the client is the address the load balancer appended, else the socket's", () => {
   const request = (headers: Record<string, string | string[]>, remote = "10.0.0.1") =>
     ({ headers, socket: { remoteAddress: remote } }) as unknown as IncomingMessage;
-  expect(clientIp(request({ "x-forwarded-for": "203.0.113.9" }))).toBe("203.0.113.9");
-  expect(clientIp(request({ "x-forwarded-for": "1.1.1.1, 203.0.113.9" }))).toBe("203.0.113.9");
+  expect(clientIp(request({ "x-forwarded-for": "203.0.113.9, 34.120.0.1" }))).toBe("203.0.113.9");
+  expect(clientIp(request({ "x-forwarded-for": "6.6.6.6, 203.0.113.9, 34.120.0.1" }))).toBe(
+    "203.0.113.9",
+  );
   expect(clientIp(request({}))).toBe("10.0.0.1");
 });

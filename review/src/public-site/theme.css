@@ -3,6 +3,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./palette.css";
+@import "./mobile/mobile.css";
 
 /* The Vite root is review/public-site, so Tailwind must be told where the components live. */
 @source "../";
@@ -54,9 +55,39 @@
 
 /*
  * A repository card's hover state, also forced on the snapshot taken during a page transition
- * through `data-active` (set by holdHover in effects/marks.ts).
+ * through `data-active` (set by holdHover in effects/marks.ts). Hover counts only where the
+ * pointer can hover: a tap on a phone leaves :hover stuck on, which would pop the preview open.
  */
-@custom-variant card-on (&:where(.group:hover *, .group:focus-visible *, .group[data-active] *));
+@custom-variant card-on {
+  @media (hover: hover) {
+    &:where(.group:hover *) {
+      @slot;
+    }
+  }
+  &:where(.group:focus-visible *, .group[data-active] *) {
+    @slot;
+  }
+}
+
+/*
+ * The frame's measurements (frame.ts, PublicLayout). In the base layer, so the compact
+ * overrides in mobile/mobile.css win wherever they apply.
+ */
+@layer base {
+  :root {
+    /* How far each ruler line sits in from its window edge. */
+    --edge: clamp(24px, 6vw, 160px);
+    /* The page's side padding. */
+    --gutter: 1.5rem;
+    /* The header's and footer's side padding, inside the rulers. */
+    --bar-inset: 1.5rem;
+    /* The pinned header's and footer's heights, border lines included; 0 when not pinned. */
+    --bar-top: 65px;
+    --bar-bottom: 49px;
+    /* Space above and below the page's content. */
+    --page-pad: 2.5rem;
+  }
+}
 
 /* The page colour sits on html so the water canvas can draw between it and the content. */
 html {
@@ -68,8 +99,8 @@ html {
    * band between them: focus, find-in-page, and scrollIntoView bring things into that band,
    * not under the header or footer. Keep in step with their heights.
    */
-  scroll-padding-top: 65px;
-  scroll-padding-bottom: 49px;
+  scroll-padding-top: var(--bar-top);
+  scroll-padding-bottom: var(--bar-bottom);
 }
 
 /* "Disable Animations" in the settings menu: every transition and animation becomes instant. */

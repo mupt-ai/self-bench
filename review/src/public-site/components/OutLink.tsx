@@ -7,7 +7,7 @@ export function OutLink({ href, children }: { href: string; children: string }) 
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-0.5 hover:text-foreground"
+      className="hit relative inline-flex items-center gap-0.5 hover:text-foreground"
     >
       {children}
       <ArrowUpRight className="size-3" aria-hidden="true" />

@@ -1,18 +1,22 @@
+/*
+ * The frame's classes. Their measurements are CSS variables (theme.css), narrowed for compact
+ * screens in one place (mobile/mobile.css), so everything built on them adapts on its own.
+ */
+
 /**
  * The one content width shared by the header, the page, and the footer, so their edges line
  * up with the card grid and with the ruler lines drawn at the frame's sides.
  */
-export const FRAME = "mx-auto w-full max-w-6xl px-6";
+export const FRAME = "mx-auto w-full max-w-6xl px-(--gutter)";
 
-/** Where the ruler lines sit: a little outside the content, so the page has a margin. */
 /**
- * Rulers sit a proportional margin in from each window edge: 6% of the width, never less
- * than 24px and never more than 160px. About 115px on a 1920px screen, 90px on a laptop.
+ * Where the ruler lines sit: `--edge` in from each window side, a proportional margin on
+ * large screens (6% of the width, 24px to 160px) and close to the edges on a phone.
  */
-export const RULER_WIDTH = "w-[calc(100%-2*clamp(24px,6vw,160px))]";
+export const RULER_WIDTH = "w-[calc(100%-2*var(--edge))]";
 
 /** The header and footer span the full width between the rulers. */
-export const EDGE_FRAME = "mx-auto w-[calc(100%-2*clamp(24px,6vw,160px))] px-6";
+export const EDGE_FRAME = "mx-auto w-[calc(100%-2*var(--edge))] px-(--bar-inset)";
 
 /** Raised surface for cards and panels: a firmer edge and a soft drop, not a pencil line. */
 export const PANEL =
