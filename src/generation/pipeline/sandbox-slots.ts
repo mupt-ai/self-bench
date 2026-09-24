@@ -1,17 +1,11 @@
-import type { SandboxSlots, SlotLimits } from "../../db/sandbox-slots.js";
+import type { SandboxSlots } from "../../db/sandbox-slots.js";
 
-function limit(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
-  const value = Number(env[name]?.trim() || fallback);
-  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`);
+/** The E2B plan allows 100 concurrent sandboxes. */
+export function sandboxSlotLimit(env: NodeJS.ProcessEnv = process.env): number {
+  const value = Number(env.SELFBENCH_SANDBOX_LIMIT?.trim() || 100);
+  if (!Number.isInteger(value) || value < 1)
+    throw new Error("SELFBENCH_SANDBOX_LIMIT must be a positive integer");
   return value;
-}
-
-/** The E2B plan allows 100 concurrent sandboxes; one organization may hold 20 of them. */
-export function sandboxSlotLimits(env: NodeJS.ProcessEnv = process.env): SlotLimits {
-  return {
-    total: limit(env, "SELFBENCH_SANDBOX_LIMIT", 100),
-    perOrg: limit(env, "SELFBENCH_ORG_SANDBOX_LIMIT", 20),
-  };
 }
 
 /** Without a database (local runs) every stage is admitted at once. */

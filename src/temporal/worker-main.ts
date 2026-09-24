@@ -10,7 +10,7 @@ import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import {
   createSandboxSlotActivities,
-  sandboxSlotLimits,
+  sandboxSlotLimit,
 } from "../generation/pipeline/sandbox-slots.js";
 import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
@@ -61,7 +61,7 @@ const workers = await Promise.all([
       ...generation,
       ...evaluation,
       ...createSandboxSlotActivities(
-        database ? createSandboxSlots(database.db, sandboxSlotLimits()) : undefined,
+        database ? createSandboxSlots(database.db, sandboxSlotLimit()) : undefined,
       ),
     },
     maxConcurrentActivityTaskExecutions: config.activityConcurrency,

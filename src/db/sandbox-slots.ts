@@ -2,13 +2,6 @@ import { and, asc, eq, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
 import { sandboxSlots } from "./schema.js";
 
-export interface SlotLimits {
-  /** Managed sandboxes running at once across the platform. */
-  readonly total: number;
-  /** Managed sandboxes one organization may hold at once. */
-  readonly perOrg: number;
-}
-
 /** A waiter polls at least every 30 s; one that stops leaves the queue. */
 const WAITING = sql`now() + interval '2 minutes'`;
 /** Bounds a slot leaked by a terminated workflow; longer than any stage's retries. */
@@ -19,10 +12,11 @@ const DRAINING = sql`now() + interval '70 minutes'`;
 export type SandboxSlots = ReturnType<typeof createSandboxSlots>;
 
 /**
- * A first-come, first-served queue for managed sandboxes: the oldest waiter whose organization
- * is under its limit gets the next free slot. One advisory lock serializes every decision.
+ * A first-come, first-served queue for managed sandboxes: at most `limit` run at once across the
+ * platform, and the oldest waiter gets the next free slot. One advisory lock serializes every
+ * decision.
  */
-export function createSandboxSlots(db: Database, limits: SlotLimits) {
+export function createSandboxSlots(db: Database, limit: number) {
   return {
     /** Joins the queue on the first call; true once `id` holds a slot. */
     async acquire(id: string, orgId: string): Promise<boolean> {
@@ -40,26 +34,15 @@ export function createSandboxSlots(db: Database, limits: SlotLimits) {
         const own = rows.find((row) => row.id === id);
         if (own?.grantedAt) return true;
 
-        const held = new Map<string, number>();
-        let total = 0;
-        const take = (org: string) => {
-          held.set(org, (held.get(org) ?? 0) + 1);
-          total += 1;
-        };
-        for (const row of rows) if (row.grantedAt) take(row.orgId);
-        // Hand out free slots in arrival order, skipping organizations at their limit.
-        for (const row of rows) {
-          if (row.grantedAt) continue;
-          if (total >= limits.total) break;
-          if ((held.get(row.orgId) ?? 0) >= limits.perOrg) continue;
-          if (row.id === id) {
-            await tx
-              .update(sandboxSlots)
-              .set({ grantedAt: sql`now()`, expiresAt: HELD })
-              .where(eq(sandboxSlots.id, id));
-            return true;
-          }
-          take(row.orgId); // An older waiter gets this slot when it next polls.
+        // Free slots go to waiters in arrival order.
+        const free = limit - rows.filter((row) => row.grantedAt).length;
+        const place = rows.filter((row) => !row.grantedAt).findIndex((row) => row.id === id);
+        if (place < free) {
+          await tx
+            .update(sandboxSlots)
+            .set({ grantedAt: sql`now()`, expiresAt: HELD })
+            .where(eq(sandboxSlots.id, id));
+          return true;
         }
         await tx.update(sandboxSlots).set({ expiresAt: WAITING }).where(eq(sandboxSlots.id, id));
         return false;
