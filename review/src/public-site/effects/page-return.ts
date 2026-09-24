@@ -242,7 +242,13 @@ export function returnHome(line: string, go: () => void): void {
     const shown = onCancel(() => {
       if (arriving) arriving.style.visibility = "";
     });
-    disassemble(sheet, keepLine, Math.max(MIN_FADE_MS, Math.min(FADE_MS, room)));
+    // Whatever the card cuts through goes first, as the card shows through the paper.
+    disassemble(
+      sheet,
+      keepLine,
+      Math.max(MIN_FADE_MS, Math.min(FADE_MS, room)),
+      card.getBoundingClientRect(),
+    );
     const touchedIn = (box: Box) => fire.touchedAt(inside(frame, box));
     // Drawing starts now, so the paper over the card dissolves at once; the fire itself starts
     // exactly late enough that it never reaches a spot before the title has passed it.
