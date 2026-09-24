@@ -20,6 +20,7 @@ import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
+import { type HarborLiveRun, harborLiveFeed } from "./harbor-live.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -73,7 +74,16 @@ export async function runHarborGates(
     const gates = notRunGates();
 
     await writeFile(join(directory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
-    const first = await harborRun(directory, root, task.taskId, "nop", harborEnvironment, signal);
+    const live = (run: HarborLiveRun) => ({ store, prefix, run });
+    const first = await harborRun(
+      directory,
+      root,
+      task.taskId,
+      "nop",
+      harborEnvironment,
+      signal,
+      live("nop"),
+    );
     await storeResult(store, `${prefix}/smoke-nop`, first);
     const buildError = trialError(first.trial);
     if (buildError) {
@@ -116,6 +126,7 @@ export async function runHarborGates(
       "oracle",
       harborEnvironment,
       signal,
+      live("oracle"),
     );
     await storeResult(store, `${prefix}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
@@ -143,12 +154,16 @@ export async function harborRun(
   agent: "nop" | "oracle",
   environment: SelfBenchConfig["harborEnvironment"],
   signal: AbortSignal,
+  /** Where to publish progress snapshots while the run is in flight. */
+  live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
   const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
+  const feed =
+    live && harborLiveFeed(live.store, live.prefix, live.run, jobsDirectory, providerSecrets(env));
   const run = await runCommand(
     "harbor",
     harborRunArguments({
@@ -159,8 +174,14 @@ export async function harborRun(
       environment,
       quiet: false,
     }),
-    { allowFailure: true, env, timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate, signal },
-  );
+    {
+      allowFailure: true,
+      env,
+      timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
+      signal,
+      ...(feed ? { onOutput: feed.push } : {}),
+    },
+  ).finally(() => feed?.close());
   if (run.exitCode !== 0) {
     throw new Error(
       `Harbor ${agent} exited ${run.exitCode} for ${taskId}:\n${tail(`${run.stdout}\n${run.stderr}`.trim())}`,
@@ -171,6 +192,13 @@ export async function harborRun(
   if (infrastructure)
     throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
   return result;
+}
+
+/** Credential values Harbor's process holds, so live output never republishes them. */
+function providerSecrets(env: NodeJS.ProcessEnv): string[] {
+  return Object.entries(env)
+    .filter(([key, value]) => /TOKEN|SECRET|KEY/.test(key) && value && value.length >= 8)
+    .map(([, value]) => value as string);
 }
 
 async function storeResult(

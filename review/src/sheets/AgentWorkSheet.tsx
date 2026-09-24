@@ -3,8 +3,11 @@ import { type AgentFeedEvent, agentFeedEvents } from "../../../src/harnesses/pi/
 import { AgentTraceEvent } from "../components/AgentTraceEvent";
 import { notice, sheetBody } from "../components/viewer-ui";
 import { type AgentRound, agentRounds } from "../lib/agent-rounds";
+import { verifyRounds } from "../lib/verify-rounds";
 import type { TaskSource } from "../sources/types";
 import type { CandidateArtifacts, TaskRow } from "../types";
+import { VerifyPart } from "./VerifyPart";
+import { WorkPart } from "./WorkPart";
 
 export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskRow }) {
   const [artifacts, setArtifacts] = React.useState<CandidateArtifacts | null>(null);
@@ -30,7 +33,15 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
       clearTimeout(timer);
     };
   }, [source, row.id]);
-  const rounds = artifacts ? agentRounds(artifacts) : [];
+  // Agent runs and the verifications between them, in the order they started.
+  const rounds = artifacts
+    ? [
+        ...agentRounds(artifacts).map((round) => ({ kind: "agent" as const, round })),
+        ...verifyRounds(artifacts).map((round) => ({ kind: "verify" as const, round })),
+      ].toSorted((a, b) => a.round.startedAt.localeCompare(b.round.startedAt))
+    : [];
+  const active =
+    row.status === "in_progress" || row.status === "authoring" || row.status === "verifying";
   return (
     <div className={`${sheetBody} !gap-2`}>
       {error && (
@@ -47,17 +58,19 @@ export function AgentWorkSheet({ source, row }: { source: TaskSource; row: TaskR
       {artifacts && rounds.length === 0 && (
         <p className={`${notice} site:p-0!`}>No agent activity yet.</p>
       )}
-      {rounds.map((round) => (
-        <AgentPart
-          key={round.id}
-          round={round}
-          source={source}
-          active={
-            row.status === "in_progress" || row.status === "authoring" || row.status === "verifying"
-          }
-          failed={row.status === "infrastructure_failed"}
-        />
-      ))}
+      {rounds.map((item) =>
+        item.kind === "agent" ? (
+          <AgentPart
+            key={item.round.id}
+            round={item.round}
+            source={source}
+            active={active}
+            failed={row.status === "infrastructure_failed"}
+          />
+        ) : (
+          <VerifyPart key={item.round.id} round={item.round} source={source} active={active} />
+        ),
+      )}
     </div>
   );
 }
@@ -112,54 +125,31 @@ function AgentPart({
           ? "In Progress"
           : "Stopped";
   return (
-    <details className="group/part panel">
-      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-x-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4">
-        <span
-          aria-hidden="true"
-          className="shrink-0 text-[10px] text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾']"
-        />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-          {round.title}
-        </span>
-        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-          {round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}
-          {status}
-        </span>
-      </summary>
-      <div className="border-t border-border">
-        {capturedAt && (
-          <p className="m-0 border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground sm:px-4">
-            Updated {formatCapturedAt(capturedAt)}
-          </p>
-        )}
-        {error && (
-          <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>
-            Could not load agent output
-          </p>
-        )}
-        {!error && events.length === 0 && (
-          <p className={notice}>
-            {done ? "No agent output available." : "Waiting for agent output…"}
-          </p>
-        )}
-        <div className="max-h-[560px] overflow-auto">
-          {events.map((event, eventIndex) => (
-            <AgentTraceEvent
-              // Feed events have no IDs; the index disambiguates repeated streaming snapshots.
-              // biome-ignore lint/suspicious/noArrayIndexKey: rows contain no local state.
-              key={`${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`}
-              event={event}
-            />
-          ))}
-        </div>
+    <WorkPart
+      title={round.title}
+      status={`${round.attempt > 1 ? `Attempt ${round.attempt} · ` : ""}${status}`}
+      capturedAt={capturedAt}
+    >
+      {error && (
+        <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>
+          Could not load agent output
+        </p>
+      )}
+      {!error && events.length === 0 && (
+        <p className={notice}>
+          {done ? "No agent output available." : "Waiting for agent output…"}
+        </p>
+      )}
+      <div className="max-h-[560px] overflow-auto">
+        {events.map((event, eventIndex) => (
+          <AgentTraceEvent
+            // Feed events have no IDs; the index disambiguates repeated streaming snapshots.
+            // biome-ignore lint/suspicious/noArrayIndexKey: rows contain no local state.
+            key={`${event.kind}:${event.timestamp ?? ""}:${event.text.slice(0, 32)}:${eventIndex}`}
+            event={event}
+          />
+        ))}
       </div>
-    </details>
+    </WorkPart>
   );
-}
-
-function formatCapturedAt(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
