@@ -3,15 +3,15 @@ import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
 import { openDatabase } from "../db/client.js";
-import { createSandboxSlots } from "../db/sandbox-slots.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
+import { createWorkflowSlots } from "../db/workflow-slots.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import {
-  createSandboxSlotActivities,
-  sandboxSlotLimit,
-} from "../generation/pipeline/sandbox-slots.js";
+  createWorkflowSlotActivities,
+  workflowSlotLimit,
+} from "../generation/pipeline/workflow-slots.js";
 import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -60,8 +60,8 @@ const workers = await Promise.all([
     activities: {
       ...generation,
       ...evaluation,
-      ...createSandboxSlotActivities(
-        database ? createSandboxSlots(database.db, sandboxSlotLimit()) : undefined,
+      ...createWorkflowSlotActivities(
+        database ? createWorkflowSlots(database.db, workflowSlotLimit()) : undefined,
       ),
     },
     maxConcurrentActivityTaskExecutions: config.activityConcurrency,

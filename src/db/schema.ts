@@ -222,9 +222,10 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
- * One row per managed sandbox stage waiting for or holding a slot. See `src/db/sandbox-slots.ts`.
+ * One row per managed generation workflow waiting for or holding a slot. See
+ * `src/db/workflow-slots.ts`.
  */
-export const sandboxSlots = pgTable("sandbox_slots", {
+export const workflowSlots = pgTable("workflow_slots", {
   id: text("id").primaryKey(),
   orgId: text("org_id").notNull(),
   requestedAt: timestamptz("requested_at").notNull().defaultNow(),

@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createSandboxSlots } from "../src/db/sandbox-slots.js";
-import { sandboxSlotLimit } from "../src/generation/pipeline/sandbox-slots.js";
+import { createWorkflowSlots } from "../src/db/workflow-slots.js";
+import { workflowSlotLimit } from "../src/generation/pipeline/workflow-slots.js";
 import { testDatabase } from "./support/site-fixture.js";
 
 test("slots go first come, first served up to the platform limit", async () => {
   const database = await testDatabase();
   try {
-    const slots = createSandboxSlots(database.db, 2);
+    const slots = createWorkflowSlots(database.db, 2);
     expect(await slots.acquire("a1", "a")).toBe(true);
     expect(await slots.acquire("a2", "a")).toBe(true);
     expect(await slots.acquire("b1", "b")).toBe(false);
@@ -29,13 +29,13 @@ test("slots go first come, first served up to the platform limit", async () => {
 test("an abnormal release keeps the slot draining; expired rows free their place", async () => {
   const database = await testDatabase();
   try {
-    const slots = createSandboxSlots(database.db, 1);
+    const slots = createWorkflowSlots(database.db, 1);
     expect(await slots.acquire("held", "a")).toBe(true);
     expect(await slots.acquire("waiting", "b")).toBe(false);
     await slots.release("held", true);
     expect(await slots.acquire("waiting", "b")).toBe(false);
     await database.db.execute(
-      sql`update sandbox_slots set expires_at = now() - interval '1 second' where id = 'held'`,
+      sql`update workflow_slots set expires_at = now() - interval '1 second' where id = 'held'`,
     );
     expect(await slots.acquire("waiting", "b")).toBe(true);
   } finally {
@@ -44,7 +44,7 @@ test("an abnormal release keeps the slot draining; expired rows free their place
 });
 
 test("the platform limit defaults to 100", () => {
-  expect(sandboxSlotLimit({})).toBe(100);
-  expect(sandboxSlotLimit({ SELFBENCH_SANDBOX_LIMIT: "40" })).toBe(40);
-  expect(() => sandboxSlotLimit({ SELFBENCH_SANDBOX_LIMIT: "0" })).toThrow();
+  expect(workflowSlotLimit({})).toBe(100);
+  expect(workflowSlotLimit({ SELFBENCH_WORKFLOW_LIMIT: "40" })).toBe(40);
+  expect(() => workflowSlotLimit({ SELFBENCH_WORKFLOW_LIMIT: "0" })).toThrow();
 });
