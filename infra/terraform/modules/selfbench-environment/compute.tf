@@ -11,7 +11,8 @@ resource "google_compute_instance" "app" {
     initialize_params {
       image = var.boot_image
       type  = "pd-balanced"
-      size  = 50
+      # Grows in place (no VM replacement); the disk cannot shrink.
+      size = var.boot_disk_size_gb
     }
   }
   network_interface {

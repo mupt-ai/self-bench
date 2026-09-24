@@ -36,6 +36,15 @@ variable "machine_type" {
   type        = string
   default     = "e2-standard-2"
 }
+variable "boot_disk_size_gb" {
+  description = "Boot disk size; holds Docker images for the current and previous release. Increase only."
+  type        = number
+  default     = 100
+  validation {
+    condition     = var.boot_disk_size_gb >= 100
+    error_message = "The boot disk must be at least 100 GB; it was 50 GB when it filled in September 2026."
+  }
+}
 variable "enable_public_web" {
   description = "Open 80/443 only after domain, TLS proxy and authentication are configured."
   type        = bool

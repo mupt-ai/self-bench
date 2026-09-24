@@ -30,6 +30,10 @@ run "dev_foundation" {
     error_message = "OS Login must replace project SSH keys."
   }
   assert {
+    condition     = google_compute_instance.app.boot_disk[0].initialize_params[0].size == 100
+    error_message = "The boot disk must leave room for the current and previous release images."
+  }
+  assert {
     condition     = !google_sql_database_instance.app[0].settings[0].ip_configuration[0].ipv4_enabled && google_sql_database_instance.app[0].settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"
     error_message = "Cloud SQL must have no public address and require encrypted connections."
   }
@@ -96,6 +100,11 @@ run "reject_moving_image" {
   command = plan
   variables { boot_image = "projects/debian-cloud/global/images/family/debian-12" }
   expect_failures = [var.boot_image]
+}
+run "reject_small_boot_disk" {
+  command = plan
+  variables { boot_disk_size_gb = 50 }
+  expect_failures = [var.boot_disk_size_gb]
 }
 run "reject_cross_region_zone" {
   command = plan

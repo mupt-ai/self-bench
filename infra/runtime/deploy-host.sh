@@ -42,6 +42,27 @@ mkdir -p "$state/releases"
 exec 9>"$state/deploy.lock"
 flock -n 9 || fail "another deployment is running"
 release="$state/releases/$release_id"
+
+# Every release pulls a new image; without pruning they accumulate until the boot disk
+# fills and the running API can no longer serve. Artifact Registry keeps every digest,
+# so only the running image (the rollback target) and the incoming one stay local.
+previous_image=
+if [[ -f $state/current-release ]]; then
+  previous_image=$(sed -n 's/^SELFBENCH_IMAGE=//p' "$(cat "$state/current-release")/release.env")
+fi
+prune_images() {
+  local ref
+  while read -r ref; do
+    [[ $ref == "$image" || $ref == "$previous_image" ]] && continue
+    docker image rm "$ref" >/dev/null || echo "Could not remove $ref; leaving it." >&2
+  done < <(docker image ls --digests --format '{{.Repository}}@{{.Digest}}' "${image%@*}")
+  docker image prune --force >/dev/null
+}
+prune_images
+docker_root=$(docker info --format '{{.DockerRootDir}}')
+free_gb=$(df --output=avail -BG "$docker_root" | tail -n 1 | tr -dc '0-9')
+(( free_gb >= 10 )) || fail "only ${free_gb}G free under $docker_root; free disk space before deploying"
+
 mkdir "$release"
 source_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 install -m 0600 "$source_dir/compose.yaml" "$release/compose.yaml"
@@ -91,4 +112,5 @@ for attempt in {1..12}; do
 done
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8080/healthz >/dev/null
 printf '%s\n' "$release" > "$state/current-release"
+prune_images
 echo "Release, migrations, API health and recent worker polling verified."
