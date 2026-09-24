@@ -97,14 +97,11 @@ export async function createComparison(
   const saved = new Map(
     (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
   );
-  // Accept saved E2B comparisons created before Managed was a distinct choice.
-  const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
-  if (selection.sandbox === "managed" && managedHarborEnvironment(environment) !== "modal")
+  const managedSandbox = selection.sandbox === "managed";
+  if (managedSandbox && managedHarborEnvironment(environment) !== "modal")
     throw new Error("Managed evaluation requires platform Modal credentials.");
-  if (managedSandbox && selection.sandbox === "e2b" && !managed.sandbox)
-    throw new Error("Managed sandboxes are not available on this deployment.");
   const sandbox = managedSandbox
-    ? { id: "managed-sandbox", kind: selection.sandbox === "managed" ? "modal" : "e2b" }
+    ? { id: "managed-sandbox", kind: "modal" }
     : saved.get(selection.sandboxCredentialId);
   if (
     !sandbox ||

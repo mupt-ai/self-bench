@@ -19,15 +19,6 @@ test("run drafts reject corrupt browser state and malformed task links", () => {
   expect(restoreRunDraft(null, '{"task":"invalid"}').draft.tasks).toEqual([]);
 });
 
-test("legacy unsent managed E2B drafts migrate, while submitted drafts stay unchanged", () => {
-  const draft = restoreRunDraft(null, null);
-  draft.draft.sandboxCredentialId = "managed-sandbox";
-  const migrated = restoreRunDraft(JSON.stringify(draft), null);
-  expect(migrated.draft.sandbox).toBe("managed");
-  draft.submitted = true;
-  expect(restoreRunDraft(JSON.stringify(draft), null).draft.sandbox).toBe("e2b");
-});
-
 test("restoring a submitted draft keeps its request identity and a new dataset starts fresh", () => {
   const previous = restoreRunDraft(null, '[{"runId":"one","taskId":"one"}]');
   previous.submitted = true;
