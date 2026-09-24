@@ -9,7 +9,8 @@ import { settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { overlayCandidateActivity } from "./activity.js";
-import { advanceBatch, planBatchDispatch } from "./advance.js";
+import { advanceBatch } from "./advance.js";
+import { dispatchLimits, planDispatch } from "./dispatch.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
@@ -56,9 +57,8 @@ export function createGenerationBatches(
         .finally(() => exports.delete(runId)),
     );
   };
+  const limits = dispatchLimits();
   const reconcile = async (runId: string) => {
-    // The dispatch plan commits before any start, so a crash leaves every start owned.
-    await store.reconcile(runId, async (state) => planBatchDispatch(state));
     let exporting: GenerationBatch | undefined;
     await store.reconcile(runId, async (state) => {
       await advanceBatch(state, executions, Date.now(), () => cancelling.has(runId));
@@ -67,6 +67,8 @@ export function createGenerationBatches(
     if (exporting) startExport(exporting);
   };
   const tick = async () => {
+    // The dispatch plan commits before any start, so a crash leaves every start owned.
+    await store.plan((batches) => planDispatch(batches, limits));
     const runIds = await store.activeRunIds();
     const results = await settleWithLimit(runIds, BATCH_CONCURRENCY, reconcile);
     // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.

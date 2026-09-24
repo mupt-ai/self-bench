@@ -48,6 +48,27 @@ export function createBatchStore(db: Database) {
       return rows.map((row) => row.runId);
     },
     /**
+     * Applies `action` to every unfinished batch, oldest first, holding all their row locks, so
+     * replicas never plan dispatch against the same free capacity.
+     */
+    async plan(action: (batches: GenerationBatch[]) => void): Promise<void> {
+      await db.transaction(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(generationBatches)
+          .where(unfinished)
+          .orderBy(generationBatches.createdAt, generationBatches.runId)
+          .for("update");
+        const states = rows.map((row) => structuredClone(row.state));
+        action(states);
+        for (const [index, row] of rows.entries())
+          await tx
+            .update(generationBatches)
+            .set({ state: states[index] ?? row.state })
+            .where(eq(generationBatches.runId, row.runId));
+      });
+    },
+    /**
      * Applies `action` to one unfinished batch under its row lock, which serializes dispatch and
      * cancel across replicas. A throwing action commits nothing. False when the batch is
      * finished or another replica holds it.

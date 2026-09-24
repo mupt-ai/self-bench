@@ -1,6 +1,6 @@
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../contracts/config/execution-limits.js";
 import type { CandidateWorkflowResult } from "../../contracts/index.js";
 import { errorMessage, settleWithLimit } from "../../lib/util.js";
+import { settled } from "./dispatch.js";
 import type { BatchExecutions } from "./temporal.js";
 import type { BatchItem, GenerationBatch } from "./types.js";
 
@@ -20,8 +20,6 @@ interface Sweep {
   readonly halted: () => boolean;
 }
 
-const settled = (item: BatchItem) => item.result !== undefined || item.error !== undefined;
-
 /** Dispatched, unsettled, and not observed within the interval. */
 const due = (item: BatchItem, now: number) =>
   !settled(item) &&
@@ -31,28 +29,6 @@ const due = (item: BatchItem, now: number) =>
 /** An item never observed has not been started by this batch yet. */
 const mayStart = (sweep: Sweep, item: BatchItem) =>
   item.observedAt !== undefined || !sweep.halted();
-
-/**
- * Marks every item the next sweep may start. The caller commits this plan in its own
- * transaction before `advanceBatch`, so a crash mid-start leaves each start owned and retryable
- * under its deterministic workflow ID rather than lost or doubled.
- */
-export function planBatchDispatch(batch: GenerationBatch): void {
-  if (batch.phase === "discovering") {
-    for (const shard of batch.shards) if (!settled(shard)) shard.dispatchAttempted = true;
-    return;
-  }
-  if (batch.phase !== "authoring") return;
-  const pending = batch.candidates.filter((item) => !settled(item));
-  let room =
-    MAX_CONCURRENT_CANDIDATE_WORKFLOWS - pending.filter((item) => item.dispatchAttempted).length;
-  for (const item of pending) {
-    if (room <= 0) break;
-    if (item.dispatchAttempted) continue;
-    item.dispatchAttempted = true;
-    room -= 1;
-  }
-}
 
 /**
  * One durable application sweep over every dispatched item. Items whose RPC fails keep their

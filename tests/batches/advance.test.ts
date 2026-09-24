@@ -1,14 +1,12 @@
 import { expect, test } from "bun:test";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/contracts/config/execution-limits.js";
-import {
-  advanceBatch,
-  OBSERVE_INTERVAL_MS,
-  planBatchDispatch,
-} from "../../src/generation/batches/advance.js";
+import { advanceBatch, OBSERVE_INTERVAL_MS } from "../../src/generation/batches/advance.js";
+import { planDispatch } from "../../src/generation/batches/dispatch.js";
 import { batchStatus } from "../../src/generation/batches/status.js";
 import type { BatchExecutions } from "../../src/generation/batches/temporal.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
 import { artifact, candidate, run } from "../support/workflow-fixture.js";
+
+const unlimited = { total: Number.POSITIVE_INFINITY, perOrg: Number.POSITIVE_INFINITY };
 
 function batch(): GenerationBatch {
   return {
@@ -60,7 +58,7 @@ test("discovery ends independently; durable candidate plan precedes dispatch and
   expect(batchStatus(state).tasks[0]?.status).toBe("queued");
   await advanceBatch(state, executions); // Unplanned candidates are never started.
   expect(calls).toHaveLength(2);
-  planBatchDispatch(state);
+  planDispatch([state], unlimited);
   await advanceBatch(state, executions);
   expect(state.phase).toBe("exporting");
   expect(batchStatus(state).rejected).toBe(1);
@@ -76,7 +74,7 @@ test("one sweep starts every planned candidate and a failed RPC only retries its
     workflowId: `run/candidate/${index}`,
     candidate: candidate(`candidate-${index}`, index + 1),
   }));
-  planBatchDispatch(state);
+  planDispatch([state], unlimited);
   expect(state.candidates.every((item) => item.dispatchAttempted)).toBe(true);
   let inFlight = 0;
   let peak = 0;
@@ -173,24 +171,6 @@ test("an independently cancelled candidate keeps an explicit cancellation termin
     status: "infrastructure_failed",
     reason: "Generation cancelled.",
   });
-});
-
-test("candidate dispatch plans respect the shared workflow concurrency limit", async () => {
-  const state = batch();
-  state.phase = "authoring";
-  state.shards = [];
-  state.candidates = Array.from({ length: MAX_CONCURRENT_CANDIDATE_WORKFLOWS + 2 }, (_, index) => ({
-    workflowId: `run/candidate/${index}`,
-    ...(index < MAX_CONCURRENT_CANDIDATE_WORKFLOWS - 1 ? { dispatchAttempted: true } : {}),
-    candidate: candidate(`candidate-${index}`, index + 1),
-  }));
-
-  planBatchDispatch(state);
-
-  expect(state.candidates.filter((item) => item.dispatchAttempted)).toHaveLength(
-    MAX_CONCURRENT_CANDIDATE_WORKFLOWS,
-  );
-  expect(state.candidates[MAX_CONCURRENT_CANDIDATE_WORKFLOWS]?.dispatchAttempted).toBeUndefined();
 });
 
 test("batch cancellation preserves candidates that already finished", async () => {
