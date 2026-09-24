@@ -36,6 +36,13 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
         if (!parsed.data.draft.models.length) {
           parsed.data.draft.models = [{ catalogId: "", credentialId: "", harnesses: [] }];
         }
+        if (
+          !parsed.data.submitted &&
+          parsed.data.draft.sandbox === "e2b" &&
+          parsed.data.draft.sandboxCredentialId === "managed-sandbox"
+        ) {
+          parsed.data.draft.sandbox = "managed";
+        }
         return parsed.data;
       }
     } catch {}
