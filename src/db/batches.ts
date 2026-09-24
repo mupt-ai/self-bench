@@ -1,10 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import type { ArtifactRef } from "../contracts/index.js";
-import type { GenerationBatch } from "../generation/batches/types.js";
+import { FINISHED_PHASES, type GenerationBatch, isFinished } from "../generation/batches/types.js";
 import type { Database } from "./client.js";
 import { generationBatches } from "./schema.js";
 
-const ACTIVE = sql`${generationBatches.state}->>'phase' NOT IN ('complete','failed','cancelled')`;
+const unfinished = notInArray(sql`${generationBatches.state}->>'phase'`, [...FINISHED_PHASES]);
 
 export function createBatchStore(db: Database) {
   return {
@@ -43,42 +43,34 @@ export function createBatchStore(db: Database) {
       const rows = await db
         .select({ runId: generationBatches.runId })
         .from(generationBatches)
-        .where(ACTIVE)
+        .where(unfinished)
         .orderBy(generationBatches.updatedAt);
       return rows.map((row) => row.runId);
     },
     /**
-     * Short application-owned reconciliation of one unfinished batch. Row locks serialize
-     * dispatch/cancel across replicas; a batch another replica holds is skipped (false).
+     * Applies `action` to one unfinished batch under its row lock, which serializes dispatch and
+     * cancel across replicas. A throwing action commits nothing. False when the batch is
+     * finished or another replica holds it.
      */
     async reconcile(
       runId: string,
       action: (state: GenerationBatch) => Promise<void>,
     ): Promise<boolean> {
-      let failure: unknown;
-      let failed = false;
-      const found = await db.transaction(async (tx) => {
+      return db.transaction(async (tx) => {
         const [row] = await tx
           .select()
           .from(generationBatches)
-          .where(and(eq(generationBatches.runId, runId), ACTIVE))
+          .where(and(eq(generationBatches.runId, runId), unfinished))
           .for("update", { skipLocked: true });
         if (!row) return false;
-        const next = structuredClone(row.state);
-        try {
-          await action(next);
-        } catch (error) {
-          failure = error;
-          failed = true;
-        }
+        const state = structuredClone(row.state);
+        await action(state);
         await tx
           .update(generationBatches)
-          .set({ state: failed ? row.state : next, updatedAt: new Date() })
-          .where(eq(generationBatches.runId, row.runId));
+          .set({ state, updatedAt: new Date() })
+          .where(eq(generationBatches.runId, runId));
         return true;
       });
-      if (failed) throw failure;
-      return found;
     },
     async cancel(runId: string): Promise<boolean> {
       return db.transaction(async (tx) => {
@@ -88,12 +80,11 @@ export function createBatchStore(db: Database) {
           .where(eq(generationBatches.runId, runId))
           .for("update");
         if (!row) return false;
-        if (!["complete", "failed", "cancelled"].includes(row.state.phase)) {
-          await tx
-            .update(generationBatches)
-            .set({ state: { ...row.state, phase: "cancelling" }, updatedAt: new Date() })
-            .where(eq(generationBatches.runId, runId));
-        }
+        if (isFinished(row.state.phase)) return true;
+        await tx
+          .update(generationBatches)
+          .set({ state: { ...row.state, phase: "cancelling" }, updatedAt: new Date() })
+          .where(eq(generationBatches.runId, runId));
         return true;
       });
     },

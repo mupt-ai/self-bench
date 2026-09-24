@@ -29,18 +29,24 @@ interface BatchCandidate extends BatchItem {
   progress?: TaskProgress;
   result?: CandidateWorkflowResult;
 }
+/** Phases after which a batch is never reconciled again. */
+export const FINISHED_PHASES = ["complete", "failed", "cancelled"] as const;
+type BatchPhase =
+  | "discovering"
+  | "authoring"
+  | "exporting"
+  | "cancelling"
+  | (typeof FINISHED_PHASES)[number];
+
+export function isFinished(phase: BatchPhase): boolean {
+  return (FINISHED_PHASES as readonly BatchPhase[]).includes(phase);
+}
+
 /** Immutable inputs are recorded before dispatch; only the application advances this record. */
 export interface GenerationBatch {
   run: RunRequest;
   taskQueue: string;
-  phase:
-    | "discovering"
-    | "authoring"
-    | "exporting"
-    | "complete"
-    | "failed"
-    | "cancelling"
-    | "cancelled";
+  phase: BatchPhase;
   shards: BatchShard[];
   candidates: BatchCandidate[];
   export?: ArtifactRef;
