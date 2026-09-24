@@ -2,15 +2,27 @@ import { and, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
 import { sandboxAdmissions } from "./schema.js";
 
+type Kind = "agent" | "harbor";
+
 export interface AdmissionRequest {
   /** Stable across retries of the same wait, so a retried poll never takes a second slot. */
   readonly id: string;
   /** The provider account the sandbox runs on; its limit is shared by every worker. */
   readonly pool: string;
   readonly orgId: string;
-  readonly kind: "agent" | "harbor";
+  readonly kind: Kind;
   readonly workflowId: string;
   readonly workflowRunId: string;
+}
+
+/** Undefined limits are unbounded. */
+export interface AdmissionLimits {
+  /** Concurrent sandboxes on the request's provider account. */
+  readonly pool?: number;
+  /** Concurrent sandboxes per organization and kind, across every pool. */
+  readonly org: Readonly<Partial<Record<Kind, number>>>;
+  /** Concurrent Harbor verifications across every pool: the workers' Harbor slots. */
+  readonly harbor?: number;
 }
 
 /**
@@ -26,45 +38,101 @@ const GRANT_TTL = sql`now() + interval '15 days'`;
 const DRAIN = sql`now() + interval '70 minutes'`;
 /** Waiters poll at least every 30 s; one that stops polling leaves the queue. */
 const WAIT_TTL = sql`now() + interval '2 minutes'`;
+/** Serializes every admission decision; each takes a few milliseconds. */
+const LOCK = sql`select pg_advisory_xact_lock(hashtext('selfbench:sandbox-admission'))`;
 
 export type AdmissionStore = ReturnType<typeof createAdmissionStore>;
 
+interface Row {
+  id: string;
+  pool: string;
+  orgId: string;
+  kind: Kind;
+  grantedAt: Date | null;
+  requestedAt: Date;
+}
+
 /**
- * Admission to a shared provider account. Each pool's rows are serialized by a transaction
- * advisory lock, so every worker replica sees one consistent count.
+ * Plays the pool's queue forward as slots free up. The next grant goes to the eligible waiter
+ * whose organization holds the fewest of the pool's slots, oldest first, so one organization's
+ * large batch cannot keep a later organization waiting behind all of its queued stages.
+ */
+function admitted(rows: Row[], request: AdmissionRequest, limits: AdmissionLimits): boolean {
+  const held = rows.filter((row) => row.grantedAt);
+  const inPool = (row: Row) => row.pool === request.pool;
+  const orgKind = new Map<string, number>();
+  const orgPool = new Map<string, number>();
+  const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
+  for (const row of held) {
+    bump(orgKind, `${row.orgId}/${row.kind}`);
+    if (inPool(row)) bump(orgPool, row.orgId);
+  }
+  let poolHeld = held.filter(inPool).length;
+  let harborHeld = held.filter((row) => row.kind === "harbor").length;
+  const eligible = (row: Row) =>
+    (orgKind.get(`${row.orgId}/${row.kind}`) ?? 0) < (limits.org[row.kind] ?? Infinity) &&
+    (row.kind !== "harbor" || harborHeld < (limits.harbor ?? Infinity));
+  const before = (a: Row, b: Row) =>
+    ((orgPool.get(a.orgId) ?? 0) - (orgPool.get(b.orgId) ?? 0) ||
+      a.requestedAt.getTime() - b.requestedAt.getTime() ||
+      a.id.localeCompare(b.id)) < 0;
+  const waiting = rows.filter((row) => !row.grantedAt && inPool(row));
+  while (poolHeld < (limits.pool ?? Infinity)) {
+    let next: Row | undefined;
+    for (const row of waiting) if (eligible(row) && (!next || before(row, next))) next = row;
+    if (!next) return false;
+    if (next.id === request.id) return true;
+    waiting.splice(waiting.indexOf(next), 1);
+    bump(orgKind, `${next.orgId}/${next.kind}`);
+    bump(orgPool, next.orgId);
+    poolHeld += 1;
+    if (next.kind === "harbor") harborHeld += 1;
+  }
+  return false;
+}
+
+/**
+ * Admission to shared provider accounts and Harbor capacity. Every decision runs under one
+ * transaction advisory lock, so all worker replicas see one consistent count.
  */
 export function createAdmissionStore(db: Database) {
   const table = sandboxAdmissions;
   return {
-    /** True once `request` holds one of the pool's `limit` slots; waiters are served oldest first. */
-    async acquire(request: AdmissionRequest, limit: number): Promise<boolean> {
+    /** True once `request` holds a slot; until then it waits in its pool's fair queue. */
+    async acquire(request: AdmissionRequest, limits: AdmissionLimits): Promise<boolean> {
       return db.transaction(async (tx) => {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${request.pool}))`);
-        await tx
-          .delete(table)
-          .where(and(eq(table.pool, request.pool), lt(table.expiresAt, sql`now()`)));
-        const rows = await tx
-          .select({ id: table.id, grantedAt: table.grantedAt })
-          .from(table)
-          .where(eq(table.pool, request.pool))
-          .orderBy(table.requestedAt, table.id);
+        await tx.execute(LOCK);
+        await tx.delete(table).where(lt(table.expiresAt, sql`now()`));
+        const rows: Row[] = await tx
+          .select({
+            id: table.id,
+            pool: table.pool,
+            orgId: table.orgId,
+            kind: table.kind,
+            grantedAt: table.grantedAt,
+            requestedAt: table.requestedAt,
+          })
+          .from(table);
         const own = rows.find((row) => row.id === request.id);
         if (own?.grantedAt) return true;
         if (own)
           await tx.update(table).set({ expiresAt: WAIT_TTL }).where(eq(table.id, request.id));
         else {
-          await tx.insert(table).values({ ...request, expiresAt: WAIT_TTL });
-          rows.push({ id: request.id, grantedAt: null });
+          const [inserted] = await tx
+            .insert(table)
+            .values({ ...request, expiresAt: WAIT_TTL })
+            .returning({ requestedAt: table.requestedAt });
+          rows.push({
+            ...request,
+            grantedAt: null,
+            requestedAt: inserted?.requestedAt ?? new Date(),
+          });
         }
-        const free = limit - rows.filter((row) => row.grantedAt).length;
-        const place = rows
-          .filter((row) => !row.grantedAt)
-          .findIndex((row) => row.id === request.id);
-        if (place >= free) return false;
+        if (!admitted(rows, request, limits)) return false;
         await tx
           .update(table)
           .set({ grantedAt: sql`now()`, expiresAt: GRANT_TTL })
-          .where(and(eq(table.id, request.id), isNull(table.grantedAt)));
+          .where(eq(table.id, request.id));
         return true;
       });
     },

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../../src/contracts/config/index.js";
 import type { RunRequest } from "../../src/contracts/index.js";
-import type { AdmissionRequest, AdmissionStore } from "../../src/db/admissions.js";
+import type { AdmissionLimits, AdmissionRequest, AdmissionStore } from "../../src/db/admissions.js";
 import { createSandboxAdmission } from "../../src/generation/pipeline/admission.js";
 import { sandboxPoolLimit } from "../../src/sandbox/admission.js";
 import { run } from "../support/workflow-fixture.js";
@@ -23,11 +23,11 @@ test("managed accounts default to measured limits; unmanaged accounts are unlimi
   ).toThrow("positive integer");
 });
 
-test("managed agents share the platform E2B pool while Harbor uses the stamped Modal pool", async () => {
-  const requests: AdmissionRequest[] = [];
+test("managed agents share the platform E2B pool; Harbor uses the stamped pool and shared capacity", async () => {
+  const requests: [AdmissionRequest, AdmissionLimits][] = [];
   const store = {
-    acquire: async (request: AdmissionRequest) => {
-      requests.push(request);
+    acquire: async (request: AdmissionRequest, limits: AdmissionLimits) => {
+      requests.push([request, limits]);
       return true;
     },
     release: async () => {},
@@ -38,6 +38,8 @@ test("managed agents share the platform E2B pool while Harbor uses the stamped M
   const admission = createSandboxAdmission(
     loadWorkerConfig({ SELFBENCH_SANDBOX_SECRET: "s".repeat(32) }),
     store,
+    10,
+    { SELFBENCH_ORG_HARBOR_LIMIT: "3" },
   );
   const managed: RunRequest = {
     ...run,
@@ -60,12 +62,26 @@ test("managed agents share the platform E2B pool while Harbor uses the stamped M
   expect(
     await admission.acquireSandboxSlot({ id: "h", run: managed, kind: "harbor", ...execution }),
   ).toBe(true);
-  // The local Docker deployment is never limited.
+  // Local Docker agents are never limited, but Harbor capacity is shared by everyone.
   expect(await admission.acquireSandboxSlot({ id: "d", run, kind: "agent", ...execution })).toBe(
     true,
   );
+  expect(await admission.acquireSandboxSlot({ id: "dh", run, kind: "harbor", ...execution })).toBe(
+    true,
+  );
+  const org = { agent: 12, harbor: 3 };
   expect(requests).toEqual([
-    { id: "a", pool: "e2b:managed", orgId: "42", kind: "agent", ...execution },
-    { id: "h", pool: "modal:managed", orgId: "42", kind: "harbor", ...execution },
+    [
+      { id: "a", pool: "e2b:managed", orgId: "42", kind: "agent", ...execution },
+      { pool: 18, org, harbor: 10 },
+    ],
+    [
+      { id: "h", pool: "modal:managed", orgId: "42", kind: "harbor", ...execution },
+      { pool: 100, org, harbor: 10 },
+    ],
+    [
+      { id: "dh", pool: "docker:deployment", orgId: "deployment", kind: "harbor", ...execution },
+      { org, harbor: 10 },
+    ],
   ]);
 });

@@ -73,6 +73,7 @@ export function createActivities(
   vault?: Vault,
   usage?: UsageLedger,
   admissions?: AdmissionStore,
+  harborSlots?: number,
 ): WorkerActivities {
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
@@ -87,7 +88,7 @@ export function createActivities(
     action: Parameters<typeof withGenerationRuntime<T>>[5],
   ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
   return {
-    ...createSandboxAdmission(config, admissions),
+    ...createSandboxAdmission(config, admissions, harborSlots),
     startDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
         startDiscoveryShard(store, sandbox, callback, { ...input, run }),

@@ -21,7 +21,9 @@ const MANAGED_LIMITS: Partial<Record<Provider, { variable: string; fallback: num
   modal: { variable: "SELFBENCH_MANAGED_MODAL_SANDBOX_LIMIT", fallback: 100 },
 };
 
-function positiveInteger(name: string, value: string | undefined): number | undefined {
+/** A positive integer limit from `env[name]`, or undefined when unset. */
+export function limitVariable(env: NodeJS.ProcessEnv, name: string): number | undefined {
+  const value = env[name];
   if (!value?.trim()) return undefined;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1)
@@ -41,9 +43,9 @@ export function sandboxPoolLimit(
   if (provider === "docker" || typeof account !== "string") return undefined;
   if (account === "deployment") {
     const variable = `SELFBENCH_${provider.toUpperCase()}_SANDBOX_LIMIT`;
-    return positiveInteger(variable, env[variable]);
+    return limitVariable(env, variable);
   }
   const managed = MANAGED_LIMITS[provider];
   if (!managed) return undefined;
-  return positiveInteger(managed.variable, env[managed.variable]) ?? managed.fallback;
+  return limitVariable(env, managed.variable) ?? managed.fallback;
 }

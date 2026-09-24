@@ -1,7 +1,12 @@
 import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
 import type { AdmissionStore } from "../../db/admissions.js";
-import { type SandboxAccount, sandboxPool, sandboxPoolLimit } from "../../sandbox/admission.js";
+import {
+  limitVariable,
+  type SandboxAccount,
+  sandboxPool,
+  sandboxPoolLimit,
+} from "../../sandbox/admission.js";
 import { stampedManagedHarbor } from "../billing/managed.js";
 
 export interface SandboxSlotInput {
@@ -48,19 +53,34 @@ function sandboxAccount(
 }
 
 /**
- * Admission to a shared provider account before a sandbox starts, so a stage waits for a slot
- * instead of failing at the provider's concurrency cap. Without a database, or on an account
- * SelfBench does not limit, every request is admitted at once.
+ * Per-organization defaults, so one organization's large batch cannot hold every slot of a
+ * shared account or every Harbor slot while other organizations wait.
+ */
+const ORG_AGENT_LIMIT = { variable: "SELFBENCH_ORG_AGENT_SANDBOX_LIMIT", fallback: 12 };
+const ORG_HARBOR_LIMIT = { variable: "SELFBENCH_ORG_HARBOR_LIMIT", fallback: 6 };
+
+/**
+ * Admission before a sandbox starts, so a stage waits for a slot instead of failing at the
+ * provider's concurrency cap or queueing unfairly for a Harbor slot. Agents on an organization's
+ * own account are admitted at once; Harbor always takes a slot because workers' Harbor capacity
+ * is shared by every organization. Without a database every request is admitted.
  */
 export function createSandboxAdmission(
   config: SelfBenchWorkerConfig,
   store: AdmissionStore | undefined,
+  harborSlots?: number,
+  env: NodeJS.ProcessEnv = process.env,
 ) {
+  const org = {
+    agent: limitVariable(env, ORG_AGENT_LIMIT.variable) ?? ORG_AGENT_LIMIT.fallback,
+    harbor: limitVariable(env, ORG_HARBOR_LIMIT.variable) ?? ORG_HARBOR_LIMIT.fallback,
+  };
+  const harbor = limitVariable(env, "SELFBENCH_HARBOR_ADMISSION_LIMIT") ?? harborSlots;
   return {
     async acquireSandboxSlot(input: SandboxSlotInput): Promise<boolean> {
       const { provider, account } = sandboxAccount(config, input.run, input.kind);
-      const limit = sandboxPoolLimit(provider, account);
-      if (!store || limit === undefined) return true;
+      const pool = sandboxPoolLimit(provider, account, env);
+      if (!store || (input.kind === "agent" && pool === undefined)) return true;
       const generation = input.run.generation;
       return store.acquire(
         {
@@ -71,7 +91,7 @@ export function createSandboxAdmission(
           orgId: String(generation?.orgId ?? generation?.ownerId ?? "deployment"),
           kind: input.kind,
         },
-        limit,
+        { ...(pool ? { pool } : {}), org, ...(harbor ? { harbor } : {}) },
       );
     },
     async releaseSandboxSlot(input: { id: string; drain: boolean }): Promise<void> {

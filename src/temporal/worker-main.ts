@@ -39,11 +39,13 @@ const vault = database
   ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")
   : undefined;
 const admissions = database ? createAdmissionStore(database.db) : undefined;
+const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const { verifyCompiled, ...generation } = createActivities(
   config,
   vault,
   database ? createUsageStore(database.db) : undefined,
   admissions,
+  harborConcurrency,
 );
 const sweepConnection = admissions ? await connectTemporalClient(config.temporal) : undefined;
 const stopSweeping =
@@ -57,7 +59,6 @@ const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
 );
-const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 
 const workers = await Promise.all([
   Worker.create({
