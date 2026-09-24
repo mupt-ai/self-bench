@@ -6,10 +6,12 @@ import type {
   ReviewRoundResult,
   VerifyOutcome,
 } from "../../contracts/index.js";
+import type { AdmissionStore } from "../../db/admissions.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { createSandboxAdmission, type SandboxSlotInput } from "./admission.js";
 import {
   type AuthoringTurnInput,
   type FinishAuthoringTurnInput,
@@ -61,6 +63,8 @@ export interface WorkerActivities {
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
+  acquireSandboxSlot(input: SandboxSlotInput): Promise<boolean>;
+  releaseSandboxSlot(id: string): Promise<void>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
@@ -68,6 +72,7 @@ export function createActivities(
   config: SelfBenchWorkerConfig,
   vault?: Vault,
   usage?: UsageLedger,
+  admissions?: AdmissionStore,
 ): WorkerActivities {
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
@@ -82,6 +87,7 @@ export function createActivities(
     action: Parameters<typeof withGenerationRuntime<T>>[5],
   ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
   return {
+    ...createSandboxAdmission(config, admissions),
     startDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
         startDiscoveryShard(store, sandbox, callback, { ...input, run }),

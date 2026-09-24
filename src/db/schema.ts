@@ -222,6 +222,26 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
+ * Sandbox admission: one row per sandbox a workflow is waiting to start or holds on a shared
+ * provider account. Granted rows count against the pool's limit until released or expired;
+ * waiting rows are granted oldest first, and each poll extends their short expiry, so a
+ * workflow that stops polling drops out of the queue.
+ */
+export const sandboxAdmissions = pgTable(
+  "sandbox_admissions",
+  {
+    id: text("id").primaryKey(),
+    pool: text("pool").notNull(),
+    orgId: text("org_id").notNull(),
+    kind: text("kind").$type<"agent" | "harbor">().notNull(),
+    grantedAt: timestamptz("granted_at"),
+    requestedAt: timestamptz("requested_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at").notNull(),
+  },
+  (table) => [index("sandbox_admissions_pool").on(table.pool, table.grantedAt)],
+);
+
+/**
  * Public releases: append-only snapshots a workspace published for a public repository. A
  * line is one workspace plus one GitHub repository id; its current release is the newest row
  * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never

@@ -334,6 +334,8 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 
 A batch is not a Temporal workflow. The API's batch reconciler (`src/generation/batches/service.ts`) stores each batch in Postgres, polls every five seconds, and starts independent workflows as the batch advances: one `selfBenchDiscoveryShardWorkflow` per discovery shard, then one `selfBenchAuthorWorkflow` per candidate, which runs that candidate's authoring and review loops and returns its final progress plus the accepted task. The reconciler reads each workflow's result, replaces rejected candidates from the leftover pool, and builds the export once every tier is filled or the pool is exhausted. A cancelled dispatch reserves its workflow ID with the no-op `selfBenchCancelledDispatchWorkflow`.
 
+Every sandbox stage (discovery, authoring turn, review round, compile, and Harbor verification) first takes a slot on its provider account from the `sandbox_admissions` table, holds it until its sandbox is stopped, then releases it. A stage that finds its account full waits on durable workflow timers (5 s, backing off to 30 s) instead of failing against the provider's concurrency cap, so a queued stage holds no worker slot and never uses up its activity retries. Waiters are admitted oldest first. Only SelfBench's managed accounts are limited by default; an organization's own credentials follow that provider's plan. Slots are released explicitly, and a slot leaked by a terminated workflow expires after eight hours. Workflows started before admission existed skip it.
+
 To inspect one candidate, open its author workflow in the Temporal UI; its history shows that candidate's activities, retries, and timeouts alone, and the `candidateStatus` query returns its current progress.
 
 ## Configuration
@@ -352,6 +354,9 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
+| `SELFBENCH_MANAGED_E2B_SANDBOX_LIMIT` | `18` | Worker; concurrent sandboxes admitted on the managed E2B account (the team cap is 20; two are left for API exports and template builds) |
+| `SELFBENCH_MANAGED_MODAL_SANDBOX_LIMIT` | `100` | Worker; concurrent Harbor sandboxes admitted on the managed Modal account (Modal Starter plan container cap) |
+| `SELFBENCH_<PROVIDER>_SANDBOX_LIMIT` | unlimited | Worker; e.g. `SELFBENCH_E2B_SANDBOX_LIMIT` limits the deployment's own provider account used by runs without generation settings |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |

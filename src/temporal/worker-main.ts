@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
+import { createAdmissionStore } from "../db/admissions.js";
 import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
@@ -39,6 +40,7 @@ const { verifyCompiled, ...generation } = createActivities(
   config,
   vault,
   database ? createUsageStore(database.db) : undefined,
+  database ? createAdmissionStore(database.db) : undefined,
 );
 const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
