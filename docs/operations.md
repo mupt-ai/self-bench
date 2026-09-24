@@ -334,7 +334,7 @@ SelfBench has no remote deletion route. Delete local artifact-volume data or GCS
 
 A batch is not a Temporal workflow. The API's batch reconciler (`src/generation/batches/service.ts`) stores each batch in Postgres, polls every five seconds, and starts independent workflows as the batch advances: one `selfBenchDiscoveryShardWorkflow` per discovery shard, then one `selfBenchAuthorWorkflow` per candidate, which runs that candidate's authoring and review loops and returns its final progress plus the accepted task. The reconciler reads each workflow's result, replaces rejected candidates from the leftover pool, and builds the export once every tier is filled or the pool is exhausted. A cancelled dispatch reserves its workflow ID with the no-op `selfBenchCancelledDispatchWorkflow`.
 
-Managed generation workflows (discovery shards and candidates) queue for a platform-wide slot in `workflow_slots` before their first sandbox and hold it until they finish: at most `SELFBENCH_WORKFLOW_LIMIT` run at once, first come first served. Each runs at most one E2B sandbox at a time, so this keeps the managed E2B account under its 100-sandbox plan. A waiting workflow polls on durable timers, so it holds no worker slot. A workflow that is cancelled or fails keeps its slot for 70 minutes, since its sandbox may still run until E2B's one-hour cap; a slot leaked by a terminated workflow expires after 15 days.
+Managed generation workflows (discovery shards and candidates) queue for a platform-wide slot in `workflow_slots` before their first sandbox and hold it until they finish: at most `SELFBENCH_WORKFLOW_LIMIT` run at once, first come first served, and no organization runs more than `SELFBENCH_ORG_WORKFLOW_LIMIT`; a waiter whose organization is at its limit is skipped, never blocking those behind it. Each runs at most one E2B sandbox at a time, so this keeps the managed E2B account under its 100-sandbox plan. A waiting workflow polls on durable timers, so it holds no worker slot. A workflow that is cancelled or fails keeps its slot for 70 minutes, since its sandbox may still run until E2B's one-hour cap; a slot leaked by a terminated workflow expires after 15 days.
 
 To inspect one candidate, open its author workflow in the Temporal UI; its history shows that candidate's activities, retries, and timeouts alone, and the `candidateStatus` query returns its current progress.
 
@@ -355,6 +355,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
 | `SELFBENCH_WORKFLOW_LIMIT` | `100` | Worker; managed generation workflows running at once across the platform |
+| `SELFBENCH_ORG_WORKFLOW_LIMIT` | `20` | Worker; managed generation workflows one organization may run at once |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |

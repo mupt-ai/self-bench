@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { createWorkflowSlots } from "../src/db/workflow-slots.js";
-import { workflowSlotLimit } from "../src/generation/pipeline/workflow-slots.js";
+import { workflowSlotLimits } from "../src/generation/pipeline/workflow-slots.js";
 import { testDatabase } from "./support/site-fixture.js";
 
 test("slots go first come, first served up to the platform limit", async () => {
   const database = await testDatabase();
   try {
-    const slots = createWorkflowSlots(database.db, 2);
+    const slots = createWorkflowSlots(database.db, { total: 2, perOrg: 2 });
     expect(await slots.acquire("a1", "a")).toBe(true);
     expect(await slots.acquire("a2", "a")).toBe(true);
     expect(await slots.acquire("b1", "b")).toBe(false);
@@ -29,7 +29,7 @@ test("slots go first come, first served up to the platform limit", async () => {
 test("an abnormal release keeps the slot draining; expired rows free their place", async () => {
   const database = await testDatabase();
   try {
-    const slots = createWorkflowSlots(database.db, 1);
+    const slots = createWorkflowSlots(database.db, { total: 1, perOrg: 1 });
     expect(await slots.acquire("held", "a")).toBe(true);
     expect(await slots.acquire("waiting", "b")).toBe(false);
     await slots.release("held", true);
@@ -43,8 +43,26 @@ test("an abnormal release keeps the slot draining; expired rows free their place
   }
 });
 
-test("the platform limit defaults to 100", () => {
-  expect(workflowSlotLimit({})).toBe(100);
-  expect(workflowSlotLimit({ SELFBENCH_WORKFLOW_LIMIT: "40" })).toBe(40);
-  expect(() => workflowSlotLimit({ SELFBENCH_WORKFLOW_LIMIT: "0" })).toThrow();
+test("an organization at its limit is skipped without blocking later waiters", async () => {
+  const database = await testDatabase();
+  try {
+    const slots = createWorkflowSlots(database.db, { total: 3, perOrg: 2 });
+    expect(await slots.acquire("a1", "a")).toBe(true);
+    expect(await slots.acquire("a2", "a")).toBe(true);
+    expect(await slots.acquire("a3", "a")).toBe(false);
+    expect(await slots.acquire("b1", "b")).toBe(true);
+    expect(await slots.acquire("c1", "c")).toBe(false);
+    await slots.release("a1", false);
+    // a3 arrived before c1 and a is under its limit again.
+    expect(await slots.acquire("c1", "c")).toBe(false);
+    expect(await slots.acquire("a3", "a")).toBe(true);
+  } finally {
+    await database.close();
+  }
+});
+
+test("limits default to 100 workflows and 20 per organization", () => {
+  expect(workflowSlotLimits({})).toEqual({ total: 100, perOrg: 20 });
+  expect(workflowSlotLimits({ SELFBENCH_ORG_WORKFLOW_LIMIT: "5" }).perOrg).toBe(5);
+  expect(() => workflowSlotLimits({ SELFBENCH_WORKFLOW_LIMIT: "0" })).toThrow();
 });

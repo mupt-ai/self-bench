@@ -11,12 +11,19 @@ const DRAINING = sql`now() + interval '70 minutes'`;
 
 export type WorkflowSlots = ReturnType<typeof createWorkflowSlots>;
 
+export interface SlotLimits {
+  /** Managed workflows running at once across the platform. */
+  readonly total: number;
+  /** Managed workflows one organization may run at once. */
+  readonly perOrg: number;
+}
+
 /**
- * A first-come, first-served queue for managed generation workflows: at most `limit` run at once
- * across the platform, and the oldest waiter gets the next free slot. One advisory lock
- * serializes every decision.
+ * A first-come, first-served queue for managed generation workflows: the oldest waiter whose
+ * organization is under its limit gets the next free slot. One advisory lock serializes every
+ * decision.
  */
-export function createWorkflowSlots(db: Database, limit: number) {
+export function createWorkflowSlots(db: Database, limits: SlotLimits) {
   return {
     /** Joins the queue on the first call; true once `id` holds a slot. */
     async acquire(id: string, orgId: string): Promise<boolean> {
@@ -34,15 +41,26 @@ export function createWorkflowSlots(db: Database, limit: number) {
         const own = rows.find((row) => row.id === id);
         if (own?.grantedAt) return true;
 
-        // Free slots go to waiters in arrival order.
-        const free = limit - rows.filter((row) => row.grantedAt).length;
-        const place = rows.filter((row) => !row.grantedAt).findIndex((row) => row.id === id);
-        if (place < free) {
-          await tx
-            .update(workflowSlots)
-            .set({ grantedAt: sql`now()`, expiresAt: HELD })
-            .where(eq(workflowSlots.id, id));
-          return true;
+        const held = new Map<string, number>();
+        let total = 0;
+        const take = (org: string) => {
+          held.set(org, (held.get(org) ?? 0) + 1);
+          total += 1;
+        };
+        for (const row of rows) if (row.grantedAt) take(row.orgId);
+        // Free slots go to waiters in arrival order, skipping organizations at their limit.
+        for (const row of rows) {
+          if (row.grantedAt) continue;
+          if (total >= limits.total) break;
+          if ((held.get(row.orgId) ?? 0) >= limits.perOrg) continue;
+          if (row.id === id) {
+            await tx
+              .update(workflowSlots)
+              .set({ grantedAt: sql`now()`, expiresAt: HELD })
+              .where(eq(workflowSlots.id, id));
+            return true;
+          }
+          take(row.orgId); // An older waiter gets this slot when it next polls.
         }
         await tx.update(workflowSlots).set({ expiresAt: WAITING }).where(eq(workflowSlots.id, id));
         return false;
