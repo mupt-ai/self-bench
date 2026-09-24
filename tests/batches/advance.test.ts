@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/contracts/config/execution-limits.js";
-import { advanceBatch } from "../../src/generation/batches/advance.js";
+import {
+  advanceBatch,
+  OBSERVE_INTERVAL_MS,
+  planBatchDispatch,
+} from "../../src/generation/batches/advance.js";
 import { batchStatus } from "../../src/generation/batches/status.js";
 import type { BatchExecutions } from "../../src/generation/batches/temporal.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
@@ -50,19 +54,64 @@ test("discovery ends independently; durable candidate plan precedes dispatch and
     cancel: async () => true,
   };
   await advanceBatch(state, executions);
-  expect(state.phase).toBe("discovering");
-  await advanceBatch(state, executions);
   expect(state.phase).toBe("authoring");
   expect(state.candidates).toHaveLength(1);
-  expect(calls).toHaveLength(2);
+  expect(calls).toEqual(["run/discovery/0", "run/discovery/1"]);
   expect(batchStatus(state).tasks[0]?.status).toBe("queued");
-  await advanceBatch(state, executions); // Persist dispatch intent.
+  await advanceBatch(state, executions); // Unplanned candidates are never started.
+  expect(calls).toHaveLength(2);
+  planBatchDispatch(state);
   await advanceBatch(state, executions);
   expect(state.phase).toBe("exporting");
   expect(batchStatus(state).rejected).toBe(1);
   await advanceBatch(state, executions);
   expect(calls).toHaveLength(3);
 });
+
+test("one sweep starts every planned candidate and a failed RPC only retries its own item", async () => {
+  const state = batch();
+  state.phase = "authoring";
+  state.shards = [];
+  state.candidates = Array.from({ length: 20 }, (_, index) => ({
+    workflowId: `run/candidate/${index}`,
+    candidate: candidate(`candidate-${index}`, index + 1),
+  }));
+  planBatchDispatch(state);
+  expect(state.candidates.every((item) => item.dispatchAttempted)).toBe(true);
+  let inFlight = 0;
+  let peak = 0;
+  const started: string[] = [];
+  const executions: BatchExecutions = {
+    shard: async () => {
+      throw Error("must not start");
+    },
+    candidate: async (id) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await Bun.sleep(1);
+      inFlight -= 1;
+      if (id === "run/candidate/3") throw new Error("temporal unavailable");
+      started.push(id);
+      return { state: "running" };
+    },
+    cancel: async () => true,
+  };
+
+  await advanceBatch(state, executions, 1_000);
+
+  expect(started).toHaveLength(19);
+  expect(peak).toBeGreaterThan(1);
+  expect(peak).toBeLessThanOrEqual(8);
+  expect(state.candidates[3]?.observedAt).toBeUndefined();
+  expect(state.candidates[4]?.observedAt).toBe(1_000);
+  started.length = 0;
+  // Running executions are polled on an interval; the failed start is retried right away.
+  await advanceBatch(state, executions, 2_000);
+  expect(started).toEqual([]);
+  await advanceBatch(state, executions, 1_000 + OBSERVE_INTERVAL_MS);
+  expect(started).toHaveLength(19);
+});
+
 test("live shard costs are retained only until settled accounting takes over", async () => {
   const state = batch();
   const first = state.shards[0];
@@ -89,10 +138,10 @@ test("live shard costs are retained only until settled accounting takes over", a
     cancel: async () => true,
   };
 
-  await advanceBatch(state, executions);
+  await advanceBatch(state, executions, 0);
   expect(state.shards[0]?.cost?.sandboxSeconds).toBe(5);
   running = false;
-  await advanceBatch(state, executions);
+  await advanceBatch(state, executions, OBSERVE_INTERVAL_MS);
   expect(state.shards[0]?.cost).toBeUndefined();
 });
 
@@ -126,30 +175,21 @@ test("an independently cancelled candidate keeps an explicit cancellation termin
   });
 });
 
-test("candidate dispatch respects the shared workflow concurrency limit", async () => {
+test("candidate dispatch plans respect the shared workflow concurrency limit", async () => {
   const state = batch();
   state.phase = "authoring";
   state.shards = [];
-  state.candidates = Array.from({ length: MAX_CONCURRENT_CANDIDATE_WORKFLOWS + 1 }, (_, index) => ({
+  state.candidates = Array.from({ length: MAX_CONCURRENT_CANDIDATE_WORKFLOWS + 2 }, (_, index) => ({
     workflowId: `run/candidate/${index}`,
-    ...(index < MAX_CONCURRENT_CANDIDATE_WORKFLOWS ? { dispatchAttempted: true } : {}),
+    ...(index < MAX_CONCURRENT_CANDIDATE_WORKFLOWS - 1 ? { dispatchAttempted: true } : {}),
     candidate: candidate(`candidate-${index}`, index + 1),
   }));
-  let observed = 0;
-  const executions: BatchExecutions = {
-    shard: async () => {
-      throw Error("must not start");
-    },
-    candidate: async () => {
-      observed += 1;
-      return { state: "running" };
-    },
-    cancel: async () => true,
-  };
 
-  await advanceBatch(state, executions);
+  planBatchDispatch(state);
 
-  expect(observed).toBe(1);
+  expect(state.candidates.filter((item) => item.dispatchAttempted)).toHaveLength(
+    MAX_CONCURRENT_CANDIDATE_WORKFLOWS,
+  );
   expect(state.candidates[MAX_CONCURRENT_CANDIDATE_WORKFLOWS]?.dispatchAttempted).toBeUndefined();
 });
 
@@ -221,7 +261,6 @@ test("cancellation never starts work and stays pending until independent executi
   await advanceBatch(state, executions);
   expect(state.phase).toBe("cancelling");
   settled = true;
-  await advanceBatch(state, executions);
-  await advanceBatch(state, executions);
+  await advanceBatch(state, executions); // Every dispatched shard is cancelled in one sweep.
   expect(String(state.phase)).toBe("cancelled");
 });

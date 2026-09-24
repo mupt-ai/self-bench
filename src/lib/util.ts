@@ -51,3 +51,25 @@ export function raceAbort<T>(operation: Promise<T>, signal: AbortSignal): Promis
     operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
   });
 }
+
+/** `Promise.allSettled` over `items`, running at most `limit` of `action` at once. */
+export async function settleWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  action: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = { status: "fulfilled", value: await action(items[index] as T) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, lane));
+  return results;
+}

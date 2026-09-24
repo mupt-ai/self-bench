@@ -5,10 +5,11 @@ import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import { createUsageStore } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { overlayCandidateActivity } from "./activity.js";
-import { advanceBatch } from "./advance.js";
+import { advanceBatch, planBatchDispatch } from "./advance.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
@@ -21,6 +22,9 @@ export class RunNotFoundError extends Error {
     this.name = "RunNotFoundError";
   }
 }
+
+/** Batches reconciled at once; each holds one pooled DB connection while its RPCs run. */
+const BATCH_CONCURRENCY = 4;
 
 /** A restartable application reconciler, not a Temporal orchestration workflow. */
 export function createGenerationBatches(
@@ -35,25 +39,45 @@ export function createGenerationBatches(
   const executions = batchExecutions(client);
   let stopped = false;
   let pending: Promise<void> | undefined;
-  const tick = async () => {
+  const exports = new Map<string, Promise<void>>();
+  // No DB transaction is held while rendering/downloading bundles, and a slow export never
+  // stalls other batches. Immutable export writes can be resumed after a crash; completion is
+  // conditional on still being exporting.
+  const startExport = (batch: GenerationBatch) => {
+    const runId = batch.run.runId;
+    if (exports.has(runId)) return;
+    exports.set(
+      runId,
+      exportBatch(batch, artifacts, vault, usage)
+        .then((reference) => store.completeExport(runId, reference))
+        .catch(() => console.error(`Batch ${runId} export failed; it will be retried`))
+        .finally(() => exports.delete(runId)),
+    );
+  };
+  const reconcile = async (runId: string) => {
+    // The dispatch plan commits before any start, so a crash leaves every start owned.
+    await store.reconcile(runId, async (state) => planBatchDispatch(state));
     let exporting: GenerationBatch | undefined;
-    await store.reconcile(async (state) => {
+    await store.reconcile(runId, async (state) => {
       await advanceBatch(state, executions);
       if (state.phase === "exporting") exporting = structuredClone(state);
     });
-    // No DB transaction is held while rendering/downloading bundles. Immutable export writes
-    // can be resumed after a crash; completion is conditional on still being exporting.
-    if (exporting) {
-      const reference = await exportBatch(exporting, artifacts, vault, usage);
-      await store.completeExport(exporting.run.runId, reference);
-    }
+    if (exporting) startExport(exporting);
+  };
+  const tick = async () => {
+    const runIds = await store.activeRunIds();
+    const results = await settleWithLimit(runIds, BATCH_CONCURRENCY, reconcile);
+    // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
+    results.forEach((result, index) => {
+      if (result.status === "rejected")
+        console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);
+    });
   };
   const poll = () => {
     if (stopped || pending) return;
     pending = tick()
       .catch(() => {
-        // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
-        console.error("Batch reconciliation failed; persisted batch will be retried");
+        console.error("Batch reconciliation failed; persisted batches will be retried");
       })
       .finally(() => {
         pending = undefined;
@@ -145,6 +169,7 @@ export function createGenerationBatches(
       stopped = true;
       clearInterval(timer);
       await pending;
+      await Promise.all(exports.values());
     },
   };
 }

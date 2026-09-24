@@ -16,26 +16,30 @@ test("batch plan survives a new store instance; aborted sweeps rollback; cancell
     });
     const restarted = createBatchStore(database.db);
     expect((await restarted.read(run.runId))?.phase).toBe("discovering");
+    expect(await restarted.activeRunIds()).toEqual([run.runId]);
     await expect(
-      restarted.reconcile(async (state) => {
+      restarted.reconcile(run.runId, async (state) => {
         state.phase = "complete";
         throw new Error("lost connection");
       }),
     ).rejects.toThrow();
     expect((await restarted.read(run.runId))?.phase).toBe("discovering");
-    await restarted.reconcile(async (state) => {
+    await restarted.reconcile(run.runId, async (state) => {
       state.phase = "exporting";
     });
     await restarted.cancel(run.runId);
     await restarted.completeExport(run.runId, artifact);
     expect((await restarted.read(run.runId))?.phase).toBe("cancelling");
-    await restarted.reconcile(async (state) => {
+    await restarted.reconcile(run.runId, async (state) => {
       state.phase = "cancelled";
     });
+    expect(await restarted.activeRunIds()).toEqual([]);
     let called = false;
-    await restarted.reconcile(async () => {
-      called = true;
-    });
+    expect(
+      await restarted.reconcile(run.runId, async () => {
+        called = true;
+      }),
+    ).toBe(false);
     expect(called).toBe(false);
   } finally {
     await database.close();

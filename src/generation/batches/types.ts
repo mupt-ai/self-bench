@@ -9,26 +9,25 @@ import type {
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
 
-interface BatchShard {
+export interface BatchItem {
   workflowId: string;
   cancelled?: boolean;
   /** Committed before an RPC; an ambiguous start remains owned by this batch. */
   dispatchAttempted?: boolean;
-  input: DiscoveryShardInput;
+  /** Epoch ms of the last successful observation; throttles polling of running executions. */
+  observedAt?: number;
   cost?: SandboxCostSnapshot;
-  result?: DiscoveryResult;
+  result?: unknown;
   error?: string;
 }
-interface BatchCandidate {
-  workflowId: string;
-  cancelled?: boolean;
-  /** Committed before an RPC; an ambiguous start remains owned by this batch. */
-  dispatchAttempted?: boolean;
+interface BatchShard extends BatchItem {
+  input: DiscoveryShardInput;
+  result?: DiscoveryResult;
+}
+interface BatchCandidate extends BatchItem {
   candidate: Candidate;
-  cost?: SandboxCostSnapshot;
   progress?: TaskProgress;
   result?: CandidateWorkflowResult;
-  error?: string;
 }
 /** Immutable inputs are recorded before dispatch; only the application advances this record. */
 export interface GenerationBatch {
@@ -44,8 +43,6 @@ export interface GenerationBatch {
     | "cancelled";
   shards: BatchShard[];
   candidates: BatchCandidate[];
-  /** Round-robin reconciliation cursor; at most one execution RPC group per sweep. */
-  cursor?: number;
   export?: ArtifactRef;
   error?: string;
 }

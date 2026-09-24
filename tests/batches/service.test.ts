@@ -2,7 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Client } from "@temporalio/client";
+import { type Client, WorkflowNotFoundError } from "@temporalio/client";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createBatchStore } from "../../src/db/batches.js";
 import * as exporter from "../../src/generation/batches/export.js";
@@ -135,6 +135,61 @@ test("a persisted authoring batch reports each candidate's live activity", async
     expect(status.activity).toEqual({
       one: { state: "queued", attempt: 2, maximumAttempts: 4, lastFailure: "quota" },
     });
+  } finally {
+    await service.close();
+    await database.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10_000);
+
+test("one tick starts every ready candidate of every active batch", async () => {
+  const database = await testDatabase();
+  const directory = await mkdtemp(join(tmpdir(), "batch-service-"));
+  const artifacts = new LocalArtifactStore(directory);
+  const started = new Set<string>();
+  const client = {
+    connection: {
+      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
+    },
+    workflow: {
+      getHandle: (workflowId: string) => ({
+        describe: async () => {
+          if (!started.has(workflowId)) throw new WorkflowNotFoundError("missing", workflowId, "");
+          return {
+            type: "selfBenchAuthorWorkflow",
+            runId: "execution",
+            status: { name: "RUNNING" },
+          };
+        },
+        query: async () => undefined,
+      }),
+      start: async (_type: string, options: { workflowId: string }) => {
+        started.add(options.workflowId);
+      },
+    },
+  } as unknown as Client;
+  const store = createBatchStore(database.db);
+  const runIds = ["batch-a", "batch-b"];
+  for (const runId of runIds)
+    await store.create({
+      run: { ...run, runId },
+      taskQueue: "generation",
+      phase: "authoring",
+      shards: [],
+      candidates: Array.from({ length: 5 }, (_, index) => ({
+        workflowId: `${runId}/candidate/${index}`,
+        candidate: candidate(`c${index}`, index + 1),
+      })),
+    });
+  const service = createGenerationBatches(database.db, client, artifacts, "generation");
+  try {
+    const deadline = Date.now() + 4_000;
+    while (started.size < 10 && Date.now() < deadline) await Bun.sleep(10);
+    // The first tick alone (ticks are 5 s apart) plans and starts all ten candidates.
+    expect(started.size).toBe(10);
+    await service.close();
+    for (const runId of runIds)
+      expect((await store.read(runId))?.candidates.every((item) => item.observedAt)).toBe(true);
   } finally {
     await service.close();
     await database.close();

@@ -1,57 +1,97 @@
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../contracts/config/execution-limits.js";
+import { errorMessage, settleWithLimit } from "../../lib/util.js";
 import type { BatchExecutions } from "./temporal.js";
-import type { GenerationBatch } from "./types.js";
+import type { BatchItem, GenerationBatch } from "./types.js";
 
-function cancellationSettled(
-  items: readonly { result?: unknown; error?: string; cancelled?: boolean }[],
-): boolean {
-  return items.every(
-    (item) => item.result !== undefined || item.error !== undefined || item.cancelled === true,
-  );
+/** Temporal RPC groups one batch sweep keeps in flight. */
+const EXECUTION_CONCURRENCY = 8;
+/** A running execution is described (and queried) at most this often; queries are billed. */
+export const OBSERVE_INTERVAL_MS = 30_000;
+
+const settled = (item: BatchItem) => item.result !== undefined || item.error !== undefined;
+
+/**
+ * Marks every item the next sweep may start. The caller commits this plan in its own
+ * transaction before `advanceBatch`, so a crash mid-start leaves each start owned and retryable
+ * under its deterministic workflow ID rather than lost or doubled.
+ */
+export function planBatchDispatch(batch: GenerationBatch): void {
+  if (batch.phase === "discovering") {
+    for (const shard of batch.shards) if (!settled(shard)) shard.dispatchAttempted = true;
+    return;
+  }
+  if (batch.phase !== "authoring") return;
+  const pending = batch.candidates.filter((item) => !settled(item));
+  let room =
+    MAX_CONCURRENT_CANDIDATE_WORKFLOWS - pending.filter((item) => item.dispatchAttempted).length;
+  for (const item of pending) {
+    if (room <= 0) break;
+    if (item.dispatchAttempted) continue;
+    item.dispatchAttempted = true;
+    room -= 1;
+  }
 }
 
-/** One durable application sweep; SDK outages throw so the persisted plan remains retryable. */
+/** Runs `action` for every item concurrently; a failed RPC leaves only its own item for retry. */
+async function each<T extends BatchItem>(
+  batch: GenerationBatch,
+  items: readonly T[],
+  action: (item: T) => Promise<void>,
+): Promise<void> {
+  const results = await settleWithLimit(items, EXECUTION_CONCURRENCY, action);
+  results.forEach((result, index) => {
+    if (result.status === "rejected")
+      console.error(
+        `Batch ${batch.run.runId} will retry ${items[index]?.workflowId}: ${errorMessage(result.reason)}`,
+      );
+  });
+}
+
+function due(item: BatchItem, now: number): boolean {
+  return item.observedAt === undefined || now - item.observedAt >= OBSERVE_INTERVAL_MS;
+}
+
+/**
+ * One durable application sweep over every dispatched item. Items whose RPC fails keep their
+ * persisted state and are retried on the next sweep; the rest of the batch still advances.
+ */
 export async function advanceBatch(
   batch: GenerationBatch,
   executions: BatchExecutions,
+  now = Date.now(),
 ): Promise<void> {
   if (batch.phase === "cancelling") {
     const all = [...batch.shards, ...batch.candidates];
     const pending = all.filter((item) => !item.result && !item.cancelled);
-    const item = pending[(batch.cursor ?? 0) % Math.max(1, pending.length)];
-    batch.cursor = (batch.cursor ?? 0) + 1;
-    if (
-      item &&
-      (!item.dispatchAttempted || (await executions.cancel(item.workflowId, batch.taskQueue)))
-    ) {
+    await each(batch, pending, async (item) => {
+      if (item.dispatchAttempted && !(await executions.cancel(item.workflowId, batch.taskQueue)))
+        return;
       item.cancelled = true;
       delete item.cost;
-    }
-    if (cancellationSettled(all)) batch.phase = "cancelled";
+    });
+    if (
+      all.every((item) => item.result !== undefined || item.error !== undefined || item.cancelled)
+    )
+      batch.phase = "cancelled";
     return;
   }
   if (batch.phase === "discovering") {
-    const pending = batch.shards.filter((shard) => !shard.result && !shard.error);
-    const shard = pending[(batch.cursor ?? 0) % Math.max(1, pending.length)];
-    batch.cursor = (batch.cursor ?? 0) + 1;
-    if (shard && !shard.dispatchAttempted) {
-      shard.dispatchAttempted = true;
-      return;
-    }
-    if (shard) {
-      const observed = await executions.shard(shard.workflowId, shard.input, batch.taskQueue);
-      if (observed.state === "completed") {
-        shard.result = observed.result;
-        delete shard.cost;
-      } else if (observed.state === "cancelled") {
-        shard.error = "Generation cancelled.";
-        delete shard.cost;
-      } else if (observed.state === "failed") {
-        shard.error = observed.error;
-        delete shard.cost;
-      } else if (observed.cost) shard.cost = observed.cost;
-    }
-    if (batch.shards.some((shard) => !shard.result && !shard.error)) return;
+    const observed = batch.shards.filter(
+      (shard) => !settled(shard) && shard.dispatchAttempted && due(shard, now),
+    );
+    await each(batch, observed, async (shard) => {
+      const snapshot = await executions.shard(shard.workflowId, shard.input, batch.taskQueue);
+      shard.observedAt = now;
+      if (snapshot.state === "completed") shard.result = snapshot.result;
+      else if (snapshot.state === "cancelled") shard.error = "Generation cancelled.";
+      else if (snapshot.state === "failed") shard.error = snapshot.error;
+      else {
+        if (snapshot.cost) shard.cost = snapshot.cost;
+        return;
+      }
+      delete shard.cost;
+    });
+    if (!batch.shards.every(settled)) return;
     // Deterministic shard order wins duplicate PRs; no candidate is dispatched twice.
     const seen = new Set<number>();
     const ids = new Set<string>();
@@ -71,35 +111,41 @@ export async function advanceBatch(
       batch.phase = "failed";
       batch.error = "Discovery returned no candidates";
     } else batch.phase = "authoring";
-    batch.cursor = 0;
     return; // Commit the candidate dispatch plan before starting any author workflow.
   }
   if (batch.phase !== "authoring") return;
-  const pending = batch.candidates.filter((item) => !item.result && !item.error);
-  const active = pending.filter((item) => item.dispatchAttempted);
-  const eligible = active.length >= MAX_CONCURRENT_CANDIDATE_WORKFLOWS ? active : pending;
-  const item = eligible[(batch.cursor ?? 0) % Math.max(1, eligible.length)];
-  batch.cursor = (batch.cursor ?? 0) + 1;
-  if (item && !item.dispatchAttempted) {
-    item.dispatchAttempted = true;
-    return;
-  }
-  if (item) {
-    const observed = await executions.candidate(
-      item.workflowId,
-      { run: batch.run, candidate: item.candidate },
-      batch.taskQueue,
+  const observed = batch.candidates.filter(
+    (item) => !settled(item) && item.dispatchAttempted && due(item, now),
+  );
+  const snapshots = new Map<BatchItem, Awaited<ReturnType<BatchExecutions["candidate"]>>>();
+  await each(batch, observed, async (item) => {
+    snapshots.set(
+      item,
+      await executions.candidate(
+        item.workflowId,
+        { run: batch.run, candidate: item.candidate },
+        batch.taskQueue,
+      ),
     );
-    if (observed.state === "completed") {
-      if (observed.result.progress.candidateId !== item.candidate.candidateId)
-        throw new Error("Candidate result identity mismatch");
-      const result = observed.result;
+  });
+  // Results apply in candidate order so a duplicate task ID always loses to the same candidate.
+  for (const item of observed) {
+    const snapshot = snapshots.get(item);
+    if (!snapshot) continue;
+    item.observedAt = now;
+    if (snapshot.state === "completed") {
+      const result = snapshot.result;
       if (
-        result.task &&
-        (result.task.candidateId !== item.candidate.candidateId ||
-          result.progress.status !== "accepted")
-      )
-        throw new Error("Nonaccepted candidate returned an export task");
+        result.progress.candidateId !== item.candidate.candidateId ||
+        (result.task &&
+          (result.task.candidateId !== item.candidate.candidateId ||
+            result.progress.status !== "accepted"))
+      ) {
+        console.error(
+          `Batch ${batch.run.runId} rejected an inconsistent result for ${item.workflowId}`,
+        );
+        continue;
+      }
       if (
         result.task &&
         batch.candidates.some(
@@ -108,19 +154,19 @@ export async function advanceBatch(
       ) {
         item.error = "Another candidate already owns this task ID";
       } else item.result = result;
-      item.progress = observed.result.progress;
+      item.progress = result.progress;
       delete item.cost;
-    } else if (observed.state === "cancelled") {
+    } else if (snapshot.state === "cancelled") {
       item.cancelled = true;
       item.error = "Generation cancelled.";
       delete item.cost;
-    } else if (observed.state === "failed") {
-      item.error = observed.error;
+    } else if (snapshot.state === "failed") {
+      item.error = snapshot.error;
       delete item.cost;
     } else {
-      if (observed.progress) item.progress = observed.progress;
-      if (observed.cost) item.cost = observed.cost;
+      if (snapshot.progress) item.progress = snapshot.progress;
+      if (snapshot.cost) item.cost = snapshot.cost;
     }
   }
-  if (batch.candidates.every((item) => item.result || item.error)) batch.phase = "exporting";
+  if (batch.candidates.every(settled)) batch.phase = "exporting";
 }
