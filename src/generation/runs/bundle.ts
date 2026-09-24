@@ -1,12 +1,12 @@
-import { createWriteStream } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, posix } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { createGunzip } from "node:zlib";
+import { extract } from "tar-stream";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { extractRegularArchive } from "../../lib/archive.js";
-import { isHarborTaskDirectory, readTaskDirectory } from "./task-files.js";
+import { type BundleFile, isInlineCandidate, taskFilesFromBundle } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
+
+const MAX_BUNDLE_ENTRIES = 20_000;
 
 const inFlight = new Map<string, Promise<TaskFiles>>();
 
@@ -18,31 +18,53 @@ export async function expandBundle(store: ArtifactStore, key: string): Promise<T
   return promise;
 }
 
-// Expanded per request and removed afterwards: a persistent cache here once grew without bound
-// on the API's boot disk and helped fill it.
+/**
+ * Streams the bundle straight from the artifact store and keeps only the small text files the
+ * viewer shows. Nothing touches disk: the repository snapshots (hundreds of MB) are skipped as
+ * they stream past, where a persistent unpacked cache once filled the API's boot disk.
+ */
 async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
-  const root = await mkdtemp(join(tmpdir(), "selfbench-viewer-bundle-"));
-  try {
-    const body = await store.openReadByKey(key);
-    if (!body) {
-      throw new BundleNotFoundError(key);
-    }
-    const archive = join(root, "bundle.tar.gz");
-    await pipeline(body, createWriteStream(archive, { mode: 0o600 }));
-    const extracted = join(root, "extracted");
-    await mkdir(extracted);
-    await extractRegularArchive(archive, extracted);
-    return await readTaskDirectory(await locateTaskDirectory(extracted), taskIdFromKey(key));
-  } finally {
-    await rm(root, { recursive: true, force: true });
+  const body = await store.openReadByKey(key);
+  if (!body) {
+    throw new BundleNotFoundError(key);
   }
+  const archive = extract();
+  const streaming = pipeline(body, createGunzip(), archive);
+  // A stream failure also ends the loop below; it is rethrown by the final await.
+  streaming.catch(() => undefined);
+  const files: BundleFile[] = [];
+  const seen = new Set<string>();
+  for await (const entry of archive) {
+    const { name, size = 0, type } = entry.header;
+    if (type !== "file") {
+      entry.resume();
+      continue;
+    }
+    const path = bundlePath(name);
+    if (seen.has(path) || seen.size >= MAX_BUNDLE_ENTRIES) {
+      archive.destroy();
+      throw new Error(`bundle repeats ${path} or has too many files`);
+    }
+    seen.add(path);
+    if (!isInlineCandidate(path, size)) {
+      entry.resume();
+      files.push({ path, sizeBytes: size });
+      continue;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of entry) chunks.push(chunk as Buffer);
+    files.push({ path, sizeBytes: size, bytes: Buffer.concat(chunks) });
+  }
+  await streaming;
+  return taskFilesFromBundle(files, taskIdFromKey(key));
 }
 
-async function locateTaskDirectory(root: string): Promise<string> {
-  for (const candidate of [join(root, "harbor-task"), root]) {
-    if (await isHarborTaskDirectory(candidate)) return candidate;
+function bundlePath(name: string): string {
+  const path = posix.normalize(name.replace(/^\.\/+/, ""));
+  if (!path || path === "." || path === ".." || path.startsWith("/") || path.startsWith("../")) {
+    throw new Error(`bundle path escapes its root: ${name}`);
   }
-  return root;
+  return path;
 }
 
 function taskIdFromKey(key: string): string {
