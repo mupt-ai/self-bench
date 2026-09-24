@@ -39,8 +39,8 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
         name  = "SELFBENCH_ACTIVITY_CONCURRENCY"
         value = tostring(var.activity_concurrency)
       }
-      # The old VM's size. Files the worker writes (Harbor checks, task bundles) count against
-      # memory, and the worker sizes its Harbor slots to it.
+      # Files the worker writes (Harbor checks, task bundles) count against memory, and the
+      # worker sizes its Harbor slots to it.
       resources {
         limits = { cpu = "2", memory = "8Gi" }
       }

@@ -69,7 +69,8 @@ resource "google_secret_manager_secret_iam_member" "runtime_reader" {
 }
 
 # Verifier material is delivered to hosted sandboxes through short-lived signed GCS URLs.
-# ADC on a VM has no local signing key; authorize ONLY signBlob on its own service account.
+# Cloud Run's metadata-server credentials have no local signing key; authorize ONLY signBlob on
+# the signer's own service account.
 resource "google_project_iam_custom_role" "artifact_signer" {
   project     = var.project_id
   role_id     = "selfbenchArtifactSigner"
