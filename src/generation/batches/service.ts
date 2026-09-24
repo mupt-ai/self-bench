@@ -1,14 +1,17 @@
 import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { BATCH_SWEEP_CONCURRENCY } from "../../contracts/config/execution-limits.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import { createUsageStore } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
+import { planDispatch, workflowLimit } from "./dispatch.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
@@ -35,25 +38,48 @@ export function createGenerationBatches(
   const executions = batchExecutions(client);
   let stopped = false;
   let pending: Promise<void> | undefined;
-  const tick = async () => {
+  const exports = new Map<string, Promise<void>>();
+  // Cancels this replica is waiting to record; their batches' sweeps stop starting work.
+  const cancelling = new Set<string>();
+  // No DB transaction is held while rendering/downloading bundles, and a slow export never
+  // stalls other batches. Immutable export writes can be resumed after a crash; completion is
+  // conditional on still being exporting.
+  const startExport = (batch: GenerationBatch) => {
+    const runId = batch.run.runId;
+    if (exports.has(runId)) return;
+    exports.set(
+      runId,
+      exportBatch(batch, artifacts, vault, usage)
+        .then((reference) => store.completeExport(runId, reference))
+        .catch(() => console.error(`Batch ${runId} export failed; it will be retried`))
+        .finally(() => exports.delete(runId)),
+    );
+  };
+  const limit = workflowLimit();
+  const reconcile = async (runId: string) => {
     let exporting: GenerationBatch | undefined;
-    await store.reconcile(async (state) => {
-      await advanceBatch(state, executions);
+    await store.reconcile(runId, async (state) => {
+      await advanceBatch(state, executions, Date.now(), () => cancelling.has(runId));
       if (state.phase === "exporting") exporting = structuredClone(state);
     });
-    // No DB transaction is held while rendering/downloading bundles. Immutable export writes
-    // can be resumed after a crash; completion is conditional on still being exporting.
-    if (exporting) {
-      const reference = await exportBatch(exporting, artifacts, vault, usage);
-      await store.completeExport(exporting.run.runId, reference);
-    }
+    if (exporting) startExport(exporting);
+  };
+  const tick = async () => {
+    // The dispatch plan commits before any start, so a crash leaves every start owned.
+    await store.plan((batches) => planDispatch(batches, limit));
+    const runIds = await store.activeRunIds();
+    const results = await settleWithLimit(runIds, BATCH_SWEEP_CONCURRENCY, reconcile);
+    // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
+    results.forEach((result, index) => {
+      if (result.status === "rejected")
+        console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);
+    });
   };
   const poll = () => {
     if (stopped || pending) return;
     pending = tick()
       .catch(() => {
-        // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
-        console.error("Batch reconciliation failed; persisted batch will be retried");
+        console.error("Batch reconciliation failed; persisted batches will be retried");
       })
       .finally(() => {
         pending = undefined;
@@ -138,13 +164,19 @@ export function createGenerationBatches(
       };
     },
     async cancel(runId: string) {
-      if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
-      else poll();
+      cancelling.add(runId);
+      try {
+        if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
+        else poll();
+      } finally {
+        cancelling.delete(runId);
+      }
     },
     async close() {
       stopped = true;
       clearInterval(timer);
       await pending;
+      await Promise.all(exports.values());
     },
   };
 }

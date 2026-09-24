@@ -352,6 +352,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
+| `SELFBENCH_WORKFLOW_LIMIT` | `100` | API; managed generation workflows (discovery shards and candidates) running at once across the platform; the rest wait in their batch, first come first served |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |

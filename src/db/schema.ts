@@ -218,6 +218,8 @@ export const apiKeys = pgTable(
 export const generationBatches = pgTable("generation_batches", {
   runId: text("run_id").primaryKey(),
   state: jsonb("state").$type<import("../generation/batches/types.js").GenerationBatch>().notNull(),
+  /** Dispatch order: older batches start their work first. */
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
 
