@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
-import { advanceBatch, OBSERVE_INTERVAL_MS } from "../../src/generation/batches/advance.js";
+import { BATCH_OBSERVE_INTERVAL_MS } from "../../src/contracts/config/execution-limits.js";
+import { advanceBatch } from "../../src/generation/batches/advance.js";
 import { planDispatch } from "../../src/generation/batches/dispatch.js";
 import { batchStatus } from "../../src/generation/batches/status.js";
 import type { BatchExecutions } from "../../src/generation/batches/temporal.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
 import { artifact, candidate, run } from "../support/workflow-fixture.js";
 
-const unlimited = { total: Number.POSITIVE_INFINITY, perOrg: Number.POSITIVE_INFINITY };
+const unlimited = Number.POSITIVE_INFINITY;
 
 function batch(): GenerationBatch {
   return {
@@ -106,7 +107,7 @@ test("one sweep starts every planned candidate and a failed RPC only retries its
   // Running executions are polled on an interval; the failed start is retried right away.
   await advanceBatch(state, executions, 2_000);
   expect(started).toEqual([]);
-  await advanceBatch(state, executions, 1_000 + OBSERVE_INTERVAL_MS);
+  await advanceBatch(state, executions, 1_000 + BATCH_OBSERVE_INTERVAL_MS);
   expect(started).toHaveLength(19);
 });
 
@@ -139,7 +140,7 @@ test("live shard costs are retained only until settled accounting takes over", a
   await advanceBatch(state, executions, 0);
   expect(state.shards[0]?.cost?.sandboxSeconds).toBe(5);
   running = false;
-  await advanceBatch(state, executions, OBSERVE_INTERVAL_MS);
+  await advanceBatch(state, executions, BATCH_OBSERVE_INTERVAL_MS);
   expect(state.shards[0]?.cost).toBeUndefined();
 });
 
@@ -267,16 +268,14 @@ test("a sweep that learns of a pending cancel starts nothing new but keeps obser
     cancel: async () => true,
   };
 
-  await advanceBatch(state, executions, OBSERVE_INTERVAL_MS, () => true);
+  await advanceBatch(state, executions, BATCH_OBSERVE_INTERVAL_MS, () => true);
 
   expect(touched).toEqual(["run/candidate/0"]);
   expect(state.candidates[1]?.observedAt).toBeUndefined();
 });
 
 test("a completed candidate with another candidate's result settles as failed", async () => {
-  const state = batch();
-  state.phase = "authoring";
-  state.shards = [];
+  const state: GenerationBatch = { ...batch(), phase: "authoring", shards: [] };
   state.candidates = [
     { workflowId: "run/candidate/one", dispatchAttempted: true, candidate: candidate("one", 1) },
   ];

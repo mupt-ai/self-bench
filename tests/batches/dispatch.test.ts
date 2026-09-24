@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../src/contracts/config/execution-limits.js";
-import { dispatchLimits, planDispatch } from "../../src/generation/batches/dispatch.js";
+import { planDispatch, workflowLimit } from "../../src/generation/batches/dispatch.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
 import { candidate, run } from "../support/workflow-fixture.js";
 
-const unlimited = { total: Number.POSITIVE_INFINITY, perOrg: Number.POSITIVE_INFINITY };
+const unlimited = Number.POSITIVE_INFINITY;
 
 function batch(): GenerationBatch {
   return { run, taskQueue: "test", phase: "authoring", shards: [], candidates: [] };
@@ -28,7 +28,7 @@ test("candidate dispatch plans respect the shared workflow concurrency limit", a
   expect(state.candidates[MAX_CONCURRENT_CANDIDATE_WORKFLOWS]?.dispatchAttempted).toBeUndefined();
 });
 
-test("managed work starts first come, first served within the platform and per-org limits", () => {
+test("managed work starts first come, first served within the platform limit", () => {
   const managed = (runId: string, orgId: number, size: number): GenerationBatch => ({
     ...batch(),
     run: {
@@ -50,27 +50,27 @@ test("managed work starts first come, first served within the platform and per-o
   const started = (state: GenerationBatch) =>
     state.candidates.filter((item) => item.dispatchAttempted).length;
   const older = managed("older", 1, 6);
-  const sameOrg = managed("same-org", 1, 3);
-  const otherOrg = managed("other-org", 2, 5);
+  const newer = managed("newer", 1, 3);
+  const newest = managed("newest", 2, 5);
   const byo = { ...managed("byo", 1, 4), run };
 
-  planDispatch([older, sameOrg, otherOrg, byo], { total: 8, perOrg: 5 });
+  planDispatch([older, newer, newest, byo], 8);
 
-  // Org 1 fills its 5 from its oldest batch; org 2 takes the remaining 3 platform slots.
-  expect([started(older), started(sameOrg), started(otherOrg)]).toEqual([5, 0, 3]);
+  // The oldest batch starts everything; the next takes the remaining 2 platform slots.
+  expect([started(older), started(newer), started(newest)]).toEqual([6, 2, 0]);
   // Work on an organization's own sandbox account is not limited.
   expect(started(byo)).toBe(4);
 
-  // A finished workflow frees its slot for the oldest waiting work of an eligible org.
+  // A finished workflow frees its slot for the oldest waiting work.
   const done = older.candidates[0];
   if (!done) throw new Error("missing candidate");
   done.error = "failed";
-  planDispatch([older, sameOrg, otherOrg, byo], { total: 8, perOrg: 5 });
-  expect([started(older), started(sameOrg), started(otherOrg)]).toEqual([6, 0, 3]);
+  planDispatch([older, newer, newest, byo], 8);
+  expect([started(older), started(newer), started(newest)]).toEqual([6, 3, 0]);
 });
 
-test("limits default to 100 workflows and 20 per organization", () => {
-  expect(dispatchLimits({})).toEqual({ total: 100, perOrg: 20 });
-  expect(dispatchLimits({ SELFBENCH_ORG_WORKFLOW_LIMIT: "5" }).perOrg).toBe(5);
-  expect(() => dispatchLimits({ SELFBENCH_WORKFLOW_LIMIT: "0" })).toThrow();
+test("the platform limit defaults to 100 workflows", () => {
+  expect(workflowLimit({})).toBe(100);
+  expect(workflowLimit({ SELFBENCH_WORKFLOW_LIMIT: "40" })).toBe(40);
+  expect(() => workflowLimit({ SELFBENCH_WORKFLOW_LIMIT: "0" })).toThrow();
 });

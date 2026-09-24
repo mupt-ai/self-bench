@@ -1,13 +1,12 @@
+import {
+  BATCH_OBSERVE_INTERVAL_MS,
+  BATCH_RPC_CONCURRENCY,
+} from "../../contracts/config/execution-limits.js";
 import type { CandidateWorkflowResult } from "../../contracts/index.js";
 import { errorMessage, settleWithLimit } from "../../lib/util.js";
 import { settled } from "./dispatch.js";
 import type { BatchExecutions } from "./temporal.js";
 import type { BatchItem, GenerationBatch } from "./types.js";
-
-/** Temporal RPC groups one batch sweep keeps in flight. */
-const EXECUTION_CONCURRENCY = 8;
-/** A running execution is described (and queried) at most this often; queries are billed. */
-export const OBSERVE_INTERVAL_MS = 30_000;
 
 type Candidate = GenerationBatch["candidates"][number];
 type CandidateSnapshot = Awaited<ReturnType<BatchExecutions["candidate"]>>;
@@ -24,7 +23,7 @@ interface Sweep {
 const due = (item: BatchItem, now: number) =>
   !settled(item) &&
   item.dispatchAttempted === true &&
-  (item.observedAt === undefined || now - item.observedAt >= OBSERVE_INTERVAL_MS);
+  (item.observedAt === undefined || now - item.observedAt >= BATCH_OBSERVE_INTERVAL_MS);
 
 /** An item never observed has not been started by this batch yet. */
 const mayStart = (sweep: Sweep, item: BatchItem) =>
@@ -54,7 +53,7 @@ async function each<T extends BatchItem>(
   items: readonly T[],
   action: (item: T) => Promise<void>,
 ): Promise<void> {
-  const results = await settleWithLimit(items, EXECUTION_CONCURRENCY, action);
+  const results = await settleWithLimit(items, BATCH_RPC_CONCURRENCY, action);
   results.forEach((result, index) => {
     if (result.status === "rejected")
       console.error(

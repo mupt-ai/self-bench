@@ -1,5 +1,6 @@
 import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { BATCH_SWEEP_CONCURRENCY } from "../../contracts/config/execution-limits.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
@@ -10,7 +11,7 @@ import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
 import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
-import { dispatchLimits, planDispatch } from "./dispatch.js";
+import { planDispatch, workflowLimit } from "./dispatch.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
@@ -23,9 +24,6 @@ export class RunNotFoundError extends Error {
     this.name = "RunNotFoundError";
   }
 }
-
-/** Batches reconciled at once; each holds one pooled DB connection while its RPCs run. */
-const BATCH_CONCURRENCY = 4;
 
 /** A restartable application reconciler, not a Temporal orchestration workflow. */
 export function createGenerationBatches(
@@ -57,7 +55,7 @@ export function createGenerationBatches(
         .finally(() => exports.delete(runId)),
     );
   };
-  const limits = dispatchLimits();
+  const limit = workflowLimit();
   const reconcile = async (runId: string) => {
     let exporting: GenerationBatch | undefined;
     await store.reconcile(runId, async (state) => {
@@ -68,9 +66,9 @@ export function createGenerationBatches(
   };
   const tick = async () => {
     // The dispatch plan commits before any start, so a crash leaves every start owned.
-    await store.plan((batches) => planDispatch(batches, limits));
+    await store.plan((batches) => planDispatch(batches, limit));
     const runIds = await store.activeRunIds();
-    const results = await settleWithLimit(runIds, BATCH_CONCURRENCY, reconcile);
+    const results = await settleWithLimit(runIds, BATCH_SWEEP_CONCURRENCY, reconcile);
     // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
     results.forEach((result, index) => {
       if (result.status === "rejected")
