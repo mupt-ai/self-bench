@@ -28,17 +28,6 @@ const draftStateSchema = z.object({
   }),
 });
 
-export function preferManagedSandbox<
-  T extends { submitted: boolean; draft: { sandbox: string; sandboxCredentialId: string } },
->(current: T): T {
-  if (current.submitted || current.draft.sandbox !== "e2b" || current.draft.sandboxCredentialId)
-    return current;
-  return {
-    ...current,
-    draft: { ...current.draft, sandbox: "managed", sandboxCredentialId: "managed-sandbox" },
-  };
-}
-
 export function restoreRunDraft(saved: string | null, selectedTasks: string | null) {
   if (saved && selectedTasks === null) {
     try {
@@ -46,13 +35,6 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
       if (parsed.success) {
         if (!parsed.data.draft.models.length) {
           parsed.data.draft.models = [{ catalogId: "", credentialId: "", harnesses: [] }];
-        }
-        if (
-          parsed.data.draft.sandbox === "e2b" &&
-          parsed.data.draft.sandboxCredentialId === "managed-sandbox" &&
-          !parsed.data.submitted
-        ) {
-          parsed.data.draft.sandbox = "managed";
         }
         return parsed.data;
       }

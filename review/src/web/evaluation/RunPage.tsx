@@ -15,7 +15,7 @@ import { customModel, hasDuplicateModelSelections } from "./model-selection";
 import { RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
-import { preferManagedSandbox, restoreRunDraft } from "./run-draft";
+import { restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
 export function RunPage() {
   const scope = useEvaluationScope();
@@ -62,7 +62,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           setModels(result.models);
           setSandboxes(result.sandboxes);
           setManaged(result.managed ?? { models: false, sandbox: false });
-          if (result.managed?.sandbox) setState(preferManagedSandbox);
         }
       },
       (cause) => {
@@ -123,17 +122,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           },
         ]
       : []),
-    ...(managed.sandbox
-      ? [
-          {
-            id: "managed-sandbox",
-            name: "Managed",
-            kind: "e2b" as const,
-            auth: "api-key" as const,
-            createdAt: "",
-          },
-        ]
-      : []),
     ...credentials,
   ];
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
@@ -145,13 +133,12 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     selected.length === draft.models.length &&
     !hasDuplicateModelSelections([...models, customModel], draft.models) &&
     selected.length <= 12 &&
-    availableCredentials.some(
-      (credential) =>
-        credential.id === draft.sandboxCredentialId &&
-        (draft.sandbox === "managed"
-          ? credential.id === "managed-sandbox"
-          : credential.kind === draft.sandbox),
-    ) &&
+    (draft.sandbox === "managed"
+      ? managed.sandbox && draft.sandboxCredentialId === "managed-sandbox"
+      : availableCredentials.some(
+          (credential) =>
+            credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
+        )) &&
     selected.every((selection) => {
       const model =
         selection.catalogId === "custom"
