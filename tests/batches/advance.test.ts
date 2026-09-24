@@ -272,3 +272,29 @@ test("a sweep that learns of a pending cancel starts nothing new but keeps obser
   expect(touched).toEqual(["run/candidate/0"]);
   expect(state.candidates[1]?.observedAt).toBeUndefined();
 });
+
+test("a completed candidate with another candidate's result settles as failed", async () => {
+  const state = batch();
+  state.phase = "authoring";
+  state.shards = [];
+  state.candidates = [
+    { workflowId: "run/candidate/one", dispatchAttempted: true, candidate: candidate("one", 1) },
+  ];
+  const executions: BatchExecutions = {
+    shard: async () => {
+      throw Error("must not start");
+    },
+    candidate: async () => ({
+      state: "completed",
+      result: {
+        progress: { candidateId: "other", taskId: "other", difficulty: "hard", status: "rejected" },
+      },
+    }),
+    cancel: async () => true,
+  };
+
+  await advanceBatch(state, executions);
+
+  expect(state.candidates[0]?.error).toBe("Candidate returned an inconsistent result");
+  expect(state.phase).toBe("exporting");
+});

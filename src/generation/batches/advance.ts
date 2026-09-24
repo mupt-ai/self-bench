@@ -154,17 +154,15 @@ function applyCandidate(batch: GenerationBatch, item: Candidate, snapshot: Candi
   }
   if (snapshot.state === "completed") {
     const result = snapshot.result;
-    if (!consistent(item, result)) {
-      console.error(
-        `Batch ${batch.run.runId} rejected an inconsistent result for ${item.workflowId}`,
-      );
-      return;
-    }
     const taskId = result.task?.taskId;
-    if (taskId && batch.candidates.some((other) => other.result?.task?.taskId === taskId))
-      item.error = "Another candidate already owns this task ID";
-    else item.result = result;
-    item.progress = result.progress;
+    // A completed workflow never reruns, so a bad result settles the candidate as failed.
+    if (!consistent(item, result)) item.error = "Candidate returned an inconsistent result";
+    else {
+      if (taskId && batch.candidates.some((other) => other.result?.task?.taskId === taskId))
+        item.error = "Another candidate already owns this task ID";
+      else item.result = result;
+      item.progress = result.progress;
+    }
   } else if (snapshot.state === "cancelled") {
     item.cancelled = true;
     item.error = "Generation cancelled.";
