@@ -30,8 +30,10 @@ const styleLab = import.meta.env.DEV
   : undefined;
 const StyleLab = styleLab ? lazy(styleLab) : undefined;
 
-/** Heights of the pinned header and footer, their border lines included. */
-const HEADER = "h-[65px]";
+/**
+ * The footer's height, its border line included. `--bar-bottom` is the height the pinned
+ * footer takes from the window: the same, or 0 on compact screens, where it is not pinned.
+ */
 const FOOTER = "h-[49px]";
 
 /**
@@ -68,7 +70,7 @@ export function PublicLayout() {
     );
   };
   return (
-    <div className="relative isolate min-h-dvh pt-[65px] pb-[49px] text-foreground">
+    <div className="relative isolate flex min-h-dvh flex-col pt-(--bar-top) pb-(--bar-bottom) text-foreground">
       <WaterBackground />
       <CursorAura />
       {/* Referenced by theme.css to tint logos in dark mode: channels scaled, blue kept most. */}
@@ -92,27 +94,27 @@ export function PublicLayout() {
       */}
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-x-0 top-0 z-[7] ${HEADER} bg-background`}
+        className="pointer-events-none fixed inset-x-0 top-0 z-[7] h-(--bar-top) bg-background"
       />
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[7] ${FOOTER} bg-background`}
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[7] h-(--bar-bottom) bg-background"
       />
       <WaterBackground bands />
       <header
         {...siteEdge("top")}
-        className={`fixed inset-x-0 top-0 z-[7] ${HEADER} border-b border-border`}
+        className="fixed inset-x-0 top-0 z-[7] h-(--bar-top) border-b border-border"
       >
         <div className={`${EDGE_FRAME} flex h-full items-center justify-between gap-4`}>
           <Link
             to="/"
             onClick={goHome}
             aria-label="SELF-BENCH Home"
-            className="font-mono text-xl font-bold tracking-wider"
+            className="hit relative font-mono text-xl font-bold tracking-wider compact:text-lg"
           >
             SELF-BENCH
           </Link>
-          <nav aria-label="Site" className="flex items-center gap-3 text-sm">
+          <nav aria-label="Site" className="flex items-center gap-3 text-sm compact:gap-2">
             {StyleLab && (
               <Suspense fallback={null}>
                 <StyleLab />
@@ -120,7 +122,7 @@ export function PublicLayout() {
             )}
             <a
               href={APP_URL}
-              className="font-semibold text-foreground/80 underline decoration-foreground/30 underline-offset-4 hover:text-foreground hover:decoration-foreground"
+              className="hit relative font-semibold text-foreground/80 underline decoration-foreground/30 underline-offset-4 hover:text-foreground hover:decoration-foreground"
             >
               Sign In
             </a>
@@ -136,19 +138,19 @@ export function PublicLayout() {
           </nav>
         </div>
       </header>
-      <div {...scrollRoot}>
-        <main className={`${FRAME} py-10`}>
+      <div {...scrollRoot} className="grow">
+        <main className={`${FRAME} py-(--page-pad)`}>
           <Outlet />
         </main>
       </div>
-      {/* Content passing under the footer softens slightly instead of being cut off hard. */}
+      {/* Content passing under the pinned footer softens slightly instead of being cut off hard. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 bottom-[49px] z-[7] h-6 backdrop-blur-[1.5px] [mask-image:linear-gradient(to_top,black,transparent)]"
+        className="pointer-events-none fixed inset-x-0 bottom-(--bar-bottom) z-[7] h-6 backdrop-blur-[1.5px] [mask-image:linear-gradient(to_top,black,transparent)] compact:hidden"
       />
       <footer
         {...siteEdge("bottom")}
-        className={`fixed inset-x-0 bottom-0 z-[7] ${FOOTER} border-t border-border`}
+        className={`fixed inset-x-0 bottom-0 z-[7] ${FOOTER} border-t border-border compact:static`}
       >
         <div
           className={`${EDGE_FRAME} flex h-full items-center justify-between gap-3 font-mono text-xs font-semibold text-foreground/90`}

@@ -192,7 +192,7 @@ export function WaterBackground({ bands = false }: { bands?: boolean }) {
       ref={canvas}
       className={
         bands
-          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_65px,transparent_65px_calc(100%-49px),black_calc(100%-49px))]"
+          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_var(--bar-top),transparent_var(--bar-top)_calc(100%-var(--bar-bottom)),black_calc(100%-var(--bar-bottom)))]"
           : "pointer-events-none fixed inset-0 -z-10 h-full w-full"
       }
     />

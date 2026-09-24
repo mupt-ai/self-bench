@@ -22,6 +22,8 @@
     "scripts/**/*.ts!",
     "tests/**/*.ts"
   ],
+  // The phone checks (review/src/public-site/AGENTS.md); the plugin reads their files from it.
+  "playwright": { "config": ["review/playwright.phone.config.ts"] },
   "includeEntryExports": true,
   "ignoreIssues": {
     // These exports are registration interfaces for the external loaders.

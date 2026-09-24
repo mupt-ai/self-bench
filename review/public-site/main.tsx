@@ -5,15 +5,18 @@ import "../src/public-site/theme.css";
 import { apiSource } from "../src/public-site/api-source";
 import { installHistoryTransitions } from "../src/public-site/effects/history-transitions";
 import { fixtureSource } from "../src/public-site/fixture-source";
+import { syntheticSource } from "../src/public-site/mobile/checks/synthetic";
 import { PublicRoutes } from "../src/public-site/PublicRoutes";
 import { SourceContext } from "../src/public-site/source-context";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("public site root is missing");
 
-// Development reads local fixtures unless VITE_PUBLIC_DATA=api; a build always reads the API.
+// Development reads local fixtures, or the API with VITE_PUBLIC_DATA=api, or the phone checks'
+// made-up repositories with VITE_PUBLIC_DATA=synthetic. A build always reads the API.
+const data = import.meta.env.DEV ? import.meta.env.VITE_PUBLIC_DATA : "api";
 const source =
-  import.meta.env.DEV && import.meta.env.VITE_PUBLIC_DATA !== "api" ? fixtureSource() : apiSource();
+  data === "api" ? apiSource() : data === "synthetic" ? syntheticSource() : fixtureSource();
 
 // Before the router, so back and forward can freeze the old page before it is replaced.
 installHistoryTransitions();
