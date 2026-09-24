@@ -33,17 +33,24 @@ function renderExecution(ready: boolean, pairs: number, tasksReady = true) {
   );
 }
 
+/** The Run Comparison button's opening tag; placeholder options are disabled too, so the
+ * panel as a whole always contains a disabled attribute. */
+function runButton(html: string): string {
+  return html.match(/<button[^>]*>(?=(?:(?!<\/button>)[\s\S])*Run Comparison)/)?.[0] ?? "";
+}
+
 test("execution explains why a run is unavailable", () => {
   expect(renderExecution(false, 0, false)).toContain("Accepted tasks are required to run.");
   expect(renderExecution(false, 0)).toContain("Add a model to continue.");
   expect(renderExecution(false, 2)).toContain("Select a sandbox credential to continue.");
-  expect(renderExecution(false, 2)).toContain('disabled=""');
+  expect(runButton(renderExecution(false, 2))).toContain('disabled=""');
 });
 
 test("ready execution shows the trial total and enables the run action", () => {
   const html = renderExecution(true, 2);
   expect(html).toContain("Total Trials");
   expect(html).toContain(">2</dd>");
-  expect(html).not.toContain('disabled=""');
+  expect(runButton(html)).toMatch(/^<button/);
+  expect(runButton(html)).not.toContain('disabled=""');
   expect(html).toContain("Model and sandbox usage is billed by your providers.");
 });

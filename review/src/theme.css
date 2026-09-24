@@ -89,6 +89,76 @@ html {
   }
 }
 
+/* Selects stay native <select>s, so the keyboard, screen readers, phone pickers, and anything
+   that automates the page behave as before. Where the browser lets a select's open list be
+   styled, it matches the app: a square card in the theme's colours, a muted hover, and a blue
+   check on the chosen option. Other browsers keep their own menu. */
+@layer components {
+  /* No native arrow: the Select component draws its own chevron. */
+  select[data-slot="select"] {
+    appearance: none;
+  }
+  @supports (appearance: base-select) {
+    select[data-slot="select"],
+    select[data-slot="select"]::picker(select) {
+      appearance: base-select;
+    }
+    select[data-slot="select"] {
+      align-items: center;
+    }
+    /* The select draws its own chevron beside it (the Select component), not this one. */
+    select[data-slot="select"]::picker-icon {
+      display: none;
+    }
+    select[data-slot="select"]:open {
+      border-color: color-mix(in srgb, var(--foreground) 50%, transparent);
+    }
+    select[data-slot="select"]::picker(select) {
+      margin-block: 4px;
+      padding: 4px;
+      max-height: min(20rem, 50dvh);
+      overflow-y: auto;
+      border: 1.5px solid var(--panel-edge);
+      border-radius: 0;
+      background: var(--card);
+      color: var(--foreground);
+      box-shadow:
+        0 1px 2px rgb(0 0 0 / 0.06),
+        0 12px 28px -12px rgb(0 0 0 / 0.3);
+    }
+    select[data-slot="select"] option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.375rem 0.625rem;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      color: var(--foreground);
+      background: transparent;
+    }
+    select[data-slot="select"] option:hover,
+    select[data-slot="select"] option:focus-visible {
+      background: var(--muted);
+      outline: none;
+    }
+    select[data-slot="select"] option:checked {
+      font-weight: 500;
+    }
+    select[data-slot="select"] option:disabled {
+      color: var(--muted-fg);
+    }
+    select[data-slot="select"] option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--check);
+    }
+    /* A placeholder ("Select Model") is a disabled option; it is never a choice to tick. */
+    select[data-slot="select"] option:disabled::checkmark {
+      visibility: hidden;
+    }
+  }
+}
+
 /* Native number-input spinners clash with the square controls; the keyboard
    arrows still step the value. */
 input[type="number"]::-webkit-outer-spin-button,
