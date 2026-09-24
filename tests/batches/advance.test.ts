@@ -296,5 +296,5 @@ test("a completed candidate with another candidate's result settles as failed", 
   await advanceBatch(state, executions);
 
   expect(state.candidates[0]?.error).toBe("Candidate returned an inconsistent result");
-  expect(state.phase).toBe("exporting");
+  expect(String(state.phase)).toBe("exporting");
 });
