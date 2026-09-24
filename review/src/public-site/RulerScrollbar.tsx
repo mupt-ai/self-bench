@@ -106,10 +106,14 @@ export function RulerScrollbar() {
       className={`pointer-events-none fixed left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2`}
       style={{ top: band.top, height: band.height }}
     >
-      {/* A strip a little wider than the line, so it is easy to grab. */}
+      {/*
+        A strip a little wider than the line, so it is easy to grab with a pointer. Not on
+        touch: there it only shows the page's place, and a finger scrolling near the edge
+        must scroll the page, not grab the strip.
+      */}
       <div
         onPointerDown={press}
-        className="group pointer-events-auto absolute inset-y-0 -right-1.5 w-3 touch-none"
+        className="group pointer-events-auto absolute inset-y-0 -right-1.5 w-3 touch-none touch:pointer-events-none"
       >
         <div
           data-shown={shown || dragging || undefined}

@@ -14,5 +14,11 @@
     "target": "ES2022",
     "types": ["bun", "vite/client"]
   },
-  "include": ["src", "public-site", "vite.config.ts", "vite.public.config.ts"]
+  "include": [
+    "src",
+    "public-site",
+    "vite.config.ts",
+    "vite.public.config.ts",
+    "playwright.phone.config.ts"
+  ]
 }
