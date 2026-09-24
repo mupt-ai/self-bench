@@ -63,7 +63,11 @@ export function stampedManagedHarbor(stamped: HarborEnvironment): "modal" | "e2b
 }
 
 /** The Modal SDK environment for managed Harbor verification on the platform account. */
-export function managedModalEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+export function managedModalEnvironment(env: NodeJS.ProcessEnv): {
+  MODAL_TOKEN_ID: string;
+  MODAL_TOKEN_SECRET: string;
+  MODAL_ENVIRONMENT?: string;
+} {
   const tokenId = env[MANAGED_MODAL_TOKEN_ID]?.trim();
   const tokenSecret = env[MANAGED_MODAL_TOKEN_SECRET]?.trim();
   if (!tokenId || !tokenSecret)

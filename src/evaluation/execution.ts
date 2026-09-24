@@ -4,7 +4,11 @@ import { isDeepStrictEqual } from "node:util";
 import { modelApiKeyVariable } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import { managedModelKey, managedSandboxCredentials } from "../generation/billing/managed.js";
+import {
+  managedModalEnvironment,
+  managedModelKey,
+  managedSandboxCredentials,
+} from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
@@ -36,7 +40,7 @@ export async function credentialExecution(
     ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
     : await credentials.find(orgId, input.credentials.modelCredentialId);
   const sandbox = managedSandbox
-    ? { id: "managed-sandbox", kind: "e2b" as const }
+    ? { id: "managed-sandbox", kind: input.sandbox }
     : await credentials.find(orgId, input.credentials.sandboxCredentialId);
   if (
     !info ||
@@ -48,10 +52,15 @@ export async function credentialExecution(
   const modelSecret = managedModel
     ? managedModelKey(env)
     : (await credentials.secret(orgId, info.id))?.value;
-  const managedE2B = managedSandbox ? managedSandboxCredentials(env) : undefined;
+  const managedE2B =
+    managedSandbox && input.sandbox === "e2b" ? managedSandboxCredentials(env) : undefined;
+  const managedModal =
+    managedSandbox && input.sandbox === "modal" ? managedModalEnvironment(env) : undefined;
   const sandboxSecret = managedE2B
     ? { value: managedE2B.apiKey }
-    : await credentials.secret(orgId, sandbox.id);
+    : managedModal
+      ? { value: managedModal.MODAL_TOKEN_SECRET, tokenId: managedModal.MODAL_TOKEN_ID }
+      : await credentials.secret(orgId, sandbox.id);
   if (!modelSecret || !sandboxSecret) throw new Error("Credential unavailable");
   const child: NodeJS.ProcessEnv = {
     PATH: env.PATH,
@@ -79,6 +88,7 @@ export async function credentialExecution(
   Object.assign(
     child,
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
+    managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
   return { profile: { model: input.modelName }, child, secrets };
 }

@@ -6,7 +6,7 @@ import type { ComparisonRecord } from "../db/comparisons.js";
 import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
-import type { ManagedOffer } from "../generation/billing/managed.js";
+import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
 import {
   evaluationTaskKey,
@@ -61,6 +61,7 @@ export async function createComparison(
   managed: ManagedOffer,
   scope: ComparisonScope,
   draft: ComparisonDraft,
+  environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   const signature = JSON.stringify(selection);
@@ -97,13 +98,13 @@ export async function createComparison(
     (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
   );
   // Accept saved E2B comparisons created before Managed was a distinct choice.
-  const managedSandbox =
-    selection.sandbox === "managed" ||
-    (selection.sandbox === "e2b" && selection.sandboxCredentialId === "managed-sandbox");
-  if (managedSandbox && !managed.sandbox)
+  const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
+  if (selection.sandbox === "managed" && managedHarborEnvironment(environment) !== "modal")
+    throw new Error("Managed evaluation requires platform Modal credentials.");
+  if (managedSandbox && selection.sandbox === "e2b" && !managed.sandbox)
     throw new Error("Managed sandboxes are not available on this deployment.");
   const sandbox = managedSandbox
-    ? { id: "managed-sandbox", kind: "e2b" as const }
+    ? { id: "managed-sandbox", kind: selection.sandbox === "managed" ? "modal" : "e2b" }
     : saved.get(selection.sandboxCredentialId);
   if (
     !sandbox ||
@@ -178,7 +179,7 @@ export async function createComparison(
           modelName,
           thinking,
           harnesses: group.harnesses,
-          sandbox: selection.sandbox === "managed" ? "e2b" : selection.sandbox,
+          sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
           repoId: scope.repoId,
           tenant: scope.tenant,
