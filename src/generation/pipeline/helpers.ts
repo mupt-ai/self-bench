@@ -59,3 +59,12 @@ export function safeHeartbeat(detail: string): void {
     // Not inside an activity.
   }
 }
+
+/** The Temporal attempt, so a retried verification publishes under fresh live keys. */
+export function activityAttempt(): number {
+  try {
+    return Context.current().info.attempt;
+  } catch {
+    return 1; // Not inside an activity (tests, local runs).
+  }
+}
