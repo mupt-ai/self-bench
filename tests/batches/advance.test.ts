@@ -264,3 +264,31 @@ test("cancellation never starts work and stays pending until independent executi
   await advanceBatch(state, executions); // Every dispatched shard is cancelled in one sweep.
   expect(String(state.phase)).toBe("cancelled");
 });
+
+test("a sweep that learns of a pending cancel starts nothing new but keeps observing", async () => {
+  const state = batch();
+  state.phase = "authoring";
+  state.shards = [];
+  state.candidates = Array.from({ length: 3 }, (_, index) => ({
+    workflowId: `run/candidate/${index}`,
+    dispatchAttempted: true,
+    ...(index === 0 ? { observedAt: 0 } : {}),
+    candidate: candidate(`candidate-${index}`, index + 1),
+  }));
+  const touched: string[] = [];
+  const executions: BatchExecutions = {
+    shard: async () => {
+      throw Error("must not start");
+    },
+    candidate: async (id) => {
+      touched.push(id);
+      return { state: "running" };
+    },
+    cancel: async () => true,
+  };
+
+  await advanceBatch(state, executions, OBSERVE_INTERVAL_MS, () => true);
+
+  expect(touched).toEqual(["run/candidate/0"]);
+  expect(state.candidates[1]?.observedAt).toBeUndefined();
+});

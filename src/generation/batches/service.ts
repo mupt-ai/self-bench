@@ -40,6 +40,8 @@ export function createGenerationBatches(
   let stopped = false;
   let pending: Promise<void> | undefined;
   const exports = new Map<string, Promise<void>>();
+  // Cancels this replica is waiting to record; their batches' sweeps stop starting work.
+  const cancelling = new Set<string>();
   // No DB transaction is held while rendering/downloading bundles, and a slow export never
   // stalls other batches. Immutable export writes can be resumed after a crash; completion is
   // conditional on still being exporting.
@@ -59,7 +61,7 @@ export function createGenerationBatches(
     await store.reconcile(runId, async (state) => planBatchDispatch(state));
     let exporting: GenerationBatch | undefined;
     await store.reconcile(runId, async (state) => {
-      await advanceBatch(state, executions);
+      await advanceBatch(state, executions, Date.now(), () => cancelling.has(runId));
       if (state.phase === "exporting") exporting = structuredClone(state);
     });
     if (exporting) startExport(exporting);
@@ -162,8 +164,13 @@ export function createGenerationBatches(
       };
     },
     async cancel(runId: string) {
-      if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
-      else poll();
+      cancelling.add(runId);
+      try {
+        if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
+        else poll();
+      } finally {
+        cancelling.delete(runId);
+      }
     },
     async close() {
       stopped = true;

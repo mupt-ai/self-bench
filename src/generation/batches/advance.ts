@@ -54,12 +54,16 @@ function due(item: BatchItem, now: number): boolean {
 /**
  * One durable application sweep over every dispatched item. Items whose RPC fails keep their
  * persisted state and are retried on the next sweep; the rest of the batch still advances.
+ * Once `halted` reports a pending cancel, the sweep starts nothing new, so the cancel (blocked
+ * on this sweep's row lock) is not preceded by a burst of starts it must then tear down.
  */
 export async function advanceBatch(
   batch: GenerationBatch,
   executions: BatchExecutions,
   now = Date.now(),
+  halted: () => boolean = () => false,
 ): Promise<void> {
+  const unstarted = (item: BatchItem) => item.observedAt === undefined && halted();
   if (batch.phase === "cancelling") {
     const all = [...batch.shards, ...batch.candidates];
     const pending = all.filter((item) => !item.result && !item.cancelled);
@@ -77,6 +81,7 @@ export async function advanceBatch(
       (shard) => !settled(shard) && shard.dispatchAttempted && due(shard, now),
     );
     await each(batch, observed, async (shard) => {
+      if (unstarted(shard)) return;
       const snapshot = await executions.shard(shard.workflowId, shard.input, batch.taskQueue);
       shard.observedAt = now;
       if (snapshot.state === "completed") shard.result = snapshot.result;
@@ -116,6 +121,7 @@ export async function advanceBatch(
   );
   const snapshots = new Map<BatchItem, Awaited<ReturnType<BatchExecutions["candidate"]>>>();
   await each(batch, observed, async (item) => {
+    if (unstarted(item)) return;
     snapshots.set(
       item,
       await executions.candidate(
