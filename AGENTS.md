@@ -10,3 +10,7 @@
 - Preserve brands, acronyms, filenames, model/provider IDs, repository names, user-authored content, and API values exactly (`OpenAI`, `OpenRouter`, `API`, `PR`, `auth.json`, `mupt-ai/self-bench`). Change presentation copy, not persisted values.
 - Write the intended casing in the source. Do not add CSS `capitalize` or a runtime title-casing utility; existing intentional uppercase badge styling may remain.
 - Apply this rule to new UI and update label-sensitive tests when changing existing copy.
+
+## Public Site
+
+- Work under `review/src/public-site/` (selfbench.dev) also follows `review/src/public-site/AGENTS.md`: how pages adapt to phones, and when and how to run the phone checks.

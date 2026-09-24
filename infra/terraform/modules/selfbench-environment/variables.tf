@@ -16,40 +16,6 @@ variable "environment" {
 variable "region" {
   type = string
 }
-variable "zone" {
-  type = string
-  validation {
-    condition     = startswith(var.zone, "${var.region}-")
-    error_message = "The VM zone must belong to the chosen region."
-  }
-}
-variable "boot_image" {
-  description = "Explicit Debian 12 image self-link; choose and review a version, not a moving family."
-  type        = string
-  validation {
-    condition     = can(regex("^projects/debian-cloud/global/images/debian-12-bookworm-v[0-9]+$", var.boot_image))
-    error_message = "Use a versioned projects/debian-cloud/global/images/debian-12-bookworm-vYYYYMMDD image."
-  }
-}
-variable "machine_type" {
-  description = "Coordinator capacity, not sandbox capacity. Size after a measured dev run."
-  type        = string
-  default     = "e2-standard-2"
-}
-variable "boot_disk_size_gb" {
-  description = "Boot disk size; holds Docker images for the current and previous release. Increase only."
-  type        = number
-  default     = 100
-  validation {
-    condition     = var.boot_disk_size_gb >= 100
-    error_message = "The boot disk must be at least 100 GB; it was 50 GB when it filled in September 2026."
-  }
-}
-variable "enable_public_web" {
-  description = "Open 80/443 only after domain, TLS proxy and authentication are configured."
-  type        = bool
-  default     = false
-}
 variable "create_cloud_sql" {
   description = "Proposed managed DB. False means an external managed database must be configured before release."
   type        = bool
@@ -78,12 +44,46 @@ variable "cloud_sql_retained_backups" {
     error_message = "Cloud SQL retained backups must be between 1 and 35."
   }
 }
-variable "operator_members" {
-  description = "Explicit user/group IAM members permitted to administer this environment through IAP."
-  type        = set(string)
-  default     = []
+variable "api_domains" {
+  description = "Hostnames the API serves from Cloud Run behind the global load balancer, for example [\"app.selfbench.dev\", \"selfbench.dev\"]."
+  type        = list(string)
   validation {
-    condition     = alltrue([for member in var.operator_members : can(regex("^(user|group):[^@[:space:]]+@[^@[:space:]]+$", member))])
-    error_message = "Operators must be explicit user:email or group:email members."
+    condition     = length(var.api_domains) > 0 && alltrue([for domain in var.api_domains : can(regex("^[a-z0-9.-]+\\.[a-z]+$", domain))])
+    error_message = "List at least one bare hostname for the API."
   }
+}
+variable "redirect_domains" {
+  description = "Hostnames the load balancer permanently redirects to another host, for example { \"www.selfbench.dev\" = \"selfbench.dev\" }."
+  type        = map(string)
+  default     = {}
+}
+variable "image" {
+  description = "The release image by immutable digest; the API and the worker run the same one."
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+-docker\\.pkg\\.dev/[a-z0-9-]+/selfbench/selfbench@sha256:[0-9a-f]{64}$", var.image))
+    error_message = "Use an Artifact Registry selfbench image pinned by digest."
+  }
+}
+variable "secret_versions" {
+  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles."
+  type        = object({ shared = number, api = number, worker = number })
+}
+variable "activity_concurrency" {
+  description = "Temporal activity slots per worker instance."
+  type        = number
+  validation {
+    condition     = var.activity_concurrency >= 1 && var.activity_concurrency <= 100
+    error_message = "Activity concurrency must be between 1 and 100."
+  }
+}
+variable "worker_instances" {
+  description = "Worker pool instances; each polls with activity_concurrency slots."
+  type        = number
+  default     = 1
+}
+variable "api_max_instances" {
+  description = "Upper bound on API instances; one always stays warm."
+  type        = number
+  default     = 3
 }

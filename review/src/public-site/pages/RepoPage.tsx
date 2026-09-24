@@ -57,13 +57,14 @@ function Results({ page }: { page: PublicRepoPage }) {
     area.scrollTo(area.top() + section.getBoundingClientRect().top - pinned);
   }, [release.releaseId]);
   const { repository } = release;
+  const [owner, name] = repository.fullName.split("/");
   return (
     <article
       className="flex flex-col gap-8"
       {...shownLine(`${repository.fullName}/${release.publisher.login}`)}
     >
       <header className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex shrink-0" {...flightTo("avatar")}>
             <Avatar src={repository.ownerAvatarUrl} size={32} />
           </span>
@@ -71,10 +72,12 @@ function Results({ page }: { page: PublicRepoPage }) {
             href={`https://github.com/${repository.fullName}`}
             target="_blank"
             rel="noreferrer"
-            className="font-mono text-2xl font-medium hover:underline"
+            className="hit relative min-w-0 font-mono text-2xl font-medium hover:underline"
             {...flightTo("name")}
           >
-            {repository.fullName}
+            {/* A long name wraps after the owner, never inside a word. */}
+            {owner}/<wbr />
+            {name}
           </a>
           {repository.stars !== undefined && (
             <span
@@ -155,7 +158,7 @@ function Results({ page }: { page: PublicRepoPage }) {
                         state: { linesTop } satisfies PinnedLines,
                       });
                     }}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted aria-[current=page]:bg-muted"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted aria-[current=page]:bg-muted touch:py-3"
                   >
                     <Avatar src={line.publisher.avatarUrl} size={16} />
                     <span className="font-medium">{publisherName(line.publisher)}</span>
@@ -183,7 +186,7 @@ function NoResults({ fullName }: { fullName: string }) {
       <p className="text-muted-foreground">No evals for this repo yet.</p>
       <a
         href={APP_URL}
-        className="border border-foreground px-3 py-1.5 text-sm hover:bg-foreground hover:text-background"
+        className="hit relative border border-foreground px-3 py-1.5 text-sm hover:bg-foreground hover:text-background"
       >
         Run SelfBench on It
       </a>

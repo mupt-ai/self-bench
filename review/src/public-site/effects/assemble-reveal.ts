@@ -1,5 +1,6 @@
 import type { ScrollArea } from "../scroll-area";
 import { advanceFrontier } from "./assembly-pace";
+import { clipRects, HIDDEN } from "./clip";
 import { select } from "./marks";
 import { currentTransition, onCancel, stillRunning } from "./transition-run";
 
@@ -9,17 +10,13 @@ const TILE = 10;
 const SWEEP_MS = 540;
 /** Random lag per block, as a distance behind the frontier, so the frontier is ragged. */
 const JITTER_PX = 170;
-/** Extra mask drawn above and below the view, so fast scrolling never shows an undrawn edge. */
+/** Extra drawn above and below the view, so fast scrolling never shows an undrawn edge. */
 const MARGIN_ABOVE = 200;
 const MARGIN_BELOW = 500;
 /** How long one block takes to drop in and click into place. */
 const PLACE_MS = 170;
-/** The mask is drawn at this fraction of full size: cheap to encode every frame. */
-const MASK_SCALE = 0.5;
 /** How long lines marked to fade (the "Run by" line) take to fade in as the assembly starts. */
 const FADE_MS = 220;
-/** Snaps a length to whole mask pixels, so tiles meet without anti-aliased seams. */
-const snap = (value: number) => Math.round(value * MASK_SCALE) / MASK_SCALE;
 
 export interface AssembleReveal {
   /**
@@ -70,15 +67,14 @@ const settle = (t: number) => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
  */
 export function assembleForReveal(content: HTMLElement, area: ScrollArea): AssembleReveal {
   const run = currentTransition();
-  content.style.setProperty("mask-image", "linear-gradient(transparent, transparent)");
+  content.style.setProperty("clip-path", HIDDEN);
   let fading: HTMLElement[] = [];
   const clear = () => {
-    for (const name of ["mask-image", "mask-size", "mask-position", "mask-repeat"])
-      content.style.removeProperty(name);
+    content.style.removeProperty("clip-path");
     for (const element of fading)
       for (const name of ["opacity", "transition"]) element.style.removeProperty(name);
   };
-  // A later transition (a quick back) must not leave this page's content masked.
+  // A later transition (a quick back) must not leave this page's content hidden.
   const finished = onCancel(clear);
 
   return {
@@ -88,23 +84,11 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
       const view = area.view();
       const width = Math.ceil(page.width);
       const height = Math.ceil(view.height + MARGIN_ABOVE + MARGIN_BELOW);
-      const mask = document.createElement("canvas");
-      mask.width = Math.ceil(width * MASK_SCALE);
-      mask.height = Math.ceil(height * MASK_SCALE);
-      const context = mask.getContext("2d");
-      if (!context || width <= 0) {
+      if (width <= 0) {
         clear();
         finished();
         return Promise.resolve();
       }
-      context.fillStyle = "#000";
-      context.scale(MASK_SCALE, MASK_SCALE);
-      // Exactly two page pixels per mask pixel, so the mask's pixels line up with the tiles.
-      content.style.setProperty(
-        "mask-size",
-        `${mask.width / MASK_SCALE}px ${mask.height / MASK_SCALE}px`,
-      );
-      content.style.setProperty("mask-repeat", "no-repeat");
 
       // Parts marked to fade (not assemble) sit above the start line; they fade in as it starts.
       fading = [...content.querySelectorAll<HTMLElement>(select.revealFade)];
@@ -128,7 +112,7 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
         bottom: rect.bottom - page.top,
       }));
       const pieces: { x: number; y: number; lag: number; startedAt: number }[] = [];
-      // Tiles sit on a fixed grid from the page's top, so they meet on whole mask pixels.
+      // Tiles sit on a fixed grid from the page's top.
       for (let y = Math.max(0, Math.floor(startLine / TILE) * TILE); y < page.height; y += TILE) {
         for (let x = 0; x < width; x += TILE) {
           const filled = rects.some(
@@ -157,16 +141,16 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
           frontier += Math.max(0, area.top() - scrolled);
           last = now;
           scrolled = area.top();
-          const box = content.getBoundingClientRect();
-          const region = snap(area.view().top - box.top - MARGIN_ABOVE);
-          context.clearRect(0, 0, width, height);
+          // The band drawn: the view and a margin around it, in the content's own pixels.
+          const region = area.view().top - content.getBoundingClientRect().top - MARGIN_ABOVE;
+          const shown = clipRects();
           // Everything above the first piece still moving is whole: the title, and every row
           // already in place, drawn as one solid area rather than as tiles.
           let solid = page.height;
           for (const piece of pieces)
             if (piece.startedAt < 0 || now - piece.startedAt < PLACE_MS)
               solid = Math.min(solid, piece.y);
-          context.fillRect(0, 0, width, Math.max(startLine, solid) - region);
+          shown.add(0, 0, width, Math.max(startLine, solid));
           let waiting = false;
           for (const piece of pieces) {
             if (piece.startedAt < 0) {
@@ -178,15 +162,13 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
             }
             const t = (now - piece.startedAt) / PLACE_MS;
             if (t < 1) waiting = true;
-            const y = piece.y - region;
-            if (y < -TILE || y > height) continue;
+            if (piece.y < region - TILE || piece.y > region + height) continue;
             // The piece grows from its centre and settles with a slight overshoot.
             const side = t >= 1 ? TILE : TILE * Math.min(1.1, settle(t));
             const inset = (TILE - side) / 2;
-            context.fillRect(piece.x + inset, y + inset, side, side);
+            shown.add(piece.x + inset, piece.y + inset, side, side);
           }
-          content.style.setProperty("mask-position", `0 ${region}px`);
-          content.style.setProperty("mask-image", `url(${mask.toDataURL()})`);
+          content.style.setProperty("clip-path", shown.css());
           if (waiting) requestAnimationFrame(frame);
           else {
             clear();

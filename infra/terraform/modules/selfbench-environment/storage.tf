@@ -59,10 +59,11 @@ resource "google_secret_manager_secret" "runtime" {
   }
   depends_on = [google_project_service.api]
 }
+# The worker never reads the API's secret.
 resource "google_secret_manager_secret_iam_member" "runtime_reader" {
-  for_each  = google_secret_manager_secret.runtime
+  for_each  = toset(["shared", "worker"])
   project   = var.project_id
-  secret_id = each.value.secret_id
+  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }

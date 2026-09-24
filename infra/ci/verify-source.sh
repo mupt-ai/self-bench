@@ -34,17 +34,6 @@ esac
 git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$default_branch" \
   || die 'Deploy source is not on the default branch.'
 
-case "${INFRASTRUCTURE_ONLY:-false}" in
-  true)
-    [[ "$TF_ENVIRONMENT" == dev && "$GITHUB_EVENT_NAME" == workflow_dispatch ]] \
-      || die 'Infrastructure-only bootstrap must be an explicit manual dev run.'
-    echo "Verified deploy source $GITHUB_SHA for infrastructure-only bootstrap."
-    exit 0
-    ;;
-  false) ;;
-  *) die 'Invalid infrastructure-only flag.' ;;
-esac
-
 secret_versions_file="${RUNTIME_SECRET_VERSIONS_FILE:-infra/runtime/secret-versions/$TF_ENVIRONMENT.json}"
 [[ -f "$secret_versions_file" ]] || die "Missing runtime secret version manifest: $secret_versions_file"
 RUNTIME_SECRET_VERSIONS=$(jq -ce '

@@ -1,0 +1,53 @@
+name: Phone
+
+# The public site's phone checks (review/src/public-site/AGENTS.md), on Chrome: the runner's
+# own install, so no browser is downloaded. WebKit runs locally. Only when the site changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "review/src/public-site/**"
+      - "review/public-site/**"
+      - "review/playwright.phone.config.ts"
+      - "review/vite.public.config.ts"
+      - "src/public/release-types.ts"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/phone.yml"
+  pull_request:
+    paths:
+      - "review/src/public-site/**"
+      - "review/public-site/**"
+      - "review/playwright.phone.config.ts"
+      - "review/vite.public.config.ts"
+      - "src/public/release-types.ts"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/phone.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phone-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phone:
+    name: Phone checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run test:phone
+      # The report, with every route's pictures, to see what failed.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-checks
+          path: .selfbench/phone/
+          retention-days: 7

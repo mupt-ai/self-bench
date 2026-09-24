@@ -20,6 +20,4 @@ jobs:
         with:
           terraform_version: 1.14.2
           terraform_wrapper: false
-      # Docker Compose config parses test fixtures only. No containers or GCP credentials.
-      - run: docker compose version
       - run: bash infra/check.sh

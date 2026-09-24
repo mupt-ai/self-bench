@@ -24,7 +24,8 @@ function view(): DOMRect {
   const header = document.querySelector(select.siteEdge("top"))?.getBoundingClientRect();
   const footer = document.querySelector(select.siteEdge("bottom"))?.getBoundingClientRect();
   const top = header?.bottom ?? 0;
-  const bottom = footer?.top ?? window.innerHeight;
+  // On compact screens the footer is not pinned: it closes the page, and may be off screen.
+  const bottom = Math.min(footer?.top ?? window.innerHeight, window.innerHeight);
   return new DOMRect(0, top, document.documentElement.clientWidth, Math.max(0, bottom - top));
 }
 

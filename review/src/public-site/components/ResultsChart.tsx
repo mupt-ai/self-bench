@@ -50,6 +50,13 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
   const labels = placeLabels(points, inner);
   const frontier = points.filter((point) => point.setting.onFrontier).sort((a, b) => a.x - b.x);
   const active = points.find((point) => point.id === hovered);
+  // A mouse inspects the point nearest the pointer as it moves; a finger taps a point to
+  // inspect it, and taps empty space to put it away. On the tap's pointerup: a touch that turns
+  // into a scroll ends in pointercancel instead, so scrolling across the chart opens nothing.
+  const inspect = (event: React.PointerEvent<SVGSVGElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setHovered(nearest(points, { x: event.clientX - box.left, y: event.clientY - box.top })?.id);
+  };
   return (
     <div ref={frame} className="relative">
       <svg
@@ -57,14 +64,11 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
         height={height}
         role="img"
         aria-label="Accuracy versus cost per task for every model setting"
-        className="block font-mono text-[11px]"
-        onMouseMove={(event) => {
-          const box = event.currentTarget.getBoundingClientRect();
-          setHovered(
-            nearest(points, { x: event.clientX - box.left, y: event.clientY - box.top })?.id,
-          );
-        }}
-        onMouseLeave={() => setHovered(undefined)}
+        // Larger text on a narrow chart, which a phone shows at arm's length.
+        className={`block font-mono ${width < 560 ? "text-[12px]" : "text-[11px]"}`}
+        onPointerMove={(event) => event.pointerType === "mouse" && inspect(event)}
+        onPointerUp={(event) => event.pointerType !== "mouse" && inspect(event)}
+        onPointerLeave={(event) => event.pointerType === "mouse" && setHovered(undefined)}
       >
         <rect
           x={inner.x}
@@ -159,7 +163,8 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
         <div
           className="pointer-events-none absolute z-10 w-56 border border-border bg-card p-3 text-xs shadow-sm"
           style={{
-            left: Math.min(active.x + 14, width - 232),
+            // Beside the point, on whichever side has room for the card (224px wide).
+            left: active.x + 238 <= width ? active.x + 14 : Math.max(0, active.x - 238),
             top: Math.max(active.y - 20, 0),
           }}
         >

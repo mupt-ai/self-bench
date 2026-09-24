@@ -1,0 +1,69 @@
+/*
+ * The mobile adaptor. Pages are written once, for any size; this folder is everything that
+ * adapts them to phones and touch screens, so a change to a page needs no mobile twin:
+ *
+ * - Space: the frame's measurements (in theme.css) are narrowed here for compact screens,
+ *   and the header, footer, rulers, and page padding follow without any page knowing.
+ * - Input: a finger is not a mouse. Hover-only styles use Tailwind's `hover:`, which already
+ *   applies only where the pointer can hover; `touch:` styles apply to a finger; `hit` grows a
+ *   small control's tap area on touch; inputs never drop below 16px on touch, or iOS zooms in
+ *   when they take focus.
+ * - Tables: AdaptiveTable turns one column list into a table or a stack of cards, by the room
+ *   it has.
+ * - Behaviour: device.ts asks the input questions from scripts, with the same media queries.
+ */
+
+/*
+ * A small or short screen: a phone either way up. (The block form keeps the comma inside one
+ * media query; the one-line form would split the variant in two.)
+ */
+@custom-variant compact {
+  @media (width < 40rem), (height < 32rem) {
+    @slot;
+  }
+}
+/* A finger rather than a mouse. Matches TOUCH in device.ts. */
+@custom-variant touch (@media (pointer: coarse));
+
+@media (width < 40rem), (height < 32rem) {
+  :root {
+    /* Rulers close to the window's edges, and the page just inside them. */
+    --edge: 10px;
+    --gutter: 1rem;
+    /* Header and footer content lines up with the page's, not further in. */
+    --bar-inset: calc(var(--gutter) - var(--edge));
+    --bar-top: 56px;
+    /* The footer is not pinned: it closes the page instead (PublicLayout). */
+    --bar-bottom: 0px;
+    --page-pad: 1.5rem;
+  }
+}
+
+/*
+ * A control smaller than a fingertip: on touch, an invisible area around it takes the tap,
+ * at least 44px each way, without moving anything. The control must be positioned.
+ */
+@utility hit {
+  @media (pointer: coarse) {
+    &::after {
+      content: "";
+      position: absolute;
+      inset: min(0px, calc(50% - 22px));
+    }
+  }
+}
+
+@media (pointer: coarse) {
+  /* iOS zooms the page into any field smaller than 16px when it takes focus. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Headings that wrap, which on a phone is most of them, break into lines of even length. */
+h1,
+h2 {
+  text-wrap: balance;
+}

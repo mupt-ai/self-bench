@@ -110,14 +110,14 @@ test("restarting after a polling error does not revive the cancelled attempt", a
     }
     if (path === `${base}/old`)
       return Response.json({ error: "Could not check sign-in" }, { status: 410 });
-    if (path === `${base}/new`) return Response.json(session("new", "ready"));
-    if (path.endsWith("/complete")) return Response.json(saved);
+    if (path === `${base}/new`)
+      return Response.json({ ...session("new", "saved"), credential: saved });
     return Response.json({});
   };
   await click("Sign In with ChatGPT");
   await waitFor(() => !!container.querySelector('[role="alert"]'));
   await click("Start Again");
-  // The server waits for the old Codex process to close before returning the new session.
+  // The new session is still starting when the old one's poll would have fired.
   await act(async () => new Promise((resolve) => setTimeout(resolve, 650)));
   expect(requests.filter((request) => request === `GET ${base}/old`)).toHaveLength(1);
   await act(async () => restart.resolve(Response.json(session("new"))));
@@ -126,48 +126,13 @@ test("restarting after a polling error does not revive the cancelled attempt", a
   expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
-test("dismissal waits for the approved credential to save and refresh the list", async () => {
-  const saving = deferred<Response>();
-  respond = (path) => {
-    if (path === base) return Response.json(session("approved"));
-    if (path.endsWith("/complete")) return saving.promise;
-    return Response.json(session("approved", "ready"));
-  };
+test("the server saves the approved credential; the browser only polls", async () => {
+  respond = (path) =>
+    path === base
+      ? Response.json(session("approved"))
+      : Response.json({ ...session("approved", "saved"), credential: saved });
   await click("Sign In with ChatGPT");
-  await waitFor(() => requests.includes(`POST ${base}/approved/complete`));
-  expect(button("Close").disabled).toBe(true);
-  expect(button("Cancel Sign-In").disabled).toBe(true);
-  await click("Close");
-  await click("Cancel Sign-In");
-  const cancel = new browser.Event("cancel", { cancelable: true });
-  await act(async () => browser.document.querySelector("dialog")?.dispatchEvent(cancel));
-  expect(cancel.defaultPrevented).toBe(true);
-  expect(onCancel).not.toHaveBeenCalled();
-  expect(requests.some((request) => request.endsWith("/cancel"))).toBe(false);
-  await act(async () => saving.resolve(Response.json(saved)));
   await waitFor(() => onSaved.mock.calls.length === 1);
-  expect(button("Close").disabled).toBe(false);
   expect(container.textContent).toContain("Codex Connected");
-});
-
-test("a failed save unlocks dismissal and can retry the approved session", async () => {
-  let saves = 0;
-  respond = (path) => {
-    if (path === base) return Response.json(session("approved"));
-    if (path.endsWith("/complete")) {
-      saves += 1;
-      return saves === 1
-        ? Response.json({ error: "Storage unavailable. Retry saving." }, { status: 503 })
-        : Response.json(saved);
-    }
-    return Response.json(session("approved", "ready"));
-  };
-  await click("Sign In with ChatGPT");
-  await waitFor(() => !!container.querySelector('[role="alert"]'));
-  expect(button("Close").disabled).toBe(false);
-  expect(button("Cancel Sign-In").disabled).toBe(false);
-  expect(onSaved).not.toHaveBeenCalled();
-  await click("Retry");
-  await waitFor(() => onSaved.mock.calls.length === 1);
-  expect(saves).toBe(2);
+  expect(requests).toEqual([`POST ${base}`, `GET ${base}/approved`]);
 });
