@@ -1,7 +1,5 @@
-# The API on Cloud Run behind a global HTTPS load balancer, apart from the worker VM, so a
-# busy or broken worker (disk, memory, Harbor processes) cannot take the site down with it.
-# Terraform owns the service's shape; each release deploys its image and pinned secret
-# versions with `gcloud run deploy`, so those fields are ignored here.
+# The API on Cloud Run behind a global HTTPS load balancer, apart from the worker, so a busy
+# or broken worker cannot take the site down with it.
 locals {
   lb_domains = concat(var.api_domains, keys(var.redirect_domains))
 }
@@ -20,9 +18,9 @@ resource "google_storage_bucket_iam_member" "api_artifacts" {
   member = "serviceAccount:${google_service_account.api.email}"
 }
 resource "google_secret_manager_secret_iam_member" "api_reader" {
-  for_each  = toset(["shared-env", "api-env"])
+  for_each  = toset(["shared", "api"])
   project   = var.project_id
-  secret_id = google_secret_manager_secret.runtime[each.value].secret_id
+  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -38,17 +36,15 @@ resource "google_cloud_run_v2_service" "api" {
   name                = "${local.name}-api"
   labels              = local.labels
   deletion_protection = var.environment == "prod"
-  # Only the load balancer reaches it, so X-Forwarded-For always carries its two hops.
+  # Only the load balancer reaches it, so the client IP it appends to X-Forwarded-For is real.
   ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   template {
     service_account                  = google_service_account.api.email
     timeout                          = "900s"
     max_instance_request_concurrency = 250
-    # Exactly one instance: Codex sign-in keeps its pending login process in memory, and the
-    # public-site rate limit is per process.
     scaling {
       min_instance_count = 1
-      max_instance_count = 1
+      max_instance_count = var.api_max_instances
     }
     # Cloud SQL is private; everything else leaves directly.
     vpc_access {
@@ -58,36 +54,48 @@ resource "google_cloud_run_v2_service" "api" {
         subnetwork = google_compute_subnetwork.app.id
       }
     }
+    dynamic "volumes" {
+      for_each = google_secret_manager_secret_iam_member.api_reader
+      content {
+        name = volumes.key
+        secret {
+          secret = google_secret_manager_secret.runtime["${volumes.key}-env"].secret_id
+          items {
+            version = var.secret_versions[volumes.key]
+            path    = "env"
+          }
+        }
+      }
+    }
     containers {
-      # Placeholder until the first release deploys the SelfBench image.
-      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      image = var.image
+      # Starting the API migrates the database, so a release's schema lands before its worker.
+      command = ["node", "--env-file=/secrets/shared/env", "--env-file=/secrets/api/env", "dist/api/main.js"]
       ports {
         container_port = 8080
       }
       resources {
         limits = { cpu = "1", memory = "2Gi" }
-        # Always-on CPU: background refreshes and Codex login processes run between requests.
+        # Billing delivery and rate refreshes run between requests.
         cpu_idle          = false
         startup_cpu_boost = true
       }
+      dynamic "volume_mounts" {
+        for_each = google_secret_manager_secret_iam_member.api_reader
+        content {
+          name       = volume_mounts.key
+          mount_path = "/secrets/${volume_mounts.key}"
+        }
+      }
+      startup_probe {
+        http_get {
+          path = "/healthz"
+        }
+        period_seconds    = 5
+        failure_threshold = 36
+      }
     }
   }
-  lifecycle {
-    ignore_changes = [
-      client,
-      client_version,
-      template[0].revision,
-      template[0].labels,
-      template[0].annotations,
-      template[0].volumes,
-      template[0].containers[0].image,
-      template[0].containers[0].command,
-      template[0].containers[0].args,
-      template[0].containers[0].env,
-      template[0].containers[0].volume_mounts,
-    ]
-  }
-  depends_on = [google_project_service.api]
 }
 
 resource "google_compute_global_address" "api" {

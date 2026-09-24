@@ -84,7 +84,6 @@ export async function openSite(
     globalBurst: 600,
     onLimit: (client, scope) =>
       console.warn(`public site rate limit (${scope}) refused requests from ${client}`),
-    forwardedHops: Number(process.env.SELFBENCH_FORWARDED_HOPS) || 1,
   });
   const publicReleases = createPublicReleaseRoutes(releases, { limiter });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;

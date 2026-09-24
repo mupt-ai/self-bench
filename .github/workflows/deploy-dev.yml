@@ -3,11 +3,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      infrastructure_only:
-        description: Provision dev infrastructure without runtime secrets or app rollout (billed resources)
-        type: boolean
-        default: false
 permissions:
   contents: read
   actions: read
@@ -19,4 +14,3 @@ jobs:
     uses: ./.github/workflows/deploy-reusable.yml
     with:
       target_environment: dev
-      infrastructure_only: ${{ github.event_name == 'workflow_dispatch' && inputs.infrastructure_only }}

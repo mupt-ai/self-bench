@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import type { ReleaseStore } from "../db/releases.js";
 import { contentType, sendJson } from "./http.js";
-import type { RateLimiter } from "./rate-limit.js";
+import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 
 export interface ResultsSiteOptions {
@@ -128,7 +128,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
       }
       // A page: the site's shell. Its status says whether the repository has anything released,
       // which is what crawlers and link previews see; the page itself renders in the browser.
-      const verdict = options.limiter?.takeRequest(request) ?? { ok: true };
+      const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
       if (!verdict.ok) {
         response.setHeader("retry-after", String(verdict.retryAfter));
         sendJson(response, 429, { error: "Too many requests; try again shortly" });

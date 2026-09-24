@@ -17,20 +17,3 @@ resource "google_compute_subnetwork" "app" {
     metadata             = "INCLUDE_ALL_METADATA"
   }
 }
-resource "google_compute_firewall" "iap_ssh" {
-  project                 = var.project_id
-  name                    = "${local.name}-iap-ssh"
-  network                 = google_compute_network.app.id
-  source_ranges           = ["35.235.240.0/20"]
-  target_service_accounts = [google_service_account.runtime.email]
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-}
-resource "google_compute_address" "app" {
-  project    = var.project_id
-  region     = var.region
-  name       = local.name
-  depends_on = [google_project_service.api]
-}

@@ -18,17 +18,3 @@ export function readEnvFile(path: string): Record<string, string> {
   }
   return values;
 }
-
-/**
- * Fills `environment` from env-files in precedence order (later files win), without replacing
- * values already set. A missing or empty file is an error: a deploy mounted the wrong secret.
- */
-export function loadEnvFiles(paths: readonly string[], environment: NodeJS.ProcessEnv): void {
-  const merged: Record<string, string> = {};
-  for (const path of paths) {
-    const values = readEnvFile(path);
-    if (Object.keys(values).length === 0) throw new Error(`env file ${path} is missing or empty`);
-    Object.assign(merged, values);
-  }
-  for (const [key, value] of Object.entries(merged)) environment[key] ??= value;
-}

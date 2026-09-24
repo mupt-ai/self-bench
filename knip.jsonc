@@ -3,8 +3,6 @@
   "entry": [
     "src/api/cli/bin.ts!",
     "src/api/main.ts!",
-    // Cloud Run starts the API here; it loads the mounted env-files, then main.
-    "src/api/cloud-run.ts!",
     "src/temporal/worker-main.ts!",
     // The one-time evaluation records migration, run by operators from the API image.
     "src/db/records-migration.ts!",
@@ -30,7 +28,5 @@
     "src/temporal/workflows.ts": ["exports"],
     "src/evaluation/workflow.ts": ["exports"],
     "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
-  },
-  // Resolved through createRequire; the CLI is installed by the operator.
-  "ignoreDependencies": ["@openai/codex"]
+  }
 }
