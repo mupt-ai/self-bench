@@ -122,17 +122,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           },
         ]
       : []),
-    ...(managed.sandbox
-      ? [
-          {
-            id: "managed-sandbox",
-            name: "Managed E2B",
-            kind: "e2b" as const,
-            auth: "api-key" as const,
-            createdAt: "",
-          },
-        ]
-      : []),
     ...credentials,
   ];
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
@@ -144,10 +133,12 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     selected.length === draft.models.length &&
     !hasDuplicateModelSelections([...models, customModel], draft.models) &&
     selected.length <= 12 &&
-    availableCredentials.some(
-      (credential) =>
-        credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
-    ) &&
+    (draft.sandbox === "managed"
+      ? managed.sandbox && draft.sandboxCredentialId === "managed-sandbox"
+      : availableCredentials.some(
+          (credential) =>
+            credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
+        )) &&
     selected.every((selection) => {
       const model =
         selection.catalogId === "custom"
@@ -280,7 +271,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           repo={repo}
           draft={draft}
           credentials={availableCredentials}
-          sandboxes={sandboxes}
+          sandboxes={managed.sandbox ? ["managed", ...sandboxes] : sandboxes}
           submitted={state.submitted}
           busy={busy}
           ready={ready}

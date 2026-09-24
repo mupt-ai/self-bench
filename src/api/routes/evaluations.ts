@@ -21,7 +21,7 @@ import {
 } from "../../evaluation/comparisons.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
-import { managedOffer } from "../../generation/billing/managed.js";
+import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -97,6 +97,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               managedOffer(env),
               { repoId: repo.id, orgId: tenant.id, tenant: tenant.login, login: user.login },
               draft,
+              env,
             );
             await resume(
               record,
@@ -143,7 +144,10 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           models: catalog.map(withReferencePricing),
           sandboxes: hostedSandboxes,
           customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
-          managed: managedOffer(env),
+          managed: {
+            ...managedOffer(env),
+            sandbox: managedHarborEnvironment(env) === "modal",
+          },
         });
       } else if (section === "options") {
         const available = (await tasks.listForRepo(repo.id)).filter(runnable);

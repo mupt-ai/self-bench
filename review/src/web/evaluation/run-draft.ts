@@ -22,7 +22,7 @@ const draftStateSchema = z.object({
         }),
       )
       .max(12),
-    sandbox: z.enum(["e2b", "modal", "daytona"]),
+    sandbox: z.enum(["managed", "e2b", "modal", "daytona"]),
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
   }),

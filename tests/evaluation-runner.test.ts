@@ -11,7 +11,12 @@ import {
   redactOutput,
   trajectorySteps,
 } from "../src/evaluation/output.js";
-import { executeEvaluation, solverArguments } from "../src/evaluation/runner.js";
+import {
+  assertEvaluationBundleSize,
+  executeEvaluation,
+  MAX_EVALUATION_BUNDLE_BYTES,
+  solverArguments,
+} from "../src/evaluation/runner.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -25,6 +30,12 @@ import { credentialedInput, testModelSecret } from "./support/evaluation-fixture
 import { memoryVault } from "./support/evaluation-vault.js";
 
 const directories: string[] = [];
+test("PostHog-sized bundles pass the compressed size guard, but oversized bundles do not", () => {
+  expect(() => assertEvaluationBundleSize(373_934_442)).not.toThrow();
+  expect(() => assertEvaluationBundleSize(MAX_EVALUATION_BUNDLE_BYTES + 1)).toThrow(
+    "Task bundle exceeds 512 MiB",
+  );
+});
 test("solver invocation carries the selected thinking level", () => {
   const args = solverArguments("/task", "/jobs", "codex", "openai/gpt-6-astra", "e2b", "max");
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);

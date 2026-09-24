@@ -28,6 +28,14 @@ import {
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
+// PostHog task bundles include compressed repository snapshots larger than 350 MiB.
+// Keep a bounded compressed size; extractRegularArchive separately caps unpacked data.
+export const MAX_EVALUATION_BUNDLE_BYTES = 512 * 1024 * 1024;
+
+export function assertEvaluationBundleSize(size: number): void {
+  if (size > MAX_EVALUATION_BUNDLE_BYTES) throw new Error("Task bundle exceeds 512 MiB");
+}
+
 export function solverArguments(
   taskPath: string,
   jobs: string,
@@ -97,8 +105,8 @@ export async function executeEvaluation(
       await saveEvaluation(store, run);
       try {
         const bundle = await store.getByKey(task.bundleKey);
-        if (!bundle || bundle.byteLength > 100 * 1024 * 1024)
-          throw new Error("Task bundle is missing or exceeds 100 MiB");
+        if (!bundle) throw new Error("Task bundle is missing");
+        assertEvaluationBundleSize(bundle.byteLength);
         const archive = join(trialRoot, "task.tar.gz");
         await writeFile(archive, bundle, { mode: 0o600 });
         const extracted = join(trialRoot, "task");

@@ -6,7 +6,7 @@ import type { ComparisonRecord } from "../db/comparisons.js";
 import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
-import type { ManagedOffer } from "../generation/billing/managed.js";
+import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
 import {
   evaluationTaskKey,
@@ -42,7 +42,7 @@ export const comparisonSchema = z
       )
       .min(1)
       .max(12),
-    sandbox: z.enum(hostedSandboxes),
+    sandbox: z.enum(["managed", ...hostedSandboxes]),
     sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
     skipCompleted: z.boolean().optional(),
   })
@@ -61,6 +61,7 @@ export async function createComparison(
   managed: ManagedOffer,
   scope: ComparisonScope,
   draft: ComparisonDraft,
+  environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   const signature = JSON.stringify(selection);
@@ -96,13 +97,19 @@ export async function createComparison(
   const saved = new Map(
     (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
   );
-  const managedSandbox = selection.sandboxCredentialId === "managed-sandbox";
+  const managedSandbox = selection.sandbox === "managed";
+  if (managedSandbox && managedHarborEnvironment(environment) !== "modal")
+    throw new Error("Managed evaluation requires platform Modal credentials.");
   const sandbox = managedSandbox
-    ? { id: "managed-sandbox", kind: "e2b" as const }
+    ? { id: "managed-sandbox", kind: "modal" }
     : saved.get(selection.sandboxCredentialId);
-  if (managedSandbox && !managed.sandbox)
-    throw new Error("Managed sandboxes are not available on this deployment.");
-  if (sandbox?.kind !== selection.sandbox) throw new Error("Select your saved sandbox credential");
+  if (
+    !sandbox ||
+    (managedSandbox
+      ? selection.sandboxCredentialId !== "managed-sandbox"
+      : sandbox.kind !== selection.sandbox)
+  )
+    throw new Error("Select your matching sandbox credential");
   const seen = new Set<string>();
   const createdAt = new Date().toISOString();
   const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
@@ -169,7 +176,7 @@ export async function createComparison(
           modelName,
           thinking,
           harnesses: group.harnesses,
-          sandbox: selection.sandbox,
+          sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
           repoId: scope.repoId,
           tenant: scope.tenant,
