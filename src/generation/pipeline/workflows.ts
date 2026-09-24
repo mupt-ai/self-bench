@@ -71,7 +71,9 @@ const admission = proxyActivities<
 /**
  * Holds one slot on the stage's provider account for as long as its sandbox lives. Waiting
  * happens on durable timers, so a queued stage holds no worker slot and never exhausts retries
- * against the provider's cap. Workflows started before admission existed skip it.
+ * against the provider's cap. A stage that did not finish normally may leave its sandbox running
+ * until the provider stops it, so its slot drains instead of freeing at once. Workflows started
+ * before admission existed skip it.
  */
 async function withSandboxSlot<T>(
   run: SandboxSlotInput["run"],
@@ -79,15 +81,24 @@ async function withSandboxSlot<T>(
   action: () => Promise<T>,
 ): Promise<T> {
   if (!patched("sandbox-admission")) return action();
-  const id = `${workflowInfo().workflowId}/${workflowInfo().runId}/${uuid4()}`;
+  const { workflowId, runId: workflowRunId } = workflowInfo();
+  const id = `${workflowId}/${workflowRunId}/${uuid4()}`;
+  let finished = false;
   try {
-    for (let wait = 5; !(await admission.acquireSandboxSlot({ id, run, kind })); ) {
+    for (
+      let wait = 5;
+      !(await admission.acquireSandboxSlot({ id, run, kind, workflowId, workflowRunId }));
+    ) {
       await sleep(`${wait} seconds`);
       wait = Math.min(wait * 2, 30);
     }
-    return await action();
+    const result = await action();
+    finished = true;
+    return result;
   } finally {
-    await CancellationScope.nonCancellable(() => admission.releaseSandboxSlot(id));
+    await CancellationScope.nonCancellable(() =>
+      admission.releaseSandboxSlot({ id, drain: !finished }),
+    );
   }
 }
 

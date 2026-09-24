@@ -10,6 +10,9 @@ export interface SandboxSlotInput {
   readonly run: RunRequest;
   /** Agents run on the run's sandbox account; Harbor verifies on its Harbor account. */
   readonly kind: "agent" | "harbor";
+  /** The waiting execution, so a sweep can drain the slots of one that was terminated. */
+  readonly workflowId: string;
+  readonly workflowRunId: string;
 }
 
 /** The provider account a stage's sandbox runs on. */
@@ -62,6 +65,8 @@ export function createSandboxAdmission(
       return store.acquire(
         {
           id: input.id,
+          workflowId: input.workflowId,
+          workflowRunId: input.workflowRunId,
           pool: sandboxPool(provider, account),
           orgId: String(generation?.orgId ?? generation?.ownerId ?? "deployment"),
           kind: input.kind,
@@ -69,8 +74,8 @@ export function createSandboxAdmission(
         limit,
       );
     },
-    async releaseSandboxSlot(id: string): Promise<void> {
-      await store?.release(id);
+    async releaseSandboxSlot(input: { id: string; drain: boolean }): Promise<void> {
+      await store?.release(input.id, input.drain);
     },
   };
 }

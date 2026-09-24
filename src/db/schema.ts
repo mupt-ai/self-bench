@@ -223,9 +223,10 @@ export const generationBatches = pgTable("generation_batches", {
 
 /**
  * Sandbox admission: one row per sandbox a workflow is waiting to start or holds on a shared
- * provider account. Granted rows count against the pool's limit until released or expired;
- * waiting rows are granted oldest first, and each poll extends their short expiry, so a
- * workflow that stops polling drops out of the queue.
+ * provider account. Granted rows count against the pool's limit until released or expired; a
+ * stage that ended abnormally keeps its row until its sandbox has certainly stopped. Waiting
+ * rows are granted oldest first, and each poll extends their short expiry, so a workflow that
+ * stops polling drops out of the queue.
  */
 export const sandboxAdmissions = pgTable(
   "sandbox_admissions",
@@ -234,6 +235,9 @@ export const sandboxAdmissions = pgTable(
     pool: text("pool").notNull(),
     orgId: text("org_id").notNull(),
     kind: text("kind").$type<"agent" | "harbor">().notNull(),
+    /** The workflow execution waiting or holding, so a sweep can free a terminated one. */
+    workflowId: text("workflow_id").notNull(),
+    workflowRunId: text("workflow_run_id").notNull(),
     grantedAt: timestamptz("granted_at"),
     requestedAt: timestamptz("requested_at").notNull().defaultNow(),
     expiresAt: timestamptz("expires_at").notNull(),

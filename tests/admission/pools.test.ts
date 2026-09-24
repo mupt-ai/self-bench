@@ -31,7 +31,10 @@ test("managed agents share the platform E2B pool while Harbor uses the stamped M
       return true;
     },
     release: async () => {},
+    holders: async () => [],
+    drainEnded: async () => {},
   } satisfies AdmissionStore;
+  const execution = { workflowId: "w", workflowRunId: "r" };
   const admission = createSandboxAdmission(
     loadWorkerConfig({ SELFBENCH_SANDBOX_SECRET: "s".repeat(32) }),
     store,
@@ -51,12 +54,18 @@ test("managed agents share the platform E2B pool while Harbor uses the stamped M
       },
     } as RunRequest["generation"],
   };
-  expect(await admission.acquireSandboxSlot({ id: "a", run: managed, kind: "agent" })).toBe(true);
-  expect(await admission.acquireSandboxSlot({ id: "h", run: managed, kind: "harbor" })).toBe(true);
+  expect(
+    await admission.acquireSandboxSlot({ id: "a", run: managed, kind: "agent", ...execution }),
+  ).toBe(true);
+  expect(
+    await admission.acquireSandboxSlot({ id: "h", run: managed, kind: "harbor", ...execution }),
+  ).toBe(true);
   // The local Docker deployment is never limited.
-  expect(await admission.acquireSandboxSlot({ id: "d", run, kind: "agent" })).toBe(true);
+  expect(await admission.acquireSandboxSlot({ id: "d", run, kind: "agent", ...execution })).toBe(
+    true,
+  );
   expect(requests).toEqual([
-    { id: "a", pool: "e2b:managed", orgId: "42", kind: "agent" },
-    { id: "h", pool: "modal:managed", orgId: "42", kind: "harbor" },
+    { id: "a", pool: "e2b:managed", orgId: "42", kind: "agent", ...execution },
+    { id: "h", pool: "modal:managed", orgId: "42", kind: "harbor", ...execution },
   ]);
 });

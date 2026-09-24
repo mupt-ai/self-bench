@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { Client } from "@temporalio/client";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
@@ -12,7 +13,8 @@ import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityEventInterceptor } from "./activity-events.js";
-import { connectTemporalWorker } from "./connection.js";
+import { keepAdmissionsSwept } from "./admission-sweep.js";
+import { connectTemporalClient, connectTemporalWorker } from "./connection.js";
 import { harborTaskQueue } from "./task-queues.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
 
@@ -36,12 +38,22 @@ const database =
 const vault = database
   ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")
   : undefined;
+const admissions = database ? createAdmissionStore(database.db) : undefined;
 const { verifyCompiled, ...generation } = createActivities(
   config,
   vault,
   database ? createUsageStore(database.db) : undefined,
-  database ? createAdmissionStore(database.db) : undefined,
+  admissions,
 );
+const stopSweeping = admissions
+  ? keepAdmissionsSwept(
+      admissions,
+      new Client({
+        connection: await connectTemporalClient(config.temporal),
+        namespace: config.temporal.namespace,
+      }),
+    )
+  : undefined;
 const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
@@ -72,5 +84,6 @@ console.log(
 try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
+  stopSweeping?.();
   await database?.close();
 }

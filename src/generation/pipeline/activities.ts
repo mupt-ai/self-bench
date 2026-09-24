@@ -64,7 +64,7 @@ export interface WorkerActivities {
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
   acquireSandboxSlot(input: SandboxSlotInput): Promise<boolean>;
-  releaseSandboxSlot(id: string): Promise<void>;
+  releaseSandboxSlot(input: { id: string; drain: boolean }): Promise<void>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */

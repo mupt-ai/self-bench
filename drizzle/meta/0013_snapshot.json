@@ -1,5 +1,5 @@
 {
-  "id": "8e2ed70f-0b34-4828-99f6-45eeacbaaf34",
+  "id": "3b040b51-cc7d-4ccc-a25e-115b7ca3be57",
   "prevId": "817d4a28-9dbf-4504-9467-2dc44daaf1a4",
   "version": "7",
   "dialect": "postgresql",
@@ -908,6 +908,18 @@
         },
         "kind": {
           "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workflow_id": {
+          "name": "workflow_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workflow_run_id": {
+          "name": "workflow_run_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
