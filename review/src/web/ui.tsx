@@ -79,7 +79,7 @@ export function SearchInput({ className, ...props }: ComponentProps<typeof Input
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <span className="relative block min-w-0">
-      <select {...props} className={cn(controlStyles, "appearance-none pr-9", className)} />
+      <select {...props} data-slot="select" className={cn(controlStyles, "pr-9", className)} />
       <ChevronDown
         aria-hidden="true"
         className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted-foreground"

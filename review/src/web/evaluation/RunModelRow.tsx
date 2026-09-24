@@ -102,7 +102,9 @@ export function RunModelRow({
           value={selected.credentialId}
           onChange={(event) => selectCredential(event.target.value)}
         >
-          <option value="">Select Credential</option>
+          <option value="" disabled>
+            Select Credential
+          </option>
           {credentials
             .filter((entry) => routeFor(model, entry.kind))
             .map((entry) => (
