@@ -7,22 +7,22 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
-  zone    = var.zone
 }
 module "selfbench" {
   source                      = "../../modules/selfbench-environment"
-  operator_members            = var.operator_members
   project_id                  = var.project_id
   environment                 = "prod"
   region                      = var.region
-  zone                        = var.zone
-  boot_image                  = var.boot_image
-  machine_type                = var.machine_type
-  enable_public_web           = var.enable_public_web
   create_cloud_sql            = var.create_cloud_sql
   cloud_sql_tier              = var.cloud_sql_tier
   cloud_sql_availability_type = var.cloud_sql_availability_type
   cloud_sql_retained_backups  = var.cloud_sql_retained_backups
+  api_domains                 = var.api_domains
+  redirect_domains            = var.redirect_domains
+  image                       = var.image
+  secret_versions             = var.secret_versions
+  activity_concurrency        = var.activity_concurrency
+  worker_instances            = var.worker_instances
 }
 output "deployment" {
   value = module.selfbench.deployment

@@ -3,13 +3,14 @@
 SelfBench runs on a small GCP stack managed with Terraform:
 
 - one isolated project per environment
-- one Compute Engine VM running the API and worker with Docker Compose
+- the API on Cloud Run behind a global HTTPS load balancer
+- the Temporal worker as a Cloud Run worker pool
 - a private Cloud SQL PostgreSQL instance
 - private GCS artifact storage
 - Artifact Registry and Secret Manager
 - GitHub Actions authentication through Workload Identity Federation
 
-Terraform owns cloud resources. GitHub Actions builds and deploys the application. The host deployment script only fetches pinned secret versions and starts the digest-pinned Compose release.
+Terraform owns everything, including each release: the image digest and pinned secret versions are Terraform inputs. GitHub Actions builds the image and applies the plan.
 
 ## Layout
 
@@ -19,8 +20,7 @@ infra/
 │   ├── environments/{dev,prod}/
 │   └── modules/selfbench-environment/
 ├── runtime/
-│   ├── compose.yaml
-│   ├── deploy-host.sh
+│   ├── secret-versions/{dev,prod}.json
 │   └── *.env.example
 ├── ci/verify-source.sh
 └── check.sh
@@ -30,7 +30,6 @@ infra/
 
 - Terraform 1.14.2
 - Google Cloud CLI
-- Docker Compose 2.30 or newer
 - `jq`
 - a GCP project with billing enabled
 - a private, versioned GCS bucket for Terraform state
@@ -45,7 +44,7 @@ Validation does not use cloud credentials:
 bash infra/check.sh
 ```
 
-This checks shell syntax and Compose configuration, formats and validates Terraform, and runs the module's native Terraform tests.
+This checks shell syntax, formats and validates Terraform, and runs the module's native Terraform tests.
 
 ## Plan and Apply Manually
 
@@ -57,16 +56,7 @@ cp backend.hcl.example backend.hcl
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Select an exact Debian image rather than an image family:
-
-```sh
-gcloud compute images list \
-  --project=debian-cloud \
-  --filter='family=debian-12 AND status=READY' \
-  --format='table(name,creationTimestamp)'
-```
-
-Then initialize, review a saved plan, and apply that exact plan:
+Set `image` to a pushed digest and `secret_versions` to the manifest's versions, then initialize, review a saved plan, and apply that exact plan:
 
 ```sh
 terraform init -backend-config=backend.hcl -input=false
@@ -80,15 +70,13 @@ Use the independent `prod` root, project, state bucket, and variables for produc
 
 ## Runtime Configuration
 
-The VM startup script installs Docker Compose, `curl`, and `jq`. It does not fetch secrets or start SelfBench.
-
 Create these Secret Manager secrets in each environment:
 
 - `selfbench-shared-env`
 - `selfbench-api-env`
 - `selfbench-worker-env`
 
-Use the files under `infra/runtime/*.env.example` as the key layout. Store actual values only in Secret Manager. Record the numeric version of each secret in:
+Use the files under `infra/runtime/*.env.example` as the key layout. Store actual values only in Secret Manager. Cloud Run mounts each pinned version as a file that Node loads with `--env-file`: the API reads the shared and API bundles, and the worker reads the shared and worker bundles. Record the numeric version of each secret in:
 
 ```text
 infra/runtime/secret-versions/dev.json
@@ -102,11 +90,7 @@ The runtime expects:
 - a TLS PostgreSQL URL
 - separate Temporal namespaces for dev and prod
 - separate GitHub OAuth applications
-- a configured public HTTPS origin
-- Caddy or another host TLS proxy forwarding to `127.0.0.1:8080`, for the app's host and the
-  results site's host alike (`infra/runtime/Caddyfile.example`)
-
-Public web ingress is disabled by default. Enable it only after DNS and TLS are configured.
+- a configured public HTTPS origin, listed with the results site's host in `api_domains`
 
 ## GitHub Deployment
 
@@ -114,7 +98,7 @@ The repository includes:
 
 - `.github/workflows/deploy-dev.yml` for `main`
 - `.github/workflows/deploy-prod.yml` for stable GitHub releases
-- `.github/workflows/deploy-reusable.yml` for the shared plan, apply, build, and rollout steps
+- `.github/workflows/deploy-reusable.yml` for the shared build, plan, and apply steps
 
 Configure `dev` and `prod` GitHub environments. Production should require reviewers and allow only release tags. Each environment needs these variables:
 
@@ -136,20 +120,28 @@ The workflow:
 
 1. validates the repository and application;
 2. verifies the source event before cloud authentication;
-3. creates a saved Terraform plan with the planner identity;
-4. applies that same local plan with the apply identity;
-5. builds and pushes a digest-pinned image;
-6. creates a Cloud SQL backup;
-7. sends the Compose bundle and release request to the VM over IAP;
-8. fetches pinned secret versions, runs migrations, starts Compose, and checks API and worker health.
+3. builds and pushes a digest-pinned image;
+4. creates a saved Terraform plan with the planner identity, with that digest, the pinned secret versions and the activity concurrency as inputs;
+5. creates a Cloud SQL backup;
+6. applies that same local plan with the apply identity. The new API revision migrates the database as it starts, then the worker pool rolls;
+7. checks the public API and results site.
 
 GitHub environment protection is the approval boundary. Terraform provides state locking. The workflow does not maintain a custom plan-manifest service or a separate private plan bucket.
+
+## Cloud Run
+
+The API is a Cloud Run service reachable only through the load balancer, with its own service account. It can scale out: nothing about a request or a Codex sign-in lives in process memory. It reads the client IP from the address the load balancer appends to `X-Forwarded-For`. The worker is a worker pool of `worker_instances` instances under the runtime service account. Both reach private Cloud SQL through the VPC.
+
+Before the first release to an environment:
+
+1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps`, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
+2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in `TF_INPUTS_JSON`, and release.
+3. Add each CNAME under `deployment.api.dns_authorizations`, and point each domain's A record at `deployment.api.address`. The certificate becomes active a few minutes after the CNAMEs resolve (`gcloud certificate-manager certificates describe selfbench-<env>-api`).
+4. Terraform forgets the old VM and its static address rather than deleting them. Delete them: `gcloud compute instances update selfbench-<env> --zone=<zone> --no-deletion-protection && gcloud compute instances delete selfbench-<env> --zone=<zone> && gcloud compute addresses delete selfbench-<env> --region=<region>`.
 
 ## Operational Notes
 
 - Dev and prod must not share projects, buckets, databases, Temporal namespaces, OAuth apps, or secrets.
-- The application is a single-VM deployment, not a high-availability architecture.
-- API and worker env files are separated, but both containers share one VM service account.
-- Do not mount the Docker socket into application containers.
+- The API and the worker run under separate service accounts and read only their own secrets.
 - Roll back an image only when database migrations and Temporal workflow replay remain compatible.
 - Keep previous image digests and secret versions. Never auto-roll back a database migration.

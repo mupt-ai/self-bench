@@ -28,7 +28,5 @@
     "src/temporal/workflows.ts": ["exports"],
     "src/evaluation/workflow.ts": ["exports"],
     "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
-  },
-  // Resolved through createRequire; the CLI is installed by the operator.
-  "ignoreDependencies": ["@openai/codex"]
+  }
 }

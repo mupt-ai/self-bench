@@ -7,10 +7,6 @@ on:
         type: string
         required: true
 
-      infrastructure_only:
-        type: boolean
-        default: false
-
 permissions: {}
 
 # Never cancel a running apply. Terraform additionally locks its own GCS state.
@@ -49,7 +45,6 @@ jobs:
       id-token: write
     env:
       TF_ENVIRONMENT: ${{ inputs.target_environment }}
-      INFRASTRUCTURE_ONLY: ${{ inputs.infrastructure_only }}
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -67,90 +62,30 @@ jobs:
           fetch-depth: 0
       - name: Verify Trusted Deploy Source and Runtime Settings
         run: bash infra/ci/verify-source.sh
-      - name: Authenticate Terraform Plan
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
-        with:
-          terraform_version: 1.14.2
-          terraform_wrapper: false
-      - name: Generate Terraform Plan
-        id: plan
+      - name: Image Coordinates
+        id: coordinates
         run: |
           set -euo pipefail
-          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
-          root="infra/terraform/environments/$TF_ENVIRONMENT"
           jq -e --arg project "$GCP_PROJECT_ID" \
             'type == "object" and .project_id == $project' <<<"$TF_INPUTS_JSON" >/dev/null
-          printf '%s' "$TF_INPUTS_JSON" > "$RUNNER_TEMP/terraform.tfvars.json"
-          terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
-          terraform -chdir="$root" validate
-          set +e
-          terraform -chdir="$root" plan -input=false -no-color -lock-timeout=5m -detailed-exitcode \
-            -var-file="$RUNNER_TEMP/terraform.tfvars.json" -out="$RUNNER_TEMP/terraform.tfplan"
-          status=$?
-          set -e
-          case "$status" in
-            0) echo 'has_changes=false' >> "$GITHUB_OUTPUT" ;;
-            2) echo 'has_changes=true' >> "$GITHUB_OUTPUT" ;;
-            *) exit "$status" ;;
-          esac
-      - name: Authenticate Terraform Apply
+          registry="$(jq -r '.region // "us-central1"' <<<"$TF_INPUTS_JSON")-docker.pkg.dev"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+          echo "image_prefix=$registry/$GCP_PROJECT_ID/selfbench/selfbench" >> "$GITHUB_OUTPUT"
+      # The apply identity pushes the image, backs up the database and applies the plan.
+      - name: Authenticate Apply Identity
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
-      # Reconfigure gcloud as well as ADC so OS Login uses the apply account.
-      - name: Configure gcloud for Apply
-        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-      - name: Apply Terraform Plan
-        if: steps.plan.outputs.has_changes == 'true'
-        run: |
-          set -euo pipefail
-          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
-          terraform -chdir="infra/terraform/environments/$TF_ENVIRONMENT" apply \
-            -input=false -no-color -lock-timeout=5m "$RUNNER_TEMP/terraform.tfplan"
-      - name: Infrastructure Bootstrap Complete
-        if: inputs.infrastructure_only
-        run: echo 'Infrastructure-only run complete. Configure DB login, secrets, Temporal, OAuth, DNS and TLS before a full deployment.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Read Release Coordinates
-        if: ${{ !inputs.infrastructure_only }}
-        id: coordinates
-        run: |
-          set -euo pipefail
-          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
-          root="infra/terraform/environments/$TF_ENVIRONMENT"
-          terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET" >/dev/null
-          deployment=$(terraform -chdir="$root" output -json deployment)
-          jq -e --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" \
-              '.project_id == $project and .environment == $environment' <<<"$deployment" >/dev/null \
-            || { echo 'Terraform outputs belong to a different environment.' >&2; exit 1; }
-          jq -e '.enable_public_web == true' <<<"$TF_INPUTS_JSON" >/dev/null \
-            || { echo 'DNS/TLS and public web ingress must be configured first.' >&2; exit 1; }
-          jq -e '.database != null' <<<"$deployment" >/dev/null \
-            || { echo 'External databases require a reviewed backup adapter.' >&2; exit 1; }
-          jq -r '
-            "image_prefix=\(.image_prefix)",
-            "registry=\(.image_prefix | split("/")[0])",
-            "zone=\(.zone)",
-            "instance=\(.instance)",
-            "database_instance=\(.database.instance | split(":")[-1])"
-          ' <<<"$deployment" >> "$GITHUB_OUTPUT"
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
       - name: Authenticate Docker to Artifact Registry
-        if: ${{ !inputs.infrastructure_only }}
         run: gcloud auth configure-docker "$REGISTRY" --quiet
         env:
           REGISTRY: ${{ steps.coordinates.outputs.registry }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        if: ${{ !inputs.infrastructure_only }}
       # GHA layer cache holds build layers only, never runtime credentials or private Terraform logs.
       - name: Build and Push Image
-        if: ${{ !inputs.infrastructure_only }}
         id: image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -162,43 +97,56 @@ jobs:
           build-args: SELFBENCH_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=${{ inputs.target_environment }}
           cache-to: type=gha,scope=${{ inputs.target_environment }},mode=max
-      # Synchronous provider backup before any schema changes. Failure blocks the rollout.
-      - name: Back Up Database
-        if: ${{ !inputs.infrastructure_only }}
-        run: gcloud sql backups create --instance="$INSTANCE" --project="$GCP_PROJECT_ID" --quiet
+      - name: Authenticate Terraform Plan
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_PLAN_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.14.2
+          terraform_wrapper: false
+      # The release is plain Terraform input: the pushed digest, pinned secret versions and
+      # worker concurrency. Applying it rolls the API revision, then the worker pool.
+      - name: Generate Terraform Plan
+        id: plan
         env:
-          INSTANCE: ${{ steps.coordinates.outputs.database_instance }}
-      - name: Migrate and Roll Out on the VM
-        if: ${{ !inputs.infrastructure_only }}
-        env:
-          SELFBENCH_IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
-          IMAGE_PREFIX: ${{ steps.coordinates.outputs.image_prefix }}
-          REGISTRY: ${{ steps.coordinates.outputs.registry }}
-          ZONE: ${{ steps.coordinates.outputs.zone }}
-          INSTANCE: ${{ steps.coordinates.outputs.instance }}
+          IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
-          digest="${SELFBENCH_IMAGE#"$IMAGE_PREFIX"@}"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Registry digest not confirmed.' >&2; exit 1; }
-          release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          staging=$(mktemp -d)
-          cp infra/runtime/deploy-host.sh infra/runtime/deploy-check.mjs infra/runtime/compose.yaml "$staging/"
-          jq -Sc -n --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" --arg sha "$GITHUB_SHA" \
-              --arg release_id "$release_id" --arg image "$SELFBENCH_IMAGE" --arg registry "$REGISTRY" \
+          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
+          root="infra/terraform/environments/$TF_ENVIRONMENT"
+          jq -n --argjson inputs "$TF_INPUTS_JSON" --arg image "$IMAGE" \
               --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
-              --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
-              '$ARGS.named' > "$staging/request.json"
-          # One SSH session: a second OS Login cert after scp can fail with publickey on first-time profiles.
-          remote="set -euo pipefail; mkdir -p /tmp/selfbench-release-$release_id; tar -C /tmp/selfbench-release-$release_id -xzf -;"
-          remote+=" sudo install -d -m 0700 /var/lib/selfbench-deploy;"
-          remote+=" sudo cp -r /tmp/selfbench-release-$release_id /var/lib/selfbench-deploy/$release_id;"
-          remote+=" sudo chown -R root:root /var/lib/selfbench-deploy/$release_id;"
-          remote+=" sudo chmod -R go-rwx /var/lib/selfbench-deploy/$release_id;"
-          remote+=" sudo bash -c 'cd /var/lib/selfbench-deploy/$release_id && bash deploy-host.sh request.json > deploy.log 2>&1'"
-          tar -C "$staging" -czf - . | gcloud compute ssh "$INSTANCE" --project="$GCP_PROJECT_ID" --zone="$ZONE" \
-            --tunnel-through-iap --quiet --command="$remote" -- -T
+              --argjson activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
+              '$inputs + {image: $image, secret_versions: $secret_versions, activity_concurrency: $activity_concurrency}' \
+            > "$RUNNER_TEMP/terraform.tfvars.json"
+          terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
+          terraform -chdir="$root" validate
+          terraform -chdir="$root" plan -input=false -no-color -lock-timeout=5m \
+            -var-file="$RUNNER_TEMP/terraform.tfvars.json" -out="$RUNNER_TEMP/terraform.tfplan"
+          database=$(terraform -chdir="$root" output -json deployment 2>/dev/null | jq -r '.database.instance // "" | split(":")[-1]' || true)
+          echo "database_instance=$database" >> "$GITHUB_OUTPUT"
+      - name: Authenticate Terraform Apply
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      # Synchronous provider backup before the new API revision migrates the schema.
+      - name: Back Up Database
+        if: steps.plan.outputs.database_instance != ''
+        run: gcloud sql backups create --instance="$INSTANCE" --project="$GCP_PROJECT_ID" --quiet
+        env:
+          INSTANCE: ${{ steps.plan.outputs.database_instance }}
+      - name: Apply Terraform Plan
+        run: |
+          export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
+          terraform -chdir="infra/terraform/environments/$TF_ENVIRONMENT" apply \
+            -input=false -no-color -lock-timeout=5m "$RUNNER_TEMP/terraform.tfplan"
       - name: Verify Public HTTPS
-        if: ${{ !inputs.infrastructure_only }}
         run: |
           curl --fail --silent --show-error --max-time 30 --output /dev/null "$SELFBENCH_PUBLIC_URL/healthz"
           status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_PUBLIC_URL/api/session")
@@ -210,7 +158,6 @@ jobs:
           status=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$SELFBENCH_RESULTS_SITE_URL/api/session")
           test "$status" = 404 || { echo "The results site exposes the app's API (HTTP $status)"; exit 1; }
       - name: Record Deployment
-        if: ${{ !inputs.infrastructure_only }}
         env:
           IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
         run: |
@@ -218,5 +165,5 @@ jobs:
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
-            echo "HTTPS health, anonymous auth rejection, results site and VM worker checks passed."
+            echo "API service and worker pool rolled out; HTTPS health, anonymous auth rejection and results site checks passed."
           } >> "$GITHUB_STEP_SUMMARY"

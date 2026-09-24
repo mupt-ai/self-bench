@@ -7,8 +7,9 @@ locals {
   }
   apis = toset(concat([
     "compute.googleapis.com", "artifactregistry.googleapis.com", "storage.googleapis.com",
-    "secretmanager.googleapis.com", "iam.googleapis.com", "iap.googleapis.com",
-    "oslogin.googleapis.com", "iamcredentials.googleapis.com",
+    "secretmanager.googleapis.com", "iam.googleapis.com", "iamcredentials.googleapis.com",
+    "run.googleapis.com",
+    "certificatemanager.googleapis.com",
   ], var.create_cloud_sql ? ["sqladmin.googleapis.com", "servicenetworking.googleapis.com"] : []))
 }
 resource "google_project_service" "api" {
@@ -20,6 +21,6 @@ resource "google_project_service" "api" {
 resource "google_service_account" "runtime" {
   project      = var.project_id
   account_id   = "${local.name}-runtime"
-  display_name = "SelfBench ${var.environment} API and worker runtime"
+  display_name = "SelfBench ${var.environment} worker runtime"
   depends_on   = [google_project_service.api]
 }
