@@ -78,7 +78,7 @@ export async function compileTask(
             path: "/work/input.json",
             contents: JSON.stringify({
               repositoryUrl: run.repository.url,
-              harborEnvironment,
+              harborEnvironment: run.version.harborEnvironment,
               candidate: {
                 sourcePr: candidate.sourcePr,
                 sourceUrl: candidate.sourceUrl,
