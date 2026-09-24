@@ -1,8 +1,9 @@
+import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
 import { errorMessage } from "../../lib/util.js";
 import { auditTaskDefinition } from "./audit.js";
 import { dependencyManifestPatch } from "./dependencies.js";
-import { assertEnvironmentPolicy } from "./environment-policy.js";
+import { assertEnvironmentPolicy, assertServicesSupported } from "./environment-policy.js";
 import { malformedPatchProblems } from "./patch.js";
 import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
@@ -38,6 +39,8 @@ export interface StaticCheckInput {
   readonly definitionJson: string;
   readonly testPatch: string;
   readonly goldPatch: string;
+  /** Where Harbor verifies the task; omitted, provider-specific checks are skipped. */
+  readonly harborEnvironment?: HarborEnvironment;
 }
 
 /**
@@ -52,6 +55,12 @@ export function staticCheckSubmission(input: StaticCheckInput): StaticCheckResul
     return { ok: false, errors };
   }
   guard(errors, "policy", () => assertEnvironmentPolicy(definition.environment));
+  const { harborEnvironment } = input;
+  if (harborEnvironment) {
+    guard(errors, "policy", () =>
+      assertServicesSupported(definition.environment, harborEnvironment),
+    );
+  }
   guard(errors, "paths", () => assertSafeTaskPaths(definition));
   for (const [patch, label] of [
     [input.testPatch, "test patch"],

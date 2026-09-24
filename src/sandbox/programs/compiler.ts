@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isHarborEnvironment } from "../../contracts/config/providers.js";
 import { staticCheckSubmission } from "../../generation/task/static.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { errorMessage } from "../../lib/util.js";
@@ -25,10 +26,12 @@ const [definitionJson, testPatch, goldPatch] = await Promise.all(
     readFile(join(submission, name), "utf8").catch(() => ""),
   ),
 );
+const harborEnvironment = String(input.harborEnvironment ?? "");
 const check = staticCheckSubmission({
   definitionJson: definitionJson ?? "",
   testPatch: testPatch ?? "",
   goldPatch: goldPatch ?? "",
+  ...(isHarborEnvironment(harborEnvironment) ? { harborEnvironment } : {}),
 });
 const compileErrors = check.errors
   .filter((error) => error.gate !== "audit")

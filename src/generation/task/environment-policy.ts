@@ -1,3 +1,8 @@
+import {
+  type HarborEnvironment,
+  harborEnvironmentLabels,
+  harborRunsServices,
+} from "../../contracts/config/providers.js";
 import type { TaskEnvironment } from "../../contracts/index.js";
 
 const secretName = /(?:TOKEN|SECRET|PRIVATE_KEY|ACCESS_KEY|API_KEY|CREDENTIAL)/i;
@@ -35,6 +40,18 @@ export function assertEnvironmentPolicy(environment: TaskEnvironment): void {
       throw new Error(`environment evidence cannot reference Git internals: ${evidence.path}`);
     }
   }
+}
+
+/** Services only exist where Harbor runs Docker Compose; elsewhere they would be dropped silently. */
+export function assertServicesSupported(
+  environment: TaskEnvironment,
+  harborEnvironment: HarborEnvironment,
+): void {
+  if (environment.services.length === 0 || harborRunsServices(harborEnvironment)) return;
+  const label = harborEnvironmentLabels[harborEnvironment];
+  throw new Error(
+    `services (${environment.services.map((service) => service.name).join(", ")}) never start on ${label}: Harbor's ${label} environment does not run Docker Compose. Leave services empty; install what the tests need in the setup commands and start it in the smoke and test commands`,
+  );
 }
 
 function assertPinnedImage(image: string, scope: string): void {
