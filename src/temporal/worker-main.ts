@@ -45,15 +45,14 @@ const { verifyCompiled, ...generation } = createActivities(
   database ? createUsageStore(database.db) : undefined,
   admissions,
 );
-const stopSweeping = admissions
-  ? keepAdmissionsSwept(
-      admissions,
-      new Client({
-        connection: await connectTemporalClient(config.temporal),
-        namespace: config.temporal.namespace,
-      }),
-    )
-  : undefined;
+const sweepConnection = admissions ? await connectTemporalClient(config.temporal) : undefined;
+const stopSweeping =
+  admissions && sweepConnection
+    ? keepAdmissionsSwept(
+        admissions,
+        new Client({ connection: sweepConnection, namespace: config.temporal.namespace }),
+      )
+    : undefined;
 const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
@@ -85,5 +84,6 @@ try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
   stopSweeping?.();
+  await sweepConnection?.close();
   await database?.close();
 }
