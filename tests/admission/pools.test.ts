@@ -39,7 +39,7 @@ test("managed agents share the platform E2B pool; Harbor uses the stamped pool a
     loadWorkerConfig({ SELFBENCH_SANDBOX_SECRET: "s".repeat(32) }),
     store,
     10,
-    { SELFBENCH_ORG_HARBOR_LIMIT: "3" },
+    { SELFBENCH_ORG_HARBOR_LIMIT: "3", SELFBENCH_HARBOR_WORKERS: "2" },
   );
   const managed: RunRequest = {
     ...run,
@@ -73,15 +73,15 @@ test("managed agents share the platform E2B pool; Harbor uses the stamped pool a
   expect(requests).toEqual([
     [
       { id: "a", pool: "e2b:managed", orgId: "42", kind: "agent", ...execution },
-      { pool: 18, org, harbor: 10 },
+      { pool: 18, org, harbor: 30 },
     ],
     [
       { id: "h", pool: "modal:managed", orgId: "42", kind: "harbor", ...execution },
-      { pool: 100, org, harbor: 10 },
+      { pool: 100, org, harbor: 30 },
     ],
     [
       { id: "dh", pool: "docker:deployment", orgId: "deployment", kind: "harbor", ...execution },
-      { org, harbor: 10 },
+      { org, harbor: 30 },
     ],
   ]);
 });

@@ -361,7 +361,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_<PROVIDER>_SANDBOX_LIMIT` | unlimited | Worker; e.g. `SELFBENCH_E2B_SANDBOX_LIMIT` limits the deployment's own provider account used by runs without generation settings |
 | `SELFBENCH_ORG_AGENT_SANDBOX_LIMIT` | `12` | Worker; concurrent agent sandboxes per organization on SelfBench-limited accounts |
 | `SELFBENCH_ORG_HARBOR_LIMIT` | `6` | Worker; concurrent Harbor verifications per organization |
-| `SELFBENCH_HARBOR_ADMISSION_LIMIT` | this worker's Harbor slots | Worker; total concurrent Harbor verifications admitted. Set it to the sum of Harbor slots when running several worker replicas |
+| `SELFBENCH_HARBOR_ADMISSION_LIMIT` | this worker's Harbor slots + 10 per `SELFBENCH_HARBOR_WORKERS` replica | Worker; total concurrent Harbor verifications admitted. Set it explicitly for any other worker topology |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |
 | `SELFBENCH_MODAL_CONFIG_PATH` | `/dev/null` | Compose host mount; set to an absolute `.modal.toml` when using Modal locally |

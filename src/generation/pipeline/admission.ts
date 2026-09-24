@@ -1,3 +1,4 @@
+import { MAX_HARBOR_CONCURRENCY } from "../../contracts/config/execution-limits.js";
 import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
 import type { AdmissionStore } from "../../db/admissions.js";
@@ -75,7 +76,11 @@ export function createSandboxAdmission(
     agent: limitVariable(env, ORG_AGENT_LIMIT.variable) ?? ORG_AGENT_LIMIT.fallback,
     harbor: limitVariable(env, ORG_HARBOR_LIMIT.variable) ?? ORG_HARBOR_LIMIT.fallback,
   };
-  const harbor = limitVariable(env, "SELFBENCH_HARBOR_ADMISSION_LIMIT") ?? harborSlots;
+  // Harbor-only replicas (infra/runtime compose) are memory-limited to the per-worker cap.
+  const replicas = Number(env.SELFBENCH_HARBOR_WORKERS?.trim() || 0);
+  const harbor =
+    limitVariable(env, "SELFBENCH_HARBOR_ADMISSION_LIMIT") ??
+    (harborSlots === undefined ? undefined : harborSlots + replicas * MAX_HARBOR_CONCURRENCY);
   return {
     async acquireSandboxSlot(input: SandboxSlotInput): Promise<boolean> {
       const { provider, account } = sandboxAccount(config, input.run, input.kind);
