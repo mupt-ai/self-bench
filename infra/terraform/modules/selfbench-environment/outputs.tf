@@ -11,7 +11,19 @@ output "deployment" {
     artifact_bucket = google_storage_bucket.artifacts.name
     image_prefix    = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/selfbench"
     task_queue      = local.name
-    secret_ids      = { for key, secret in google_secret_manager_secret.runtime : key => secret.secret_id }
+    vm_serves_api   = var.vm_serves_api
+    # Before cutover: add each dns_authorization CNAME, wait for the certificate, then point the
+    # domains' A records at address.
+    api = local.cloud_run ? {
+      service = google_cloud_run_v2_service.api[0].name
+      region  = var.region
+      address = google_compute_global_address.api[0].address
+      dns_authorizations = {
+        for domain, authorization in google_certificate_manager_dns_authorization.api :
+        domain => authorization.dns_resource_record[0]
+      }
+    } : null
+    secret_ids = { for key, secret in google_secret_manager_secret.runtime : key => secret.secret_id }
     database = var.create_cloud_sql ? {
       instance   = google_sql_database_instance.app[0].connection_name
       private_ip = google_sql_database_instance.app[0].private_ip_address

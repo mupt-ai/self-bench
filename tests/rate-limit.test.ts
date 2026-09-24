@@ -68,3 +68,14 @@ test("the client is the last forwarded address, else the socket's", () => {
   expect(clientIp(request({ "x-forwarded-for": "1.1.1.1, 203.0.113.9" }))).toBe("203.0.113.9");
   expect(clientIp(request({}))).toBe("10.0.0.1");
 });
+
+test("behind Google's load balancer the client is the second-to-last address", () => {
+  const request = (forwarded: string) =>
+    ({
+      headers: { "x-forwarded-for": forwarded },
+      socket: { remoteAddress: "169.254.1.1" },
+    }) as unknown as IncomingMessage;
+  // The load balancer appends the client it saw, then its own address; earlier entries are spoofable.
+  expect(clientIp(request("203.0.113.9, 34.120.0.1"), 2)).toBe("203.0.113.9");
+  expect(clientIp(request("6.6.6.6, 203.0.113.9, 34.120.0.1"), 2)).toBe("203.0.113.9");
+});

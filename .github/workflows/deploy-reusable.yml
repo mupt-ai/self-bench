@@ -130,7 +130,7 @@ jobs:
           jq -e --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" \
               '.project_id == $project and .environment == $environment' <<<"$deployment" >/dev/null \
             || { echo 'Terraform outputs belong to a different environment.' >&2; exit 1; }
-          jq -e '.enable_public_web == true' <<<"$TF_INPUTS_JSON" >/dev/null \
+          jq -e '.enable_public_web == true or ((.api_domains // []) | length > 0)' <<<"$TF_INPUTS_JSON" >/dev/null \
             || { echo 'DNS/TLS and public web ingress must be configured first.' >&2; exit 1; }
           jq -e '.database != null' <<<"$deployment" >/dev/null \
             || { echo 'External databases require a reviewed backup adapter.' >&2; exit 1; }
@@ -139,7 +139,11 @@ jobs:
             "registry=\(.image_prefix | split("/")[0])",
             "zone=\(.zone)",
             "instance=\(.instance)",
-            "database_instance=\(.database.instance | split(":")[-1])"
+            "database_instance=\(.database.instance | split(":")[-1])",
+            # `//` would also replace false; only an explicit false moves the API off the VM.
+            "vm_serves_api=\(.vm_serves_api != false)",
+            "api_service=\(.api.service // "")",
+            "api_region=\(.api.region // "")"
           ' <<<"$deployment" >> "$GITHUB_OUTPUT"
       - name: Authenticate Docker to Artifact Registry
         if: ${{ !inputs.infrastructure_only }}
@@ -176,6 +180,7 @@ jobs:
           REGISTRY: ${{ steps.coordinates.outputs.registry }}
           ZONE: ${{ steps.coordinates.outputs.zone }}
           INSTANCE: ${{ steps.coordinates.outputs.instance }}
+          VM_SERVES_API: ${{ steps.coordinates.outputs.vm_serves_api }}
         run: |
           set -euo pipefail
           digest="${SELFBENCH_IMAGE#"$IMAGE_PREFIX"@}"
@@ -186,7 +191,7 @@ jobs:
           jq -Sc -n --arg project "$GCP_PROJECT_ID" --arg environment "$TF_ENVIRONMENT" --arg sha "$GITHUB_SHA" \
               --arg release_id "$release_id" --arg image "$SELFBENCH_IMAGE" --arg registry "$REGISTRY" \
               --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
-              --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
+              --arg activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" --argjson api_on_vm "$VM_SERVES_API" \
               '$ARGS.named' > "$staging/request.json"
           # One SSH session: a second OS Login cert after scp can fail with publickey on first-time profiles.
           remote="set -euo pipefail; mkdir -p /tmp/selfbench-release-$release_id; tar -C /tmp/selfbench-release-$release_id -xzf -;"
@@ -197,6 +202,22 @@ jobs:
           remote+=" sudo bash -c 'cd /var/lib/selfbench-deploy/$release_id && bash deploy-host.sh request.json > deploy.log 2>&1'"
           tar -C "$staging" -czf - . | gcloud compute ssh "$INSTANCE" --project="$GCP_PROJECT_ID" --zone="$ZONE" \
             --tunnel-through-iap --quiet --command="$remote" -- -T
+      # Migrations already ran on the VM. A revision that fails to start never takes traffic.
+      - name: Roll Out the API on Cloud Run
+        if: ${{ !inputs.infrastructure_only && steps.coordinates.outputs.api_service != '' }}
+        env:
+          SELFBENCH_IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
+          SERVICE: ${{ steps.coordinates.outputs.api_service }}
+          REGION: ${{ steps.coordinates.outputs.api_region }}
+        run: |
+          set -euo pipefail
+          shared=$(jq -er '.shared' <<<"$RUNTIME_SECRET_VERSIONS")
+          api=$(jq -er '.api' <<<"$RUNTIME_SECRET_VERSIONS")
+          # ^;^ makes ";" the list separator, since SELFBENCH_ENV_FILES itself holds a comma.
+          gcloud run deploy "$SERVICE" --project="$GCP_PROJECT_ID" --region="$REGION" --quiet \
+            --image="$SELFBENCH_IMAGE" --command=node --args=dist/api/cloud-run.js \
+            --set-secrets="/secrets/shared/env=selfbench-shared-env:$shared,/secrets/api/env=selfbench-api-env:$api" \
+            --set-env-vars="^;^SELFBENCH_ENV_FILES=/secrets/shared/env,/secrets/api/env;SELFBENCH_FORWARDED_HOPS=2"
       - name: Verify Public HTTPS
         if: ${{ !inputs.infrastructure_only }}
         run: |
@@ -213,10 +234,12 @@ jobs:
         if: ${{ !inputs.infrastructure_only }}
         env:
           IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
+          API_SERVICE: ${{ steps.coordinates.outputs.api_service }}
         run: |
           {
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
             echo "HTTPS health, anonymous auth rejection, results site and VM worker checks passed."
+            [[ -z "$API_SERVICE" ]] || echo "API revision rolled out on Cloud Run service \`${API_SERVICE}\`."
           } >> "$GITHUB_STEP_SUMMARY"

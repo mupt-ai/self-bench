@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ReleaseStore } from "../../db/releases.js";
 import type { PublishedLine } from "../../public/release-types.js";
 import { sendJson } from "../http.js";
-import { clientIp, type RateLimiter } from "../rate-limit.js";
+import type { RateLimiter } from "../rate-limit.js";
 
 const NAME = "([A-Za-z0-9_.-]+)";
 const repoRoute = new RegExp(`^/api/public/repos/${NAME}/${NAME}$`);
@@ -47,7 +47,7 @@ export function createPublicReleaseRoutes(
         return true;
       }
       const uncached = () => response.setHeader("cache-control", "no-store");
-      const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
+      const verdict = options.limiter?.takeRequest(request) ?? { ok: true };
       if (!verdict.ok) {
         uncached();
         response.setHeader("retry-after", String(verdict.retryAfter));

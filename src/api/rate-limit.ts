@@ -18,6 +18,8 @@ export interface RateLimitOptions {
   globalBurst: number;
   /** Told of a refused client at most once a minute each, so limits can be tuned from real use. */
   onLimit?: (client: string, scope: "client" | "global") => void;
+  /** Proxies that append to `X-Forwarded-For` in front of the API; see `clientIp`. */
+  forwardedHops?: number;
   now?: () => number;
 }
 
@@ -42,43 +44,47 @@ export function createRateLimiter(options: RateLimitOptions) {
   };
   const wait = (bucket: Bucket, perMinute: number) =>
     Math.max(1, Math.ceil(((1 - bucket.tokens) * 60) / perMinute));
-  return {
-    take(client: string): RateLimitVerdict {
-      const at = now();
-      if (at - sweptAt > IDLE_MS) {
-        for (const [key, bucket] of clients)
-          if (at - bucket.updatedAt > IDLE_MS) clients.delete(key);
-        sweptAt = at;
+  const take = (client: string): RateLimitVerdict => {
+    const at = now();
+    if (at - sweptAt > IDLE_MS) {
+      for (const [key, bucket] of clients) if (at - bucket.updatedAt > IDLE_MS) clients.delete(key);
+      sweptAt = at;
+    }
+    const bucket = clients.get(client) ?? { tokens: options.burst, updatedAt: at };
+    clients.set(client, bucket);
+    refill(bucket, options.perMinute, options.burst, at);
+    refill(everyone, options.globalPerMinute, options.globalBurst, at);
+    const refuse = (scope: "client" | "global", retryAfter: number): RateLimitVerdict => {
+      if (bucket.reportedAt === undefined || at - bucket.reportedAt >= 60_000) {
+        bucket.reportedAt = at;
+        options.onLimit?.(client, scope);
       }
-      const bucket = clients.get(client) ?? { tokens: options.burst, updatedAt: at };
-      clients.set(client, bucket);
-      refill(bucket, options.perMinute, options.burst, at);
-      refill(everyone, options.globalPerMinute, options.globalBurst, at);
-      const refuse = (scope: "client" | "global", retryAfter: number): RateLimitVerdict => {
-        if (bucket.reportedAt === undefined || at - bucket.reportedAt >= 60_000) {
-          bucket.reportedAt = at;
-          options.onLimit?.(client, scope);
-        }
-        return { ok: false, retryAfter };
-      };
-      if (bucket.tokens < 1) return refuse("client", wait(bucket, options.perMinute));
-      if (everyone.tokens < 1) return refuse("global", wait(everyone, options.globalPerMinute));
-      bucket.tokens -= 1;
-      everyone.tokens -= 1;
-      return { ok: true };
-    },
+      return { ok: false, retryAfter };
+    };
+    if (bucket.tokens < 1) return refuse("client", wait(bucket, options.perMinute));
+    if (everyone.tokens < 1) return refuse("global", wait(everyone, options.globalPerMinute));
+    bucket.tokens -= 1;
+    everyone.tokens -= 1;
+    return { ok: true };
+  };
+  return {
+    take,
+    /** `take` for the request's client, as the proxies in front of the API report it. */
+    takeRequest: (request: IncomingMessage) => take(clientIp(request, options.forwardedHops)),
   };
 }
 export type RateLimiter = ReturnType<typeof createRateLimiter>;
 
 /**
- * The client's IP. In production the API listens on loopback behind Caddy, which sets
- * `X-Forwarded-For` to the real peer and drops any value the client sent, so the last entry is
- * trustworthy. Without the header, the socket's address.
+ * The client's IP. Each trusted proxy appends the address it saw to `X-Forwarded-For`, so the
+ * entry `forwardedHops` from the end is the one the outermost proxy recorded; anything earlier
+ * came from the client. Caddy on the VM replaces the header with its peer (one hop); Google's
+ * load balancer in front of Cloud Run appends the client and then its own address (two hops).
+ * Without the header, the socket's address.
  */
-export function clientIp(request: IncomingMessage): string {
+export function clientIp(request: IncomingMessage, forwardedHops = 1): string {
   const forwarded = request.headers["x-forwarded-for"];
-  const header = Array.isArray(forwarded) ? forwarded.at(-1) : forwarded;
-  const last = header?.split(",").at(-1)?.trim();
-  return last || request.socket.remoteAddress || "unknown";
+  const header = Array.isArray(forwarded) ? forwarded.join(",") : forwarded;
+  const entries = header?.split(",").map((entry) => entry.trim()) ?? [];
+  return entries.at(-forwardedHops) || request.socket.remoteAddress || "unknown";
 }

@@ -87,3 +87,26 @@ variable "operator_members" {
     error_message = "Operators must be explicit user:email or group:email members."
   }
 }
+variable "api_domains" {
+  description = "Hostnames the API serves from Cloud Run behind a global load balancer (for example [\"app.selfbench.dev\", \"selfbench.dev\"]); empty keeps the API on the VM only."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = alltrue([for domain in var.api_domains : can(regex("^[a-z0-9.-]+\\.[a-z]+$", domain))])
+    error_message = "API domains must be bare hostnames."
+  }
+}
+variable "redirect_domains" {
+  description = "Hostnames the load balancer permanently redirects to another host, for example { \"www.selfbench.dev\" = \"selfbench.dev\" }."
+  type        = map(string)
+  default     = {}
+}
+variable "vm_serves_api" {
+  description = "Whether the VM still runs the API. Set false only after DNS points at the load balancer; the VM then runs the worker alone."
+  type        = bool
+  default     = true
+  validation {
+    condition     = var.vm_serves_api || length(var.api_domains) > 0
+    error_message = "The API must run somewhere: keep it on the VM until api_domains puts it on Cloud Run."
+  }
+}

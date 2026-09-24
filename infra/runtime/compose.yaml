@@ -16,6 +16,9 @@ x-app: &app
 services:
   api:
     <<: *app
+    # Off the VM once the API runs on Cloud Run: release.env sets COMPOSE_PROFILES=api only while
+    # the VM still serves it.
+    profiles: [api]
     command: [node, dist/api/main.js]
     env_file:
       - path: ${SELFBENCH_SHARED_ENV_FILE:?Set protected shared env-file path}
@@ -41,9 +44,10 @@ services:
         format: raw
       - path: ${SELFBENCH_WORKER_ENV_FILE:?Set protected worker env-file path}
         format: raw
-    # Serializes initial startup/migrations. Does not prove worker registration or DB readiness.
+    # Serializes startup with a VM-hosted API; deploy-host.sh migrates before either starts.
     depends_on:
       api:
         condition: service_healthy
+        required: false
 # No Docker socket, model secrets on the API, local artifacts, or local Postgres/Temporal.
 # Host TLS proxy is configured separately; only its 80/443 listeners may be public.

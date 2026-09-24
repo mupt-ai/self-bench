@@ -40,3 +40,15 @@ variable "operator_members" {
   description = "Explicit user/group principals approved to administer this environment."
   type        = set(string)
 }
+variable "api_domains" {
+  type    = list(string)
+  default = []
+}
+variable "redirect_domains" {
+  type    = map(string)
+  default = {}
+}
+variable "vm_serves_api" {
+  type    = bool
+  default = true
+}

@@ -3,7 +3,8 @@
 SelfBench runs on a small GCP stack managed with Terraform:
 
 - one isolated project per environment
-- one Compute Engine VM running the API and worker with Docker Compose
+- one Compute Engine VM running the worker (and, until cutover, the API) with Docker Compose
+- optionally, the API on Cloud Run behind a global HTTPS load balancer
 - a private Cloud SQL PostgreSQL instance
 - private GCS artifact storage
 - Artifact Registry and Secret Manager
@@ -144,6 +145,21 @@ The workflow:
 8. fetches pinned secret versions, runs migrations, starts Compose, and checks API and worker health.
 
 GitHub environment protection is the approval boundary. Terraform provides state locking. The workflow does not maintain a custom plan-manifest service or a separate private plan bucket.
+
+## API on Cloud Run
+
+Setting `api_domains` in `TF_INPUTS_JSON` runs the API on Cloud Run as well as the VM, so a busy or broken worker VM can't take the site down. The API gets its own service account, reads only the shared and API secrets, and reaches Cloud SQL through the VPC. It runs as exactly one always-on instance, because Codex sign-in keeps its pending login process in memory. Each release runs `gcloud run deploy` with the new image and the pinned secret versions, which are mounted as files and loaded by `dist/api/cloud-run.js`. The API reads the client IP from the second-to-last `X-Forwarded-For` entry (`SELFBENCH_FORWARDED_HOPS=2`); the service's load-balancer-only ingress prevents anyone from bypassing the load balancer to spoof it.
+
+Cut over with no TLS gap:
+
+1. Grant the plan and apply roles the permissions for Cloud Run (`run.services.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API account), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps`, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
+2. Set `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}`, keep `vm_serves_api` true, and deploy. The VM and Cloud Run now both serve the API.
+3. Add each CNAME under `deployment.api.dns_authorizations`, and wait until `gcloud certificate-manager certificates describe selfbench-<env>-api` reports `ACTIVE`.
+4. Check the new path before switching: `curl --resolve app.example:443:<deployment.api.address> https://app.example/healthz`.
+5. Point each domain's A record at `deployment.api.address`, and wait for the old records' TTL to expire.
+6. Set `"vm_serves_api": false` and `"enable_public_web": false`, then deploy. The VM now runs only the worker, and its ports 80 and 443 close. Stop Caddy on the VM.
+
+To roll back before step 6, point DNS back at the VM. After step 6, set `vm_serves_api` back to true and deploy first.
 
 ## Operational Notes
 
