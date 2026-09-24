@@ -5,6 +5,7 @@ import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
+import { stampedManagedHarbor } from "../billing/managed.js";
 import { meteredSandboxExecutor } from "../billing/metered-sandbox.js";
 import { withUsageLedger } from "../billing/usage.js";
 import { buildExport } from "../pipeline/export.js";
@@ -23,8 +24,14 @@ export async function exportBatch(
   let env = process.env;
   if (generation) {
     if (!vault) throw Error("Export credentials unavailable");
-    env = await generationEnvironment(vault, batch.run.runId, generation, env);
-    env = generationConfigEnvironment(generation.settings, env, batch.run.version.sandboxImage);
+    const managedHarbor = stampedManagedHarbor(batch.run.version.harborEnvironment);
+    env = await generationEnvironment(vault, batch.run.runId, generation, env, managedHarbor);
+    env = generationConfigEnvironment(
+      generation.settings,
+      env,
+      batch.run.version.sandboxImage,
+      managedHarbor,
+    );
   }
   const config = loadWorkerConfig(env);
   await prepareSandboxRuntime(config.execution, () => {
