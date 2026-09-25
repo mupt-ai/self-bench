@@ -103,7 +103,7 @@ test("the compiler splits the task from its repository snapshot", async () => {
 
   // Tasks with services build through Compose and keep the full bundle.
   const composed = await temporary();
-  await writeFile(join(task, "environment/docker-compose.yaml"), "services: {}\n");
+  await writeFile(join(task, "tests/docker-compose.yaml"), "services: {}\n");
   await runCommand("tar", ["-czf", compiled, "-C", join(work, "src"), "harbor-task"]);
   await splitGateBundle(compiled, composed);
   expect(await readdir(composed)).toEqual([]);

@@ -13,7 +13,7 @@ export const SNAPSHOT_FILE = "repo.tar.gz";
  * Splits a compiled bundle into the Harbor task without its repository snapshots and the
  * environment snapshot on its own. A remote image build fetches the snapshot itself, so the
  * worker running the check only ever holds the small task. The compiled bundle is unchanged.
- * Tasks with services build through Compose instead and keep the full bundle.
+ * Tasks with services build their verifier through Compose instead and keep the full bundle.
  */
 export async function splitGateBundle(compiled: string, work: string): Promise<void> {
   const gate = join(work, "gate");
@@ -27,7 +27,7 @@ export async function splitGateBundle(compiled: string, work: string): Promise<v
     `--exclude=${ENVIRONMENT_SNAPSHOT}`,
     `--exclude=${TESTS_SNAPSHOT}`,
   ]);
-  const compose = join(gate, "harbor-task/environment/docker-compose.yaml");
+  const compose = join(gate, "harbor-task/tests/docker-compose.yaml");
   const hasServices = await access(compose).then(
     () => true,
     () => false,
