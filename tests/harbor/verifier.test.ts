@@ -33,6 +33,9 @@ describe("verifier script", () => {
       "project/tests/regression.test",
     ]);
     expect(passToPassTestPaths({ ...task, workdir: ".", passToPass: [".", "../x"] })).toEqual([]);
+    expect(
+      passToPassTestPaths({ ...task, passToPass: ["spec/a_spec.rb:42", "spec/b_spec.rb[1:2]"] }),
+    ).toEqual(["project/spec/a_spec.rb", "project/spec/b_spec.rb"]);
   });
 
   test("grades pass-to-pass files at their base version and keeps the solver's source change", async () => {

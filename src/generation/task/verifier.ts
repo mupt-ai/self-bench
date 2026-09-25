@@ -69,6 +69,7 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   done
   for regression_path in ${regressionPaths}; do
     if is_base_file "$regression_path"; then
+      git -C /app clean -fd -- "$regression_path" >/dev/null 2>&1 || true
       git -C /app restore --source=HEAD --staged --worktree -- "$regression_path" 2>/dev/null || true
     fi
   done

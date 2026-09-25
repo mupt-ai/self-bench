@@ -102,4 +102,12 @@ describe("tiered task audit", () => {
       "gold patch changes pass-to-pass test files, which are graded at their base version: src/0.ts",
     ]);
   });
+
+  test("rejects a gold patch that renames a pass-to-pass test file", () => {
+    const rename =
+      "diff --git a/tests/a.ts b/tests/moved.ts\nsimilarity index 100%\nrename from tests/a.ts\nrename to tests/moved.ts\n";
+    expect(auditTaskDefinition(definition, `${patch(3, 100)}\n${rename}`, tests).blockers).toEqual([
+      "gold patch changes pass-to-pass test files, which are graded at their base version: tests/a.ts",
+    ]);
+  });
 });
