@@ -3,7 +3,6 @@ import { type Client, defaultPayloadConverter } from "@temporalio/client";
 import {
   activityDetail,
   heartbeatCost,
-  normalizeFailure,
   overlayCandidateActivity,
 } from "../../src/generation/batches/activity.js";
 
@@ -119,10 +118,13 @@ test("the started attempt wins over a scheduled one and Long timestamps convert"
   expect(activityDetail([])).toEqual({ state: "unknown" });
 });
 
-test("failure normalization removes artifact references and blank messages", () => {
-  expect(normalizeFailure("sandbox died; partial log: gs://b/x.log")).toBe("sandbox died");
-  expect(normalizeFailure("   ")).toBeUndefined();
-  expect(normalizeFailure(undefined)).toBeUndefined();
+test("the last failure drops partial-log references and blank messages", () => {
+  const failed = (message: string) => activityDetail([{ state: 2, lastFailure: { message } }]);
+  expect(failed("sandbox died; partial log: gs://b/x.log")).toEqual({
+    state: "running",
+    lastFailure: "sandbox died",
+  });
+  expect(failed("   ")).toEqual({ state: "running" });
 });
 
 test("a Temporal deadline returns unknown activity instead of hanging the poll", async () => {

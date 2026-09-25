@@ -1,3 +1,4 @@
+import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -17,6 +18,7 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
+import { full, names } from "./release-fixture.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 
 /** What the fake GitHub reports for the connected repository; tests change it. */
@@ -193,11 +195,24 @@ export async function releaseServer(
         if (task) await tasks.review(task.id, { decision: "approve", note: "", userId: priya.id });
       }
     },
+    /** Saves `run` on the connected repository, evaluated with the workspace's credential. */
     async save(run: EvaluationRun) {
-      await saveEvaluation(artifacts, { ...run, repoId: repo.id });
+      await saveEvaluation(artifacts, {
+        ...run,
+        repoId: repo.id,
+        credentials: {
+          modelCredentialId: credential.id,
+          sandboxCredentialId: "s",
+          provider: "openai",
+        },
+      });
     },
     async preview(githubId = 1) {
       return (await request(`${base}/preview`, {}, githubId)).json();
+    },
+    /** Every setting key the preview lists, ticked or not. */
+    async allSettings(): Promise<string[]> {
+      return (await this.preview()).preview.settings.map((setting: { key: string }) => setting.key);
     },
     /** Releases with the preview's defaults, or `settings` when given. */
     async release(
@@ -234,6 +249,39 @@ export async function releaseServer(
       await new Promise<void>((resolve) => server.close(() => resolve()));
       if (!shared) await database.close();
       await rm(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+export type ReleaseServer = Awaited<ReturnType<typeof releaseServer>>;
+
+/**
+ * One shared database per test file and a fresh release server per test, with tasks t1-t3
+ * approved and a full run of each of `models` saved.
+ */
+export function releaseServerPerTest(models: readonly string[]) {
+  let database: TestDatabase;
+  let server: ReleaseServer;
+  beforeAll(async () => {
+    database = await testDatabase();
+  });
+  afterAll(async () => {
+    await database.close();
+  });
+  beforeEach(async () => {
+    server = await releaseServer(database);
+    await server.approve(names(1, 3));
+    for (const model of models) await server.save(full(model, names(1, 3)));
+  });
+  afterEach(async () => {
+    await server.close();
+  });
+  return {
+    get database() {
+      return database;
+    },
+    get server() {
+      return server;
     },
   };
 }

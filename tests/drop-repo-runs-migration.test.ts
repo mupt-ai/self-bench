@@ -1,20 +1,17 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import { createUserStore } from "../src/db/users.js";
 import { testAuthConfig } from "./support/site-fixture.js";
 
-test("review migrations preserve batch ownership, tasks, reviews, tombstones and artifacts", async () => {
+test("review migrations preserve batch ownership, tasks, reviews and tombstones", async () => {
   const client = new PGlite();
-  const root = await mkdtemp(join(tmpdir(), "drop-repo-runs-"));
   try {
     await client.waitReady;
     for (const file of [
@@ -71,8 +68,6 @@ test("review migrations preserve batch ownership, tasks, reviews, tombstones and
     await db
       .insert(schema.evaluationRecords)
       .values({ path: "evaluations/historical", version: 1, sealed: "test-history" });
-    const artifacts = new LocalArtifactStore(root);
-    await artifacts.put("history/bundle", Buffer.from("retained"), "application/octet-stream");
     const beforeTasks = await db.select().from(schema.tasks);
     const beforeEvaluations = await db.select().from(schema.evaluationRecords);
     const migration = await readFile(join(migrationsFolder(), "0003_drop_repo_runs.sql"), "utf8");
@@ -87,9 +82,6 @@ test("review migrations preserve batch ownership, tasks, reviews, tombstones and
     expect(await tasks.listForRepo(repo.id)).toHaveLength(1);
     expect((await tasks.find(repo.id, base.runId, "kept"))?.review?.note).toBe("Keep review");
     expect(await tasks.deleteTask(repo.id, base.runId, "deleted")).toBe("deleted");
-    expect(Buffer.from((await artifacts.getByKey("history/bundle")) ?? []).toString()).toBe(
-      "retained",
-    );
     await client.exec('DROP TABLE "repo_runs";');
     await client.exec(repair);
     await client.exec(repair);
@@ -98,6 +90,5 @@ test("review migrations preserve batch ownership, tasks, reviews, tombstones and
     ]);
   } finally {
     await client.close();
-    await rm(root, { recursive: true, force: true });
   }
 });

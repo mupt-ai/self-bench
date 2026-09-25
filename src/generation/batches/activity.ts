@@ -122,7 +122,7 @@ export function heartbeatCost(payload: unknown): TaskActivityDetail["cost"] {
 }
 
 /** Strips the per-attempt artifact reference so identical provider errors compare equal. */
-export function normalizeFailure(message: string | null | undefined): string | undefined {
+function normalizeFailure(message: string | null | undefined): string | undefined {
   const text = message?.replace(/;\s*(partial )?log:\s*\S+/g, "").trim();
   return text ? text : undefined;
 }

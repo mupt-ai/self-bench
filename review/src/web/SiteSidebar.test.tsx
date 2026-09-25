@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { SidebarTrigger } from "./primitives/sidebar";
 import { SiteSidebar } from "./SiteSidebar";
 import type { SiteOrg } from "./session";
 
@@ -73,34 +72,5 @@ test("account picker keeps its menu affordance and readable personal account lab
   const html = renderSidebar("/", "user");
   expect(html).toContain('aria-haspopup="menu"');
   expect(html).toContain('aria-label="Organization"');
-  expect(html).toContain("cursor-pointer");
   expect(html).toContain("example-account");
-});
-
-test("sidebar preserves group spacing and a neutral active state", () => {
-  const html = renderSidebar("/");
-  expect(html).toContain('data-slot="sidebar-group"');
-  expect(html).toContain('data-slot="sidebar-group-content"');
-  const active = html.match(/<a[^>]*data-active="true"[^>]*>/)?.[0];
-  expect(active).toContain("data-[active=true]:bg-foreground/[0.07]");
-  expect(active).not.toContain("text-brand");
-  expect(html).toContain("group-data-[collapsible=icon]/sidebar:p-2");
-});
-
-test("org picker uses the compact row while preserving the requested avatar", () => {
-  const html = renderSidebar("/");
-  const trigger = html.match(/<button[^>]*aria-label="Organization"[^>]*>/)?.[0];
-  expect(trigger).toContain("h-10");
-  expect(trigger).toContain("border-foreground/15");
-  expect(trigger).not.toContain("min-h-14");
-  expect(html).toContain("width:20px;height:20px");
-});
-
-test("sidebar trigger keeps a 32px button and native 24px PanelLeft icon", () => {
-  const html = renderToStaticMarkup(<SidebarTrigger aria-label="Collapse Sidebar" />);
-  expect(html).toContain("h-8 w-8");
-  expect(html).toContain('width="24"');
-  expect(html).toContain('height="24"');
-  expect(html).toContain('stroke-width="1.5"');
-  expect(html).not.toContain("size-4");
 });

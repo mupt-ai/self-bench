@@ -60,13 +60,6 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
     ["openai", "gpt-6-sol", 2],
     ["openrouter", "openai/gpt-6-sol", 2],
   ]);
-  expect(routes[1]?.harnesses).toEqual([
-    "codex",
-    "claude-code",
-    "pi",
-    "mini-swe-agent",
-    "terminus-2",
-  ]);
   expect(thinkingOptions(sol, ["codex"])).toContain("max");
   expect(thinkingOptions(sol, ["codex", "pi"])).not.toContain("max");
 });

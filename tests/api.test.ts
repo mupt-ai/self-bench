@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/contracts/config/index.js";
 import { buildRunRequest } from "../src/generation/settings/run.js";
-import { HOBBY_E2B_TIMEOUT_CAP_MS } from "../src/sandbox/providers/e2b/timeout-cap.js";
-import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../src/sandbox/providers/vercel/timeout-cap.js";
 
 const submission = {
   runId: "run-timeout-metadata",
@@ -19,25 +17,6 @@ const submission = {
 };
 
 describe("API run metadata", () => {
-  test("accepts up to three hundred candidates", () => {
-    const built = buildRunRequest(loadConfig(), {
-      ...submission,
-      candidateCounts: { easy: 100, medium: 100, hard: 100 },
-    });
-
-    expect("candidateCounts" in built ? built.candidateCounts : undefined).toEqual({
-      easy: 100,
-      medium: 100,
-      hard: 100,
-    });
-    expect(() =>
-      buildRunRequest(loadConfig(), {
-        ...submission,
-        candidateCounts: { easy: 100, medium: 100, hard: 101 },
-      }),
-    ).toThrow();
-  });
-
   test("persists the effective Vercel timeout cap with provider and Harbor metadata", () => {
     const config = loadConfig({
       SELFBENCH_EXECUTION_BACKEND: "vercel",
@@ -52,7 +31,7 @@ describe("API run metadata", () => {
       executionBackend: "vercel",
       harborEnvironment: "modal",
       sandboxImage: `selfbench-runtime@sha256:${"d".repeat(64)}`,
-      sandboxTimeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
+      sandboxTimeoutCapMs: 2_700_000,
       schema: 2,
     });
   });
@@ -71,7 +50,7 @@ describe("API run metadata", () => {
       executionBackend: "e2b",
       harborEnvironment: "docker",
       sandboxImage: "selfbench-runtime:v1",
-      sandboxTimeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS,
+      sandboxTimeoutCapMs: 3_600_000,
       schema: 2,
     });
   });

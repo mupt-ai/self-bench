@@ -33,7 +33,7 @@ async function compile(bundle: (work: string) => Promise<void>) {
   };
 }
 
-test("compiler unpacks the submission into a fresh work directory and reports author errors", async () => {
+test("compiler unpacks the submission and reports its author errors", async () => {
   const result = await compile(async (work) => {
     const draft = join(work, "draft");
     await mkdir(draft);
@@ -44,7 +44,10 @@ test("compiler unpacks the submission into a fresh work directory and reports au
     await rm(draft, { recursive: true });
   });
   expect(result.compileErrors.length).toBeGreaterThan(0);
-  expect(result.compileErrors.join("\n")).not.toContain("could not be unpacked");
+  const errors = result.compileErrors.join("\n");
+  expect(errors).not.toContain("could not be unpacked");
+  // The unpacked `{}` parses; a missing definition.json would read as "" and fail JSON parsing.
+  expect(errors).not.toContain("not valid JSON");
 });
 
 test("an unreadable submission bundle is an author error, not a compiler crash", async () => {

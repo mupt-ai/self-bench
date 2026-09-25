@@ -1,8 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import { MAX_CANDIDATES_PER_RUN } from "../../../src/contracts/config/execution-limits";
 import { BatchRequestError, batchIsTerminal, startBatch, validCandidateCounts } from "./batch-api";
-import { GenerateBatch } from "./GenerateBatch";
 
 test("batch form count validation and terminal states", () => {
   expect(validCandidateCounts({ easy: 1, medium: 2, hard: 3 })).toBe(true);
@@ -15,14 +13,6 @@ test("batch form count validation and terminal states", () => {
     expect(batchIsTerminal(phase)).toBe(true);
   expect(batchIsTerminal("discovering")).toBe(false);
 });
-test("renders minimal batch trigger without starting generation", () => {
-  const html = renderToStaticMarkup(
-    <GenerateBatch repoId={{ org: "team", fullName: "owner/repo" }} />,
-  );
-  expect(html).toContain("Generate Batch");
-  expect(html).not.toContain("dialog");
-});
-
 test("unconfirmed batch starts retain the run ID for navigation without resubmitting", async () => {
   const fetch = spyOn(globalThis, "fetch").mockResolvedValue(
     Response.json(

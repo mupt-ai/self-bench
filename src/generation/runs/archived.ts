@@ -3,11 +3,7 @@ import type { ArtifactEntry } from "./types.js";
 
 const RUN_ID = /^runs\/([a-z0-9][a-z0-9-]{2,62})\//;
 const LISTING_TTL_MS = 60_000;
-let runIndexCache: { at: number; runs: Promise<ArchivedRun[]> } | undefined;
-
-export function clearArchivedListingCache(): void {
-  runIndexCache = undefined;
-}
+const runIndexCache = new WeakMap<ArtifactStore, { at: number; runs: Promise<ArchivedRun[]> }>();
 
 export interface ArchivedRun {
   readonly runId: string;
@@ -20,12 +16,13 @@ export interface ArchivedRun {
  * The index walks every run in the store, so it is cached like the per-run listings.
  */
 export function listArchivedRuns(store: ArtifactStore): Promise<ArchivedRun[]> {
-  if (runIndexCache && Date.now() - runIndexCache.at < LISTING_TTL_MS) return runIndexCache.runs;
+  const hit = runIndexCache.get(store);
+  if (hit && Date.now() - hit.at < LISTING_TTL_MS) return hit.runs;
   const runs = scanArchivedRuns(store);
   const cached = { at: Date.now(), runs };
-  runIndexCache = cached;
+  runIndexCache.set(store, cached);
   runs.catch(() => {
-    if (runIndexCache === cached) runIndexCache = undefined;
+    if (runIndexCache.get(store) === cached) runIndexCache.delete(store);
   });
   return runs;
 }

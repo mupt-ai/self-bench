@@ -39,12 +39,6 @@ test("the task set is every task all ticked settings ran", () => {
   expect(selectionOf(preview, new Set()).tasks).toEqual([]);
 });
 
-test("ticking shrinks the task set and un-ticking grows it (I3)", () => {
-  const all = selectionOf(preview, new Set(["a", "b", "c"])).tasks.length;
-  const fewer = selectionOf(preview, new Set(["a", "b"])).tasks.length;
-  expect(fewer).toBeGreaterThanOrEqual(all);
-});
-
 test("added tasks are labelled new or returning; removed ones count as left out", () => {
   const selection = selectionOf(preview, new Set(["a"]));
   expect(selection.added).toEqual({ new: 1, returning: 1 });

@@ -83,6 +83,23 @@ describe("runSandbox", () => {
     expect(result.outputs).toEqual({});
   }, 30_000);
 
+  test("does not allocate when cancellation is already requested", async () => {
+    let opened = 0;
+    const controller = new AbortController();
+    controller.abort(new Error("cancelled before run"));
+    await expect(
+      runSandbox(
+        async () => {
+          opened++;
+          return fakeSession(async () => 0).session;
+        },
+        request,
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow("cancelled before run");
+    expect(opened).toBe(0);
+  });
+
   test("the deadline returns exit code 124", async () => {
     const fake = fakeSession(
       (_command, { signal }) =>

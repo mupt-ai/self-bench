@@ -176,7 +176,11 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(calls).toBe(1);
 });
 test("missing credentials and incompatible Harbor fail before a model command", async () => {
-  for (const scenario of ["credential", "version"]) {
+  for (const [scenario, version, error] of [
+    // The Harbor version is right here, so only the missing credential can stop the run.
+    ["credential", HARBOR_VERSION, "Credential unavailable"],
+    ["version", "wrong-version", "does not match supported"],
+  ] as const) {
     const { store, input, vault } = await fixture();
     if (scenario === "credential")
       await vault.credentials.remove(1, input.credentials?.modelCredentialId ?? "");
@@ -186,10 +190,12 @@ test("missing credentials and incompatible Harbor fail before a model command", 
       vault,
       command: async (_name, args) => {
         if (args[0] !== "--version") calls += 1;
-        return { stdout: "wrong-version", stderr: "", exitCode: 0 };
+        return { stdout: version, stderr: "", exitCode: 0 };
       },
     });
-    expect((await getEvaluation(store, input.repoId, input.id))?.status).toBe("failed");
+    const run = await getEvaluation(store, input.repoId, input.id);
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toContain(error);
     expect(calls).toBe(0);
   }
 });

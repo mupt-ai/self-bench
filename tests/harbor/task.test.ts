@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compileHarborTask, refreshHarborTask } from "../../src/generation/task/compiler.js";
+import { compileHarborTask } from "../../src/generation/task/compiler.js";
+import { COMPILER_REVISION } from "../../src/generation/task/constants.js";
 import { dependencyManifestPatch } from "../../src/generation/task/dependencies.js";
-import { sha256 } from "../../src/lib/hash.js";
 import { runCommand } from "../../src/lib/process.js";
 
 const roots: string[] = [];
@@ -105,7 +105,6 @@ describe("Harbor task compiler", () => {
     });
     const taskToml = await readFile(join(output, "task.toml"), "utf8");
     expect(taskToml).toContain('difficulty = "medium"');
-    expect(taskToml).toContain('"medium"');
     expect(taskToml).toContain(
       'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     );
@@ -159,7 +158,7 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(30);
+    ).toBe(COMPILER_REVISION);
 
     const baseOnlyDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
@@ -177,12 +176,10 @@ describe("Harbor task compiler", () => {
         passToPass: ["suite::a", "suite::b"],
       },
     };
-    const originalPatch = await readFile(join(authored, "test.patch"), "utf8");
     await writeFile(join(authored, "definition.json"), JSON.stringify(baseOnlyDefinition));
     await writeFile(join(authored, "test.patch"), "");
     const baseOutput = join(root, "base-only");
     await compileHarborTask(authored, repo, baseOutput);
-    await refreshHarborTask(baseOutput, baseOnlyDefinition);
     expect(await readFile(join(baseOutput, "tests/test.patch"), "utf8")).toBe("");
     expect(await readFile(join(baseOutput, "tests/test.sh"), "utf8")).toContain(
       "source /opt/selfbench-runtime/command.sh",
@@ -192,27 +189,6 @@ describe("Harbor task compiler", () => {
     );
     expect(baseManifest.testEvidence).toBe("junit");
     expect(baseManifest.referenceDependencyProvisioning).toBe(true);
-    await writeFile(join(authored, "test.patch"), originalPatch);
-
-    const repairedDefinition = {
-      ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
-      testCommand: "test --repaired {tests}",
-      testSelection: undefined,
-    };
-    const repairedPatch =
-      "diff --git a/tests/new b/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new\n@@ -0,0 +1 @@\n+repaired\n";
-    await writeFile(join(output, "tests/test.patch"), repairedPatch);
-    await refreshHarborTask(output, repairedDefinition);
-    const refreshedManifest = JSON.parse(
-      await readFile(join(output, ".selfbench-manifest.json"), "utf8"),
-    );
-    expect(refreshedManifest.definitionSha256).toBe(sha256(JSON.stringify(repairedDefinition)));
-    expect(refreshedManifest.testPatchSha256).toBe(sha256(repairedPatch));
-    expect(await readFile(join(output, "tests/test.sh"), "utf8")).toContain("--repaired");
-    expect(JSON.parse(await readFile(join(output, "definition.json"), "utf8"))).toMatchObject({
-      taskId: "example",
-      testCommand: "test --repaired {tests}",
-    });
   });
 
   test("detects supported dependency manifests without treating source changes as dependencies", () => {

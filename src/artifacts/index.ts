@@ -11,6 +11,5 @@ export function createArtifactStore(config: SelfBenchConfig["artifact"]): Artifa
     : new LocalArtifactStore(config.directory);
 }
 
-export { verifiedArtifactReadStream } from "./common.js";
 export { GcsArtifactStore } from "./gcs.js";
 export { LocalArtifactStore } from "./local.js";

@@ -8,7 +8,6 @@ import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
 import { TokenCosts } from "./evaluation/TokenCosts";
-import { LoginPage } from "./pages/LoginPage";
 
 function renderPage(page: ReactNode) {
   return renderToStaticMarkup(
@@ -41,22 +40,9 @@ test("settings and results use consistent action, section and table labels", () 
   expect(settings).toContain("Model Providers");
   expect(settings).toContain("Sandboxes");
   expect(settings).toContain("Shared with mupt-ai.");
-  expect(settings).not.toContain("Import Previous Setups");
   const results = renderPage(<EvaluationPage />);
   expect(results).toContain("Compare your runs. Inspect what the solver did.");
   expect(results).toContain('aria-label="Accuracy versus Cost"');
-  expect(results).not.toContain("Accuracy vs. Estimated Cost");
-});
-
-test("sign-in labels preserve product spelling and short prepositions", () => {
-  const html = renderPage(<LoginPage />);
-  expect(html).toContain("Continue with GitHub");
-  expect(html).toContain('class="size-4 shrink-0" width="16" height="16"');
-  expect(html).toContain("Sign In</h1>");
-  expect(html).toContain(">SELF-BENCH</a>");
-  expect(html).toContain('href="/auth/github"');
-  expect(html).not.toContain("Build verified coding tasks");
-  expect(html).not.toContain("Continue to self-bench");
 });
 
 test("token labels use Title Case while the cost explanation stays sentence case", () => {

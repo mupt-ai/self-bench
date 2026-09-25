@@ -56,8 +56,6 @@ export async function fetchBatchPullRequests(options: {
   repositoryUrl: string;
   token: string;
   limit?: number;
-  endpoint?: string;
-  signal?: AbortSignal;
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<ProvenanceMessage[]> {
   const limit = options.limit ?? 500;
@@ -68,21 +66,16 @@ export async function fetchBatchPullRequests(options: {
   const cursors = new Set<string>();
   let after: string | null = null;
   while (rows.length < limit) {
-    options.signal?.throwIfAborted();
-    const timeout = AbortSignal.timeout(30_000);
-    const response = await (options.fetchImpl ?? fetch)(
-      options.endpoint ?? "https://api.github.com/graphql",
-      {
-        method: "POST",
-        redirect: "error",
-        headers: { ...apiHeaders(options.token), "content-type": "application/json" },
-        signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
-        body: JSON.stringify({
-          query,
-          variables: { owner, name, first: Math.min(100, limit - rows.length), after },
-        }),
-      },
-    );
+    const response = await (options.fetchImpl ?? fetch)("https://api.github.com/graphql", {
+      method: "POST",
+      redirect: "error",
+      headers: { ...apiHeaders(options.token), "content-type": "application/json" },
+      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({
+        query,
+        variables: { owner, name, first: Math.min(100, limit - rows.length), after },
+      }),
+    });
     if (!response.ok)
       throw new GitHubOAuthError(`GitHub PR fetch failed (${response.status})`, response.status);
     const raw: unknown = await response.json();

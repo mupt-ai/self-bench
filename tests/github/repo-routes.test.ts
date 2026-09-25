@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { SESSION_COOKIE } from "../../src/api/auth/session.js";
-import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
+import { signedIn } from "../support/sign-in.js";
 import {
   type AuthServer,
-  cookieValue,
   type FakeGitHubOptions,
   fakeGitHub,
   startAuthServer,
@@ -16,22 +14,16 @@ afterEach(async () => {
   server = undefined;
 });
 
-/** Boots the server, signs in through the fake GitHub, and returns a cookie header. */
-async function signedIn(github: FakeGitHubOptions) {
+/** Boots the server and signs in through the fake GitHub. */
+async function bootSignedIn(github: FakeGitHubOptions) {
   const hub = fakeGitHub(github);
   server = await startAuthServer({ config: testAuthConfig, fetchImpl: hub.fetch });
-  const start = await server.request("/auth/github");
-  const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${state}` },
-  });
-  const cookie = `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`;
-  return { site: server, hub, headers: { cookie } };
+  return { site: server, hub, headers: await signedIn(server) };
 }
 
 describe("GitHub repo listing", () => {
   test("lists an org's repos with the user's token and caches the page", async () => {
-    const { site, hub, headers } = await signedIn({
+    const { site, hub, headers } = await bootSignedIn({
       orgs: ["Mupt-AI"],
       repos: [
         { full_name: "Mupt-AI/self-bench", private: true, pushed_at: "2026-09-04T00:00:00Z" },
@@ -61,7 +53,10 @@ describe("GitHub repo listing", () => {
   });
 
   test("lists the personal tenant from /user/repos and refuses foreign orgs", async () => {
-    const { site, hub, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
+    const { site, hub, headers } = await bootSignedIn({
+      orgs: [],
+      repos: [{ full_name: "avyay/x" }],
+    });
     const mine = await site.request("/api/orgs/avyay/github-repos", { headers });
     expect(mine.status).toBe(200);
     expect(hub.calls.at(-1)).toBe(
@@ -74,7 +69,7 @@ describe("GitHub repo listing", () => {
   });
 
   test("reports the repo and its merged pull requests over the last year", async () => {
-    const { site, hub, headers } = await signedIn({
+    const { site, hub, headers } = await bootSignedIn({
       orgs: [],
       repos: [{ full_name: "avyay/x" }],
       mergedPullRequests: 37,

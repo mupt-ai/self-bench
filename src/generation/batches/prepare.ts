@@ -14,14 +14,12 @@ export async function prepareGenerationBatch(options: {
   /** Artifacts are write-once, so each preparation attempt stages its own shard inputs. */
   attempt: number;
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
-  endpoint?: string;
 }): Promise<GenerationBatch> {
   const { run, artifacts } = options;
   const github = await fetchBatchPullRequests({
     repositoryUrl: run.repository.url,
     token: options.token,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-    ...(options.endpoint ? { endpoint: options.endpoint } : {}),
   });
   const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
   if (!chunks.length) throw new Error("No eligible merged PRs found");

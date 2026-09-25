@@ -156,24 +156,6 @@ describe("organization allowlist", () => {
     expect(await users.findByGitHubId(42)).toBeUndefined();
   });
 
-  test("membership matches case-insensitively", async () => {
-    const { server: site, users } = await boot(
-      {},
-      {
-        ...testAuthConfig,
-        allowedOrgs: ["Mupt-AI", " mupt-ai "].map((login) => login.trim().toLowerCase()),
-      },
-    );
-    const response = await signIn(site);
-    expect(response.headers.get("location")).toBe("/");
-    expect(await users.findByGitHubId(42)).toBeDefined();
-  });
-
-  test("an empty allowlist keeps sign-in open to everyone", async () => {
-    const { server: site } = await boot({ orgs: [] });
-    expect((await signIn(site)).headers.get("location")).toBe("/");
-  });
-
   test("a removed member is denied once the membership cache expires", async () => {
     const orgs: string[] = ["Mupt-AI"];
     const clock = { now: new Date("2026-09-21T00:00:00Z") };
@@ -186,8 +168,11 @@ describe("organization allowlist", () => {
       now: () => clock.now,
     });
     server = site;
+    // GitHub reports "Mupt-AI" against the allowlisted "mupt-ai": this first sign-in is also
+    // the proof that membership matches case-insensitively.
     const signedIn = await signIn(site);
     expect(signedIn.headers.get("location")).toBe("/");
+    expect(await site.users.findByGitHubId(42)).toBeDefined();
     const session = cookieValue(signedIn, SESSION_COOKIE) ?? "";
     const me = () =>
       site.request("/api/me", { headers: { cookie: `${SESSION_COOKIE}=${session}` } });

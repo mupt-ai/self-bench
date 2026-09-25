@@ -1,6 +1,6 @@
 const BILLING_ELIGIBLE_STATUSES = new Set(["active", "trialing"]);
 
-export const BILLING_REQUIRED_CODE = "billing_required";
+const BILLING_REQUIRED_CODE = "billing_required";
 const BILLING_REQUIRED_ERROR = "Set up billing to use managed models or sandboxes.";
 
 export interface BillingEligibility {

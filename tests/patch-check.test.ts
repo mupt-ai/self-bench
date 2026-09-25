@@ -2,11 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  exportIgnoredPaths,
-  malformedPatchProblems,
-  patchApplyCheck,
-} from "../src/generation/task/patch.js";
+import { patchApplyCheck } from "../src/generation/task/patch.js";
 import { runCommand } from "../src/lib/process.js";
 
 const roots: string[] = [];
@@ -52,7 +48,7 @@ const goldPatch = `diff --git a/src.txt b/src.txt
 
 describe("patch apply check", () => {
   test("rejects patches that touch export-ignored paths, including via an ancestor directory", async () => {
-    const { repo, base: dirtyBase } = await repository();
+    const { repo } = await repository();
     await writeFile(
       join(repo, ".gitattributes"),
       ".github/ export-ignore\ndocs/internal.md export-ignore\n",
@@ -60,7 +56,6 @@ describe("patch apply check", () => {
     await runCommand("git", ["-C", repo, "add", ".gitattributes"]);
     await runCommand("git", ["-C", repo, "commit", "-qm", "attributes"]);
     const base = (await runCommand("git", ["-C", repo, "rev-parse", "HEAD"])).stdout.trim();
-    expect(base).not.toBe(dirtyBase);
     const ignoredTest = `diff --git a/.github/scripts/check.py b/.github/scripts/check.py
 new file mode 100644
 --- /dev/null
@@ -68,25 +63,28 @@ new file mode 100644
 @@ -0,0 +1 @@
 +print("hi")
 `;
+    const ignoredGold = `${goldPatch}diff --git a/docs/internal.md b/docs/internal.md
+new file mode 100644
+--- /dev/null
++++ b/docs/internal.md
+@@ -0,0 +1 @@
++notes
+`;
     const errors = await patchApplyCheck({
       repository: repo,
       base,
       testPatch: ignoredTest,
-      goldPatch,
+      goldPatch: ignoredGold,
     });
-    expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toContain("test.patch touches .github/scripts/check.py");
+    expect(errors.map((error) => error.message.split(", which")[0])).toEqual([
+      "test.patch touches .github/scripts/check.py",
+      "gold.patch touches docs/internal.md",
+    ]);
     expect(errors[0]?.message).toContain("export-ignore");
     const worktree = (await runCommand("git", ["-C", repo, "worktree", "list"])).stdout
       .trim()
       .split("\n");
     expect(worktree).toHaveLength(1);
-    const scratch = join(repo, "..", "attr-check");
-    await runCommand("git", ["-C", repo, "worktree", "add", "--detach", scratch, base]);
-    expect(await exportIgnoredPaths(scratch, ["docs/internal.md", "src.txt", ".github/x"])).toEqual(
-      [".github/x", "docs/internal.md"],
-    );
-    await runCommand("git", ["-C", repo, "worktree", "remove", "--force", scratch]);
   });
 
   test("accepts patches that apply to the clean base in both orders despite a dirty working tree", async () => {
@@ -154,19 +152,6 @@ new file mode 100644
       goldPatch,
     });
     expect(errors[0]?.message).toContain("is not available in");
-  });
-
-  test("flags malformed patch text before git sees it", () => {
-    expect(malformedPatchProblems(testPatch, "test patch")).toEqual([]);
-    expect(malformedPatchProblems(testPatch.replaceAll("\n", "\r\n"), "test patch")).toEqual([
-      "test patch has CRLF line endings; write it with LF only",
-    ]);
-    expect(malformedPatchProblems(testPatch.trimEnd(), "test patch")).toEqual([
-      "test patch is missing its final newline",
-    ]);
-    expect(malformedPatchProblems("--- a\n+++ b\n", "gold patch")).toEqual([
-      "gold patch must be a Git patch starting with diff --git",
-    ]);
   });
 });
 

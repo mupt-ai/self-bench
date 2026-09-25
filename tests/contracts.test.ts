@@ -148,21 +148,6 @@ describe("contracts", () => {
     }
   });
 
-  test("requires an explicit Harbor backend for E2B requests", () => {
-    expect(
-      runRequestSchema.safeParse({
-        ...request,
-        candidateCounts: { easy: 1, medium: 0, hard: 0 },
-        version: {
-          ...request.version,
-          executionBackend: "e2b",
-          harborEnvironment: undefined,
-          sandboxImage: "selfbench-runtime:v1",
-        },
-      }).success,
-    ).toBe(false);
-  });
-
   test("rejects hosted-only timeout metadata on Docker and Modal", () => {
     expect(
       runRequestSchema.safeParse({
@@ -194,7 +179,7 @@ describe("contracts", () => {
   });
 
   test("rejects legacy requests without an explicit Harbor backend", () => {
-    for (const executionBackend of ["docker", "modal", "vercel"] as const) {
+    for (const executionBackend of ["docker", "modal", "vercel", "e2b"] as const) {
       expect(
         runRequestSchema.safeParse({
           ...request,

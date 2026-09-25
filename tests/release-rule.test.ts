@@ -203,14 +203,17 @@ test("the same inputs give the same hash, whatever the run order", () => {
 });
 
 test("an edited review note changes the fingerprint but not the release hash", () => {
-  const all = inputs({ runs: baseRuns() });
+  const runs = baseRuns();
+  const all = inputs({ runs });
   const noted = inputs({
-    runs: baseRuns(),
+    runs,
     tasks: approvedTasks(tPrev).map((task) =>
       task.taskId === "t1" ? { ...task, note: "edited" } : task,
     ),
   });
   expect(previewRelease(noted).fingerprint).not.toBe(previewRelease(all).fingerprint);
+  const chosen = previewRelease(all).settings.map((setting) => setting.key);
+  expect(buildRelease(noted, chosen, context).hash).toBe(buildRelease(all, chosen, context).hash);
 });
 
 test("a setting whose only trials are on unapproved tasks is not listed", () => {

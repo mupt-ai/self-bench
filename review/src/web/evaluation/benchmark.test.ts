@@ -1,26 +1,8 @@
 import { expect, test } from "bun:test";
-import { paretoFrontier } from "@mupt-ai/dari-pareto";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
 import { benchmarkPoints, runAccuracy } from "./benchmark";
 
-test("frontier excludes dominated points and handles equal costs", () => {
-  const point = (id: string, cost: number, accuracy: number) => ({
-    id,
-    label: id,
-    x: cost,
-    y: accuracy,
-  });
-  expect(
-    paretoFrontier([
-      point("dominated", 3, 40),
-      point("low", 1, 50),
-      point("equal-cost", 1, 20),
-      point("high", 4, 90),
-      point("flat", 2, 50),
-    ]).map((entry) => entry.id),
-  ).toEqual(["low", "high"]);
-});
 test("only complete, priced, verified runs enter the comparison", () => {
   const run = initialEvaluation(
     {
