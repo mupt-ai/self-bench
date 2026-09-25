@@ -151,6 +151,22 @@ describe("harbor task directories and bundles", () => {
     await expect(expandBundle(store, "runs/run-2/missing.tar.gz")).rejects.toThrow("not found");
   });
 
+  test("serves a re-read bundle from memory", async () => {
+    const root = await temporaryRoot();
+    const key = "runs/run-4/authoring/cand-b/source-task.tar.gz";
+    const store = await storeBundle(root, key, false);
+    const first = await expandBundle(store, key);
+    let opened = 0;
+    const openReadByKey = store.openReadByKey.bind(store);
+    store.openReadByKey = (...args) => {
+      opened += 1;
+      return openReadByKey(...args);
+    };
+
+    expect(await expandBundle(store, key)).toBe(first);
+    expect(opened).toBe(0);
+  });
+
   test("reads a bundle whose task sits at the archive root", async () => {
     const root = await temporaryRoot();
     const key = "runs/run-3/authoring/cand-a/source-task.tar.gz";

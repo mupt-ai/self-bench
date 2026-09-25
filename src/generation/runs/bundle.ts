@@ -7,15 +7,54 @@ import { type BundleFile, isInlineCandidate, taskFilesFromBundle } from "./task-
 import type { TaskFiles } from "./types.js";
 
 const MAX_BUNDLE_ENTRIES = 20_000;
+const MAX_CACHED_BYTES = 64 * 1024 * 1024;
 
 const inFlight = new Map<string, Promise<TaskFiles>>();
+/** Expanded bundles by key and digest, least recently used first. */
+const expanded = new Map<string, { files: TaskFiles; bytes: number }>();
+let expandedBytes = 0;
 
+/**
+ * Viewer files for the bundle at `key`. Expanding means streaming and gunzipping the whole
+ * archive, repository snapshot included, so results are kept in memory by content digest:
+ * a task page that re-reads the same bundle costs one metadata lookup instead of a full pass.
+ */
 export async function expandBundle(store: ArtifactStore, key: string): Promise<TaskFiles> {
-  const pending = inFlight.get(key);
+  const object = await store.stat(key);
+  // Objects written without a recorded digest are expanded every time rather than cached.
+  const identity = object ? `${key}@${object.sha256}` : undefined;
+  const cached = identity ? expanded.get(identity) : undefined;
+  if (identity && cached) {
+    expanded.delete(identity);
+    expanded.set(identity, cached);
+    return cached.files;
+  }
+  const flight = identity ?? key;
+  const pending = inFlight.get(flight);
   if (pending) return pending;
-  const promise = expand(store, key).finally(() => inFlight.delete(key));
-  inFlight.set(key, promise);
+  const promise = expand(store, key)
+    .then((files) => {
+      if (identity) remember(identity, files);
+      return files;
+    })
+    .finally(() => inFlight.delete(flight));
+  inFlight.set(flight, promise);
   return promise;
+}
+
+function remember(identity: string, files: TaskFiles): void {
+  const bytes = files.files.reduce(
+    (total, file) => total + file.path.length + (file.text?.length ?? 0),
+    0,
+  );
+  if (bytes > MAX_CACHED_BYTES) return;
+  expanded.set(identity, { files, bytes });
+  expandedBytes += bytes;
+  for (const [oldest, entry] of expanded) {
+    if (expandedBytes <= MAX_CACHED_BYTES) break;
+    expanded.delete(oldest);
+    expandedBytes -= entry.bytes;
+  }
 }
 
 /**

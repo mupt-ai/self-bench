@@ -1,6 +1,8 @@
+import { createWriteStream } from "node:fs";
 import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pipeline } from "node:stream/promises";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
@@ -65,8 +67,11 @@ export async function runHarborGates(
   const root = await mkdtemp(join(tmpdir(), `selfbench-${task.taskId}-`));
   try {
     const archive = join(root, "task.tar.gz");
-    await writeFile(archive, await store.get(task.bundle));
+    // Bundles run to hundreds of MB and Cloud Run's /tmp is memory: stream the archive to disk
+    // rather than buffering it, and drop it once unpacked.
+    await pipeline(await store.openRead(task.bundle), createWriteStream(archive), { signal });
     await extractRegularArchive(archive, root, { signal });
+    await rm(archive);
     const directory = join(root, "harbor-task");
     // Artifacts are write-once: a retried verification keeps its gate outputs in its own folder.
     const attempt = activityAttempt();
