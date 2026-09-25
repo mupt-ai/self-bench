@@ -1,8 +1,6 @@
-import { createWriteStream } from "node:fs";
 import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
@@ -18,12 +16,12 @@ import {
   harborInfrastructureError,
   readHarborJobResult,
 } from "../../harnesses/harbor/results.js";
-import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
 import { activityAttempt } from "./helpers.js";
+import { fetchSnapshotInBuild, type RemoteGate, unpackTask } from "./remote-gate.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -63,16 +61,12 @@ export async function runHarborGates(
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   prefix: string,
   signal: AbortSignal,
+  remote?: RemoteGate,
 ): Promise<HarborGates> {
   const root = await mkdtemp(join(tmpdir(), `selfbench-${task.taskId}-`));
   try {
-    const archive = join(root, "task.tar.gz");
-    // Bundles run to hundreds of MB and Cloud Run's /tmp is memory: stream the archive to disk
-    // rather than buffering it, and drop it once unpacked.
-    await pipeline(await store.openRead(task.bundle), createWriteStream(archive), { signal });
-    await extractRegularArchive(archive, root, { signal });
-    await rm(archive);
-    const directory = join(root, "harbor-task");
+    const directory = await unpackTask(store, remote?.bundle ?? task.bundle, root, signal);
+    if (remote) await fetchSnapshotInBuild(directory, remote);
     // Artifacts are write-once: a retried verification keeps its gate outputs in its own folder.
     const attempt = activityAttempt();
     const gateOutputs = attempt > 1 ? `${prefix}/attempt-${attempt}` : prefix;
