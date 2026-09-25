@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import { parse, stringify } from "smol-toml";
@@ -24,6 +24,7 @@ export class UnsafeHarborTaskError extends Error {
 }
 
 const TASK_TOML_MAX_BYTES = 64 * 1024;
+const COMPOSE_MAX_BYTES = 256 * 1024;
 /**
  * Keys whose values Harbor resolves against the host environment or acts on outside the sandbox.
  * Harbor ignores keys it does not know, so only these matter; older bundles keep their other keys.
@@ -83,6 +84,8 @@ export async function assertHostSafeTask(
   await writeFile(path, stringify(config));
 
   for (const compose of await composeFiles(taskDirectory)) {
+    if ((await stat(compose)).size > COMPOSE_MAX_BYTES)
+      throw new UnsafeHarborTaskError("a compose file is too large");
     const text = await readFile(compose, "utf8");
     for (const match of text.matchAll(COMPOSE_REFERENCE)) {
       const name = match[1] ?? match[2] ?? "";

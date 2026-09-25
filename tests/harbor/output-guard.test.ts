@@ -72,6 +72,15 @@ test("the guard also counts files, and a run that ends past the limit still fail
   await expect(guard.watch(finished)).rejects.toBeInstanceOf(HarborOutputLimitError);
 });
 
+test("a run that finishes before the next poll is still measured", async () => {
+  const root = await scratch();
+  const guard = guardHarborOutput([root], undefined, { limitBytes: 1_000, intervalMs: 60_000 });
+  await writeFile(join(root, "burst"), "x".repeat(2_000));
+  await expect(guard.watch(Promise.resolve("exited 0"))).rejects.toBeInstanceOf(
+    HarborOutputLimitError,
+  );
+});
+
 test("the guard passes through its parent's cancellation and a clean run's result", async () => {
   const root = await scratch();
   const parent = new AbortController();
@@ -94,5 +103,7 @@ test("verifier output is read bounded and an oversized trial result is refused",
   expect(result.verifier?.combined?.length).toBeLessThan(3 * 1024 * 1024);
 
   await writeFile(join(trial, "result.json"), `{"pad":"${"z".repeat(17 * 1024 * 1024)}"}`);
-  await expect(readHarborJobResult(root, "job")).rejects.toThrow("larger than 16 MiB");
+  await expect(readHarborJobResult(root, "job")).rejects.toThrow(
+    new HarborOutputLimitError(`Harbor result ${join(trial, "result.json")} is larger than 16 MiB`),
+  );
 });

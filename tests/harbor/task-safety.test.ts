@@ -103,6 +103,11 @@ test("a compose file may not name a credential the Harbor process holds", async 
   await assertHostSafeTask(harmless, harborEnv);
 });
 
+test("an oversized compose file is refused before it is read", async () => {
+  const root = await taskDirectory('schema_version = "1.4"\n', `# ${"x".repeat(300 * 1024)}\n`);
+  await expect(assertHostSafeTask(root, harborEnv)).rejects.toThrow("compose file is too large");
+});
+
 test("an unparseable task.toml is refused", async () => {
   const root = await taskDirectory("[environment\n");
   await expect(assertHostSafeTask(root, harborEnv)).rejects.toThrow("does not parse");

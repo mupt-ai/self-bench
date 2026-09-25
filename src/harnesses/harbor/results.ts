@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord } from "../../lib/util.js";
-import { readBoundedText } from "./output-guard.js";
+import { HarborOutputLimitError, readBoundedText } from "./output-guard.js";
 
 interface HarborVerifierOutput {
   readonly combined?: string;
@@ -109,7 +109,8 @@ async function readResult(directory: string): Promise<string | undefined> {
     (error: unknown) => (isNotFound(error) ? undefined : Promise.reject(error)),
   );
   if (size === undefined) return undefined;
-  if (size > RESULT_MAX_BYTES) throw new Error(`Harbor result ${path} is larger than 16 MiB`);
+  if (size > RESULT_MAX_BYTES)
+    throw new HarborOutputLimitError(`Harbor result ${path} is larger than 16 MiB`);
   return await readFile(path, "utf8");
 }
 

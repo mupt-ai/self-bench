@@ -13,10 +13,10 @@ const HARBOR_OUTPUT_LIMIT_ENTRIES = 50_000;
 const HARBOR_LOG_READ_BYTES = 2 * 1024 * 1024;
 
 export class HarborOutputLimitError extends Error {
-  constructor() {
-    super(
-      `Harbor output exceeded ${HARBOR_OUTPUT_LIMIT_BYTES / 1024 ** 3} GiB or ${HARBOR_OUTPUT_LIMIT_ENTRIES} files on the worker; the trial was stopped`,
-    );
+  constructor(
+    message = `Harbor output exceeded ${HARBOR_OUTPUT_LIMIT_BYTES / 1024 ** 3} GiB or ${HARBOR_OUTPUT_LIMIT_ENTRIES} files on the worker; the trial was stopped`,
+  ) {
+    super(message);
     this.name = "HarborOutputLimitError";
   }
 }
@@ -45,15 +45,18 @@ export function guardHarborOutput(
   const controller = new AbortController();
   let exceeded: HarborOutputLimitError | undefined;
   let measuring = false;
+  const over = async () => {
+    const usage = await measure(directories, limitBytes, limitEntries);
+    return usage.bytes > limitBytes || usage.entries > limitEntries;
+  };
   const timer = setInterval(() => {
     if (measuring || exceeded) return;
     measuring = true;
-    void measure(directories, limitBytes, limitEntries)
-      .then((usage) => {
-        if (usage.bytes > limitBytes || usage.entries > limitEntries) {
-          exceeded = new HarborOutputLimitError();
-          controller.abort(exceeded);
-        }
+    void over()
+      .then((isOver) => {
+        if (!isOver || exceeded) return;
+        exceeded = new HarborOutputLimitError();
+        controller.abort(exceeded);
       })
       .finally(() => {
         measuring = false;
@@ -64,9 +67,12 @@ export function guardHarborOutput(
     signal: parent ? AbortSignal.any([parent, controller.signal]) : controller.signal,
     async watch(work) {
       try {
-        return await work.finally(() => {
-          if (exceeded) throw exceeded;
+        const value = await work.catch((error: unknown) => {
+          throw exceeded ?? error;
         });
+        // A burst in the last poll interval lands after the final poll; measure once more.
+        if (exceeded || (await over())) throw exceeded ?? new HarborOutputLimitError();
+        return value;
       } finally {
         clearInterval(timer);
       }

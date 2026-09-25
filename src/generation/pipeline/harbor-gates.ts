@@ -204,7 +204,7 @@ export async function harborRun(
       `Harbor ${agent} exited ${run.exitCode} for ${taskId}:\n${tail(`${run.stdout}\n${run.stderr}`.trim())}`,
     );
   }
-  const result = await readHarborJobResult(jobsDirectory, jobName);
+  const result = await readHarborJobResult(jobsDirectory, jobName).catch(refuseWithoutRetry);
   const infrastructure = harborInfrastructureError(result.trial);
   if (infrastructure)
     throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
