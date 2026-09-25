@@ -92,9 +92,10 @@ async function trialLogs(jobDirectory: string): Promise<string[]> {
     .sort();
   const lines: string[] = [];
   for (const log of logs) {
-    const text =
-      (await readBoundedText(join(jobDirectory, log), TRIAL_LOG_READ_BYTES).catch(() => "")) ?? "";
-    lines.push(...text.split("\n").filter((line) => line.trim()));
+    const text = await readBoundedText(join(jobDirectory, log), TRIAL_LOG_READ_BYTES).catch(
+      () => undefined,
+    );
+    lines.push(...(text ?? "").split("\n").filter((line) => line.trim()));
   }
   return lines;
 }

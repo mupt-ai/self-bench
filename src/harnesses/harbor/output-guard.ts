@@ -13,7 +13,7 @@ const HARBOR_OUTPUT_LIMIT_ENTRIES = 50_000;
 const HARBOR_LOG_READ_BYTES = 2 * 1024 * 1024;
 
 export class HarborOutputLimitError extends Error {
-  constructor(readonly bytes: number) {
+  constructor() {
     super(
       `Harbor output exceeded ${HARBOR_OUTPUT_LIMIT_BYTES / 1024 ** 3} GiB or ${HARBOR_OUTPUT_LIMIT_ENTRIES} files on the worker; the trial was stopped`,
     );
@@ -51,11 +51,10 @@ export function guardHarborOutput(
     void measure(directories, limitBytes, limitEntries)
       .then((usage) => {
         if (usage.bytes > limitBytes || usage.entries > limitEntries) {
-          exceeded = new HarborOutputLimitError(usage.bytes);
+          exceeded = new HarborOutputLimitError();
           controller.abort(exceeded);
         }
       })
-      .catch(() => undefined)
       .finally(() => {
         measuring = false;
       });
