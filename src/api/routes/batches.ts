@@ -19,6 +19,7 @@ import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
+  GENERATION_REQUIRED,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
@@ -91,6 +92,10 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
               settings: parsed.data.generation,
             }
           : undefined;
+        if (!generation && options.vault) {
+          sendJson(response, 400, { error: GENERATION_REQUIRED });
+          return true;
+        }
         if (generation) {
           if (!options.vault) {
             sendJson(response, 503, { error: "Generation credential storage is not configured." });

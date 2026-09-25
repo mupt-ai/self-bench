@@ -46,12 +46,12 @@ afterEach(async () => {
     directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
-async function fixture() {
+async function fixture(toml = 'version = "1.0"') {
   const root = await mkdtemp(join(tmpdir(), "evaluation-test-"));
   directories.push(root);
   const task = join(root, "task", "harbor-task");
   await mkdir(task, { recursive: true });
-  await writeFile(join(task, "task.toml"), 'version = "1.0"');
+  await writeFile(join(task, "task.toml"), toml);
   await runCommand("tar", [
     "-czf",
     join(root, "task.tar.gz"),
@@ -208,6 +208,23 @@ test("missing verifier results are failures, never invented zero scores", async 
   expect(run?.status).toBe("failed");
   expect(run?.trials[0]?.error).toContain("trial result");
   expect(run?.trials[0]?.rewards).toEqual({});
+});
+test("a bundle that asks for host credentials fails its trial before Harbor runs", async () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises Harbor's host interpolation.
+  const { store, input, vault } = await fixture('[verifier.env]\nKEY = "${OPENAI_API_KEY}"\n');
+  let calls = 0;
+  await executeEvaluation(store, input, {
+    env: {},
+    vault,
+    command: async (_name, args) => {
+      if (args[0] !== "--version") calls += 1;
+      return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    },
+  });
+  const run = await getEvaluation(store, input.repoId, input.id);
+  expect(run?.trials[0]?.status).toBe("failed");
+  expect(run?.trials[0]?.error).toContain("task.toml sets verifier.env");
+  expect(calls).toBe(0);
 });
 test("output collector excludes symlinks, credential files and arbitrary artifacts", async () => {
   const { root } = await fixture();

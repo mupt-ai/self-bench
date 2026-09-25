@@ -16,6 +16,7 @@ import {
   harborInfrastructureError,
   readHarborJobResult,
 } from "../../harnesses/harbor/results.js";
+import { prepareHarborRun, refuseWithoutRetry } from "../../harnesses/harbor/task-safety.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
@@ -169,13 +170,14 @@ export async function harborRun(
   const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
+  const harbor = await prepareHarborRun(taskDirectory, root, env, signal).catch(refuseWithoutRetry);
   const feed =
     live &&
     harborLiveFeed(live.store, live.prefix, live.run, join(jobsDirectory, jobName), {
       attempt: activityAttempt(),
       secrets: providerSecrets(env),
     });
-  const run = await runCommand(
+  const trial = runCommand(
     "harbor",
     harborRunArguments({
       taskPath: taskDirectory,
@@ -187,18 +189,22 @@ export async function harborRun(
     }),
     {
       allowFailure: true,
-      env,
+      env: harbor.env,
       timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
-      signal,
+      signal: harbor.guard.signal,
       ...(feed ? { onOutput: feed.push } : {}),
     },
-  ).finally(() => feed?.close());
+  );
+  const run = await harbor.guard
+    .watch(trial)
+    .catch(refuseWithoutRetry)
+    .finally(() => feed?.close());
   if (run.exitCode !== 0) {
     throw new Error(
       `Harbor ${agent} exited ${run.exitCode} for ${taskId}:\n${tail(`${run.stdout}\n${run.stderr}`.trim())}`,
     );
   }
-  const result = await readHarborJobResult(jobsDirectory, jobName);
+  const result = await readHarborJobResult(jobsDirectory, jobName).catch(refuseWithoutRetry);
   const infrastructure = harborInfrastructureError(result.trial);
   if (infrastructure)
     throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);

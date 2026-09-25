@@ -17,6 +17,9 @@ test("publishes Harbor milestones and output as redacted, immutable snapshots", 
   const trial = join(root, "jobs", "job-1", "trial-1");
   await mkdir(trial, { recursive: true });
   await writeFile(join(trial, "trial.log"), "Selected strategy: _ModalDirect\nBuilding image\n");
+  // Sandbox downloads land deeper in the trial and may reuse the name; they are not milestones.
+  await mkdir(join(trial, "verifier"));
+  await writeFile(join(trial, "verifier", "trial.log"), "planted by the task\n");
   // Another run's job in the same jobs directory must not leak into this run's snapshots.
   await mkdir(join(root, "jobs", "job-0", "trial-0"), { recursive: true });
   await writeFile(join(root, "jobs", "job-0", "trial-0", "trial.log"), "nop finished\n");
