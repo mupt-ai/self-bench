@@ -129,6 +129,17 @@ export function solverAgent(harness: Harness, model: string): string {
     : "harbor_gateway:SelfBenchCodex";
 }
 
+/** The model name Harbor receives for a harness over the selected connection. */
+export function gatewayModel(
+  provider: NonNullable<EvaluationInput["credentials"]>["provider"] | undefined,
+  harness: Harness,
+  model: string,
+): string {
+  if (provider !== "openrouter" || harness === "pi") return model;
+  const modelId = model.slice(provider.length + 1);
+  return harness === "claude-code" ? modelId : `openai/${modelId}`;
+}
+
 /** Adapt the selected connection to each harness without inheriting host credentials. */
 export function gatewayTrial(
   input: EvaluationInput,
@@ -144,21 +155,21 @@ export function gatewayTrial(
   const gateway = gateways[provider];
   const key = env.OPENROUTER_API_KEY;
   if (!key) throw new Error("Gateway credential is unavailable");
-  const modelId = model.slice(provider.length + 1);
+  const harborModel = gatewayModel(provider, harness, model);
   const child = { ...env };
   delete child.OPENROUTER_API_KEY;
   delete child.AI_GATEWAY_API_KEY;
   if (harness === "claude-code") {
     child.ANTHROPIC_API_KEY = key;
     child.ANTHROPIC_BASE_URL = gateway.messages;
-    return { model: modelId, child, extraAllowedHosts: [...gateway.hosts] };
+    return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
   }
   if (harness === "pi") {
     child.OPENROUTER_API_KEY = key;
-    return { model, child, extraAllowedHosts: [...gateway.hosts] };
+    return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
   }
   child.OPENAI_API_KEY = key;
   child.OPENAI_BASE_URL = gateway.base;
   child.OPENAI_API_BASE = gateway.base;
-  return { model: `openai/${modelId}`, child, extraAllowedHosts: [...gateway.hosts] };
+  return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
 }

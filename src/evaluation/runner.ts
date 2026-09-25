@@ -24,6 +24,7 @@ import {
   record,
   redactOutput,
   trajectorySteps,
+  trialLog,
 } from "./output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
@@ -176,6 +177,7 @@ async function runTrial(context: {
   const { store, run, trial, index, taskPath, jobs, model, child, command, redact, options } =
     context;
   let stdout = "";
+  let outputs = new Map<string, string>();
   let polling = Promise.resolve();
   let refreshing = false;
   let lastSnapshot = "";
@@ -197,14 +199,8 @@ async function runTrial(context: {
       }
     } else if (pi) trial.steps = piSteps(pi[1]);
     trial.steps = boundedSteps(trial.steps);
-    trial.log = [
-      redact(archive ? stdout : completeLines(stdout)),
-      ...[...clean]
-        .filter(([name]) => /\.(log|txt)$/.test(name))
-        .map(([name, text]) => `\n--- ${name} ---\n${text}`),
-    ]
-      .join("\n")
-      .slice(-100_000);
+    outputs = clean;
+    trial.log = trialLog(redact(archive ? stdout : completeLines(stdout)), clean);
     if (archive) {
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
@@ -286,6 +282,6 @@ async function runTrial(context: {
   } finally {
     clearInterval(timer);
     await polling;
-    trial.log = `${trial.log}\n${redact(stdout)}`.slice(-100_000);
+    trial.log = trialLog(redact(stdout), outputs);
   }
 }

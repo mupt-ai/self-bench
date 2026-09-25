@@ -60,7 +60,9 @@ export function assertHarborVersion(actual: string): void {
 }
 
 export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...resolved, PYTHONPATH: harborPythonPath() };
+  // Harbor prints its result tables with rich, which truncates columns to COLUMNS (80 without a
+  // terminal); a wide width keeps every metric name and value whole in captured logs.
+  return { ...resolved, PYTHONPATH: harborPythonPath(), COLUMNS: "320" };
 }
 
 /** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */

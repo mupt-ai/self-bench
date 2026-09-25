@@ -38,6 +38,40 @@ function display(value: unknown): string {
 export function completeLines(text: string): string {
   return text.slice(0, text.lastIndexOf("\n") + 1);
 }
+const TRIAL_LOG_CHARS = 100_000;
+/** Keeps the last `limit` characters, starting on a whole line. */
+function tailLines(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const cut = text.slice(-limit);
+  const kept = cut.slice(cut.indexOf("\n") + 1);
+  return `[${text.length - kept.length} earlier characters omitted]\n${kept}`;
+}
+/**
+ * The readable trial log: Harbor's summary, the verifier's output, then Harbor's trial log.
+ * Agent transcripts are left out (they are shown as steps), as is job.log when it only repeats a
+ * trial log. Each section gets an equal share of the budget so none can evict the others.
+ */
+export function trialLog(stdout: string, files: ReadonlyMap<string, string>): string {
+  const rank = (name: string) => {
+    if (/\/verifier\/test-stdout\.txt$/.test(name)) return 1;
+    if (/\/verifier\/[^/]+\.txt$/.test(name)) return 2;
+    if (/(^|\/)trial\.log$/.test(name)) return 3;
+    if (/(^|\/)job\.log$/.test(name)) return 4;
+    return undefined;
+  };
+  const logs = [...files]
+    .flatMap(([name, text]) => {
+      const order = rank(name);
+      return order === undefined ? [] : [{ order, name, text }];
+    })
+    .filter((file, _, all) => file.order !== 4 || !all.some((other) => other.order === 3))
+    .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
+  const sections = [...(stdout.trim() ? [{ name: "Harbor output", text: stdout }] : []), ...logs];
+  const share = Math.floor(TRIAL_LOG_CHARS / Math.max(1, sections.length));
+  return sections
+    .map(({ name, text }) => `--- ${name} ---\n${tailLines(text.trimEnd(), share)}`)
+    .join("\n\n");
+}
 export function boundedSteps(steps: SolverStep[]): SolverStep[] {
   let budget = 100_000;
   return steps

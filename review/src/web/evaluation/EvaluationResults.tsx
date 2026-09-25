@@ -165,8 +165,9 @@ export function EvaluationResults({
             ))}
           </ol>
           <details open={!trial.steps.length}>
-            <summary>Harbor and Solver Output</summary>
-            <pre>{trial.log || "No output yet."}</pre>
+            <summary>Harbor Output</summary>
+            {/* Unwrapped so Harbor's result tables keep their columns; the panel scrolls sideways. */}
+            <pre className="whitespace-pre!">{trial.log || "No output yet."}</pre>
           </details>
           {trial.artifacts.length > 0 && (
             <details className="[&_p]:mt-3 [&_p]:text-sm [&_p]:text-muted-foreground [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-foreground [&_a]:underline [&_a]:decoration-foreground/25 [&_a]:underline-offset-4 [&_a]:wrap-anywhere [&_a:hover]:decoration-foreground">

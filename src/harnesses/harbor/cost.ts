@@ -15,7 +15,8 @@ export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsag
     const extra = record(metrics.extra);
     const prompt = metrics.prompt_tokens;
     const output = metrics.completion_tokens;
-    const cached = metrics.cached_tokens;
+    // Harbor's Codex adapter omits cached_tokens when a call read nothing from cache.
+    const cached = metrics.cached_tokens ?? 0;
     const written = extra.cache_write_input_tokens ?? 0;
     if (!count(prompt) || !count(output) || !count(cached) || !count(written)) return undefined;
     const cost = metrics.cost_usd;
