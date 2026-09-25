@@ -5,6 +5,7 @@ import { type ArtifactRef, taskDefinitionSchema } from "../../contracts/index.js
 import type { SandboxFile } from "../../sandbox/contracts.js";
 import { dedupeBySourcePr, exportManifest } from "../../sandbox/export-manifest.js";
 import { taskOperation } from "../../sandbox/task-operation.js";
+import { artifactFile } from "./helpers.js";
 
 export interface ExportInput {
   readonly run: RunRequest;
@@ -28,11 +29,9 @@ export async function buildExport(
   }
   const { kept, dropped } = dedupeBySourcePr(entries);
   const files: SandboxFile[] = [];
+  // The sandbox pulls each bundle itself; buffering them all would hold GBs in the worker.
   for (const [index, entry] of kept.entries())
-    files.push({
-      path: `/work/bundle-${index}.tar.gz`,
-      contents: await store.get(entry.task.bundle),
-    });
+    files.push(await artifactFile(store, entry.task.bundle, `/work/bundle-${index}.tar.gz`));
   files.push({
     path: "/work/export-input.json",
     contents: JSON.stringify({

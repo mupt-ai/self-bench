@@ -17,6 +17,8 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
   const [error, setError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("file");
   const [openFile, setOpenFile] = React.useState<OpenFile | null>(null);
+  // The page hands in a new source on every status poll; the bundle is re-read only when it changes.
+  const loadedKey = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -26,8 +28,11 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
         if (cancelled) return;
         const first = found?.bundles[0];
         if (first && source.loadBundle) {
+          if (first.key === loadedKey.current) return;
           const loaded = await source.loadBundle(first.key);
-          if (!cancelled) setFiles(loaded);
+          if (cancelled) return;
+          loadedKey.current = first.key;
+          setFiles(loaded);
         } else {
           setFiles({ taskId: row.id, files: [] });
           setTab("pipeline");

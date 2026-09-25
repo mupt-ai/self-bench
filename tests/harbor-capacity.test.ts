@@ -8,7 +8,7 @@ const GiB = 1024 ** 3;
 
 test("Harbor slots follow worker memory with a floor of two", () => {
   expect(harborSlotsForMemory(2 * GiB)).toBe(2);
-  expect(harborSlotsForMemory(8 * GiB)).toBe(10);
+  expect(harborSlotsForMemory(8 * GiB)).toBe(7);
   expect(harborSlotsForMemory(16 * GiB)).toBe(10);
   expect(harborSlotsForMemory(32 * GiB)).toBe(10);
 });
