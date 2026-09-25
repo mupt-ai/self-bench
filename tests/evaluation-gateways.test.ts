@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
-import { gatewayTrial } from "../src/evaluation/execution.js";
+import { gatewayModel, gatewayTrial } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
@@ -67,6 +67,11 @@ for (const provider of ["openrouter"] as const) {
       expect(result.child.OPENAI_API_BASE).toBe(codex.child.OPENAI_BASE_URL);
     }
     expect(env).toEqual(original);
+    // Cost verification derives the same Harbor model name the runner passes.
+    for (const harness of harnessIds)
+      expect(gatewayModel(provider, harness, name)).toBe(
+        gatewayTrial(input, harness, name, env).model,
+      );
     expect(() => gatewayTrial(input, "codex", name, {})).toThrow("Gateway credential");
   });
 }

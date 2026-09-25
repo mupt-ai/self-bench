@@ -33,5 +33,5 @@ test("results distinguish zero rewards from missing scores and escape solver tex
   expect(html).toContain("&lt;script&gt;");
   expect(html).toContain("Solver’s Final Response");
   expect(html).toContain("Verifier Scores");
-  expect(html).toContain("Harbor and Solver Output");
+  expect(html).toContain("Harbor Output");
 });

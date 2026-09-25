@@ -135,7 +135,8 @@ test("mocked Harbor persists live output, structured tool results and final scor
     if (!jobs) throw new Error("Missing jobs path");
     const trial = join(jobs, "solver", "task__123");
     await mkdir(join(trial, "agent"), { recursive: true });
-    await writeFile(join(trial, "agent", "codex.txt"), `Running tests\n${testModelSecret}\n`);
+    await writeFile(join(trial, "agent", "codex.txt"), '{"type":"item.completed"}\n');
+    await writeFile(join(trial, "trial.log"), `Running tests\n${testModelSecret}\n`);
     options?.onOutput?.("stdout", Buffer.from(`Starting ${testModelSecret}\n`));
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const snapshot = await getEvaluation(store, input.repoId, input.id);
@@ -160,6 +161,9 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(run?.status).toBe("completed");
   expect(run?.trials[0]?.rewards).toEqual({ reward: 1 });
   expect(run?.trials[0]?.steps[0]?.tools[0]?.output).toBe("2 tests passed");
+  // The transcript is shown as steps, not repeated in the log; Harbor's stdout appears once.
+  expect(run?.trials[0]?.log).not.toContain("item.completed");
+  expect(run?.trials[0]?.log.match(/Starting/g)).toHaveLength(1);
   expect(run?.trials[0]?.artifacts.some((name) => name.endsWith("config.json"))).toBe(false);
   for (const artifact of await store.list(evaluationPrefix(input.repoId, input.id).slice(0, -1)))
     expect(Buffer.from((await store.getByKey(artifact.key)) ?? []).toString()).not.toContain(

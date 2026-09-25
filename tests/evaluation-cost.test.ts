@@ -139,3 +139,82 @@ test("Pi cache-write tokens are charged separately and truncated events fail clo
       .apiCostUsd,
   ).toBeUndefined();
 });
+
+test("OpenRouter Codex trials verify against the gateway model name Harbor records", () => {
+  const input = {
+    ...evaluationInput(),
+    model: "gpt-6-astra",
+    modelName: "openrouter/openai/gpt-6-astra",
+    credentials: {
+      modelCredentialId: "managed-model",
+      sandboxCredentialId: "managed-sandbox",
+      provider: "openrouter" as const,
+    },
+  };
+  const run = initialEvaluation({ ...input, pricing }, "Test");
+  // Shaped like Harbor 0.x Codex output: every agent step carries the model Harbor was given,
+  // and a call with no cache read omits cached_tokens.
+  const trajectory = (model: string) => ({
+    agent: { name: "codex", model_name: "openai/gpt-6-astra" },
+    final_metrics: { total_cost_usd: 0.43, extra: { total_cache_write_input_tokens: 29793 } },
+    steps: [
+      { step_id: 1, source: "user", message: "Fix the bug" },
+      {
+        step_id: 2,
+        source: "agent",
+        model_name: model,
+        metrics: {
+          prompt_tokens: 25796,
+          completion_tokens: 156,
+          cost_usd: 0.33,
+          extra: { cache_write_input_tokens: 25793 },
+        },
+      },
+      {
+        step_id: 3,
+        source: "agent",
+        model_name: model,
+        metrics: {
+          prompt_tokens: 30000,
+          completion_tokens: 100,
+          cached_tokens: 25793,
+          cost_usd: 0.1,
+          extra: { cache_write_input_tokens: 4000 },
+        },
+      },
+    ],
+  });
+  const files = (model: string) =>
+    new Map([["solver/trial/agent/trajectory.json", JSON.stringify(trajectory(model))]]);
+  const result = {
+    agent_result: {
+      n_input_tokens: 55796,
+      n_cache_tokens: 25793,
+      n_output_tokens: 256,
+      cost_usd: 0.43,
+    },
+  };
+  const usage = { input: 210, output: 256, cacheRead: 25793, cacheWrite: 29793 };
+  expect(trialCost(run, "codex", files("openai/openai/gpt-6-astra"), result)).toEqual({
+    modelVerified: true,
+    tokenUsage: usage,
+    apiCostUsd: 0.43,
+    costSource: "harbor",
+  });
+  expect(trialCost(run, "codex", files("openai/openai/gpt-6-other"), result)).toEqual({
+    modelVerified: false,
+    tokenUsage: usage,
+  });
+  // A direct OpenAI key never passes Harbor the doubled gateway prefix, so it is not accepted.
+  const direct = initialEvaluation(
+    {
+      ...input,
+      modelName: "openai/gpt-6-astra",
+      credentials: { ...input.credentials, provider: "openai" },
+    },
+    "Test",
+  );
+  expect(trialCost(direct, "codex", files("openai/openai/gpt-6-astra"), result).modelVerified).toBe(
+    false,
+  );
+});

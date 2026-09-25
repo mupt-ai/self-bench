@@ -50,6 +50,17 @@ Run it only with a separate deployment authorization, against the database the A
 
 The old `accounts/…` and `credentials/…` records can be deleted in a later release once the new tables are confirmed. Generation run records (`generations/<runId>`) and managed E2B template locks stay in `evaluation_records`.
 
+### Recomputing a finished evaluation's trial costs
+
+Trial cost (`modelVerified`, `tokenUsage`, `apiCostUsd`, `costSource`) is derived once, when a trial finishes. After a cost fix ships, older runs keep their stored values until recomputed from their saved Harbor artifacts (`trajectory.json` or `pi.txt`, and `result.json`):
+
+```bash
+docker compose run --rm --no-deps api node dist/evaluation/recompute-cost.js <repoId> <evaluationId>          # dry run
+docker compose run --rm --no-deps api node dist/evaluation/recompute-cost.js <repoId> <evaluationId> --apply  # save
+```
+
+The dry run prints each trial's stored and recomputed cost fields and writes nothing. `--apply` appends a new evaluation snapshot with only the cost fields changed; earlier snapshots stay in the artifact store, so the prior revision remains readable. It refuses runs that are still queued or running.
+
 ## Execution backends and Harbor
 
 SelfBench uses one provider for discovery, authoring-turn, and review-round sandboxes. Every generation provider runs the same runtime, defined by `Dockerfile.sandbox`: Docker runs the image Compose builds from it, Modal and E2B build from the packaged file automatically, and Vercel runs an image published from it (see below). It separately invokes Harbor for the build, smoke, nop, and oracle gates of every `verify` and every submission. Every generation backend defaults Harbor to the matching environment; `SELFBENCH_HARBOR_ENVIRONMENT=docker|modal|vercel|e2b|daytona` selects a different one. Daytona is a Harbor-only environment and reads `DAYTONA_API_KEY` from the worker. The pinned Harbor build is installed with its `e2b`, `daytona`, `modal`, and `vercel` extras; Harbor's Vercel environment boots a Vercel Sandbox from a cached snapshot and runs Docker inside it.

@@ -6,6 +6,8 @@
     "src/temporal/worker-main.ts!",
     // The one-time evaluation records migration, run by operators from the API image.
     "src/db/records-migration.ts!",
+    // The one-off trial cost recompute, run by operators from the API or worker image.
+    "src/evaluation/recompute-cost.ts!",
     // Temporal loads workflows and Pi loads extensions by path, not imports.
     "src/temporal/workflows.ts!",
     "src/evaluation/workflow.ts!",

@@ -1,18 +1,22 @@
 import { harborCost } from "../harnesses/harbor/cost.js";
+import { gatewayModel } from "./execution.js";
 import { record } from "./output.js";
-import type { EvaluationRun, EvaluationTrial } from "./types.js";
+import type { EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 const count = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 export function trialCost(
   run: EvaluationRun,
-  harness: string,
+  harness: Harness,
   files: Map<string, string>,
   result: unknown,
 ): Pick<EvaluationTrial, "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource"> {
   const pricing = run.pricing;
   const model = run.modelName.split("/").slice(1).join("/");
-  const matches = (value: unknown) => value === model || value === run.modelName;
+  // Harbor records the model name the runner passed it, which is the gateway form over OpenRouter.
+  const harborModel = gatewayModel(run.credentials?.provider, harness, run.modelName);
+  const matches = (value: unknown) =>
+    value === model || value === run.modelName || value === harborModel;
   let usage: { input: number; output: number; cacheRead: number; cacheWrite: number } | undefined;
   let verified = false;
   let reportedCost: number | undefined;
