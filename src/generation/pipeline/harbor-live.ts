@@ -1,6 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { readBoundedText } from "../../harnesses/harbor/output-guard.js";
 import { tail } from "../../lib/util.js";
 
 /** Which of the two Harbor runs a snapshot belongs to. */
@@ -22,6 +23,8 @@ const INTERVAL_MS = 5_000;
 const HEARTBEAT_MS = 60_000;
 const OUTPUT_TAIL = 8_000;
 const STEP_LIMIT = 200;
+/** Enough of a trial log to hold its last STEP_LIMIT lines. */
+const TRIAL_LOG_READ_BYTES = 256 * 1024;
 
 /**
  * Publishes a Harbor run's progress as immutable `<prefix>/live/<attempt>-<run>-<seq>.json`
@@ -77,13 +80,20 @@ export function harborLiveFeed(
   };
 }
 
-/** Every trial log under one Harbor job directory, oldest trial first. */
+/**
+ * Each trial's own trial.log under one Harbor job directory, oldest trial first. Deeper files hold
+ * sandbox downloads, which may carry the same name.
+ */
 async function trialLogs(jobDirectory: string): Promise<string[]> {
-  const entries = await readdir(jobDirectory, { recursive: true }).catch(() => []);
-  const logs = entries.filter((entry) => entry.endsWith("trial.log")).sort();
+  const trials = await readdir(jobDirectory, { withFileTypes: true }).catch(() => []);
+  const logs = trials
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(entry.name, "trial.log"))
+    .sort();
   const lines: string[] = [];
   for (const log of logs) {
-    const text = await readFile(join(jobDirectory, log), "utf8").catch(() => "");
+    const text =
+      (await readBoundedText(join(jobDirectory, log), TRIAL_LOG_READ_BYTES).catch(() => "")) ?? "";
     lines.push(...text.split("\n").filter((line) => line.trim()));
   }
   return lines;

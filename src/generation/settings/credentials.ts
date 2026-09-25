@@ -33,6 +33,13 @@ type ProviderCredential =
 
 const credentialLabels = { ...harborEnvironmentLabels, ...executionBackendLabels };
 
+/**
+ * A run without generation settings uses the worker's own sandbox backend and credentials, which
+ * only a single-user stack may do. Wherever the site stores credentials, every run names its own.
+ */
+export const GENERATION_REQUIRED =
+  "Choose generation models, reasoning, sandbox, and credentials for this run.";
+
 /** The generation sandbox credential plus its separate Harbor credential. */
 function sandboxCredentials(settings: GenerationSettings): ProviderCredential[] {
   const credentials: ProviderCredential[] = [];

@@ -1,6 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord } from "../../lib/util.js";
+import { readBoundedText } from "./output-guard.js";
 
 interface HarborVerifierOutput {
   readonly combined?: string;
@@ -29,6 +30,8 @@ const infrastructurePatterns = [
 
 class IncompleteHarborJobError extends Error {}
 
+const RESULT_MAX_BYTES = 16 * 1024 * 1024;
+
 export function harborInfrastructureError(trial: unknown): string | undefined {
   if (!isRecord(trial) || !isRecord(trial.exception_info)) {
     return undefined;
@@ -49,7 +52,9 @@ export async function readHarborJobResult(
   jobName: string,
 ): Promise<HarborJobResult> {
   const jobDirectory = join(jobsDirectory, jobName);
-  const job = JSON.parse(await readFile(join(jobDirectory, "result.json"), "utf8")) as unknown;
+  const jobResult = await readResult(jobDirectory);
+  if (jobResult === undefined) throw new Error(`Harbor job ${jobName} wrote no result.json`);
+  const job = JSON.parse(jobResult) as unknown;
   const entries = await readdir(jobDirectory, { withFileTypes: true });
   const trials: Array<{ directory: string; result: unknown }> = [];
   for (const entry of entries) {
@@ -57,9 +62,7 @@ export async function readHarborJobResult(
       continue;
     }
     const directory = join(jobDirectory, entry.name);
-    const raw = await readFile(join(directory, "result.json"), "utf8").catch((error: unknown) =>
-      isNotFound(error) ? undefined : Promise.reject(error),
-    );
+    const raw = await readResult(directory);
     if (raw) {
       trials.push({ directory, result: JSON.parse(raw) as unknown });
     }
@@ -68,7 +71,7 @@ export async function readHarborJobResult(
     isRecord(job) && Array.isArray(job.trial_results) ? job.trial_results : [];
   const [onlyTrial] = trials;
   if (onlyTrial && trials.length === 1) {
-    const trialLog = await readOptionalText(join(onlyTrial.directory, "trial.log"));
+    const trialLog = await readBoundedText(join(onlyTrial.directory, "trial.log"));
     return {
       job,
       trial: onlyTrial.result,
@@ -90,18 +93,24 @@ async function readVerifierOutput(
 ): Promise<{ readonly verifier?: HarborVerifierOutput }> {
   const verifierDirectory = join(trialDirectory, "verifier");
   const [combined, stderr] = await Promise.all([
-    readOptionalText(join(verifierDirectory, "test-stdout.txt")),
-    readOptionalText(join(verifierDirectory, "test-stderr.txt")),
+    readBoundedText(join(verifierDirectory, "test-stdout.txt")),
+    readBoundedText(join(verifierDirectory, "test-stderr.txt")),
   ]);
   return combined || stderr
     ? { verifier: { ...(combined ? { combined } : {}), ...(stderr ? { stderr } : {}) } }
     : {};
 }
 
-async function readOptionalText(path: string): Promise<string | undefined> {
-  return await readFile(path, "utf8").catch((error: unknown) =>
-    isNotFound(error) ? undefined : Promise.reject(error),
+/** Harbor copies the task's reward file into result.json, so an oversized one is refused unread. */
+async function readResult(directory: string): Promise<string | undefined> {
+  const path = join(directory, "result.json");
+  const size = await stat(path).then(
+    (stats) => stats.size,
+    (error: unknown) => (isNotFound(error) ? undefined : Promise.reject(error)),
   );
+  if (size === undefined) return undefined;
+  if (size > RESULT_MAX_BYTES) throw new Error(`Harbor result ${path} is larger than 16 MiB`);
+  return await readFile(path, "utf8");
 }
 
 function isNotFound(error: unknown): boolean {

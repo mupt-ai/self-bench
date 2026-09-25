@@ -11,6 +11,7 @@ import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
+  GENERATION_REQUIRED,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
 import { generationModels } from "../../generation/settings/models.js";
@@ -118,6 +119,10 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
       const generation = parsed?.success
         ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
         : undefined;
+      if (!generation && options.vault) {
+        sendJson(response, 400, { error: GENERATION_REQUIRED });
+        return true;
+      }
       if (generation) {
         if (!options.vault) {
           sendJson(response, 503, { error: "Generation credential storage is not configured." });

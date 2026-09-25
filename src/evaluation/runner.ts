@@ -11,6 +11,8 @@ import {
   harborProcessEnvironment,
   harborRunArguments,
 } from "../harnesses/harbor/command.js";
+import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
+import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
@@ -121,7 +123,8 @@ export async function executeEvaluation(
           () => join(extracted, "harbor-task"),
           () => extracted,
         );
-        await readFile(join(taskPath, "task.toml"));
+        const gateway = gatewayTrial(input, trial.harness, profile.model, child);
+        const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal);
         await runTrial({
           store,
           run,
@@ -129,7 +132,9 @@ export async function executeEvaluation(
           index,
           taskPath,
           jobs: join(trialRoot, "jobs"),
-          ...gatewayTrial(input, trial.harness, profile.model, child),
+          ...gateway,
+          child: prepared.env,
+          guard: prepared.guard,
           command,
           redact,
           options,
@@ -167,6 +172,7 @@ async function runTrial(context: {
   index: number;
   taskPath: string;
   jobs: string;
+  guard: HarborOutputGuard;
   model: string;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
@@ -247,27 +253,29 @@ async function runTrial(context: {
       });
   }, options.pollMs ?? 3000);
   try {
-    const result = await command(
-      "harbor",
-      solverArguments(
-        taskPath,
-        jobs,
-        trial.harness,
-        model,
-        run.sandbox,
-        run.thinking,
-        context.extraAllowedHosts,
-      ),
-      {
-        env: child,
-        cwd: taskPath,
-        timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
-        allowFailure: true,
-        ...(options.signal ? { signal: options.signal } : {}),
-        onOutput: (_stream, chunk) => {
-          stdout = `${stdout}${Buffer.from(chunk).toString("utf8")}`.slice(-200_000);
+    const result = await context.guard.watch(
+      command(
+        "harbor",
+        solverArguments(
+          taskPath,
+          jobs,
+          trial.harness,
+          model,
+          run.sandbox,
+          run.thinking,
+          context.extraAllowedHosts,
+        ),
+        {
+          env: child,
+          cwd: taskPath,
+          timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
+          allowFailure: true,
+          signal: context.guard.signal,
+          onOutput: (_stream, chunk) => {
+            stdout = `${stdout}${Buffer.from(chunk).toString("utf8")}`.slice(-200_000);
+          },
         },
-      },
+      ),
     );
     clearInterval(timer);
     await polling;

@@ -223,7 +223,31 @@ test("managed generation is gated when Stripe is configured and unblocked for cr
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: "billing_required" });
     expect(f.started).toHaveLength(0);
-    const allowed = await f.start();
+    const model = await vault.credentials.create(
+      f.tenant.id,
+      { name: "OpenAI", kind: "openai", auth: "api-key", value: "sk-own-key" },
+      {},
+    );
+    const e2b = await vault.credentials.create(
+      f.tenant.id,
+      { name: "E2B", kind: "e2b", auth: "api-key", value: "own-e2b-key" },
+      {},
+    );
+    const allowed = await f.request(ROOT, {
+      method: "POST",
+      body: JSON.stringify({
+        candidateCounts: { easy: 1, medium: 0, hard: 0 },
+        generation: {
+          ...managed,
+          modelAccess: "credential",
+          modelCredentialId: model.id,
+          sandbox: "e2b",
+          sandboxCredentialId: e2b.id,
+          harborEnvironment: "e2b",
+          harborCredentialId: e2b.id,
+        },
+      }),
+    });
     expect(allowed.status).toBe(202);
   } finally {
     if (previous.models === undefined) delete process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
