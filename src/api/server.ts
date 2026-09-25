@@ -21,6 +21,7 @@ import { sendIdentityError } from "./routes/auth.js";
 import { handleRunArtifactRoute } from "./routes/run-artifacts.js";
 import { handleRunRoute } from "./routes/runs.js";
 import { handleSandboxRoute } from "./routes/sandbox.js";
+import { handleSnapshotRoute } from "./routes/snapshots.js";
 import { openSite } from "./site.js";
 
 export interface ApiOptions {
@@ -76,6 +77,7 @@ export async function startApi(
       // Sandbox jobs authenticate with their own signed grant, not a user or the API token.
       if (await handleSandboxRoute(request, url, response, { secret, store: artifacts, client }))
         return;
+      if (await handleSnapshotRoute(request, url, response, { secret, store: artifacts })) return;
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
       const user = site ? await site.auth.authenticate(request, config.apiToken) : undefined;
       const allowed = site

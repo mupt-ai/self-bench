@@ -11,12 +11,14 @@ import type {
   VerifyOutcome,
   VerifyReport,
 } from "../../contracts/index.js";
+import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../../sandbox/gate-bundle.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
+import { remoteGate } from "./remote-gate.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
 
@@ -97,6 +99,12 @@ export async function compileTask(
           path: "/work/compiled.tar.gz",
           contentType: "application/gzip",
         },
+        {
+          name: GATE_TASK_FILE,
+          path: `/work/${GATE_TASK_FILE}`,
+          contentType: "application/gzip",
+        },
+        { name: SNAPSHOT_FILE, path: `/work/${SNAPSHOT_FILE}`, contentType: "application/gzip" },
       ],
       inline: [{ name: "result.json", path: "/work/result.json" }],
       // A compiler that crashed or could not run reports no result, and Temporal reruns it.
@@ -129,6 +137,7 @@ export async function verifyCompiled(
   store: ArtifactStore,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: VerifyCompiledInput,
+  callback: SandboxCallback,
 ): Promise<VerifyOutcome> {
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
@@ -141,7 +150,14 @@ export async function verifyCompiled(
       result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
     const gates =
       task && result.auditBlockers.length === 0
-        ? await runHarborGates(store, task, harborEnvironment, prefix, signal)
+        ? await runHarborGates(
+            store,
+            task,
+            harborEnvironment,
+            prefix,
+            signal,
+            remoteGate(harborEnvironment, compiled, callback),
+          )
         : notRunGates();
     const partial = {
       schemaVersion: 1 as const,

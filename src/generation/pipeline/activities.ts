@@ -106,7 +106,7 @@ export function createActivities(
       runtime(input.run, "author", (sandbox) => finishCompile(sandbox, input)),
     verifyCompiled: (input) =>
       runtime(input.run, "author", (_sandbox, harbor, run) =>
-        verifyCompiled(store, harbor, { ...input, run }),
+        verifyCompiled(store, harbor, { ...input, run }, callback),
       ),
     startReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>

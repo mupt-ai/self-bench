@@ -5,6 +5,7 @@ import { isHarborEnvironment } from "../../contracts/config/providers.js";
 import { staticCheckSubmission } from "../../generation/task/static.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { errorMessage } from "../../lib/util.js";
+import { splitGateBundle } from "../gate-bundle.js";
 import { compileSubmittedTask, TaskCompilerInfrastructureError } from "../task-compiler.js";
 
 // Trusted compile of one submission (definition.json, test.patch, gold.patch in a tarball):
@@ -84,4 +85,10 @@ if (compileErrors.length === 0) {
   }
 }
 await writeFile(join(work, "compiled.tar.gz"), bundle);
+if (bundle.byteLength > 0) {
+  // Optional: without the split files the check falls back to the full bundle.
+  await splitGateBundle(join(work, "compiled.tar.gz"), work).catch((error) =>
+    process.stderr.write(`gate bundle split failed: ${errorMessage(error)}\n`),
+  );
+}
 await writeFile(join(work, "result.json"), JSON.stringify({ compileErrors, auditBlockers }));
