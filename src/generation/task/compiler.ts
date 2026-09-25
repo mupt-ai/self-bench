@@ -6,7 +6,7 @@ import { runCommand } from "../../lib/process.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { dependencyManifestPatch } from "./dependencies.js";
 import { assertEnvironmentEvidence, assertEnvironmentPolicy } from "./environment-policy.js";
-import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
+import { assertGoldAvoidsPassToPass, assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
   agentDockerfile,
   environmentContextFiles,
@@ -39,6 +39,7 @@ async function loadAuthoredTask(directory: string): Promise<AuthoredTaskFiles> {
     throw new Error("gold.patch is not a Git patch");
   }
   assertSafePatchPaths(goldPatch, "gold patch");
+  assertGoldAvoidsPassToPass(definition, goldPatch);
   return { definition, testPatch, goldPatch };
 }
 
@@ -173,6 +174,7 @@ export async function refreshHarborTask(
     readFile(join(outputDirectory, "tests/test.patch"), "utf8"),
   ]);
   assertTestPatch(definition, testPatch);
+  assertGoldAvoidsPassToPass(definition, goldPatch);
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
   const verifierScript = testScript(definition, testPatch);

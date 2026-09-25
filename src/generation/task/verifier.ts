@@ -1,7 +1,7 @@
 import type { TaskDefinition } from "../../contracts/index.js";
 import { patchPaths } from "../../lib/patch-paths.js";
 import { shellQuote } from "../../lib/util.js";
-import { repositoryRelativePath } from "./paths.js";
+import { passToPassTestPaths, repositoryRelativePath } from "./paths.js";
 
 export function solutionScript(): string {
   return `#!/bin/bash
@@ -25,6 +25,9 @@ export function testScript(task: TaskDefinition, testPatch: string): string {
     .join(" ");
   const protectedPaths = repositoryTestPaths.map(shellQuote).join(" ");
   const protectedAbsolute = repositoryTestPaths.map((path) => shellQuote(`/app/${path}`)).join(" ");
+  // Regression tests are graded at their base version, so a solver edit that renames or removes
+  // the selected tests cannot fail pass-to-pass on its own.
+  const regressionPaths = passToPassTestPaths(task).map(shellQuote).join(" ");
   const structured = task.testResults;
   const f2p = taskCommand(task, task.failToPass);
   const p2p = task.passToPass.length > 0 ? taskCommand(task, task.passToPass) : "true";
@@ -48,6 +51,7 @@ protect_held_out_path() {
   chown -R root:root -- "$path"
   chmod -R a-w,go+rX -- "$path"
 }
+is_base_file() { [ "$(git -C /app cat-file -t "HEAD:$1" 2>/dev/null)" = blob ]; }
 
 if [ ! -f /opt/selfbench/agent.patch ]; then
   patch_applied=0
@@ -63,9 +67,18 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
     git -C /app restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
     git -C /app clean -fd -- "$protected_path" >/dev/null 2>&1 || true
   done
+  for regression_path in ${regressionPaths}; do
+    if is_base_file "$regression_path"; then
+      git -C /app clean -fd -- "$regression_path" >/dev/null 2>&1 || true
+      git -C /app restore --source=HEAD --staged --worktree -- "$regression_path" 2>/dev/null || true
+    fi
+  done
   git -C /app apply --allow-empty --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
   if [ "$patch_applied" -eq 1 ]; then
     for protected_path in ${protectedAbsolute}; do protect_held_out_path "$protected_path"; done
+    for regression_path in ${regressionPaths}; do
+      if is_base_file "$regression_path"; then protect_held_out_path "/app/$regression_path"; fi
+    done
   fi
   rm -f /tests/test.patch
 fi

@@ -86,6 +86,15 @@ describe("Harbor task compiler", () => {
     );
 
     await compileHarborTask(authored, repo, output);
+    const compiledDefinition = await readFile(join(authored, "definition.json"), "utf8");
+    await writeFile(
+      join(authored, "definition.json"),
+      JSON.stringify({ ...JSON.parse(compiledDefinition), passToPass: ["package.json"] }),
+    );
+    await expect(compileHarborTask(authored, repo, join(root, "rejected"))).rejects.toThrow(
+      "gold patch changes pass-to-pass test files, which are graded at their base version: project/package.json",
+    );
+    await writeFile(join(authored, "definition.json"), compiledDefinition);
 
     expect(await readFile(join(output, "instruction.md"), "utf8")).toBe(
       "Implement the requested behavior.\n",
@@ -150,7 +159,7 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(29);
+    ).toBe(30);
 
     const baseOnlyDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),

@@ -1,5 +1,9 @@
 import type { Difficulty, TaskDefinition } from "../../contracts/index.js";
-import { repositoryRelativePath } from "./paths.js";
+import {
+  goldPassToPassOverlap,
+  passToPassOverlapMessage,
+  repositoryRelativePath,
+} from "./paths.js";
 
 export interface StaticAuditReport {
   readonly accepted: boolean;
@@ -46,6 +50,12 @@ export function auditTaskDefinition(
   );
   if (overlap.length > 0) {
     blockers.push(`gold and held-out test patches overlap: ${overlap.join(", ")}`);
+  }
+  const regressionOverlap = goldPassToPassOverlap(definition, goldPatch).filter(
+    (path) => !overlap.includes(path),
+  );
+  if (regressionOverlap.length > 0) {
+    blockers.push(passToPassOverlapMessage(regressionOverlap));
   }
   if (gold.files.length < threshold.implementationFiles) {
     blockers.push(
