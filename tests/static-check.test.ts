@@ -64,6 +64,16 @@ describe("static submission check", () => {
     );
   });
 
+  test("rejects a gold patch that changes a pass-to-pass test file at submit time", () => {
+    expect(check({ passToPass: ["src/feature.ts"] }).errors).toEqual([
+      {
+        gate: "audit",
+        message:
+          "gold patch changes pass-to-pass test files, which are graded at their base version: src/feature.ts",
+      },
+    ]);
+  });
+
   test("reports schema, patch, and path problems with their gates", () => {
     expect(check({ testCommand: "bun test" }).errors).toEqual([
       { gate: "schema", message: expect.stringContaining('"{tests}" exactly once') },

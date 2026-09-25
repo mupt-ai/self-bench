@@ -68,6 +68,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 # Isolate the Tests
 
 - gold.patch and test.patch touch different files. Fail-to-pass tests fail on the base, pass with gold, every time.
+- Pass-to-pass files are graded at their base version, whatever the agent changes, so gold.patch must not touch them.
 - Test through a public boundary. Don't import private helpers from the gold patch, and don't pin SQL, error wording, UI copy, or response shapes the request doesn't ask for. A different correct implementation must pass.
 - Backend + frontend change: test the backend contract, not a mocked frontend.
 

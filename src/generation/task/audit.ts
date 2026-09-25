@@ -1,5 +1,5 @@
 import type { Difficulty, TaskDefinition } from "../../contracts/index.js";
-import { repositoryRelativePath } from "./paths.js";
+import { passToPassTestPaths, repositoryRelativePath } from "./paths.js";
 
 export interface StaticAuditReport {
   readonly accepted: boolean;
@@ -46,6 +46,13 @@ export function auditTaskDefinition(
   );
   if (overlap.length > 0) {
     blockers.push(`gold and held-out test patches overlap: ${overlap.join(", ")}`);
+  }
+  const regressionPaths = new Set(passToPassTestPaths(definition));
+  const regressionOverlap = gold.files.filter((path) => regressionPaths.has(path));
+  if (regressionOverlap.length > 0) {
+    blockers.push(
+      `gold patch changes pass-to-pass test files, which are graded at their base version: ${regressionOverlap.join(", ")}`,
+    );
   }
   if (gold.files.length < threshold.implementationFiles) {
     blockers.push(

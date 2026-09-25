@@ -91,4 +91,15 @@ describe("tiered task audit", () => {
     const overlapping = patch(3, 100);
     expect(auditTaskDefinition(definition, overlapping, overlapping).accepted).toBe(false);
   });
+
+  test("rejects a gold patch that changes a pass-to-pass test file", () => {
+    const result = auditTaskDefinition(
+      { ...definition, passToPass: ["src/0.ts::case", "src"] },
+      patch(3, 100),
+      tests,
+    );
+    expect(result.blockers).toEqual([
+      "gold patch changes pass-to-pass test files, which are graded at their base version: src/0.ts",
+    ]);
+  });
 });

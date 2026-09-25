@@ -150,7 +150,7 @@ describe("Harbor task compiler", () => {
     expect(compose.services.redis.image).toContain("redis:7@sha256:");
     expect(
       JSON.parse(await readFile(join(output, ".selfbench-manifest.json"), "utf8")).compilerRevision,
-    ).toBe(29);
+    ).toBe(30);
 
     const baseOnlyDefinition = {
       ...JSON.parse(await readFile(join(authored, "definition.json"), "utf8")),
