@@ -34,6 +34,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           loadedKey.current = first.key;
           setFiles(loaded);
         } else {
+          loadedKey.current = null;
           setFiles({ taskId: row.id, files: [] });
           setTab("pipeline");
         }
