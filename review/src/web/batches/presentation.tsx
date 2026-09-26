@@ -13,6 +13,7 @@ export const batchDate = (date: string) =>
   });
 const labels: Record<BatchStatus["phase"], string> = {
   queued: "Queued",
+  preparing: "Preparing",
   discovering: "Discovering",
   authoring: "Generating Tasks",
   exporting: "Exporting",

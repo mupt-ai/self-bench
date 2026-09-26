@@ -6,9 +6,10 @@ import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import { createUsageStore } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
-import { settleWithLimit } from "../../lib/util.js";
+import { errorMessage, settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
+import { readGenerationGitHubToken } from "../settings/credentials.js";
 import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
 import { planDispatch, workflowLimit } from "./dispatch.js";
@@ -24,6 +25,9 @@ export class RunNotFoundError extends Error {
     this.name = "RunNotFoundError";
   }
 }
+
+/** A preparation claim older than this belongs to a crashed replica and may be retaken. */
+const PREPARE_STALE_MS = 10 * 60_000;
 
 /** A restartable application reconciler, not a Temporal orchestration workflow. */
 export function createGenerationBatches(
@@ -55,13 +59,62 @@ export function createGenerationBatches(
         .finally(() => exports.delete(runId)),
     );
   };
+  // Submitters' GitHub tokens for batches this replica accepted; hosted generation also saves
+  // the token in the vault, so any replica can take over its preparation.
+  const tokens = new Map<string, string>();
+  const preparing = new Map<string, Promise<void>>();
+  const prepare = async (runId: string) => {
+    const token =
+      tokens.get(runId) ??
+      (vault ? await readGenerationGitHubToken(vault.records, runId) : undefined);
+    const staleBefore = Date.now() - PREPARE_STALE_MS;
+    if (!token) {
+      await store.abandonPrepare(
+        runId,
+        staleBefore,
+        "Batch preparation was interrupted. Start another batch.",
+      );
+      return;
+    }
+    const claimed = await store.claimPrepare(runId, Date.now(), staleBefore);
+    if (!claimed) return;
+    let outcome: Pick<GenerationBatch, "shards"> | { error: string };
+    try {
+      const { shards } = await prepareGenerationBatch({
+        run: claimed.run,
+        token,
+        artifacts,
+        taskQueue: claimed.taskQueue,
+        attempt: claimed.prepareAttempt,
+      });
+      outcome = { shards };
+    } catch (error) {
+      outcome = { error: errorMessage(error) };
+    }
+    await store.completePrepare(runId, claimed.prepareAttempt, outcome);
+    tokens.delete(runId);
+    poll();
+  };
+  // Like exports, GitHub I/O runs outside any row lock and never stalls other batches.
+  const startPrepare = (runId: string) => {
+    if (preparing.has(runId)) return;
+    preparing.set(
+      runId,
+      prepare(runId)
+        .catch(() => console.error(`Batch ${runId} preparation failed; it will be retried`))
+        .finally(() => preparing.delete(runId)),
+    );
+  };
   const limit = workflowLimit();
   const reconcile = async (runId: string) => {
     let exporting: GenerationBatch | undefined;
+    let unprepared = false;
     await store.reconcile(runId, async (state) => {
+      unprepared = state.phase === "preparing";
       await advanceBatch(state, executions, Date.now(), () => cancelling.has(runId));
       if (state.phase === "exporting") exporting = structuredClone(state);
     });
+    if (unprepared) startPrepare(runId);
     if (exporting) startExport(exporting);
   };
   const tick = async () => {
@@ -94,9 +147,23 @@ export function createGenerationBatches(
         throw new Error(
           "Batch ID already exists; inspect it rather than starting another execution",
         );
-      const state = await prepareGenerationBatch({ run, token, artifacts, taskQueue });
-      await store.create(state);
-      poll();
+      // Only record the batch here; the sweep prepares it, so the submitter never waits on
+      // the merged-PR fetch.
+      tokens.set(run.runId, token);
+      try {
+        await store.create({
+          run,
+          taskQueue,
+          phase: "preparing",
+          acceptedAt: Date.now(),
+          shards: [],
+          candidates: [],
+        });
+      } catch (error) {
+        tokens.delete(run.runId);
+        throw error;
+      }
+      startPrepare(run.runId);
     },
     list: () => store.list(),
     read: (runId: string) => store.read(runId),
@@ -176,7 +243,7 @@ export function createGenerationBatches(
       stopped = true;
       clearInterval(timer);
       await pending;
-      await Promise.all(exports.values());
+      await Promise.all([...preparing.values(), ...exports.values()]);
     },
   };
 }

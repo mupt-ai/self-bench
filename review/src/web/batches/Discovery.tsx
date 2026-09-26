@@ -7,7 +7,8 @@ import { DiscoveryFeed } from "./DiscoveryFeed";
 export function Discovery({ status }: { status: BatchStatus }) {
   const discovery = status.discovery;
   const shards = discovery?.shards ?? [];
-  const active = status.phase === "discovering" && !batchIsTerminal(status.phase);
+  const preparing = status.phase === "preparing";
+  const active = (preparing || status.phase === "discovering") && !batchIsTerminal(status.phase);
   if (!active && shards.length === 0 && !(discovery?.totalShards ?? 0)) return null;
   const completed = discovery?.completedShards ?? shards.filter((shard) => !shard.error).length;
   const total = discovery?.totalShards || shards.length;
@@ -33,11 +34,19 @@ export function Discovery({ status }: { status: BatchStatus }) {
       ) : (
         <EmptyState
           className="border-solid"
-          title={active ? "Starting Discovery" : "No Discovery Output"}
+          title={
+            preparing
+              ? "Collecting Merged PRs"
+              : active
+                ? "Starting Discovery"
+                : "No Discovery Output"
+          }
         >
-          {active
-            ? "The discovery sandbox is starting. Agent output will appear here."
-            : "This batch has no discovery traces."}
+          {preparing
+            ? "Reading this repository's merged pull requests to plan discovery."
+            : active
+              ? "The discovery sandbox is starting. Agent output will appear here."
+              : "This batch has no discovery traces."}
         </EmptyState>
       )}
     </section>

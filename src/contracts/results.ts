@@ -5,6 +5,7 @@ import type { PipelineStage } from "./verify.js";
 
 export type RunPhase =
   | "queued"
+  | "preparing"
   | "discovering"
   | "authoring"
   | "exporting"
