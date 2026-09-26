@@ -68,7 +68,7 @@ export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.Pr
     ...resolved,
     PYTHONPATH: harborPythonPath(),
     COLUMNS: "320",
-    HARBOR_TELEMETRY: "0",
+    HARBOR_TELEMETRY: "off",
   };
 }
 

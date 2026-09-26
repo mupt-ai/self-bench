@@ -55,7 +55,7 @@ test("process setup does not mutate or reinterpret already isolated credentials"
   expect(child.PYTHONPATH).not.toBe(input.PYTHONPATH);
   expect(input.PYTHONPATH).toBe("/untrusted");
   expect(child.COLUMNS).toBe("320");
-  expect(child.HARBOR_TELEMETRY).toBe("0");
+  expect(child.HARBOR_TELEMETRY).toBe("off");
   expect(HARBOR_PROCESS_TIMEOUT_MS.gate).toBe(10800000);
   expect(HARBOR_PROCESS_TIMEOUT_MS.solver).toBe(7200000);
 });
