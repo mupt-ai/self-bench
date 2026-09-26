@@ -39,7 +39,9 @@ describe("remote sandbox files", () => {
 
   test("the in-sandbox fetch script fails when the downloaded bytes do not match the digest", async () => {
     const { source, destination } = await fixture();
-    expect((await fetchWith(source, destination, sha256("other bytes\n"))).exitCode).not.toBe(0);
+    const result = await fetchWith(source, destination, sha256("other bytes\n"));
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("did NOT match");
   });
 
   test("the in-sandbox fetch script retries transient download failures", () => {

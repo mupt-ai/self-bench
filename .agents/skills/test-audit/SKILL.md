@@ -5,6 +5,9 @@ description: "Invoke whenever writing, changing, reviewing, or sweeping tests. A
 
 # Test Audit
 
+Adapted from OpenClaw's `test-audit` skill for this Bun repo. CAMPAIGN.md keeps
+OpenClaw's Telegram campaign as its worked example.
+
 Three modes, one value bar. Authoring mode gates every new or changed test at
 write time. Audit mode runs focused sweeps of tests that re-assert source,
 duplicate stronger proof, couple behavior to implementation, or keep test-only
@@ -83,9 +86,9 @@ or types directly.
 Keep discovery read-only and report evidence before editing. For broad scope,
 run parallel discovery lanes when available:
 
-- core and packages (`src/`, `packages/`);
-- plugins (`extensions/`);
-- UI, apps, scripts, and tooling;
+- backend tests (`tests/*.test.ts`), split by owner area;
+- backend subsystem suites (`tests/{batches,generation,github,harbor,sandbox,tasks,...}/`);
+- the web app and public site (`review/src/**/*.test.{ts,tsx}`);
 - a cross-cutting pattern sweep.
 
 Outside campaign mode, prefer a few high-confidence candidates over a large
@@ -134,27 +137,24 @@ to increase deletion counts.
 
 ## Validation
 
-Never edit source or tests while Vitest is running in the checkout. Follow
-`$openclaw-testing`; route heavy proof through its `$crabbox` rules.
-
-1. Run the smallest owner and sibling tests with
-   `node scripts/run-vitest.mjs <path-or-filter>`.
+1. Run the smallest owner and sibling tests with `bun test <path>`.
 2. For removed source greps or plan assertions, run the executable script or
    dry-run that owns the real contract.
-3. Run targeted formatting, then `git diff --check`.
-4. Classify with
-   `node scripts/check-changed.mjs --dry-run -- <changed-paths>`, then run the
-   actual changed gate required by repository policy.
-5. Inspect `git diff --numstat`; report production/tooling separately from
+3. For every moved, tightened, or rewritten assertion, mutate the production
+   owner once, confirm the keeper goes red, then restore the source byte for byte.
+4. Run `bunx biome check --write <changed paths>`, then `git diff --check`.
+5. Run `bun run check` (biome, both `tsc` configs, file-size cap, knip) and the
+   full `bun test tests review/src src`.
+6. Inspect `git diff --numstat`; report production/tooling separately from
    tests and test support.
-6. After final audit edits, run mandatory `$autoreview`.
+7. After final audit edits, have an independent reviewer compare deleted
+   coverage against the keepers before landing.
 
 ## Landing and continuation
 
-Commit, push, open a PR, or land only when authorized. Use
-`$openclaw-pr-maintainer` and the repository `scripts/pr` flow. Land one
-coherent PR at a time; after landing, refresh from current `main` and rerun
-read-only discovery for the next high-confidence batch.
+Commit, push, open a PR, or land only when authorized. Land one coherent PR at
+a time; after landing, refresh from current `main` and rerun read-only
+discovery for the next high-confidence batch.
 
 ## Handoff
 

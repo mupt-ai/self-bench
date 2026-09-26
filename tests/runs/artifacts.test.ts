@@ -115,6 +115,16 @@ describe("artifact store listing", () => {
     // Newest run first: run-2 was written after every run-1 object.
     expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-2", "run-1"]);
   });
+
+  test("a failed archived-run scan lists nothing and is retried on the next request", async () => {
+    const store = new LocalArtifactStore(await temporaryRoot());
+    await store.put("runs/run-1/definition.json", Buffer.from("{}"), "application/json");
+    const list = store.list.bind(store);
+    store.list = () => Promise.reject(new Error("store unavailable"));
+    expect(await listArchivedRuns(store)).toEqual([]);
+    store.list = list;
+    expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-1"]);
+  });
 });
 
 describe("harbor task directories and bundles", () => {
