@@ -1,7 +1,8 @@
 {{- /*
   One Deployment per task queue, each scaled by KEDA on that queue's Temporal backlog.
-  A stopping pod stops polling at once and lets in-flight activities finish for `drainSeconds`
-  (a Harbor check or solver trial runs up to three hours); Temporal retries anything left.
+  A stopping pod stops polling at once and lets in-flight activities finish for `drainSeconds`,
+  then exits as soon as they do. A Harbor check runs up to 7 hours and a solver evaluation, which
+  is never retried, up to 72, so Harbor pods may drain that long.
 */ -}}
 {{- $pools := list
   (dict
@@ -14,7 +15,7 @@
     "name" "harbor" "queue" (printf "%s-harbor" .Values.temporal.taskQueue) "queueTypes" "activity"
     "env" (dict "SELFBENCH_HARBOR_CONCURRENCY" (toString .Values.harbor.slots))
     "cpu" "2" "memory" "8Gi" "storage" "2Gi" "scratch" "50Gi"
-    "drainSeconds" 10800 "minReplicas" .Values.harbor.minReplicas "maxReplicas" .Values.harbor.maxReplicas
+    "drainSeconds" 259200 "minReplicas" .Values.harbor.minReplicas "maxReplicas" .Values.harbor.maxReplicas
     "targetQueueSize" .Values.harbor.slots)
 }}
 {{- range $pools }}

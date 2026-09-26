@@ -142,24 +142,10 @@ resource "google_secret_manager_secret_iam_member" "worker_pod_reader" {
   member     = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
   depends_on = [google_container_cluster.workers]
 }
-# KEDA reads queue backlogs from Temporal with this key; loaded out of band like the bundles.
-resource "google_secret_manager_secret" "temporal_api_key" {
-  count     = local.gke
-  project   = var.project_id
-  secret_id = "selfbench-temporal-api-key"
-  labels    = local.labels
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
 resource "google_secret_manager_secret_iam_member" "keda_temporal_reader" {
   count      = local.gke
   project    = var.project_id
-  secret_id  = google_secret_manager_secret.temporal_api_key[0].secret_id
+  secret_id  = google_secret_manager_secret.temporal_api_key.secret_id
   role       = "roles/secretmanager.secretAccessor"
   member     = "${local.kubernetes_principal}/keda/sa/keda-operator"
   depends_on = [google_container_cluster.workers]
@@ -192,7 +178,7 @@ resource "helm_release" "workers" {
     secrets = {
       shared   = "projects/${var.project_id}/secrets/${google_secret_manager_secret.runtime["shared-env"].secret_id}/versions/${var.secret_versions.shared}"
       worker   = "projects/${var.project_id}/secrets/${google_secret_manager_secret.runtime["worker-env"].secret_id}/versions/${var.secret_versions.worker}"
-      temporal = { id = google_secret_manager_secret.temporal_api_key[0].secret_id, version = tostring(var.secret_versions.temporal) }
+      temporal = { id = google_secret_manager_secret.temporal_api_key.secret_id, version = tostring(var.secret_versions.temporal) }
     }
     temporal = {
       address   = var.temporal_address

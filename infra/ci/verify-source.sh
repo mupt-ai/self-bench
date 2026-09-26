@@ -37,7 +37,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$default_branch"
 secret_versions_file="${RUNTIME_SECRET_VERSIONS_FILE:-infra/runtime/secret-versions/$TF_ENVIRONMENT.json}"
 [[ -f "$secret_versions_file" ]] || die "Missing runtime secret version manifest: $secret_versions_file"
 RUNTIME_SECRET_VERSIONS=$(jq -ce '
-  if type=="object" and keys==["api","shared","worker"]
+  if type=="object" and (keys==["api","shared","worker"] or keys==["api","shared","temporal","worker"])
      and ([.[] | tostring | test("^[1-9][0-9]*$")] | all)
   then .
   else error("invalid runtime secret version manifest")

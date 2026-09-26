@@ -145,12 +145,12 @@ With `"gke_workers": true` in `TF_INPUTS_JSON`, Terraform adds a GKE Autopilot c
 - `selfbench-workflows-worker` polls the workflow queue (`SELFBENCH_WORKER_ROLE=workflows`): 1 to `workflow_worker_max_replicas` pods.
 - `selfbench-harbor-worker` polls the Harbor queue (`SELFBENCH_WORKER_ROLE=harbor`): `harbor_worker_min_replicas` to `harbor_worker_max_replicas` pods of `harbor_worker_slots` slots each (default 0 to 100 pods of 10, so up to 1000 Harbor checks and solver trials at once). Each pod gets a 50 GiB scratch disk at `/tmp`.
 
-KEDA scales each Deployment on its queue's Temporal backlog. A pod that is scaled in or replaced stops polling and finishes what it holds (up to three hours for Harbor work) before exiting. Pods run as the runtime service account through Workload Identity and mount the pinned `shared` and `worker` bundles from Secret Manager.
+KEDA scales each Deployment on its queue's Temporal backlog. A pod that is scaled in or replaced stops polling and finishes what it holds before exiting: up to 72 hours for Harbor pods, since a solver evaluation is one unretried activity of up to 72 hours. Pods run as the runtime service account through Workload Identity and mount the pinned `shared` and `worker` bundles from Secret Manager.
 
 Before turning it on in an environment:
 
 1. Grant the apply role `roles/container.admin` (the cluster, KEDA's CRDs and cluster roles), Compute router, NAT and subnetwork permissions, and `iam.serviceAccounts.actAs` on the new `selfbench-<env>-gke-nodes` account. Grant the plan role `container.clusters.get` and read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records.
-2. Create the secret `selfbench-temporal-api-key` holding only the value of `SELFBENCH_TEMPORAL_API_KEY`, and add its version as `"temporal"` in `infra/runtime/secret-versions/<env>.json`.
+2. Terraform creates the empty secret `selfbench-temporal-api-key` in every environment. Add a version holding only the value of `SELFBENCH_TEMPORAL_API_KEY`, and record it as `"temporal"` in `infra/runtime/secret-versions/<env>.json`.
 3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` (the values of `SELFBENCH_TEMPORAL_ADDRESS` and `SELFBENCH_TEMPORAL_NAMESPACE`) to `TF_INPUTS_JSON`, and release. Both worker platforms poll the same queues, so running them side by side is safe.
 4. Once the GKE workers are taking work, set `"worker_instances": 0` to stop the Cloud Run worker pool.
 
