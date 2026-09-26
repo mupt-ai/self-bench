@@ -39,14 +39,6 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
         name  = "SELFBENCH_ACTIVITY_CONCURRENCY"
         value = tostring(var.activity_concurrency)
       }
-      # With the GKE workers on, Harbor work runs there and this pool polls only the workflow queue.
-      dynamic "env" {
-        for_each = var.gke_workers ? ["workflows"] : []
-        content {
-          name  = "SELFBENCH_WORKER_ROLE"
-          value = env.value
-        }
-      }
       # Files the worker writes (Harbor checks, task bundles) count against memory, and the
       # worker sizes its Harbor slots to it.
       resources {

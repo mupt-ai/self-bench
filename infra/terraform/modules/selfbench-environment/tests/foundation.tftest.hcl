@@ -171,8 +171,8 @@ run "gke_workers" {
     error_message = "Harbor workers run on Autopilot with pod and service ranges in the app subnet, next to Cloud SQL."
   }
   assert {
-    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "workflows"]
-    error_message = "The Cloud Run pool leaves Harbor work to GKE."
+    condition     = length(google_service_account.gke_nodes) == 1 && google_artifact_registry_repository_iam_member.gke_nodes[0].role == "roles/artifactregistry.reader"
+    error_message = "Nodes run as their own account, which can pull the release image."
   }
   assert {
     condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["shared", "worker"]

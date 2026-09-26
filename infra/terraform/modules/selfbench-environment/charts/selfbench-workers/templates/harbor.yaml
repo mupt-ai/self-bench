@@ -16,8 +16,13 @@ spec:
       annotations:
         # Autopilot keeps a busy pod through node scale-down and upgrades.
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        # New pinned bundle versions roll the pods, as a new Cloud Run revision would.
+        selfbench.dev/secrets: {{ printf "%s %s" .Values.secrets.shared .Values.secrets.worker | sha256sum | trunc 16 | quote }}
     spec:
       serviceAccountName: selfbench-worker
+      securityContext:
+        # The image runs as node (1000); the scratch disk must be writable by it.
+        fsGroup: 1000
       terminationGracePeriodSeconds: 259500
       containers:
         - name: worker
@@ -35,12 +40,14 @@ spec:
             - name: SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS
               value: "259200"
           resources:
-            requests: { cpu: "2", memory: 8Gi, ephemeral-storage: 10Gi }
-            limits: { cpu: "2", memory: 8Gi, ephemeral-storage: 10Gi }
+            requests: { cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi }
+            limits: { cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi }
           volumeMounts:
             - name: secrets
               mountPath: /secrets
               readOnly: true
+            - name: scratch
+              mountPath: /tmp
       volumes:
         - name: secrets
           csi:
@@ -48,6 +55,15 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: selfbench-worker-env
+        # Ten unpacked task bundles and their Harbor downloads, on a disk of the pod's own.
+        - name: scratch
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 100Gi
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject

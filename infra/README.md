@@ -140,7 +140,7 @@ Before the first release to a new environment:
 
 ## GKE Workers
 
-With `"gke_workers": true`, Harbor work (the `<task queue>-harbor` queue: Harbor checks and solver trials) runs on a GKE Autopilot cluster in the app VPC, from `modules/selfbench-environment/charts/selfbench-workers`. KEDA sets the pod count from that queue's Temporal backlog, 0 to `harbor_worker_max_replicas` pods of 10 slots each. A pod being removed stops taking work and finishes what it holds first. The Cloud Run pool keeps the workflow queue (`SELFBENCH_WORKER_ROLE=workflows`).
+With `"gke_workers": true`, Harbor work (the `<task queue>-harbor` queue: Harbor checks and solver trials) runs on a GKE Autopilot cluster in the app VPC, from `modules/selfbench-environment/charts/selfbench-workers`. KEDA sets the pod count from that queue's Temporal backlog, 0 to `harbor_worker_max_replicas` pods of 10 slots each. A pod being removed stops taking work and finishes what it holds first. The Cloud Run pool keeps polling both queues, so Harbor work never goes unpolled while the cluster comes up; set its `SELFBENCH_WORKER_ROLE=workflows` once the GKE workers are proven. Harbor nodes run as their own `selfbench-<env>-gke-nodes` account (image pulls, logs, metrics); the apply role also needs `iam.serviceAccounts.actAs` on it.
 
 To turn it on:
 

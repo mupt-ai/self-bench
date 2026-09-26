@@ -1,6 +1,6 @@
 # Harbor work on GKE Autopilot, when gke_workers is on: one Deployment polls the Harbor queue and
-# KEDA sets its pod count from that queue's Temporal backlog. The workflow queue stays on the
-# Cloud Run worker pool.
+# KEDA sets its pod count from that queue's Temporal backlog. The Cloud Run worker pool keeps
+# polling both queues.
 locals {
   gke              = var.gke_workers ? 1 : 0
   worker_namespace = "selfbench"
@@ -14,6 +14,29 @@ data "google_project" "this" {
 locals {
   # A Kubernetes service account as an IAM principal.
   kubernetes_principal = local.gke == 1 ? "principal://iam.googleapis.com/projects/${data.google_project.this[0].number}/locations/global/workloadIdentityPools/${local.workload_pool}/subject/ns" : ""
+}
+
+# Nodes pull images and write logs and metrics as their own account; the project's default
+# compute account has no roles here.
+resource "google_service_account" "gke_nodes" {
+  count        = local.gke
+  project      = var.project_id
+  account_id   = "${local.name}-gke-nodes"
+  display_name = "SelfBench ${var.environment} GKE nodes"
+}
+resource "google_project_iam_member" "gke_nodes" {
+  count   = local.gke
+  project = var.project_id
+  role    = "roles/container.defaultNodeServiceAccount"
+  member  = "serviceAccount:${google_service_account.gke_nodes[0].email}"
+}
+resource "google_artifact_registry_repository_iam_member" "gke_nodes" {
+  count      = local.gke
+  project    = var.project_id
+  location   = var.region
+  repository = google_artifact_registry_repository.app.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${google_service_account.gke_nodes[0].email}"
 }
 
 resource "google_container_cluster" "workers" {
@@ -34,7 +57,13 @@ resource "google_container_cluster" "workers" {
   secret_manager_config {
     enabled = true
   }
-  depends_on = [google_project_service.api]
+  cluster_autoscaling {
+    auto_provisioning_defaults {
+      service_account = google_service_account.gke_nodes[0].email
+      oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+    }
+  }
+  depends_on = [google_project_service.api, google_project_iam_member.gke_nodes]
 }
 
 # Pods act as the runtime account, so its artifact, signing and secret grants carry over.
