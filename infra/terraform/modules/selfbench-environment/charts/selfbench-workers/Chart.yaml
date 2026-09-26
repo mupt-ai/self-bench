@@ -1,0 +1,5 @@
+apiVersion: v2
+name: selfbench-workers
+description: SelfBench Harbor workers, scaled by KEDA on the Harbor queue backlog.
+type: application
+version: 1.0.0

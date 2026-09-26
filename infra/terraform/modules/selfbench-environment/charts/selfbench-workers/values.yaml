@@ -1,0 +1,14 @@
+# Every value is set by Terraform (gke.tf, helm_release.workers).
+image: ""
+runtimeAccount: ""
+secrets:
+  shared: ""
+  worker: ""
+  temporal:
+    id: ""
+    version: ""
+temporal:
+  address: ""
+  namespace: ""
+  queue: ""
+maxReplicas: 100

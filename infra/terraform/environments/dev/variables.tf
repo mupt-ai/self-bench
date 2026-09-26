@@ -34,7 +34,7 @@ variable "image" {
 }
 variable "secret_versions" {
   description = "Set by the deploy workflow from infra/runtime/secret-versions/<env>.json."
-  type        = object({ shared = number, api = number, worker = number })
+  type        = object({ shared = number, api = number, worker = number, temporal = optional(number) })
 }
 variable "activity_concurrency" {
   type = number
@@ -42,4 +42,17 @@ variable "activity_concurrency" {
 variable "worker_instances" {
   type    = number
   default = 1
+}
+variable "gke_workers" {
+  description = "Run Harbor work on GKE Autopilot, scaled by KEDA."
+  type        = bool
+  default     = false
+}
+variable "temporal_address" {
+  type    = string
+  default = ""
+}
+variable "temporal_namespace" {
+  type    = string
+  default = ""
 }

@@ -66,8 +66,12 @@ variable "image" {
   }
 }
 variable "secret_versions" {
-  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles."
-  type        = object({ shared = number, api = number, worker = number })
+  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles, and of the Temporal API key KEDA reads when gke_workers is on."
+  type        = object({ shared = number, api = number, worker = number, temporal = optional(number) })
+  validation {
+    condition     = !var.gke_workers || var.secret_versions.temporal != null
+    error_message = "The GKE workers need a pinned version of the selfbench-temporal-api-key secret."
+  }
 }
 variable "activity_concurrency" {
   description = "Temporal activity slots per worker instance."
@@ -86,4 +90,32 @@ variable "api_max_instances" {
   description = "Upper bound on API instances; one always stays warm."
   type        = number
   default     = 3
+}
+variable "gke_workers" {
+  description = "Run Harbor work on GKE Autopilot, scaled by KEDA on the Harbor queue backlog."
+  type        = bool
+  default     = false
+}
+variable "temporal_address" {
+  description = "Temporal frontend host:port KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_ADDRESS."
+  type        = string
+  default     = ""
+  validation {
+    condition     = !var.gke_workers || can(regex("^[a-z0-9.-]+:[0-9]+$", var.temporal_address))
+    error_message = "The GKE workers need the Temporal address as host:port."
+  }
+}
+variable "temporal_namespace" {
+  description = "Temporal namespace KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_NAMESPACE."
+  type        = string
+  default     = ""
+  validation {
+    condition     = !var.gke_workers || length(var.temporal_namespace) > 0
+    error_message = "The GKE workers need the Temporal namespace."
+  }
+}
+variable "harbor_worker_max_replicas" {
+  description = "Most Harbor worker pods; each runs 10 Harbor activities, so 100 allows 1000 at once."
+  type        = number
+  default     = 100
 }
