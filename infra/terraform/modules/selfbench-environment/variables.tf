@@ -66,8 +66,12 @@ variable "image" {
   }
 }
 variable "secret_versions" {
-  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles."
-  type        = object({ shared = number, api = number, worker = number })
+  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles, and of the Temporal API key KEDA reads when gke_workers is on."
+  type        = object({ shared = number, api = number, worker = number, temporal = optional(number) })
+  validation {
+    condition     = !var.gke_workers || var.secret_versions.temporal != null
+    error_message = "The GKE workers need a pinned version of the selfbench-temporal-api-key secret."
+  }
 }
 variable "activity_concurrency" {
   description = "Temporal activity slots per worker instance."
@@ -86,4 +90,51 @@ variable "api_max_instances" {
   description = "Upper bound on API instances; one always stays warm."
   type        = number
   default     = 3
+}
+variable "gke_workers" {
+  description = "Run the Temporal worker on GKE Autopilot, its workflow and Harbor queues scaled apart by KEDA."
+  type        = bool
+  default     = false
+}
+variable "temporal_address" {
+  description = "Temporal frontend host:port KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_ADDRESS."
+  type        = string
+  default     = ""
+  validation {
+    condition     = !var.gke_workers || can(regex("^[a-z0-9.-]+:[0-9]+$", var.temporal_address))
+    error_message = "The GKE workers need the Temporal address as host:port."
+  }
+}
+variable "temporal_namespace" {
+  description = "Temporal namespace KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_NAMESPACE."
+  type        = string
+  default     = ""
+  validation {
+    condition     = !var.gke_workers || length(var.temporal_namespace) > 0
+    error_message = "The GKE workers need the Temporal namespace."
+  }
+}
+variable "workflow_worker_max_replicas" {
+  description = "Upper bound on workflow-queue worker pods; one always runs."
+  type        = number
+  default     = 3
+}
+variable "harbor_worker_slots" {
+  description = "Harbor activities each Harbor worker pod runs at once."
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.harbor_worker_slots >= 1 && var.harbor_worker_slots <= 10
+    error_message = "Harbor slots per pod must be between 1 and 10."
+  }
+}
+variable "harbor_worker_min_replicas" {
+  description = "Harbor worker pods kept when the Harbor queue is empty; 0 scales to zero."
+  type        = number
+  default     = 0
+}
+variable "harbor_worker_max_replicas" {
+  description = "Upper bound on Harbor worker pods; this times harbor_worker_slots is the most Harbor checks and solver trials running at once."
+  type        = number
+  default     = 100
 }

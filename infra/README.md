@@ -4,7 +4,7 @@ SelfBench runs on a small GCP stack managed with Terraform:
 
 - one isolated project per environment
 - the API on Cloud Run behind a global HTTPS load balancer
-- the Temporal worker as a Cloud Run worker pool
+- the Temporal worker as a Cloud Run worker pool, or on GKE Autopilot with KEDA autoscaling (`gke_workers`)
 - a private Cloud SQL PostgreSQL instance
 - private GCS artifact storage
 - Artifact Registry and Secret Manager
@@ -137,6 +137,22 @@ Before the first release to a new environment:
 1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps`, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), `artifactregistry.repositories.downloadArtifacts` (Cloud Run checks that the deploying account can read the image), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
 2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in `TF_INPUTS_JSON`, and release.
 3. Add each CNAME under `deployment.api.dns_authorizations`, and point each domain's A record at `deployment.api.address`. The certificate becomes active a few minutes after the CNAMEs resolve (`gcloud certificate-manager certificates describe selfbench-<env>-api`), and the load balancer answers HTTPS a few minutes after that.
+
+## GKE Workers
+
+With `"gke_workers": true` in `TF_INPUTS_JSON`, Terraform adds a GKE Autopilot cluster (`selfbench-<env>-workers`, private nodes behind Cloud NAT, in its own subnet of the app VPC) and deploys the worker there from `modules/selfbench-environment/charts/selfbench-workers`:
+
+- `selfbench-workflows-worker` polls the workflow queue (`SELFBENCH_WORKER_ROLE=workflows`): 1 to `workflow_worker_max_replicas` pods.
+- `selfbench-harbor-worker` polls the Harbor queue (`SELFBENCH_WORKER_ROLE=harbor`): `harbor_worker_min_replicas` to `harbor_worker_max_replicas` pods of `harbor_worker_slots` slots each (default 0 to 100 pods of 10, so up to 1000 Harbor checks and solver trials at once). Each pod gets a 50 GiB scratch disk at `/tmp`.
+
+KEDA scales each Deployment on its queue's Temporal backlog. A pod that is scaled in or replaced stops polling and finishes what it holds (up to three hours for Harbor work) before exiting. Pods run as the runtime service account through Workload Identity and mount the pinned `shared` and `worker` bundles from Secret Manager.
+
+Before turning it on in an environment:
+
+1. Grant the apply role `roles/container.admin` (the cluster, KEDA's CRDs and cluster roles), Compute router, NAT and subnetwork permissions, and `iam.serviceAccounts.actAs` on the new `selfbench-<env>-gke-nodes` account. Grant the plan role `container.clusters.get` and read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records.
+2. Create the secret `selfbench-temporal-api-key` holding only the value of `SELFBENCH_TEMPORAL_API_KEY`, and add its version as `"temporal"` in `infra/runtime/secret-versions/<env>.json`.
+3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` (the values of `SELFBENCH_TEMPORAL_ADDRESS` and `SELFBENCH_TEMPORAL_NAMESPACE`) to `TF_INPUTS_JSON`, and release. Both worker platforms poll the same queues, so running them side by side is safe.
+4. Once the GKE workers are taking work, set `"worker_instances": 0` to stop the Cloud Run worker pool.
 
 ## Operational Notes
 

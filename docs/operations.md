@@ -124,7 +124,7 @@ Modal sandboxes are built from the packaged `Dockerfile.sandbox`: its pinned `FR
 
 Compose bind-mounts `SELFBENCH_MODAL_CONFIG_PATH` into the worker at `/root/.modal.toml`; the default is `/dev/null` so a missing profile file does not break Docker-only stacks. Set the variable to an absolute path whenever generation or Harbor uses Modal. A secret manager may provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` instead. Empty token environment variables are removed at worker startup so they cannot override a valid mounted profile.
 
-Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring turns and review rounds each request four hours.
+Modal defaults to 20 concurrent worker activities; hosted provider settings remain provider-specific. SelfBench-owned execution safety limits are 300 candidates per run, 150 candidate workflows in a fanout, and eight discovery shards. Activities that spawn `harbor run` (Harbor gates in `compileAndVerify` and solver trials) poll a sibling queue, `<task queue>-harbor`, with its own slot count: each Harbor process is a Python client peaking near 300 MiB, so `SELFBENCH_HARBOR_CONCURRENCY` is memory-sized but capped at 10 and never takes an ordinary slot from authoring or review sessions. On GKE (`infra/README.md`, GKE Workers) the two queues run as separate Deployments that KEDA scales on their backlog. Discovery, authoring rounds, and review rounds stop after eight minutes without process output. Discovery also has a 45-minute per-attempt deadline and up to three attempts per shard; authoring turns and review rounds each request four hours.
 
 ### E2B
 
@@ -363,6 +363,8 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_ENVIRONMENT` | matching Docker/Modal backend | Worker; required as `docker` or `modal` for Vercel/E2B |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | `1` Docker, `20` Modal, `4` Vercel/E2B | Worker |
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
+| `SELFBENCH_WORKER_ROLE` | `all`; `workflows` or `harbor` polls only that queue, so each scales apart | Worker |
+| `SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS` | `0`; how long a stopping worker lets in-flight activities finish | Worker |
 | `SELFBENCH_WORKFLOW_LIMIT` | `100` | API; managed generation workflows (discovery shards and candidates) running at once across the platform; the rest wait in their batch, first come first served |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |

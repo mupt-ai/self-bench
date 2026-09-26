@@ -1,0 +1,143 @@
+{{- /*
+  One Deployment per task queue, each scaled by KEDA on that queue's Temporal backlog.
+  A stopping pod stops polling at once and lets in-flight activities finish for `drainSeconds`
+  (a Harbor check or solver trial runs up to three hours); Temporal retries anything left.
+*/ -}}
+{{- $pools := list
+  (dict
+    "name" "workflows" "queue" .Values.temporal.taskQueue "queueTypes" "workflow,activity"
+    "env" (dict "SELFBENCH_ACTIVITY_CONCURRENCY" (toString .Values.workflows.activityConcurrency))
+    "cpu" "1" "memory" "2Gi" "storage" "5Gi" "scratch" ""
+    "drainSeconds" 240 "minReplicas" 1 "maxReplicas" .Values.workflows.maxReplicas
+    "targetQueueSize" 10)
+  (dict
+    "name" "harbor" "queue" (printf "%s-harbor" .Values.temporal.taskQueue) "queueTypes" "activity"
+    "env" (dict "SELFBENCH_HARBOR_CONCURRENCY" (toString .Values.harbor.slots))
+    "cpu" "2" "memory" "8Gi" "storage" "2Gi" "scratch" "50Gi"
+    "drainSeconds" 10800 "minReplicas" .Values.harbor.minReplicas "maxReplicas" .Values.harbor.maxReplicas
+    "targetQueueSize" .Values.harbor.slots)
+}}
+{{- range $pools }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selfbench-{{ .name }}-worker
+  labels:
+    app.kubernetes.io/name: selfbench-worker
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  # KEDA owns the replica count.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: selfbench-worker
+      app.kubernetes.io/component: {{ .name }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: selfbench-worker
+        app.kubernetes.io/component: {{ .name }}
+      annotations:
+        # Autopilot keeps a busy pod through node scale-down and upgrades for up to 7 days.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        # Pinned bundle versions roll the pods when they change.
+        selfbench.dev/secrets: {{ printf "%s %s" $.Values.secrets.shared $.Values.secrets.worker | sha256sum | trunc 16 | quote }}
+    spec:
+      serviceAccountName: {{ $.Values.serviceAccount }}
+      terminationGracePeriodSeconds: {{ add .drainSeconds 300 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: {{ $.Values.image | quote }}
+          command:
+            - node
+            - --env-file=/secrets/shared-env
+            - --env-file=/secrets/worker-env
+            - dist/temporal/worker-main.js
+          env:
+            - name: SELFBENCH_WORKER_ROLE
+              value: {{ .name | quote }}
+            - name: SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS
+              value: {{ .drainSeconds | quote }}
+            {{- range $key, $value := .env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .cpu | quote }}
+              memory: {{ .memory | quote }}
+              ephemeral-storage: {{ .storage | quote }}
+            limits:
+              cpu: {{ .cpu | quote }}
+              memory: {{ .memory | quote }}
+              ephemeral-storage: {{ .storage | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            {{- if .scratch }}
+            - name: scratch
+              mountPath: /tmp
+            {{- end }}
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: selfbench-worker-env
+        {{- if .scratch }}
+        # Unpacked task bundles and Harbor downloads, on disk rather than in memory.
+        - name: scratch
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: {{ .scratch | quote }}
+        {{- end }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: selfbench-{{ .name }}-worker
+spec:
+  scaleTargetRef:
+    name: selfbench-{{ .name }}-worker
+  minReplicaCount: {{ .minReplicas }}
+  maxReplicaCount: {{ .maxReplicas }}
+  pollingInterval: 15
+  # Scale-in only stops a pod from taking work; it keeps running what it has.
+  cooldownPeriod: 900
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 900
+  triggers:
+    - type: temporal
+      metadata:
+        endpoint: {{ $.Values.temporal.address | quote }}
+        namespace: {{ $.Values.temporal.namespace | quote }}
+        taskQueue: {{ .queue | quote }}
+        queueTypes: {{ .queueTypes | quote }}
+        targetQueueSize: {{ .targetQueueSize | quote }}
+      authenticationRef:
+        name: temporal
+{{- end }}

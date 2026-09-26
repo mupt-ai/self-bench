@@ -5,6 +5,7 @@ output "deployment" {
     project_id      = var.project_id
     region          = var.region
     worker_pool     = google_cloud_run_v2_worker_pool.worker.name
+    workers_cluster = var.gke_workers ? google_container_cluster.workers[0].name : null
     runtime_account = google_service_account.runtime.email
     artifact_bucket = google_storage_bucket.artifacts.name
     image_prefix    = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/selfbench"
@@ -25,4 +26,11 @@ output "deployment" {
       name       = google_sql_database.app[0].name
     } : null
   }
+}
+output "workers_cluster" {
+  description = "Where the Helm provider reaches the GKE worker cluster; null while gke_workers is off."
+  value = var.gke_workers ? {
+    endpoint               = google_container_cluster.workers[0].endpoint
+    cluster_ca_certificate = one(google_container_cluster.workers[0].master_auth[*].cluster_ca_certificate)
+  } : null
 }

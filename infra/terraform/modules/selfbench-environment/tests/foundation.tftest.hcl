@@ -1,5 +1,6 @@
 # Mock-only tests: apply means apply to a mock provider, NEVER GCP.
 mock_provider "google" {}
+mock_provider "helm" {}
 variables {
   project_id           = "selfbench-dev-testing"
   environment          = "dev"
@@ -141,4 +142,61 @@ run "allow_operator_chosen_project" {
     condition     = google_cloud_run_v2_service.api.project == "community-production"
     error_message = "The reusable module must accept an operator-chosen project ID."
   }
+}
+run "gke_workers_off_by_default" {
+  command = plan
+  assert {
+    condition     = length(google_container_cluster.workers) == 0 && length(helm_release.workers) == 0 && output.workers_cluster == null
+    error_message = "The GKE workers stay off until gke_workers is set."
+  }
+}
+run "gke_workers" {
+  command = plan
+  variables {
+    gke_workers        = true
+    temporal_address   = "us-central1.gcp.api.temporal.io:7233"
+    temporal_namespace = "selfbench-dev.abc12"
+    secret_versions    = { shared = 7, api = 3, worker = 1, temporal = 2 }
+  }
+  override_resource {
+    target          = google_service_account.runtime
+    override_during = plan
+    values = {
+      email = "selfbench-dev-runtime@selfbench-dev-testing.iam.gserviceaccount.com"
+      name  = "projects/selfbench-dev-testing/serviceAccounts/selfbench-dev-runtime@selfbench-dev-testing.iam.gserviceaccount.com"
+    }
+  }
+  assert {
+    condition     = google_container_cluster.workers[0].enable_autopilot && google_container_cluster.workers[0].private_cluster_config[0].enable_private_nodes && google_container_cluster.workers[0].secret_manager_config[0].enabled
+    error_message = "Workers run on Autopilot with private nodes and Secret Manager mounts."
+  }
+  assert {
+    condition     = google_compute_router_nat.gke[0].source_subnetwork_ip_ranges_to_nat == "LIST_OF_SUBNETWORKS" && contains(local.apis, "container.googleapis.com")
+    error_message = "Private nodes reach the internet through NAT, and the GKE API is enabled."
+  }
+  assert {
+    condition     = google_service_account_iam_member.runtime_workload_identity[0].member == "serviceAccount:selfbench-dev-testing.svc.id.goog[selfbench/selfbench-worker]"
+    error_message = "Only the worker's Kubernetes account acts as the runtime account."
+  }
+  assert {
+    condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["shared", "worker"]
+    error_message = "Worker pods must not read the API's secret."
+  }
+  assert {
+    condition = yamldecode(helm_release.workers[0].values[0]).secrets == {
+      shared   = "projects/selfbench-dev-testing/secrets/selfbench-shared-env/versions/7"
+      worker   = "projects/selfbench-dev-testing/secrets/selfbench-worker-env/versions/1"
+      temporal = { id = "selfbench-temporal-api-key", version = "2" }
+    }
+    error_message = "Worker pods and KEDA read pinned secret versions, never latest or the API's."
+  }
+  assert {
+    condition     = yamldecode(helm_release.workers[0].values[0]).image == var.image && yamldecode(helm_release.workers[0].values[0]).temporal.taskQueue == "selfbench-dev" && yamldecode(helm_release.workers[0].values[0]).harbor == { slots = 10, minReplicas = 0, maxReplicas = 100 }
+    error_message = "Workers run the release image on the environment's queue, with up to 1000 Harbor slots."
+  }
+}
+run "gke_workers_need_temporal_settings" {
+  command = plan
+  variables { gke_workers = true }
+  expect_failures = [var.secret_versions, var.temporal_address, var.temporal_namespace]
 }
