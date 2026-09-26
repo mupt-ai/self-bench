@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dedupeBySourcePr, exportManifest } from "../../src/generation/pipeline/export.js";
+import { dedupeBySourcePr, exportManifest } from "../../src/sandbox/export-manifest.js";
 import { run } from "../support/workflow-fixture.js";
 
 describe("export deduplication by source pull request", () => {
@@ -16,15 +16,6 @@ describe("export deduplication by source pull request", () => {
       { taskId: "uploader-retry-again", sourcePr: 93203, keptTaskId: "uploader-retry" },
       { taskId: "uploader-retry-third", sourcePr: 93203, keptTaskId: "uploader-retry" },
     ]);
-  });
-
-  test("leaves distinct pull requests untouched", () => {
-    const tasks = [
-      { taskId: "a", sourcePr: 1 },
-      { taskId: "b", sourcePr: 2 },
-    ];
-
-    expect(dedupeBySourcePr(tasks)).toEqual({ kept: tasks, dropped: [] });
   });
 
   test("manifest counts only kept tasks and lists the dropped duplicates", () => {

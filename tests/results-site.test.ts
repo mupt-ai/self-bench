@@ -11,6 +11,7 @@ import type { ReleaseStore } from "../src/db/releases.js";
 import type { PublishedLine } from "../src/public/release-types.js";
 
 /** The results site over a fake build and a fake store, answering for `selfbench.test`. */
+let outside: string;
 let root: string;
 let server: Server;
 let base: string;
@@ -63,8 +64,11 @@ const get = (path: string, init: RequestInit = {}, host = "selfbench.test") =>
   fetch(`${base}${path}`, { ...init, headers: { host, ...init.headers } });
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "results-site-"));
-  await mkdir(join(root, "assets"));
+  // The build sits one level down so a file beside it proves traversal stays inside the build.
+  outside = await mkdtemp(join(tmpdir(), "results-site-"));
+  root = join(outside, "build");
+  await mkdir(join(root, "assets"), { recursive: true });
+  await writeFile(join(outside, "secret.txt"), "not part of the build");
   await writeFile(
     join(root, "index.html"),
     "<html><head><title>Self-Bench</title></head><body>shell</body></html>",
@@ -76,7 +80,7 @@ beforeAll(async () => {
 afterAll(async () => {
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  await rm(root, { recursive: true, force: true });
+  await rm(outside, { recursive: true, force: true });
 });
 
 test("only the public host is the public site; every other host is the app's", async () => {
@@ -110,7 +114,10 @@ test("built files are served, hashed ones cached for good", async () => {
   expect(script.headers.get("cache-control")).toContain("immutable");
   const logo = await get("/dari-logo.svg");
   expect(logo.headers.get("cache-control")).toBe("public, max-age=3600");
-  expect((await get("/../package.json")).status).not.toBe(200);
+  // An encoded slash survives URL parsing, so the server itself must refuse to leave the build.
+  const escaped = await get("/..%2fsecret.txt");
+  expect(escaped.status).toBe(404);
+  expect(await escaped.text()).not.toContain("not part of the build");
 });
 
 test("the app's surface does not exist on the public host", async () => {

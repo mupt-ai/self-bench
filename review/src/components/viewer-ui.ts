@@ -6,8 +6,7 @@ export const sheetBody =
 export const notice = "px-4 py-3 text-sm leading-6 text-muted-foreground";
 export const prose =
   "max-w-[96ch] px-4 py-3 text-sm leading-6 whitespace-pre-wrap wrap-anywhere text-foreground [&:is(pre)]:max-w-none";
-export const viewerButton = buttonStyles.secondary;
-export const viewerIconButton = cn(viewerButton, "size-9 p-0");
+export const viewerIconButton = cn(buttonStyles.secondary, "size-9 p-0");
 export const viewerLink =
   "cursor-pointer text-left text-sm font-medium text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground";
 export const sheetTable =

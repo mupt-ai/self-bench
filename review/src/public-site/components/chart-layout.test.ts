@@ -17,8 +17,29 @@ test("labels never overlap and frontier labels are placed first", () => {
   const placed = placeLabels(points, bounds);
   expect(placed[0]?.id).toBe("b");
   expect(placed.map((label) => label.id)).toContain("c");
-  const ids = new Set(placed.map((label) => label.id));
-  expect(ids.size).toBe(placed.length);
+  // Rebuild each label's text box from its anchor (6.6px per character, 14px tall).
+  const boxes = placed.map((label) => {
+    const width = (points.find((point) => point.id === label.id)?.label.length ?? 0) * 6.6;
+    const left =
+      label.anchor === "start"
+        ? label.x
+        : label.anchor === "end"
+          ? label.x - width
+          : label.x - width / 2;
+    return { left, right: left + width, top: label.y - 12, bottom: label.y + 3 };
+  });
+  const markers = points.map(({ x, y }) => ({
+    left: x - 5,
+    right: x + 5,
+    top: y - 5,
+    bottom: y + 5,
+  }));
+  const intersects = (one: (typeof boxes)[number], two: (typeof boxes)[number]) =>
+    one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
+  for (const [index, box] of boxes.entries()) {
+    for (const other of boxes.slice(index + 1)) expect(intersects(box, other)).toBe(false);
+    for (const marker of markers) expect(intersects(box, marker)).toBe(false);
+  }
 });
 
 test("labels stay inside the plot, flipping to the left near the right edge", () => {

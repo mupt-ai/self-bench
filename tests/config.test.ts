@@ -1,13 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { loadConfig, loadWorkerConfig } from "../src/contracts/config/index.js";
-import {
-  HOBBY_E2B_TIMEOUT_CAP_MS,
-  STANDARD_E2B_TIMEOUT_CAP_MS,
-} from "../src/sandbox/providers/e2b/timeout-cap.js";
-import {
-  HOBBY_VERCEL_TIMEOUT_CAP_MS,
-  STANDARD_VERCEL_TIMEOUT_CAP_MS,
-} from "../src/sandbox/providers/vercel/timeout-cap.js";
 
 const image = `iad1.vcr.dev/dari/selfbench/runtime@sha256:${"a".repeat(64)}`;
 
@@ -100,7 +92,7 @@ describe("SelfBench configuration", () => {
         projectId: "project",
       },
       image,
-      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
+      timeoutCapMs: 7_200_000,
     });
     expect(config.harborEnvironment).toBe("modal");
   });
@@ -115,7 +107,7 @@ describe("SelfBench configuration", () => {
     expect(config.execution).toEqual({
       kind: "vercel",
       image,
-      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
+      timeoutCapMs: 7_200_000,
     });
   });
 
@@ -127,17 +119,17 @@ describe("SelfBench configuration", () => {
     };
 
     expect(loadConfig(base).execution).toMatchObject({
-      timeoutCapMs: STANDARD_VERCEL_TIMEOUT_CAP_MS,
+      timeoutCapMs: 7_200_000,
     });
     expect(loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "45m" }).execution).toMatchObject({
-      timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
+      timeoutCapMs: 2_700_000,
     });
     expect(loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "2700s" }).execution).toMatchObject({
-      timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS,
+      timeoutCapMs: 2_700_000,
     });
     expect(
       loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "2700000" }).execution,
-    ).toMatchObject({ timeoutCapMs: HOBBY_VERCEL_TIMEOUT_CAP_MS });
+    ).toMatchObject({ timeoutCapMs: 2_700_000 });
     expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "forty-five" })).toThrow();
     expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "3h" })).toThrow();
     expect(() => loadConfig({ ...base, SELFBENCH_VERCEL_TIMEOUT_CAP: "25h" })).toThrow();
@@ -214,7 +206,7 @@ describe("SelfBench configuration", () => {
     expect(config.execution).toEqual({
       kind: "e2b",
       image: "selfbench-runtime:v1",
-      timeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS,
+      timeoutCapMs: 3_600_000,
       credentials: { apiKey: "e2b-key", domain: "custom.e2b.example" },
     });
     expect(config.harborEnvironment).toBe("modal");
@@ -228,7 +220,7 @@ describe("SelfBench configuration", () => {
         SELFBENCH_HARBOR_ENVIRONMENT: "docker",
         SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
       }).execution,
-    ).toMatchObject({ timeoutCapMs: HOBBY_E2B_TIMEOUT_CAP_MS });
+    ).toMatchObject({ timeoutCapMs: 3_600_000 });
     expect(
       loadConfig({
         SELFBENCH_EXECUTION_BACKEND: "e2b",
@@ -236,7 +228,7 @@ describe("SelfBench configuration", () => {
         SELFBENCH_E2B_TEMPLATE: "selfbench-runtime",
         SELFBENCH_E2B_TIMEOUT_CAP: "24h",
       }).execution,
-    ).toMatchObject({ timeoutCapMs: STANDARD_E2B_TIMEOUT_CAP_MS });
+    ).toMatchObject({ timeoutCapMs: 86_400_000 });
     expect(() =>
       loadConfig({
         SELFBENCH_EXECUTION_BACKEND: "e2b",

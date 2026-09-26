@@ -142,7 +142,6 @@ test.each(["modal", "e2b", "vercel"] as const)(
   (sandbox) => {
     const html = render({ ...base, sandbox, sandboxCredentialId: undefined });
     if (sandbox === "vercel") expect(html).toContain("Vercel Runtime Image");
-    else expect(html).not.toContain("E2B Template");
     expect(html).toContain("Harbor Verification");
     expect(html).not.toContain('value="docker"');
     for (const environment of ["modal", "vercel", "e2b", "daytona"])
@@ -160,14 +159,6 @@ test.each(["modal", "e2b", "vercel"] as const)(
     if (sandbox !== "modal") expect(daytona).not.toContain("modal-credential");
   },
 );
-
-test("Modal generation exposes separate Harbor settings", () => {
-  const modal = render({ ...base, harborEnvironment: "modal", harborCredentialId: undefined });
-  expect(modal).toContain("Modal Credential");
-  expect(modal).toContain("modal-credential");
-  expect(modal).toContain("Harbor Verification");
-  expect(modal).toContain("Harbor Modal Credential");
-});
 
 test("generation popup keeps helper descriptions in tooltips", () => {
   const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });

@@ -72,9 +72,11 @@ test("Pi dollar totals cannot invent pricing for unknown models", () => {
   };
   const files = () => new Map([["agent/pi.txt", JSON.stringify(event)]]);
   const result = { agent_result: { cost_usd: 0.37 } };
-  expect(trialCost(run, "pi", files(), result).apiCostUsd).toBeUndefined();
-  event.message.usage.cost.cacheWrite = 0.4;
-  expect(trialCost(run, "pi", files(), result).apiCostUsd).toBeUndefined();
+  // The run is verified and its tokens measured, so the missing cost is down to missing pricing.
+  expect(trialCost(run, "pi", files(), result)).toEqual({
+    modelVerified: true,
+    tokenUsage: { input: 100, output: 50, cacheRead: 80, cacheWrite: 20 },
+  });
 });
 
 test("cost uses token counts and explicit rates, never Harbor's unverified cost_usd", () => {

@@ -12,8 +12,6 @@ export interface ExportInput {
   readonly tasks: readonly AuthoredTask[];
 }
 
-export { dedupeBySourcePr, exportManifest } from "../../sandbox/export-manifest.js";
-
 /** Only metadata and opaque artifacts cross the worker. Archive creation is sandbox-owned. */
 export async function buildExport(
   store: ArtifactStore,

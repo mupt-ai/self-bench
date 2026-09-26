@@ -1,13 +1,12 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SESSION_COOKIE } from "../../src/api/auth/session.js";
-import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import type { CandidateWorkflowInput } from "../../src/contracts/index.js";
 import type { Vault } from "../../src/db/vault.js";
 import type { WorkflowSnapshot } from "../../src/generation/tasks/status.js";
-import { cookieValue, fakeGitHub, startAuthServer, testAuthConfig } from "./site-fixture.js";
+import { connectRepo, signedIn } from "./sign-in.js";
+import { fakeGitHub, startAuthServer, testAuthConfig } from "./site-fixture.js";
 export const MERGE = "a".repeat(40);
 export const pullRequest = (number: number, extra: Record<string, unknown> = {}) => ({
   number,
@@ -49,20 +48,8 @@ export async function prFixture(options: {
       },
     },
   });
-  const start = await server.request("/auth/github");
-  const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${state}` },
-  });
-  const headers = {
-    cookie: `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`,
-    "content-type": "application/json",
-  };
-  await server.request("/api/orgs/mupt-ai/repos", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
-  });
+  const headers = await signedIn(server);
+  await connectRepo(server, headers);
   return { site: server, headers, started, artifacts, hub };
 }
 

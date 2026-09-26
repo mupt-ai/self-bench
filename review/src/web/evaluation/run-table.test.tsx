@@ -101,18 +101,11 @@ test("model cards remain usable without credentials and never embed a table or s
   expect(html).not.toContain(">openai<");
   expect(html).not.toContain("<table");
   expect(html).toContain("Select Credential");
-  expect(html).toContain("Credential");
   expect(html).toContain('value="default" selected="">default</option>');
   expect(html).toContain('aria-label="Test model Credential"');
   expect(html).toContain('aria-label="Test model Thinking Level"');
-  expect(html).toContain("Harness");
-  expect(html).toContain("Reasoning");
-  expect(html).toContain("sm:grid-cols-3");
-  expect(html).not.toContain("border-transparent!");
+  expect(html).toContain('aria-label="Test model Harness"');
   expect(html).toContain('aria-label="Remove Test model"');
-  expect(html).toContain("right-0 bottom-3 flex h-9 w-10");
-  expect(html).toContain("border-0 bg-transparent p-0");
-  expect(html).not.toContain("Shortlist");
   expect(html).not.toContain('type="password"');
 });
 
@@ -148,26 +141,21 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(options(html)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
 });
 
-test.each([false, true])(
-  "credential add actions match the small plus-button style: %s",
-  (sandbox) => {
-    const html = renderToStaticMarkup(
-      <CredentialGroup
-        title="Credentials"
-        credentials={[]}
-        loading={false}
-        canManage
-        sandbox={sandbox}
-        onAdd={() => {}}
-        onReplace={() => {}}
-        onDelete={() => {}}
-      />,
-    );
-    expect(html).toContain(sandbox ? "Add Sandbox" : "Add Provider");
-    expect(html).toContain("h-8 px-3 text-xs");
-    expect(html).toContain("mr-1 h-4 w-4");
-  },
-);
+test.each([false, true])("credential add action names its group (sandbox: %s)", (sandbox) => {
+  const html = renderToStaticMarkup(
+    <CredentialGroup
+      title="Credentials"
+      credentials={[]}
+      loading={false}
+      canManage
+      sandbox={sandbox}
+      onAdd={() => {}}
+      onReplace={() => {}}
+      onDelete={() => {}}
+    />,
+  );
+  expect(html).toContain(sandbox ? "Add Sandbox" : "Add Provider");
+});
 
 test("Add Sandbox offers only hosted sandboxes and the fields for its selected sandbox", () => {
   const html = credentialEditor("modal");

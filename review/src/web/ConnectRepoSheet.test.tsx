@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import * as api from "./api";
 import { ConnectRepoSheet } from "./ConnectRepoSheet";
 
-test("connect rows keep one layout and omit merged pull request counts", async () => {
+test("connect sheet lists fetched repositories with a Connect action", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
   const globals = {
     window: browser,
@@ -50,8 +50,6 @@ test("connect rows keep one layout and omit merged pull request counts", async (
     expect(html).toContain("main");
     expect(html).toContain("Connect My Repo");
     expect(html).toContain(">Connect<");
-    expect(html).not.toContain("merged pull request");
-    expect(html).not.toContain("counting merged");
   } finally {
     await act(async () => {
       root.unmount();

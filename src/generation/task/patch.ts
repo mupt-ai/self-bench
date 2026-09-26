@@ -104,10 +104,7 @@ export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<Patc
  * ancestor directory carries the export-ignore attribute (directories are queried with a trailing
  * slash, the form git archive uses).
  */
-export async function exportIgnoredPaths(
-  worktree: string,
-  paths: readonly string[],
-): Promise<string[]> {
+async function exportIgnoredPaths(worktree: string, paths: readonly string[]): Promise<string[]> {
   const candidates = new Map<string, string>();
   for (const path of paths) {
     const segments = path.split("/").filter(Boolean);
@@ -142,21 +139,6 @@ export async function exportIgnoredPaths(
     }
   }
   return [...ignored].sort();
-}
-
-/** Text-level problems that make git reject a patch before it even reaches apply --check. */
-export function malformedPatchProblems(patch: string, label: string): string[] {
-  const problems: string[] = [];
-  if (!patch.startsWith("diff --git ")) {
-    problems.push(`${label} must be a Git patch starting with diff --git`);
-  }
-  if (patch.includes("\r\n")) {
-    problems.push(`${label} has CRLF line endings; write it with LF only`);
-  }
-  if (patch.length > 0 && !patch.endsWith("\n")) {
-    problems.push(`${label} is missing its final newline`);
-  }
-  return problems;
 }
 
 function gitMessage(stderr: string): string {

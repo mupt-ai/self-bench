@@ -11,7 +11,7 @@
     // Temporal loads workflows and Pi loads extensions by path, not imports.
     "src/temporal/workflows.ts!",
     "src/evaluation/workflow.ts!",
-    "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts!",
+    "src/harnesses/pi/extensions/{authoring,discovery,reviewer}.ts!",
     "src/sandbox/programs/{author,check,verifier,compiler,task-operation,job}.ts!",
     "review/src/main.tsx!",
     "scripts/*.ts!",
@@ -31,6 +31,6 @@
     // These exports are registration interfaces for the external loaders.
     "src/temporal/workflows.ts": ["exports"],
     "src/evaluation/workflow.ts": ["exports"],
-    "src/harnesses/pi/extensions/{authoring,verifier,discovery}.ts": ["exports"]
+    "src/harnesses/pi/extensions/{authoring,discovery,reviewer}.ts": ["exports"]
   }
 }

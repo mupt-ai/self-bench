@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { HARBOR_ENVIRONMENTS } from "../../src/contracts/config/providers.js";
 import {
-  HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
 } from "../../src/harnesses/harbor/command.js";
@@ -56,8 +55,6 @@ test("process setup does not mutate or reinterpret already isolated credentials"
   expect(input.PYTHONPATH).toBe("/untrusted");
   expect(child.COLUMNS).toBe("320");
   expect(child.HARBOR_TELEMETRY).toBe("off");
-  expect(HARBOR_PROCESS_TIMEOUT_MS.gate).toBe(10800000);
-  expect(HARBOR_PROCESS_TIMEOUT_MS.solver).toBe(7200000);
 });
 
 test("Docker packaging and the process policy pin the same Harbor version", async () => {

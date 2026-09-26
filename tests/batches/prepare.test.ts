@@ -66,7 +66,8 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
         .map((line) => JSON.parse(line) as { sourcePr: number });
       for (const record of records) sourcePrs.add(record.sourcePr);
     }
-    expect(sourcePrs.size).toBeGreaterThanOrEqual(300);
+    // A 300-candidate run needs a 1.5x discovery pool, not just one PR per candidate.
+    expect(sourcePrs.size).toBeGreaterThanOrEqual(450);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

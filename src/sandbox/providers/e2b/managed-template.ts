@@ -6,7 +6,7 @@ import type { E2BCredentials } from "../../../contracts/config/index.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../../db/encrypted-records.js";
 import { projectRoot } from "../../../lib/project-paths.js";
 import { errorMessage } from "../../../lib/util.js";
-import { buildSelfBenchE2BTemplate } from "./template-build.js";
+import { buildSelfBenchE2BTemplate, type E2BTemplateBuildApi } from "./template-build.js";
 
 /** The resources every SelfBench stage requests; E2B fixes them when the template is built. */
 export const MANAGED_E2B_TEMPLATE_CPUS = 4;
@@ -54,11 +54,6 @@ type BuildRecord =
 
 interface ManagedE2BTemplateApi {
   exists(reference: string, signal?: AbortSignal): Promise<boolean>;
-  build?(
-    template: unknown,
-    name: string,
-    options: { cpuCount: number; memoryMB: number },
-  ): Promise<{ name: string; templateId: string; buildId: string }>;
 }
 
 export interface EnsureManagedE2BTemplateOptions {
@@ -69,6 +64,7 @@ export interface EnsureManagedE2BTemplateOptions {
   readonly credentialId: string;
   readonly projectRoot?: string;
   readonly api?: ManagedE2BTemplateApi;
+  readonly buildApi?: E2BTemplateBuildApi;
   /** Called on every wait poll and build log so activities can heartbeat. */
   readonly onLog?: (message: string) => void;
   readonly signal?: AbortSignal;
@@ -143,26 +139,22 @@ async function buildAndRecord(
   let result: { name: string; templateId: string; buildId: string };
   let lastLog = 0;
   try {
-    result = options.api.build
-      ? await options.api.build(undefined, reference, {
-          cpuCount: MANAGED_E2B_TEMPLATE_CPUS,
-          memoryMB: MANAGED_E2B_TEMPLATE_MEMORY_MIB,
-        })
-      : await buildSelfBenchE2BTemplate({
-          name: reference,
-          cpuCount: MANAGED_E2B_TEMPLATE_CPUS,
-          memoryMiB: MANAGED_E2B_TEMPLATE_MEMORY_MIB,
-          credentials: options.credentials,
-          projectRoot: options.projectRoot ?? projectRoot(import.meta.url),
-          onLog: (message) => {
-            // Long builds must heartbeat; coalesce log bursts to one call per 30 seconds.
-            if (options.onLog && now() - lastLog >= 30_000) {
-              lastLog = now();
-              options.onLog(message);
-            }
-          },
-          ...(options.signal ? { signal: options.signal } : {}),
-        });
+    result = await buildSelfBenchE2BTemplate({
+      name: reference,
+      cpuCount: MANAGED_E2B_TEMPLATE_CPUS,
+      memoryMiB: MANAGED_E2B_TEMPLATE_MEMORY_MIB,
+      credentials: options.credentials,
+      projectRoot: options.projectRoot ?? projectRoot(import.meta.url),
+      ...(options.buildApi ? { api: options.buildApi } : {}),
+      onLog: (message) => {
+        // Long builds must heartbeat; coalesce log bursts to one call per 30 seconds.
+        if (options.onLog && now() - lastLog >= 30_000) {
+          lastLog = now();
+          options.onLog(message);
+        }
+      },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
   } catch (error) {
     // Release the claim by writing our own record at our version: a delete could wipe a
     // successor's lock that a stale-window takeover already placed on this path.

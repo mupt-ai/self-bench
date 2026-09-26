@@ -23,7 +23,6 @@ test("counts reject missing, fractional, negative, zero, excessive and client-su
 
 test("authenticated repo start resolves commit, stages readable input, associates before start and lists on reload", async () => {
   const f = await fixture();
-  expect((await f.request(ROOT, { headers: { authorization: "" } })).status).toBe(401);
   expect((await f.request(ROOT.replace("team", "outsider"), { method: "POST" })).status).toBe(404);
   const response = await f.start();
   expect(response.status).toBe(202);

@@ -32,6 +32,7 @@ test("GitHub sign-in shows progress, blocks repeat clicks, and resets on return"
     const link = browser.document.querySelector('a[href="/auth/github"]');
     if (!(link instanceof browser.HTMLAnchorElement))
       throw new Error("Missing GitHub sign-in link");
+    expect(container.querySelector("h1")?.textContent).toBe("Sign In");
     expect(link.textContent).toBe("Continue with GitHub");
     expect(link.getAttribute("aria-busy")).toBe("false");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(

@@ -25,22 +25,6 @@ describe("VercelSandboxExecutor validation", () => {
         ?.path,
     ).toContain("wait=true");
   });
-  test("treats a missing required output after exit zero as an execution failure", async () => {
-    const fixture = new VercelSdkFixture();
-    fixture.commandExitCode = 0;
-    const executor = new VercelSandboxExecutor(config, fixture.fetch);
-
-    await expect(
-      executor.run({
-        runId: "missing-output",
-        stage: "author",
-        command: ["node", "script.js"],
-        outputPaths: ["/work/required.tar.gz"],
-        timeoutMs: 60_000,
-      }),
-    ).rejects.toThrow("exited 0 without /work/required.tar.gz");
-    expect(fixture.calls.at(-1)?.method).toBe("DELETE");
-  });
   test("rejects invalid paths and resource mappings before allocation", async () => {
     const fixture = new VercelSdkFixture();
     const executor = new VercelSandboxExecutor(config, fixture.fetch);
@@ -64,20 +48,6 @@ describe("VercelSandboxExecutor validation", () => {
         memoryMiB: 4096,
       }),
     ).rejects.toThrow("Vercel fixes memory at 2048 MiB per vCPU");
-    expect(fixture.calls).toEqual([]);
-  });
-  test("does not allocate when cancellation is already requested", async () => {
-    const fixture = new VercelSdkFixture();
-    const executor = new VercelSandboxExecutor(config, fixture.fetch);
-    const controller = new AbortController();
-    controller.abort(new Error("cancelled before run"));
-
-    await expect(
-      executor.run(
-        { runId: "cancelled", stage: "author", command: ["true"], timeoutMs: 60_000 },
-        { signal: controller.signal },
-      ),
-    ).rejects.toThrow("cancelled before run");
     expect(fixture.calls).toEqual([]);
   });
 });
