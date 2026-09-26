@@ -130,14 +130,17 @@ resource "google_service_account_iam_member" "runtime_workload_identity" {
   service_account_id = google_service_account.runtime.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${local.workload_pool}[${local.worker_namespace}/${local.worker_account}]"
+  # The cluster creates the project's workload identity pool these members name.
+  depends_on = [google_container_cluster.workers]
 }
 # The Secret Manager add-on mounts bundles as the pod's own Kubernetes identity.
 resource "google_secret_manager_secret_iam_member" "worker_pod_reader" {
-  for_each  = var.gke_workers ? toset(["shared", "worker"]) : toset([])
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
+  for_each   = var.gke_workers ? toset(["shared", "worker"]) : toset([])
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
+  depends_on = [google_container_cluster.workers]
 }
 # KEDA reads queue backlogs from Temporal with this key; loaded out of band like the bundles.
 resource "google_secret_manager_secret" "temporal_api_key" {
@@ -154,11 +157,12 @@ resource "google_secret_manager_secret" "temporal_api_key" {
   }
 }
 resource "google_secret_manager_secret_iam_member" "keda_temporal_reader" {
-  count     = local.gke
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.temporal_api_key[0].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "${local.kubernetes_principal}/keda/sa/keda-operator"
+  count      = local.gke
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.temporal_api_key[0].secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "${local.kubernetes_principal}/keda/sa/keda-operator"
+  depends_on = [google_container_cluster.workers]
 }
 
 resource "helm_release" "keda" {
