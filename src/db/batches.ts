@@ -93,6 +93,74 @@ export function createBatchStore(db: Database) {
         return true;
       });
     },
+    /**
+     * Claims a preparing batch no replica has claimed since `staleBefore` (epoch ms). The claim
+     * commits before any GitHub I/O, so no row lock is held while preparing.
+     */
+    async claimPrepare(
+      runId: string,
+      now: number,
+      staleBefore: number,
+    ): Promise<(GenerationBatch & { prepareAttempt: number }) | undefined> {
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(generationBatches)
+          .where(eq(generationBatches.runId, runId))
+          .for("update", { skipLocked: true });
+        if (row?.state.phase !== "preparing") return undefined;
+        if (row.state.prepareAttempt !== undefined && row.state.prepareAttempt > staleBefore)
+          return undefined;
+        const state = { ...row.state, prepareAttempt: now };
+        await tx
+          .update(generationBatches)
+          .set({ state, updatedAt: new Date() })
+          .where(eq(generationBatches.runId, runId));
+        return state;
+      });
+    },
+    /**
+     * Records a preparation outcome only while `attempt` is still the batch's current claim; a
+     * cancelled or taken-over batch keeps its state.
+     */
+    async completePrepare(
+      runId: string,
+      attempt: number,
+      outcome: Pick<GenerationBatch, "shards"> | { error: string },
+    ): Promise<void> {
+      await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(generationBatches)
+          .where(eq(generationBatches.runId, runId))
+          .for("update");
+        if (row?.state.phase !== "preparing" || row.state.prepareAttempt !== attempt) return;
+        const state: GenerationBatch =
+          "error" in outcome
+            ? { ...row.state, phase: "failed", error: outcome.error }
+            : { ...row.state, phase: "discovering", shards: outcome.shards };
+        await tx
+          .update(generationBatches)
+          .set({ state, updatedAt: new Date() })
+          .where(eq(generationBatches.runId, runId));
+      });
+    },
+    /** Fails a preparing batch untouched since `staleBefore`: no replica can still prepare it. */
+    async abandonPrepare(runId: string, staleBefore: number, error: string): Promise<void> {
+      await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(generationBatches)
+          .where(eq(generationBatches.runId, runId))
+          .for("update", { skipLocked: true });
+        if (row?.state.phase !== "preparing") return;
+        if ((row.state.prepareAttempt ?? row.state.acceptedAt ?? 0) > staleBefore) return;
+        await tx
+          .update(generationBatches)
+          .set({ state: { ...row.state, phase: "failed", error }, updatedAt: new Date() })
+          .where(eq(generationBatches.runId, runId));
+      });
+    },
     async cancel(runId: string): Promise<boolean> {
       return db.transaction(async (tx) => {
         const [row] = await tx

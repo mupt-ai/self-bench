@@ -31,6 +31,7 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
       },
       token: "secret-lookup-token",
       taskQueue: "generation",
+      attempt: 1,
       artifacts,
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init.body)) as { variables: { after: string | null } };
@@ -91,6 +92,7 @@ test("server stages complete PR chunks before dispatch, without retaining the lo
       run: { ...run, provenance },
       token: "secret-lookup-token",
       taskQueue: "generation",
+      attempt: 1,
       artifacts,
       fetchImpl: async () =>
         Response.json({

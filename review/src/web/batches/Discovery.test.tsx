@@ -48,3 +48,8 @@ test("shows a Discovery section above an empty task list while shards are runnin
 test("hides Discovery after generation when no shards ran", () => {
   expect(renderToStaticMarkup(<Discovery status={status({ phase: "authoring" })} />)).toBe("");
 });
+
+test("a preparing batch says it is collecting merged PRs before any shard exists", () => {
+  const html = renderToStaticMarkup(<Discovery status={status({ phase: "preparing" })} />);
+  expect(html).toContain("Collecting Merged PRs");
+});

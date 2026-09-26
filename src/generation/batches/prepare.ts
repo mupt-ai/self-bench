@@ -11,6 +11,8 @@ export async function prepareGenerationBatch(options: {
   token: string;
   artifacts: ArtifactStore;
   taskQueue: string;
+  /** Artifacts are write-once, so each preparation attempt stages its own shard inputs. */
+  attempt: number;
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
   endpoint?: string;
 }): Promise<GenerationBatch> {
@@ -33,30 +35,32 @@ export async function prepareGenerationBatch(options: {
     shardCount,
     discoveryPrsPerShard(requested, shardCount),
   );
-  const shards: GenerationBatch["shards"] = [];
-  for (const [index, chunk] of selected.entries()) {
-    const provenance = await artifacts.put(
-      `runs/${run.runId}/input/shard-${index}.jsonl`,
-      Buffer.from(`${chunk.map((message) => JSON.stringify(message)).join("\n")}\n`),
-      "application/x-ndjson",
-    );
-    shards.push({
-      workflowId: `${run.runId}/discovery/${index}`,
-      input: {
-        run: { ...run, provenance },
-        partitioned: true,
-        wave: 0,
-        shardIndex: index,
-        shardCount: selected.length,
-        targetCounts: Object.fromEntries(
-          Object.entries(run.candidateCounts).map(([tier, count]) => [
-            tier,
-            count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
-          ]),
-        ) as RunRequest["candidateCounts"],
-        excludedSourcePrs: [],
-      },
-    });
-  }
+  const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
+  const shards: GenerationBatch["shards"] = await Promise.all(
+    selected.map(async (chunk, index) => {
+      const provenance = await artifacts.put(
+        `${input}/shard-${index}.jsonl`,
+        Buffer.from(`${chunk.map((message) => JSON.stringify(message)).join("\n")}\n`),
+        "application/x-ndjson",
+      );
+      return {
+        workflowId: `${run.runId}/discovery/${index}`,
+        input: {
+          run: { ...run, provenance },
+          partitioned: true,
+          wave: 0,
+          shardIndex: index,
+          shardCount: selected.length,
+          targetCounts: Object.fromEntries(
+            Object.entries(run.candidateCounts).map(([tier, count]) => [
+              tier,
+              count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
+            ]),
+          ) as RunRequest["candidateCounts"],
+          excludedSourcePrs: [],
+        },
+      };
+    }),
+  );
   return { run, taskQueue: options.taskQueue, phase: "discovering", shards, candidates: [] };
 }

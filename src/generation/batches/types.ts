@@ -32,6 +32,7 @@ interface BatchCandidate extends BatchItem {
 /** Phases after which a batch is never reconciled again. */
 export const FINISHED_PHASES = ["complete", "failed", "cancelled"] as const;
 type BatchPhase =
+  | "preparing"
   | "discovering"
   | "authoring"
   | "exporting"
@@ -47,6 +48,13 @@ export interface GenerationBatch {
   run: RunRequest;
   taskQueue: string;
   phase: BatchPhase;
+  /**
+   * Preparation (the merged-PR fetch and shard staging) runs after the start request returns.
+   * `acceptedAt` is when the batch was accepted and `prepareAttempt` when a replica last claimed
+   * preparation (epoch ms); a stale claim lets another replica take over a crashed one.
+   */
+  acceptedAt?: number;
+  prepareAttempt?: number;
   shards: BatchShard[];
   candidates: BatchCandidate[];
   export?: ArtifactRef;

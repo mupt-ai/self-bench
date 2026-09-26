@@ -75,6 +75,14 @@ export async function saveGenerationRecords(
   await records.write(generationGitHubTokenPath(runId), { value: githubToken }, 0);
 }
 
+/** The submitter's saved GitHub token, when this run stored one. */
+export async function readGenerationGitHubToken(
+  records: EncryptedRecordStore,
+  runId: string,
+): Promise<string | undefined> {
+  return (await records.read<{ value: string }>(generationGitHubTokenPath(runId)))?.value.value;
+}
+
 /** The organization whose credentials a run uses. */
 function credentialOrg(reference: GenerationReference): number {
   return reference.orgId ?? reference.ownerId;
@@ -176,8 +184,8 @@ export async function generationEnvironment(
   // The platform OpenRouter key is not a run credential: managed runs re-inject it under
   // its sandbox name below, and credential runs must resolve their own subscription auth.
   delete env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
-  const github = await records.read<{ value: string }>(generationGitHubTokenPath(runId));
-  if (github?.value.value) env.GH_TOKEN = github.value.value;
+  const github = await readGenerationGitHubToken(records, runId);
+  if (github) env.GH_TOKEN = github;
   // A worker's own provider credentials must never reach a generation sandbox.
   for (const key of WORKER_PROVIDER_CREDENTIALS) delete env[key];
   // Model credential: managed platform access, or one stored credential per stage.
