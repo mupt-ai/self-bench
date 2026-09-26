@@ -62,6 +62,7 @@ async function preparingService() {
     },
   };
   return {
+    db: database.db,
     service,
     store,
     started,
@@ -124,6 +125,29 @@ test("a batch cancelled while preparing never starts discovery", async () => {
     await f.service.close();
     expect((await f.store.read(run.runId))?.phase).toBe("cancelled");
     expect(f.started.size).toBe(0);
+  } finally {
+    await f.close();
+  }
+}, 12_000);
+
+test("a preparation whose result fails to save retries the save without refetching", async () => {
+  const f = await preparingService();
+  try {
+    await f.service.start(run, "submitter-token");
+    const transaction = f.db.transaction.bind(f.db);
+    let failed = false;
+    const save = spyOn(f.db, "transaction").mockImplementation(((
+      ...args: Parameters<typeof transaction>
+    ) => {
+      if (failed) return transaction(...args);
+      failed = true;
+      return Promise.reject(new Error("database unavailable"));
+    }) as typeof transaction);
+    f.prepared.resolve(f.discovering);
+    await f.until(async () => (await f.store.read(run.runId))?.phase === "discovering");
+    save.mockRestore();
+    expect((await f.store.read(run.runId))?.phase).toBe("discovering");
+    expect(f.tokens).toEqual(["submitter-token"]);
   } finally {
     await f.close();
   }

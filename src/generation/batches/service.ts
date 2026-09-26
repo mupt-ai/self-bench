@@ -26,6 +26,8 @@ export class RunNotFoundError extends Error {
   }
 }
 
+type PrepareOutcome = Pick<GenerationBatch, "shards"> | { error: string };
+
 /** A preparation claim older than this belongs to a crashed replica and may be retaken. */
 const PREPARE_STALE_MS = 10 * 60_000;
 
@@ -63,7 +65,19 @@ export function createGenerationBatches(
   // the token in the vault, so any replica can take over its preparation.
   const tokens = new Map<string, string>();
   const preparing = new Map<string, Promise<void>>();
+  // Outcomes whose recording failed; this replica still holds their claim, so it retries the
+  // write rather than waiting for the claim to go stale.
+  const unrecorded = new Map<string, { attempt: number; outcome: PrepareOutcome }>();
+  const record = async (runId: string, attempt: number, outcome: PrepareOutcome) => {
+    unrecorded.set(runId, { attempt, outcome });
+    await store.completePrepare(runId, attempt, outcome);
+    unrecorded.delete(runId);
+    tokens.delete(runId);
+    poll();
+  };
   const prepare = async (runId: string) => {
+    const pending = unrecorded.get(runId);
+    if (pending) return record(runId, pending.attempt, pending.outcome);
     const token =
       tokens.get(runId) ??
       (vault ? await readGenerationGitHubToken(vault.records, runId) : undefined);
@@ -78,7 +92,7 @@ export function createGenerationBatches(
     }
     const claimed = await store.claimPrepare(runId, Date.now(), staleBefore);
     if (!claimed) return;
-    let outcome: Pick<GenerationBatch, "shards"> | { error: string };
+    let outcome: PrepareOutcome;
     try {
       const { shards } = await prepareGenerationBatch({
         run: claimed.run,
@@ -91,9 +105,7 @@ export function createGenerationBatches(
     } catch (error) {
       outcome = { error: errorMessage(error) };
     }
-    await store.completePrepare(runId, claimed.prepareAttempt, outcome);
-    tokens.delete(runId);
-    poll();
+    await record(runId, claimed.prepareAttempt, outcome);
   };
   // Like exports, GitHub I/O runs outside any row lock and never stalls other batches.
   const startPrepare = (runId: string) => {
