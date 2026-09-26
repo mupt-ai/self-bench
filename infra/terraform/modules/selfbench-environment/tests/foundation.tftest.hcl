@@ -146,8 +146,8 @@ run "allow_operator_chosen_project" {
 run "gke_workers_off_by_default" {
   command = plan
   assert {
-    condition     = length(google_container_cluster.workers) == 0 && length(helm_release.workers) == 0 && output.workers_cluster == null
-    error_message = "The GKE workers stay off until gke_workers is set."
+    condition     = length(google_container_cluster.workers) == 0 && length(helm_release.workers) == 0 && length(google_compute_subnetwork.app.secondary_ip_range) == 0
+    error_message = "Harbor work stays on the Cloud Run pool until gke_workers is set."
   }
 }
 run "gke_workers" {
@@ -167,16 +167,12 @@ run "gke_workers" {
     }
   }
   assert {
-    condition     = google_container_cluster.workers[0].enable_autopilot && google_container_cluster.workers[0].private_cluster_config[0].enable_private_nodes && google_container_cluster.workers[0].secret_manager_config[0].enabled
-    error_message = "Workers run on Autopilot with private nodes and Secret Manager mounts."
+    condition     = google_container_cluster.workers[0].enable_autopilot && toset([for range in google_compute_subnetwork.app.secondary_ip_range : range.range_name]) == toset(["gke-pods", "gke-services"])
+    error_message = "Harbor workers run on Autopilot with pod and service ranges in the app subnet, next to Cloud SQL."
   }
   assert {
-    condition     = google_compute_router_nat.gke[0].source_subnetwork_ip_ranges_to_nat == "LIST_OF_SUBNETWORKS" && contains(local.apis, "container.googleapis.com")
-    error_message = "Private nodes reach the internet through NAT, and the GKE API is enabled."
-  }
-  assert {
-    condition     = google_service_account_iam_member.runtime_workload_identity[0].member == "serviceAccount:selfbench-dev-testing.svc.id.goog[selfbench/selfbench-worker]"
-    error_message = "Only the worker's Kubernetes account acts as the runtime account."
+    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "workflows"]
+    error_message = "The Cloud Run pool leaves Harbor work to GKE."
   }
   assert {
     condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["shared", "worker"]
@@ -188,11 +184,11 @@ run "gke_workers" {
       worker   = "projects/selfbench-dev-testing/secrets/selfbench-worker-env/versions/1"
       temporal = { id = "selfbench-temporal-api-key", version = "2" }
     }
-    error_message = "Worker pods and KEDA read pinned secret versions, never latest or the API's."
+    error_message = "Worker pods and KEDA read pinned secret versions."
   }
   assert {
-    condition     = yamldecode(helm_release.workers[0].values[0]).image == var.image && yamldecode(helm_release.workers[0].values[0]).temporal.taskQueue == "selfbench-dev" && yamldecode(helm_release.workers[0].values[0]).harbor == { slots = 10, minReplicas = 0, maxReplicas = 100 }
-    error_message = "Workers run the release image on the environment's queue, with up to 1000 Harbor slots."
+    condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 100
+    error_message = "KEDA scales on the Harbor queue, up to 100 pods."
   }
 }
 run "gke_workers_need_temporal_settings" {

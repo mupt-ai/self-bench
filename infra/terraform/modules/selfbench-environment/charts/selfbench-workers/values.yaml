@@ -1,6 +1,5 @@
 # Every value is set by Terraform (gke.tf, helm_release.workers).
 image: ""
-serviceAccount: selfbench-worker
 runtimeAccount: ""
 secrets:
   shared: ""
@@ -11,11 +10,5 @@ secrets:
 temporal:
   address: ""
   namespace: ""
-  taskQueue: ""
-workflows:
-  activityConcurrency: 8
-  maxReplicas: 3
-harbor:
-  slots: 10
-  minReplicas: 0
-  maxReplicas: 100
+  queue: ""
+maxReplicas: 100

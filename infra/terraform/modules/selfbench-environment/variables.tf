@@ -92,7 +92,7 @@ variable "api_max_instances" {
   default     = 3
 }
 variable "gke_workers" {
-  description = "Run the Temporal worker on GKE Autopilot, its workflow and Harbor queues scaled apart by KEDA."
+  description = "Run Harbor work on GKE Autopilot, scaled by KEDA on the Harbor queue backlog."
   type        = bool
   default     = false
 }
@@ -114,27 +114,8 @@ variable "temporal_namespace" {
     error_message = "The GKE workers need the Temporal namespace."
   }
 }
-variable "workflow_worker_max_replicas" {
-  description = "Upper bound on workflow-queue worker pods; one always runs."
-  type        = number
-  default     = 3
-}
-variable "harbor_worker_slots" {
-  description = "Harbor activities each Harbor worker pod runs at once."
-  type        = number
-  default     = 10
-  validation {
-    condition     = var.harbor_worker_slots >= 1 && var.harbor_worker_slots <= 10
-    error_message = "Harbor slots per pod must be between 1 and 10."
-  }
-}
-variable "harbor_worker_min_replicas" {
-  description = "Harbor worker pods kept when the Harbor queue is empty; 0 scales to zero."
-  type        = number
-  default     = 0
-}
 variable "harbor_worker_max_replicas" {
-  description = "Upper bound on Harbor worker pods; this times harbor_worker_slots is the most Harbor checks and solver trials running at once."
+  description = "Most Harbor worker pods; each runs 10 Harbor activities, so 100 allows 1000 at once."
   type        = number
   default     = 100
 }

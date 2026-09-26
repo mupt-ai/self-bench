@@ -35,8 +35,6 @@ module "selfbench" {
   gke_workers                 = var.gke_workers
   temporal_address            = var.temporal_address
   temporal_namespace          = var.temporal_namespace
-  harbor_worker_min_replicas  = var.harbor_worker_min_replicas
-  harbor_worker_max_replicas  = var.harbor_worker_max_replicas
 }
 output "deployment" {
   value = module.selfbench.deployment
