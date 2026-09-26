@@ -61,8 +61,15 @@ export function assertHarborVersion(actual: string): void {
 
 export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // Harbor prints its result tables with rich, which truncates columns to COLUMNS (80 without a
-  // terminal); a wide width keeps every metric name and value whole in captured logs.
-  return { ...resolved, PYTHONPATH: harborPythonPath(), COLUMNS: "320" };
+  // terminal); a wide width keeps every metric name and value whole in captured logs. Harbor's
+  // job-finished telemetry imports litellm just to split model names, which takes a run's peak
+  // from ~105 MiB to ~280 MiB, and it would report our jobs to Harbor's analytics.
+  return {
+    ...resolved,
+    PYTHONPATH: harborPythonPath(),
+    COLUMNS: "320",
+    HARBOR_TELEMETRY: "off",
+  };
 }
 
 /** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */

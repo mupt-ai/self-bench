@@ -14,10 +14,12 @@ export function defaultActivityConcurrency(backend: ExecutionBackend): number {
 
 /**
  * Each `harbor run` is a Python client peaking near 300 MiB regardless of what the sandbox does
- * (measured in the production image: 40 concurrent Modal nop gates used 7.6 GiB). Its unpacked
- * task sits in /tmp, which is memory on Cloud Run, and carries the repository snapshot (bundles
- * averaged ~365 MB in a September 2026 PostHog batch). Sandbox-driving activities cost the
- * worker almost nothing, so only Harbor slots are sized to host memory.
+ * (measured in the production image: 40 concurrent Modal nop gates used 7.6 GiB). A gate peaks
+ * near 105 MiB with Harbor telemetry off, but solver trials share these slots and Harbor's Codex
+ * and Claude Code agents import litellm on the worker to price calls, so slots keep the larger
+ * figure. Its unpacked task sits in /tmp, which is memory on Cloud Run, and carries the repository
+ * snapshot (bundles averaged ~365 MB in a September 2026 PostHog batch). Sandbox-driving
+ * activities cost the worker almost nothing, so only Harbor slots are sized to host memory.
  * This module stays free of Node imports because the browser bundle reaches `config.ts`.
  */
 const RESERVED_BYTES = 2.25 * 1024 ** 3;
