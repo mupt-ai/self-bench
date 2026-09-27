@@ -5,12 +5,16 @@ locals {
     environment = var.environment
     managed_by  = "terraform"
   }
-  apis = toset(concat([
-    "compute.googleapis.com", "artifactregistry.googleapis.com", "storage.googleapis.com",
-    "secretmanager.googleapis.com", "iam.googleapis.com", "iamcredentials.googleapis.com",
-    "run.googleapis.com",
-    "certificatemanager.googleapis.com",
-  ], var.create_cloud_sql ? ["sqladmin.googleapis.com", "servicenetworking.googleapis.com"] : []))
+  apis = toset(concat(
+    [
+      "compute.googleapis.com", "artifactregistry.googleapis.com", "storage.googleapis.com",
+      "secretmanager.googleapis.com", "iam.googleapis.com", "iamcredentials.googleapis.com",
+      "run.googleapis.com",
+      "certificatemanager.googleapis.com",
+    ],
+    var.create_cloud_sql ? ["sqladmin.googleapis.com", "servicenetworking.googleapis.com"] : [],
+    var.gke_workers ? ["container.googleapis.com"] : [],
+  ))
 }
 resource "google_project_service" "api" {
   for_each           = local.apis

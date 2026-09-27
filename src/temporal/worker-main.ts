@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
+import { workerProcessSettings } from "../contracts/config/worker.js";
 import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
@@ -16,12 +17,14 @@ import { harborTaskQueue } from "./task-queues.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
 
 /**
- * The combined worker: generation and evaluation workflows and their sandbox activities on the
- * configured task queue, plus the Harbor activities on a sibling queue. Each Harbor activity
- * hosts a ~300 MiB Python client, so that queue's concurrency is sized to memory.
+ * The worker: generation and evaluation workflows and their sandbox activities on the configured
+ * task queue, plus the Harbor activities on a sibling queue. Each Harbor activity hosts a
+ * ~300 MiB Python client, so that queue's concurrency is sized to memory. `SELFBENCH_WORKER_ROLE`
+ * limits a process to one queue so each can scale on its own backlog.
  */
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
+const { role, shutdownGraceMs } = workerProcessSettings(process.env);
 await checkSandboxBackends(config);
 // Managed usage is billed at OpenRouter's live list prices; see openrouter-rates.ts.
 await keepOpenRouterRatesFresh().ready;
@@ -45,27 +48,43 @@ const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
   vault,
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
+// A stopping worker (SIGTERM on a scale-in or rollout) stops polling at once and lets in-flight
+// activities finish for shutdownGraceMs; Temporal retries anything still running after it.
 
 const workers = await Promise.all([
-  Worker.create({
-    connection,
-    namespace: config.temporal.namespace,
-    taskQueue: config.temporal.taskQueue,
-    workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
-    activities: { ...generation, ...evaluation },
-    maxConcurrentActivityTaskExecutions: config.activityConcurrency,
-    interceptors: { activity: [activityEventInterceptor()] },
-  }),
-  Worker.create({
-    connection,
-    namespace: config.temporal.namespace,
-    taskQueue: harborTaskQueue(config.temporal.taskQueue),
-    activities: { verifyCompiled, executeSolverEvaluation },
-    maxConcurrentActivityTaskExecutions: harborConcurrency,
-  }),
+  ...(role === "harbor"
+    ? []
+    : [
+        Worker.create({
+          connection,
+          namespace: config.temporal.namespace,
+          taskQueue: config.temporal.taskQueue,
+          workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
+          activities: { ...generation, ...evaluation },
+          maxConcurrentActivityTaskExecutions: config.activityConcurrency,
+          interceptors: { activity: [activityEventInterceptor()] },
+          shutdownGraceTime: shutdownGraceMs,
+        }),
+      ]),
+  ...(role === "workflows"
+    ? []
+    : [
+        Worker.create({
+          connection,
+          namespace: config.temporal.namespace,
+          taskQueue: harborTaskQueue(config.temporal.taskQueue),
+          activities: { verifyCompiled, executeSolverEvaluation },
+          maxConcurrentActivityTaskExecutions: harborConcurrency,
+          shutdownGraceTime: shutdownGraceMs,
+        }),
+      ]),
 ]);
+const slots = [
+  ...(role === "harbor" ? [] : [`activity concurrency ${config.activityConcurrency}`]),
+  ...(role === "workflows" ? [] : [`Harbor concurrency ${harborConcurrency}`]),
+];
 console.log(
-  `SelfBench worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with activity concurrency ${config.activityConcurrency} and Harbor concurrency ${harborConcurrency}`,
+  `SelfBench ${role} worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with ${slots.join(" and ")}`,
 );
 try {
   await Promise.all(workers.map((worker) => worker.run()));

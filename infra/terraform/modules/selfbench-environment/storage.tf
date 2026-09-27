@@ -59,6 +59,24 @@ resource "google_secret_manager_secret" "runtime" {
   }
   depends_on = [google_project_service.api]
 }
+# The Temporal API key alone, for KEDA to read queue backlogs when gke_workers is on. It exists
+# in every environment so a version can be loaded and pinned before the workers are turned on.
+resource "google_secret_manager_secret" "temporal_api_key" {
+  project   = var.project_id
+  secret_id = "selfbench-temporal-api-key"
+  labels    = local.labels
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+  lifecycle {
+    prevent_destroy = true
+  }
+  depends_on = [google_project_service.api]
+}
 # The worker never reads the API's secret.
 resource "google_secret_manager_secret_iam_member" "runtime_reader" {
   for_each  = toset(["shared", "worker"])

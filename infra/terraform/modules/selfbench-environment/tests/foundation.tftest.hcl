@@ -1,5 +1,6 @@
 # Mock-only tests: apply means apply to a mock provider, NEVER GCP.
 mock_provider "google" {}
+mock_provider "helm" {}
 variables {
   project_id           = "selfbench-dev-testing"
   environment          = "dev"
@@ -141,4 +142,57 @@ run "allow_operator_chosen_project" {
     condition     = google_cloud_run_v2_service.api.project == "community-production"
     error_message = "The reusable module must accept an operator-chosen project ID."
   }
+}
+run "gke_workers_off_by_default" {
+  command = plan
+  assert {
+    condition     = length(google_container_cluster.workers) == 0 && length(helm_release.workers) == 0 && length(google_compute_subnetwork.app.secondary_ip_range) == 0
+    error_message = "Harbor work stays on the Cloud Run pool until gke_workers is set."
+  }
+}
+run "gke_workers" {
+  command = plan
+  variables {
+    gke_workers        = true
+    temporal_address   = "us-central1.gcp.api.temporal.io:7233"
+    temporal_namespace = "selfbench-dev.abc12"
+    secret_versions    = { shared = 7, api = 3, worker = 1, temporal = 2 }
+  }
+  override_resource {
+    target          = google_service_account.runtime
+    override_during = plan
+    values = {
+      email = "selfbench-dev-runtime@selfbench-dev-testing.iam.gserviceaccount.com"
+      name  = "projects/selfbench-dev-testing/serviceAccounts/selfbench-dev-runtime@selfbench-dev-testing.iam.gserviceaccount.com"
+    }
+  }
+  assert {
+    condition     = google_container_cluster.workers[0].enable_autopilot && toset([for range in google_compute_subnetwork.app.secondary_ip_range : range.range_name]) == toset(["gke-pods", "gke-services"])
+    error_message = "Harbor workers run on Autopilot with pod and service ranges in the app subnet, next to Cloud SQL."
+  }
+  assert {
+    condition     = length(google_service_account.gke_nodes) == 1 && google_artifact_registry_repository_iam_member.gke_nodes[0].role == "roles/artifactregistry.reader"
+    error_message = "Nodes run as their own account, which can pull the release image."
+  }
+  assert {
+    condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["shared", "worker"]
+    error_message = "Worker pods must not read the API's secret."
+  }
+  assert {
+    condition = yamldecode(helm_release.workers[0].values[0]).secrets == {
+      shared   = "projects/selfbench-dev-testing/secrets/selfbench-shared-env/versions/7"
+      worker   = "projects/selfbench-dev-testing/secrets/selfbench-worker-env/versions/1"
+      temporal = { id = "selfbench-temporal-api-key", version = "2" }
+    }
+    error_message = "Worker pods and KEDA read pinned secret versions."
+  }
+  assert {
+    condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 100
+    error_message = "KEDA scales on the Harbor queue, up to 100 pods."
+  }
+}
+run "gke_workers_need_temporal_settings" {
+  command = plan
+  variables { gke_workers = true }
+  expect_failures = [var.secret_versions, var.temporal_address, var.temporal_namespace]
 }

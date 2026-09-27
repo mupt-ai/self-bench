@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../src/contracts/config/index.js";
+import { workerProcessSettings } from "../src/contracts/config/worker.js";
 import { harborSlotsForMemory } from "../src/contracts/config/worker-capacity.js";
 import { harborTaskQueue } from "../src/temporal/task-queues.js";
 import { resolveHarborConcurrency } from "../src/temporal/worker-memory.js";
@@ -33,4 +34,15 @@ test("the resolved Harbor concurrency keeps the hard cap for direct callers", ()
 
 test("the Harbor queue is derived from the worker queue", () => {
   expect(harborTaskQueue("selfbench-prod")).toBe("selfbench-prod-harbor");
+});
+
+test("a worker polls both queues and stops at once unless its role and grace are set", () => {
+  expect(workerProcessSettings({})).toEqual({ role: "all", shutdownGraceMs: 0 });
+  expect(
+    workerProcessSettings({
+      SELFBENCH_WORKER_ROLE: "harbor",
+      SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS: "10800",
+    }),
+  ).toEqual({ role: "harbor", shutdownGraceMs: 10_800_000 });
+  expect(() => workerProcessSettings({ SELFBENCH_WORKER_ROLE: "api" })).toThrow();
 });

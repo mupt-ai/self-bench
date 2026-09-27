@@ -1,0 +1,93 @@
+# The Harbor worker: each pod runs 10 Harbor checks or solver trials at once, and KEDA sets the
+# pod count from the Harbor queue's backlog. A pod being removed stops taking work and finishes
+# what it holds first: a solver evaluation is one unretried activity of up to 72 hours.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selfbench-harbor-worker
+spec:
+  selector:
+    matchLabels:
+      app: selfbench-harbor-worker
+  template:
+    metadata:
+      labels:
+        app: selfbench-harbor-worker
+      annotations:
+        # Autopilot keeps a busy pod through node scale-down and upgrades.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+        # New pinned bundle versions roll the pods, as a new Cloud Run revision would.
+        selfbench.dev/secrets: {{ printf "%s %s" .Values.secrets.shared .Values.secrets.worker | sha256sum | trunc 16 | quote }}
+    spec:
+      serviceAccountName: selfbench-worker
+      securityContext:
+        # The image runs as node (1000); the scratch disk must be writable by it.
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 259500
+      containers:
+        - name: worker
+          image: {{ .Values.image | quote }}
+          command:
+            - node
+            - --env-file=/secrets/shared-env
+            - --env-file=/secrets/worker-env
+            - dist/temporal/worker-main.js
+          env:
+            - name: SELFBENCH_WORKER_ROLE
+              value: harbor
+            - name: SELFBENCH_HARBOR_CONCURRENCY
+              value: "10"
+            - name: SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS
+              value: "259200"
+          resources:
+            requests: { cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi }
+            limits: { cpu: "2", memory: 8Gi, ephemeral-storage: 2Gi }
+          volumeMounts:
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            - name: scratch
+              mountPath: /tmp
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: selfbench-worker-env
+        # Ten unpacked task bundles and their Harbor downloads, on a disk of the pod's own.
+        - name: scratch
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 100Gi
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: selfbench-harbor-worker
+spec:
+  scaleTargetRef:
+    name: selfbench-harbor-worker
+  minReplicaCount: 0
+  maxReplicaCount: {{ .Values.maxReplicas }}
+  # Wait 15 minutes of lower backlog before removing pods.
+  cooldownPeriod: 900
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 900
+  triggers:
+    - type: temporal
+      metadata:
+        endpoint: {{ .Values.temporal.address | quote }}
+        namespace: {{ .Values.temporal.namespace | quote }}
+        taskQueue: {{ .Values.temporal.queue | quote }}
+        queueTypes: activity
+        targetQueueSize: "10"
+      authenticationRef:
+        name: temporal
