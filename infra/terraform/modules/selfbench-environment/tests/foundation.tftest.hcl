@@ -187,8 +187,8 @@ run "gke_workers" {
     error_message = "Worker pods and KEDA read pinned secret versions."
   }
   assert {
-    condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 100
-    error_message = "KEDA scales on the Harbor queue, up to 100 pods."
+    condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 20
+    error_message = "KEDA scales on the Harbor queue, up to 20 pods by default."
   }
 }
 run "gke_workers_need_temporal_settings" {
