@@ -115,7 +115,7 @@ variable "temporal_namespace" {
   }
 }
 variable "harbor_worker_max_replicas" {
-  description = "Most Harbor worker pods; each runs 10 Harbor activities, so 100 allows 1000 at once."
+  description = "Most Harbor worker pods; each runs 10 Harbor activities, so 20 allows 200 at once. Also caps the pod spend (about $0.14 an hour each)."
   type        = number
-  default     = 100
+  default     = 20
 }

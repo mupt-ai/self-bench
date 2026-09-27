@@ -144,7 +144,7 @@ With `"gke_workers": true`, Harbor work (the `<task queue>-harbor` queue: Harbor
 
 To turn it on:
 
-1. Grant the apply role `roles/container.admin`, and the plan role `container.clusters.get` plus read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records.
+1. Grant the apply role `roles/container.admin`, and the plan role `container.clusters.get` plus read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records. Both also need `compute.instanceGroupManagers.get` and `.list`: the provider reads the cluster's node pools through them.
 2. Add a version holding only `SELFBENCH_TEMPORAL_API_KEY` to the `selfbench-temporal-api-key` secret (Terraform creates it empty), and record it as `"temporal"` in `infra/runtime/secret-versions/<env>.json`.
 3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` to `TF_INPUTS_JSON`, and release.
 

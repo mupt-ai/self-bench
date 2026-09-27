@@ -11,4 +11,4 @@ temporal:
   address: ""
   namespace: ""
   queue: ""
-maxReplicas: 100
+maxReplicas: 20

@@ -56,3 +56,7 @@ variable "temporal_namespace" {
   type    = string
   default = ""
 }
+variable "harbor_worker_max_replicas" {
+  type    = number
+  default = 20
+}
