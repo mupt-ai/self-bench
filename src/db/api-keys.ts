@@ -5,7 +5,7 @@ import type { Database } from "./client.js";
 import { apiKeys, users } from "./schema.js";
 import type { ApiKeyRef, User } from "./users.js";
 
-export const API_KEY_PREFIX = "sbk_";
+const API_KEY_PREFIX = "sbk_";
 export type ApiKeyScope = ApiKeyRef["scope"];
 export const API_KEY_SCOPES: readonly ApiKeyScope[] = ["read", "write"];
 const DISPLAY_PREFIX_LENGTH = API_KEY_PREFIX.length + 8;
@@ -64,7 +64,7 @@ export function apiKeyDenies(user: User, method: string | undefined): string | u
   return "this API key is read-only";
 }
 
-export function hashApiKey(secret: string): string {
+function hashApiKey(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");
 }
 

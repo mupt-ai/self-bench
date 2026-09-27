@@ -95,7 +95,7 @@ const SECRET_RUN_ENTROPY_BITS = 3.5;
  * A secret-named variable may carry a fixed placeholder literal: no entropy, short, or a documented
  * placeholder pattern. Values shaped like real key material stay rejected.
  */
-export function isPlaceholderSecretValue(value: string): boolean {
+function isPlaceholderSecretValue(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     return true;

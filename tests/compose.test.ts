@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 
 const composeEmpty = (name: string): string => `\${${name}:-}`;
@@ -17,10 +17,20 @@ type ComposeDocument = {
 };
 
 describe("Compose provider credential boundary", () => {
-  test("defines one shared environment and preserves the checkout sandbox image on both services", async () => {
-    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
+  let source: string;
+  let compose: ComposeDocument;
+  let api: Readonly<Record<string, string>>;
+  let worker: Readonly<Record<string, string>>;
+
+  beforeAll(async () => {
+    source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
+    compose = Bun.YAML.parse(source) as ComposeDocument;
+    api = compose.services.api?.environment ?? {};
+    worker = compose.services.worker?.environment ?? {};
+  });
+
+  test("defines one shared environment and preserves the checkout sandbox image on both services", () => {
     expect(source.match(/^x-selfbench-environment:/gm)).toHaveLength(1);
-    const compose = Bun.YAML.parse(source) as ComposeDocument;
     expect(compose.name).toBeUndefined();
     for (const service of ["api", "worker"]) {
       expect(compose.services[service]?.environment).toMatchObject({
@@ -41,12 +51,7 @@ describe("Compose provider credential boundary", () => {
     });
   });
 
-  test("shares E2B run metadata with the API but gives control credentials only to the worker", async () => {
-    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
-    const compose = Bun.YAML.parse(source) as ComposeDocument;
-    const api = compose.services.api?.environment ?? {};
-    const worker = compose.services.worker?.environment ?? {};
-
+  test("shares E2B run metadata with the API but gives control credentials only to the worker", () => {
     expect(api).toMatchObject({
       SELFBENCH_E2B_TEMPLATE: composeEmpty("SELFBENCH_E2B_TEMPLATE"),
       SELFBENCH_E2B_TIMEOUT_CAP: composeEmpty("SELFBENCH_E2B_TIMEOUT_CAP"),
@@ -61,11 +66,7 @@ describe("Compose provider credential boundary", () => {
     });
   });
 
-  test("workers get no host model or Stripe credentials", async () => {
-    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
-    const compose = Bun.YAML.parse(source) as ComposeDocument;
-    const api = compose.services.api?.environment ?? {};
-    const worker = compose.services.worker?.environment ?? {};
+  test("workers get no host model or Stripe credentials", () => {
     expect(worker).not.toHaveProperty("OPENAI_API_KEY");
     expect(worker).not.toHaveProperty("SELFBENCH_PI_AUTH_JSON");
     expect(api).toMatchObject({
@@ -90,12 +91,7 @@ describe("Compose provider credential boundary", () => {
     );
   });
 
-  test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", async () => {
-    const source = await Bun.file(resolve(import.meta.dir, "../compose.yaml")).text();
-    const compose = Bun.YAML.parse(source) as ComposeDocument;
-    const api = compose.services.api?.environment ?? {};
-    const worker = compose.services.worker?.environment ?? {};
-
+  test("shares the site database with the worker but keeps GitHub sign-in secrets on the API", () => {
     const databaseUrl = "postgres://selfbench:selfbench@site-postgres:5432/selfbench";
     expect(api).toMatchObject({
       SELFBENCH_DATABASE_URL: databaseUrl,

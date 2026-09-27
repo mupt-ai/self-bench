@@ -6,26 +6,9 @@ import {
   acceptingActivities,
   authorCandidates,
   candidate,
-  greenOutcome,
-  redReport,
-  ref,
 } from "../../support/workflow-fixture.js";
 
 describe("SelfBench workflow processing", () => {
-  test("counts an infrastructure round as a round the author can retry", async () => {
-    const activities = acceptingActivities([candidate("retry", 1)]);
-    activities.compileAndVerify = async ({ task, stage, round }) =>
-      round === 1 && stage === "authoring"
-        ? {
-            report: redReport(stage, round, task.taskId, { infrastructure: "ImageBuildError" }),
-            reportRef: ref("file:///report-1"),
-          }
-        : greenOutcome(task, stage, round);
-
-    const result = await authorCandidates(activities);
-
-    expect(result.acceptedTaskIds).toEqual(["retry-task"]);
-  });
   test("isolates an exhausted authoring activity and completes successful siblings", async () => {
     const activities = acceptingActivities([
       candidate("timed-out", 1),

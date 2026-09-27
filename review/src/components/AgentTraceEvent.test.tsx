@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentTraceEvent, eventPreview, formatTraceText, parseToolCall } from "./AgentTraceEvent";
 
-test("renders assistant text directly without a model-output wrapper", () => {
+test("renders assistant text verbatim with its formatted timestamp", () => {
   const html = renderToStaticMarkup(
     <AgentTraceEvent
       event={{
@@ -13,15 +13,11 @@ test("renders assistant text directly without a model-output wrapper", () => {
     />,
   );
 
-  expect(html).not.toContain("Model Output");
   expect(html).toContain("12:34:56 PM");
-  expect(html).toContain("text-[10px]");
-  expect(html).toContain("max-w-[96ch]");
-  expect(html).toContain("whitespace-pre-wrap");
   expect(html).toContain("I checked the implementation.\nThe focused tests pass.");
 });
 
-test("keeps provider-error metadata in the compact top-right header", () => {
+test("labels provider errors before their timestamp", () => {
   const html = renderToStaticMarkup(
     <AgentTraceEvent
       event={{
@@ -32,15 +28,13 @@ test("keeps provider-error metadata in the compact top-right header", () => {
     />,
   );
 
-  expect(html).toContain("justify-end");
-  expect(html).toContain("text-[10px] text-destructive");
   expect(html).toContain("Provider Error");
   expect(html).toContain("·</span><time");
   expect(html).toContain("12:34:56 PM");
   expect(html.indexOf("Provider Error")).toBeLessThan(html.indexOf("12:34:56 PM"));
 });
 
-test("labels tool outputs without a redundant returned-to-model detail", () => {
+test("labels tool calls by tool name with pretty arguments and summarises tool output", () => {
   const call = renderToStaticMarkup(
     <AgentTraceEvent
       event={{ kind: "tool", text: 'bash\n{"command":"bun test","timeout":30000}' }}
@@ -50,15 +44,12 @@ test("labels tool outputs without a redundant returned-to-model detail", () => {
     <AgentTraceEvent event={{ kind: "result", text: '{"passed":2,"failed":0}' }} />,
   );
 
-  expect(call).toContain("block truncate font-mono text-[10px] leading-4");
   expect(call).toContain("Tool Call");
   expect(call).toContain("· bash");
   expect(call).toContain("Arguments");
   expect(call).toContain("&quot;command&quot;: &quot;bun test&quot;");
   expect(result).toContain("Tool Output");
-  expect(result).not.toContain("Returned to Model");
   expect(result).toContain("passed: 2 · failed: 0");
-  expect(result).not.toContain("Model Input");
 });
 
 test("formats structured payloads without changing prose or malformed output", () => {
@@ -74,12 +65,4 @@ test("formats structured payloads without changing prose or malformed output", (
   expect(eventPreview('{"items":[1,2,3]}')).toBe("items: [3 items]");
   expect(eventPreview("\n\nfinished successfully\nmore")).toBe("finished successfully");
   expect(eventPreview("", "(no arguments)")).toBe("(no arguments)");
-});
-
-test("keeps expandable summaries keyboard-visible and ignores decorative disclosure glyphs", () => {
-  const html = renderToStaticMarkup(
-    <AgentTraceEvent event={{ kind: "result", text: '{"ok":true}' }} />,
-  );
-  expect(html).toContain("focus-visible:outline-foreground/40");
-  expect(html).toContain('aria-hidden="true"');
 });

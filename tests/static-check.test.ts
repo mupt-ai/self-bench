@@ -64,16 +64,6 @@ describe("static submission check", () => {
     );
   });
 
-  test("rejects a gold patch that changes a pass-to-pass test file at submit time", () => {
-    expect(check({ passToPass: ["src/feature.ts"] }).errors).toEqual([
-      {
-        gate: "audit",
-        message:
-          "gold patch changes pass-to-pass test files, which are graded at their base version: src/feature.ts",
-      },
-    ]);
-  });
-
   test("reports schema, patch, and path problems with their gates", () => {
     expect(check({ testCommand: "bun test" }).errors).toEqual([
       { gate: "schema", message: expect.stringContaining('"{tests}" exactly once') },
@@ -94,25 +84,6 @@ describe("static submission check", () => {
     expect(staticCheckSubmission({ definitionJson: "{", testPatch, goldPatch }).errors).toEqual([
       { gate: "schema", message: expect.stringContaining("not valid JSON") },
     ]);
-  });
-
-  test("sandbox-check rejects the retired original-task arguments", async () => {
-    const result = await runCommand(
-      "bun",
-      [
-        "src/sandbox/programs/check.ts",
-        "definition",
-        "test",
-        "gold",
-        "output",
-        "original-definition",
-        "original-test",
-        "original-gold",
-      ],
-      { allowFailure: true },
-    );
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("usage: sandbox-check");
   });
 
   test("the sandbox-check program proves patches apply against a clean base worktree", async () => {

@@ -15,23 +15,22 @@ test("request IDs work without secure-context randomUUID and URL scopes are enco
     "/api/orgs/org%20name/repos/owner/repo/evaluations",
   );
 });
-test("results distinguish zero rewards from missing scores and escape solver text", () => {
+test("results distinguish zero rewards from missing scores and show the last solver message", () => {
   const run = initialEvaluation(evaluationInput(), "Test model");
   const trial = run.trials[0];
   if (!trial) throw new Error("Missing trial");
   expect(scores(trial)).toBe("Not Scored");
   trial.rewards = { reward: 0 };
   expect(scores(trial)).toBe("reward: 0");
-  trial.steps = [{ id: "one", role: "agent", text: "<script>steal()</script>", tools: [] }];
+  trial.steps = [
+    { id: "one", role: "agent", text: "Reading the parser.", tools: [] },
+    { id: "two", role: "agent", text: "Patched the parser.", tools: [] },
+  ];
   run.status = "completed";
   const html = renderToStaticMarkup(
     <MemoryRouter>
       <EvaluationResults run={run} baseUrl="/api/evaluations" repo="owner/repo" />
     </MemoryRouter>,
   );
-  expect(html).not.toContain("<script>");
-  expect(html).toContain("&lt;script&gt;");
-  expect(html).toContain("Solver’s Final Response");
-  expect(html).toContain("Verifier Scores");
-  expect(html).toContain("Harbor Output");
+  expect(html).toContain("Solver’s Final Response</h4><p>Patched the parser.</p>");
 });

@@ -7,8 +7,9 @@ import { createRepoStore } from "../src/db/repos.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import type { WorkflowSnapshot } from "../src/generation/tasks/status.js";
 import { bearerToken } from "../src/lib/util.js";
-import { mint, signedIn } from "./support/api-keys.js";
+import { mint } from "./support/api-keys.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
+import { signedIn } from "./support/sign-in.js";
 import { type AuthServer, fakeGitHub, startAuthServer } from "./support/site-fixture.js";
 
 let server: AuthServer | undefined;
@@ -18,26 +19,6 @@ afterEach(async () => {
 });
 
 describe("what an api key may reach", () => {
-  test("read keys may list but not change anything", async () => {
-    server = await startAuthServer({
-      fetchImpl: fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] })
-        .fetch,
-    });
-    const headers = await signedIn(server);
-    const { secret } = await mint(server, headers, { name: "reader", scope: "read" });
-    const keyHeaders = { authorization: `Bearer ${secret}` };
-    expect((await server.request("/api/orgs/mupt-ai/repos", { headers: keyHeaders })).status).toBe(
-      200,
-    );
-    const blocked = await server.request("/api/orgs/mupt-ai/repos", {
-      method: "POST",
-      headers: keyHeaders,
-      body: JSON.stringify({ fullName: "mupt-ai/self-bench" }),
-    });
-    expect(blocked.status).toBe(403);
-    expect(await blocked.json()).toEqual({ error: "this API key is read-only" });
-  });
-
   test("a single task is readable by run and task id, refreshed against its workflow", async () => {
     const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "api-keys-tasks-")));
     const snapshot = mock(async (): Promise<WorkflowSnapshot> => ({ kind: "running" }));
@@ -147,7 +128,7 @@ describe("api keys and evaluation mutations", () => {
       expect(keyed.status).toBe(201);
       const listed = await fixture.request(
         "/api/orgs/avyay/credentials",
-        { headers: { "x-api-key": reader.secret } },
+        { headers: { authorization: `Bearer ${reader.secret}` } },
         null,
       );
       expect(listed.status).toBe(200);
@@ -158,6 +139,7 @@ describe("api keys and evaluation mutations", () => {
         null,
       );
       expect(readOnly.status).toBe(403);
+      expect(await readOnly.json()).toEqual({ error: "this API key is read-only" });
     } finally {
       await fixture.close();
     }

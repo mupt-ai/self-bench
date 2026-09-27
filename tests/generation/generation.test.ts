@@ -6,6 +6,7 @@ import { managedOffer } from "../../src/generation/billing/managed.js";
 import { withGenerationRuntime } from "../../src/generation/pipeline/runtime.js";
 import { loadPiModelAuth } from "../../src/harnesses/pi/model-auth.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
+import { ModalSandboxExecutor } from "../../src/sandbox/providers/modal/executor.js";
 import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
@@ -102,7 +103,7 @@ describe("generation submissions", () => {
         legacy,
         async (sandbox, environment, configured) => {
           expect(environment).toBe("modal");
-          expect(sandbox.constructor.name).toBe("ModalSandboxExecutor");
+          expect(sandbox).toBeInstanceOf(ModalSandboxExecutor);
           expect(configured.authoring.model).toBe(
             stage === "author" ? generation.authorModel : generation.verifierModel,
           );

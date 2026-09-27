@@ -1,101 +1,26 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { SESSION_COOKIE } from "../../src/api/auth/session.js";
-import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
-import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { taskState } from "../../src/db/task-record.js";
-import { clearArchivedListingCache } from "../../src/generation/runs/archived.js";
-import { ingestTasks } from "../support/ingest-tasks.js";
-import {
-  type AuthServer,
-  cookieValue,
-  fakeGitHub,
-  startAuthServer,
-  testAuthConfig,
-} from "../support/site-fixture.js";
+import { seededTaskSite } from "../support/ingest-tasks.js";
+import type { AuthServer } from "../support/site-fixture.js";
 
 let server: AuthServer | undefined;
 afterEach(async () => {
   await server?.stop();
   server = undefined;
-  clearArchivedListingCache();
 });
 
-/** A run with one accepted and one rejected candidate, as the agent pipeline writes them. */
-async function seededStore(): Promise<LocalArtifactStore> {
-  const store = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "site-tasks-")));
-  const put = (key: string, value: unknown) =>
-    store.put(key, Buffer.from(JSON.stringify(value)), "application/json");
-  const definition = (taskId: string, sourcePr: number, difficulty = "medium") => ({
-    taskId,
-    difficulty,
-    repo: "Mupt-AI/self-bench",
-    testCommand: "bun test",
-    failToPass: ["a"],
-    passToPass: [],
-    testPaths: ["tests"],
-    workdir: ".",
-    sourcePr,
-    sourceUrl: `https://github.com/Mupt-AI/self-bench/pull/${sourcePr}`,
-    baseCommit: "a".repeat(40),
-  });
-  await put("runs/run-one/authoring/c1/definition.json", definition("task-good", 11));
-  await put("runs/run-one/verification/c1/round-1/result.json", { kind: "accepted" });
-  await store.put(
-    "runs/run-one/verification/c1/round-1/attempt-1/verify-1/harbor-task.tar.gz",
-    Buffer.from("tar"),
-    "application/gzip",
-  );
-  await put("runs/run-one/authoring/c2/definition.json", definition("task-bad", 12));
-  await put("runs/run-one/authoring/c2/round-1/result.json", {
-    kind: "rejected",
-    reason: "authoring failed: tests never fail without the solution\nmore detail",
-  });
-  await put("runs/run-two/authoring/c9/definition.json", definition("task-other", 13));
-  // The agent pipeline nests definitions per round; the newest one carries the real difficulty.
-  await put("runs/run-three/authoring/c3/round-1/definition.json", definition("task-nested", 14));
-  await put(
-    "runs/run-three/authoring/c3/round-2/attempt-1/verify-1/definition.json",
-    definition("task-nested", 14, "hard"),
-  );
-  await put("runs/run-three/verification/c3/round-1/result.json", { kind: "accepted" });
-  return store;
-}
-
-async function signedIn(artifacts: LocalArtifactStore) {
-  const hub = fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] });
-  server = await startAuthServer({
-    config: testAuthConfig,
-    artifacts,
-    fetchImpl: hub.fetch,
-  });
-  const start = await server.request("/auth/github");
-  const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${state}` },
-  });
-  const headers = {
-    cookie: `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`,
-    "content-type": "application/json",
-  };
-  await server.request("/api/orgs/mupt-ai/repos", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
-  });
-  const site = server;
-  const ingest = (runId: string) => ingestTasks(site, artifacts, "Mupt-AI/self-bench", runId);
-  return { site, headers, ingest };
+async function signedIn() {
+  const fixture = await seededTaskSite();
+  server = fixture.site;
+  return fixture;
 }
 
 const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";
 
 describe("task routes", () => {
-  test("ingestion stores candidate tasks and scoped counts", async () => {
-    const { site, headers, ingest } = await signedIn(await seededStore());
-    expect(await ingest("run-one")).toEqual({ synced: 2 });
+  test("lists ingested tasks with reason summaries and scoped review counts", async () => {
+    const { site, headers, ingest } = await signedIn();
+    await ingest();
 
     const tasks = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: Record<string, unknown>[];
@@ -129,8 +54,8 @@ describe("task routes", () => {
   });
 
   test("a human review overrides the pipeline verdict, survives a sync, and can be cleared", async () => {
-    const { site, headers, ingest } = await signedIn(await seededStore());
-    await ingest("run-one");
+    const { site, headers, ingest } = await signedIn();
+    await ingest();
     const review = await site.request(`${REPO}/tasks/run-one/task-good/review`, {
       method: "PUT",
       headers,
@@ -149,7 +74,7 @@ describe("task routes", () => {
       body: JSON.stringify({ decision: "maybe" }),
     });
     expect(bad.status).toBe(400);
-    await ingest("run-one");
+    await ingest();
     const synced = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { taskId: string; state: string }[];
     };
@@ -168,11 +93,11 @@ describe("task routes", () => {
   });
 
   test("serves a task's artifacts only for synced tasks", async () => {
-    const { site, headers, ingest } = await signedIn(await seededStore());
+    const { site, headers, ingest } = await signedIn();
     expect(
       (await site.request(`${REPO}/tasks/run-one/task-good/artifacts`, { headers })).status,
     ).toBe(404);
-    await ingest("run-one");
+    await ingest();
     const found = await site.request(`${REPO}/tasks/run-one/task-good/artifacts`, { headers });
     expect(found.status).toBe(200);
     expect(await found.json()).toMatchObject({

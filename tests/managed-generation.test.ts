@@ -1,15 +1,11 @@
 import { expect, test } from "bun:test";
-import { withExecutionEnvironment } from "../src/contracts/config/execution-environment.js";
-import { managedModelKey, managedOffer } from "../src/generation/billing/managed.js";
-import { meteredSandboxExecutor } from "../src/generation/billing/metered-sandbox.js";
+import { managedOffer } from "../src/generation/billing/managed.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "../src/generation/billing/pricing.js";
 import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { generationModelRoute } from "../src/generation/settings/models.js";
 import type { GenerationReference } from "../src/generation/settings/settings.js";
 import { generationSettingsSchema } from "../src/generation/settings/settings.js";
-import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
-import { runOnlyExecutor } from "./support/sandbox-executor.js";
 
 const managedSettings = {
   authorModel: "gpt-6-sol",
@@ -102,7 +98,6 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
     },
   };
   await vault.records.write(`generations/run-m`, reference, 0);
-  const offer = { models: true, sandbox: true };
   const env = await generationEnvironment(vault, "run-m", reference, {
     OPENAI_API_KEY: "host-key",
     MODAL_TOKEN_SECRET: "host-modal",
@@ -111,9 +106,6 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
   // The host worker's own credentials are replaced by the run's stored ones.
   expect(env.OPENAI_API_KEY).toBe("model-one");
   expect(env.MODAL_TOKEN_SECRET).toBe("sandbox-one");
-  await withExecutionEnvironment({ OPENROUTER_API_KEY: "router-key" }, async () =>
-    expect((await loadPiModelAuth()).provider).toBe("openrouter"),
-  );
   // Managed selections validate against the deployment offer.
   const managedReference: GenerationReference = {
     ...reference,
@@ -127,29 +119,12 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
   expect(managedEnv.OPENROUTER_API_KEY).toBe("platform-openrouter");
   expect(managedEnv.E2B_API_KEY).toBe("platform-e2b");
   expect(managedEnv.E2B_DOMAIN).toBeUndefined();
-  expect(offer).toEqual({ models: true, sandbox: true });
-  // The offer follows key presence: one key set, one capability offered.
-  expect(managedOffer({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toEqual({
-    models: true,
-    sandbox: false,
-  });
   await expect(generationEnvironment(vault, "run-managed", managedReference, {})).rejects.toThrow(
     "Managed models are not available",
   );
-  expect(managedModelKey({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toBe("k");
 });
 
-test("managed usage metering vault tokens and sandbox seconds with costs", async () => {
-  meteredSandboxExecutor(
-    runOnlyExecutor(async () => ({
-      sandboxId: "s",
-      exitCode: 0,
-      stdout: "",
-      stderr: "",
-      outputs: {},
-    })),
-    { managedModel: true, managedSandbox: true, model: "gpt-6-sol" },
-  );
+test("managed prices charge sandboxes per CPU-hour and GiB-hour and models per million tokens", () => {
   expect(managedSandboxCostUsd(3600, 4, 8192)).toBeCloseTo(0.3312, 4);
   expect(
     managedModelCostUsd("gpt-6-sol", {

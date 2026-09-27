@@ -29,9 +29,6 @@ test("options expose only this repository's approved tasks", async () => {
 test("runs start only through comparisons", async () => {
   const body = JSON.stringify({ id: crypto.randomUUID() });
   expect((await server.request(server.base, { method: "POST", body })).status).toBe(405);
-  expect((await server.request(`${server.base}/profiles`, { method: "POST", body })).status).toBe(
-    404,
-  );
   expect(server.starts).toHaveLength(0);
 });
 

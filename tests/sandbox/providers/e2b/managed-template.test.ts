@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TemplateClass } from "e2b";
 import {
   ensureManagedE2BTemplate,
   MANAGED_E2B_TEMPLATE_CPUS,
@@ -9,9 +10,23 @@ import {
   managedE2BTemplateRecordPath,
   managedE2BTemplateReference,
 } from "../../../../src/sandbox/providers/e2b/managed-template.js";
+import type { E2BTemplateBuildApi } from "../../../../src/sandbox/providers/e2b/template-build.js";
 import { MemoryRecords } from "../../../support/evaluation-vault.js";
 
 const CREDENTIALS = { apiKey: "e2b-key" } as const;
+
+/** The E2B build SDK behind the real template build; `onBuild` sees each requested build. */
+function buildApi(
+  onBuild: (name: string, options: { cpuCount: number; memoryMB: number }) => unknown = () => {},
+): E2BTemplateBuildApi {
+  return {
+    fromDockerfile: () => ({}) as TemplateClass,
+    build: async (_template, name, options) => {
+      await onBuild(name, options);
+      return { alias: name, name, tags: [], templateId: "tid", buildId: "bid" };
+    },
+  };
+}
 
 function deferred() {
   let resolve!: () => void;
@@ -46,23 +61,17 @@ test("the managed template reference is derived from the packaged Dockerfile.san
 test("the managed template is built only when absent, with resources matching the stage request", async () => {
   const records = new MemoryRecords();
   const builds: { name: string; cpuCount: number; memoryMB: number }[] = [];
-  const api = {
-    exists: async (reference: string) => reference === "selfbench-runtime:exists",
-    build: async (
-      _template: unknown,
-      name: string,
-      options: { cpuCount: number; memoryMB: number },
-    ) => {
-      builds.push({ name, cpuCount: options.cpuCount, memoryMB: options.memoryMB });
-      return { name, templateId: "tid", buildId: "bid" };
-    },
-  };
+  const api = { exists: async (reference: string) => reference === "selfbench-runtime:exists" };
+  const builder = buildApi((name, options) => {
+    builds.push({ name, cpuCount: options.cpuCount, memoryMB: options.memoryMB });
+  });
   await ensureManagedE2BTemplate({
     reference: "selfbench-runtime:exists",
     credentials: CREDENTIALS,
     records,
     credentialId: crypto.randomUUID(),
     api,
+    buildApi: builder,
   });
   expect(builds).toHaveLength(0);
   await ensureManagedE2BTemplate({
@@ -71,6 +80,7 @@ test("the managed template is built only when absent, with resources matching th
     records,
     credentialId: crypto.randomUUID(),
     api,
+    buildApi: builder,
   });
   expect(builds).toEqual([
     {
@@ -85,19 +95,15 @@ test("a failed build releases the lock and another attempt can rebuild", async (
   const records = new MemoryRecords();
   const credentialId = crypto.randomUUID();
   let fail = true;
-  const api = {
-    exists: async () => false,
-    build: async () => {
-      if (fail) throw new Error("control plane unavailable");
-      return { name: "x", templateId: "tid", buildId: "bid" };
-    },
-  };
   const options = {
     reference: "selfbench-runtime:missing",
     credentials: CREDENTIALS,
     records,
     credentialId,
-    api,
+    api: { exists: async () => false },
+    buildApi: buildApi(() => {
+      if (fail) throw new Error("control plane unavailable");
+    }),
   };
   await expect(ensureManagedE2BTemplate(options)).rejects.toThrow(
     "could not be built in this account",
@@ -125,21 +131,20 @@ test("a concurrent build waits for the winner instead of building a second templ
   const builds: string[] = [];
   let built = false;
   const shared = {
-    exists: async () => built,
-    build: async (_template: unknown, name: string) => {
+    api: { exists: async () => built },
+    buildApi: buildApi(async (name) => {
       builds.push(name);
       winnerStarted.resolve();
       await releaseWinner.promise;
       built = true;
-      return { name, templateId: "tid", buildId: "bid" };
-    },
+    }),
   };
   const winner = ensureManagedE2BTemplate({
     reference,
     credentials: CREDENTIALS,
     records,
     credentialId,
-    api: shared,
+    ...shared,
   });
   await winnerStarted.promise;
   const waiter = ensureManagedE2BTemplate({
@@ -147,7 +152,7 @@ test("a concurrent build waits for the winner instead of building a second templ
     credentials: CREDENTIALS,
     records,
     credentialId,
-    api: shared,
+    ...shared,
     // Zero delay: the first poll races the winner's final record write, which the loop tolerates.
     sleep: async () => {},
   });
@@ -167,13 +172,8 @@ test("a build lock left by a dead worker is taken over", async () => {
   const path = managedE2BTemplateRecordPath(credentialId, reference);
   let clock = 46 * 60_000;
   const builds: string[] = [];
-  const api = {
-    exists: async () => false,
-    build: async (_template: unknown, name: string) => {
-      builds.push(name);
-      return { name, templateId: "tid", buildId: "bid" };
-    },
-  };
+  const api = { exists: async () => false };
+  const builder = buildApi((name) => builds.push(name));
   // A lock the dead worker last refreshed long before the stale window.
   await records.write(
     path,
@@ -186,6 +186,7 @@ test("a build lock left by a dead worker is taken over", async () => {
     records,
     credentialId,
     api,
+    buildApi: builder,
     now: () => clock,
   });
   expect(builds).toEqual([reference]);
@@ -202,6 +203,7 @@ test("a build lock left by a dead worker is taken over", async () => {
     records,
     credentialId,
     api,
+    buildApi: builder,
     now: () => clock,
     // Each poll advances the clock past the stale window, so the waiter takes the lock over.
     sleep: () => {

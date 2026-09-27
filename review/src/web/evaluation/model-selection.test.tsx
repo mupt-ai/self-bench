@@ -4,7 +4,6 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { hasModelSelection, nextModelSelection } from "./model-selection";
-import { RunModelRow } from "./RunModelRow";
 import { RunModelTable } from "./RunModelTable";
 
 const model: CatalogModel = {
@@ -52,26 +51,6 @@ test("duplicates match model, effective thinking level, and harness, not credent
   expect(hasModelSelection(astra, [{ ...selection, harnesses: ["codex", "pi"] }], selection)).toBe(
     true,
   );
-});
-
-test("inline rows expose model, thinking, and harness dropdowns without provider subtitles", () => {
-  const selection = nextModelSelection(model, [credential]);
-  if (!selection) throw new Error("Expected compatible selection");
-  const html = renderToStaticMarkup(
-    <RunModelRow
-      model={model}
-      credentials={[credential]}
-      selection={selection}
-      onChange={() => {
-        throw new Error("Rendering cannot add a model");
-      }}
-    />,
-  );
-  expect(html).toContain('aria-label="Test Model Thinking Level"');
-  expect(html).toContain('aria-label="Test Model Harness"');
-  expect(html).toContain('aria-label="Model"');
-  expect(html).not.toContain(">anthropic<");
-  expect(html).toContain('value="default" selected=""');
 });
 
 test("selection fails without credentials", () => {

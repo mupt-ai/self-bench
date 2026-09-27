@@ -43,7 +43,6 @@ test("prompt sections stay explicit and ordered", () => {
     expect(index).toBeGreaterThan(previous);
     previous = index;
   }
-  expect(prompt.match(/^#/gm)?.length).toBeGreaterThanOrEqual(sections.length);
 });
 
 test("unrelated ENOENT does not claim the checkout is unavailable", () => {

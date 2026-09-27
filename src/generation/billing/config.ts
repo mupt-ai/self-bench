@@ -6,7 +6,7 @@ const emptyStringAsUndefined = (value: unknown): unknown =>
 /** Frozen policy id stored on every rate snapshot. Bump only when unit semantics change. */
 const BILLING_POLICY_VERSION = "v1";
 /** Default: 1 unit = $1e-7 so E2B's $0.0000045/GiB-s is an exact integer. */
-export const DEFAULT_BILLING_UNIT_SCALE = 10_000_000;
+const DEFAULT_BILLING_UNIT_SCALE = 10_000_000;
 const DEFAULT_METER_EVENT_NAME = "selfbench_managed_usage";
 /** Stripe API version that includes Billing Meter Events v2. */
 const STRIPE_API_VERSION = "2025-09-30.clover";

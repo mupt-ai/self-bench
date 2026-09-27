@@ -4,7 +4,6 @@ import {
   assertEnvironmentEvidence,
   assertEnvironmentPolicy,
   assertServicesSupported,
-  isPlaceholderSecretValue,
 } from "../src/generation/task/environment-policy.js";
 
 const environment: TaskEnvironment = {
@@ -77,6 +76,10 @@ describe("environment contracts", () => {
           API_KEY: "test",
           JWT_SECRET: "changeme",
           ACCESS_TOKEN: "xxxxxxxxxxxxxxxxxxxxxxxx",
+          SESSION_SECRET: "",
+          DJANGO_SECRET_KEY: "dev-secret",
+          STRIPE_API_KEY: "not-a-real-key",
+          JWT_SIGNING_SECRET: "insecure-jwt-signing-key-for-ci",
         },
       }),
     ).not.toThrow();
@@ -92,6 +95,11 @@ describe("environment contracts", () => {
     rejects("ghp_16C7e42F292c6912E7710c838347Ae178B4a");
     rejects("a9f3c2e1b7d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2");
     rejects("supersecretvalue1234");
+    rejects("AKIAIOSFODNN7EXAMPLE");
+    rejects("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY");
+    // A PEM header is refused even beside a placeholder word. Kept newline-free: a newline would be
+    // refused as a control character before the secret check.
+    rejects("-----BEGIN PRIVATE KEY-----example");
     expect(() =>
       assertEnvironmentPolicy({
         ...environment,
@@ -99,16 +107,6 @@ describe("environment contracts", () => {
         environmentVariables: { SECRET_KEY: "${HOST_SECRET}" },
       }),
     ).toThrow("must not interpolate host environment values");
-  });
-
-  test("classifies placeholder secret values", () => {
-    expect(isPlaceholderSecretValue("")).toBe(true);
-    expect(isPlaceholderSecretValue("dev-secret")).toBe(true);
-    expect(isPlaceholderSecretValue("not-a-real-key")).toBe(true);
-    expect(isPlaceholderSecretValue("insecure-jwt-signing-key-for-ci")).toBe(true);
-    expect(isPlaceholderSecretValue("AKIAIOSFODNN7EXAMPLE")).toBe(false);
-    expect(isPlaceholderSecretValue("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")).toBe(false);
-    expect(isPlaceholderSecretValue("-----BEGIN PRIVATE KEY-----\nabc")).toBe(false);
   });
 
   test("rejects secret material and Docker-in-Docker setup", () => {

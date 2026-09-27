@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
-import { finishAgent } from "../../src/generation/pipeline/agent.js";
+import { agentScript, finishAgent } from "../../src/generation/pipeline/agent.js";
 import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
 import type { SandboxJobOutcome } from "../../src/sandbox/jobs.js";
 import { runOnlyExecutor } from "../support/sandbox-executor.js";
@@ -77,4 +77,14 @@ test("a retried finish keeps the first result instead of failing on the write-on
   await new Promise((resolve) => setTimeout(resolve, 5));
   await finishAgent(store, executor, outcome);
   expect(await store.getByKey(`${prefix}/result.json`)).toEqual(first);
+});
+
+test("the agent command thinks at the run's reasoning effort, defaulting to high", () => {
+  const script = agentScript({
+    workspace: { kind: "task" },
+    extension: "/work/reviewer.js",
+    tools: "read",
+  });
+  expect(script).toContain(`--thinking "\${AUTHOR_THINKING:-high}"`);
+  expect(script).not.toContain("--thinking high");
 });

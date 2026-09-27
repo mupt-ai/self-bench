@@ -1,19 +1,10 @@
 import { expect, test } from "bun:test";
-import {
-  DEFAULT_BILLING_UNIT_SCALE,
-  loadBillingPolicy,
-  loadStripeConfig,
-} from "../src/generation/billing/config.js";
-import {
-  BILLING_REQUIRED_CODE,
-  eligibilityFrom,
-  managedBillingRefusal,
-} from "../src/generation/billing/eligibility.js";
+import { loadBillingPolicy, loadStripeConfig } from "../src/generation/billing/config.js";
+import { eligibilityFrom, managedBillingRefusal } from "../src/generation/billing/eligibility.js";
 import {
   modelBillableUnits,
   rateSnapshotSpec,
   sandboxBillableUnits,
-  usdToUnits,
 } from "../src/generation/billing/policy.js";
 
 test("Stripe config is all-or-nothing and policy defaults are pass-through", () => {
@@ -41,7 +32,7 @@ test("Stripe config is all-or-nothing and policy defaults are pass-through", () 
   const policy = loadBillingPolicy({});
   expect(policy).toEqual({
     version: "v1",
-    unitScale: DEFAULT_BILLING_UNIT_SCALE,
+    unitScale: 10_000_000,
     markupBps: 0,
     meterEventName: "selfbench_managed_usage",
   });
@@ -49,20 +40,19 @@ test("Stripe config is all-or-nothing and policy defaults are pass-through", () 
 
 test("integer units come from quantities and frozen rates, not USD estimates", () => {
   const snapshot = rateSnapshotSpec(loadBillingPolicy({}));
-  expect(snapshot.unitScale).toBe(DEFAULT_BILLING_UNIT_SCALE);
+  expect(snapshot.unitScale).toBe(10_000_000);
   expect(snapshot.markupBps).toBe(0);
-  expect(usdToUnits(1, snapshot.unitScale, 0)).toBe(DEFAULT_BILLING_UNIT_SCALE);
   const model = modelBillableUnits(snapshot, "gpt-6-sol", {
     input: 1_000_000,
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
   });
-  expect(model).toBe(usdToUnits(2, snapshot.unitScale, 0));
+  // gpt-6-sol input is $2 per million tokens; one unit is $1e-7.
+  expect(model).toBe(20_000_000);
   expect(modelBillableUnits(snapshot, "gpt-6-sol", undefined)).toBe(0);
-  expect(sandboxBillableUnits(snapshot, 1, 4, 8192)).toBe(
-    usdToUnits(4 * 0.000014 + 8 * 0.0000045, snapshot.unitScale, 0),
-  );
+  // 4 vCPU at $0.000014/s plus 8 GiB at $0.0000045/s.
+  expect(sandboxBillableUnits(snapshot, 1, 4, 8192)).toBe(920);
   const marked = rateSnapshotSpec(loadBillingPolicy({ SELFBENCH_BILLING_MARKUP_BPS: "1000" }));
   expect(marked.markupBps).toBe(1000);
   expect(
@@ -72,7 +62,7 @@ test("integer units come from quantities and frozen rates, not USD estimates", (
       cacheRead: 0,
       cacheWrite: 0,
     }),
-  ).toBe(usdToUnits(2, marked.unitScale, 1000));
+  ).toBe(22_000_000);
 });
 
 test("managed runs are gated only when Stripe is configured and the subscription is not active", () => {
@@ -95,7 +85,7 @@ test("managed runs are gated only when Stripe is configured and the subscription
     managedBillingRefusal({ modelAccess: "credential", sandbox: "modal" }, eligibilityFrom(true)),
   ).toBeUndefined();
   const refused = managedBillingRefusal(settings, eligibilityFrom(true));
-  expect(refused?.code).toBe(BILLING_REQUIRED_CODE);
+  expect(refused?.code).toBe("billing_required");
   expect(
     managedBillingRefusal(
       settings,

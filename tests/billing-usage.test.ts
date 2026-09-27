@@ -4,13 +4,7 @@ import { createBillingStore } from "../src/db/billing.js";
 import { billingOutbox, generationUsage } from "../src/db/schema.js";
 import { createUsageStore } from "../src/db/usage.js";
 import { createUserStore } from "../src/db/users.js";
-import { loadBillingPolicy } from "../src/generation/billing/config.js";
 import { startBillingDispatcher } from "../src/generation/billing/outbox.js";
-import {
-  modelBillableUnits,
-  rateSnapshotSpec,
-  sandboxBillableUnits,
-} from "../src/generation/billing/policy.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 async function orgFixture() {
@@ -49,12 +43,10 @@ test("managed usage snapshots integer units and only enqueues when a Stripe cust
     const usage = createUsageStore(database.db);
     await usage.record({ ...managedRow, orgId: org.id });
     const [row] = await database.db.select().from(generationUsage);
-    const snapshot = rateSnapshotSpec(loadBillingPolicy({}));
     expect(row?.rateSnapshotId).toBeGreaterThan(0);
-    expect(row?.modelBillableUnits).toBe(
-      modelBillableUnits(snapshot, "gpt-6-sol", managedRow.tokens),
-    );
-    expect(row?.sandboxBillableUnits).toBe(sandboxBillableUnits(snapshot, 10, 4, 8192));
+    // Default policy: 1M gpt-6-sol input tokens at $2/M, and 10s of 4 vCPU / 8 GiB E2B.
+    expect(row?.modelBillableUnits).toBe(20_000_000);
+    expect(row?.sandboxBillableUnits).toBe(9200);
     expect(await database.db.select().from(billingOutbox)).toEqual([]);
 
     await createBillingStore(database.db, true).saveCustomer(org.id, "cus_test");
@@ -63,7 +55,7 @@ test("managed usage snapshots integer units and only enqueues when a Stripe cust
     const queued = await database.db.select().from(billingOutbox);
     expect(queued).toHaveLength(1);
     expect(queued[0]?.identifier).toBe(`selfbench-usage-${queued[0]?.usageId}`);
-    expect(queued[0]?.value).toBe(sandboxBillableUnits(snapshot, 10, 4, 8192));
+    expect(queued[0]?.value).toBe(9200);
     expect(queued[0]?.customerId).toBe("cus_test");
   } finally {
     await database.close();

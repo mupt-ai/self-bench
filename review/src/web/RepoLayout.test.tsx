@@ -34,9 +34,6 @@ for (const section of [
     expect(html.match(/aria-label="Breadcrumb"/g)).toHaveLength(1);
     expect(html.match(/aria-label="Repository Sections"/g)).toHaveLength(1);
     expect(html.match(/<main/g)).toHaveLength(1);
-    expect(html).toContain("h-full min-h-0 min-w-0 flex-col overflow-hidden");
-    expect(html).not.toContain("dvh");
-    expect(html).toContain("min-h-0 flex-1 overflow-y-auto");
     expect(html.indexOf('data-slot="repository-content"')).toBeGreaterThan(
       html.indexOf("</nav>", html.indexOf('aria-label="Repository Sections"')),
     );

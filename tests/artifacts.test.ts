@@ -3,11 +3,8 @@ import { lstat, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import {
-  GcsArtifactStore,
-  LocalArtifactStore,
-  verifiedArtifactReadStream,
-} from "../src/artifacts/index.js";
+import { verifiedArtifactReadStream } from "../src/artifacts/common.js";
+import { GcsArtifactStore, LocalArtifactStore } from "../src/artifacts/index.js";
 
 const roots: string[] = [];
 

@@ -6,8 +6,9 @@ import type {
   SandboxRunOptions,
   StartedSandbox,
 } from "../../src/sandbox/contracts.js";
-import { HOBBY_VERCEL_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/vercel/timeout-cap.js";
 import { TimeoutCappedSandboxExecutor } from "../../src/sandbox/timeout.js";
+
+const capMs = 45 * 60 * 1_000;
 
 class RecordingExecutor implements SandboxExecutor {
   readonly requests: SandboxRequest[] = [];
@@ -38,39 +39,28 @@ class RecordingExecutor implements SandboxExecutor {
 describe("TimeoutCappedSandboxExecutor", () => {
   test("caps only requests above the configured provider ceiling", async () => {
     const delegate = new RecordingExecutor();
-    const executor = new TimeoutCappedSandboxExecutor(delegate, HOBBY_VERCEL_TIMEOUT_CAP_MS);
-    const run = async (stage: string, timeoutMs: number): Promise<void> => {
-      await executor.run({ runId: "run", stage, command: ["true"], timeoutMs });
-    };
+    const executor = new TimeoutCappedSandboxExecutor(delegate, capMs);
+    const request = (timeoutMs: number) => ({
+      runId: "run",
+      stage: "stage",
+      command: ["true"],
+      timeoutMs,
+    });
 
-    await run("discover-0-0", 45 * 60 * 1_000);
-    await run("author-candidate", 2 * 60 * 60 * 1_000);
-    await run("validation-repair-task", 2 * 60 * 60 * 1_000);
-    await run("review-task", 15 * 60 * 1_000);
-    await run("repair-task", 2 * 60 * 60 * 1_000);
-    await run("standalone-repair", 2 * 60 * 60 * 1_000);
+    await executor.run(request(2 * 60 * 60 * 1_000));
+    await executor.run(request(15 * 60 * 1_000));
+    await executor.start(request(2 * 60 * 60 * 1_000));
 
     expect(delegate.requests.map(({ timeoutMs }) => timeoutMs)).toEqual([
-      HOBBY_VERCEL_TIMEOUT_CAP_MS,
-      HOBBY_VERCEL_TIMEOUT_CAP_MS,
-      HOBBY_VERCEL_TIMEOUT_CAP_MS,
+      capMs,
       15 * 60 * 1_000,
-      HOBBY_VERCEL_TIMEOUT_CAP_MS,
-      HOBBY_VERCEL_TIMEOUT_CAP_MS,
-    ]);
-    expect(delegate.requests.map(({ stage }) => stage)).toEqual([
-      "discover-0-0",
-      "author-candidate",
-      "validation-repair-task",
-      "review-task",
-      "repair-task",
-      "standalone-repair",
+      capMs,
     ]);
   });
 
   test("delegates lifecycle and rejects invalid caps", () => {
     const delegate = new RecordingExecutor();
-    const executor = new TimeoutCappedSandboxExecutor(delegate, HOBBY_VERCEL_TIMEOUT_CAP_MS);
+    const executor = new TimeoutCappedSandboxExecutor(delegate, capMs);
 
     executor.close();
 

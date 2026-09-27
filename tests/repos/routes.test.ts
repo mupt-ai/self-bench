@@ -1,11 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { SESSION_COOKIE } from "../../src/api/auth/session.js";
-import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createUserStore } from "../../src/db/users.js";
+import { signedIn } from "../support/sign-in.js";
 import {
   type AuthServer,
-  cookieValue,
   type FakeGitHubOptions,
   fakeGitHub,
   startAuthServer,
@@ -20,21 +18,15 @@ afterEach(async () => {
   server = undefined;
 });
 
-async function signedIn(github: FakeGitHubOptions) {
+async function bootSignedIn(github: FakeGitHubOptions) {
   const hub = fakeGitHub(github);
   server = await startAuthServer({ config: testAuthConfig, fetchImpl: hub.fetch });
-  const start = await server.request("/auth/github");
-  const state = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await server.request(`/auth/github/callback?code=c&state=${state}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${state}` },
-  });
-  const cookie = `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`;
-  return { site: server, hub, headers: { cookie, "content-type": "application/json" } };
+  return { site: server, hub, headers: await signedIn(server) };
 }
 
 describe("connected repos routes", () => {
   test("connects a repo the token can read, once, and lists it for the org", async () => {
-    const { site, headers } = await signedIn({
+    const { site, headers } = await bootSignedIn({
       orgs: ["Mupt-AI"],
       repos: [{ full_name: "Mupt-AI/self-bench", private: true }],
     });
@@ -68,7 +60,7 @@ describe("connected repos routes", () => {
   });
 
   test("allows public repos from anywhere, refuses foreign private ones, bad names, and foreign orgs", async () => {
-    const { site, headers } = await signedIn({
+    const { site, headers } = await bootSignedIn({
       orgs: ["Mupt-AI"],
       repos: [{ full_name: "someone/else", private: true }, { full_name: "posthog/posthog" }],
     });
@@ -87,7 +79,7 @@ describe("connected repos routes", () => {
   });
 
   test("keeps connections to the same public repository isolated by workspace", async () => {
-    const { site, headers } = await signedIn({
+    const { site, headers } = await bootSignedIn({
       orgs: ["Mupt-AI"],
       repos: [{ full_name: "Mupt-AI/self-bench", private: false }],
     });
@@ -112,7 +104,7 @@ describe("connected repos routes", () => {
   });
 
   test("toggles continuous per repo", async () => {
-    const { site, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
+    const { site, headers } = await bootSignedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
     const created = await site.request("/api/orgs/avyay/repos", {
       method: "POST",
       headers,
@@ -141,7 +133,7 @@ describe("connected repos routes", () => {
   });
 
   test("disconnects by name", async () => {
-    const { site, headers } = await signedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
+    const { site, headers } = await bootSignedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
     await site.request("/api/orgs/avyay/repos", {
       method: "POST",
       headers,

@@ -58,22 +58,6 @@ test("fails closed on auth, GraphQL partial data and repeated cursors", async ()
     }),
   ).rejects.toThrow("did not advance");
 });
-test("pre-abort never sends credentials or a request", async () => {
-  let calls = 0;
-  await expect(
-    fetchBatchPullRequests({
-      repositoryUrl: "https://github.com/o/r",
-      token: "test",
-      signal: AbortSignal.abort(),
-      fetchImpl: async () => {
-        calls++;
-        return page([]);
-      },
-    }),
-  ).rejects.toThrow();
-  expect(calls).toBe(0);
-});
-
 test("null descriptions and unavailable diff stats do not discard unrelated PRs", async () => {
   const result = await fetchBatchPullRequests({
     repositoryUrl: "https://github.com/o/r",

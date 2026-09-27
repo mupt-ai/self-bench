@@ -4,7 +4,6 @@ import { errorMessage } from "../../lib/util.js";
 import { auditTaskDefinition } from "./audit.js";
 import { dependencyManifestPatch } from "./dependencies.js";
 import { assertEnvironmentPolicy, assertServicesSupported } from "./environment-policy.js";
-import { malformedPatchProblems } from "./patch.js";
 import { assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
   agentDockerfile,
@@ -125,6 +124,21 @@ function environmentScripts(directory: string, definition: TaskDefinition): Rend
     [`${directory}/setup.sh`]: bashScript(definition.environment.setupCommand),
     [`${directory}/smoke.sh`]: smokeScript(definition),
   };
+}
+
+/** Text-level problems that make git reject a patch before it even reaches apply --check. */
+function malformedPatchProblems(patch: string, label: string): string[] {
+  const problems: string[] = [];
+  if (!patch.startsWith("diff --git ")) {
+    problems.push(`${label} must be a Git patch starting with diff --git`);
+  }
+  if (patch.includes("\r\n")) {
+    problems.push(`${label} has CRLF line endings; write it with LF only`);
+  }
+  if (patch.length > 0 && !patch.endsWith("\n")) {
+    problems.push(`${label} is missing its final newline`);
+  }
+  return problems;
 }
 
 function parseDefinition(json: string, errors: StaticCheckError[]): TaskDefinition | undefined {

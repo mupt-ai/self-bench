@@ -101,7 +101,7 @@ export function redReport(
   stage: PipelineStage,
   round: number,
   taskId: string,
-  failure: { compile?: string; infrastructure?: string; oracle?: boolean },
+  failure: { compile?: string; oracle?: boolean },
 ): VerifyReport {
   const green = greenReport(stage, round, taskId);
   const notRun = { ran: false, ok: false, logTail: "" };
@@ -110,16 +110,6 @@ export function redReport(
       ...green,
       compile: { ok: false, errors: [failure.compile] },
       build: { ...notRun, infrastructure: false },
-      smoke: notRun,
-      nop: { ...notRun, rewards: {} },
-      oracle: { ...notRun, rewards: {} },
-      green: false,
-    };
-  }
-  if (failure.infrastructure) {
-    return {
-      ...green,
-      build: { ran: true, ok: false, infrastructure: true, logTail: failure.infrastructure },
       smoke: notRun,
       nop: { ...notRun, rewards: {} },
       oracle: { ...notRun, rewards: {} },

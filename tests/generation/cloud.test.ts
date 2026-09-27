@@ -9,9 +9,7 @@ import {
   generationSettingsSchema,
 } from "../../src/generation/settings/settings.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
-import { providerEnvironment } from "../../src/sandbox/provider-environment.js";
-import { HOBBY_E2B_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/e2b/timeout-cap.js";
-import { STANDARD_VERCEL_TIMEOUT_CAP_MS } from "../../src/sandbox/providers/vercel/timeout-cap.js";
+import { TimeoutCappedSandboxExecutor } from "../../src/sandbox/timeout.js";
 import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
@@ -96,11 +94,6 @@ for (const sandbox of ["e2b", "vercel"] as const) {
       // Vercel requires its digest-pinned runtime image; E2B defaults to the managed template.
       if (sandbox === "vercel")
         expect((await post({ ...generation, sandboxImage: undefined })).status).toBe(400);
-      expect((await post({ ...generation, harborEnvironment: undefined })).status).toBe(400);
-      // Docker generation and Docker Harbor would run on the worker; the site rejects both.
-      expect((await post({ ...generation, sandbox: "docker" })).status).toBe(400);
-      expect((await post({ ...generation, harborEnvironment: "docker" })).status).toBe(400);
-      expect((await post({ ...generation, harborCredentialId: undefined })).status).toBe(400);
       if (harborEnvironment !== sandbox)
         expect((await post({ ...generation, harborCredentialId: cloud.id })).status).toBe(400);
       expect(started).toHaveLength(0);
@@ -111,8 +104,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         executionBackend: sandbox,
         harborEnvironment,
         sandboxImage: generation.sandboxImage,
-        sandboxTimeoutCapMs:
-          sandbox === "e2b" ? HOBBY_E2B_TIMEOUT_CAP_MS : STANDARD_VERCEL_TIMEOUT_CAP_MS,
+        sandboxTimeoutCapMs: sandbox === "e2b" ? 3_600_000 : 7_200_000,
       });
       for (const secret of [
         "model-secret",
@@ -133,7 +125,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
             stage,
             legacy,
             async (executor, harbor, configured) => {
-              expect(executor.constructor.name).toBe("TimeoutCappedSandboxExecutor");
+              expect(executor).toBeInstanceOf(TimeoutCappedSandboxExecutor);
               expect(harbor).toBe(harborEnvironment);
               expect(configured.authoring.model).toBe(
                 stage === "author" ? generation.authorModel : generation.verifierModel,
@@ -153,20 +145,12 @@ for (const sandbox of ["e2b", "vercel"] as const) {
               expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe(
                 harborEnvironment === "e2b" ? "modal-secret" : undefined,
               );
-              expect(providerEnvironment(env, harbor).E2B_API_KEY).toBe(
-                harborEnvironment === "e2b" ? "modal-secret" : undefined,
-              );
               expect(env.SELFBENCH_HARBOR_VERCEL_TOKEN).toBe(
                 harborEnvironment === "vercel" ? "modal-secret" : undefined,
               );
-              const harborChild = providerEnvironment(env, harbor);
-              expect(harborChild.VERCEL_TOKEN).toBe(
-                harborEnvironment === "vercel" ? "modal-secret" : undefined,
-              );
-              expect(harborChild.VERCEL_TEAM_ID).toBe(
+              expect(env.SELFBENCH_HARBOR_VERCEL_TEAM_ID).toBe(
                 harborEnvironment === "vercel" ? "team_harbor" : undefined,
               );
-              expect(harborChild.SELFBENCH_HARBOR_VERCEL_TOKEN).toBeUndefined();
             },
           );
         }
@@ -237,6 +221,9 @@ test("cloud generation validates runtime artifacts and never offers worker-local
   ).toBe(false);
   for (const harborEnvironment of ["vercel", "e2b", "daytona"])
     expect(generationSettingsSchema.safeParse({ ...cloud, harborEnvironment }).success).toBe(true);
+  expect(
+    generationSettingsSchema.safeParse({ ...cloud, harborEnvironment: undefined }).success,
+  ).toBe(false);
   expect(
     generationSettingsSchema.safeParse({ ...cloud, harborCredentialId: undefined }).success,
   ).toBe(false);

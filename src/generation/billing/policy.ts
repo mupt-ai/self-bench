@@ -17,7 +17,7 @@ export interface RateSnapshotSpec {
 }
 
 /** Converts a USD amount into integer billable units, applying the snapshot markup. */
-export function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
+function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
   return Math.round((usd * unitScale * (10_000 + markupBps)) / 10_000);
 }
 

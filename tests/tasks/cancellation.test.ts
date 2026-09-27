@@ -3,15 +3,13 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { SESSION_COOKIE } from "../../src/api/auth/session.js";
-import { OAUTH_STATE_COOKIE } from "../../src/api/routes/auth.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { repos } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
+import { connectRepo, signedIn } from "../support/sign-in.js";
 import {
   type AuthServer,
-  cookieValue,
   fakeGitHub,
   startAuthServer,
   testAuthConfig,
@@ -54,20 +52,8 @@ test("task cancellation is tenant-scoped, race-safe, and idempotent after confir
     fetchImpl: hub.fetch,
     status,
   });
-  const start = await server.request("/auth/github");
-  const oauthState = cookieValue(start, OAUTH_STATE_COOKIE) ?? "";
-  const callback = await server.request(`/auth/github/callback?code=c&state=${oauthState}`, {
-    headers: { cookie: `${OAUTH_STATE_COOKIE}=${oauthState}` },
-  });
-  const headers = {
-    cookie: `${SESSION_COOKIE}=${cookieValue(callback, SESSION_COOKIE) ?? ""}`,
-    "content-type": "application/json",
-  };
-  await server.request("/api/orgs/mupt-ai/repos", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ fullName: "Mupt-AI/self-bench" }),
-  });
+  const headers = await signedIn(server);
+  await connectRepo(server, headers);
   const [repo] = await server.db
     .select()
     .from(repos)

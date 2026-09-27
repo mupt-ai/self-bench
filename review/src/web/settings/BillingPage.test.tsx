@@ -35,7 +35,6 @@ test("subscription summary exposes access, period, and limit availability", () =
     "Not Available in SelfBench",
   ])
     expect(html).toContain(value);
-  expect(html).not.toContain("Status: Active · managed runs are allowed");
 });
 
 test("billing summary derives cost visualization from recorded usage", () => {

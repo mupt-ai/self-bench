@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { API_KEY_PREFIX, createApiKeyStore, hashApiKey } from "../src/db/api-keys.js";
+import { createApiKeyStore } from "../src/db/api-keys.js";
 import { apiKeys } from "../src/db/schema.js";
 import { createUserStore } from "../src/db/users.js";
-import { mint, signedIn } from "./support/api-keys.js";
+import { mint } from "./support/api-keys.js";
+import { signedIn } from "./support/sign-in.js";
 import {
   type AuthServer,
   fakeGitHub,
@@ -33,7 +35,7 @@ describe("api key store", () => {
       const clock = new Date("2026-09-14T10:00:00Z");
       const store = createApiKeyStore(database.db, { now: () => clock });
       const { key, secret } = await store.create(user.id, { name: "CI", scope: "write" });
-      expect(secret.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(secret.startsWith("sbk_")).toBe(true);
       expect(secret.length).toBeGreaterThan(40);
       expect(key).toEqual({
         id: key.id,
@@ -43,7 +45,8 @@ describe("api key store", () => {
         createdAt: "2026-09-14T10:00:00.000Z",
       });
       const [row] = await database.db.select().from(apiKeys).where(eq(apiKeys.id, key.id));
-      expect(row?.keyHash).toBe(hashApiKey(secret));
+      // Issued keys stay valid only while the stored digest is a plain SHA-256 of the secret.
+      expect(row?.keyHash).toBe(createHash("sha256").update(secret).digest("hex"));
       expect(JSON.stringify(row)).not.toContain(secret);
 
       const resolved = await store.authenticate(secret);
@@ -54,7 +57,7 @@ describe("api key store", () => {
         apiKey: { id: key.id, name: "CI", scope: "write" },
       });
       expect((await store.list(user.id))[0]?.lastUsedAt).toBe("2026-09-14T10:00:00.000Z");
-      expect(await store.authenticate(`${API_KEY_PREFIX}not-a-real-key`)).toBeUndefined();
+      expect(await store.authenticate("sbk_not-a-real-key")).toBeUndefined();
       expect(await store.authenticate("gho")).toBeUndefined();
 
       expect(await store.revoke(user.id + 1, key.id)).toBe(false);

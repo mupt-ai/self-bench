@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import { loadPiModelAuth, loadPiSubscriptionAuth } from "../../src/harnesses/pi/model-auth.js";
 
 afterEach(() => {
@@ -12,6 +13,12 @@ describe("subscription authentication", () => {
     process.env.OPENAI_API_KEY = "  api-key  ";
 
     expect(await loadPiModelAuth()).toEqual({ provider: "openai", apiKey: "api-key" });
+  });
+
+  test("uses a run's OpenRouter key when no OpenAI or Anthropic key is present", async () => {
+    await withExecutionEnvironment({ OPENROUTER_API_KEY: " router-key " }, async () =>
+      expect(await loadPiModelAuth()).toEqual({ provider: "openrouter", apiKey: "router-key" }),
+    );
   });
 
   test("falls back to the managed platform key for Compose workers without a model key", async () => {

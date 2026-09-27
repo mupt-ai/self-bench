@@ -1,10 +1,9 @@
 import { sleep } from "../lib/util.js";
 
-const DEFAULT_ATTEMPTS = 5;
+const ATTEMPTS = 5;
 const BACKOFF_MS = [250, 500, 1_000, 2_000, 4_000] as const;
 
 export interface OutputReadOptions {
-  readonly attempts?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly signal?: AbortSignal;
 }
@@ -18,10 +17,9 @@ export async function readOutputWithRetry(
   read: () => Promise<Uint8Array | undefined>,
   options: OutputReadOptions = {},
 ): Promise<{ value: Uint8Array | undefined; attempts: number; lastError?: unknown }> {
-  const attempts = options.attempts ?? DEFAULT_ATTEMPTS;
   const wait = options.sleep ?? sleep;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     options.signal?.throwIfAborted();
     try {
       const value = await read();
@@ -32,9 +30,13 @@ export async function readOutputWithRetry(
     } catch (error) {
       lastError = error;
     }
-    if (attempt < attempts) {
+    if (attempt < ATTEMPTS) {
       await wait(BACKOFF_MS[Math.min(attempt - 1, BACKOFF_MS.length - 1)] ?? 1_000);
     }
   }
-  return { value: undefined, attempts, ...(lastError !== undefined ? { lastError } : {}) };
+  return {
+    value: undefined,
+    attempts: ATTEMPTS,
+    ...(lastError !== undefined ? { lastError } : {}),
+  };
 }

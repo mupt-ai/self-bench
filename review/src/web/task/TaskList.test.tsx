@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import type { TaskItem } from "../api";
-import { ReviewTaskList } from "./ReviewTaskList";
 import { TaskList } from "./TaskList";
 
 test("deletion controls sit outside task links and active generation stays disabled even when approved", () => {
@@ -40,32 +39,4 @@ test("deletion controls sit outside task links and active generation stays disab
   const links = html.match(/<a\b[^>]*>.*?<\/a>/g) ?? [];
   expect(links).toHaveLength(2);
   expect(links.every((link) => !link.includes("<button") && !link.includes("<input"))).toBe(true);
-});
-test("task rows have no selection toolbar or guidance section", () => {
-  const tasks = [
-    {
-      runId: "run",
-      taskId: "task",
-      pipelineStatus: "accepted",
-      state: "accepted",
-      difficulty: "easy",
-    },
-  ] as TaskItem[];
-  const html = renderToStaticMarkup(
-    <MemoryRouter>
-      <ReviewTaskList
-        org="owner"
-        fullName="owner/repo"
-        visible={tasks}
-        selectionScope="accepted/"
-        onDeleting={() => {}}
-        onDeleted={() => {}}
-      />
-    </MemoryRouter>,
-  );
-  expect(html).not.toContain("run-selection-guidance");
-  expect(html).not.toContain("Select finished, human-approved tasks to run them.");
-  expect(html).not.toContain("Select All Shown");
-  expect(html).not.toContain("Run Selected");
-  expect(html).not.toContain(">Delete Selected</button>");
 });

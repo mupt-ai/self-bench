@@ -3,7 +3,6 @@ import {
   executionEnvironment,
   withExecutionEnvironment,
 } from "../../src/contracts/config/execution-environment.js";
-import { agentScript } from "../../src/generation/pipeline/agent.js";
 import {
   generationEnvironment,
   generationRecordPath,
@@ -128,12 +127,4 @@ test("generation credentials cannot be substituted and concurrent activity envir
     ),
   );
   expect(executionEnvironment()).toBe(process.env);
-  const script = agentScript({
-    workspace: { kind: "task" },
-    extension: "/work/reviewer.js",
-    tools: "read",
-    outputs: [],
-  } as unknown as Parameters<typeof agentScript>[0]);
-  expect(script).toContain(`--thinking "\${AUTHOR_THINKING:-high}"`);
-  expect(script).not.toContain("--thinking high");
 });

@@ -86,6 +86,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
         </MemoryRouter>,
       );
     });
+    expect(container.querySelector("dialog")).toBeNull();
     await act(async () => button("Generate Batch").click());
     expect(container.querySelector("dialog")?.open).toBe(true);
     for (const label of ["Easy Candidates", "Medium Candidates", "Hard Candidates"])
