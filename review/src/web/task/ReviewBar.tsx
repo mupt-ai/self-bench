@@ -28,6 +28,14 @@ export function ReviewBar({
 
   // Two quick presses of `A` land before `busy` re-renders; the ref drops the second.
   const saving = React.useRef(false);
+  // A save that finishes after the reviewer moved to another task must not move them again.
+  const mounted = React.useRef(true);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const decide = (decision: "approve" | "reject") => {
     if (saving.current) return;
     saving.current = true;
@@ -39,6 +47,7 @@ export function ReviewBar({
     }).then(
       (updated) => {
         saving.current = false;
+        if (!mounted.current) return;
         setBusy(false);
         setRejecting(false);
         setNote("");
