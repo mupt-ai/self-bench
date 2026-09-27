@@ -8,13 +8,17 @@ provider "google" {
   project = var.project_id
   region  = var.region
 }
-# The GKE worker cluster, reached as whoever runs Terraform; unused while gke_workers is off.
-data "google_client_config" "current" {}
+# The GKE worker cluster; unused while gke_workers is off. Credentials come from the plugin at
+# each call, so the apply runs as the apply identity rather than a token saved in the plan.
 provider "helm" {
   kubernetes = {
     host                   = module.selfbench.workers_cluster == null ? "" : "https://${module.selfbench.workers_cluster.endpoint}"
-    token                  = data.google_client_config.current.access_token
     cluster_ca_certificate = module.selfbench.workers_cluster == null ? "" : base64decode(module.selfbench.workers_cluster.cluster_ca_certificate)
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "gke-gcloud-auth-plugin"
+      args        = ["--use_application_default_credentials"]
+    }
   }
 }
 module "selfbench" {
