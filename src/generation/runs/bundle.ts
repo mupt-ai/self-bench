@@ -82,9 +82,10 @@ async function withoutSnapshots(
   const suffix = "/harbor-task.tar.gz";
   if (!key.endsWith(suffix)) return undefined;
   const directory = key.slice(0, -suffix.length);
+  // Optional: any trouble finding the split files only means reading the full bundle.
   const [gate, snapshot] = await Promise.all([
-    store.stat(`${directory}/${GATE_TASK_FILE}`),
-    store.stat(`${directory}/${SNAPSHOT_FILE}`),
+    store.stat(`${directory}/${GATE_TASK_FILE}`).catch(() => undefined),
+    store.stat(`${directory}/${SNAPSHOT_FILE}`).catch(() => undefined),
   ]);
   if (!gate || !snapshot) return undefined;
   return {

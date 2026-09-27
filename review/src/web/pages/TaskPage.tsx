@@ -85,7 +85,7 @@ function TaskPageContent() {
   );
   const onDecided = () => {
     if (position?.next) goTo(position.next);
-    else if (queue) void navigate(queue.back);
+    else if (queue) void navigate(queue.back, { replace: true });
   };
 
   const next = position?.next;

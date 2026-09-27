@@ -26,8 +26,11 @@ export function ReviewBar({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Two quick presses of `A` land before `busy` re-renders; the ref drops the second.
+  const saving = React.useRef(false);
   const decide = (decision: "approve" | "reject") => {
-    if (busy) return;
+    if (saving.current) return;
+    saving.current = true;
     setBusy(true);
     setError(null);
     putReview(org, fullName, task.runId, task.taskId, {
@@ -35,6 +38,7 @@ export function ReviewBar({
       note: decision === "reject" ? note.trim() : "",
     }).then(
       (updated) => {
+        saving.current = false;
         setBusy(false);
         setRejecting(false);
         setNote("");
@@ -42,6 +46,7 @@ export function ReviewBar({
         onDecided?.(updated);
       },
       (cause: Error) => {
+        saving.current = false;
         setBusy(false);
         setError(cause.message);
       },
@@ -51,7 +56,7 @@ export function ReviewBar({
   const decideRef = React.useRef(decide);
   decideRef.current = decide;
   React.useEffect(() => {
-    if (decided) return;
+    if (decided || rejecting) return;
     const onKey = (event: KeyboardEvent) => {
       if (isTyping(event)) return;
       if (event.key === "a") {
@@ -64,7 +69,7 @@ export function ReviewBar({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [decided]);
+  }, [decided, rejecting]);
 
   const clear = () => {
     setBusy(true);
