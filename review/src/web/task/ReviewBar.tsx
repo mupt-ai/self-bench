@@ -2,35 +2,44 @@ import { Check, CircleX } from "lucide-react";
 import React from "react";
 import { clearReview, formatAgo, putReview, type TaskItem } from "../api";
 import { Button, Input } from "../ui";
+import { isTyping } from "./review-queue";
 
+/**
+ * Approve decides in one click (or `A`); Reject (or `R`) asks for an optional reason first.
+ * `onDecided` hears only new decisions, so the page can move on to the next task.
+ */
 export function ReviewBar({
   org,
   fullName,
   task,
   onReview,
+  onDecided,
 }: {
   org: string;
   fullName: string;
   task: TaskItem;
   onReview: (updated: TaskItem) => void;
+  onDecided?: (updated: TaskItem) => void;
 }) {
-  const [pending, setPending] = React.useState<"approve" | "reject" | null>(null);
+  const [rejecting, setRejecting] = React.useState(false);
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const submit = () => {
-    if (!pending) return;
+  const decide = (decision: "approve" | "reject") => {
+    if (busy) return;
     setBusy(true);
+    setError(null);
     putReview(org, fullName, task.runId, task.taskId, {
-      decision: pending,
-      note: note.trim(),
+      decision,
+      note: decision === "reject" ? note.trim() : "",
     }).then(
       (updated) => {
         setBusy(false);
-        setPending(null);
+        setRejecting(false);
         setNote("");
         onReview(updated);
+        onDecided?.(updated);
       },
       (cause: Error) => {
         setBusy(false);
@@ -38,6 +47,25 @@ export function ReviewBar({
       },
     );
   };
+  const decided = !!task.review;
+  const decideRef = React.useRef(decide);
+  decideRef.current = decide;
+  React.useEffect(() => {
+    if (decided) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (isTyping(event)) return;
+      if (event.key === "a") {
+        event.preventDefault();
+        decideRef.current("approve");
+      } else if (event.key === "r") {
+        event.preventDefault();
+        setRejecting(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [decided]);
+
   const clear = () => {
     setBusy(true);
     clearReview(org, fullName, task.runId, task.taskId).then(
@@ -89,39 +117,51 @@ export function ReviewBar({
   }
   return (
     <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-      {pending ? (
+      {rejecting ? (
         <form
           className="flex flex-wrap items-center gap-2.5"
           onSubmit={(event) => {
             event.preventDefault();
-            submit();
+            decide("reject");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setRejecting(false);
           }}
         >
           <Input
             className="w-64 max-w-full"
-            placeholder={pending === "approve" ? "Note (optional)" : "Why reject? (optional)"}
+            placeholder="Why reject? (optional)"
             value={note}
             onChange={(event) => setNote(event.target.value)}
             aria-label="Review Note"
+            autoFocus
           />
-          <Button
-            type="submit"
-            variant={pending === "approve" ? "primary" : "destructive"}
-            disabled={busy}
-          >
-            {busy ? "Saving…" : pending === "approve" ? "Confirm Approve" : "Confirm Reject"}
+          <Button type="submit" variant="destructive" disabled={busy}>
+            {busy ? "Saving…" : "Confirm Reject"}
           </Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => setPending(null)}>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => setRejecting(false)}>
             Cancel
           </Button>
         </form>
       ) : (
         <>
-          <Button type="button" variant="destructive" onClick={() => setPending("reject")}>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={busy}
+            title="Reject (R)"
+            onClick={() => setRejecting(true)}
+          >
             Reject
           </Button>
-          <Button type="button" variant="primary" onClick={() => setPending("approve")}>
-            Approve
+          <Button
+            type="button"
+            variant="primary"
+            disabled={busy}
+            title="Approve (A)"
+            onClick={() => decide("approve")}
+          >
+            {busy ? "Saving…" : "Approve"}
           </Button>
         </>
       )}

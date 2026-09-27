@@ -2,6 +2,7 @@ import { GitPullRequest } from "lucide-react";
 import { Link } from "react-router";
 import type { TaskItem } from "../api";
 import { cn } from "../primitives/cn";
+import { queueState, taskPath } from "./review-queue";
 import { DifficultyStamp, StateStamp } from "./state";
 import { TaskRowActions } from "./TaskRowActions";
 import { taskKey } from "./task-deletion";
@@ -14,14 +15,18 @@ export function TaskList({
   busy,
   onSelect,
   onDelete,
+  back,
 }: {
   fullName: string;
   tasks: TaskItem[];
+  /** Where a task page returns to; its previous and next tasks follow this list's order. */
+  back: string;
   selected: ReadonlySet<string>;
   busy: boolean;
   onSelect: (task: TaskItem, checked: boolean) => void;
   onDelete: (task: TaskItem) => void;
 }) {
+  const linkState = queueState(tasks, back, "Dataset");
   return (
     <div>
       <TaskListHeader />
@@ -45,7 +50,8 @@ export function TaskList({
             />
             <Link
               className={cn(taskDetailsLayout, "py-3 text-foreground outline-offset-4")}
-              to={`/repos/${fullName}/tasks/${task.runId}/${encodeURIComponent(task.taskId)}`}
+              to={taskPath(fullName, task)}
+              state={linkState}
             >
               <span className="flex min-w-0 flex-col gap-1">
                 <span

@@ -26,6 +26,7 @@ test("deletion controls sit outside task links and active generation stays disab
       <TaskList
         fullName="owner/repo"
         tasks={tasks}
+        back="/repos/owner/repo"
         selected={new Set(["run-one:terminal"])}
         busy={false}
         onSelect={() => {}}

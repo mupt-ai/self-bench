@@ -1,17 +1,26 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { fetchTask, type TaskItem } from "../api";
 import { pageGutter } from "../layout";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { LiveTaskState } from "../task/LiveTaskState";
 import { ReviewBar } from "../task/ReviewBar";
-import { rowFor, siteTaskSource } from "../task/site-source";
+import {
+  isTyping,
+  queuePosition,
+  type ReviewQueue,
+  readQueue,
+  type TaskRef,
+  taskPath,
+} from "../task/review-queue";
+import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
 import { TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
-import { Breadcrumbs, Notice, PageFrame } from "../ui";
+import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
@@ -63,6 +72,27 @@ function TaskPageContent() {
   const technicalDetails = task ? taskTechnicalDetails(task.reason, task.reasonSummary) : undefined;
 
   const onReview = (updated: TaskItem) => setTask(updated);
+  const location = useLocation();
+  const queue = readQueue(location.state);
+  const position = queue ? queuePosition(queue, { runId, taskId }) : undefined;
+  const navigate = useNavigate();
+  // Replacing keeps the browser's Back button one step from the list, however many tasks were seen.
+  const goTo = React.useCallback(
+    (target: TaskRef) => {
+      if (queue) void navigate(taskPath(fullName, target), { state: { queue }, replace: true });
+    },
+    [navigate, fullName, queue],
+  );
+  const onDecided = () => {
+    if (position?.next) goTo(position.next);
+    else if (queue) void navigate(queue.back);
+  };
+
+  const next = position?.next;
+  const loaded = task !== undefined;
+  React.useEffect(() => {
+    if (loaded && next) void prefetchTaskFiles(org.login, fullName, next).catch(() => undefined);
+  }, [loaded, next, org.login, fullName]);
 
   if (error && task === undefined) {
     return (
@@ -90,7 +120,11 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               { label: "Repositories", to: "/" },
-              { label: fullName, to: `/repos/${fullName}`, mono: true },
+              {
+                label: fullName,
+                to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,
+                mono: true,
+              },
               {
                 label: "Batch",
                 to: `/repos/${fullName}/batches/${encodeURIComponent(task.runId)}`,
@@ -140,6 +174,7 @@ function TaskPageContent() {
           ) : null}
         </div>
         <div className="flex flex-col items-end gap-2">
+          {queue && position && <QueueNav queue={queue} position={position} onGo={goTo} />}
           <TaskGenerationControls
             task={task}
             org={org.login}
@@ -149,12 +184,74 @@ function TaskPageContent() {
           {task.state !== "in_progress" &&
             task.state !== "failed" &&
             task.state !== "cancelled" && (
-              <ReviewBar org={org.login} fullName={fullName} task={task} onReview={onReview} />
+              <ReviewBar
+                org={org.login}
+                fullName={fullName}
+                task={task}
+                onReview={onReview}
+                onDecided={onDecided}
+              />
             )}
         </div>
       </header>
       <TaskView source={source} row={rowFor(task)} />
     </div>
+  );
+}
+
+/** Previous / next through the list the task was opened from, also on `K` / `J`. */
+function QueueNav({
+  queue,
+  position,
+  onGo,
+}: {
+  queue: ReviewQueue;
+  position: NonNullable<ReturnType<typeof queuePosition>>;
+  onGo: (task: TaskRef) => void;
+}) {
+  const { previous, next } = position;
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isTyping(event)) return;
+      const target = event.key === "j" ? next : event.key === "k" ? previous : undefined;
+      if (!target) return;
+      event.preventDefault();
+      onGo(target);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previous, next, onGo]);
+  return (
+    <nav className="flex items-center gap-1" aria-label="Task Queue">
+      <Link className="mr-2 text-xs text-muted-foreground hover:text-foreground" to={queue.back}>
+        Back to {queue.backLabel}
+      </Link>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Previous Task"
+        title="Previous Task (K)"
+        disabled={!previous}
+        onClick={() => previous && onGo(previous)}
+      >
+        <ChevronLeft aria-hidden="true" />
+      </Button>
+      <span className="font-mono text-xs tabular-nums text-muted-foreground" role="status">
+        {position.index + 1} of {queue.tasks.length}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Next Task"
+        title="Next Task (J)"
+        disabled={!next}
+        onClick={() => next && onGo(next)}
+      >
+        <ChevronRight aria-hidden="true" />
+      </Button>
+    </nav>
   );
 }
 

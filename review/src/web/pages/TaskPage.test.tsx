@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router";
 import type { TaskItem } from "../api";
 import type { OrgContext } from "../SiteLayout";
+import { queueState } from "../task/review-queue";
 import { TaskPage } from "./TaskPage";
 
 const activeTask: TaskItem = {
@@ -87,6 +88,88 @@ test("a transient refresh failure preserves the task and cancellation state", as
     expect(container.textContent).toContain(
       "Task status could not be refreshed. Showing the last update. temporarily unavailable",
     );
+  } finally {
+    await act(async () => root.unmount());
+    fetch.mockRestore();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});
+
+test("approving moves to the next task in the list the page was opened from", async () => {
+  const browser = new Window({ url: "https://selfbench.test" });
+  const globals = {
+    window: browser,
+    document: browser.document,
+    HTMLElement: browser.HTMLElement,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  const previous = Object.keys(globals).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  for (const [key, value] of Object.entries(globals))
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const reviewable = (taskId: string): TaskItem => ({
+    ...activeTask,
+    taskId,
+    state: "needs_review",
+    pipelineStatus: "accepted",
+  });
+  const reviews: string[] = [];
+  const fetch = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
+    const url = String(input);
+    const taskId = url.match(/\/tasks\/run-one\/(task-[a-z]+)/)?.[1] ?? "";
+    if (url.endsWith("/review") && init?.method === "PUT") {
+      reviews.push(`${taskId} ${init.body}`);
+      return Response.json({ task: { ...reviewable(taskId), state: "accepted" } });
+    }
+    if (url.endsWith("/artifacts"))
+      return Response.json({ runId: "run-one", taskId, groups: {}, bundles: [], agents: [] });
+    if (url.includes("/batches/")) return Response.json({ error: "unavailable" }, { status: 503 });
+    if (taskId) return Response.json({ task: reviewable(taskId) });
+    throw new Error(`Unexpected request: ${url}`);
+  }) as typeof globalThis.fetch);
+  const org = { login: "Mupt-AI", kind: "org", role: "admin" } as const;
+  const queue = queueState(
+    ["task-one", "task-two"].map((taskId) => ({ runId: "run-one", taskId })),
+    "/repos/Mupt-AI/self-bench?state=needs_review",
+    "Dataset",
+  );
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/",
+        element: <Outlet context={{ org, orgs: [org] } satisfies OrgContext} />,
+        children: [
+          { path: "repos/:owner/:name/tasks/:runId/:taskId", element: <TaskPage /> },
+          { path: "repos/:owner/:name", element: <p>Dataset</p> },
+        ],
+      },
+    ],
+    {
+      initialEntries: [
+        { pathname: "/repos/Mupt-AI/self-bench/tasks/run-one/task-one", state: queue },
+      ],
+    },
+  );
+  const button = (label: string) =>
+    [...container.querySelectorAll("button")].find((found) => found.textContent === label);
+  try {
+    await act(async () => root.render(<RouterProvider router={router} />));
+    expect(container.textContent).toContain("1 of 2");
+
+    await act(async () => button("Approve")?.click());
+    expect(reviews).toEqual(['task-one {"decision":"approve","note":""}']);
+    expect(router.state.location.pathname).toBe("/repos/Mupt-AI/self-bench/tasks/run-one/task-two");
+    expect(container.textContent).toContain("2 of 2");
+
+    await act(async () => button("Approve")?.click());
+    expect(router.state.location.pathname).toBe("/repos/Mupt-AI/self-bench");
+    expect(router.state.location.search).toBe("?state=needs_review");
   } finally {
     await act(async () => root.unmount());
     fetch.mockRestore();

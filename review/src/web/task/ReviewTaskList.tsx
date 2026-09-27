@@ -14,7 +14,9 @@ export function ReviewTaskList({
   onDeleting,
   onDeleted,
   actionsTarget,
+  back,
 }: {
+  back: string;
   actionsTarget?: HTMLElement | null;
   org: string;
   fullName: string;
@@ -126,6 +128,7 @@ export function ReviewTaskList({
         <TaskList
           fullName={fullName}
           tasks={visible}
+          back={back}
           selected={selected}
           busy={deleting}
           onSelect={(task, checked) =>

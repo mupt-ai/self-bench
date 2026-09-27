@@ -1,12 +1,12 @@
 import { GitBranch, LockKeyhole, Plus } from "lucide-react";
 import React from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
 import { useBatches } from "../batches/BatchProvider";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { ReviewTaskList } from "../task/ReviewTaskList";
-import { type Filter, TaskFilters } from "../task/TaskFilters";
+import { FILTERS, type Filter, TaskFilters } from "../task/TaskFilters";
 import { TaskListSkeleton } from "../task/TaskListSkeleton";
 import { taskKey } from "../task/task-deletion";
 import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
@@ -26,11 +26,24 @@ function RepoTasksPage() {
   const [repo, setRepo] = React.useState<ConnectedRepo | null | undefined>(undefined);
   const [tasks, setTasks] = React.useState<TaskItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [params] = useSearchParams();
-  const [filter, setFilter] = React.useState<Filter>(
-    params.get("state") === "in_progress" ? "in_progress" : "accepted",
-  );
-  const [query, setQuery] = React.useState("");
+  // Filters live in the URL, so returning from a task (or a reload) keeps the list as it was.
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("state") as Filter | null;
+  const filter: Filter = requested && FILTERS.includes(requested) ? requested : "accepted";
+  const query = params.get("q") ?? "";
+  const updateParams = (key: "state" | "q", value: string) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const setFilter = (value: Filter) => updateParams("state", value);
+  const setQuery = (value: string) => updateParams("q", value);
   const [deleting, setDeleting] = React.useState(false);
   const [actionsTarget, setActionsTarget] = React.useState<HTMLDivElement | null>(null);
   const requestVersion = React.useRef(0);
@@ -191,6 +204,7 @@ function RepoTasksPage() {
           org={org.login}
           fullName={fullName}
           visible={visible}
+          back={`${location.pathname}${location.search}`}
           selectionScope={`${filter}/${query}`}
           onDeleting={(value) => {
             if (value) ++requestVersion.current;
