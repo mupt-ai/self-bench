@@ -2,12 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CancelledFailure } from "@temporalio/workflow";
+import { RetryState } from "@temporalio/common";
+import { CancelledFailure, ChildWorkflowFailure, TerminatedFailure } from "@temporalio/workflow";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { failTrial, finishEvaluation, startEvaluation } from "../src/evaluation/lifecycle.js";
 import { executeTrial } from "../src/evaluation/runner.js";
 import { getEvaluation } from "../src/evaluation/store.js";
-import { runEvaluationTrials } from "../src/evaluation/workflow.js";
+import { trialInput } from "../src/evaluation/trial-input.js";
+import { runEvaluationTrials, runTrial } from "../src/evaluation/workflow.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
@@ -75,7 +77,10 @@ test("trials running at once each keep their own progress and result", async () 
     await barrier;
   });
   const options = { env: {}, vault, command, pollMs: 1, progressMs: 0 };
-  await Promise.all([0, 1, 2, 3].map((index) => executeTrial(store, input, index, options)));
+  // Each trial workflow carries only its own task.
+  await Promise.all(
+    [0, 1, 2, 3].map((index) => executeTrial(store, trialInput(input, index), index, options)),
+  );
   await finishEvaluation(store, input);
   const run = await getEvaluation(store, input.repoId, input.id);
   expect(run?.status).toBe("completed");
@@ -116,7 +121,7 @@ function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {
         events.push("finish");
       },
     },
-    harbor: { runSolverTrial: (_input: unknown, index: number) => runSolverTrial(index) },
+    solve: (_input: unknown, index: number) => runSolverTrial(index),
   };
 }
 
@@ -124,7 +129,7 @@ test("the workflow bounds trials in flight and fails only a trial whose activity
   let running = 0;
   let peak = 0;
   const started: number[] = [];
-  const { events, records, harbor } = workflowActivities(async (index) => {
+  const { events, records, solve } = workflowActivities(async (index) => {
     started.push(index);
     running += 1;
     peak = Math.max(peak, running);
@@ -132,7 +137,7 @@ test("the workflow bounds trials in flight and fails only a trial whose activity
     running -= 1;
     if (index === 1) throw new Error("Heartbeat timeout");
   });
-  await runEvaluationTrials(evaluationInput(), records, harbor, 2);
+  await runEvaluationTrials(evaluationInput(), records, solve, 2);
   expect(peak).toBe(2);
   expect(started.sort()).toEqual([0, 1, 2, 3, 4]);
   expect(events).toEqual(["fail 1", "finish"]);
@@ -140,14 +145,31 @@ test("the workflow bounds trials in flight and fails only a trial whose activity
 
 test("a cancelled workflow waits for running trials and records no outcome", async () => {
   let settled = 0;
-  const { events, records, harbor } = workflowActivities(async (index) => {
+  const { events, records, solve } = workflowActivities(async (index) => {
     await new Promise((resolve) => setTimeout(resolve, index === 0 ? 1 : 20));
     settled += 1;
     throw new CancelledFailure("Activity cancelled");
   });
-  await expect(runEvaluationTrials(evaluationInput(), records, harbor, 3)).rejects.toThrow(
+  await expect(runEvaluationTrials(evaluationInput(), records, solve, 3)).rejects.toThrow(
     "Activity cancelled",
   );
   expect(settled).toBe(3);
   expect(events).toEqual([]);
+});
+
+test("a trial workflow cancelled with its evaluation is not failed, but a terminated one is", async () => {
+  const child = (cause: Error) =>
+    new ChildWorkflowFailure(
+      "default",
+      { workflowId: "evaluation/1/run/trial/0" },
+      "selfBenchSolverTrialWorkflow",
+      RetryState.NON_RETRYABLE_FAILURE,
+      cause,
+    );
+  const { events, records } = workflowActivities(async () => {});
+  const cancelled = { runSolverTrial: () => Promise.reject(child(new CancelledFailure("x"))) };
+  await expect(runTrial(evaluationInput(), 0, cancelled, records)).rejects.toThrow();
+  const terminated = { runSolverTrial: () => Promise.reject(child(new TerminatedFailure("x"))) };
+  await runTrial(evaluationInput(), 1, terminated, records);
+  expect(events).toEqual(["fail 1"]);
 });

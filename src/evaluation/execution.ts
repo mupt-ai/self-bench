@@ -32,7 +32,12 @@ export async function credentialExecution(
     comparison?.orgId === orgId && comparison.repoId === input.repoId
       ? comparison.inputs.find((entry) => entry.id === input.id)
       : undefined;
-  if (!saved || !isDeepStrictEqual(saved, input))
+  // A trial workflow carries only its own task (trialInput); the rest must match exactly.
+  const reserved =
+    saved && input.tasks.length === 1
+      ? { ...saved, tasks: saved.tasks.filter((task) => isDeepStrictEqual(task, input.tasks[0])) }
+      : saved;
+  if (!reserved || !isDeepStrictEqual(reserved, input))
     throw new Error("Execution does not match the reserved comparison");
   const managedModel = input.credentials.modelCredentialId === "managed-model";
   const managedSandbox = input.credentials.sandboxCredentialId === "managed-sandbox";

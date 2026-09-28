@@ -1,7 +1,7 @@
 /** The worker's workflow bundle: every workflow type this deployment registers. */
 
 export {
-  selfBenchEvaluationWorkflow,
-  selfBenchParallelEvaluationWorkflow,
+  selfBenchEvaluationRunWorkflow,
+  selfBenchSolverTrialWorkflow,
 } from "../evaluation/workflow.js";
 export * from "../generation/pipeline/workflows.js";
