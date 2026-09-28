@@ -54,13 +54,20 @@ export function createGenerationBatches(
     exports.set(
       runId,
       executions
-        .export(`${runId}/export`, batch, taskQueue)
+        .export(
+          `${runId}/export/${batch.exportAttempt ?? 0}`,
+          {
+            run: batch.run,
+            candidates: batch.candidates,
+          },
+          taskQueue,
+        )
         .then(async (snapshot) => {
           if (snapshot.state === "completed") await store.completeExport(runId, snapshot.result);
-          else if (snapshot.state === "failed")
-            console.error(`Batch ${runId} export workflow failed: ${snapshot.error}`);
-          else if (snapshot.state === "cancelled")
-            console.error(`Batch ${runId} export workflow was cancelled`);
+          else if (snapshot.state === "failed" || snapshot.state === "cancelled") {
+            console.error(`Batch ${runId} export workflow ended as ${snapshot.state}`);
+            await store.retryExport(runId);
+          }
         })
         .catch((error) =>
           console.error(`Batch ${runId} export observation failed: ${errorMessage(error)}`),
@@ -253,7 +260,12 @@ export function createGenerationBatches(
       cancelling.add(runId);
       try {
         if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
-        else poll();
+        else {
+          await executions.cancelExport(
+            `${runId}/export/${(await store.read(runId))?.exportAttempt ?? 0}`,
+          );
+          poll();
+        }
       } finally {
         cancelling.delete(runId);
       }

@@ -14,11 +14,14 @@ import { generationConfigEnvironment } from "../settings/run.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Resolve only this run's provider account; never launch repo tools in the API process. */
+export type BatchExportInput = Pick<GenerationBatch, "run" | "candidates">;
+
 export async function exportBatch(
-  batch: GenerationBatch,
+  batch: BatchExportInput,
   artifacts: ArtifactStore,
   vault?: Vault,
   usage?: UsageLedger,
+  signal?: AbortSignal,
 ) {
   const generation = batch.run.generation;
   let env = process.env;
@@ -60,6 +63,7 @@ export async function exportBatch(
             ),
           },
           `application-${crypto.randomUUID()}`,
+          signal,
         ),
       );
     if (!generation || !usage) return await runExport();

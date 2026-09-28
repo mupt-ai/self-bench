@@ -17,6 +17,7 @@ export async function buildExport(
   store: ArtifactStore,
   input: ExportInput,
   attempt: string | number = Context.current().info.attempt,
+  signal?: AbortSignal,
 ): Promise<ArtifactRef> {
   const entries = [];
   for (const task of input.tasks) {
@@ -37,7 +38,7 @@ export async function buildExport(
       taskIds: kept.map((entry) => entry.taskId),
     }),
   });
-  const outputs = await taskOperation("export", files, ["/work/export.tar.gz"]);
+  const outputs = await taskOperation("export", files, ["/work/export.tar.gz"], signal);
   const archive = outputs["/work/export.tar.gz"];
   if (!archive) throw Error("Export sandbox returned no archive");
   return store.put(

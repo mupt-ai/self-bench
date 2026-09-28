@@ -31,6 +31,23 @@ export function createBatchStore(db: Database) {
           .where(eq(generationBatches.runId, runId));
       });
     },
+    async retryExport(runId: string): Promise<void> {
+      await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(generationBatches)
+          .where(eq(generationBatches.runId, runId))
+          .for("update");
+        if (row?.state.phase !== "exporting") return;
+        await tx
+          .update(generationBatches)
+          .set({
+            state: { ...row.state, exportAttempt: (row.state.exportAttempt ?? 0) + 1 },
+            updatedAt: new Date(),
+          })
+          .where(eq(generationBatches.runId, runId));
+      });
+    },
     async read(runId: string): Promise<GenerationBatch | undefined> {
       const [row] = await db
         .select()

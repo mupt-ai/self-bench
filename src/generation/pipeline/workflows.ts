@@ -19,7 +19,7 @@ import {
   type TaskProgress,
 } from "../../contracts/index.js";
 import { harborTaskQueue } from "../../temporal/task-queues.js";
-import type { GenerationBatch } from "../batches/types.js";
+import type { BatchExportInput } from "../batches/export.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
@@ -105,10 +105,11 @@ export async function selfBenchAuthorWorkflow(
 export async function selfBenchCancelledDispatchWorkflow(): Promise<void> {}
 
 /** Builds a batch archive on a worker rather than in the API process. */
-export async function selfBenchBatchExportWorkflow(batch: GenerationBatch): Promise<ArtifactRef> {
+export async function selfBenchBatchExportWorkflow(batch: BatchExportInput): Promise<ArtifactRef> {
   const { exportBatch } = proxyActivities<Pick<WorkerActivities, "exportBatch">>({
     startToCloseTimeout: "2 hours",
     retry,
+    heartbeatTimeout: "2 minutes",
   });
   return exportBatch(batch);
 }

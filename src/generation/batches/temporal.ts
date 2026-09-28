@@ -14,7 +14,7 @@ import type {
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
 import { heartbeatCost } from "./activity.js";
-import type { GenerationBatch } from "./types.js";
+import type { BatchExportInput } from "./export.js";
 
 type ExecutionSnapshot<T> =
   | { state: "running"; progress?: TaskProgress; cost?: SandboxCostSnapshot }
@@ -34,9 +34,10 @@ export interface BatchExecutionClient {
   ): Promise<ExecutionSnapshot<CandidateWorkflowResult>>;
   export(
     id: string,
-    batch: GenerationBatch,
+    batch: BatchExportInput,
     queue: string,
   ): Promise<ExecutionSnapshot<ArtifactRef>>;
+  cancelExport(id: string): Promise<void>;
   cancel(id: string, queue: string): Promise<boolean>;
 }
 
@@ -105,6 +106,14 @@ export function batchExecutions(client: Client): BatchExecutionClient {
       observe(id, "selfBenchDiscoveryShardWorkflow", input, queue, false),
     candidate: (id, input, queue) => observe(id, "selfBenchAuthorWorkflow", input, queue, true),
     export: (id, batch, queue) => observe(id, "selfBenchBatchExportWorkflow", batch, queue, false),
+    async cancelExport(id) {
+      const handle = client.workflow.getHandle(id);
+      try {
+        if ((await handle.describe()).status.name === "RUNNING") await handle.cancel();
+      } catch (error) {
+        if (!(error instanceof WorkflowNotFoundError)) throw error;
+      }
+    },
     async cancel(id, queue) {
       return client.connection.withDeadline(Date.now() + 10_000, async () => {
         const handle = client.workflow.getHandle(id);

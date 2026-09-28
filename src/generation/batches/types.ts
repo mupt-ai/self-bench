@@ -55,6 +55,7 @@ export interface GenerationBatch {
    */
   acceptedAt?: number;
   prepareAttempt?: number;
+  exportAttempt?: number;
   shards: BatchShard[];
   candidates: BatchCandidate[];
   export?: ArtifactRef;

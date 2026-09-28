@@ -24,14 +24,14 @@ test("application persists the artifact returned by the batch export workflow", 
         observed.push(workflowId);
         return {
           describe: async () => ({
-            type: workflowId.endsWith("/export")
+            type: workflowId.includes("/export/")
               ? "selfBenchBatchExportWorkflow"
               : "selfBenchAuthorWorkflow",
             runId: "execution",
             status: { name: "COMPLETED" },
           }),
           result: async () =>
-            workflowId.endsWith("/export")
+            workflowId.includes("/export/")
               ? {
                   uri: "file:///export.tar.gz",
                   sha256: "digest",
@@ -72,7 +72,7 @@ test("application persists the artifact returned by the batch export workflow", 
     expect(status.rejected).toBe(1);
     expect(status.export).toBeDefined();
     expect(status.export?.uri).toBe("file:///export.tar.gz");
-    expect(observed).toContain(`${run.runId}/export`);
+    expect(observed).toContain(`${run.runId}/export/0`);
     expect(observed).toContain(id);
   } finally {
     await service.close();

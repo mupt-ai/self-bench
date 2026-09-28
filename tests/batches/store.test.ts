@@ -27,6 +27,8 @@ test("batch plan survives a new store instance; aborted sweeps rollback; cancell
     await restarted.reconcile(run.runId, async (state) => {
       state.phase = "exporting";
     });
+    await restarted.retryExport(run.runId);
+    expect((await restarted.read(run.runId))?.exportAttempt).toBe(1);
     await restarted.cancel(run.runId);
     await restarted.completeExport(run.runId, artifact);
     expect((await restarted.read(run.runId))?.phase).toBe("cancelling");
