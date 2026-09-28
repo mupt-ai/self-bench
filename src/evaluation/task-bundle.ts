@@ -35,11 +35,10 @@ export async function unpackTrialTask(
   trialRoot: string,
   options: { snapshotLink?: SandboxCallback; signal?: AbortSignal },
 ): Promise<string> {
-  const split =
-    sandbox === "modal" && options.snapshotLink
-      ? await splitBundle(store, task.bundleKey).catch(() => undefined)
-      : undefined;
-  if (split && options.snapshotLink) {
+  const link = sandbox === "modal" ? options.snapshotLink : undefined;
+  // Any trouble finding the split files only means reading the full bundle.
+  const split = link ? await splitBundle(store, task.bundleKey).catch(() => undefined) : undefined;
+  if (link && split) {
     const root = join(trialRoot, "task");
     await mkdir(root);
     const directory = await unpackTask(
@@ -48,10 +47,9 @@ export async function unpackTrialTask(
       root,
       options.signal ?? new AbortController().signal,
     );
-    const { url, secret } = options.snapshotLink;
     await fetchSnapshotInBuild(directory, {
       bundle: split.gate,
-      snapshotUrl: snapshotLinkUrl(url, split.snapshot, secret),
+      snapshotUrl: snapshotLinkUrl(link.url, split.snapshot, link.secret),
       snapshotSha256: split.snapshot.sha256,
     });
     return directory;

@@ -14,9 +14,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from modal import Image
-from modal.exception import NotFoundError
+from modal.exception import InvalidError, NotFoundError, PermissionDeniedError
 
 from harbor.environments.modal import ModalEnvironment
+
+# What Modal raises for an image ID this workspace cannot use; anything else is a real failure.
+_UNUSABLE_PIN = (NotFoundError, PermissionDeniedError, InvalidError)
 
 # Harbor builds the agent from the task's environment/ and a separate verifier from its tests/.
 _ROLES = {"environment": "agent", "tests": "verifier"}
@@ -45,7 +48,7 @@ class SelfBenchModalEnvironment(ModalEnvironment):
             self._image = Image.from_id(self._selfbench_pin)
             try:
                 sandbox = await super()._create_sandbox(**kwargs)
-            except NotFoundError:
+            except _UNUSABLE_PIN:
                 self.logger.warning(
                     f"Pinned image {self._selfbench_pin} is unavailable; building the Dockerfile"
                 )

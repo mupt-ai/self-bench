@@ -192,11 +192,14 @@ test("the Modal environment starts from its role's pin, falls back when Modal lo
     `import asyncio, importlib.util, logging, pathlib, sys, types
 modal = types.ModuleType("modal"); exception = types.ModuleType("modal.exception")
 class NotFoundError(Exception): pass
+class PermissionDeniedError(Exception): pass
+class InvalidError(Exception): pass
 class Image:
     def __init__(self, object_id): self.object_id = object_id
     @staticmethod
     def from_id(image_id): return Image(image_id)
-modal.Image = Image; exception.NotFoundError = NotFoundError
+modal.Image = Image
+exception.NotFoundError, exception.PermissionDeniedError, exception.InvalidError = NotFoundError, PermissionDeniedError, InvalidError
 harbor_modal = types.ModuleType("harbor.environments.modal")
 class ModalEnvironment:
     def __init__(self, environment_dir, compose=False, **kwargs):

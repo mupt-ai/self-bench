@@ -18,7 +18,7 @@ export interface HarborRunCommand {
   solver?: { model: string; agentArguments: readonly string[] };
   /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
   extraAllowedHosts?: readonly string[];
-  /** Harbor `--ek` settings for the environment (pinned-images.ts). */
+  /** Harbor `--ek` settings for the environment, such as pinnedImageKwargs. */
   environmentKwargs?: Readonly<Record<string, string>>;
   quiet?: boolean;
 }
