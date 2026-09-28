@@ -57,7 +57,7 @@ const scenarios = {
     await page.locator(`a[href="${REPOSITORY}"]`).first().tap();
     await page.waitForURL(`**${REPOSITORY}`);
     await page.waitForTimeout(RECORD_MS);
-    return () => page.getByRole("link", { name: "SELF-BENCH Home" }).tap();
+    return () => page.getByRole("link", { name: "self-bench by dari.dev Home" }).tap();
   },
 };
 
