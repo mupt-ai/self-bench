@@ -8,6 +8,11 @@ import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
 import {
+  cancelComparison,
+  cancelEvaluation,
+  type StopEvaluation,
+} from "../../evaluation/cancel.js";
+import {
   catalog,
   catalogVersion,
   hostedSandboxes,
@@ -28,7 +33,7 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel))?$/;
 
 export interface EvaluationRoutesOptions {
   users: UserStore;
@@ -37,6 +42,7 @@ export interface EvaluationRoutesOptions {
   artifacts: ArtifactStore;
   publicUrl: string;
   start(input: EvaluationInput): Promise<void>;
+  stop: StopEvaluation;
   env?: NodeJS.ProcessEnv;
   vault?: Vault;
   codexLogins?: CodexLogins;
@@ -118,7 +124,10 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               sendJson(response, 200, await comparisonStatus(artifacts, record));
             else if (request.method === "POST" && action === "resume")
               await resume(record, "Submission not confirmed. Resume uses the same run IDs.");
-            else sendJson(response, 405, { error: "Method not allowed" });
+            else if (request.method === "POST" && action === "cancel") {
+              await cancelComparison(artifacts, record, user.login, options.stop);
+              sendJson(response, 200, await comparisonStatus(artifacts, record));
+            } else sendJson(response, 405, { error: "Method not allowed" });
           }
         } catch (error) {
           if (error instanceof RecordStoreError)
@@ -130,6 +139,18 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
                   ? error.message
                   : "Invalid selection or credential fields",
             });
+        }
+        request.resume();
+        return true;
+      }
+      if (section && !id && action === "cancel" && request.method === "POST") {
+        if (!trustedMutation(request, options.publicUrl, user))
+          sendJson(response, 403, { error: "Same-origin JSON request required" });
+        else if (!(await getEvaluation(artifacts, repo.id, section)))
+          sendJson(response, 404, { error: "Evaluation not found" });
+        else {
+          await cancelEvaluation(artifacts, repo.id, section, user.login, options.stop);
+          sendJson(response, 200, await getEvaluation(artifacts, repo.id, section));
         }
         request.resume();
         return true;

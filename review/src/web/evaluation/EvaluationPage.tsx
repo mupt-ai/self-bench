@@ -115,7 +115,13 @@ export function EvaluationPage() {
       {error && <Notice className="mb-4">{error}</Notice>}
       {selectedId ? (
         current ? (
-          <EvaluationResults key={current.id} run={current} baseUrl={url} repo={repo} />
+          <EvaluationResults
+            key={current.id}
+            run={current}
+            baseUrl={url}
+            repo={repo}
+            onCancelled={setCurrent}
+          />
         ) : (
           !error && <ListSkeleton label="Loading Run" />
         )
