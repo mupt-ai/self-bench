@@ -60,3 +60,7 @@ variable "harbor_worker_max_replicas" {
   type    = number
   default = 20
 }
+variable "worker_pool_polls_harbor" {
+  type    = bool
+  default = true
+}
