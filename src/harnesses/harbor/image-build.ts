@@ -1,7 +1,7 @@
 import { runCommand } from "../../lib/process.js";
 import { tail } from "../../lib/util.js";
 
-const FAILED_IMAGE = /ImageBuildError: Image build for (im-[A-Za-z0-9]+) failed/;
+const FAILED_IMAGE = /Image build for (im-[A-Za-z0-9]+) failed/;
 // Modal's builder ran one of the Dockerfile's own commands and it exited non-zero.
 const BUILDER_COMMAND_FAILED = /Terminating task due to error: failed to run builder command/;
 

@@ -30,6 +30,8 @@ test("a Dockerfile step that fails is handed to the author with its build log", 
   const log = await authoredImageBuildFailure(failure, env, new AbortController().signal);
   expect(log).toContain("Modal image build log (im-abc123)");
   expect(log).toContain("container exit status: 127");
+  const remote = "RemoteError: Image build for im-abc123 failed";
+  expect(await authoredImageBuildFailure(remote, env, new AbortController().signal)).toBe(log);
 });
 
 test("a build Modal itself failed stays an infrastructure failure", async () => {
