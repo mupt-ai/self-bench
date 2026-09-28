@@ -5,12 +5,10 @@ import {
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
+import { MAX_HARBOR_CONCURRENCY } from "../contracts/config/execution-limits.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
 import type { EvaluationInput } from "./types.js";
-
-/** Trials of one evaluation running at once: one Harbor worker pod's slots. */
-const EVALUATION_TRIAL_CONCURRENCY = 10;
 
 const solver = () =>
   proxyActivities<EvaluationActivities>({
@@ -57,12 +55,12 @@ export async function selfBenchEvaluationWorkflow(input: EvaluationInput): Promi
 }
 
 /**
- * Runs each trial as its own Harbor activity, up to EVALUATION_TRIAL_CONCURRENCY at once, so the
+ * Runs each trial as its own Harbor activity, up to one Harbor worker's slots at once, so the
  * Harbor queue's backlog reflects the evaluation's size and its workers scale out to it.
  */
 export async function selfBenchParallelEvaluationWorkflow(input: EvaluationInput): Promise<void> {
   try {
-    await runEvaluationTrials(input, records, trial(), EVALUATION_TRIAL_CONCURRENCY);
+    await runEvaluationTrials(input, records, trial(), MAX_HARBOR_CONCURRENCY);
   } catch {
     await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));
   }
