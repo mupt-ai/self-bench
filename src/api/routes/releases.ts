@@ -57,6 +57,8 @@ export interface ReleaseRoutesOptions {
   /** Origin of the results site, for links to released pages; null when there is none. */
   readonly resultsSiteUrl: string | null;
   readonly fetchImpl?: typeof fetch;
+  /** Told when what the public sees changes (a release or a withdrawal), so it is read afresh. */
+  readonly onPublicChange?: () => void;
 }
 
 /** A signed-in member's request, scoped to one connected repository. */
@@ -174,6 +176,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
           repositoryFlags: { private: isPrivate, archived },
         },
       });
+      options.onPublicChange?.();
       const after = await releases.list(scope.line);
       sendJson(response, 201, { release: summaryOf(row, after) });
     } catch (error) {
@@ -228,12 +231,14 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         const withdrawn = z.uuid().safeParse(section).success
           ? await releases.withdraw(scope.line, section, user.login)
           : undefined;
-        if (!withdrawn)
+        if (!withdrawn) {
           sendJson(response, 404, { error: "Release not found or already withdrawn" });
-        else
+        } else {
+          options.onPublicChange?.();
           sendJson(response, 200, {
             release: summaryOf(withdrawn, await releases.list(scope.line)),
           });
+        }
       } else if (mutation && !section) {
         const body = releaseRequest.parse(
           JSON.parse((await readBody(request, 1024 * 1024)).toString()),

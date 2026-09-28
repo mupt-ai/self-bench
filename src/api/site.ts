@@ -76,14 +76,11 @@ export async function openSite(
   const releases = createReleaseStore(database.db);
   // Unset means no public results site: no host serves it and nothing links to it.
   const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
-  // Anonymous reads share this server with the app: a scraper must not slow the app down.
+  // Anonymous reads share this server with the app: one scraper must not slow the app down.
   const limiter = createRateLimiter({
     perMinute: 300,
     burst: 60,
-    globalPerMinute: 6_000,
-    globalBurst: 600,
-    onLimit: (client, scope) =>
-      console.warn(`public site rate limit (${scope}) refused requests from ${client}`),
+    onLimit: (client) => console.warn(`public site rate limit refused requests from ${client}`),
   });
   const publicReleases = createPublicReleaseRoutes(releases, { limiter });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
@@ -134,6 +131,7 @@ export async function openSite(
       publicUrl,
       githubApiUrl: auth.githubApiUrl,
       resultsSiteUrl,
+      onPublicChange: () => publicReleases.refresh(),
     }),
     publicReleases,
     ...(resultsSiteUrl
@@ -143,7 +141,6 @@ export async function openSite(
             appUrl: publicUrl,
             indexable: process.env.SELFBENCH_RESULTS_SITE_INDEX === "true",
             root: `${projectRoot(import.meta.url)}/dist/public-site`,
-            releases,
             publicRoutes: publicReleases,
             limiter,
           }),

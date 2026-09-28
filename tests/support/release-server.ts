@@ -139,6 +139,7 @@ export async function releaseServer(
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No port");
   publicUrl = `http://127.0.0.1:${address.port}`;
+  const publicRoutes = createPublicReleaseRoutes(releases);
   const routes = createReleaseRoutes({
     db: database.db,
     artifacts,
@@ -149,8 +150,8 @@ export async function releaseServer(
     githubApiUrl: testAuthConfig.githubApiUrl,
     resultsSiteUrl,
     fetchImpl: githubFetch,
+    onPublicChange: () => publicRoutes.refresh(),
   });
-  const publicRoutes = createPublicReleaseRoutes(releases);
   const signer = createSessionSigner(testAuthConfig.sessionSecret);
   const base = "/api/orgs/acme/repos/vercel/next.js/releases";
   const request = (path: string, init: RequestInit = {}, githubId: number | null = 1) =>

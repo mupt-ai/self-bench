@@ -23,25 +23,16 @@ const store = {
     reads += 1;
     return [line("vercel/next.js", "acme")];
   },
-  async currentLinesFor(fullName: string) {
-    return fullName.toLowerCase() === "vercel/next.js" ? [line("vercel/next.js", "acme")] : [];
-  },
 } as unknown as ReleaseStore;
 
 async function start(indexable: boolean, limit = 1_000) {
-  const limiter = createRateLimiter({
-    perMinute: limit,
-    burst: limit,
-    globalPerMinute: 100_000,
-    globalBurst: 100_000,
-  });
+  const limiter = createRateLimiter({ perMinute: limit, burst: limit });
   const publicRoutes = createPublicReleaseRoutes(store, { limiter });
   const site = createResultsSite({
     siteUrl: "https://selfbench.test",
     appUrl: "https://app.selfbench.test",
     indexable,
     root,
-    releases: store,
     publicRoutes,
     limiter,
   });
@@ -105,6 +96,34 @@ test("pages get the shell, with the app's address, and a status for crawlers", a
   expect((await get("/nobody/nothing")).status).toBe(404);
   expect((await get("/a/b/c/d")).status).toBe(404);
   expect((await get("/%E0%A4%A")).status).toBe(404);
+  // Paths that cannot name a GitHub repository are refused before any lookup.
+  expect((await get("/vercel/next%20js")).status).toBe(404);
+  expect((await get(`/${"a".repeat(40)}/next.js`)).status).toBe(404);
+});
+
+test("a page that exists may be kept by the CDN a minute, and browsers check it each visit", async () => {
+  const home = await get("/");
+  expect(home.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+  const etag = home.headers.get("etag");
+  expect(etag).toMatch(/^"[\w-]+"$/);
+  const repository = await get("/vercel/next.js");
+  expect(repository.headers.get("etag")).toBe(etag);
+  // A check with the tag it holds costs a bodyless 304.
+  const unchanged = await get("/vercel/next.js", { headers: { "if-none-match": etag ?? "" } });
+  expect(unchanged.status).toBe(304);
+  expect(await unchanged.text()).toBe("");
+  expect(unchanged.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+});
+
+test("a page that does not exist is never cached, so a first release shows at once", async () => {
+  const missing = await get("/nobody/nothing");
+  expect(missing.status).toBe(404);
+  expect(missing.headers.get("cache-control")).toBe("no-store");
+  expect(missing.headers.get("etag")).toBeNull();
+  expect(await missing.text()).toContain("shell");
+  // Even a tag from a page that did exist gets the page, not a 304.
+  const etag = (await get("/")).headers.get("etag") ?? "";
+  expect((await get("/nobody/nothing", { headers: { "if-none-match": etag } })).status).toBe(404);
 });
 
 test("built files are served, hashed ones cached for good", async () => {

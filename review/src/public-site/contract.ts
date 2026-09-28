@@ -1,7 +1,7 @@
+import type { DirectoryCard, SettingPick } from "../../../src/public/directory";
 import type {
   PublishedRelease,
   ReleasePublisher,
-  ReleaseRepository,
   ReleaseSetting,
 } from "../../../src/public/release-types";
 
@@ -12,7 +12,6 @@ import type {
  */
 export { RELEASE_SCHEMA_VERSION as PUBLIC_SCHEMA_VERSION } from "../../../src/public/release-types";
 
-type PublicRepository = ReleaseRepository;
 export type PublicPublisher = ReleasePublisher;
 export type PublicSetting = ReleaseSetting;
 /** One release of one repository by one publisher: the unit a repository page shows. */
@@ -35,23 +34,13 @@ export interface PublicRepoPage {
   lines: PublicLineSummary[];
 }
 
-export type PickRole = "cheapest" | "mostAccurate";
+export type { PickRole } from "../../../src/public/directory";
 
-/** A frontier setting singled out on cards and the picks strip, with every role it holds. */
-export interface PublicPick {
-  setting: PublicSetting;
-  roles: PickRole[];
-}
+/** A frontier setting singled out on the picks strip, with every role it holds. */
+export type PublicPick = SettingPick<PublicSetting>;
 
-/** One entry of the home page directory: the default line's release, reduced to a card. */
-export interface PublicRepoSummary {
-  repository: PublicRepository;
-  publisher: PublicPublisher;
-  releaseId: string;
-  releasedAt: string;
-  tasks: number;
-  settings: number;
-  picks: PublicPick[];
-  frontier: Pick<PublicSetting, "id" | "model" | "accuracy" | "costPerTaskUsd">[];
-  endorsed: boolean;
-}
+/**
+ * One entry of the home page directory: a release line reduced to its card, as the server
+ * builds it (`src/public/directory.ts`), with only what a card and the search show.
+ */
+export type PublicRepoSummary = DirectoryCard;

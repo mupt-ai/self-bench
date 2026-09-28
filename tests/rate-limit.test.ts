@@ -9,13 +9,7 @@ const clock = () => {
 
 test("a client gets its burst, then the sustained rate, then a wait", () => {
   const time = clock();
-  const limiter = createRateLimiter({
-    perMinute: 60,
-    burst: 3,
-    globalPerMinute: 6_000,
-    globalBurst: 600,
-    now: time.now,
-  });
+  const limiter = createRateLimiter({ perMinute: 60, burst: 3, now: time.now });
   for (let index = 0; index < 3; index += 1) expect(limiter.take("a").ok).toBe(true);
   const refused = limiter.take("a");
   expect(refused).toEqual({ ok: false, retryAfter: 1 });
@@ -27,17 +21,14 @@ test("a client gets its burst, then the sustained rate, then a wait", () => {
   expect(limiter.take("a").ok).toBe(false);
 });
 
-test("the shared limit stops a flood spread across many clients", () => {
+test("no limit is shared: many clients at once are each held to their own share", () => {
   const time = clock();
-  const limiter = createRateLimiter({
-    perMinute: 600,
-    burst: 100,
-    globalPerMinute: 60,
-    globalBurst: 5,
-    now: time.now,
-  });
-  const verdicts = Array.from({ length: 8 }, (_, index) => limiter.take(`client-${index}`).ok);
-  expect(verdicts.filter(Boolean)).toHaveLength(5);
+  const limiter = createRateLimiter({ perMinute: 60, burst: 2, now: time.now });
+  for (let index = 0; index < 1_000; index += 1) {
+    expect(limiter.take(`client-${index}`).ok).toBe(true);
+    expect(limiter.take(`client-${index}`).ok).toBe(true);
+  }
+  expect(limiter.take("client-0").ok).toBe(false);
 });
 
 test("refusals are reported at most once a minute per client", () => {
@@ -46,19 +37,17 @@ test("refusals are reported at most once a minute per client", () => {
   const limiter = createRateLimiter({
     perMinute: 60,
     burst: 1,
-    globalPerMinute: 6_000,
-    globalBurst: 600,
-    onLimit: (client, scope) => reports.push(`${client}:${scope}`),
+    onLimit: (client) => reports.push(client),
     now: time.now,
   });
   limiter.take("a");
   limiter.take("a");
   limiter.take("a");
-  expect(reports).toEqual(["a:client"]);
+  expect(reports).toEqual(["a"]);
   time.advance(61_000);
   limiter.take("a");
   limiter.take("a");
-  expect(reports).toEqual(["a:client", "a:client"]);
+  expect(reports).toEqual(["a", "a"]);
 });
 
 test("the client is the address the load balancer appended, else the socket's", () => {
