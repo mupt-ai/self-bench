@@ -51,12 +51,15 @@ protect_held_out_path() {
   chown -R root:root -- "$path"
   chmod -R a-w,go+rX -- "$path"
 }
-is_base_file() { [ "$(git -C /app cat-file -t "HEAD:$1" 2>/dev/null)" = blob ]; }
+# This script runs as root over an /app the verifier user owns; git refuses such a repository
+# unless it is marked safe, and every restore below would silently do nothing.
+app_git() { git -c safe.directory=/app -C /app "$@"; }
+is_base_file() { [ "$(app_git cat-file -t "HEAD:$1" 2>/dev/null)" = blob ]; }
 
 if [ ! -f /opt/selfbench/agent.patch ]; then
   patch_applied=0
 elif [ -s /opt/selfbench/agent.patch ]; then
-  git -C /app apply --binary --whitespace=nowarn ${exclusions} /opt/selfbench/agent.patch || patch_applied=0
+  app_git apply --binary --whitespace=nowarn ${exclusions} /opt/selfbench/agent.patch || patch_applied=0
 fi
 
 if [ "$patch_applied" -eq 1 ]; then setup_completed=1; fi
@@ -64,16 +67,16 @@ if [ "$patch_applied" -eq 1 ]; then setup_completed=1; fi
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   kill_verifier_processes
   for protected_path in ${protectedPaths}; do
-    git -C /app restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
-    git -C /app clean -fd -- "$protected_path" >/dev/null 2>&1 || true
+    app_git restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
+    app_git clean -fd -- "$protected_path" >/dev/null 2>&1 || true
   done
   for regression_path in ${regressionPaths}; do
     if is_base_file "$regression_path"; then
-      git -C /app clean -fd -- "$regression_path" >/dev/null 2>&1 || true
-      git -C /app restore --source=HEAD --staged --worktree -- "$regression_path" 2>/dev/null || true
+      app_git clean -fd -- "$regression_path" >/dev/null 2>&1 || true
+      app_git restore --source=HEAD --staged --worktree -- "$regression_path" 2>/dev/null || true
     fi
   done
-  git -C /app apply --allow-empty --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
+  app_git apply --allow-empty --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
   if [ "$patch_applied" -eq 1 ]; then
     for protected_path in ${protectedAbsolute}; do protect_held_out_path "$protected_path"; done
     for regression_path in ${regressionPaths}; do

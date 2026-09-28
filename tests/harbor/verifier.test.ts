@@ -71,7 +71,12 @@ describe("verifier script", () => {
       .replaceAll("/logs/verifier", join(root, "logs"))
       .replaceAll("pkill -KILL", "true");
     await writeFile(join(root, "test.sh"), script);
-    await runCommand("bash", [join(root, "test.sh")], { allowFailure: true });
+    // Harbor runs test.sh as root over an /app the verifier user owns, which git treats as
+    // another user's repository.
+    await runCommand("bash", [join(root, "test.sh")], {
+      allowFailure: true,
+      env: { ...process.env, GIT_TEST_ASSUME_DIFFERENT_OWNER: "1" },
+    });
 
     expect(JSON.parse(await readFile(join(root, "logs/reward.json"), "utf8"))).toMatchObject({
       reward: 1,
