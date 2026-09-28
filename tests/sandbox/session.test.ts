@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SandboxExecutionError, type SandboxRequest } from "../../src/sandbox/contracts.js";
+import { fileUploadScript } from "../../src/sandbox/remote-files.js";
 import { runSandbox, type SandboxSession, startSandbox } from "../../src/sandbox/session.js";
 
 const request: SandboxRequest = {
@@ -234,5 +235,29 @@ describe("runSandbox", () => {
       ).rejects.toThrow("could not upload /work/out.txt");
       expect(fake.events).toEqual(["destroyed"]);
     });
+  });
+
+  test("the upload script accepts an object an earlier try created and fails other errors", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) =>
+        new Response(null, { status: Number(new URL(request.url).pathname.slice(1)) }),
+    });
+    const exit = async (status: number) =>
+      await Bun.spawn(
+        [
+          "bash",
+          "-c",
+          fileUploadScript(import.meta.path, { url: `${server.url}${status}`, headers: {} }),
+        ],
+        { stderr: "ignore" },
+      ).exited;
+    try {
+      expect(await exit(200)).toBe(0);
+      expect(await exit(412)).toBe(0);
+      expect(await exit(403)).not.toBe(0);
+    } finally {
+      server.stop(true);
+    }
   });
 });

@@ -70,7 +70,8 @@ export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
   /**
    * Declared outputs the sandbox uploads after exit 0, keyed by path, so large archives never
-   * pass through this process. They are never read back after a failure.
+   * pass through this process. They are never read back after a failure. An object that already
+   * exists counts as uploaded, so the caller checks the stored digest.
    */
   readonly uploads?: Readonly<Record<string, SandboxUploadTarget>>;
 }
