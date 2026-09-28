@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Why a Batch Can Be Stuck Exporting</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101318; --panel:#191e26; --line:#303744; --text:#edf0f5; --muted:#a7b0bf; --green:#65d6a0; --amber:#f5c56b; --red:#ff8585; --blue:#83baff; }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(ellipse at 50% -10%,#202a39 0,transparent 55%),var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,sans-serif }
+    main { max-width:920px; margin:auto; padding:56px 24px 80px }
+    h1,h2,h3 { line-height:1.2; letter-spacing:-.025em }
+    h1 { font-size:clamp(2.25rem,6vw,4rem); max-width:780px; margin:12px 0 18px }
+    h2 { font-size:1.65rem; margin:0 0 12px }
+    h3 { font-size:1.1rem; margin:0 0 8px }
+    p { margin:8px 0 14px }
+    .eyebrow { color:var(--green); font:700 .78rem/1.4 ui-monospace,monospace; letter-spacing:.14em; text-transform:uppercase }
+    .lede { font-size:1.2rem; color:#d1d8e2; max-width:760px }
+    section,.callout { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px; margin:22px 0 }
+    .flow { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:22px 0 }
+    .step { border:1px solid var(--line); border-radius:12px; background:#151a21; padding:16px; min-width:0 }
+    .step b { display:block; margin:7px 0 }
+    .step small,.muted { color:var(--muted) }
+    .num { color:var(--blue); font:700 .8rem ui-monospace,monospace }
+    .arrow { color:var(--muted); text-align:center; padding-top:12px }
+    .callout { border-left:4px solid var(--amber); background:#211f19 }
+    .callout strong { color:var(--amber) }
+    .evidence { border-left:4px solid var(--red); background:#241b1d }
+    .evidence strong { color:var(--red) }
+    .columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px }
+    .mini { padding:18px; border:1px solid var(--line); border-radius:12px; background:#151a21 }
+    code { color:#b9d9ff; background:#10151c; border:1px solid #29313c; padding:2px 6px; border-radius:5px; overflow-wrap:anywhere }
+    .label { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:3px 9px; color:var(--muted); font-size:.8rem }
+    ul { padding-left:22px }
+    li { margin:7px 0 }
+    .yes { color:var(--green) }.no { color:var(--red) }
+    footer { color:var(--muted); font-size:.88rem; margin-top:32px }
+    @media(max-width:700px) { main{padding:34px 16px 56px}.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg);padding:0}.columns{grid-template-columns:1fr}section,.callout{padding:19px} }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Production Batch · What “Exporting” Means</div>
+  <h1>The work finished. The package didn’t.</h1>
+  <p class="lede">A batch has two different kinds of work: generate and verify candidate tasks, then package the successful tasks into a downloadable archive. “Exporting” is that second step—not proof that generation is still running.</p>
+
+  <div class="flow" aria-label="Batch lifecycle">
+    <div class="step"><span class="num">01</span><b>Discover</b><small>Find eligible pull requests and plan candidates.</small></div>
+    <div class="step"><span class="num">02</span><b>Author</b><small>Temporal workflows generate and verify each candidate.</small></div>
+    <div class="step"><span class="num">03</span><b>Exporting</b><small>Collect accepted tasks and build one archive.</small></div>
+    <div class="step"><span class="num">04</span><b>Complete</b><small>Save the archive reference to the batch record.</small></div>
+    <div class="step"><span class="num">!</span><b>Stuck here</b><small>Export errors are retried; completion has not been recorded.</small></div>
+  </div>
+
+  <section>
+    <h2>What the code does</h2>
+    <ol>
+      <li>When every candidate is settled, <code>advanceBatch</code> changes the durable batch phase to <code>exporting</code>.</li>
+      <li>The API’s batch reconciler starts or observes a stable-ID Temporal export workflow and persists its artifact reference when complete.</li>
+      <li>A Temporal worker runs export: it reads task definitions and bundles from artifact storage, starts an export sandbox, and asks it to make <code>export.tar.gz</code>.</li>
+      <li>The worker stores the archive in artifact storage and returns only the small artifact reference through Temporal. The API records it and changes the phase to <code>complete</code>.</li>
+    </ol>
+    <p class="muted">Relevant code: <code>src/generation/batches/advance.ts</code>, <code>service.ts</code>, <code>src/generation/batches/temporal.ts</code>, and <code>src/generation/pipeline/workflows.ts</code>.</p>
+  </section>
+
+  <div class="callout"><strong>What changed:</strong> the API still coordinates durable batch state, but export execution and archive data transfer now happen in the Temporal worker. The API handles only workflow metadata and the resulting artifact reference, not bundle or archive bytes.</div>
+
+  <section>
+    <h2>What production evidence says</h2>
+    <p>Logs for <code>batch-cd664ae6-006d-4065-ae5d-d08db435ddb1</code> show repeated messages saying export failed and would be retried. Production Cloud Run logs also show the API exceeding its <strong>2 GiB memory limit</strong> and instances restarting.</p>
+    <div class="callout evidence"><strong>Most likely explanation:</strong> the API is being killed or failing while it handles the export, before it can save the reference and mark the batch complete. The current error handler suppresses the actual exception, so logs do not prove exactly which export operation fails. This is strong evidence, not a confirmed root cause.</div>
+    <p class="muted">Those historical memory-limit events are consistent with the previous design, where API export retries performed the data-heavy work. The underlying exception was suppressed, so logs alone did not prove memory exhaustion was the specific export failure.</p>
+  </section>
+
+  <section>
+    <h2>Does Kubernetes fix it?</h2>
+    <div class="columns">
+      <div class="mini"><h3 class="yes">The API memory fix</h3><p>Export now runs on the existing Temporal worker, which has a larger memory allocation. GKE’s Harbor workers are a separate pool; they are not what moves this export.</p></div>
+      <div class="mini"><h3>Still worth monitoring</h3><p>The worker still handles artifact bytes, so very large exports can use worker memory. If that becomes a problem, stream artifact reads and writes rather than buffering whole archives.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>In one sentence</h2>
+    <p><strong>“Exporting” means the system has not yet successfully packaged, stored, and recorded the batch result.</strong> The API now dispatches this work to a Temporal worker, keeping the memory-intensive transfer off Cloud Run.</p>
+    <span class="label">Code change only · Not deployed to production</span>
+  </section>
+  <footer>Based on the current repository implementation and production logs inspected during this investigation. The log message currently hides the underlying export exception.</footer>
+</main>
+</body>
+</html>

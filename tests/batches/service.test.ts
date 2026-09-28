@@ -1,16 +1,15 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Client, WorkflowNotFoundError } from "@temporalio/client";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createBatchStore } from "../../src/db/batches.js";
-import * as exporter from "../../src/generation/batches/export.js";
 import { createGenerationBatches } from "../../src/generation/batches/service.js";
 import { testDatabase } from "../support/site-fixture.js";
 import { candidate, run } from "../support/workflow-fixture.js";
 
-test("application resumes a persisted candidate plan and exports without a batch Temporal execution", async () => {
+test("application persists the artifact returned by the batch export workflow", async () => {
   const database = await testDatabase();
   const directory = await mkdtemp(join(tmpdir(), "batch-service-"));
   const artifacts = new LocalArtifactStore(directory);
@@ -25,19 +24,29 @@ test("application resumes a persisted candidate plan and exports without a batch
         observed.push(workflowId);
         return {
           describe: async () => ({
-            type: "selfBenchAuthorWorkflow",
+            type: workflowId.endsWith("/export")
+              ? "selfBenchBatchExportWorkflow"
+              : "selfBenchAuthorWorkflow",
             runId: "execution",
             status: { name: "COMPLETED" },
           }),
-          result: async () => ({
-            progress: {
-              candidateId: "one",
-              taskId: "one",
-              difficulty: "hard",
-              status: "rejected",
-              reason: "not reproducible",
-            },
-          }),
+          result: async () =>
+            workflowId.endsWith("/export")
+              ? {
+                  uri: "file:///export.tar.gz",
+                  sha256: "digest",
+                  sizeBytes: 6,
+                  contentType: "application/gzip",
+                }
+              : {
+                  progress: {
+                    candidateId: "one",
+                    taskId: "one",
+                    difficulty: "hard",
+                    status: "rejected",
+                    reason: "not reproducible",
+                  },
+                },
         };
       },
       start: async () => {
@@ -53,9 +62,6 @@ test("application resumes a persisted candidate plan and exports without a batch
     shards: [],
     candidates: [{ workflowId: id, dispatchAttempted: true, candidate: candidate("one", 1) }],
   });
-  const exportMock = spyOn(exporter, "exportBatch").mockImplementation(async (_batch, store) =>
-    store.put("export.tar.gz", Buffer.from("opaque sandbox archive"), "application/gzip"),
-  );
   const service = createGenerationBatches(database.db, client, artifacts, "generation");
   try {
     const deadline = Date.now() + 5_000;
@@ -65,12 +71,11 @@ test("application resumes a persisted candidate plan and exports without a batch
     expect(status.phase).toBe("complete");
     expect(status.rejected).toBe(1);
     expect(status.export).toBeDefined();
-    if (!status.export) throw Error("missing export");
-    expect((await artifacts.get(status.export)).length).toBeGreaterThan(0);
-    expect(observed.every((value) => value === id)).toBe(true);
+    expect(status.export?.uri).toBe("file:///export.tar.gz");
+    expect(observed).toContain(`${run.runId}/export`);
+    expect(observed).toContain(id);
   } finally {
     await service.close();
-    exportMock.mockRestore();
     await database.close();
     await rm(directory, { recursive: true, force: true });
   }

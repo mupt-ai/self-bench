@@ -5,6 +5,7 @@ import {
 } from "@temporalio/client";
 import { WorkflowIdReusePolicy } from "@temporalio/common";
 import type {
+  ArtifactRef,
   CandidateWorkflowInput,
   CandidateWorkflowResult,
   DiscoveryResult,
@@ -13,13 +14,14 @@ import type {
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
 import { heartbeatCost } from "./activity.js";
+import type { GenerationBatch } from "./types.js";
 
 type ExecutionSnapshot<T> =
   | { state: "running"; progress?: TaskProgress; cost?: SandboxCostSnapshot }
   | { state: "completed"; result: T }
   | { state: "cancelled" }
   | { state: "failed"; error: string };
-export interface BatchExecutions {
+export interface BatchExecutionClient {
   shard(
     id: string,
     input: DiscoveryShardInput,
@@ -30,11 +32,18 @@ export interface BatchExecutions {
     input: CandidateWorkflowInput,
     queue: string,
   ): Promise<ExecutionSnapshot<CandidateWorkflowResult>>;
+  export(
+    id: string,
+    batch: GenerationBatch,
+    queue: string,
+  ): Promise<ExecutionSnapshot<ArtifactRef>>;
   cancel(id: string, queue: string): Promise<boolean>;
 }
 
+export type BatchExecutions = Pick<BatchExecutionClient, "shard" | "candidate" | "cancel">;
+
 /** Ordinary client starts: no Temporal parent/child relationship or waiting activity slot. */
-export function batchExecutions(client: Client): BatchExecutions {
+export function batchExecutions(client: Client): BatchExecutionClient {
   async function observe<T>(
     id: string,
     type: string,
@@ -95,6 +104,7 @@ export function batchExecutions(client: Client): BatchExecutions {
     shard: (id, input, queue) =>
       observe(id, "selfBenchDiscoveryShardWorkflow", input, queue, false),
     candidate: (id, input, queue) => observe(id, "selfBenchAuthorWorkflow", input, queue, true),
+    export: (id, batch, queue) => observe(id, "selfBenchBatchExportWorkflow", batch, queue, false),
     async cancel(id, queue) {
       return client.connection.withDeadline(Date.now() + 10_000, async () => {
         const handle = client.workflow.getHandle(id);

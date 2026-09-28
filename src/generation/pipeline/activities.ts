@@ -10,6 +10,8 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { exportBatch as runBatchExport } from "../batches/export.js";
+import type { GenerationBatch } from "../batches/types.js";
 import {
   type AuthoringTurnInput,
   type FinishAuthoringTurnInput,
@@ -61,6 +63,7 @@ export interface WorkerActivities {
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
+  exportBatch(batch: GenerationBatch): ReturnType<typeof runBatchExport>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
@@ -116,5 +119,6 @@ export function createActivities(
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>
         finishReviewRound(store, sandbox, { ...input, run }),
       ),
+    exportBatch: (batch) => runBatchExport(batch, store, vault, usage),
   };
 }

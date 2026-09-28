@@ -13,7 +13,6 @@ import { readGenerationGitHubToken } from "../settings/credentials.js";
 import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
 import { planDispatch, workflowLimit } from "./dispatch.js";
-import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
 import { batchExecutions } from "./temporal.js";
@@ -47,17 +46,25 @@ export function createGenerationBatches(
   const exports = new Map<string, Promise<void>>();
   // Cancels this replica is waiting to record; their batches' sweeps stop starting work.
   const cancelling = new Set<string>();
-  // No DB transaction is held while rendering/downloading bundles, and a slow export never
-  // stalls other batches. Immutable export writes can be resumed after a crash; completion is
-  // conditional on still being exporting.
+  // Exports run as Temporal workflows on workers; this map only coalesces repeated observations
+  // in this API replica. The API never downloads bundles or archive bytes.
   const startExport = (batch: GenerationBatch) => {
     const runId = batch.run.runId;
     if (exports.has(runId)) return;
     exports.set(
       runId,
-      exportBatch(batch, artifacts, vault, usage)
-        .then((reference) => store.completeExport(runId, reference))
-        .catch(() => console.error(`Batch ${runId} export failed; it will be retried`))
+      executions
+        .export(`${runId}/export`, batch, taskQueue)
+        .then(async (snapshot) => {
+          if (snapshot.state === "completed") await store.completeExport(runId, snapshot.result);
+          else if (snapshot.state === "failed")
+            console.error(`Batch ${runId} export workflow failed: ${snapshot.error}`);
+          else if (snapshot.state === "cancelled")
+            console.error(`Batch ${runId} export workflow was cancelled`);
+        })
+        .catch((error) =>
+          console.error(`Batch ${runId} export observation failed: ${errorMessage(error)}`),
+        )
         .finally(() => exports.delete(runId)),
     );
   };
