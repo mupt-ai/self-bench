@@ -59,6 +59,9 @@ export async function updateEvaluation(
   id: string,
   change: (run: EvaluationRun) => unknown,
 ): Promise<EvaluationRun> {
+  // Every trial of an evaluation can start at once, so writers back off exponentially with full
+  // jitter and keep trying for two minutes rather than a fixed number of attempts.
+  const deadline = Date.now() + 120_000;
   for (let attempt = 1; ; attempt += 1) {
     const run = await getEvaluation(store, repoId, id);
     if (!run) throw new Error("Evaluation record is missing");
@@ -67,9 +70,11 @@ export async function updateEvaluation(
       await saveEvaluation(store, run);
       return run;
     } catch (error) {
-      if (attempt >= 20 || !(await store.stat(snapshotKey(run)))) throw error;
+      if (Date.now() >= deadline || !(await store.stat(snapshotKey(run)))) throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 225));
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.random() * Math.min(2_000, 50 * 2 ** attempt)),
+    );
   }
 }
 function snapshotKey(run: EvaluationRun): string {

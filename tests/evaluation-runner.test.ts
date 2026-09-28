@@ -112,6 +112,10 @@ test("saved credentials reach the solver; host auth never does", async () => {
   await expect(
     credentialExecution({ ...input, sandbox: "modal" }, "/tmp", {}, vault),
   ).rejects.toThrow("reserved comparison");
+  const foreign = { runId: "run-one", taskId: "not-reserved", bundleKey: "tasks/other.tar.gz" };
+  await expect(
+    credentialExecution({ ...input, tasks: [foreign] }, "/tmp", {}, vault),
+  ).rejects.toThrow("reserved comparison");
 });
 test("solver argv cannot trigger author/oracle gates or implicit retries", () => {
   const args = solverArguments("/task space", "/jobs", "codex", "openai/test-model", "docker");

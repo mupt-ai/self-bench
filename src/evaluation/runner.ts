@@ -64,7 +64,7 @@ export interface RunnerOptions {
   signal?: AbortSignal;
   heartbeat?: () => void;
   pollMs?: number;
-  /** The least time between saves of a running trial's live output. */
+  /** The least time between saves of a running trial's live output; scales with trial count. */
   progressMs?: number;
   vault?: Pick<Vault, "credentials" | "comparisons">;
 }
@@ -236,8 +236,9 @@ async function runTrial(context: {
       if (Object.keys(trial.rewards).length === 0)
         throw new Error("Harbor returned no verifier scores");
     }
-    // Parallel trials share one record, so live output is saved at most every progressMs.
-    if (!archive && Date.now() - lastSave < (options.progressMs ?? 10_000)) return;
+    // Trials share one record: live output waits ten seconds or a second per trial, if longer.
+    const interval = options.progressMs ?? Math.max(10_000, run.trials.length * 1_000);
+    if (!archive && Date.now() - lastSave < interval) return;
     const snapshot = JSON.stringify(trial);
     if (snapshot !== lastSnapshot) {
       await save();

@@ -1,13 +1,20 @@
 import {
   ActivityCancellationType,
   CancellationScope,
+  ChildWorkflowCancellationType,
+  executeChild,
   isCancellation,
+  ParentClosePolicy,
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
-import { MAX_HARBOR_CONCURRENCY } from "../contracts/config/execution-limits.js";
+import {
+  MAX_HARBOR_CONCURRENCY,
+  MAX_PENDING_TRIAL_WORKFLOWS,
+} from "../contracts/config/execution-limits.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
+import { trialInput } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
 
 const solver = () =>
@@ -55,21 +62,79 @@ export async function selfBenchEvaluationWorkflow(input: EvaluationInput): Promi
 }
 
 /**
- * Runs each trial as its own Harbor activity, up to one Harbor worker's slots at once, so the
- * Harbor queue's backlog reflects the evaluation's size and its workers scale out to it.
+ * Runs each trial as its own Harbor activity, up to one Harbor worker's slots at once. Replaced by
+ * selfBenchEvaluationRunWorkflow; it must keep issuing the same commands so evaluations already
+ * running on it replay. Remove it once none are left, 73 hours after that type is in use.
  */
 export async function selfBenchParallelEvaluationWorkflow(input: EvaluationInput): Promise<void> {
   try {
-    await runEvaluationTrials(input, records, trial(), MAX_HARBOR_CONCURRENCY);
+    await runEvaluationTrials(
+      input,
+      records,
+      (input, index) => trial().runSolverTrial(input, index),
+      MAX_HARBOR_CONCURRENCY,
+    );
   } catch {
     await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));
   }
 }
 
 /**
+ * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
+ * at once, so a trial's history stands alone in Temporal and the Harbor queue sees the whole
+ * evaluation. Cancelling the evaluation cancels every trial workflow and waits for each to record
+ * where it stopped; closing it any other way terminates them.
+ */
+export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Promise<void> {
+  const { workflowId } = workflowInfo();
+  try {
+    await runEvaluationTrials(
+      input,
+      records,
+      (input, index) =>
+        executeChild(selfBenchSolverTrialWorkflow, {
+          workflowId: `${workflowId}/trial/${index}`,
+          args: [trialInput(input, index), index],
+          cancellationType: ChildWorkflowCancellationType.WAIT_CANCELLATION_COMPLETED,
+          parentClosePolicy: ParentClosePolicy.TERMINATE,
+        }),
+      MAX_PENDING_TRIAL_WORKFLOWS,
+    );
+  } catch {
+    await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));
+  }
+}
+
+/** One trial of an evaluation: its Harbor activity, and its failure when it recorded none. */
+export async function selfBenchSolverTrialWorkflow(
+  input: EvaluationInput,
+  index: number,
+): Promise<void> {
+  await runTrial(input, index, trial(), records);
+}
+
+/**
+ * Runs one trial. A trial activity that fails without recording an outcome (a lost worker, a
+ * timeout) fails that trial alone; a cancellation propagates once the activity has stopped.
+ */
+export async function runTrial(
+  input: EvaluationInput,
+  index: number,
+  harbor: Pick<EvaluationActivities, "runSolverTrial">,
+  records: Pick<EvaluationActivities, "failSolverTrial">,
+): Promise<void> {
+  try {
+    await harbor.runSolverTrial(input, index);
+  } catch (error) {
+    if (isCancellation(error)) throw error;
+    await records.failSolverTrial(input, index);
+  }
+}
+
+/**
  * Starts the evaluation, runs its trials with at most `concurrency` in flight, then records the
- * outcome. A trial activity that fails without recording one (a lost worker, a timeout) fails only
- * that trial; a cancellation stops the rest once every running trial has recorded where it ended.
+ * outcome. A trial that fails without recording one fails only that trial; a cancellation stops
+ * the rest once every running trial has recorded where it ended.
  */
 export async function runEvaluationTrials(
   input: EvaluationInput,
@@ -77,7 +142,7 @@ export async function runEvaluationTrials(
     EvaluationActivities,
     "startSolverEvaluation" | "failSolverTrial" | "finishSolverEvaluation"
   >,
-  harbor: Pick<EvaluationActivities, "runSolverTrial">,
+  solve: (input: EvaluationInput, index: number) => Promise<void>,
   concurrency: number,
 ): Promise<void> {
   const trials = await records.startSolverEvaluation(input);
@@ -86,12 +151,7 @@ export async function runEvaluationTrials(
     while (next < trials) {
       const index = next;
       next += 1;
-      try {
-        await harbor.runSolverTrial(input, index);
-      } catch (error) {
-        if (isCancellation(error)) throw error;
-        await records.failSolverTrial(input, index);
-      }
+      await runTrial(input, index, { runSolverTrial: solve }, records);
     }
   };
   const lanes = await Promise.allSettled(
