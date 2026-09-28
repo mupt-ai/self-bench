@@ -63,6 +63,19 @@ export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): Thin
   return levels.filter((level) => !harnesses.includes("pi") || level !== "max");
 }
 
+/** Harness CLI versions each trial installs onto the task image's agent runtime. */
+export const harnessVersions: Partial<Record<Harness, string>> = {
+  codex: "0.158.0",
+  "claude-code": "2.1.284",
+  pi: "0.87.1",
+};
+
+export function solverAgentArguments(harness: Harness, level?: ThinkingLevel): string[] {
+  const version = harnessVersions[harness];
+  const pinned = version ? ["--agent-kwarg", `version=${version}`] : [];
+  return [...pinned, ...thinkingArguments(harness, level)];
+}
+
 export function thinkingArguments(harness: Harness, level?: ThinkingLevel): string[] {
   if (!level || level === "default") return [];
   const name = harness === "pi" ? "thinking" : "reasoning_effort";

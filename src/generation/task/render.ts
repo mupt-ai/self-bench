@@ -1,10 +1,10 @@
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TaskDefinition } from "../../contracts/index.js";
-import { agentRuntimeScript } from "../../harnesses/harbor/agent-runtime.js";
 import { patchPaths } from "../../lib/patch-paths.js";
 import { shellQuote } from "../../lib/util.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
+import { agentRuntimeScript } from "./runtime-assets.js";
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
@@ -111,9 +111,8 @@ function baseDockerfile(task: TaskDefinition): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, value]) => `ENV ${name}=${JSON.stringify(value)}`)
     .join("\n");
-  // The agent runtime comes straight after FROM and depends only on the base image and its own
-  // pins, so every task on the same base image shares that layer; everything after it is per
-  // task. Agent and verifier images carry it alike so their setup layers stay identical.
+  // The agent runtime depends only on the base image, so tasks sharing one share that layer.
+  // The verifier carries it too, keeping its setup layers identical to the agent image's.
   return `FROM ${task.environment.baseImage}
 USER root
 ENTRYPOINT []

@@ -1,6 +1,5 @@
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
-import { agentRuntimeScript } from "../../harnesses/harbor/agent-runtime.js";
 import { errorMessage } from "../../lib/util.js";
 import { auditTaskDefinition } from "./audit.js";
 import { dependencyManifestPatch } from "./dependencies.js";
@@ -15,7 +14,7 @@ import {
   taskToml,
   verifierDockerfile,
 } from "./render.js";
-import { verifierRuntimeFiles } from "./runtime-assets.js";
+import { agentRuntimeScript, verifierRuntimeFiles } from "./runtime-assets.js";
 import { isBaseOnlyTestPatch } from "./test-patch.js";
 import { solutionScript, testScript } from "./verifier.js";
 

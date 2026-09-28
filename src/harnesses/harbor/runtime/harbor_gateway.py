@@ -1,15 +1,15 @@
 """SelfBench's Harbor solver adapters.
 
 Compiled task images carry a harness-neutral runtime (system tools and a private Node under
-RUNTIME_ROOT, see src/harnesses/harbor/agent-runtime.ts). On those images a trial installs only
-its pinned harness CLI; tasks compiled without the runtime fall back to Harbor's own install.
+RUNTIME_ROOT, from src/generation/task/runtime/agent-runtime.sh). On those images a trial installs
+only its pinned harness CLI; tasks compiled without the runtime fall back to Harbor's install.
 """
 import shlex
 from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.codex import Codex
 from harbor.agents.installed.pi import Pi
 
-# Must match AGENT_RUNTIME_ROOT in src/harnesses/harbor/agent-runtime.ts.
+# Must match ROOT in src/generation/task/runtime/agent-runtime.sh.
 RUNTIME_ROOT = "/opt/selfbench-agent-runtime"
 RUNTIME_NODE_BIN = f"{RUNTIME_ROOT}/node/bin"
 
@@ -26,29 +26,27 @@ class PrebakedRuntime:
         return self._has_runtime
 
     async def install_node_cli(self, environment, package: str, command: str) -> None:
-        """Install an npm CLI root-owned under the runtime and expose it on /usr/local/bin.
+        """Install a root-owned npm CLI on the runtime's Node and put it on /usr/local/bin.
 
-        The runtime's Node stays off PATH, so the repository keeps its own Node: a JavaScript entry
-        point gets a wrapper that names the runtime's node, and a native one is linked directly.
+        That Node stays off PATH so the repository keeps its own: a JavaScript entry point gets a
+        wrapper naming the runtime's node, and a native one (Claude Code) is linked directly.
         """
-        spec = f"{package}@{self._version}" if self._version else package
-        prefix = shlex.quote(f"{RUNTIME_ROOT}/harness/{command}")
-        link = shlex.quote(f"/usr/local/bin/{command}")
-        node = shlex.quote(f"{RUNTIME_NODE_BIN}/node")
+        spec = shlex.quote(f"{package}@{self._version}" if self._version else package)
+        prefix = f"{RUNTIME_ROOT}/harness/{command}"
+        link = f"/usr/local/bin/{command}"
         await self.exec_as_root(
             environment,
-            command=(
-                "set -eu; "
-                f"PATH={shlex.quote(RUNTIME_NODE_BIN)}:$PATH npm install --global --prefix {prefix} "
-                f"--no-audit --no-fund --loglevel=error {shlex.quote(spec)}; "
-                f"entry=\"$(readlink -f {prefix}/bin/{shlex.quote(command)})\"; "
-                f"mkdir -p /usr/local/bin; rm -f {link}; "
-                'if [ "$(head -c 2 "$entry")" = "#!" ]; then '
-                f"printf '#!/bin/sh\\nexec %s %s \"$@\"\\n' {node} \"$entry\" > {link}; "
-                f"chmod 755 {link}; "
-                f"else ln -s \"$entry\" {link}; fi; "
-                f"{shlex.quote(command)} --version"
-            ),
+            command=f"""set -eu
+PATH={RUNTIME_NODE_BIN}:$PATH npm install --global --prefix {prefix} --no-audit --no-fund {spec}
+entry="$(readlink -f {prefix}/bin/{command})"
+rm -f {link}
+if [ "$(head -c 2 "$entry")" = "#!" ]; then
+  printf '#!/bin/sh\\nexec {RUNTIME_NODE_BIN}/node %s "$@"\\n' "$entry" > {link}
+  chmod 755 {link}
+else
+  ln -s "$entry" {link}
+fi
+{command} --version""",
         )
 
 

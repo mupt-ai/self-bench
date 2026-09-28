@@ -3,10 +3,9 @@ import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial } from "../src/evaluation/execution.js";
-import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
+import { harnessIds, harnessVersions, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { HARNESS_CLI_VERSIONS } from "../src/harnesses/harbor/agent-runtime.js";
 import { runCommand } from "../src/lib/process.js";
 
 const adapterPath = fileURLToPath(
@@ -80,9 +79,9 @@ asyncio.run(check())`);
 
 test("trials pin each Node harness CLI and install it onto a prebaked runtime without apt", async () => {
   for (const [harness, agent, version] of [
-    ["codex", "harbor_gateway:SelfBenchCodex", HARNESS_CLI_VERSIONS.codex],
-    ["claude-code", "harbor_gateway:SelfBenchClaudeCode", HARNESS_CLI_VERSIONS["claude-code"]],
-    ["pi", "harbor_gateway:SelfBenchPi", HARNESS_CLI_VERSIONS.pi],
+    ["codex", "harbor_gateway:SelfBenchCodex", harnessVersions.codex],
+    ["claude-code", "harbor_gateway:SelfBenchClaudeCode", harnessVersions["claude-code"]],
+    ["pi", "harbor_gateway:SelfBenchPi", harnessVersions.pi],
   ] as const) {
     const args = solverArguments("task", "jobs", harness, "openai/gpt-6-sol", "modal");
     expect(args[args.indexOf("--agent") + 1]).toBe(agent);

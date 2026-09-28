@@ -66,6 +66,7 @@ try {
   for (const asset of [
     "dist/generation/task/runtime/junit.py",
     "dist/generation/task/runtime/command.sh",
+    "dist/generation/task/runtime/agent-runtime.sh",
     "dist/runtime/junit.py",
     "dist/runtime/command.sh",
     "dist/api/main.js",

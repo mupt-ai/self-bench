@@ -121,7 +121,7 @@ describe("Harbor task compiler", () => {
       agentDockerfile.indexOf("COPY root-setup.sh"),
     );
     expect(await readFile(join(output, "environment/agent-runtime.sh"), "utf8")).toContain(
-      `node-v$version-linux-$arch`,
+      "NODE_VERSION=",
     );
     expect(agentDockerfile).not.toContain("reset --hard");
     expect(agentDockerfile).not.toContain("clean -fdq");

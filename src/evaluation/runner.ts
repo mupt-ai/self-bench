@@ -16,12 +16,8 @@ import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
-import {
-  credentialExecution,
-  gatewayTrial,
-  solverAgent,
-  solverAgentArguments,
-} from "./execution.js";
+import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
+import { solverAgentArguments } from "./models.js";
 import {
   boundedSteps,
   collectOutput,
