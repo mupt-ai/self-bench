@@ -50,17 +50,22 @@ need() {
 need bash bash
 need curl curl
 need git git
-need rg ripgrep
 [ -s /etc/ssl/certs/ca-certificates.crt ] || missing="$missing ca-certificates"
+# Codex and Claude Code bundle their own ripgrep, so a distro without the package still builds.
 if command -v apt-get >/dev/null 2>&1; then
   libc=glibc
-  if [ -n "$missing" ]; then
+  if [ -n "$missing" ] || ! command -v rg >/dev/null 2>&1; then
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $missing
+    export DEBIAN_FRONTEND=noninteractive
+    [ -z "$missing" ] || apt-get install -y --no-install-recommends $missing
+    command -v rg >/dev/null 2>&1 || apt-get install -y --no-install-recommends ripgrep \
+      || echo "selfbench: ripgrep is unavailable on this base image" >&2
   fi
 elif command -v apk >/dev/null 2>&1; then
   libc=musl
   apk add --no-cache $missing libgcc libstdc++
+  command -v rg >/dev/null 2>&1 || apk add --no-cache ripgrep \
+    || echo "selfbench: ripgrep is unavailable on this base image" >&2
 else
   echo "selfbench: the agent runtime supports apt-get (Debian/Ubuntu) or apk (Alpine) base images; this image has neither" >&2
   exit 1
@@ -88,6 +93,10 @@ tar -xzf "$work/node.tar.gz" -C "$work"
 mkdir -p ${AGENT_RUNTIME_ROOT}
 mv "$work/$name" ${AGENT_RUNTIME_ROOT}/node
 rm -rf "$work"
-${AGENT_RUNTIME_ROOT}/node/bin/node --version
+if ! ${AGENT_RUNTIME_ROOT}/node/bin/node --version; then
+  # Node 22 needs glibc 2.28; without the runtime, trials fall back to Harbor's own install.
+  rm -rf ${AGENT_RUNTIME_ROOT}/node
+  echo "selfbench: Node $version does not run on this base image; trials will install their own" >&2
+fi
 `;
 }
