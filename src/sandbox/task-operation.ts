@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { verifierRuntimeFiles } from "../generation/task/runtime-assets.js";
 import { projectRoot } from "../lib/project-paths.js";
-import type { SandboxFile } from "./contracts.js";
+import type { SandboxFile, SandboxRunOptions } from "./contracts.js";
 import { taskSandbox } from "./task-context.js";
 
 /** Runs trusted preparation code in a NEW allocation, never in the author's mutable sandbox. */
@@ -10,7 +10,7 @@ export async function taskOperation(
   operation: string,
   files: readonly SandboxFile[],
   outputPaths: readonly string[],
-  signal?: AbortSignal,
+  options: SandboxRunOptions = {},
 ) {
   const result = await taskSandbox().run(
     {
@@ -33,10 +33,10 @@ export async function taskOperation(
       ],
       outputPaths,
     },
-    signal ? { signal } : {},
+    options,
   );
-  signal?.throwIfAborted();
+  options.signal?.throwIfAborted();
   if (result.exitCode !== 0)
     throw new Error(`Sandbox ${operation} failed (exit ${result.exitCode})`);
-  return result.outputs;
+  return result;
 }

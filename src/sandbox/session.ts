@@ -3,13 +3,15 @@ import { errorMessage, raceAbort } from "../lib/util.js";
 import {
   isRemoteSandboxFile,
   SandboxExecutionError,
+  type SandboxFileDigest,
   type SandboxRequest,
   type SandboxResult,
   type SandboxRunOptions,
+  type SandboxUploadTarget,
   type StartedSandbox,
 } from "./contracts.js";
 import { readOutputWithRetry } from "./output-retry.js";
-import { remoteFileFetchScript } from "./remote-files.js";
+import { fileDigestScript, fileUploadScript, remoteFileFetchScript } from "./remote-files.js";
 import { validateSandboxRequest } from "./request-validation.js";
 
 const HARD_TIMEOUT_EXIT_CODE = 124;
@@ -72,7 +74,11 @@ export async function runSandbox(
   }
   let failed = false;
   try {
-    const result = await runInSession(session, request, signal, { stdout, stderr });
+    const result = await runInSession(session, request, signal, {
+      stdout,
+      stderr,
+      uploads: options.uploads ?? {},
+    });
     if (deadline.signal.aborted && !options.signal?.aborted) return timedOut(session.id);
     return result;
   } catch (error) {
@@ -155,7 +161,15 @@ async function runInSession(
   session: SandboxSession,
   request: SandboxRequest,
   signal: AbortSignal,
-  { stdout, stderr }: { stdout: RollingOutput; stderr: RollingOutput },
+  {
+    stdout,
+    stderr,
+    uploads,
+  }: {
+    stdout: RollingOutput;
+    stderr: RollingOutput;
+    uploads: Readonly<Record<string, SandboxUploadTarget>>;
+  },
 ): Promise<SandboxResult> {
   await stageFiles(session, request.files ?? [], signal, (chunk) => stderr.push(chunk));
 
@@ -174,7 +188,18 @@ async function runInSession(
   signal.throwIfAborted();
 
   const outputs: Record<string, Uint8Array> = {};
+  const uploaded: Record<string, SandboxFileDigest> = {};
   for (const path of request.outputPaths ?? []) {
+    const target = uploads[path];
+    if (target) {
+      // Reading an upload back would buffer it here, so a failed run leaves it in the sandbox.
+      if (exitCode !== 0 || failure !== undefined) continue;
+      const sent = await uploadOutput(session, path, target, signal, (chunk) => stderr.push(chunk));
+      if (sent) {
+        uploaded[path] = sent;
+        continue;
+      }
+    }
     const { value } = await readOutputWithRetry(() => session.read(path, signal), { signal });
     if (value) outputs[path] = value;
   }
@@ -184,6 +209,7 @@ async function runInSession(
     stdout: stdout.text(),
     stderr: stderr.text(),
     outputs,
+    ...(Object.keys(uploaded).length ? { uploaded } : {}),
   });
   if (failure !== undefined) {
     // The provider lost the command, but if every output is there the script had finished.
@@ -206,7 +232,7 @@ async function runInSession(
     );
     exitCode = 1;
   }
-  const missing = (request.outputPaths ?? []).filter((path) => !outputs[path]);
+  const missing = (request.outputPaths ?? []).filter((path) => !outputs[path] && !uploaded[path]);
   if (exitCode === 0 && missing.length > 0) {
     throw new SandboxExecutionError(
       `sandbox ${session.id} exited 0 without ${missing.join(", ")}`,
@@ -214,4 +240,38 @@ async function runInSession(
     );
   }
   return result(exitCode ?? 1);
+}
+
+/**
+ * Has the sandbox PUT one output to where `target` says, returning its digest; undefined when the
+ * file is missing or the target declines, so the caller reads it back instead.
+ */
+async function uploadOutput(
+  session: SandboxSession,
+  path: string,
+  target: SandboxUploadTarget,
+  signal: AbortSignal,
+  onLog: (chunk: Buffer) => void,
+): Promise<SandboxFileDigest | undefined> {
+  let printed = "";
+  const found = await session.exec(["bash", "-lc", fileDigestScript(path)], {
+    environment: {},
+    signal,
+    onOutput: (stream, chunk) => {
+      if (stream === "stdout") printed += Buffer.from(chunk).toString();
+      else onLog(Buffer.from(chunk));
+    },
+  });
+  const [sha256, size] = printed.trim().split(" ");
+  if (found !== 0 || !sha256 || !/^[0-9a-f]{64}$/.test(sha256) || !size) return undefined;
+  const digest = { sha256, sizeBytes: Number(size) };
+  const url = await target(digest);
+  if (!url) return undefined;
+  const exit = await session.exec(["bash", "-lc", fileUploadScript(path, url)], {
+    environment: {},
+    signal,
+    onOutput: (_stream, chunk) => onLog(Buffer.from(chunk)),
+  });
+  if (exit !== 0) throw new Error(`sandbox ${session.id} could not upload ${path}`);
+  return digest;
 }
