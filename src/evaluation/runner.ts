@@ -28,7 +28,7 @@ import {
   trajectorySteps,
   trialLog,
 } from "./output.js";
-import { evaluationPrefix, updateEvaluation } from "./store.js";
+import { evaluationPrefix, RepeatSpendError, updateEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 // PostHog task bundles include compressed repository snapshots larger than 350 MiB.
@@ -67,13 +67,6 @@ export interface RunnerOptions {
   /** The least time between saves of a running trial's live output. */
   progressMs?: number;
   vault?: Pick<Vault, "credentials" | "comparisons">;
-}
-/** Thrown instead of starting work that may already have spent model money; never retried. */
-export class RepeatSpendError extends Error {
-  override name = "RepeatSpendError";
-  constructor() {
-    super("Evaluation already attempted; refusing to repeat model spend");
-  }
 }
 
 /**

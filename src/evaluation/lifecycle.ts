@@ -1,6 +1,12 @@
 import type { ArtifactStore } from "../artifacts/index.js";
-import { executeTrial, RepeatSpendError, type RunnerOptions } from "./runner.js";
-import { getEvaluation, initialEvaluation, saveEvaluation, updateEvaluation } from "./store.js";
+import { executeTrial, type RunnerOptions } from "./runner.js";
+import {
+  getEvaluation,
+  initialEvaluation,
+  RepeatSpendError,
+  saveEvaluation,
+  updateEvaluation,
+} from "./store.js";
 import type { EvaluationInput } from "./types.js";
 
 const INTERRUPTED = "Worker interrupted or timed out before this trial completed";

@@ -41,6 +41,13 @@ export async function saveEvaluation(store: ArtifactStore, run: EvaluationRun): 
   run.revision += 1;
   await store.put(snapshotKey(run), Buffer.from(JSON.stringify(run)), "application/json");
 }
+/** Thrown instead of starting work that may already have spent model money; never retried. */
+export class RepeatSpendError extends Error {
+  override name = "RepeatSpendError";
+  constructor() {
+    super("Evaluation already attempted; refusing to repeat model spend");
+  }
+}
 /**
  * Applies `change` to the latest record and saves it as the next revision. Snapshots are
  * create-only, so two writers that read the same revision cannot both save the next one: the
@@ -73,7 +80,9 @@ export async function getEvaluation(
   repoId: number,
   id: string,
 ): Promise<EvaluationRun | undefined> {
-  const entries = await store.list(`${evaluationPrefix(repoId, id)}snapshots`);
+  const entries = (await store.list(`${evaluationPrefix(repoId, id)}snapshots`)).filter((entry) =>
+    /\/snapshots\/\d{10}\.json$/.test(entry.key),
+  );
   const latest = entries.sort((left, right) => right.key.localeCompare(left.key))[0];
   const bytes = latest ? await store.getByKey(latest.key) : undefined;
   return bytes ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun) : undefined;
