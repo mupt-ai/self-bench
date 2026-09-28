@@ -213,12 +213,29 @@ export const authoredTaskDraftSchema = z.object({
 
 export type AuthoredTaskDraft = z.infer<typeof authoredTaskDraftSchema>;
 
+const modalImageIdSchema = z.string().regex(/^im-[A-Za-z0-9]{1,64}$/);
+
+/**
+ * The Modal images a task's verification built and passed its oracle on: the agent's (from
+ * `environment/`) and the separate verifier's (from `tests/`, absent for tasks with services).
+ * Modal trials start from them instead of building the Dockerfiles; they are IDs in the Modal
+ * workspace that verified the task, so any other backend or workspace builds as before.
+ */
+export const taskImagesSchema = z.object({
+  provider: z.literal("modal"),
+  agent: modalImageIdSchema,
+  verifier: modalImageIdSchema.optional(),
+});
+
+export type TaskImages = z.infer<typeof taskImagesSchema>;
+
 export const authoredTaskSchema = z.object({
   candidateId: z.string().min(1),
   taskId: z.string().min(1),
   definition: artifactRefSchema,
   sourceBundle: artifactRefSchema,
   bundle: artifactRefSchema,
+  images: taskImagesSchema.optional(),
 });
 
 export type AuthoredTask = z.infer<typeof authoredTaskSchema>;

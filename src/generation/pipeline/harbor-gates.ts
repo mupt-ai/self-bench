@@ -4,7 +4,12 @@ import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
-import type { AuthoredTask, HarborRewards, VerifyReport } from "../../contracts/index.js";
+import type {
+  AuthoredTask,
+  HarborRewards,
+  TaskImages,
+  VerifyReport,
+} from "../../contracts/index.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -12,6 +17,7 @@ import {
   harborRunArguments,
 } from "../../harnesses/harbor/command.js";
 import { authoredImageBuildFailure } from "../../harnesses/harbor/image-build.js";
+import { recordedImages } from "../../harnesses/harbor/pinned-images.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -56,7 +62,7 @@ export async function runHarborGates(
   prefix: string,
   signal: AbortSignal,
   remote?: RemoteGate,
-): Promise<HarborGates> {
+): Promise<HarborGates & { images?: TaskImages }> {
   const root = await mkdtemp(join(tmpdir(), `selfbench-${task.taskId}-`));
   try {
     const directory = await unpackTask(store, remote?.bundle ?? task.bundle, root, signal);
@@ -112,6 +118,8 @@ export async function runHarborGates(
     };
     if (!gates.nop.ok) return gates;
 
+    // The oracle's sandboxes start from exactly the images a trial would build.
+    const imageRecord = join(root, "images");
     const oracle = await harborRun(
       directory,
       root,
@@ -120,6 +128,7 @@ export async function runHarborGates(
       harborEnvironment,
       signal,
       live("oracle"),
+      harborEnvironment === "modal" ? { image_record_dir: imageRecord } : {},
     );
     await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
@@ -133,7 +142,9 @@ export async function runHarborGates(
         oracleError ? failureText(oracleError, oracle) : verifierOutput(oracle),
       )),
     };
-    return gates;
+    if (!gates.oracle.ok || harborEnvironment !== "modal") return gates;
+    const images = await recordedImages(imageRecord);
+    return images ? { ...gates, images } : gates;
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -149,6 +160,7 @@ export async function harborRun(
   signal: AbortSignal,
   /** Where to publish progress snapshots while the run is in flight. */
   live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
+  environmentKwargs: Readonly<Record<string, string>> = {},
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const agent = run === "nop" ? SMOKE_AGENT : "oracle";
@@ -171,6 +183,7 @@ export async function harborRun(
       jobName,
       agent,
       environment,
+      environmentKwargs,
       quiet: false,
     }),
     {

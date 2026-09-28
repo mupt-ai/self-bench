@@ -72,6 +72,7 @@ try {
     "dist/temporal/worker-main.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
+    "dist/harnesses/harbor/runtime/selfbench_modal.py",
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
     "dist/generation/pipeline/prompts/authoring.md",
@@ -85,7 +86,7 @@ try {
   ]) {
     await readFile(join(installedRoot, asset));
   }
-  for (const asset of ["harbor_gateway.py", "harbor_smoke.py"]) {
+  for (const asset of ["harbor_gateway.py", "harbor_smoke.py", "selfbench_modal.py"]) {
     const source = join(root, "src/harnesses/harbor/runtime", asset);
     const packed = join(installedRoot, "dist/harnesses/harbor/runtime", asset);
     if ((await digest(source)) !== (await digest(packed))) {

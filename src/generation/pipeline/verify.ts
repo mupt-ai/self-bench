@@ -148,7 +148,7 @@ export async function verifyCompiled(
     const bundle = compiled.files["harbor-task.tar.gz"];
     const task: AuthoredTask | undefined =
       result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
-    const gates =
+    const { images, ...gates }: Awaited<ReturnType<typeof runHarborGates>> =
       task && result.auditBlockers.length === 0
         ? await runHarborGates(
             store,
@@ -179,6 +179,6 @@ export async function verifyCompiled(
       Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
       "application/json",
     );
-    return { report, reportRef, ...(task ? { task } : {}) };
+    return { report, reportRef, ...(task ? { task: images ? { ...task, images } : task } : {}) };
   });
 }

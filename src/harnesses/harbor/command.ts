@@ -18,6 +18,8 @@ export interface HarborRunCommand {
   solver?: { model: string; agentArguments: readonly string[] };
   /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
   extraAllowedHosts?: readonly string[];
+  /** Harbor `--ek` settings for the environment (pinned-images.ts). */
+  environmentKwargs?: Readonly<Record<string, string>>;
   quiet?: boolean;
 }
 
@@ -31,7 +33,7 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     input.agent,
     ...(input.solver ? ["--model", input.solver.model] : []),
     "--env",
-    input.environment,
+    harborEnvironmentArgument(input.environment),
     "--jobs-dir",
     input.jobsPath,
     "--job-name",
@@ -46,8 +48,21 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
+    ...Object.entries(input.environmentKwargs ?? {}).flatMap(([key, value]) => [
+      "--ek",
+      `${key}=${value}`,
+    ]),
     ...(input.solver?.agentArguments ?? []),
   ];
+}
+
+/**
+ * Modal runs through SelfBench's subclass of Harbor's Modal environment (runtime/selfbench_modal.py),
+ * which records the images a run built and starts trials from a task's pinned images. With no
+ * pins it behaves exactly like `--env modal`; every other provider is Harbor's own.
+ */
+function harborEnvironmentArgument(environment: HarborEnvironment): string {
+  return environment === "modal" ? "selfbench_modal:SelfBenchModalEnvironment" : environment;
 }
 
 /** Callers must first resolve their distinct generation/solver credential boundaries. */

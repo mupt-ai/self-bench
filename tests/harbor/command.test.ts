@@ -16,7 +16,10 @@ test("all Harbor providers share invocation policy without acquiring solver retr
         agent,
         quiet: true,
       });
-      expect(args[args.indexOf("--env") + 1]).toBe(environment);
+      // Modal runs through SelfBench's subclass, which pins and records task images.
+      expect(args[args.indexOf("--env") + 1]).toBe(
+        environment === "modal" ? "selfbench_modal:SelfBenchModalEnvironment" : environment,
+      );
       expect(args[args.indexOf("--path") + 1]).toBe("/task with spaces");
       expect(args).not.toContain("--model");
       expect(args[args.indexOf("--max-retries") + 1]).toBe("0");

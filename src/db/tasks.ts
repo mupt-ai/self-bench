@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { TaskImages } from "../contracts/index.js";
 import { TaskNotFoundError, tombstoneTask } from "../generation/tasks/deletion.js";
 import { reserveTaskStart } from "../generation/tasks/start-reservation.js";
 import type { Database } from "./client.js";
@@ -25,6 +26,8 @@ export interface TaskRecord {
   readonly reason?: string;
   readonly bundleKey?: string;
   readonly definition?: Record<string, unknown>;
+  /** The Modal images the accepted revision was verified on. */
+  readonly images?: TaskImages;
   readonly review?: {
     readonly decision: ReviewDecision;
     readonly note: string;
@@ -125,6 +128,8 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
     reason: row.reason ?? null,
     bundleKey: row.bundleKey ?? null,
     definition: row.definition ?? null,
+    // Only an accepted row carries images; a later sync without them keeps what was pinned.
+    ...(row.images ? { images: row.images } : {}),
     syncedAt: now(),
   });
   return {

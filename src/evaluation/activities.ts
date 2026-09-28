@@ -1,6 +1,7 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
+import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
 import type { EvaluationInput } from "./types.js";
@@ -15,6 +16,7 @@ export interface EvaluationActivities {
 export function createEvaluationActivities(
   store: ArtifactStore,
   vault?: Vault,
+  snapshotLink?: SandboxCallback,
 ): EvaluationActivities {
   const heartbeating = async (run: (options: RunnerOptions) => Promise<void>) => {
     const context = Context.current();
@@ -22,6 +24,7 @@ export function createEvaluationActivities(
     try {
       await run({
         ...(vault ? { vault } : {}),
+        ...(snapshotLink ? { snapshotLink } : {}),
         signal: context.cancellationSignal,
         heartbeat: () => context.heartbeat(),
       });

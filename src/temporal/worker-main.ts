@@ -44,9 +44,11 @@ const { verifyCompiled, ...generation } = createActivities(
   vault,
   database ? createUsageStore(database.db) : undefined,
 );
+const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
 const { runSolverTrial, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
+  snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 // A stopping worker (SIGTERM on a scale-in or rollout) stops polling at once and lets in-flight
