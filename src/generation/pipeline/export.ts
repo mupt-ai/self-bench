@@ -12,6 +12,8 @@ export interface ExportInput {
   readonly tasks: readonly AuthoredTask[];
 }
 
+const EXPORT_UPLOAD_TTL_MS = 60 * 60_000;
+
 /** Only metadata and opaque artifacts cross the worker. Archive creation is sandbox-owned. */
 export async function buildExport(
   store: ArtifactStore,
@@ -37,12 +39,24 @@ export async function buildExport(
       taskIds: kept.map((entry) => entry.taskId),
     }),
   });
-  const outputs = await taskOperation("export", files, ["/work/export.tar.gz"]);
-  const archive = outputs["/work/export.tar.gz"];
+  const archivePath = "/work/export.tar.gz";
+  const key = `runs/${input.run.runId}/export/attempt-${attempt}/selfbench-${input.run.runId}.tar.gz`;
+  const contentType = "application/gzip";
+  // The archive holds every accepted bundle (GBs); read back, it would exceed the API's memory.
+  const { outputs, uploaded } = await taskOperation("export", files, [archivePath], {
+    uploads: {
+      [archivePath]: async ({ sha256 }) =>
+        store.signedWriteUrl?.(key, { sha256, contentType }, EXPORT_UPLOAD_TTL_MS),
+    },
+  });
+  const sent = uploaded?.[archivePath];
+  if (sent) {
+    const stored = await store.stat(key);
+    if (stored?.sha256 !== sent.sha256 || stored.sizeBytes !== sent.sizeBytes)
+      throw Error("Export sandbox upload does not match its archive");
+    return { ...stored, contentType };
+  }
+  const archive = outputs[archivePath];
   if (!archive) throw Error("Export sandbox returned no archive");
-  return store.put(
-    `runs/${input.run.runId}/export/attempt-${attempt}/selfbench-${input.run.runId}.tar.gz`,
-    archive,
-    "application/gzip",
-  );
+  return store.put(key, archive, contentType);
 }

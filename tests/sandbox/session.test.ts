@@ -151,4 +151,88 @@ describe("runSandbox", () => {
       SandboxExecutionError,
     );
   }, 30_000);
+
+  describe("uploads", () => {
+    const digest = "a".repeat(64);
+    // The run writes out.txt; the sandbox answers digest and upload commands like bash would.
+    const uploadingSession = (runExit = 0) => {
+      const commands: string[] = [];
+      const reads: string[] = [];
+      const fake = fakeSession(async (command, { onOutput }) => {
+        const script = command.join(" ");
+        commands.push(script);
+        if (script.includes("sha256sum")) {
+          if (!fake.files.has("/work/out.txt")) return 1;
+          onOutput("stdout", Buffer.from(`${digest} 7`));
+          return 0;
+        }
+        if (script.includes("curl")) return 0;
+        fake.files.set("/work/out.txt", Buffer.from("archive"));
+        return runExit;
+      });
+      const read = fake.session.read;
+      fake.session.read = async (path, signal) => {
+        reads.push(path);
+        return read(path, signal);
+      };
+      return { ...fake, commands, reads };
+    };
+
+    test("the sandbox PUTs a declared upload itself and it is never read back", async () => {
+      const fake = uploadingSession();
+      const targets: unknown[] = [];
+      const result = await runSandbox(async () => fake.session, request, {
+        uploads: {
+          "/work/out.txt": async (file) => {
+            targets.push(file);
+            return { url: "https://storage.example/put?sig=1", headers: { "x-meta": "v" } };
+          },
+        },
+      });
+      expect(targets).toEqual([{ sha256: digest, sizeBytes: 7 }]);
+      expect(result).toMatchObject({
+        exitCode: 0,
+        outputs: {},
+        uploaded: { "/work/out.txt": { sha256: digest, sizeBytes: 7 } },
+      });
+      expect(fake.reads).toEqual([]);
+      const upload = fake.commands.find((command) => command.includes("curl"));
+      expect(upload).toContain("'https://storage.example/put?sig=1'");
+      expect(upload).toContain("-H 'x-meta: v'");
+    });
+
+    test("a failed run never reads an upload back", async () => {
+      const fake = uploadingSession(2);
+      const result = await runSandbox(async () => fake.session, request, {
+        uploads: { "/work/out.txt": async () => ({ url: "https://storage.example", headers: {} }) },
+      });
+      expect(result).toMatchObject({ exitCode: 2, outputs: {} });
+      expect(fake.reads).toEqual([]);
+      expect(fake.commands.some((command) => command.includes("curl"))).toBe(false);
+    });
+
+    test("a store without upload URLs gets the output read back", async () => {
+      const fake = uploadingSession();
+      const result = await runSandbox(async () => fake.session, request, {
+        uploads: { "/work/out.txt": async () => undefined },
+      });
+      expect(Buffer.from(result.outputs["/work/out.txt"] ?? []).toString()).toBe("archive");
+      expect(result.uploaded).toBeUndefined();
+    });
+
+    test("a failed upload fails the run", async () => {
+      const fake = uploadingSession();
+      const exec = fake.session.exec;
+      fake.session.exec = async (command, options) =>
+        command.join(" ").includes("curl") ? 22 : exec(command, options);
+      await expect(
+        runSandbox(async () => fake.session, request, {
+          uploads: {
+            "/work/out.txt": async () => ({ url: "https://storage.example", headers: {} }),
+          },
+        }),
+      ).rejects.toThrow("could not upload /work/out.txt");
+      expect(fake.events).toEqual(["destroyed"]);
+    });
+  });
 });

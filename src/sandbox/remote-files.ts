@@ -10,3 +10,25 @@ export function remoteFileFetchScript(file: RemoteSandboxFile): string {
     `printf '%s  %s\\n' ${shellQuote(file.sha256)} ${path} | sha256sum -c - >/dev/null`,
   ].join(" && ");
 }
+
+/** Shell that prints `<sha256> <size>` of one file inside the sandbox; exits nonzero when absent. */
+export function fileDigestScript(path: string): string {
+  const quoted = shellQuote(path);
+  return `test -f ${quoted} && printf '%s %s' "$(sha256sum < ${quoted} | cut -d' ' -f1)" "$(stat -c %s ${quoted})"`;
+}
+
+/** Shell that PUTs one file from inside the sandbox to a signed upload URL. */
+export function fileUploadScript(
+  path: string,
+  target: { readonly url: string; readonly headers: Readonly<Record<string, string>> },
+): string {
+  const headers = Object.entries(target.headers).map(
+    ([name, value]) => `-H ${shellQuote(`${name}: ${value}`)}`,
+  );
+  return [
+    "curl -fsS --retry 5 --connect-timeout 30 -o /dev/null",
+    ...headers,
+    `-T ${shellQuote(path)}`,
+    shellQuote(target.url),
+  ].join(" ");
+}
