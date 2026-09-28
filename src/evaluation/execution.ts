@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { modelApiKeyVariable } from "../contracts/models.js";
+import { modelApiKeyVariable, type ThinkingLevel } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import {
@@ -9,7 +9,9 @@ import {
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
+import { harnessVersionArguments } from "../harnesses/harbor/agent-runtime.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
+import { thinkingArguments } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /** The organization whose credentials an evaluation uses. */
@@ -123,10 +125,17 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 }
 
 export function solverAgent(harness: Harness, model: string): string {
+  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
+  if (harness === "pi") return "harbor_gateway:SelfBenchPi";
   if (harness !== "codex") return harness;
   return model.startsWith("openai/") && model.slice(7).includes("/")
     ? "harbor_gateway:GatewayCodex"
     : "harbor_gateway:SelfBenchCodex";
+}
+
+/** Harbor agent kwargs for a trial: the pinned harness CLI version, then the thinking level. */
+export function solverAgentArguments(harness: Harness, thinking?: ThinkingLevel): string[] {
+  return [...harnessVersionArguments(harness), ...thinkingArguments(harness, thinking)];
 }
 
 /** The model name Harbor receives for a harness over the selected connection. */

@@ -115,6 +115,14 @@ describe("Harbor task compiler", () => {
     expect(agentDockerfile).toContain(
       "&& git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
     );
+    // The harness-neutral runtime follows FROM directly, so tasks on one base image share it.
+    expect(agentDockerfile).toStartWith("FROM node:22-bookworm@sha256:");
+    expect(agentDockerfile.indexOf("COPY agent-runtime.sh")).toBeLessThan(
+      agentDockerfile.indexOf("COPY root-setup.sh"),
+    );
+    expect(await readFile(join(output, "environment/agent-runtime.sh"), "utf8")).toContain(
+      `node-v$version-linux-$arch`,
+    );
     expect(agentDockerfile).not.toContain("reset --hard");
     expect(agentDockerfile).not.toContain("clean -fdq");
     const verifierDockerfile = await readFile(join(output, "tests/Dockerfile"), "utf8");
@@ -126,6 +134,10 @@ describe("Harbor task compiler", () => {
     expect(verifierDockerfile).toContain("git -C /app clean -fdq -- 'project/package.json'");
     expect(verifierDockerfile).not.toMatch(/clean -fdq \\/);
     expect(verifierDockerfile).toContain("COPY test.patch test.sh task-test.sh /tests/");
+    // The verifier carries it too, so both images share the task's setup layers.
+    expect(verifierDockerfile.split("COPY root-setup.sh")[0]).toBe(
+      agentDockerfile.split("COPY root-setup.sh")[0],
+    );
     const dependencyPatch = await readFile(join(output, "tests/dependency-setup.patch"), "utf8");
     expect(dependencyPatch).toContain('left-pad":"1.1.0');
     expect(dependencyPatch).not.toContain("value.txt");

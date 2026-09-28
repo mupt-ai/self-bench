@@ -6,25 +6,66 @@ import { gatewayModel, gatewayTrial } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
+import { HARNESS_CLI_VERSIONS } from "../src/harnesses/harbor/agent-runtime.js";
 import { runCommand } from "../src/lib/process.js";
+
+const adapterPath = fileURLToPath(
+  new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url),
+);
+
+/** Loads harbor_gateway.py over stand-ins for Harbor's installed agents, then runs `check`. */
+async function checkAdapters(check: string) {
+  const result = await runCommand("python3", [
+    "-c",
+    `import asyncio, importlib.util, os, subprocess, sys, types
+from types import SimpleNamespace
+class Installed:
+    _version = None
+    def __init__(self):
+        self.calls = []
+    async def exec_as_agent(self, environment, command, **kwargs):
+        return command, kwargs
+    async def exec_as_root(self, environment, command, **kwargs):
+        self.calls.append(("root", command))
+    async def ensure_system_dependencies(self, environment, dependencies):
+        self.calls.append(("apt", dependencies))
+    async def install(self, environment):
+        await self.ensure_system_dependencies(environment, ("curl",))
+        self.calls.append(("harbor-install", self._version))
+    async def _installed_codex_satisfies_version(self, environment):
+        return False
+    async def _installed_claude_satisfies_version(self, environment):
+        return False
+    def parse_version(self, stdout):
+        return stdout.strip()
+    def _package_name(self):
+        return "@earendil-works/pi-coding-agent"
+for name, cls in [("codex", "Codex"), ("claude_code", "ClaudeCode"), ("pi", "Pi")]:
+    module = types.ModuleType(f"harbor.agents.installed.{name}")
+    setattr(module, cls, type(cls, (Installed,), {}))
+    sys.modules[module.__name__] = module
+class Environment:
+    def __init__(self, runtime):
+        self.runtime = runtime
+    async def exec(self, command, **kwargs):
+        prebaked = command.startswith("test -x /opt/selfbench-agent-runtime/")
+        return SimpleNamespace(return_code=0 if prebaked and self.runtime else 1, stdout="")
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+${check}
+`,
+    adapterPath,
+  ]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+}
 
 test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
   expect(solverArguments("task", "jobs", "codex", "openai/gpt-6-sol", "modal")).toContain(
     "harbor_gateway:SelfBenchCodex",
   );
-  const result = await runCommand("python3", [
-    "-c",
-    `import asyncio, importlib.util, os, subprocess, sys, types
-module = types.ModuleType("harbor.agents.installed.codex")
-class Codex:
-    async def exec_as_agent(self, environment, command, **kwargs):
-        return command, kwargs
-module.Codex = Codex
-sys.modules[module.__name__] = module
-spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
-adapter = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(adapter)
-async def check():
+  await checkAdapters(`async def check():
     command, options = await adapter.SelfBenchCodex().exec_as_agent(None, 'printf %s "$NVM_DIR"', timeout_sec=30)
     output = subprocess.check_output(["bash", "-c", command], env={**os.environ, "HOME": "/home/test-agent", "NVM_DIR": "/usr/local/share/nvm"}, text=True)
     assert output == "/home/test-agent/.nvm"
@@ -34,11 +75,41 @@ async def check():
     command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
     assert "--model anthropic/claude-sonnet-5 " in command
     assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
-asyncio.run(check())
-`,
-    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
-  ]);
-  expect(result.exitCode).toBe(0);
+asyncio.run(check())`);
+});
+
+test("trials pin each Node harness CLI and install it onto a prebaked runtime without apt", async () => {
+  for (const [harness, agent, version] of [
+    ["codex", "harbor_gateway:SelfBenchCodex", HARNESS_CLI_VERSIONS.codex],
+    ["claude-code", "harbor_gateway:SelfBenchClaudeCode", HARNESS_CLI_VERSIONS["claude-code"]],
+    ["pi", "harbor_gateway:SelfBenchPi", HARNESS_CLI_VERSIONS.pi],
+  ] as const) {
+    const args = solverArguments("task", "jobs", harness, "openai/gpt-6-sol", "modal");
+    expect(args[args.indexOf("--agent") + 1]).toBe(agent);
+    expect(args).toContain(`version=${version}`);
+  }
+  const args = solverArguments("task", "jobs", "terminus-2", "openai/gpt-6-sol", "modal");
+  expect(args.some((arg) => arg.startsWith("version="))).toBe(false);
+  await checkAdapters(`async def check():
+    for cls, package, command in [
+        (adapter.SelfBenchCodex, "@openai/codex", "codex"),
+        (adapter.SelfBenchClaudeCode, "@anthropic-ai/claude-code", "claude"),
+        (adapter.SelfBenchPi, "@earendil-works/pi-coding-agent", "pi"),
+    ]:
+        agent = cls()
+        agent._version = "1.2.3"
+        await agent.install(Environment(runtime=True))
+        assert len(agent.calls) == 1 and agent.calls[0][0] == "root", agent.calls
+        script = agent.calls[0][1]
+        assert f"{package}@1.2.3" in script and f"/usr/local/bin/{command}" in script, script
+        # Tasks compiled before the runtime existed keep Harbor's own install.
+        legacy = cls()
+        legacy._version = "1.2.3"
+        await legacy.install(Environment(runtime=False))
+        assert legacy.calls == [("apt", ("curl",)), ("harbor-install", "1.2.3")], legacy.calls
+    command, _ = await adapter.SelfBenchPi().exec_as_agent(None, ". ~/.nvm/nvm.sh; pi --print")
+    assert command == "if [ -s ~/.nvm/nvm.sh ]; then . ~/.nvm/nvm.sh; fi; pi --print", command
+asyncio.run(check())`);
 });
 
 for (const provider of ["openrouter"] as const) {

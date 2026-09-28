@@ -16,8 +16,12 @@ import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
-import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
-import { thinkingArguments } from "./models.js";
+import {
+  credentialExecution,
+  gatewayTrial,
+  solverAgent,
+  solverAgentArguments,
+} from "./execution.js";
 import {
   boundedSteps,
   collectOutput,
@@ -54,7 +58,7 @@ export function solverArguments(
     jobName: "solver",
     agent: solverAgent(harness, model),
     environment: sandbox,
-    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    solver: { model, agentArguments: solverAgentArguments(harness, thinking) },
     extraAllowedHosts,
   });
 }

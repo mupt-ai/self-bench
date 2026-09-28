@@ -1,5 +1,6 @@
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { type TaskDefinition, taskDefinitionSchema } from "../../contracts/index.js";
+import { agentRuntimeScript } from "../../harnesses/harbor/agent-runtime.js";
 import { errorMessage } from "../../lib/util.js";
 import { auditTaskDefinition } from "./audit.js";
 import { dependencyManifestPatch } from "./dependencies.js";
@@ -120,6 +121,7 @@ function renderTaskFiles(
 
 function environmentScripts(directory: string, definition: TaskDefinition): RenderedTaskFiles {
   return {
+    [`${directory}/agent-runtime.sh`]: agentRuntimeScript(),
     [`${directory}/root-setup.sh`]: posixShellScript(definition.environment.rootSetupCommand),
     [`${directory}/setup.sh`]: bashScript(definition.environment.setupCommand),
     [`${directory}/smoke.sh`]: smokeScript(definition),

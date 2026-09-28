@@ -22,6 +22,7 @@ describe("static submission check", () => {
     expect(Object.keys(result.rendered ?? {}).sort()).toEqual([
       "definition.json",
       "environment/Dockerfile",
+      "environment/agent-runtime.sh",
       "environment/root-setup.sh",
       "environment/setup.sh",
       "environment/smoke.sh",
@@ -29,6 +30,7 @@ describe("static submission check", () => {
       "solution/solve.sh",
       "task.toml",
       "tests/Dockerfile",
+      "tests/agent-runtime.sh",
       "tests/root-setup.sh",
       "tests/runtime/command.sh",
       "tests/runtime/junit.py",

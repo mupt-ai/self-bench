@@ -1,6 +1,7 @@
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TaskDefinition } from "../../contracts/index.js";
+import { agentRuntimeScript } from "../../harnesses/harbor/agent-runtime.js";
 import { patchPaths } from "../../lib/patch-paths.js";
 import { shellQuote } from "../../lib/util.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
@@ -110,9 +111,14 @@ function baseDockerfile(task: TaskDefinition): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, value]) => `ENV ${name}=${JSON.stringify(value)}`)
     .join("\n");
+  // The agent runtime comes straight after FROM and depends only on the base image and its own
+  // pins, so every task on the same base image shares that layer; everything after it is per
+  // task. Agent and verifier images carry it alike so their setup layers stay identical.
   return `FROM ${task.environment.baseImage}
 USER root
 ENTRYPOINT []
+COPY agent-runtime.sh /tmp/selfbench-agent-runtime.sh
+RUN /bin/sh /tmp/selfbench-agent-runtime.sh && rm /tmp/selfbench-agent-runtime.sh
 COPY root-setup.sh /tmp/selfbench-root-setup.sh
 RUN /bin/sh /tmp/selfbench-root-setup.sh \\
     && command -v bash >/dev/null \\
@@ -152,6 +158,7 @@ RUN git -C /app apply --binary --whitespace=nowarn /tmp/selfbench-dependency-set
 }
 export function environmentContextFiles(directory: string, task: TaskDefinition): Promise<void>[] {
   return [
+    writeFile(join(directory, "agent-runtime.sh"), agentRuntimeScript()),
     writeFile(
       join(directory, "root-setup.sh"),
       posixShellScript(task.environment.rootSetupCommand),
