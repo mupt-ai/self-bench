@@ -34,7 +34,7 @@ const connection = await connectTemporalWorker(config.temporal);
 // Stored credentials need both the database and the key; without them only local runs work.
 const database =
   process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_DATABASE_URL
-    ? await openDatabase(process.env.SELFBENCH_DATABASE_URL)
+    ? await openDatabase(process.env.SELFBENCH_DATABASE_URL, { light: role === "harbor" })
     : undefined;
 const vault = database
   ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")

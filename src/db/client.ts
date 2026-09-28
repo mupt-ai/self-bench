@@ -17,10 +17,21 @@ export function migrationsFolder(): string {
   return `${projectRoot(import.meta.url)}/drizzle`;
 }
 
-/** Opens the site database and applies any migration it has not seen. */
-export async function openDatabase(url: string): Promise<OpenDatabase> {
-  const client = postgres(url, { max: 8, onnotice: () => undefined });
+/**
+ * Opens the site database and applies any migration it has not seen. A `light` client (the
+ * Harbor workers, which may run by the dozen) keeps at most two connections, closes them when
+ * idle, and leaves migrations to the API.
+ */
+export async function openDatabase(
+  url: string,
+  { light = false }: { light?: boolean } = {},
+): Promise<OpenDatabase> {
+  const client = postgres(url, {
+    max: light ? 2 : 8,
+    ...(light ? { idle_timeout: 30 } : {}),
+    onnotice: () => undefined,
+  });
   const db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: migrationsFolder() });
+  if (!light) await migrate(db, { migrationsFolder: migrationsFolder() });
   return { db, close: () => client.end({ timeout: 5 }) };
 }
