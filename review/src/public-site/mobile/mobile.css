@@ -2,8 +2,9 @@
  * The mobile adaptor. Pages are written once, for any size; this folder is everything that
  * adapts them to phones and touch screens, so a change to a page needs no mobile twin:
  *
- * - Space: the frame's measurements (in theme.css) are narrowed here for compact screens,
- *   and the header, footer, rulers, and page padding follow without any page knowing.
+ * - Space: the frame's measurements are narrowed for compact screens (in ../frame.css, which
+ *   the app's sign-in page shares), and the header, footer, rulers, and page padding follow
+ *   without any page knowing.
  * - Input: a finger is not a mouse. Hover-only styles use Tailwind's `hover:`, which already
  *   applies only where the pointer can hover; `touch:` styles apply to a finger; `hit` grows a
  *   small control's tap area on touch; inputs never drop below 16px on touch, or iOS zooms in
@@ -24,20 +25,6 @@
 }
 /* A finger rather than a mouse. Matches TOUCH in device.ts. */
 @custom-variant touch (@media (pointer: coarse));
-
-@media (width < 40rem), (height < 32rem) {
-  :root {
-    /* Rulers close to the window's edges, and the page just inside them. */
-    --edge: 10px;
-    --gutter: 1rem;
-    /* Header and footer content lines up with the page's, not further in. */
-    --bar-inset: calc(var(--gutter) - var(--edge));
-    --bar-top: 56px;
-    /* The footer is not pinned: it closes the page instead (PublicLayout). */
-    --bar-bottom: 0px;
-    --page-pad: 1.5rem;
-  }
-}
 
 /*
  * A control smaller than a fingertip: on touch, an invisible area around it takes the tap,
