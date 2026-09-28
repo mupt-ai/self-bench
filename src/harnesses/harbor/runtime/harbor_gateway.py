@@ -15,7 +15,7 @@ RUNTIME_NODE_BIN = f"{RUNTIME_ROOT}/node/bin"
 
 
 class PrebakedRuntime:
-    """Skips Harbor's apt and nvm steps when the task image already carries the runtime."""
+    """Replaces Harbor's apt and nvm install when the task image already carries the runtime."""
 
     _has_runtime: bool | None = None
 
@@ -24,11 +24,6 @@ class PrebakedRuntime:
             result = await environment.exec(command=f"test -x {RUNTIME_NODE_BIN}/node", user="root")
             self._has_runtime = result.return_code == 0
         return self._has_runtime
-
-    async def ensure_system_dependencies(self, environment, dependencies):
-        if await self.has_runtime(environment):
-            return
-        await super().ensure_system_dependencies(environment, dependencies)
 
     async def install_node_cli(self, environment, package: str, command: str) -> None:
         """Install an npm CLI root-owned under the runtime and expose it on /usr/local/bin.
