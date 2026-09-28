@@ -54,7 +54,7 @@ export function PublicLayout() {
     previousKey.current = location.key;
   }, [location.key, location.pathname]);
 
-  // From a repository page, SELF-BENCH plays the return. If the visitor came from the home
+  // From a repository page, the logo plays the return. If the visitor came from the home
   // page on this trip, it goes back to that home view (search and scroll); otherwise to the top.
   const goHome = (event: React.MouseEvent) => {
     const repository = repositoryOf(location.pathname);
