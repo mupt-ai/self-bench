@@ -11,7 +11,7 @@ import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
 import { createVault } from "../db/vault.js";
-import { evaluationStarter } from "../evaluation/start.js";
+import { evaluationStarter, evaluationStopper } from "../evaluation/start.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
 import { loadStripeConfig } from "../generation/billing/config.js";
 import { generationCost } from "../generation/billing/cost-status.js";
@@ -122,6 +122,7 @@ export async function openSite(
       publicUrl,
       ...(vault ? { vault } : {}),
       start: evaluationStarter(client, config.temporal.taskQueue),
+      stop: evaluationStopper(client),
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     releases: createReleaseRoutes({

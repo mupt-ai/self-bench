@@ -34,3 +34,21 @@ test("results distinguish zero rewards from missing scores and show the last sol
   );
   expect(html).toContain("Solver’s Final Response</h4><p>Patched the parser.</p>");
 });
+test("only a live run offers cancellation", () => {
+  const run = initialEvaluation(evaluationInput(), "Test model");
+  const render = () =>
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <EvaluationResults
+          run={run}
+          baseUrl="/api/evaluations"
+          repo="owner/repo"
+          onCancelled={() => {}}
+        />
+      </MemoryRouter>,
+    );
+  run.status = "running";
+  expect(render()).toContain("Cancel Run");
+  run.status = "failed";
+  expect(render()).not.toContain("Cancel Run");
+});

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { buttonStyles, DataTable, Notice, RunStatus } from "../ui";
 import type { EvaluationRun, EvaluationTrial } from "./api";
+import { CancelEvaluation } from "./CancelEvaluation";
 import { thinkingLabel } from "./run-presentation";
 import { TokenCosts } from "./TokenCosts";
 
@@ -25,10 +26,12 @@ export function EvaluationResults({
   run,
   baseUrl,
   repo,
+  onCancelled,
 }: {
   run: EvaluationRun;
   baseUrl: string;
   repo: string;
+  onCancelled?(run: EvaluationRun): void;
 }) {
   const [index, setIndex] = React.useState(0);
   const trial = run.trials[index] ?? run.trials[0];
@@ -57,9 +60,18 @@ export function EvaluationResults({
             {run.credentials?.provider ?? run.modelName.split("/")[0]}
           </p>
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums" role="status">
-          {done}/{run.trials.length} completed{failed ? ` · ${failed} failed` : ""}
-        </span>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-xs text-muted-foreground tabular-nums" role="status">
+            {done}/{run.trials.length} completed{failed ? ` · ${failed} failed` : ""}
+          </span>
+          {active && onCancelled && (
+            <CancelEvaluation
+              endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/cancel`}
+              subject="Run"
+              onCancelled={onCancelled}
+            />
+          )}
+        </div>
       </header>
       {run.error && <Notice className="mt-4">{run.error}</Notice>}
       {active && (

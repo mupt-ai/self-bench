@@ -141,6 +141,7 @@ export async function evaluationServer(
   if (!approved) throw new Error("Missing fixture task");
   await tasks.review(approved.id, { decision: "approve", note: "Reviewed", userId: user.id });
   const starts: EvaluationInput[] = [];
+  const stops: string[] = [];
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
   const auth = createSiteAuth({
@@ -189,6 +190,9 @@ export async function evaluationServer(
           if (failStart) throw new Error("mock connection lost");
           starts.push(input);
         },
+        async stop(repoId, id) {
+          stops.push(`evaluation/${repoId}/${id}`);
+        },
       });
       if (
         !(await routes.handle(request, new URL(request.url ?? "/", publicUrl), response, signedIn))
@@ -213,6 +217,7 @@ export async function evaluationServer(
     tasks,
     repo,
     starts,
+    stops,
     outsider,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     failStart(value: boolean) {

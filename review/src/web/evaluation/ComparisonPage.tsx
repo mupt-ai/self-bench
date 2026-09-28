@@ -6,6 +6,7 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, buttonStyles, Notice, PageContent, PageHeader } from "../ui";
 import { EvaluationRequestError, evaluationRequest } from "./api";
+import { CancelEvaluation } from "./CancelEvaluation";
 import { unlockMissingComparison } from "./comparison-submission";
 import { thinkingLabel } from "./run-presentation";
 import { useEvaluationScope } from "./useEvaluationScope";
@@ -82,6 +83,13 @@ export function ComparisonPage() {
             : ""
         }
       >
+        {status?.runs.some((run) => ["pending", "queued", "running"].includes(run.status)) && (
+          <CancelEvaluation<ComparisonStatus>
+            endpoint={`${url}/comparisons/${comparisonId}/cancel`}
+            subject="Comparison"
+            onCancelled={setStatus}
+          />
+        )}
         <Link className={buttonStyles.secondary} to={`/repos/${repo}/results`}>
           View Results
         </Link>
