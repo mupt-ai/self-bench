@@ -80,7 +80,7 @@ test("worker interruption finalizes persisted progress without rerunning the sol
     await activities.failSolverEvaluation(input);
     const failed = await getEvaluation(store, input.repoId, input.id);
     expect(failed?.status).toBe("failed");
-    expect(failed?.error).toContain("cleanup");
+    expect(failed?.error).toContain("will not retry");
     expect(failed?.trials[0]?.status).toBe("failed");
     const revision = failed?.revision;
     await activities.failSolverEvaluation(input);

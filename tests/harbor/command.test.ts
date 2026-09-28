@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { HARBOR_ENVIRONMENTS } from "../../src/contracts/config/providers.js";
 import {
+  HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
 } from "../../src/harnesses/harbor/command.js";
@@ -61,4 +62,27 @@ test("Docker packaging and the process policy pin the same Harbor version", asyn
   const { HARBOR_VERSION } = await import("../../src/harnesses/harbor/command.js");
   const dockerfile = await Bun.file(new URL("../../Dockerfile", import.meta.url)).text();
   expect(dockerfile.match(/^ARG HARBOR_VERSION=(.+)$/m)?.[1]).toBe(HARBOR_VERSION);
+});
+
+test("Modal sandboxes are capped at their Harbor process's timeout and tagged with their owner", () => {
+  const kwargs = (args: string[]) =>
+    args.flatMap((arg, index) => (args[index - 1] === "--ek" ? [arg] : []));
+  const base = { taskPath: "/task", jobsPath: "/jobs", jobName: "run", agent: "nop" } as const;
+  expect(kwargs(harborRunArguments({ ...base, environment: "modal" }))).toEqual([
+    `sandbox_timeout_secs=${HARBOR_PROCESS_TIMEOUT_MS.gate / 1000}`,
+  ]);
+  const solver = harborRunArguments({
+    ...base,
+    environment: "modal",
+    solver: { model: "m", agentArguments: [] },
+    labels: { "selfbench.evaluation": "e", "selfbench.trial": "3" },
+  });
+  expect(kwargs(solver)).toEqual([
+    `sandbox_timeout_secs=${HARBOR_PROCESS_TIMEOUT_MS.solver / 1000}`,
+    'labels={"selfbench.evaluation":"e","selfbench.trial":"3"}',
+  ]);
+  // Other providers' environments take no Modal kwargs.
+  expect(harborRunArguments({ ...base, environment: "e2b", labels: { owner: "e" } })).not.toContain(
+    "--ek",
+  );
 });

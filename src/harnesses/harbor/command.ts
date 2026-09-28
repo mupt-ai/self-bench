@@ -18,6 +18,8 @@ export interface HarborRunCommand {
   solver?: { model: string; agentArguments: readonly string[] };
   /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
   extraAllowedHosts?: readonly string[];
+  /** Modal tags on the run's sandboxes, so whoever owns the run can find and stop them later. */
+  labels?: Readonly<Record<string, string>>;
   quiet?: boolean;
 }
 
@@ -47,6 +49,22 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
     ...(input.solver?.agentArguments ?? []),
+    ...(input.environment === "modal" ? modalArguments(input) : []),
+  ];
+}
+
+/**
+ * Harbor gives a Modal sandbox 24 hours. A worker killed mid-run never reaches Harbor's teardown,
+ * so cap each sandbox at its Harbor process's own timeout: nothing still using it runs longer.
+ */
+function modalArguments(input: HarborRunCommand): string[] {
+  const timeoutMs = input.solver
+    ? HARBOR_PROCESS_TIMEOUT_MS.solver
+    : HARBOR_PROCESS_TIMEOUT_MS.gate;
+  return [
+    "--ek",
+    `sandbox_timeout_secs=${timeoutMs / 1000}`,
+    ...(input.labels ? ["--ek", `labels=${JSON.stringify(input.labels)}`] : []),
   ];
 }
 

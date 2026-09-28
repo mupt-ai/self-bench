@@ -1,7 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { modelApiKeyVariable } from "../contracts/models.js";
+import type { HarborEnvironment } from "../contracts/config/providers.js";
+import { modelApiKeyVariable, type ThinkingLevel } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import {
@@ -9,7 +10,9 @@ import {
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
+import { harborRunArguments } from "../harnesses/harbor/command.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
+import { thinkingArguments } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /** The organization whose credentials an evaluation uses. */
@@ -122,7 +125,30 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
   return hostsFromEnvironment(env);
 }
 
-export function solverAgent(harness: Harness, model: string): string {
+/** Harbor's arguments for one solver trial; `labels` tag its Modal sandboxes. */
+export function solverArguments(
+  taskPath: string,
+  jobs: string,
+  harness: Harness,
+  model: string,
+  sandbox: HarborEnvironment,
+  thinking?: ThinkingLevel,
+  extraAllowedHosts: readonly string[] = [],
+  labels?: Readonly<Record<string, string>>,
+): string[] {
+  return harborRunArguments({
+    taskPath,
+    jobsPath: jobs,
+    jobName: "solver",
+    agent: solverAgent(harness, model),
+    environment: sandbox,
+    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    extraAllowedHosts,
+    ...(labels ? { labels } : {}),
+  });
+}
+
+function solverAgent(harness: Harness, model: string): string {
   if (harness !== "codex") return harness;
   return model.startsWith("openai/") && model.slice(7).includes("/")
     ? "harbor_gateway:GatewayCodex"

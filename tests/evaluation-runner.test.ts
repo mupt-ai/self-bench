@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
-import { credentialExecution } from "../src/evaluation/execution.js";
+import { credentialExecution, solverArguments } from "../src/evaluation/execution.js";
 import { executeEvaluation } from "../src/evaluation/lifecycle.js";
 import {
   collectOutput,
@@ -15,7 +15,6 @@ import {
 import {
   assertEvaluationBundleSize,
   MAX_EVALUATION_BUNDLE_BYTES,
-  solverArguments,
 } from "../src/evaluation/runner.js";
 import {
   evaluationPrefix,

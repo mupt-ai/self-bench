@@ -2,22 +2,18 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { HarborEnvironment } from "../contracts/config/providers.js";
-import type { ThinkingLevel } from "../contracts/models.js";
 import type { Vault } from "../db/vault.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
-  harborRunArguments,
 } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
-import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
-import { thinkingArguments } from "./models.js";
+import { credentialExecution, gatewayTrial, solverArguments } from "./execution.js";
 import {
   boundedSteps,
   collectOutput,
@@ -28,8 +24,9 @@ import {
   trajectorySteps,
   trialLog,
 } from "./output.js";
+import { trialSandboxLabels } from "./sandbox-cleanup.js";
 import { evaluationPrefix, RepeatSpendError, updateEvaluation } from "./store.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
+import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
 // PostHog task bundles include compressed repository snapshots larger than 350 MiB.
 // Keep a bounded compressed size; extractRegularArchive separately caps unpacked data.
@@ -39,25 +36,6 @@ export function assertEvaluationBundleSize(size: number): void {
   if (size > MAX_EVALUATION_BUNDLE_BYTES) throw new Error("Task bundle exceeds 512 MiB");
 }
 
-export function solverArguments(
-  taskPath: string,
-  jobs: string,
-  harness: Harness,
-  model: string,
-  sandbox: HarborEnvironment,
-  thinking?: ThinkingLevel,
-  extraAllowedHosts: readonly string[] = [],
-): string[] {
-  return harborRunArguments({
-    taskPath,
-    jobsPath: jobs,
-    jobName: "solver",
-    agent: solverAgent(harness, model),
-    environment: sandbox,
-    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
-    extraAllowedHosts,
-  });
-}
 export interface RunnerOptions {
   command?: typeof runCommand;
   env?: NodeJS.ProcessEnv;
@@ -268,6 +246,7 @@ async function runTrial(context: {
           run.sandbox,
           run.thinking,
           context.extraAllowedHosts,
+          trialSandboxLabels(run.id, index),
         ),
         {
           env: child,
