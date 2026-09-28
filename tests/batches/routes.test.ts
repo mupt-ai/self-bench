@@ -93,13 +93,16 @@ test("invalid input never starts, and ambiguous start failure retains repo owner
   expect(f.started).toHaveLength(0);
 });
 
-test("invalid revision and failed association never launch work", async () => {
-  const invalid = await fixture({ sha: "main" });
-  expect((await invalid.start()).status).toBe(400);
-  expect(invalid.started).toHaveLength(0);
-  const failed = await fixture({ failAttach: true });
-  expect((await failed.start()).status).toBe(500);
-  expect(failed.started).toHaveLength(0);
+test("an invalid revision never launches work", async () => {
+  const f = await fixture({ sha: "main" });
+  expect((await f.start()).status).toBe(400);
+  expect(f.started).toHaveLength(0);
+});
+
+test("a failed association never launches work", async () => {
+  const f = await fixture({ failAttach: true });
+  expect((await f.start()).status).toBe(500);
+  expect(f.started).toHaveLength(0);
 });
 
 test("a known verdict survives when candidate queries disappear", async () => {

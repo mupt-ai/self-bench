@@ -1,6 +1,6 @@
 {
   "name": "self-bench",
-  "version": "0.3.12",
+  "version": "0.3.14",
   "description": "Turn completed repository changes into durable, private Harbor evaluations",
   "license": "MIT",
   "repository": {
