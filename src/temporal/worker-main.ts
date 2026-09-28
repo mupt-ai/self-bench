@@ -13,6 +13,7 @@ import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
+import { idleTracker } from "./idle-exit.js";
 import { harborTaskQueue } from "./task-queues.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
 
@@ -24,7 +25,7 @@ import { resolveHarborConcurrency } from "./worker-memory.js";
  */
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
-const { role, shutdownGraceMs } = workerProcessSettings(process.env);
+const { role, shutdownGraceMs, idleExitMs } = workerProcessSettings(process.env);
 await checkSandboxBackends(config);
 // Managed usage is billed at OpenRouter's live list prices; see openrouter-rates.ts.
 await keepOpenRouterRatesFresh().ready;
@@ -51,6 +52,7 @@ const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 // A stopping worker (SIGTERM on a scale-in or rollout) stops polling at once and lets in-flight
 // activities finish for shutdownGraceMs; Temporal retries anything still running after it.
 
+const idle = idleTracker();
 const workers = await Promise.all([
   ...(role === "harbor"
     ? []
@@ -62,7 +64,7 @@ const workers = await Promise.all([
           workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
           activities: { ...generation, ...evaluation },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
-          interceptors: { activity: [activityEventInterceptor()] },
+          interceptors: { activity: [activityEventInterceptor(), idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
         }),
       ]),
@@ -75,6 +77,7 @@ const workers = await Promise.all([
           taskQueue: harborTaskQueue(config.temporal.taskQueue),
           activities: { verifyCompiled, executeSolverEvaluation },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
+          interceptors: { activity: [idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
         }),
       ]),
@@ -86,6 +89,17 @@ const slots = [
 console.log(
   `SelfBench ${role} worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with ${slots.join(" and ")}`,
 );
+if (idleExitMs) {
+  // A job-style worker stops polling once idle, or after a day so it drains well inside
+  // Autopilot's seven-day protection of a running pod; running() returns once it has drained.
+  const startedAt = Date.now();
+  const check = setInterval(() => {
+    if (idle.idleForMs() < idleExitMs && Date.now() - startedAt < 24 * 60 * 60 * 1000) return;
+    clearInterval(check);
+    console.log(`SelfBench ${role} worker stopping: idle or retired, draining in-flight work`);
+    for (const worker of workers) worker.shutdown();
+  }, 30_000);
+}
 try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {

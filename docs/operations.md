@@ -365,6 +365,7 @@ To inspect one candidate, open its author workflow in the Temporal UI; its histo
 | `SELFBENCH_HARBOR_CONCURRENCY` | sized to worker memory, capped at 10 | Worker |
 | `SELFBENCH_WORKER_ROLE` | `all`; `workflows` or `harbor` polls only that queue, so each scales apart | Worker |
 | `SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS` | `0`; how long a stopping worker lets in-flight activities finish | Worker |
+| `SELFBENCH_WORKER_IDLE_EXIT_SECONDS` | unset; when set, the worker exits after this long with nothing running, and stops taking work after a day | Worker |
 | `SELFBENCH_WORKFLOW_LIMIT` | `100` | API; managed generation workflows (discovery shards and candidates) running at once across the platform; the rest wait in their batch, first come first served |
 | `SELFBENCH_MODAL_APP` | `selfbench` | Modal worker |
 | `SELFBENCH_MODAL_ENVIRONMENT` | — | Modal worker |

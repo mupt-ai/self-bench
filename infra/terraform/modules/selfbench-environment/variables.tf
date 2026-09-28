@@ -119,3 +119,12 @@ variable "harbor_worker_max_replicas" {
   type        = number
   default     = 20
 }
+variable "worker_pool_polls_harbor" {
+  description = "Whether the Cloud Run worker pool also runs Harbor work; turn off to leave it to the GKE workers."
+  type        = bool
+  default     = true
+  validation {
+    condition     = var.worker_pool_polls_harbor || var.gke_workers
+    error_message = "Something must poll the Harbor queue: keep the pool on it or turn on gke_workers."
+  }
+}

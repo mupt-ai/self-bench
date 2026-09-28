@@ -44,5 +44,8 @@ test("a worker polls both queues and stops at once unless its role and grace are
       SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS: "10800",
     }),
   ).toEqual({ role: "harbor", shutdownGraceMs: 10_800_000 });
+  expect(workerProcessSettings({ SELFBENCH_WORKER_IDLE_EXIT_SECONDS: "300" }).idleExitMs).toBe(
+    300_000,
+  );
   expect(() => workerProcessSettings({ SELFBENCH_WORKER_ROLE: "api" })).toThrow();
 });

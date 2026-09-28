@@ -191,6 +191,25 @@ run "gke_workers" {
     error_message = "KEDA scales on the Harbor queue, up to 20 pods by default."
   }
 }
+run "worker_pool_leaves_harbor_to_gke" {
+  command = plan
+  variables {
+    gke_workers              = true
+    worker_pool_polls_harbor = false
+    temporal_address         = "us-central1.gcp.api.temporal.io:7233"
+    temporal_namespace       = "selfbench-dev.abc12"
+    secret_versions          = { shared = 7, api = 3, worker = 1, temporal = 2 }
+  }
+  assert {
+    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "workflows"]
+    error_message = "The pool polls only the workflow queue once Harbor work is on GKE."
+  }
+}
+run "harbor_queue_always_polled" {
+  command = plan
+  variables { worker_pool_polls_harbor = false }
+  expect_failures = [var.worker_pool_polls_harbor]
+}
 run "gke_workers_need_temporal_settings" {
   command = plan
   variables { gke_workers = true }

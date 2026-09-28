@@ -40,6 +40,7 @@ module "selfbench" {
   temporal_address            = var.temporal_address
   temporal_namespace          = var.temporal_namespace
   harbor_worker_max_replicas  = var.harbor_worker_max_replicas
+  worker_pool_polls_harbor    = var.worker_pool_polls_harbor
 }
 output "deployment" {
   value = module.selfbench.deployment
