@@ -44,7 +44,7 @@ const { verifyCompiled, ...generation } = createActivities(
   vault,
   database ? createUsageStore(database.db) : undefined,
 );
-const { executeSolverEvaluation, ...evaluation } = createEvaluationActivities(
+const { executeSolverEvaluation, runSolverTrial, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
 );
@@ -75,7 +75,7 @@ const workers = await Promise.all([
           connection,
           namespace: config.temporal.namespace,
           taskQueue: harborTaskQueue(config.temporal.taskQueue),
-          activities: { verifyCompiled, executeSolverEvaluation },
+          activities: { verifyCompiled, executeSolverEvaluation, runSolverTrial },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,

@@ -1,48 +1,55 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
-import { executeEvaluation } from "./runner.js";
-import { getEvaluation, initialEvaluation, saveEvaluation } from "./store.js";
+import {
+  executeEvaluation,
+  failEvaluation,
+  failTrial,
+  finishEvaluation,
+  startEvaluation,
+} from "./lifecycle.js";
+import { executeTrial, type RunnerOptions } from "./runner.js";
 import type { EvaluationInput } from "./types.js";
 
 export interface EvaluationActivities {
+  /** Every trial in one activity: kept only for evaluations started before trials ran in parallel. */
   executeSolverEvaluation(input: EvaluationInput): Promise<void>;
+  startSolverEvaluation(input: EvaluationInput): Promise<number>;
+  runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
 }
 export function createEvaluationActivities(
   store: ArtifactStore,
   vault?: Vault,
 ): EvaluationActivities {
+  const heartbeating = async (run: (options: RunnerOptions) => Promise<void>) => {
+    const context = Context.current();
+    const timer = setInterval(() => context.heartbeat(), 10_000);
+    try {
+      await run({
+        ...(vault ? { vault } : {}),
+        signal: context.cancellationSignal,
+        heartbeat: () => context.heartbeat(),
+      });
+    } finally {
+      clearInterval(timer);
+    }
+  };
   return {
-    async executeSolverEvaluation(input) {
-      const context = Context.current();
-      const timer = setInterval(() => context.heartbeat(), 10_000);
-      try {
-        if (!(await getEvaluation(store, input.repoId, input.id)))
-          await saveEvaluation(store, initialEvaluation(input, input.modelName));
-        await executeEvaluation(store, input, {
-          ...(vault ? { vault } : {}),
-          signal: context.cancellationSignal,
-          heartbeat: () => context.heartbeat(),
-        });
-      } finally {
-        clearInterval(timer);
-      }
-    },
-    async failSolverEvaluation(input) {
-      const run = await getEvaluation(store, input.repoId, input.id);
-      if (!run || run.status === "completed" || run.status === "failed") return;
-      run.status = "failed";
-      run.error =
-        "Worker interrupted or timed out. This evaluation will not retry automatically; sandbox cleanup may require operator verification.";
-      run.finishedAt = new Date().toISOString();
-      for (const trial of run.trials) {
-        if (trial.status === "queued" || trial.status === "running") {
-          trial.status = "failed";
-          trial.error = "Evaluation interrupted before this trial completed";
-        }
-      }
-      await saveEvaluation(store, run);
-    },
+    executeSolverEvaluation: (input) =>
+      heartbeating((options) => executeEvaluation(store, input, options)),
+    startSolverEvaluation: (input) => startEvaluation(store, input),
+    runSolverTrial: (input, index) =>
+      heartbeating((options) => executeTrial(store, input, index, options)),
+    failSolverTrial: (input, index) => failTrial(store, input, index),
+    finishSolverEvaluation: (input) => finishEvaluation(store, input),
+    failSolverEvaluation: (input) =>
+      failEvaluation(
+        store,
+        input,
+        "Worker interrupted or timed out. This evaluation will not retry automatically; sandbox cleanup may require operator verification.",
+      ),
   };
 }
