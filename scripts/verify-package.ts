@@ -99,10 +99,11 @@ try {
       "--input-type=module",
       "-e",
       `
-    const {verifierRuntimeFiles} = await import(${JSON.stringify(runtimeModule)});
+    const {agentRuntimeScript, verifierRuntimeFiles} = await import(${JSON.stringify(runtimeModule)});
     const files = verifierRuntimeFiles();
     if (!files["runtime/junit.py"].includes("def main")) throw new Error("missing Python runtime");
     if (!files["runtime/command.sh"].includes("run_verifier_command")) throw new Error("missing shell runtime");
+    if (!agentRuntimeScript().includes("NODE_VERSION=")) throw new Error("missing agent runtime");
     console.log("runtime assets verified");
   `,
     ],

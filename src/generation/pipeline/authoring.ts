@@ -14,7 +14,7 @@ import {
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { difficultyThresholds } from "../task/audit.js";
-import { verifierRuntimeFiles } from "../task/runtime-assets.js";
+import { sandboxRuntimeFiles } from "../task/runtime-assets.js";
 import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
@@ -123,7 +123,7 @@ export async function startAuthoringTurn(
           )
         : verifyResultPrompt(verifyReport, input.verifiesLeft),
     files: [
-      ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
+      ...Object.entries(sandboxRuntimeFiles()).map(([path, contents]) => ({
         path: `/work/${path}`,
         contents,
       })),

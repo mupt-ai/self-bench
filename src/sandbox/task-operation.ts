@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { verifierRuntimeFiles } from "../generation/task/runtime-assets.js";
+import { sandboxRuntimeFiles } from "../generation/task/runtime-assets.js";
 import { projectRoot } from "../lib/project-paths.js";
 import type { SandboxFile, SandboxRunOptions } from "./contracts.js";
 import { taskSandbox } from "./task-context.js";
@@ -25,7 +25,7 @@ export async function taskOperation(
             join(projectRoot(import.meta.url), "dist/sandbox-task-operation.bundle.js"),
           ),
         },
-        ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
+        ...Object.entries(sandboxRuntimeFiles()).map(([path, contents]) => ({
           path: `/work/${path}`,
           contents,
         })),

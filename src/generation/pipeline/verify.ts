@@ -15,7 +15,7 @@ import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../../sandbox/gate-bundle.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
-import { verifierRuntimeFiles } from "../task/runtime-assets.js";
+import { sandboxRuntimeFiles } from "../task/runtime-assets.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
 import { remoteGate } from "./remote-gate.js";
@@ -72,7 +72,7 @@ export async function compileTask(
         command: ["node", "/work/compiler.js"],
         files: [
           { path: "/work/compiler.js", contents: program },
-          ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
+          ...Object.entries(sandboxRuntimeFiles()).map(([path, contents]) => ({
             path: `/work/${path}`,
             contents,
           })),
