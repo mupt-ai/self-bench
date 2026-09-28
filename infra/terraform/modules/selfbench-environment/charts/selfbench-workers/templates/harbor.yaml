@@ -11,6 +11,9 @@ spec:
   # The backlog excludes tasks already running, so count only pending jobs against it.
   scalingStrategy:
     strategy: accurate
+  # A release (a new image) leaves running jobs alone; only new jobs use the new spec.
+  rollout:
+    strategy: gradual
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 5
   triggers:
