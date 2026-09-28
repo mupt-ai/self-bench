@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
-import { executeEvaluation } from "../src/evaluation/lifecycle.js";
 import {
   collectOutput,
   completeLines,
@@ -27,6 +26,7 @@ import {
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 import { credentialedInput, testModelSecret } from "./support/evaluation-fixture.js";
+import { runEvaluation } from "./support/evaluation-run.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 
 const directories: string[] = [];
@@ -159,7 +159,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     await writeFile(join(trial, "config.json"), '{"secret":"never-export-this"}');
     return { stdout: "", stderr: "", exitCode: 0 };
   };
-  await executeEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
+  await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
   const run = await getEvaluation(store, input.repoId, input.id);
   expect(sawLive).toBe(true);
   expect(run?.status).toBe("completed");
@@ -174,7 +174,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
       testModelSecret,
     );
   expect((await listEvaluations(store, input.repoId))[0]?.status).toBe("completed");
-  await expect(executeEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
+  await expect(runEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
     "refusing to repeat",
   );
   expect(calls).toBe(1);
@@ -189,7 +189,7 @@ test("missing credentials and incompatible Harbor fail before a model command", 
     if (scenario === "credential")
       await vault.credentials.remove(1, input.credentials?.modelCredentialId ?? "");
     let calls = 0;
-    await executeEvaluation(store, input, {
+    await runEvaluation(store, input, {
       env: {},
       vault,
       command: async (_name, args) => {
@@ -205,7 +205,7 @@ test("missing credentials and incompatible Harbor fail before a model command", 
 });
 test("missing verifier results are failures, never invented zero scores", async () => {
   const { store, input, vault } = await fixture();
-  await executeEvaluation(store, input, {
+  await runEvaluation(store, input, {
     env: {},
     vault,
     command: async (_name, args) => ({
@@ -223,7 +223,7 @@ test("a bundle that asks for host credentials fails its trial before Harbor runs
   // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises Harbor's host interpolation.
   const { store, input, vault } = await fixture('[verifier.env]\nKEY = "${OPENAI_API_KEY}"\n');
   let calls = 0;
-  await executeEvaluation(store, input, {
+  await runEvaluation(store, input, {
     env: {},
     vault,
     command: async (_name, args) => {

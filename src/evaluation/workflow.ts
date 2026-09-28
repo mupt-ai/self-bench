@@ -8,23 +8,12 @@ import {
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
-import {
-  MAX_HARBOR_CONCURRENCY,
-  MAX_PENDING_TRIAL_WORKFLOWS,
-} from "../contracts/config/execution-limits.js";
+import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
 import { trialInput } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
 
-const solver = () =>
-  proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: "72 hours",
-    heartbeatTimeout: "2 minutes",
-    cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
-    retry: { maximumAttempts: 1 },
-    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
-  });
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
 const REFUSED = ["RepeatSpendError"];
 // One trial is one `harbor run` (capped at 2 hours) plus its bundle and artifact transfers. A retry
@@ -38,46 +27,10 @@ const trial = () =>
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
     taskQueue: harborTaskQueue(workflowInfo().taskQueue),
   });
-const finalizer = proxyActivities<EvaluationActivities>({
-  startToCloseTimeout: "1 minute",
-  retry: { maximumAttempts: 5 },
-});
 const records = proxyActivities<EvaluationActivities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 5, nonRetryableErrorTypes: REFUSED },
 });
-
-/**
- * Runs every trial in one Harbor activity, one after another. Replaced by
- * selfBenchParallelEvaluationWorkflow and kept unchanged so evaluations already running on it
- * replay; remove it (and executeSolverEvaluation) once none are left, at most 73 hours after
- * the new type starts being used.
- */
-export async function selfBenchEvaluationWorkflow(input: EvaluationInput): Promise<void> {
-  try {
-    await solver().executeSolverEvaluation(input);
-  } catch {
-    await CancellationScope.nonCancellable(() => finalizer.failSolverEvaluation(input));
-  }
-}
-
-/**
- * Runs each trial as its own Harbor activity, up to one Harbor worker's slots at once. Replaced by
- * selfBenchEvaluationRunWorkflow; it must keep issuing the same commands so evaluations already
- * running on it replay. Remove it once none are left, 73 hours after that type is in use.
- */
-export async function selfBenchParallelEvaluationWorkflow(input: EvaluationInput): Promise<void> {
-  try {
-    await runEvaluationTrials(
-      input,
-      records,
-      (input, index) => trial().runSolverTrial(input, index),
-      MAX_HARBOR_CONCURRENCY,
-    );
-  } catch {
-    await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));
-  }
-}
 
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started

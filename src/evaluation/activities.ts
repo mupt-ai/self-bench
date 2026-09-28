@@ -1,19 +1,11 @@
 import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
-import {
-  executeEvaluation,
-  failEvaluation,
-  failTrial,
-  finishEvaluation,
-  startEvaluation,
-} from "./lifecycle.js";
+import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
 import type { EvaluationInput } from "./types.js";
 
 export interface EvaluationActivities {
-  /** Every trial in one activity: kept only for evaluations started before trials ran in parallel. */
-  executeSolverEvaluation(input: EvaluationInput): Promise<void>;
   startSolverEvaluation(input: EvaluationInput): Promise<number>;
   runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
@@ -38,8 +30,6 @@ export function createEvaluationActivities(
     }
   };
   return {
-    executeSolverEvaluation: (input) =>
-      heartbeating((options) => executeEvaluation(store, input, options)),
     startSolverEvaluation: (input) => startEvaluation(store, input),
     runSolverTrial: (input, index) =>
       heartbeating((options) => executeTrial(store, input, index, options)),

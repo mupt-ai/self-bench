@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createEvaluationActivities } from "../src/evaluation/activities.js";
-import { executeEvaluation } from "../src/evaluation/lifecycle.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
+import { runEvaluation } from "./support/evaluation-run.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 
 test("multiple tasks and harnesses run once each; a zero score still completes", async () => {
@@ -36,7 +36,7 @@ test("multiple tasks and harnesses run once each; a zero score still completes",
     );
     await saveEvaluation(store, initialEvaluation(input, "Test"));
     const calls: string[] = [];
-    await executeEvaluation(store, input, {
+    await runEvaluation(store, input, {
       env: {},
       vault,
       command: async (_name, args) => {
@@ -99,7 +99,7 @@ test("an already-cancelled evaluation does not invoke a solver", async () => {
     const controller = new AbortController();
     controller.abort();
     const calls: string[][] = [];
-    await executeEvaluation(store, input, {
+    await runEvaluation(store, input, {
       env: {},
       vault,
       signal: controller.signal,

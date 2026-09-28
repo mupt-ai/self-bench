@@ -2,8 +2,6 @@
 
 export {
   selfBenchEvaluationRunWorkflow,
-  selfBenchEvaluationWorkflow,
-  selfBenchParallelEvaluationWorkflow,
   selfBenchSolverTrialWorkflow,
 } from "../evaluation/workflow.js";
 export * from "../generation/pipeline/workflows.js";

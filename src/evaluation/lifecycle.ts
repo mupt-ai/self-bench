@@ -1,5 +1,4 @@
 import type { ArtifactStore } from "../artifacts/index.js";
-import { executeTrial, type RunnerOptions } from "./runner.js";
 import {
   getEvaluation,
   initialEvaluation,
@@ -85,29 +84,4 @@ export async function failEvaluation(
       }
     }
   });
-}
-
-/**
- * Runs every trial in turn inside one activity. Only evaluations started before trials ran as
- * their own activities use it; see selfBenchEvaluationWorkflow.
- */
-export async function executeEvaluation(
-  store: ArtifactStore,
-  input: EvaluationInput,
-  options: RunnerOptions = {},
-): Promise<void> {
-  const trials = await startEvaluation(store, input);
-  try {
-    for (let index = 0; index < trials; index += 1) {
-      options.signal?.throwIfAborted();
-      await executeTrial(store, input, index, options);
-    }
-    await finishEvaluation(store, input);
-  } catch (error) {
-    await failEvaluation(
-      store,
-      input,
-      error instanceof Error ? error.message : "Evaluation failed",
-    );
-  }
 }
