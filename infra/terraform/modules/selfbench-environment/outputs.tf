@@ -18,6 +18,11 @@ output "deployment" {
         for domain, authorization in google_certificate_manager_dns_authorization.api :
         domain => authorization.dns_resource_record[0]
       }
+      # What the deploy clears after each release; null without a results site CDN.
+      results_site_cdn = var.results_site_domain == null ? null : {
+        host    = var.results_site_domain
+        url_map = google_compute_url_map.api.name
+      }
     }
     secret_ids = { for key, secret in google_secret_manager_secret.runtime : key => secret.secret_id }
     database = var.create_cloud_sql ? {

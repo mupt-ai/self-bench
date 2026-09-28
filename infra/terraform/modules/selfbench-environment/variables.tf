@@ -52,6 +52,15 @@ variable "api_domains" {
     error_message = "List at least one bare hostname for the API."
   }
 }
+variable "results_site_domain" {
+  description = "The host of the public results site (selfbench.dev), one of api_domains. Its traffic goes through Cloud CDN, which keeps only what the API marks public; the other hosts are never cached. Null: no CDN."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.results_site_domain == null || contains(var.api_domains, coalesce(var.results_site_domain, "-"))
+    error_message = "The results site's host must be one of api_domains."
+  }
+}
 variable "redirect_domains" {
   description = "Hostnames the load balancer permanently redirects to another host, for example { \"www.selfbench.dev\" = \"selfbench.dev\" }."
   type        = map(string)
