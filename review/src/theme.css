@@ -3,6 +3,8 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./public-site/palette.css";
+/* The frame's measurements, for the sign-in page, which is built on selfbench.dev's frame. */
+@import "./public-site/frame.css";
 
 /* Token names are shared with the public site's theme.css, so both render the same palette. */
 @theme inline {

@@ -1,6 +1,7 @@
 /*
- * The frame's classes. Their measurements are CSS variables (theme.css), narrowed for compact
- * screens in one place (mobile/mobile.css), so everything built on them adapts on its own.
+ * The frame's classes. Their measurements are CSS variables in frame.css, narrowed there for
+ * compact screens, so everything built on them adapts on its own. Both sites' stylesheets
+ * import frame.css; a page using these classes needs nothing more.
  */
 
 /**

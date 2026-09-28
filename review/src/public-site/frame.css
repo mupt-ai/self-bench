@@ -1,0 +1,38 @@
+/*
+ * The frame's measurements: the ruler lines, the header's and footer's insets, and the page's
+ * padding, used by frame.ts's classes. Shared like palette.css: public-site/theme.css and the
+ * app's theme.css both import it, so anything built on the frame (selfbench.dev, and the app's
+ * sign-in page) gets the same measurements.
+ *
+ * The defaults are in the base layer, so the compact values below win wherever they apply.
+ */
+@layer base {
+  :root {
+    /* How far each ruler line sits in from its window edge. */
+    --edge: clamp(24px, 6vw, 160px);
+    /* The page's side padding. */
+    --gutter: 1.5rem;
+    /* The header's and footer's side padding, inside the rulers. */
+    --bar-inset: 1.5rem;
+    /* The pinned header's and footer's heights, border lines included; 0 when not pinned. */
+    --bar-top: 65px;
+    --bar-bottom: 49px;
+    /* Space above and below the page's content. */
+    --page-pad: 2.5rem;
+  }
+}
+
+/* A small or short screen (the compact variant in mobile/mobile.css): rulers close to the
+   window's edges, and the page just inside them. */
+@media (width < 40rem), (height < 32rem) {
+  :root {
+    --edge: 10px;
+    --gutter: 1rem;
+    /* Header and footer content lines up with the page's, not further in. */
+    --bar-inset: calc(var(--gutter) - var(--edge));
+    --bar-top: 56px;
+    /* The footer is not pinned: it closes the page instead (PublicLayout). */
+    --bar-bottom: 0px;
+    --page-pad: 1.5rem;
+  }
+}
