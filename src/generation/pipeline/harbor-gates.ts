@@ -11,6 +11,7 @@ import {
   harborProcessEnvironment,
   harborRunArguments,
 } from "../../harnesses/harbor/command.js";
+import { authoredImageBuildFailure } from "../../harnesses/harbor/image-build.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -206,9 +207,12 @@ export async function harborRun(
   }
   const result = await readHarborJobResult(jobsDirectory, jobName).catch(refuseWithoutRetry);
   const infrastructure = harborInfrastructureError(result.trial);
-  if (infrastructure)
-    throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
-  return result;
+  if (!infrastructure) return result;
+  // A build that failed in the task's own Dockerfile steps is the author's to fix, not a retry.
+  const buildLog = await authoredImageBuildFailure(infrastructure, env, signal);
+  if (buildLog)
+    return { ...result, trialLog: [result.trialLog, buildLog].filter(Boolean).join("\n\n") };
+  throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
 }
 
 async function storeResult(
