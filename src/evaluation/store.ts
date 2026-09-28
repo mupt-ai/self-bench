@@ -39,11 +39,34 @@ export function initialEvaluation(input: EvaluationInput, modelLabel: string): E
 }
 export async function saveEvaluation(store: ArtifactStore, run: EvaluationRun): Promise<void> {
   run.revision += 1;
-  await store.put(
-    `${evaluationPrefix(run.repoId, run.id)}snapshots/${String(run.revision).padStart(10, "0")}.json`,
-    Buffer.from(JSON.stringify(run)),
-    "application/json",
-  );
+  await store.put(snapshotKey(run), Buffer.from(JSON.stringify(run)), "application/json");
+}
+/**
+ * Applies `change` to the latest record and saves it as the next revision. Snapshots are
+ * create-only, so two writers that read the same revision cannot both save the next one: the
+ * loser re-reads and applies its change again. `change` returns false to leave the record as is.
+ */
+export async function updateEvaluation(
+  store: ArtifactStore,
+  repoId: number,
+  id: string,
+  change: (run: EvaluationRun) => unknown,
+): Promise<EvaluationRun> {
+  for (let attempt = 1; ; attempt += 1) {
+    const run = await getEvaluation(store, repoId, id);
+    if (!run) throw new Error("Evaluation record is missing");
+    if (change(run) === false) return run;
+    try {
+      await saveEvaluation(store, run);
+      return run;
+    } catch (error) {
+      if (attempt >= 20 || !(await store.stat(snapshotKey(run)))) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 225));
+  }
+}
+function snapshotKey(run: EvaluationRun): string {
+  return `${evaluationPrefix(run.repoId, run.id)}snapshots/${String(run.revision).padStart(10, "0")}.json`;
 }
 export async function getEvaluation(
   store: ArtifactStore,

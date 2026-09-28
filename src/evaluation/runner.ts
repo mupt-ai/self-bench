@@ -28,7 +28,7 @@ import {
   trajectorySteps,
   trialLog,
 } from "./output.js";
-import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
+import { evaluationPrefix, updateEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 // PostHog task bundles include compressed repository snapshots larger than 350 MiB.
@@ -64,17 +64,42 @@ export interface RunnerOptions {
   signal?: AbortSignal;
   heartbeat?: () => void;
   pollMs?: number;
+  /** The least time between saves of a running trial's live output. */
+  progressMs?: number;
   vault?: Pick<Vault, "credentials" | "comparisons">;
 }
-export async function executeEvaluation(
+/** Thrown instead of starting work that may already have spent model money; never retried. */
+export class RepeatSpendError extends Error {
+  override name = "RepeatSpendError";
+  constructor() {
+    super("Evaluation already attempted; refusing to repeat model spend");
+  }
+}
+
+/**
+ * Runs one trial of a started evaluation. The trial is claimed (queued to running) in the record
+ * before any model spend, so a second delivery of the same trial refuses instead of re-running it.
+ * Every save replaces only this trial, so trials running in parallel never overwrite each other.
+ */
+export async function executeTrial(
   store: ArtifactStore,
   input: EvaluationInput,
+  index: number,
   options: RunnerOptions = {},
 ): Promise<void> {
-  const run = await getEvaluation(store, input.repoId, input.id);
-  if (!run) throw new Error("Evaluation record is missing");
-  if (run.status !== "queued")
-    throw new Error("Evaluation already attempted; refusing to repeat model spend");
+  const run = await updateEvaluation(store, input.repoId, input.id, (run) => {
+    const trial = run.trials[index];
+    if (run.status !== "running" || trial?.status !== "queued") throw new RepeatSpendError();
+    trial.status = "running";
+    trial.startedAt = new Date().toISOString();
+  });
+  const trial = run.trials[index] as EvaluationTrial;
+  const save = () =>
+    updateEvaluation(store, input.repoId, input.id, (latest) => {
+      // A trial finalized elsewhere (its evaluation failed, or it timed out) stays as it was left.
+      if (latest.status !== "running" || latest.trials[index]?.status !== "running") return false;
+      latest.trials[index] = trial;
+    }).then(() => undefined);
   const root = await mkdtemp(join(tmpdir(), "selfbench-evaluation-"));
   const command = options.command ?? runCommand;
   const environment = options.env ?? process.env;
@@ -83,93 +108,75 @@ export async function executeEvaluation(
     .map(([, value]) => value ?? "")
     .filter(Boolean);
   const redact = (text: string) => redactOutput(text, secrets);
-  run.status = "running";
   try {
-    await saveEvaluation(store, run);
     const home = join(root, "home");
     await mkdir(home, { mode: 0o700 });
     if (!options.vault) throw new Error("Credential storage unavailable on the worker");
     const execution = await credentialExecution(input, home, environment, options.vault);
     secrets.push(...execution.secrets);
-    const { profile } = execution;
     const child = harborProcessEnvironment(execution.child);
     const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
     assertHarborVersion(version.stdout);
-    for (const [index, trial] of run.trials.entries()) {
-      options.signal?.throwIfAborted();
-      const task = input.tasks.find(
-        (candidate) => candidate.runId === trial.runId && candidate.taskId === trial.taskId,
-      );
-      if (!task) throw new Error("Evaluation task snapshot is missing");
-      const trialRoot = join(root, String(index));
-      await mkdir(trialRoot);
-      trial.status = "running";
-      trial.startedAt = new Date().toISOString();
-      await saveEvaluation(store, run);
-      try {
-        const bundle = await store.getByKey(task.bundleKey);
-        if (!bundle) throw new Error("Task bundle is missing");
-        assertEvaluationBundleSize(bundle.byteLength);
-        const archive = join(trialRoot, "task.tar.gz");
-        await writeFile(archive, bundle, { mode: 0o600 });
-        const extracted = join(trialRoot, "task");
-        await mkdir(extracted);
-        await extractRegularArchive(
-          archive,
-          extracted,
-          options.signal ? { signal: options.signal } : {},
-        );
-        const taskPath = await readFile(join(extracted, "harbor-task", "task.toml")).then(
-          () => join(extracted, "harbor-task"),
-          () => extracted,
-        );
-        const gateway = gatewayTrial(input, trial.harness, profile.model, child);
-        const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal);
-        await runTrial({
-          store,
-          run,
-          trial,
-          index,
-          taskPath,
-          jobs: join(trialRoot, "jobs"),
-          ...gateway,
-          child: prepared.env,
-          guard: prepared.guard,
-          command,
-          redact,
-          options,
-        });
-      } catch (error) {
-        trial.status = "failed";
-        trial.error = redact(error instanceof Error ? error.message : "Solver failed");
-      }
-      trial.finishedAt = new Date().toISOString();
-      await saveEvaluation(store, run);
-    }
-    run.status = run.trials.some((trial) => trial.status === "failed") ? "failed" : "completed";
+    options.signal?.throwIfAborted();
+    const task = input.tasks.find(
+      (candidate) => candidate.runId === trial.runId && candidate.taskId === trial.taskId,
+    );
+    if (!task) throw new Error("Evaluation task snapshot is missing");
+    const trialRoot = join(root, "trial");
+    await mkdir(trialRoot);
+    const bundle = await store.getByKey(task.bundleKey);
+    if (!bundle) throw new Error("Task bundle is missing");
+    assertEvaluationBundleSize(bundle.byteLength);
+    const archive = join(trialRoot, "task.tar.gz");
+    await writeFile(archive, bundle, { mode: 0o600 });
+    const extracted = join(trialRoot, "task");
+    await mkdir(extracted);
+    await extractRegularArchive(
+      archive,
+      extracted,
+      options.signal ? { signal: options.signal } : {},
+    );
+    const taskPath = await readFile(join(extracted, "harbor-task", "task.toml")).then(
+      () => join(extracted, "harbor-task"),
+      () => extracted,
+    );
+    const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
+    const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal);
+    await runTrial({
+      store,
+      run,
+      trial,
+      index,
+      save,
+      taskPath,
+      jobs: join(trialRoot, "jobs"),
+      ...gateway,
+      child: prepared.env,
+      guard: prepared.guard,
+      command,
+      redact,
+      options,
+    });
   } catch (error) {
-    run.status = "failed";
-    run.error = redact(error instanceof Error ? error.message : "Evaluation failed");
+    trial.status = "failed";
+    trial.error = redact(error instanceof Error ? error.message : "Solver failed");
   } finally {
-    for (const trial of run.trials) {
-      if (trial.status === "queued" || trial.status === "running") {
-        trial.status = "failed";
-        trial.error = "Not completed because the evaluation stopped";
-      }
-    }
-    run.finishedAt = new Date().toISOString();
+    trial.finishedAt = new Date().toISOString();
     try {
-      await saveEvaluation(store, run);
+      await save();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   }
+  options.signal?.throwIfAborted();
 }
+
 async function runTrial(context: {
   store: ArtifactStore;
   run: EvaluationRun;
   trial: EvaluationTrial;
   index: number;
+  save: () => Promise<void>;
   taskPath: string;
   jobs: string;
   guard: HarborOutputGuard;
@@ -180,13 +187,14 @@ async function runTrial(context: {
   redact: (text: string) => string;
   options: RunnerOptions;
 }): Promise<void> {
-  const { store, run, trial, index, taskPath, jobs, model, child, command, redact, options } =
+  const { store, run, trial, index, save, taskPath, jobs, model, child, command, redact, options } =
     context;
   let stdout = "";
   let outputs = new Map<string, string>();
   let polling = Promise.resolve();
   let refreshing = false;
   let lastSnapshot = "";
+  let lastSave = 0;
   const refresh = async (archive: boolean) => {
     const files = await collectOutput(jobs);
     const clean = new Map(
@@ -235,10 +243,13 @@ async function runTrial(context: {
       if (Object.keys(trial.rewards).length === 0)
         throw new Error("Harbor returned no verifier scores");
     }
+    // Parallel trials share one record, so live output is saved at most every progressMs.
+    if (!archive && Date.now() - lastSave < (options.progressMs ?? 10_000)) return;
     const snapshot = JSON.stringify(trial);
     if (snapshot !== lastSnapshot) {
-      await saveEvaluation(store, run);
+      await save();
       lastSnapshot = snapshot;
+      lastSave = Date.now();
     }
   };
   const timer = setInterval(() => {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
+import { executeEvaluation } from "../src/evaluation/lifecycle.js";
 import {
   collectOutput,
   completeLines,
@@ -13,7 +14,6 @@ import {
 } from "../src/evaluation/output.js";
 import {
   assertEvaluationBundleSize,
-  executeEvaluation,
   MAX_EVALUATION_BUNDLE_BYTES,
   solverArguments,
 } from "../src/evaluation/runner.js";
@@ -155,7 +155,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     await writeFile(join(trial, "config.json"), '{"secret":"never-export-this"}');
     return { stdout: "", stderr: "", exitCode: 0 };
   };
-  await executeEvaluation(store, input, { env: {}, vault, command, pollMs: 5 });
+  await executeEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
   const run = await getEvaluation(store, input.repoId, input.id);
   expect(sawLive).toBe(true);
   expect(run?.status).toBe("completed");
@@ -195,7 +195,7 @@ test("missing credentials and incompatible Harbor fail before a model command", 
     });
     const run = await getEvaluation(store, input.repoId, input.id);
     expect(run?.status).toBe("failed");
-    expect(run?.error).toContain(error);
+    expect(run?.trials[0]?.error).toContain(error);
     expect(calls).toBe(0);
   }
 });
