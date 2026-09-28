@@ -26,8 +26,8 @@ adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
 async def check():
     command, options = await adapter.SelfBenchCodex().exec_as_agent(None, 'printf %s "$NVM_DIR"', timeout_sec=30)
-    output = subprocess.check_output(["bash", "-c", command], env={**os.environ, "HOME": "/home/test-agent", "NVM_DIR": "/usr/local/share/nvm"}, text=True)
-    assert output == "/home/test-agent/.nvm"
+    output = subprocess.check_output(["bash", "-c", command], env={**os.environ, "HOME": "/root", "NVM_DIR": "/usr/local/share/nvm"}, text=True)
+    assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
     gateway = adapter.GatewayCodex()
     gateway.model_name = "openai/anthropic/claude-sonnet-5"

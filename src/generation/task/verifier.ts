@@ -56,7 +56,18 @@ protect_held_out_path() {
 app_git() { git -c safe.directory=/app -C /app "$@"; }
 is_base_file() { [ "$(app_git cat-file -t "HEAD:$1" 2>/dev/null)" = blob ]; }
 
+# The agent runs as root beside its baseline, so the baseline must be exactly the post-setup commit
+# over this image's HEAD, the snapshot the agent cannot touch.
+agent_base_matches() {
+  local trees
+  trees="$(cat /opt/selfbench/agent-base 2>/dev/null)" || return 1
+  [ "$(printf '%s\\n' "$trees" | wc -l)" -eq 2 ] \\
+    && [ "$(printf '%s\\n' "$trees" | tail -n 1)" = "$(app_git rev-parse --verify 'HEAD^{tree}')" ]
+}
 if [ ! -f /opt/selfbench/agent.patch ]; then
+  patch_applied=0
+elif ! agent_base_matches; then
+  echo "agent.patch was not diffed against the task's snapshot; refusing to apply it" >&2
   patch_applied=0
 elif [ -s /opt/selfbench/agent.patch ]; then
   app_git apply --binary --whitespace=nowarn ${exclusions} /opt/selfbench/agent.patch || patch_applied=0

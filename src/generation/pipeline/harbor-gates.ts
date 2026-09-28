@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
@@ -28,19 +28,10 @@ import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
 
-const NOP_REWARD_KEYS = [
-  "structured_results",
-  "patch_applied",
-  "fail_to_pass",
-  "pass_to_pass",
-  "deterministic",
-  "setup_completed",
-  "fail_to_pass_exit_code",
-  "fail_to_pass_repeat_exit_code",
-  "pass_to_pass_exit_code",
-] as const;
-const SMOKE_MARKER = "--- selfbench smoke ---";
-const NOP_MARKER = "--- selfbench nop ---";
+/** Runs smoke.sh inside the agent phase; see runtime/harbor_smoke.py. */
+const SMOKE_AGENT = "harbor_smoke:SmokeAgent";
+/** Exceptions that mean smoke itself failed or hung, not the image build. */
+const SMOKE_FAILURES = new Set(["SmokeCheckFailed", "AgentTimeoutError"]);
 
 export function notRunGates(): HarborGates {
   const gate = { ran: false, ok: false, logTail: "" };
@@ -53,9 +44,10 @@ export function notRunGates(): HarborGates {
 }
 
 /**
- * Two Harbor runs over the compiled task. The first swaps the verifier script for one that runs
- * smoke and then the real nop split (building both images on the way); the second is the oracle.
- * Harbor or provider outages throw so Temporal retries them instead of charging the author.
+ * Two Harbor runs over the compiled task. The first builds both images, runs smoke as the agent
+ * (agent image, [agent] user, agent network allowlist), and then the real nop split; the second is
+ * the oracle. Harbor or provider outages throw so Temporal retries them instead of charging the
+ * author.
  */
 export async function runHarborGates(
   store: ArtifactStore,
@@ -82,7 +74,6 @@ export async function runHarborGates(
     });
     const gates = notRunGates();
 
-    await writeFile(join(directory, "tests/test.sh"), smokeAndNopScript(), { mode: 0o755 });
     const live = (run: HarborLiveRun) => ({ store, prefix, run });
     const first = await harborRun(
       directory,
@@ -94,8 +85,9 @@ export async function runHarborGates(
       live("nop"),
     );
     await storeResult(store, `${gateOutputs}/smoke-nop`, first);
+    const smoke = smokeResult(first.trial);
     const buildError = trialError(first.trial);
-    if (buildError) {
+    if (buildError && !smoke.failed) {
       gates.build = {
         ran: true,
         ok: false,
@@ -104,30 +96,22 @@ export async function runHarborGates(
       };
       return gates;
     }
-    const firstRewards = rewards(first.trial);
-    const output = verifierOutput(first);
     gates.build = { ran: true, ok: true, infrastructure: false, logTail: "" };
-    const smokeOk = firstRewards.smoke_exit_code === 0;
     gates.smoke = {
       ran: true,
-      ok: smokeOk,
-      ...(await log("smoke.log", section(output, SMOKE_MARKER, NOP_MARKER))),
+      ok: !smoke.failed,
+      ...(await log("smoke.log", smokeLog(smoke, buildError))),
     };
-    if (!smokeOk) return gates;
-    const nopRewards: HarborRewards = {};
-    for (const key of NOP_REWARD_KEYS) {
-      const value = firstRewards[`nop_${key}`];
-      if (typeof value === "number") nopRewards[key] = value;
-    }
+    if (smoke.failed) return gates;
+    const nopRewards = numericRewards(rewards(first.trial));
     gates.nop = {
       ran: true,
       ok: nopGatePassed(nopRewards),
       rewards: nopRewards,
-      ...(await log("nop.log", section(output, NOP_MARKER))),
+      ...(await log("nop.log", verifierOutput(first))),
     };
     if (!gates.nop.ok) return gates;
 
-    await copyFile(join(directory, "tests/task-test.sh"), join(directory, "tests/test.sh"));
     const oracle = await harborRun(
       directory,
       root,
@@ -160,14 +144,15 @@ export async function harborRun(
   taskDirectory: string,
   root: string,
   taskId: string,
-  agent: "nop" | "oracle",
+  run: HarborLiveRun,
   environment: SelfBenchConfig["harborEnvironment"],
   signal: AbortSignal,
   /** Where to publish progress snapshots while the run is in flight. */
   live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
-  const jobName = `${taskId}-${agent}-${crypto.randomUUID().slice(0, 8)}`;
+  const agent = run === "nop" ? SMOKE_AGENT : "oracle";
+  const jobName = `${taskId}-${run}-${crypto.randomUUID().slice(0, 8)}`;
   const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
   const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
   assertHarborVersion(version.stdout);
@@ -196,13 +181,13 @@ export async function harborRun(
       ...(feed ? { onOutput: feed.push } : {}),
     },
   );
-  const run = await harbor.guard
+  const exited = await harbor.guard
     .watch(trial)
     .catch(refuseWithoutRetry)
     .finally(() => feed?.close());
-  if (run.exitCode !== 0) {
+  if (exited.exitCode !== 0) {
     throw new Error(
-      `Harbor ${agent} exited ${run.exitCode} for ${taskId}:\n${tail(`${run.stdout}\n${run.stderr}`.trim())}`,
+      `Harbor ${run} exited ${exited.exitCode} for ${taskId}:\n${tail(`${exited.stdout}\n${exited.stderr}`.trim())}`,
     );
   }
   const result = await readHarborJobResult(jobsDirectory, jobName).catch(refuseWithoutRetry);
@@ -212,7 +197,7 @@ export async function harborRun(
   const buildLog = await authoredImageBuildFailure(infrastructure, env, signal);
   if (buildLog)
     return { ...result, trialLog: [result.trialLog, buildLog].filter(Boolean).join("\n\n") };
-  throw new Error(`Harbor ${agent} infrastructure failure for ${taskId}: ${infrastructure}`);
+  throw new Error(`Harbor ${run} infrastructure failure for ${taskId}: ${infrastructure}`);
 }
 
 async function storeResult(
@@ -257,43 +242,39 @@ function numericRewards(raw: Record<string, unknown>): HarborRewards {
   );
 }
 
-function section(output: string, start: string, end?: string): string {
-  const from = output.indexOf(start);
-  if (from < 0) return output;
-  const body = output.slice(from + start.length);
-  const to = end ? body.indexOf(end) : -1;
-  return (to >= 0 ? body.slice(0, to) : body).trim();
+interface SmokeResult {
+  readonly failed: boolean;
+  readonly exitCode?: number;
+  readonly output: string;
 }
 
-/** Verifier script for the first run: smoke, then the nop split with rewards under `nop_*`. */
-function smokeAndNopScript(): string {
-  const fields = NOP_REWARD_KEYS.map(
-    (key) => `printf ', "nop_${key}": %s' "$(field ${key} ${key.endsWith("_code") ? "-1" : "0"})"`,
-  ).join("\n");
-  return `#!/bin/bash
-set -uo pipefail
-mkdir -p /logs/verifier
-# Image post-processing (Modal runs as root with HOME=/home/verifier) can leave root-owned files
-# in the verifier's caches; the runtime user must own its home before it runs.
-chown -R verifier:verifier /home/verifier 2>/dev/null || true
-echo '${SMOKE_MARKER}'
-smoke_status=0
-runuser -u verifier --preserve-environment -- env -u XDG_CACHE_HOME HOME=/home/verifier /opt/selfbench-environment/smoke.sh 2>&1 || smoke_status=$?
-echo "smoke exit code: $smoke_status"
-nop_ran=0
-nop_rewards='{}'
-if [ "$smoke_status" -eq 0 ]; then
-  echo '${NOP_MARKER}'
-  nop_ran=1
-  /tests/task-test.sh 2>&1 || true
-  nop_rewards="$(cat /logs/verifier/reward.json 2>/dev/null || printf '{}')"
-fi
-field() { printf '%s' "$nop_rewards" | sed -n 's/.*"'"$1"'": *\\(-\\{0,1\\}[0-9]\\{1,\\}\\).*/\\1/p' | head -n 1 | grep . || printf '%s' "$2"; }
-{
-  printf '{"reward": 0, "smoke_exit_code": %s, "nop_ran": %s' "$smoke_status" "$nop_ran"
-${fields}
-  printf '}\\n'
-} > /logs/verifier/reward.json
-exit 0
-`;
+function smokeResult(trial: unknown): SmokeResult {
+  const agent = isRecord(trial) ? trial.agent_result : undefined;
+  const metadata = isRecord(agent) && isRecord(agent.metadata) ? agent.metadata : {};
+  const output = typeof metadata.smoke_output === "string" ? metadata.smoke_output : "";
+  const exitCode =
+    typeof metadata.smoke_exit_code === "number" ? metadata.smoke_exit_code : undefined;
+  const info = isRecord(trial) ? trial.exception_info : undefined;
+  const raised = isRecord(info) && SMOKE_FAILURES.has(String(info.exception_type));
+  // SmokeAgent raises on a non-zero exit, so a trial without one got past smoke (or never built).
+  return {
+    failed: raised || (exitCode ?? 0) !== 0,
+    output,
+    ...(exitCode === undefined ? {} : { exitCode }),
+  };
+}
+
+function smokeLog(smoke: SmokeResult, error: string | undefined): string {
+  if (!smoke.failed) return smoke.output;
+  const status =
+    smoke.exitCode === undefined
+      ? `The smoke command did not finish in the agent environment${error ? ` (${error})` : ""}.`
+      : `The smoke command exited ${smoke.exitCode} in the agent environment.`;
+  return [
+    status,
+    "It ran exactly as the solver agent will: in the agent image, as root, with network limited to the model provider. Anything the agent needs (package managers, toolchains, Corepack shims, browsers) must be installed and cached by setupCommand, not downloaded on first use.",
+    smoke.output,
+  ]
+    .filter((part) => part.trim())
+    .join("\n\n");
 }

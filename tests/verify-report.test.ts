@@ -113,7 +113,9 @@ describe("verify report", () => {
     expect(rendered).toContain(
       "## 3. Image build\nResult: failed.\n\n```text\nE: Unable to locate package foo\n```",
     );
-    expect(rendered).toContain("## 4. Smoke command (verifier image, runtime user)\nNot run");
+    expect(rendered).toContain(
+      "## 4. Smoke command (agent image, user, and network allowlist)\nNot run",
+    );
     const withLog = renderVerifyReport({
       ...greenReport,
       smoke: {
@@ -137,7 +139,7 @@ describe("verify report", () => {
     expect(green).toContain("| fail_to_pass | 0 |");
     expect(green).toContain("| deterministic | 1 |");
     expect(green).toContain(
-      "## 4. Smoke command (verifier image, runtime user)\nOK.\n\n```text\nnode v22.0.0\n```",
+      "## 4. Smoke command (agent image, user, and network allowlist)\nOK.\n\n```text\nnode v22.0.0\n```",
     );
   });
 });
