@@ -61,8 +61,8 @@ export function HomePage() {
 
   // Back to where the visitor left this page, before the first frame is drawn: to the card
   // they opened, placed where it was on screen, or else the same scroll offset. This entry's
-  // own view comes first; a fresh return from a repository page (the SELF-BENCH link) instead
-  // names the home entry the trip started from.
+  // own view comes first; a fresh return from a repository page via the logo instead names
+  // the home entry the trip started from.
   const restoreFrom = (location.state as { restoreFrom?: string } | null)?.restoreFrom;
   const restored = useRef<string>(undefined);
   // Typing a search replaces the entry, which gives it a new key; that is not an arrival.

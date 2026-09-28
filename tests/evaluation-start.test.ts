@@ -13,7 +13,7 @@ test("solver runs use the evaluation queue, falling back to the default and neve
     const client = { workflow: { start } } as unknown as Client;
     const input = evaluationInput();
     await evaluationStarter(client, "default", env)(input);
-    expect(start).toHaveBeenLastCalledWith("selfBenchEvaluationWorkflow", {
+    expect(start).toHaveBeenLastCalledWith("selfBenchParallelEvaluationWorkflow", {
       workflowId: `evaluation/${input.repoId}/${input.id}`,
       taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? "default",
       args: [input],

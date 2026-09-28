@@ -37,15 +37,21 @@ export class LocalArtifactStore implements ArtifactStore {
     const path = this.#pathFor(key);
     await this.#prepareParent(path);
     const digest = sha256(value);
+    // Written aside and linked into place, so a concurrent reader never sees a partial object.
+    const temporaryPath = `${path}.${randomUUID()}.tmp`;
     try {
-      await writeFile(path, value, { flag: "wx", mode: 0o600 });
+      await writeFile(temporaryPath, value, { flag: "wx", mode: 0o600 });
+      await link(temporaryPath, path);
     } catch (error) {
+      if (!hasCode(error, "EEXIST")) throw error;
       await this.#assertRegularFile(path);
       const existing = await fileDigest(path).catch(() => undefined);
       if (!existing || existing.sha256 !== digest || existing.sizeBytes !== value.byteLength) {
         throw error;
       }
       await chmod(path, 0o600);
+    } finally {
+      await rm(temporaryPath, { force: true });
     }
     return {
       uri: pathToFileURL(path).href,
@@ -170,7 +176,12 @@ export class LocalArtifactStore implements ArtifactStore {
         if (entry.isDirectory()) {
           await visit(path, key);
         } else if (entry.isFile()) {
-          const stats = await stat(path);
+          // A concurrent put's staging file can be gone by the time it is inspected.
+          const stats = await stat(path).catch((error: unknown) => {
+            if (isNotFound(error)) return undefined;
+            throw error;
+          });
+          if (!stats) continue;
           entries.push({ key, sizeBytes: stats.size, updatedAt: stats.mtime.toISOString() });
         }
       }

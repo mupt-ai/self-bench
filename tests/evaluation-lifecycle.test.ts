@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createEvaluationActivities } from "../src/evaluation/activities.js";
-import { executeEvaluation } from "../src/evaluation/runner.js";
+import { executeEvaluation } from "../src/evaluation/lifecycle.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";

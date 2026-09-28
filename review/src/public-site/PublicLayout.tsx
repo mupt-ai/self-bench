@@ -1,5 +1,6 @@
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { Lockup } from "../web/Lockup";
 import { OutLink } from "./components/OutLink";
 import { CursorAura } from "./effects/CursorAura";
 import { notePath } from "./effects/history-transitions";
@@ -53,7 +54,7 @@ export function PublicLayout() {
     previousKey.current = location.key;
   }, [location.key, location.pathname]);
 
-  // From a repository page, SELF-BENCH plays the return. If the visitor came from the home
+  // From a repository page, the logo plays the return. If the visitor came from the home
   // page on this trip, it goes back to that home view (search and scroll); otherwise to the top.
   const goHome = (event: React.MouseEvent) => {
     const repository = repositoryOf(location.pathname);
@@ -106,14 +107,7 @@ export function PublicLayout() {
         className="fixed inset-x-0 top-0 z-[7] h-(--bar-top) border-b border-border"
       >
         <div className={`${EDGE_FRAME} flex h-full items-center justify-between gap-4`}>
-          <Link
-            to="/"
-            onClick={goHome}
-            aria-label="SELF-BENCH Home"
-            className="hit relative font-mono text-xl font-bold tracking-wider compact:text-lg"
-          >
-            SELF-BENCH
-          </Link>
+          <Lockup className="hit relative" onClick={goHome} />
           <nav aria-label="Site" className="flex items-center gap-3 text-sm compact:gap-2">
             {StyleLab && (
               <Suspense fallback={null}>

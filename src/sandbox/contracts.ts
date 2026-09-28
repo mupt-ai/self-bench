@@ -53,8 +53,27 @@ export interface SandboxCostSnapshot {
   readonly updatedAt: string;
 }
 
+/** A declared output's digest, computed in the sandbox. */
+export interface SandboxFileDigest {
+  readonly sha256: string;
+  readonly sizeBytes: number;
+}
+
+/** Where the sandbox PUTs an output itself; undefined reads it back into this process instead. */
+export type SandboxUploadTarget = (
+  file: SandboxFileDigest,
+) => Promise<
+  { readonly url: string; readonly headers: Readonly<Record<string, string>> } | undefined
+>;
+
 export interface SandboxRunOptions {
   readonly signal?: AbortSignal;
+  /**
+   * Declared outputs the sandbox uploads after exit 0, keyed by path, so large archives never
+   * pass through this process. They are never read back after a failure. An object that already
+   * exists counts as uploaded, so the caller checks the stored digest.
+   */
+  readonly uploads?: Readonly<Record<string, SandboxUploadTarget>>;
 }
 
 export interface SandboxResult {
@@ -63,6 +82,8 @@ export interface SandboxResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly outputs: Readonly<Record<string, Uint8Array>>;
+  /** Outputs the sandbox uploaded itself instead of returning. */
+  readonly uploaded?: Readonly<Record<string, SandboxFileDigest>>;
 }
 
 export class SandboxExecutionError extends Error {

@@ -9,7 +9,7 @@ export function evaluationStarter(
 ) {
   return async (input: EvaluationInput): Promise<void> => {
     try {
-      await client.workflow.start("selfBenchEvaluationWorkflow", {
+      await client.workflow.start("selfBenchParallelEvaluationWorkflow", {
         workflowId: `evaluation/${input.repoId}/${input.id}`,
         taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
         args: [input],
