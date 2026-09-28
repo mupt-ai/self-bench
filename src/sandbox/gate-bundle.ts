@@ -5,6 +5,9 @@ import { runCommand } from "../lib/process.js";
 const ENVIRONMENT_SNAPSHOT = "harbor-task/environment/repo.tar.gz";
 const TESTS_SNAPSHOT = "harbor-task/tests/repo.tar.gz";
 
+/** Where the compiled bundle keeps its two copies of the repository snapshot. */
+export const SNAPSHOT_PATHS = [ENVIRONMENT_SNAPSHOT, TESTS_SNAPSHOT] as const;
+
 /** What a remote Harbor check needs, written next to the compiled bundle. */
 export const GATE_TASK_FILE = "gate-task.tar.gz";
 export const SNAPSHOT_FILE = "repo.tar.gz";

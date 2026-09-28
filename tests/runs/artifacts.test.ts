@@ -161,6 +161,46 @@ describe("harbor task directories and bundles", () => {
     await expect(expandBundle(store, "runs/run-2/missing.tar.gz")).rejects.toThrow("not found");
   });
 
+  test("reads a compiled bundle from its gate task without streaming the snapshots", async () => {
+    const root = await temporaryRoot();
+    const directory = "runs/run-5/verify/cand-c/r1/compile/attempt-1";
+    const key = `${directory}/harbor-task.tar.gz`;
+    const store = await storeBundle(root, key, true);
+    const full = join(root, "source");
+    await writeFile(join(full, "harbor-task/tests/repo.tar.gz"), Buffer.from([0x1f, 0x8b, 0, 0]));
+    const gate = join(root, "gate.tar.gz");
+    await runCommand("tar", [
+      "-czf",
+      gate,
+      "--exclude=harbor-task/environment/repo.tar.gz",
+      "--exclude=harbor-task/tests/repo.tar.gz",
+      "-C",
+      full,
+      "harbor-task",
+    ]);
+    await store.putFile(`${directory}/gate-task.tar.gz`, gate, "application/gzip");
+    await store.put(`${directory}/repo.tar.gz`, Buffer.alloc(4096), "application/gzip");
+    const opened: string[] = [];
+    const openReadByKey = store.openReadByKey.bind(store);
+    store.openReadByKey = (openedKey, ...rest) => {
+      opened.push(openedKey);
+      return openReadByKey(openedKey, ...rest);
+    };
+
+    const bundle = await expandBundle(store, key);
+    expect(opened).toEqual([`${directory}/gate-task.tar.gz`]);
+    expect(bundle.taskId).toBe("cand-c");
+    expect(bundle.files.map((file) => [file.path, file.text === undefined])).toEqual([
+      ["environment/Dockerfile", false],
+      ["environment/repo.tar.gz", true],
+      ["instruction.md", false],
+      ["task.toml", false],
+      ["tests/repo.tar.gz", true],
+      ["tests/test.patch", false],
+    ]);
+    expect(bundle.files.find((file) => file.path === "tests/repo.tar.gz")?.sizeBytes).toBe(4096);
+  });
+
   test("serves a re-read bundle from memory", async () => {
     const root = await temporaryRoot();
     const key = "runs/run-4/authoring/cand-b/source-task.tar.gz";

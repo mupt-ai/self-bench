@@ -3,6 +3,7 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { extract } from "tar-stream";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { GATE_TASK_FILE, SNAPSHOT_FILE, SNAPSHOT_PATHS } from "../../sandbox/gate-bundle.js";
 import { type BundleFile, isInlineCandidate, taskFilesFromBundle } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
 
@@ -15,9 +16,11 @@ const expanded = new Map<string, { files: TaskFiles; bytes: number }>();
 let expandedBytes = 0;
 
 /**
- * Viewer files for the bundle at `key`. Expanding means streaming and gunzipping the whole
- * archive, repository snapshot included, so results are kept in memory by content digest:
- * a task page that re-reads the same bundle costs one metadata lookup instead of a full pass.
+ * Viewer files for the bundle at `key`. A compiled bundle is read from the gate task the compiler
+ * wrote beside it, which is the same tree without its repository snapshots, so opening a task
+ * streams kilobytes instead of the hundreds of MB the snapshots weigh. Other bundles are streamed
+ * whole. Results are kept in memory by content digest: a task page that re-reads the same bundle
+ * costs one metadata lookup instead of a full pass.
  */
 export async function expandBundle(store: ArtifactStore, key: string): Promise<TaskFiles> {
   const object = await store.stat(key);
@@ -57,16 +60,48 @@ function remember(identity: string, files: TaskFiles): void {
   }
 }
 
-/**
- * Streams the bundle straight from the artifact store and keeps only the small text files the
- * viewer shows. Nothing touches disk: the repository snapshots (hundreds of MB) are skipped as
- * they stream past, where a persistent unpacked cache once filled the API's boot disk.
- */
 async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
-  const body = await store.openReadByKey(key);
-  if (!body) {
-    throw new BundleNotFoundError(key);
+  const light = await withoutSnapshots(store, key);
+  if (light) {
+    const files = await readArchive(store, light.key);
+    if (files) return taskFilesFromBundle([...files, ...light.snapshots], taskIdFromKey(key));
   }
+  const files = await readArchive(store, key);
+  if (!files) throw new BundleNotFoundError(key);
+  return taskFilesFromBundle(files, taskIdFromKey(key));
+}
+
+/**
+ * The gate task beside a compiled bundle, with the snapshot entries it leaves out listed by size.
+ * Tasks with services, and bundles compiled before the split existed, have no gate task.
+ */
+async function withoutSnapshots(
+  store: ArtifactStore,
+  key: string,
+): Promise<{ key: string; snapshots: BundleFile[] } | undefined> {
+  const suffix = "/harbor-task.tar.gz";
+  if (!key.endsWith(suffix)) return undefined;
+  const directory = key.slice(0, -suffix.length);
+  // Optional: any trouble finding the split files only means reading the full bundle.
+  const [gate, snapshot] = await Promise.all([
+    store.stat(`${directory}/${GATE_TASK_FILE}`).catch(() => undefined),
+    store.stat(`${directory}/${SNAPSHOT_FILE}`).catch(() => undefined),
+  ]);
+  if (!gate || !snapshot) return undefined;
+  return {
+    key: `${directory}/${GATE_TASK_FILE}`,
+    snapshots: SNAPSHOT_PATHS.map((path) => ({ path, sizeBytes: snapshot.sizeBytes })),
+  };
+}
+
+/**
+ * Streams an archive straight from the artifact store and keeps only the small text files the
+ * viewer shows; undefined when there is no object at `key`. Nothing touches disk: large entries
+ * are skipped as they stream past, where a persistent unpacked cache once filled the API's disk.
+ */
+async function readArchive(store: ArtifactStore, key: string): Promise<BundleFile[] | undefined> {
+  const body = await store.openReadByKey(key);
+  if (!body) return undefined;
   const archive = extract();
   const streaming = pipeline(body, createGunzip(), archive);
   // A stream failure also ends the loop below; it is rethrown by the final await.
@@ -95,7 +130,7 @@ async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
     files.push({ path, sizeBytes: size, bytes: Buffer.concat(chunks) });
   }
   await streaming;
-  return taskFilesFromBundle(files, taskIdFromKey(key));
+  return files;
 }
 
 function bundlePath(name: string): string {

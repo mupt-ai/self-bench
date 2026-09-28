@@ -4,7 +4,7 @@ import { SearchInput, Select } from "../ui";
 import { STATE_LABEL } from "./state";
 
 export type Filter = "all" | TaskState;
-const FILTERS: Filter[] = [
+export const FILTERS: Filter[] = [
   "all",
   "in_progress",
   "needs_review",

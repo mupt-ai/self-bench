@@ -1,8 +1,9 @@
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
 import { cn } from "../primitives/cn";
+import { queueState, taskPath } from "../task/review-queue";
 import { DifficultyStamp } from "../task/state";
 import { taskTitle } from "../task/task-title";
 import { Button, EmptyState, SectionHeader } from "../ui";
@@ -40,6 +41,12 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
     (a, b) => order.indexOf(taskActivity(status, a)) - order.indexOf(taskActivity(status, b)),
   );
   const visible = tasks.filter((task) => filter === "all" || taskActivity(status, task) === filter);
+  const location = useLocation();
+  const linkState = queueState(
+    visible.map((task) => ({ runId: status.runId, taskId: task.taskId })),
+    location.pathname,
+    "Batch",
+  );
   return (
     <section className="mt-6">
       <SectionHeader title="Tasks">
@@ -90,7 +97,8 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
               return (
                 <li key={task.candidateId}>
                   <Link
-                    to={`/repos/${fullName}/tasks/${encodeURIComponent(status.runId)}/${encodeURIComponent(task.taskId)}`}
+                    to={taskPath(fullName, { runId: status.runId, taskId: task.taskId })}
+                    state={linkState}
                     className="grid items-center gap-3 px-4 py-3.5 hover:bg-muted/60 lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
                   >
                     <span className="min-w-0">
