@@ -17,7 +17,8 @@ function render(path: string): string {
 
 test("the frame names the site, links sign-in to the app, and marks outgoing links", () => {
   const html = render("/");
-  expect(html).toContain(">SELF-BENCH<");
+  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
+  expect(html).toContain("by dari.dev</span>");
   expect(html).toContain('target="_blank"');
   expect(html).toContain('href="https://app.selfbench.dev"');
   expect(html).toContain(">Sign In<");
@@ -37,7 +38,7 @@ test("repository URLs mirror GitHub, dotted names included", () => {
 test("unknown paths render the frame and nothing else while the client redirects home", () => {
   // <Navigate> only acts in the browser, so a static render shows the empty frame.
   const html = render("/nothing/here/at/all");
-  expect(html).toContain(">SELF-BENCH<");
+  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
   expect(html).not.toContain("Results appear here");
   expect(html).not.toContain("<h1");
 });

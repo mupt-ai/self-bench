@@ -5,6 +5,7 @@ import { WaterBackground } from "../../public-site/effects/WaterBackground";
 import { EDGE_FRAME, PANEL, RULER_WIDTH } from "../../public-site/frame";
 import { SettingsMenu } from "../../public-site/SettingsMenu";
 import { ThemeToggle } from "../../public-site/ThemeToggle";
+import { Lockup } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
 import { buttonStyles, Notice } from "../ui";
 
@@ -40,13 +41,7 @@ export function LoginPage() {
       />
       <header className="shrink-0 border-b border-border">
         <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
-          <a
-            href={PUBLIC_SITE_URL}
-            aria-label="SELF-BENCH Home"
-            className="font-mono text-xl font-bold tracking-wider"
-          >
-            SELF-BENCH
-          </a>
+          <Lockup href={PUBLIC_SITE_URL} />
           {/* As on selfbench.dev: 32px icon buttons 4px apart, the last glyph on the frame edge. */}
           <span className="-mr-2 flex items-center gap-1">
             <ThemeToggle />

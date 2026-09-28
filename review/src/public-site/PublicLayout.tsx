@@ -1,5 +1,6 @@
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { Lockup } from "../web/Lockup";
 import { OutLink } from "./components/OutLink";
 import { CursorAura } from "./effects/CursorAura";
 import { notePath } from "./effects/history-transitions";
@@ -106,14 +107,7 @@ export function PublicLayout() {
         className="fixed inset-x-0 top-0 z-[7] h-(--bar-top) border-b border-border"
       >
         <div className={`${EDGE_FRAME} flex h-full items-center justify-between gap-4`}>
-          <Link
-            to="/"
-            onClick={goHome}
-            aria-label="SELF-BENCH Home"
-            className="hit relative font-mono text-xl font-bold tracking-wider compact:text-lg"
-          >
-            SELF-BENCH
-          </Link>
+          <Lockup className="hit relative" onClick={goHome} />
           <nav aria-label="Site" className="flex items-center gap-3 text-sm compact:gap-2">
             {StyleLab && (
               <Suspense fallback={null}>

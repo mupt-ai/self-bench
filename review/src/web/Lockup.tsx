@@ -22,22 +22,22 @@ export function Lockup({
   compact = false,
   showName = true,
   className,
+  href,
+  onClick,
 }: {
   compact?: boolean;
   showName?: boolean;
   className?: string;
+  href?: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
-  return (
-    <Link
-      className={cn("inline-flex min-w-0 items-center gap-2.5 text-foreground", className)}
-      to="/"
-      aria-label="self-bench by dari.dev Home"
-    >
+  const content = (
+    <>
       <span
         className={
           compact
             ? "inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-foreground/30 text-foreground [&>svg]:size-5"
-            : "size-9 shrink-0 text-foreground"
+            : "size-9 shrink-0 translate-y-1 text-foreground"
         }
       >
         <DariMark />
@@ -55,6 +55,26 @@ export function Lockup({
           <span className="font-mono text-xs leading-none text-muted-foreground">by dari.dev</span>
         </span>
       )}
+    </>
+  );
+  const classNames = cn("inline-flex min-w-0 items-center gap-2.5 text-foreground", className);
+
+  if (href) {
+    return (
+      <a
+        className={classNames}
+        href={href}
+        aria-label="self-bench by dari.dev Home"
+        onClick={onClick}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link className={classNames} to="/" aria-label="self-bench by dari.dev Home" onClick={onClick}>
+      {content}
     </Link>
   );
 }

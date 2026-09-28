@@ -33,6 +33,10 @@ test("GitHub sign-in shows progress, blocks repeat clicks, and resets on return"
     if (!(link instanceof browser.HTMLAnchorElement))
       throw new Error("Missing GitHub sign-in link");
     expect(container.querySelector("h1")?.textContent).toBe("Sign In");
+    const lockup = container.querySelector('a[href="https://selfbench.dev"]');
+    expect(lockup?.getAttribute("aria-label")).toBe("self-bench by dari.dev Home");
+    expect(lockup?.textContent).toContain("self-bench");
+    expect(lockup?.textContent).toContain("by dari.dev");
     expect(link.textContent).toBe("Continue with GitHub");
     expect(link.getAttribute("aria-busy")).toBe("false");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(
