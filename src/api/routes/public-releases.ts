@@ -81,7 +81,9 @@ export function createPublicReleaseRoutes(
 ) {
   const now = options.now ?? Date.now;
   let reading: { snapshot: Promise<Snapshot>; at: number } | undefined;
-  let lastGood: Snapshot | undefined;
+  /** The newest successful read, by when it started: an older read finishing later never wins. */
+  let lastGood: { snapshot: Snapshot; read: number } | undefined;
+  let reads = 0;
   /**
    * The snapshot, read again when it is older than a few seconds. Concurrent requests share one
    * read. A failed read is never kept: the last good snapshot stands in until the next read is
@@ -89,20 +91,24 @@ export function createPublicReleaseRoutes(
    */
   const snapshot = (): Promise<Snapshot> => {
     if (!reading || now() - reading.at >= SNAPSHOT_MS) {
+      reads += 1;
+      const read = reads;
       const entry = { snapshot: releases.currentLines().then(snapshotOf), at: now() };
       reading = entry;
       entry.snapshot.then(
-        (read) => {
-          lastGood = read;
+        (snapshot) => {
+          if (!lastGood || read > lastGood.read) lastGood = { snapshot, read };
         },
         () => {
           if (reading !== entry) return;
-          reading = lastGood ? { snapshot: Promise.resolve(lastGood), at: entry.at } : undefined;
+          reading = lastGood
+            ? { snapshot: Promise.resolve(lastGood.snapshot), at: entry.at }
+            : undefined;
         },
       );
     }
     return reading.snapshot.catch((error: unknown) => {
-      if (lastGood) return lastGood;
+      if (lastGood) return lastGood.snapshot;
       throw error;
     });
   };

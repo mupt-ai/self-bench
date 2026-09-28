@@ -236,6 +236,33 @@ test("a failed read serves the last good snapshot, and is retried once the inter
   expect(reads()).toBe(3);
 });
 
+test("an older read that finishes late never replaces a newer one as the fallback", async () => {
+  const before = [line("vercel/next.js", "acme", "2026-09-10T00:00:00Z")];
+  const after = [...before, line("denoland/deno", "acme", "2026-09-11T00:00:00Z")];
+  let finishOld: (lines: PublishedLine[]) => void = () => {};
+  let calls = 0;
+  const { get, routes, advance } = await serve(() => {
+    calls += 1;
+    if (calls === 1)
+      return new Promise((resolve) => {
+        finishOld = resolve;
+      });
+    if (calls === 2) return Promise.resolve(after);
+    return Promise.reject(new Error("database unavailable"));
+  });
+  // A read from before a release is still in flight when the release asks for a fresh one.
+  const slow = get("/api/public/directory");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  routes.refresh();
+  const cards = async (response: Promise<Response>) => (await (await response).json()).cards.length;
+  expect(await cards(get("/api/public/directory"))).toBe(2);
+  finishOld(before);
+  expect(await cards(slow)).toBe(1);
+  // The next read fails: the fallback is the newer snapshot, so the release stays visible.
+  advance(5_000);
+  expect(await cards(get("/api/public/directory"))).toBe(2);
+});
+
 test("paths that are not a public route or a repository are refused, uncached", async () => {
   const { get, reads } = await serve(async () => []);
   for (const path of [
