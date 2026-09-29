@@ -85,14 +85,25 @@ function frontier(settings: readonly ReleaseSetting[]) {
     .sort((left, right) => right.accuracy - left.accuracy);
 }
 
+/**
+ * The chart's cost axis, as log10 of its ends: the settings' costs, padded a little on each side.
+ * $0 costs sit at the axis start. A release with only $0 costs, as sign-in runs record, gets a
+ * short range around $1, so the axis still runs from low to high.
+ */
+export function costRange(
+  settings: readonly Pick<ReleaseSetting, "costPerTaskUsd">[],
+): [number, number] {
+  const costs = settings.map((setting) => setting.costPerTaskUsd).filter((cost) => cost > 0);
+  if (costs.length === 0) return [Math.log10(1 / 1.3), Math.log10(1.3)];
+  return [Math.log10(Math.min(...costs) / 1.3), Math.log10(Math.max(...costs) * 1.3)];
+}
+
 /** Accuracy against cost on a log axis, frontier filled and joined, the rest as rings. */
 function chart(
   settings: readonly ReleaseSetting[],
   box: { x: number; y: number; w: number; h: number },
 ) {
-  const costs = settings.map((setting) => setting.costPerTaskUsd).filter((cost) => cost > 0);
-  const low = Math.log10(Math.min(...costs, 1) / 1.3);
-  const high = Math.log10(Math.max(...costs, 0.01) * 1.3);
+  const [low, high] = costRange(settings);
   const floor = Math.max(
     0,
     Math.floor((Math.min(100, ...settings.map((s) => s.accuracy)) - 5) / 10) * 10,
