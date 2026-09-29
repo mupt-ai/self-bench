@@ -81,9 +81,7 @@ const SCRIPT_LABELS: [string, string][] = [
   ["environment/smoke.sh", "Smoke (Agent Image)"],
   ["tests/root-setup.sh", "Root Setup (Verifier Image)"],
   ["tests/setup.sh", "Setup (Verifier Image)"],
-  ["tests/smoke.sh", "Smoke (Verifier Image)"],
   ["tests/test.sh", "Verifier test.sh"],
-  ["tests/task-test.sh", "Verifier task-test.sh"],
   ["solution/solve.sh", "Oracle solve.sh"],
 ];
 

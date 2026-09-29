@@ -84,9 +84,11 @@ export function agentDockerfile(task: TaskDefinition): string {
   // The post-setup tree is committed as the baseline for agent.patch, so files that setup.sh
   // creates and does not gitignore never land in the agent's diff and never collide with the
   // verifier image, which ran the same setup. The agent runs as root with setup's HOME and
-  // caches, exactly as setup left them.
+  // caches, exactly as setup left them. Only this image runs smoke.sh, in the agent phase.
   return `${baseDockerfile(task)}
-RUN git -C /app add -A \\
+COPY smoke.sh /opt/selfbench-environment/
+RUN chmod 755 /opt/selfbench-environment/smoke.sh \\
+    && git -C /app add -A \\
     && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\
     && mkdir -p /opt/selfbench \\
     && cp -a /app/.git /opt/selfbench/base.git
@@ -104,8 +106,8 @@ RUN useradd --create-home --shell /bin/bash verifier \\
 ENV HOME=/home/verifier
 COPY runtime/ /opt/selfbench-runtime/
 RUN chown -R root:root /opt/selfbench-runtime && chmod 755 /opt/selfbench-runtime && chmod 644 /opt/selfbench-runtime/*
-COPY test.patch test.sh task-test.sh /tests/
-RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh /tests/task-test.sh
+COPY test.patch test.sh /tests/
+RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh
 WORKDIR /app
 `;
 }
@@ -127,7 +129,7 @@ RUN /bin/sh /tmp/selfbench-root-setup.sh \\
     && command -v useradd >/dev/null \\
     && rm /tmp/selfbench-root-setup.sh
 ${environmentVariables}
-COPY setup.sh smoke.sh /opt/selfbench-environment/
+COPY setup.sh /opt/selfbench-environment/
 COPY repo.tar.gz /tmp/repo.tar.gz
 RUN mkdir -p /app \\
     && tar -xzf /tmp/repo.tar.gz -C /app \\
@@ -137,7 +139,7 @@ RUN mkdir -p /app \\
     && git -C /app config user.name selfbench \\
     && git -C /app add -A \\
     && git -C /app -c core.hooksPath=/dev/null commit -qm base --no-verify \\
-    && chmod 755 /opt/selfbench-environment/setup.sh /opt/selfbench-environment/smoke.sh \\
+    && chmod 755 /opt/selfbench-environment/setup.sh \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
     && /opt/selfbench-environment/setup.sh`;
 }
@@ -161,7 +163,6 @@ export function environmentContextFiles(directory: string, task: TaskDefinition)
       posixShellScript(task.environment.rootSetupCommand),
     ),
     writeFile(join(directory, "setup.sh"), bashScript(task.environment.setupCommand)),
-    writeFile(join(directory, "smoke.sh"), smokeScript(task)),
   ];
 }
 export function serviceComposeFiles(directory: string, task: TaskDefinition): Promise<void>[] {

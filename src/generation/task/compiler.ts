@@ -11,6 +11,7 @@ import {
   agentDockerfile,
   environmentContextFiles,
   serviceComposeFiles,
+  smokeScript,
   taskToml,
   verifierDockerfile,
 } from "./render.js";
@@ -114,10 +115,10 @@ export async function compileHarborTask(
     ),
     writeFile(join(tests, "test.patch"), task.testPatch),
     writeFile(join(tests, "test.sh"), testScript(task.definition, task.testPatch)),
-    writeFile(join(tests, "task-test.sh"), testScript(task.definition, task.testPatch)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(task.definition)),
     writeFile(join(tests, "Dockerfile"), verifierDockerfile(task.definition, dependencySetupPatch)),
     ...environmentContextFiles(environment, task.definition),
+    writeFile(join(environment, "smoke.sh"), smokeScript(task.definition)),
     ...environmentContextFiles(tests, task.definition),
     ...serviceComposeFiles(tests, task.definition),
     writeFile(join(outputDirectory, "task.toml"), taskToml(task.definition)),
@@ -129,13 +130,11 @@ export async function compileHarborTask(
   await Promise.all([
     chmod(join(solution, "solve.sh"), 0o755),
     chmod(join(tests, "test.sh"), 0o755),
-    chmod(join(tests, "task-test.sh"), 0o755),
     chmod(join(environment, "root-setup.sh"), 0o755),
     chmod(join(environment, "setup.sh"), 0o755),
     chmod(join(environment, "smoke.sh"), 0o755),
     chmod(join(tests, "root-setup.sh"), 0o755),
     chmod(join(tests, "setup.sh"), 0o755),
-    chmod(join(tests, "smoke.sh"), 0o755),
   ]);
   await writeFile(
     join(outputDirectory, ".selfbench-manifest.json"),

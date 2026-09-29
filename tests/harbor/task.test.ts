@@ -118,7 +118,7 @@ describe("Harbor task compiler", () => {
     // agent.patch is diffed against the post-setup snapshot, so non-ignored setup outputs never
     // land in the agent's patch and never collide with the verifier image's own setup.
     expect(agentDockerfile).toContain(
-      "RUN git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
+      "COPY smoke.sh /opt/selfbench-environment/\nRUN chmod 755 /opt/selfbench-environment/smoke.sh \\\n    && git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
     );
     expect(agentDockerfile).not.toContain("reset --hard");
     expect(agentDockerfile).not.toContain("clean -fdq");
@@ -130,7 +130,7 @@ describe("Harbor task compiler", () => {
     expect(verifierDockerfile).toContain("git -C /app reset --hard -q HEAD");
     expect(verifierDockerfile).toContain("git -C /app clean -fdq -- 'project/package.json'");
     expect(verifierDockerfile).not.toMatch(/clean -fdq \\/);
-    expect(verifierDockerfile).toContain("COPY test.patch test.sh task-test.sh /tests/");
+    expect(verifierDockerfile).toContain("COPY test.patch test.sh /tests/");
     const dependencyPatch = await readFile(join(output, "tests/dependency-setup.patch"), "utf8");
     expect(dependencyPatch).toContain('left-pad":"1.1.0');
     expect(dependencyPatch).not.toContain("value.txt");
@@ -156,7 +156,9 @@ describe("Harbor task compiler", () => {
     expect(await readFile(join(output, "environment/setup.sh"), "utf8")).toContain(
       "npm ci --ignore-scripts",
     );
-    expect(await readFile(join(output, "tests/smoke.sh"), "utf8")).toContain("npm --version");
+    expect(await readFile(join(output, "environment/smoke.sh"), "utf8")).toContain("npm --version");
+    expect(await Bun.file(join(output, "tests/smoke.sh")).exists()).toBe(false);
+    expect(verifierDockerfile).not.toContain("smoke.sh");
     expect(await Bun.file(join(output, "environment/docker-compose.yaml")).exists()).toBe(false);
     const compose = JSON.parse(await readFile(join(output, "tests/docker-compose.yaml"), "utf8"));
     expect(compose.services.main.depends_on.redis.condition).toBe("service_healthy");

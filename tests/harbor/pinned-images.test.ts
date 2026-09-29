@@ -37,7 +37,7 @@ async function storedTask(store: LocalArtifactStore, split: boolean) {
     await writeFile(join(task, context, "Dockerfile"), DOCKERFILE);
   }
   await writeFile(join(task, "task.toml"), 'schema_version = "1.4"\n');
-  await writeFile(join(task, "tests/task-test.sh"), "#!/bin/bash\n");
+  await writeFile(join(task, "tests/test.sh"), "#!/bin/bash\n");
   const gate = join(source, "gate.tar.gz");
   await runCommand("tar", ["-czf", gate, "-C", source, "harbor-task"]);
   await writeFile(join(task, "environment/repo.tar.gz"), "snapshot");

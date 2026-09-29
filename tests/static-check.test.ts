@@ -33,8 +33,6 @@ describe("static submission check", () => {
       "tests/runtime/command.sh",
       "tests/runtime/junit.py",
       "tests/setup.sh",
-      "tests/smoke.sh",
-      "tests/task-test.sh",
       "tests/test.sh",
     ]);
     expect(result.rendered?.["environment/Dockerfile"]).toContain(
