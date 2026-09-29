@@ -52,7 +52,12 @@ export function activityErrorInterceptor(report = reportError): ActivityIntercep
 function reportable(error: unknown, attempt: number): boolean {
   if (error instanceof CompleteAsyncError) return false;
   if (error instanceof CancelledFailure) return error.message === "TIMED_OUT";
-  const type = error instanceof ApplicationFailure ? error.type : (error as Error | null)?.name;
+  const type =
+    error instanceof ApplicationFailure
+      ? error.type
+      : error instanceof Error
+        ? error.name
+        : undefined;
   if (type && EXPECTED.has(type)) return false;
   return attempt === 1 || (error instanceof ApplicationFailure && error.nonRetryable === true);
 }

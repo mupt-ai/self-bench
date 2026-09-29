@@ -53,21 +53,17 @@ export function track(
   org?: { readonly login: string },
 ): void {
   if (!client) return;
-  try {
-    client.capture({
-      distinctId: distinctIdFor(actor.githubId),
-      event,
-      properties: {
-        ...properties,
-        via: actor.apiKey ? "api-key" : "session",
-        environment,
-        $set: { login: actor.login },
-      },
-      ...(org ? { groups: { organization: org.login.toLowerCase() } } : {}),
-    });
-  } catch (error) {
-    console.warn(`PostHog capture of ${event} failed: ${String(error)}`);
-  }
+  client.capture({
+    distinctId: distinctIdFor(actor.githubId),
+    event,
+    properties: {
+      ...properties,
+      via: actor.apiKey ? "api-key" : "session",
+      environment,
+      $set: { login: actor.login },
+    },
+    ...(org ? { groups: { organization: org.login.toLowerCase() } } : {}),
+  });
 }
 
 /** How a generation was configured: models, reasoning, and whose accounts pay. */
