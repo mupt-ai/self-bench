@@ -128,6 +128,39 @@ resource "google_compute_backend_service" "api" {
     group = google_compute_region_network_endpoint_group.api.id
   }
 }
+# The results site's host reaches the same Cloud Run service through Cloud CDN. Only what the
+# API marks public is kept, for as long as it says: pages and their data, never the app's
+# responses, which stay on the backend above. The deploy clears this cache, since a page names
+# its build's scripts.
+resource "google_compute_backend_service" "results_site" {
+  count                 = var.results_site_domain == null ? 0 : 1
+  project               = var.project_id
+  name                  = "${local.name}-results-site"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  protocol              = "HTTPS"
+  compression_mode      = "AUTOMATIC"
+  custom_response_headers = [
+    "X-Content-Type-Options: nosniff",
+    "Referrer-Policy: strict-origin-when-cross-origin",
+  ]
+  enable_cdn = true
+  cdn_policy {
+    cache_mode = "USE_ORIGIN_HEADERS"
+    # While the API errors, or a stale copy is being refreshed, the last good copy is served
+    # for up to a day, so the cached parts of the site stay readable through an outage.
+    serve_while_stale = 86400
+    negative_caching  = false
+    # No public response depends on a query string, so none may split the cache or bypass it.
+    cache_key_policy {
+      include_host         = true
+      include_protocol     = true
+      include_query_string = false
+    }
+  }
+  backend {
+    group = google_compute_region_network_endpoint_group.api.id
+  }
+}
 resource "google_compute_url_map" "api" {
   project         = var.project_id
   name            = "${local.name}-api"
@@ -149,6 +182,20 @@ resource "google_compute_url_map" "api" {
         strip_query            = false
         redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
       }
+    }
+  }
+  dynamic "host_rule" {
+    for_each = google_compute_backend_service.results_site
+    content {
+      hosts        = [var.results_site_domain]
+      path_matcher = "results-site"
+    }
+  }
+  dynamic "path_matcher" {
+    for_each = google_compute_backend_service.results_site
+    content {
+      name            = "results-site"
+      default_service = path_matcher.value.id
     }
   }
 }

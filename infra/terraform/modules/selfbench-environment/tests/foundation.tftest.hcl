@@ -67,6 +67,47 @@ run "api_on_cloud_run" {
     error_message = "Every served or redirected host needs a certificate, and www redirects to the apex."
   }
 }
+run "results_site_cdn" {
+  command = plan
+  variables {
+    redirect_domains    = { "www.selfbench.example" = "selfbench.example" }
+    results_site_domain = "selfbench.example"
+  }
+  assert {
+    condition     = length(google_compute_backend_service.results_site) == 1 && google_compute_backend_service.results_site[0].enable_cdn && google_compute_backend_service.results_site[0].compression_mode == "AUTOMATIC"
+    error_message = "The results site's host goes through Cloud CDN, compressed."
+  }
+  assert {
+    condition     = google_compute_backend_service.results_site[0].cdn_policy[0].cache_mode == "USE_ORIGIN_HEADERS" && !google_compute_backend_service.results_site[0].cdn_policy[0].negative_caching
+    error_message = "The CDN keeps only what the API marks public, and never caches errors on its own."
+  }
+  assert {
+    condition     = !google_compute_backend_service.results_site[0].cdn_policy[0].cache_key_policy[0].include_query_string && google_compute_backend_service.results_site[0].cdn_policy[0].serve_while_stale == 86400
+    error_message = "Query strings never split the cache, and the last good copy is served through a day of errors."
+  }
+  assert {
+    condition     = one([for rule in google_compute_url_map.api.host_rule : rule.path_matcher if contains(tolist(rule.hosts), "selfbench.example")]) == "results-site" && google_compute_url_map.api.path_matcher[0].default_url_redirect[0].host_redirect == "selfbench.example"
+    error_message = "Only the results site's host routes to the CDN backend; www still redirects."
+  }
+  assert {
+    condition     = output.deployment.api.results_site_cdn.host == "selfbench.example"
+    error_message = "The deploy needs the host and URL map to clear the CDN."
+  }
+}
+run "no_results_site_cdn_by_default" {
+  command = plan
+  assert {
+    condition     = length(google_compute_backend_service.results_site) == 0 && output.deployment.api.results_site_cdn == null && !coalesce(google_compute_backend_service.api.enable_cdn, false)
+    error_message = "Without a results site host there is no CDN, and the app's backend is never cached."
+  }
+}
+run "results_site_must_be_served" {
+  command = plan
+  variables {
+    results_site_domain = "elsewhere.example"
+  }
+  expect_failures = [var.results_site_domain]
+}
 run "worker_pool" {
   command = plan
   assert {

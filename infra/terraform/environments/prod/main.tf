@@ -32,6 +32,7 @@ module "selfbench" {
   cloud_sql_retained_backups  = var.cloud_sql_retained_backups
   api_domains                 = var.api_domains
   redirect_domains            = var.redirect_domains
+  results_site_domain         = var.results_site_domain
   image                       = var.image
   secret_versions             = var.secret_versions
   activity_concurrency        = var.activity_concurrency

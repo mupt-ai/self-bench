@@ -24,6 +24,10 @@ variable "cloud_sql_retained_backups" {
 variable "api_domains" {
   type = list(string)
 }
+variable "results_site_domain" {
+  type    = string
+  default = null
+}
 variable "redirect_domains" {
   type    = map(string)
   default = {}

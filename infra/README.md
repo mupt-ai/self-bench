@@ -113,7 +113,7 @@ Configure `dev` and `prod` GitHub environments. Production should require review
 | `TF_STATE_BUCKET` | Environment Terraform state bucket |
 | `TF_INPUTS_JSON` | JSON object matching the root Terraform variables |
 | `SELFBENCH_PUBLIC_URL` | Public HTTPS origin |
-| `SELFBENCH_RESULTS_SITE_URL` | Results site HTTPS origin, checked after each deploy |
+| `SELFBENCH_RESULTS_SITE_URL` | Results site HTTPS origin, checked after each deploy. Its host becomes `results_site_domain`: that host is served through Cloud CDN, and its cache is cleared after each apply |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | Worker concurrency from 1 to 100 |
 
 The workflow:
@@ -134,7 +134,7 @@ The API is a Cloud Run service reachable only through the load balancer, with it
 
 Before the first release to a new environment:
 
-1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps`, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), `artifactregistry.repositories.downloadArtifacts` (Cloud Run checks that the deploying account can read the image), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
+1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps` including `compute.urlMaps.invalidateCache` for the apply role, which clears the results site's CDN after each release, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), `artifactregistry.repositories.downloadArtifacts` (Cloud Run checks that the deploying account can read the image), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
 2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in `TF_INPUTS_JSON`, and release.
 3. Add each CNAME under `deployment.api.dns_authorizations`, and point each domain's A record at `deployment.api.address`. The certificate becomes active a few minutes after the CNAMEs resolve (`gcloud certificate-manager certificates describe selfbench-<env>-api`), and the load balancer answers HTTPS a few minutes after that.
 
