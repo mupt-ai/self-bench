@@ -261,13 +261,17 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
                   draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)
                 }
                 onClick={() =>
-                  setState({
+                  setState((current) => ({
+                    ...current,
                     draft: {
-                      ...draft,
-                      models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
+                      ...current.draft,
+                      models: [
+                        ...current.draft.models,
+                        { catalogId: "", credentialId: "", harnesses: [] },
+                      ],
                     },
                     submitted: false,
-                  })
+                  }))
                 }
               >
                 <Plus className="size-4" aria-hidden="true" />
@@ -278,7 +282,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             models={[...models, customModel]}
             credentials={availableCredentials}
             draft={draft}
-            onChange={(value) => setState({ draft: value, submitted: false })}
+            onChange={(value) =>
+              setState((current) => ({ ...current, draft: value, submitted: false }))
+            }
           />
         </fieldset>
         <RunExecution

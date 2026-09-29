@@ -39,15 +39,18 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
     });
   };
   let root = createRoot(container);
-  const mount = async (managed: boolean) => {
+  const mount = async (managed: boolean, catalog?: Promise<Response>) => {
     fetch.mockImplementation((async (input) => {
       const endpoint = String(input);
       if (endpoint === `${url}/catalog`)
-        return Response.json({
-          models: [],
-          sandboxes: ["e2b", "modal"],
-          managed: { models: false, sandbox: managed },
-        });
+        return (
+          catalog ??
+          Response.json({
+            models: [],
+            sandboxes: ["e2b", "modal"],
+            managed: { models: false, sandbox: managed },
+          })
+        );
       if (endpoint === `${url}/options`) return Response.json({ tasks: [] });
       if (endpoint === "/api/orgs/team/credentials") return Response.json({ credentials: [] });
       throw new Error(`Unexpected request: ${endpoint}`);
@@ -85,6 +88,27 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
     await mount(false);
     expect(sandbox()?.value).toBe("e2b");
     expect(sandbox()?.querySelector('option[value="managed"]')).toBeNull();
+
+    await reset();
+    browser.sessionStorage.removeItem(key);
+    const pendingCatalog = Promise.withResolvers<Response>();
+    await mount(true, pendingCatalog.promise);
+    const model = container.querySelector<HTMLSelectElement>('select[aria-label="Model"]');
+    if (!model) throw new Error("Missing model selector");
+    await act(async () => {
+      model.value = "custom";
+      model.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
+    });
+    await act(async () =>
+      pendingCatalog.resolve(
+        Response.json({
+          models: [],
+          sandboxes: ["e2b", "modal"],
+          managed: { models: false, sandbox: true },
+        }),
+      ),
+    );
+    expect(sandbox()?.value).toBe("managed");
 
     await reset();
     browser.sessionStorage.setItem(
