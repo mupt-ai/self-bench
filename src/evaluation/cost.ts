@@ -163,6 +163,12 @@ export function trialCost(
       count(cacheWrite) &&
       tokens.n_cache_tokens + cacheWrite <= tokens.n_input_tokens
     ) {
+      const calls = harborCallUsage(trajectory);
+      if (calls)
+        largestPrompt = Math.max(
+          0,
+          ...calls.map((call) => call.input + call.cacheRead + call.cacheWrite),
+        );
       usage = {
         input: tokens.n_input_tokens - tokens.n_cache_tokens - cacheWrite,
         output: tokens.n_output_tokens,

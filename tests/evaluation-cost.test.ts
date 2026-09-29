@@ -247,3 +247,30 @@ test("OpenRouter Codex trials verify against the gateway model name Harbor recor
     false,
   );
 });
+
+test("Codex reference-rate costs are bounded per request when Harbor records each call", () => {
+  const run = initialEvaluation(
+    { ...evaluationInput(), pricing: { ...pricing, maxInputTokens: 1000 } },
+    "Test",
+  );
+  const call = (prompt: number) => ({
+    source: "agent",
+    model_name: "test-model",
+    metrics: { prompt_tokens: prompt, completion_tokens: 10 },
+  });
+  const cost = (prompts: number[]) => {
+    const total = prompts.reduce((sum, prompt) => sum + prompt, 0);
+    const trajectory = JSON.stringify({ steps: prompts.map(call) });
+    const tokens = {
+      n_input_tokens: total,
+      n_cache_tokens: 0,
+      n_output_tokens: 10 * prompts.length,
+    };
+    return trialCost(run, "codex", new Map([["solver/t/agent/trajectory.json", trajectory]]), {
+      agent_result: tokens,
+    }).apiCostUsd;
+  };
+  // 1,400 prompt tokens over the trial, but no single call passes the 1,000-token bound.
+  expect(cost([700, 700])).toBeCloseTo((1400 * 2 + 20 * 8) / 1_000_000, 12);
+  expect(cost([1001])).toBeUndefined();
+});

@@ -7,10 +7,11 @@
  *
  * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Runs
  * recorded before the model credential's sign-in type was saved with the evaluation look it up in
- * SELFBENCH_DATABASE_URL when set, or take it from --auth=codex-login|api-key when the database is
- * out of reach; without either, Codex sign-in cache writes are not inferred. A recorded sign-in type
- * always wins over the flag. Apply appends a new snapshot and never rewrites old ones, so the
- * previous revision stays readable. Only the cost fields change. It refuses runs that are still queued or running.
+ * SELFBENCH_DATABASE_URL when set, else take it from --auth=codex-login|api-key; without either,
+ * Codex sign-in cache writes are not inferred. A sign-in type recorded or saved always wins over
+ * the flag. A trial whose stored transcript is cut too far to count again keeps its cost. Apply
+ * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
+ * Only the cost fields change. It refuses runs that are still queued or running.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,12 +60,16 @@ const costFields = (trial: CostFields): CostFields =>
 async function modelAuth(
   run: EvaluationRun,
   lookup: ModelAuthLookup | undefined,
+  fallback: ModelAuth | undefined,
 ): Promise<ModelAuth | undefined> {
   if (run.credentials?.auth) return run.credentials.auth;
   if (run.credentials?.modelCredentialId === "managed-model") return "api-key";
   const orgId = evaluationCredentialOrg(run);
-  if (!lookup || !run.credentials || !orgId) return undefined;
-  return lookup(orgId, run.credentials.modelCredentialId);
+  const saved =
+    lookup && run.credentials && orgId
+      ? await lookup(orgId, run.credentials.modelCredentialId)
+      : undefined;
+  return saved ?? fallback;
 }
 
 export async function recomputeEvaluationCost(
@@ -73,12 +78,13 @@ export async function recomputeEvaluationCost(
   id: string,
   apply: boolean,
   lookup?: ModelAuthLookup,
+  fallbackAuth?: ModelAuth,
 ): Promise<RecomputeReport> {
   const run = await getEvaluation(store, repoId, id);
   if (!run) throw new Error("Evaluation not found");
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");
-  const auth = await modelAuth(run, lookup);
+  const auth = await modelAuth(run, lookup, fallbackAuth);
   const report: RecomputeReport = {
     status: run.status,
     auth: auth ?? "unknown",
@@ -102,6 +108,11 @@ export async function recomputeEvaluationCost(
       continue;
     }
     const after = trialCost(run, trial.harness, files, record(JSON.parse(result[1])), auth);
+    // The runner reads transcripts whole; stored ones can be cut too far to count again.
+    if (before.tokenUsage && !after.tokenUsage) {
+      report.trials.push({ index, before, changed: false });
+      continue;
+    }
     const changed = !isDeepStrictEqual(before, after);
     report.trials.push({ index, before, after, changed });
     if (changed) {
@@ -132,13 +143,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const lookup: ModelAuthLookup | undefined = database
       ? async (orgId, credentialId) =>
           (await releaseCredentials(database.db, orgId)).get(credentialId)?.auth
-      : flag && (async () => flag);
+      : undefined;
     const report = await recomputeEvaluationCost(
       store,
       Number(repoId),
       id,
       process.argv.includes("--apply"),
       lookup,
+      flag,
     );
     console.log(JSON.stringify(report, null, 2));
   } finally {
