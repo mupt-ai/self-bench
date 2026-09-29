@@ -88,7 +88,7 @@ export async function executeTrial(
   const stopping = options.retry ? options.stopping : undefined;
   if (stopping?.aborted) throw new WorkerStoppingError();
   const claim = await claimTrial(store, input, index);
-  const { run, trial } = claim;
+  const { run, trial, save } = claim;
   const root = await mkdtemp(join(tmpdir(), "selfbench-evaluation-"));
   const command = options.command ?? runCommand;
   const environment = options.env ?? process.env;
@@ -111,17 +111,7 @@ export async function executeTrial(
     if (stopping?.aborted) throw new WorkerStoppingError();
     await claim.startSolver();
     solving = true;
-    await runTrial({
-      store,
-      run,
-      trial,
-      index,
-      save: claim.save,
-      ...ready,
-      command,
-      redact,
-      options,
-    });
+    await runTrial({ store, run, trial, index, save, ...ready, command, redact, options });
   } catch (error) {
     // This attempt lost its claim (or its evaluation stopped); the trial's holder records it.
     if (error instanceof RepeatSpendError) {
@@ -129,9 +119,9 @@ export async function executeTrial(
       throw error;
     }
     const stopped = !solving && stopping?.aborted === true;
-    const message = stopped
-      ? new WorkerStoppingError().message
-      : redact(error instanceof Error ? error.message : "Solver failed");
+    const failure = stopped
+      ? new WorkerStoppingError()
+      : new Error(redact(error instanceof Error ? error.message : "Solver failed"));
     // A retry needs the trial back in the queue; if that write fails, the failure is recorded here.
     retrying =
       !solving &&
@@ -143,14 +133,14 @@ export async function executeTrial(
         () => true,
         () => false,
       ));
-    if (retrying) throw stopped ? new WorkerStoppingError() : new Error(message);
+    if (retrying) throw failure;
     trial.status = "failed";
-    trial.error = message;
+    trial.error = failure.message;
   } finally {
     try {
       if (!retrying) {
         trial.finishedAt = new Date().toISOString();
-        await claim.save();
+        await save();
       }
     } finally {
       await rm(root, { recursive: true, force: true });

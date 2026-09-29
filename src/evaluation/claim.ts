@@ -53,7 +53,7 @@ export async function claimTrial(store: ArtifactStore, input: EvaluationInput, i
      * Marks the claim solving, or refuses if another attempt took it over. Both are saves of the
      * same record, so at most one attempt ever gets past this.
      */
-    startSolver: async (): Promise<void> => {
+    startSolver: async () => {
       const startedAt = new Date().toISOString();
       await update((latest) => {
         const current = held(latest);

@@ -48,10 +48,10 @@ const { verifyCompiled, ...generation } = createActivities(
   database ? createUsageStore(database.db) : undefined,
 );
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
-// A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once. Trials
-// that have not started their solver hand themselves to another worker, since the pod is usually
-// killed long before one could finish; other activities run on for shutdownGraceMs, through
-// Temporal's own handler (installed with the connection), and Temporal retries any still running.
+// A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once through
+// Temporal's handler, installed with the connection, and lets in-flight activities finish for
+// shutdownGraceMs. Trials not yet solving leave for another worker instead: the pod is usually
+// killed long before one could finish.
 const stopping = new AbortController();
 process.once("SIGTERM", () => stopping.abort());
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
