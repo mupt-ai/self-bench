@@ -12,7 +12,6 @@ import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-sha
 import { readGenerationGitHubToken } from "../settings/credentials.js";
 import { overlayCandidateActivity } from "./activity.js";
 import { advanceBatch } from "./advance.js";
-import { planDispatch, workflowLimit } from "./dispatch.js";
 import { exportBatch } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import { batchStatus } from "./status.js";
@@ -117,7 +116,6 @@ export function createGenerationBatches(
         .finally(() => preparing.delete(runId)),
     );
   };
-  const limit = workflowLimit();
   const reconcile = async (runId: string) => {
     let exporting: GenerationBatch | undefined;
     let unprepared = false;
@@ -130,11 +128,9 @@ export function createGenerationBatches(
     if (exporting) startExport(exporting);
   };
   const tick = async () => {
-    // The dispatch plan commits before any start, so a crash leaves every start owned.
-    await store.plan((batches) => planDispatch(batches, limit));
     const runIds = await store.activeRunIds();
     const results = await settleWithLimit(runIds, BATCH_SWEEP_CONCURRENCY, reconcile);
-    // Credentials/upstream outages must not drop a durable dispatch plan. Retry on next tick.
+    // Credentials/upstream outages leave the batch as it was; the next tick retries it.
     results.forEach((result, index) => {
       if (result.status === "rejected")
         console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);

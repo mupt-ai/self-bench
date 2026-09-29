@@ -3,7 +3,6 @@ import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import { workerProcessSettings } from "../src/contracts/config/worker.js";
 import { harborSlotsForMemory } from "../src/contracts/config/worker-capacity.js";
 import { harborTaskQueue } from "../src/temporal/task-queues.js";
-import { resolveHarborConcurrency } from "../src/temporal/worker-memory.js";
 
 const GiB = 1024 ** 3;
 
@@ -26,10 +25,6 @@ test("an explicit Harbor concurrency is validated and otherwise left to the work
   expect(loadWorkerConfig(base).harborConcurrency).toBeUndefined();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "0" })).toThrow();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "11" })).toThrow();
-});
-
-test("the resolved Harbor concurrency keeps the hard cap for direct callers", () => {
-  expect(resolveHarborConcurrency(100)).toBe(10);
 });
 
 test("the Harbor queue is derived from the worker queue", () => {

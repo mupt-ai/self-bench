@@ -51,7 +51,7 @@ test("application resumes a persisted candidate plan and exports without a batch
     taskQueue: "generation",
     phase: "authoring",
     shards: [],
-    candidates: [{ workflowId: id, dispatchAttempted: true, candidate: candidate("one", 1) }],
+    candidates: [{ workflowId: id, candidate: candidate("one", 1) }],
   });
   const exportMock = spyOn(exporter, "exportBatch").mockImplementation(async (_batch, store) =>
     store.put("export.tar.gz", Buffer.from("opaque sandbox archive"), "application/gzip"),
@@ -122,7 +122,6 @@ test("a persisted authoring batch reports each candidate's live activity", async
     candidates: [
       {
         workflowId: id,
-        dispatchAttempted: true,
         candidate: candidate("one", 1),
         progress: { candidateId: "one", taskId: "one", difficulty: "hard", status: "authoring" },
       },

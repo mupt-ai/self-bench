@@ -1,5 +1,6 @@
 import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import { MAX_CONCURRENT_CANDIDATE_WORKFLOWS } from "../../contracts/config/execution-limits.js";
+import { BATCH_RPC_CONCURRENCY } from "../../contracts/config/execution-limits.js";
+import { settleWithLimit } from "../../lib/util.js";
 import type { BatchStatus, TaskActivityDetail } from "./progress.js";
 
 const PENDING_ACTIVITY_SCHEDULED = 1;
@@ -32,35 +33,19 @@ export async function overlayCandidateActivity(
     ["authoring", "verifying", "reviewing"].includes(task.status),
   );
   const activity: NonNullable<BatchStatus["activity"]> = {};
-  const tasksToInspect = tasks.slice(0, MAX_CONCURRENT_CANDIDATE_WORKFLOWS);
-  const markUnknown = () => {
-    for (const task of tasksToInspect) {
-      if (!activity[task.candidateId]) activity[task.candidateId] = { state: "unknown" };
-    }
-  };
-  try {
-    // Same 10s budget as other batch Temporal calls so one hung describe cannot stall the poll.
-    await client.connection.withDeadline(Date.now() + 10_000, async () => {
-      // Limit each refresh's reads to the candidate workflow fanout cap.
-      for (let index = 0; index < tasksToInspect.length; index += 8) {
-        await Promise.all(
-          tasksToInspect.slice(index, index + 8).map(async (task) => {
-            try {
-              const description = await client.workflowService.describeWorkflowExecution({
-                namespace: client.options.namespace,
-                execution: { workflowId: `${status.runId}/candidate/${task.candidateId}` },
-              });
-              activity[task.candidateId] = activityDetail(description.pendingActivities ?? []);
-            } catch {
-              activity[task.candidateId] = { state: "unknown" };
-            }
-          }),
-        );
-      }
-    });
-  } catch {
-    markUnknown();
-  }
+  // Same 10s budget as other batch Temporal calls so one hung describe cannot stall the poll.
+  await client.connection
+    .withDeadline(Date.now() + 10_000, () =>
+      settleWithLimit(tasks, BATCH_RPC_CONCURRENCY, async (task) => {
+        const description = await client.workflowService.describeWorkflowExecution({
+          namespace: client.options.namespace,
+          execution: { workflowId: `${status.runId}/candidate/${task.candidateId}` },
+        });
+        activity[task.candidateId] = activityDetail(description.pendingActivities ?? []);
+      }),
+    )
+    .catch(() => undefined);
+  for (const task of tasks) activity[task.candidateId] ??= { state: "unknown" };
   return { ...status, activity };
 }
 

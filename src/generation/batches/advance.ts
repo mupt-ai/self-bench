@@ -4,9 +4,8 @@ import {
 } from "../../contracts/config/execution-limits.js";
 import type { CandidateWorkflowResult } from "../../contracts/index.js";
 import { errorMessage, settleWithLimit } from "../../lib/util.js";
-import { settled } from "./dispatch.js";
 import type { BatchExecutions } from "./temporal.js";
-import type { BatchItem, GenerationBatch } from "./types.js";
+import { type BatchItem, type GenerationBatch, settled } from "./types.js";
 
 type Candidate = GenerationBatch["candidates"][number];
 type CandidateSnapshot = Awaited<ReturnType<BatchExecutions["candidate"]>>;
@@ -19,10 +18,9 @@ interface Sweep {
   readonly halted: () => boolean;
 }
 
-/** Dispatched, unsettled, and not observed within the interval. */
+/** Unsettled and not observed within the interval; an item never observed is started. */
 const due = (item: BatchItem, now: number) =>
   !settled(item) &&
-  item.dispatchAttempted === true &&
   (item.observedAt === undefined || now - item.observedAt >= BATCH_OBSERVE_INTERVAL_MS);
 
 /** An item never observed has not been started by this batch yet. */
@@ -30,8 +28,10 @@ const mayStart = (sweep: Sweep, item: BatchItem) =>
   item.observedAt !== undefined || !sweep.halted();
 
 /**
- * One durable application sweep over every dispatched item. Items whose RPC fails keep their
- * persisted state and are retried on the next sweep; the rest of the batch still advances.
+ * One durable application sweep over every item. Each starts as soon as its phase begins;
+ * workers and sandbox providers, not this sweep, decide how much of it runs at once. Items whose
+ * RPC fails keep their persisted state and are retried on the next sweep; the rest of the batch
+ * still advances.
  * Once `halted` reports a pending cancel, the sweep starts nothing new, so the cancel (blocked
  * on this sweep's row lock) is not preceded by a burst of starts it must then tear down.
  */
@@ -66,9 +66,10 @@ async function cancelBatch(sweep: Sweep): Promise<void> {
   const { batch, executions } = sweep;
   const all = [...batch.shards, ...batch.candidates];
   const pending = all.filter((item) => !item.result && !item.cancelled);
+  // A start may have landed without being recorded, so every item is cancelled through
+  // Temporal; an ID that was never started is fenced with a tombstone.
   await each(sweep, pending, async (item) => {
-    if (item.dispatchAttempted && !(await executions.cancel(item.workflowId, batch.taskQueue)))
-      return;
+    if (!(await executions.cancel(item.workflowId, batch.taskQueue))) return;
     item.cancelled = true;
     delete item.cost;
   });

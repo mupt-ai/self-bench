@@ -1,6 +1,11 @@
-import { CompleteAsyncError, Context } from "@temporalio/activity";
+import { ApplicationFailure, CompleteAsyncError, Context } from "@temporalio/activity";
 import { signSandboxGrant } from "../../sandbox/callback-grant.js";
-import type { SandboxExecutor, SandboxRequest, StartedSandbox } from "../../sandbox/index.js";
+import {
+  SandboxCapacityError,
+  type SandboxExecutor,
+  type SandboxRequest,
+  type StartedSandbox,
+} from "../../sandbox/index.js";
 import {
   JOB_DEADLINE_VARIABLE,
   JOB_SPEC_FILE,
@@ -43,7 +48,7 @@ export async function runSandboxJob(
   if (previous) await sandbox.stop(previous).catch(() => undefined);
   const { request, prefix, ...report } = job;
   const spec: JobSpec = { ...report, command: request.command };
-  const started = await sandbox.start(
+  const starting = sandbox.start(
     {
       ...request,
       timeoutMs: request.timeoutMs + REPORTING_MS,
@@ -70,6 +75,15 @@ export async function runSandboxJob(
       ),
     }),
   );
+  const started = await starting.catch((error: unknown) => {
+    // The provider is full: the workflow waits and starts again rather than spend a retry.
+    if (!(error instanceof SandboxCapacityError)) throw error;
+    throw ApplicationFailure.create({
+      type: SandboxCapacityError.type,
+      message: error.message,
+      nonRetryable: true,
+    });
+  });
   context.heartbeat({ sandbox: started });
   throw new CompleteAsyncError();
 }
