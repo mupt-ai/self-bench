@@ -48,9 +48,10 @@ const { verifyCompiled, ...generation } = createActivities(
   database ? createUsageStore(database.db) : undefined,
 );
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
-// A SIGTERM (a preempted pod, a scale-in or a rollout) usually kills the worker before a trial
-// could finish, so trials that have not started their solver hand themselves to another worker.
-// Temporal's own handler, installed with the connection, drains the rest.
+// A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once. Trials
+// that have not started their solver hand themselves to another worker, since the pod is usually
+// killed long before one could finish; other activities run on for shutdownGraceMs, through
+// Temporal's own handler (installed with the connection), and Temporal retries any still running.
 const stopping = new AbortController();
 process.once("SIGTERM", () => stopping.abort());
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
@@ -60,9 +61,6 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
   stopping.signal,
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
-// A stopping worker (SIGTERM on a scale-in or rollout) stops polling at once and lets in-flight
-// activities finish for shutdownGraceMs; Temporal retries anything still running after it.
-
 const idle = idleTracker();
 const workers = await Promise.all([
   ...(role === "harbor"

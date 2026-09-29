@@ -192,24 +192,29 @@ test("a trial whose worker was lost after its solver started is not run again", 
   expect(calls).toHaveLength(1);
 });
 
-test("a stopping worker hands a trial that has not started its solver to the next attempt", async () => {
+test("a stopping worker hands a trial in setup to the next attempt, but runs its last attempt", async () => {
   const { store, vault, input } = await started();
   const { calls, command } = harbor();
+  // SIGTERM lands while the trial is in setup.
   const stopping = new AbortController();
-  stopping.abort();
-  await expect(
-    executeTrial(store, input, 0, {
-      env: {},
-      vault,
-      command,
-      retry: true,
-      stopping: stopping.signal,
-    }),
-  ).rejects.toThrow("Worker stopped before the solver started");
+  const options = {
+    env: {},
+    vault,
+    retry: true,
+    stopping: stopping.signal,
+    command: (async (name, args, commandOptions) => {
+      stopping.abort();
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  };
+  await expect(executeTrial(store, input, 0, options)).rejects.toThrow(
+    "Worker stopped before the solver started",
+  );
   const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
   expect(trial?.status).toBe("queued");
+  expect(trial?.claim).toBeUndefined();
   expect(calls).toHaveLength(0);
-  await executeTrial(store, input, 0, { env: {}, vault, command });
+  await executeTrial(store, input, 0, { ...options, retry: false });
   expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
 });
 

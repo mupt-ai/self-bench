@@ -3,6 +3,14 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import { RepeatSpendError, updateEvaluation } from "./store.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
+/** A trial left for another worker because this one is stopping; its solver never started. */
+export class WorkerStoppingError extends Error {
+  override name = "WorkerStoppingError";
+  constructor() {
+    super("Worker stopped before the solver started");
+  }
+}
+
 /**
  * One attempt's hold on a trial in its evaluation record. An attempt claims the trial (queued to
  * running) under an id of its own and marks the claim solving just before Harbor starts. Until
@@ -31,11 +39,12 @@ export async function claimTrial(store: ArtifactStore, input: EvaluationInput, i
       ? current
       : undefined;
   };
+  const trial = run.trials[index] as EvaluationTrial;
   return {
     run,
-    trial: run.trials[index] as EvaluationTrial,
+    trial,
     /** Replaces the record's trial with `trial` while this attempt holds it. */
-    save: (trial: EvaluationTrial) =>
+    save: () =>
       update((latest) => {
         if (!held(latest)) return false;
         latest.trials[index] = trial;
@@ -44,14 +53,14 @@ export async function claimTrial(store: ArtifactStore, input: EvaluationInput, i
      * Marks the claim solving, or refuses if another attempt took it over. Both are saves of the
      * same record, so at most one attempt ever gets past this.
      */
-    startSolver: async (): Promise<string> => {
+    startSolver: async (): Promise<void> => {
       const startedAt = new Date().toISOString();
       await update((latest) => {
         const current = held(latest);
         if (!current) throw new RepeatSpendError();
         current.solverStartedAt = startedAt;
       });
-      return startedAt;
+      trial.solverStartedAt = startedAt;
     },
     /** Returns the trial to the queue, so the next attempt can claim it again. */
     requeue: () =>
@@ -61,6 +70,8 @@ export async function claimTrial(store: ArtifactStore, input: EvaluationInput, i
         current.status = "queued";
         delete current.startedAt;
         delete current.claim;
+        // Set if the mark saved but its write still failed; the solver never started.
+        delete current.solverStartedAt;
       }),
   };
 }
