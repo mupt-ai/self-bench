@@ -41,6 +41,8 @@ export interface VerifyCompiledInput extends CompileAndVerifyInput {
   readonly compiled: SandboxJobOutcome;
 }
 
+const PINNED_DEFINITION = "definition.json";
+
 /** Every artifact of one check lands under this folder. */
 function verifyPrefix(input: CompileAndVerifyInput): string {
   return `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}${input.turn ? `-turn-${input.turn}` : ""}`;
@@ -105,6 +107,11 @@ export async function compileTask(
           contentType: "application/gzip",
         },
         { name: SNAPSHOT_FILE, path: `/work/${SNAPSHOT_FILE}`, contentType: "application/gzip" },
+        {
+          name: PINNED_DEFINITION,
+          path: `/work/${PINNED_DEFINITION}`,
+          contentType: "application/json",
+        },
       ],
       inline: [{ name: "result.json", path: "/work/result.json" }],
       // A compiler that crashed or could not run reports no result, and Temporal reruns it.
@@ -146,8 +153,12 @@ export async function verifyCompiled(
     const result = compileResultSchema.parse(compiled.inline["result.json"]);
 
     const bundle = compiled.files["harbor-task.tar.gz"];
+    // The compiled definition carries the image digests the compiler pinned.
+    const definition = compiled.files[PINNED_DEFINITION] ?? input.task.definition;
     const task: AuthoredTask | undefined =
-      result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
+      result.compileErrors.length === 0 && bundle
+        ? { ...input.task, definition, bundle }
+        : undefined;
     const gates =
       task && result.auditBlockers.length === 0
         ? await runHarborGates(

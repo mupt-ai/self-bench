@@ -34,6 +34,24 @@ test("a Dockerfile step that fails is handed to the author with its build log", 
   expect(await authoredImageBuildFailure(remote, env, new AbortController().signal)).toBe(log);
 });
 
+const pull = (reason: string) =>
+  `=> Step 0: FROM node:22-bookworm@sha256:aa4a\ntime="…" level=fatal msg="initializing source docker://node@sha256:aa4a: ${reason}"\nTerminating task due to error: command skopeo copy docker://node@sha256:aa4a oci:… had exit status: 2\n`;
+
+test("a base image its registry does not serve is handed to the author", async () => {
+  const env = await modalPrinting(
+    pull("reading manifest sha256:aa4a in docker.io/library/node: manifest unknown"),
+  );
+  const log = await authoredImageBuildFailure(failure, env, new AbortController().signal);
+  expect(log).toContain("manifest unknown");
+});
+
+test("a base image pull the registry throttled stays an infrastructure failure", async () => {
+  const env = await modalPrinting(pull("toomanyrequests: You have reached your pull rate limit"));
+  expect(
+    await authoredImageBuildFailure(failure, env, new AbortController().signal),
+  ).toBeUndefined();
+});
+
 test("a build Modal itself failed stays an infrastructure failure", async () => {
   const env = await modalPrinting("Step 0: FROM python\nError: registry timed out\n");
   expect(

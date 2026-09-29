@@ -3,6 +3,7 @@ import type { TaskEnvironment } from "../src/contracts/index.js";
 import {
   assertEnvironmentEvidence,
   assertEnvironmentPolicy,
+  assertPinnedImages,
   assertServicesSupported,
 } from "../src/generation/task/environment-policy.js";
 
@@ -46,10 +47,25 @@ describe("environment contracts", () => {
     expect(() => assertServicesSupported({ ...environment, services: [] }, "e2b")).not.toThrow();
   });
 
-  test("rejects mutable images, host interpolation, and control characters", () => {
-    expect(() => assertEnvironmentPolicy({ ...environment, baseImage: "node:22" })).toThrow(
-      "pinned by sha256 digest",
+  test("accepts a tag for the worker to pin, but a compiled contract must carry digests", () => {
+    const tagged = { ...environment, baseImage: "node:22-bookworm" };
+    expect(() => assertEnvironmentPolicy(tagged)).not.toThrow();
+    expect(() => assertPinnedImages(environment)).not.toThrow();
+    expect(() => assertPinnedImages(tagged)).toThrow(
+      "environment baseImage must be pinned by sha256 digest",
     );
+    const service = environment.services[0] as TaskEnvironment["services"][number];
+    expect(() =>
+      assertPinnedImages({ ...environment, services: [{ ...service, image: "postgres:17" }] }),
+    ).toThrow("service postgres image must be pinned by sha256 digest");
+  });
+
+  test("rejects untagged images, host interpolation, and control characters", () => {
+    for (const baseImage of ["node", "Node:22", "node:22@sha256:abc"]) {
+      expect(() => assertEnvironmentPolicy({ ...environment, baseImage })).toThrow(
+        "must be an image reference with a tag",
+      );
+    }
     expect(() =>
       assertEnvironmentPolicy({
         ...environment,
