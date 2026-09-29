@@ -66,7 +66,9 @@ export function accuracyTick(value: number): string {
   return value > 100 ? "" : percent(value);
 }
 
+/** A count as a star or card shows it: 950, 9.5k, 95k, 1.3M. The link preview images match. */
 export function compactNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   return value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k` : String(value);
 }
 
