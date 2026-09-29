@@ -92,7 +92,7 @@
     "@biomejs/biome": "^2.5.11",
     "@earendil-works/pi-coding-agent": "0.84.0",
     "@electric-sql/pglite": "0.3.15",
-    "@mupt-ai/dari-pareto": "0.4.0",
+    "@mupt-ai/dari-pareto": "0.5.0",
     "@pierre/diffs": "1.2.12",
     "@playwright/test": "1.56.1",
     "@sentry/browser": "11.1.0",
