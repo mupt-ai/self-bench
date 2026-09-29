@@ -12,6 +12,7 @@ import { sendExpiredSession } from "./auth/session-expired.js";
 import {
   authorized,
   bearerMatches,
+  clientWentAway,
   isReviewAssetPath,
   isSitePage,
   sendApiError,
@@ -123,7 +124,7 @@ export async function startApi(
       sendJson(response, 404, { error: "not found" });
     } catch (error) {
       if (response.headersSent) {
-        reportError(error);
+        if (!clientWentAway(error)) reportError(error);
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }

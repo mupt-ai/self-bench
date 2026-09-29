@@ -62,6 +62,8 @@ export function startTelemetry(site: "app" | "public-site"): void {
         environment: config.environment,
         ...release,
         initialScope: { tags: { site } },
+        // Sentry would otherwise store each visitor's IP address.
+        dataCollection: { userInfo: false },
         ...(app ? { beforeSend: withoutRepoNames, beforeBreadcrumb: withoutRepoNames } : {}),
       });
       window.removeEventListener("error", keep);
@@ -120,7 +122,7 @@ export function identifyPerson(user: Person): void {
   applyPerson();
 }
 
-/** On sign-out: later events in this browser are no longer this person's. */
+/** Nobody is signed in: later events in this browser are no longer the last person's. */
 export function forgetPerson(): void {
   person = null;
   applyPerson();
@@ -130,7 +132,8 @@ function applyPerson(): void {
   if (person === undefined) return;
   if (person === null) {
     sentry?.setUser(null);
-    posthog?.reset();
+    // Only an identified browser resets: a reset gives an anonymous visitor a new id each visit.
+    if (posthog?.get_distinct_id().startsWith("github:")) posthog.reset();
     return;
   }
   const id = `github:${person.githubId}`;

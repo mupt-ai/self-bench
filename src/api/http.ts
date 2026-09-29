@@ -80,11 +80,22 @@ export async function sendReviewAsset(
 export const escapeAttribute = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
+/** The client hung up mid-request or mid-response: nothing on the server failed. */
+export function clientWentAway(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return (
+    code === "ERR_STREAM_PREMATURE_CLOSE" ||
+    code === "ECONNRESET" ||
+    code === "EPIPE" ||
+    (error instanceof Error && error.message === "aborted")
+  );
+}
+
 export function sendApiError(response: ServerResponse, error: unknown): void {
   const status = apiErrorStatus(error);
   if (status === 500) {
     console.error(error);
-    reportError(error);
+    if (!clientWentAway(error)) reportError(error);
   }
   sendJson(response, status, {
     error: status === 500 ? "internal server error" : errorMessage(error),

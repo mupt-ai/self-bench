@@ -44,7 +44,10 @@ export function WebApp() {
     };
     window.addEventListener(SESSION_EXPIRED, expired);
     void fetchSession().then((found) => {
-      if (!cancelled) setSession(found);
+      if (cancelled) return;
+      // A session that ended while the page was closed leaves its person identified.
+      if (found.status === "anonymous") forgetPerson();
+      setSession(found);
     });
     return () => {
       cancelled = true;
