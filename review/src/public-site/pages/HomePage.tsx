@@ -109,8 +109,12 @@ export function HomePage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <section className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      {/*
+        The heading stays on one line on any screen: the line is just under 16em wide, so its
+        size follows the section's width (cqi), up to 1.5rem.
+      */}
+      <section className="@container mx-auto flex w-full max-w-2xl flex-col items-center gap-4 text-center">
+        <h1 className="text-[length:min(1.5rem,100cqi/16)] leading-[calc(2/1.5)] font-semibold tracking-tight">
           Find the best models for your repo
         </h1>
         <SearchBox query={query} onChange={setQuery} />
