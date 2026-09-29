@@ -110,6 +110,8 @@ export async function openSite(
       store: billingStore,
       ...(stripe ? { config: stripe } : {}),
       publicUrl,
+      githubApiUrl: auth.githubApiUrl,
+      githubToken: (githubId) => users.gitHubToken(githubId),
     }),
     auth: createSiteAuth({ config: auth, users, apiKeys }),
     apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),

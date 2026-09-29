@@ -2,6 +2,7 @@ import { and, eq, lte, or, sql } from "drizzle-orm";
 import { type BillingEligibility, eligibilityFrom } from "../generation/billing/eligibility.js";
 import type { Database } from "./client.js";
 import {
+  billingCreditGrants,
   billingOutbox,
   billingRateSnapshots,
   billingWebhookEvents,
@@ -9,6 +10,18 @@ import {
   orgBilling,
   orgs,
 } from "./schema.js";
+
+export class CreditGrantConflictError extends Error {
+  constructor() {
+    super("Credit grant request ID was already used with different details");
+  }
+}
+
+export class CreditGrantLimitError extends Error {
+  constructor() {
+    super("Global credit grant daily limit of $100 exceeded");
+  }
+}
 
 export interface BillingUsageSummary {
   readonly modelTokens: {
@@ -64,6 +77,67 @@ export function createBillingStore(db: Database, configured: boolean) {
         sandboxSeconds: row?.sandboxSeconds ?? 0,
         sandboxBillableUsd: row?.sandboxBillableUsd ?? 0,
       };
+    },
+    async beginCreditGrant(input: {
+      requestId: string;
+      adminUserId: number;
+      targetOrgId: number;
+      amountCents: number;
+      reason: string;
+      customerId: string;
+    }) {
+      return db.transaction(async (tx) => {
+        // One global lock/cap prevents multiple admins from multiplying the daily grant budget.
+        await tx.execute(sql`select pg_advisory_xact_lock(887654321, 0)`);
+        const [existing] = await tx
+          .select()
+          .from(billingCreditGrants)
+          .where(eq(billingCreditGrants.requestId, input.requestId));
+        if (existing) {
+          if (
+            existing.adminUserId !== input.adminUserId ||
+            existing.targetOrgId !== input.targetOrgId ||
+            existing.amountCents !== input.amountCents ||
+            existing.reason !== input.reason ||
+            existing.stripeCustomerId !== input.customerId
+          )
+            throw new CreditGrantConflictError();
+          return { ...existing, replay: true };
+        }
+        const [daily] = await tx
+          .select({
+            amount: sql<number>`coalesce(sum(${billingCreditGrants.amountCents}), 0)::int`,
+          })
+          .from(billingCreditGrants)
+          .where(and(sql`${billingCreditGrants.createdAt} >= date_trunc('day', now())`));
+        if ((daily?.amount ?? 0) + input.amountCents > 10_000) {
+          throw new CreditGrantLimitError();
+        }
+        const [inserted] = await tx
+          .insert(billingCreditGrants)
+          .values({
+            requestId: input.requestId,
+            adminUserId: input.adminUserId,
+            targetOrgId: input.targetOrgId,
+            amountCents: input.amountCents,
+            reason: input.reason,
+            stripeCustomerId: input.customerId,
+          })
+          .returning();
+        if (!inserted) throw new Error("Credit grant reservation failed");
+        return { ...inserted, replay: false };
+      });
+    },
+    async finishCreditGrant(requestId: string, transactionId: string) {
+      await db
+        .update(billingCreditGrants)
+        .set({ stripeTransactionId: transactionId })
+        .where(
+          and(
+            eq(billingCreditGrants.requestId, requestId),
+            sql`${billingCreditGrants.stripeTransactionId} is null`,
+          ),
+        );
     },
     async creditTarget(login: string): Promise<{ orgId: number; customerId: string } | undefined> {
       const [target] = await db

@@ -15,10 +15,10 @@ export function CreditGrant({ org }: { org: string }) {
     if (
       !Number.isFinite(amountCents) ||
       amountCents < 1 ||
-      amountCents > 1_000_000 ||
+      amountCents > 10_000 ||
       !/^\d+(?:\.\d{1,2})?$/.test(amount)
     ) {
-      setMessage("Enter an amount between $0.01 and $10,000.00 with at most two decimal places.");
+      setMessage("Enter an amount between $0.01 and $100.00 with at most two decimal places.");
       return;
     }
     if (

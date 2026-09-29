@@ -1,8 +1,17 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import type { BillingStore } from "../../db/billing.js";
+import {
+  type BillingStore,
+  CreditGrantConflictError,
+  CreditGrantLimitError,
+} from "../../db/billing.js";
 import type { User, UserStore } from "../../db/users.js";
-import { loadBillingPolicy, type StripeConfig } from "../../generation/billing/config.js";
+import {
+  billingCreditAdminOrgId,
+  loadBillingPolicy,
+  type StripeConfig,
+} from "../../generation/billing/config.js";
+import { fetchOrgMemberships } from "../../third_party/github/oauth.js";
 import {
   createCheckoutSession,
   createPortalSession,
@@ -16,10 +25,11 @@ import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 
 const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/billing(?:\/(checkout|portal|credits))?$/;
+const MAX_CREDIT_GRANT_CENTS = 10_000;
 const creditInput = z
   .object({
     targetOrg: z.string().regex(/^[A-Za-z0-9_.-]+$/),
-    amountCents: z.number().int().min(1).max(1_000_000),
+    amountCents: z.number().int().min(1).max(MAX_CREDIT_GRANT_CENTS),
     reason: z.string().trim().min(1).max(200),
     requestId: z.string().uuid(),
   })
@@ -32,6 +42,9 @@ export interface BillingRoutesOptions {
   readonly publicUrl: string;
   readonly fetchImpl?: typeof fetch;
   readonly unitScale?: number;
+  readonly creditAdminOrgId?: number;
+  readonly githubApiUrl?: string;
+  readonly githubToken?: (githubId: number) => Promise<string | undefined>;
 }
 
 export function createBillingRoutes(options: BillingRoutesOptions) {
@@ -58,7 +71,8 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           canManage: org.role === "admin" && !user.apiKey,
           canGrantCredits:
             org.kind === "org" &&
-            org.login.toLowerCase() === "mupt-ai" &&
+            !!(options.creditAdminOrgId ?? billingCreditAdminOrgId()) &&
+            org.githubId === (options.creditAdminOrgId ?? billingCreditAdminOrgId()) &&
             org.role === "admin" &&
             !user.apiKey &&
             !!options.config,
@@ -81,8 +95,37 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
         return true;
       }
       if (match[2] === "credits") {
-        if (user.apiKey || org.kind !== "org" || org.login.toLowerCase() !== "mupt-ai") {
+        const trustedAdminOrgId = options.creditAdminOrgId ?? billingCreditAdminOrgId();
+        if (
+          user.apiKey ||
+          org.kind !== "org" ||
+          !trustedAdminOrgId ||
+          org.githubId !== trustedAdminOrgId ||
+          !options.githubApiUrl ||
+          !options.githubToken
+        ) {
           sendJson(response, 403, { error: "Only mupt-ai organization admins can grant credits" });
+          return true;
+        }
+        const githubToken = await options.githubToken(user.githubId);
+        if (!githubToken) {
+          sendJson(response, 403, { error: "Admin membership could not be verified" });
+          return true;
+        }
+        const memberships = await fetchOrgMemberships(
+          { githubApiUrl: options.githubApiUrl },
+          githubToken,
+          options.fetchImpl ?? fetch,
+        );
+        if (
+          !memberships.some(
+            (membership) =>
+              membership.githubId === trustedAdminOrgId && membership.role === "admin",
+          )
+        ) {
+          sendJson(response, 403, {
+            error: "Current GitHub organization admin membership is required",
+          });
           return true;
         }
         let input: unknown;
@@ -96,7 +139,8 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
         const parsed = creditInput.safeParse(input);
         if (!parsed.success) {
           sendJson(response, 400, {
-            error: "Valid target organization, amount in cents, and reason required",
+            error:
+              "Valid target organization, amount up to $100 in cents, reason, and request ID required",
           });
           return true;
         }
@@ -106,16 +150,48 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           return true;
         }
         const grantId = parsed.data.requestId;
+        let grant: Awaited<ReturnType<BillingStore["beginCreditGrant"]>>;
+        try {
+          grant = await options.store.beginCreditGrant({
+            requestId: grantId,
+            adminUserId: user.id,
+            targetOrgId: target.orgId,
+            amountCents: parsed.data.amountCents,
+            reason: parsed.data.reason,
+            customerId: target.customerId,
+          });
+        } catch (error) {
+          if (error instanceof CreditGrantConflictError) {
+            sendJson(response, 409, { error: error.message });
+            return true;
+          }
+          if (error instanceof CreditGrantLimitError) {
+            sendJson(response, 429, { error: error.message });
+            return true;
+          }
+          throw error;
+        }
+        if (grant.replay && grant.stripeTransactionId) {
+          sendJson(response, 200, { id: grant.stripeTransactionId, replay: true });
+          return true;
+        }
+        // Stripe retains idempotency results for at least 24 hours. Retry ambiguous requests
+        // with the same body/key within 23 hours; after that, require manual reconciliation.
+        if (grant.replay && Date.now() - grant.createdAt.getTime() >= 23 * 60 * 60 * 1000) {
+          sendJson(response, 202, { pending: true, requestId: grantId });
+          return true;
+        }
         const credit = await grantStripeCredit(
           options.config,
           {
             customerId: target.customerId,
             amountCents: parsed.data.amountCents,
-            description: `SelfBench credit: ${parsed.data.reason} (granted by ${user.login}; ${grantId})`,
+            description: `SelfBench credit: ${parsed.data.reason} (${grantId})`,
             idempotencyKey: `selfbench-credit-${grantId}`,
           },
           requestOptions,
         );
+        await options.store.finishCreditGrant(grantId, credit.id);
         sendJson(response, 200, { id: credit.id });
         return true;
       }

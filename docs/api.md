@@ -155,17 +155,17 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 
 ## Billing
 
-Metered Stripe billing applies only to managed model and sandbox usage. Organization credentials are never invoiced by SelfBench. When the three Stripe env vars are unset, billing is disabled and managed runs stay available. Reads need membership; Checkout and the Customer Portal need the `admin` role and a browser session.
+Metered Stripe billing applies only to managed model and sandbox usage. Organization credentials are never invoiced by SelfBench. When the three Stripe env vars are unset, billing is disabled and managed runs stay available. Reads need membership; Checkout and the Customer Portal need the `admin` role and a browser session. Invoice credit grants are disabled by default; enabling them requires an operator to set `SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID` to the numeric GitHub organization ID of the trusted billing-admin organization (never a login name). Each grant re-checks current GitHub organization admin membership.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/orgs/:org/billing` | Subscription status: `configured`, `eligible`, `status`, `canManage`, and optional customer/period fields |
 | `POST` | `/api/orgs/:org/billing/checkout` | Creates a Stripe Checkout session; `200 { url }`. Browser session, admin only |
 | `POST` | `/api/orgs/:org/billing/portal` | Creates a Stripe Customer Portal session; `200 { url }`. Browser session, admin only |
-| `POST` | `/api/orgs/mupt-ai/billing/credits` | Grants a future-invoice Stripe customer balance credit to a registered organization with a Stripe customer. Browser session of a `mupt-ai` org admin only; JSON `{ targetOrg, amountCents, reason, requestId }` where `requestId` is a UUID reused on retries. Amount is 1–1,000,000 USD cents. Does not change recorded usage or past invoices. |
+| `POST` | `/api/orgs/:creditAdminOrg/billing/credits` | Grants a future-invoice Stripe customer balance credit to a registered organization with a Stripe customer. Requires explicit `SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID`, browser session of a current GitHub org admin, same-origin JSON, and an amount of 1–10,000 USD cents. JSON `{ targetOrg, amountCents, reason, requestId }`; retries with identical request ID and details do not grant twice. Does not change recorded usage or past invoices. Disabled unless a deployment explicitly configures a trusted organization ID. |
 | `POST` | `/api/stripe/webhook` | Stripe webhook (unauthenticated, `Stripe-Signature` verified) |
 
-Checkout validates that the configured Stripe metered USD price has a per-unit amount of `100 / SELFBENCH_BILLING_UNIT_SCALE` cents (default `0.00001` cents per event unit). Fix a mismatched price before starting new subscriptions. Existing subscriptions and past invoices must be inspected and corrected in Stripe separately. The site's usage total is all-time recorded usage, not a current-period invoice balance; credits do not reduce it.
+Credit grants have a $100 per-request and $100-per-admin-per-day cap. A durable audit/idempotency record is reserved before the Stripe request. Identical retries use the same Stripe idempotency key for up to 23 hours; afterward an unresolved grant returns pending for manual Stripe reconciliation. Checkout validates that the configured Stripe metered USD price has a per-unit amount of `100 / SELFBENCH_BILLING_UNIT_SCALE` cents (default `0.00001` cents per event unit). Fix a mismatched price before starting new subscriptions. Existing subscriptions and past invoices must be inspected and corrected in Stripe separately. The site's usage total is all-time recorded usage, not a current-period invoice balance; credits do not reduce it.
 
 `GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 
