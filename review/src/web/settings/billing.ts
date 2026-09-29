@@ -13,6 +13,7 @@ export interface BillingUsageSummary {
   sandboxBillableUsd: number;
 }
 
+import { checkSessionExpired } from "../../session-expired";
 import { requestJson } from "../api";
 
 export interface BillingStatus extends BillingEligibility {
@@ -45,18 +46,28 @@ export type CreditGrantResult =
   | { id: string; pending?: false }
   | { pending: true; requestId: string };
 
+export class CreditGrantRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function grantBillingCredit(
   org: string,
   input: CreditGrantRequest,
 ): Promise<CreditGrantResult> {
-  const result = await requestJson<CreditGrantResult>(
-    `/api/orgs/${encodeURIComponent(org)}/billing/credits`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    },
-  );
+  const response = await fetch(`/api/orgs/${encodeURIComponent(org)}/billing/credits`, {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  checkSessionExpired(response);
+  const result = (await response.json()) as CreditGrantResult & { error?: string };
+  if (!response.ok)
+    throw new CreditGrantRequestError(result.error ?? String(response.status), response.status);
   if (result.pending === true && result.requestId === input.requestId) return result;
   if ("id" in result && typeof result.id === "string" && result.id.startsWith("cbtxn_"))
     return result;

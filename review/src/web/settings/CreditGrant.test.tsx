@@ -73,6 +73,28 @@ async function click(label: string) {
   await act(async () => button.click());
 }
 
+test("pre-Stripe rejection unlocks the form without claiming a grant", async () => {
+  responses.push(
+    Response.json({ error: "Target organization has no Stripe customer" }, { status: 404 }),
+  );
+  await type(0, "missing");
+  await type(1, "25.00");
+  await type(2, "Courtesy");
+  await click("Grant Credit");
+  expect(container.textContent).toContain("Credit was not granted");
+  expect(container.textContent).toContain("Grant Credit");
+  expect(browser.sessionStorage.getItem("selfbench.billing.pending-credit.mupt-ai")).toBeNull();
+});
+
+test("malformed pending storage blocks only the credit form", async () => {
+  browser.sessionStorage.setItem("selfbench.billing.pending-credit.mupt-ai", "{");
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<CreditGrant org="mupt-ai" />));
+  expect(container.textContent).toContain("cannot be restored");
+  expect(container.querySelector("form")).toBeNull();
+});
+
 test("pending credit survives reload, retries the same request, and only confirms a Stripe transaction", async () => {
   responses.push(Response.json({ pending: true, requestId: "wrong" }, { status: 202 }));
   await type(0, "team");

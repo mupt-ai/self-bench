@@ -1,13 +1,18 @@
 import React from "react";
 import { Button } from "../ui";
-import { type CreditGrantRequest, formatBillingDollars, grantBillingCredit } from "./billing";
+import {
+  type CreditGrantRequest,
+  CreditGrantRequestError,
+  formatBillingDollars,
+  grantBillingCredit,
+} from "./billing";
 
 const storageKey = (org: string) => `selfbench.billing.pending-credit.${org}`;
 
-function restorePending(org: string): CreditGrantRequest | null {
-  const raw = window.sessionStorage.getItem(storageKey(org));
-  if (!raw) return null;
+function restorePending(org: string): CreditGrantRequest | "blocked" | null {
   try {
+    const raw = window.sessionStorage.getItem(storageKey(org));
+    if (!raw) return null;
     const value: unknown = JSON.parse(raw);
     if (
       value &&
@@ -23,11 +28,9 @@ function restorePending(org: string): CreditGrantRequest | null {
     )
       return value as CreditGrantRequest;
   } catch {
-    // Keep malformed pending data rather than silently allowing a new grant.
+    // Never open a new grant when an unresolved request may be hidden or unreadable.
   }
-  throw new Error(
-    "A pending credit request could not be restored. Reconcile it before granting again.",
-  );
+  return "blocked";
 }
 
 export function CreditGrant({ org }: { org: string }) {
@@ -35,7 +38,7 @@ export function CreditGrant({ org }: { org: string }) {
   const [amount, setAmount] = React.useState("");
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [pending, setPending] = React.useState<CreditGrantRequest | null>(() =>
+  const [pending, setPending] = React.useState<CreditGrantRequest | "blocked" | null>(() =>
     restorePending(org),
   );
   const [message, setMessage] = React.useState("");
@@ -51,16 +54,35 @@ export function CreditGrant({ org }: { org: string }) {
         );
         return;
       }
-      window.sessionStorage.removeItem(storageKey(org));
-      setPending(null);
+      try {
+        window.sessionStorage.removeItem(storageKey(org));
+        setPending(null);
+      } catch {
+        setPending("blocked");
+      }
       setMessage("Credit granted in Stripe. It will apply to future invoices, not recorded usage.");
       setTargetOrg("");
       setAmount("");
       setReason("");
     } catch (cause) {
-      setMessage(
-        `Credit status is uncertain. Retry this same request; do not grant another credit. ${cause instanceof Error ? cause.message : "Unknown error."}`,
-      );
+      if (cause instanceof CreditGrantRequestError && [400, 404, 429].includes(cause.status)) {
+        try {
+          window.sessionStorage.removeItem(storageKey(org));
+          setPending(null);
+          setMessage(
+            `Credit was not granted: ${cause.message}. Correct the details and try again.`,
+          );
+        } catch {
+          setPending("blocked");
+          setMessage(
+            "Credit was rejected, but pending storage could not be cleared. Reconcile before another grant.",
+          );
+        }
+      } else {
+        setMessage(
+          `Credit status is uncertain. Retry this same request; do not grant another credit. ${cause instanceof Error ? cause.message : "Unknown error."}`,
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -104,7 +126,11 @@ export function CreditGrant({ org }: { org: string }) {
       <p className="mt-1 text-xs text-muted-foreground">
         Credits reduce future Stripe invoices; they do not change recorded usage.
       </p>
-      {pending ? (
+      {pending === "blocked" ? (
+        <p className="mt-4 text-sm" role="alert">
+          A pending credit request cannot be restored. Reconcile it in Stripe before granting again.
+        </p>
+      ) : pending ? (
         <div className="mt-4 text-sm">
           <p>
             Unresolved credit for {pending.targetOrg}:{" "}
