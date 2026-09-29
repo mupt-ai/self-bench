@@ -140,27 +140,21 @@ test("a trial whose worker was lost before its solver started runs on the next a
   const { store, vault, input } = await started();
   const { calls, command } = harbor();
   // The first attempt's worker stalls in setup (a preempted pod), so Temporal retries the trial.
-  let resume = () => {};
-  const stalled = new Promise<void>((resolve) => {
-    resume = resolve;
-  });
-  let reached = () => {};
-  const setUp = new Promise<void>((resolve) => {
-    reached = resolve;
-  });
+  const stalled = Promise.withResolvers<void>();
+  const setUp = Promise.withResolvers<void>();
   const lost = executeTrial(store, input, 0, {
     env: {},
     vault,
     command: (async (name, args, commandOptions) => {
-      reached();
-      await stalled;
+      setUp.resolve();
+      await stalled.promise;
       return command(name, args, commandOptions);
     }) satisfies typeof runCommand,
   });
-  await setUp;
+  await setUp.promise;
   await executeTrial(store, input, 0, { env: {}, vault, command });
   // A stalled attempt that comes back never starts Harbor or overwrites the outcome.
-  resume();
+  stalled.resolve();
   await expect(lost).rejects.toThrow("refusing to repeat model spend");
   expect(calls).toHaveLength(1);
   const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
@@ -170,24 +164,18 @@ test("a trial whose worker was lost before its solver started runs on the next a
 
 test("a trial whose worker was lost after its solver started is not run again", async () => {
   const { store, vault, input } = await started();
-  let reached = () => {};
-  const solving = new Promise<void>((resolve) => {
-    reached = resolve;
-  });
-  let finish = () => {};
-  const finished = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
+  const solving = Promise.withResolvers<void>();
+  const finished = Promise.withResolvers<void>();
   const { calls, command } = harbor(async () => {
-    reached();
-    await finished;
+    solving.resolve();
+    await finished.promise;
   });
   const first = executeTrial(store, input, 0, { env: {}, vault, command });
-  await solving;
+  await solving.promise;
   await expect(executeTrial(store, input, 0, { env: {}, vault, command })).rejects.toThrow(
     "refusing to repeat model spend",
   );
-  finish();
+  finished.resolve();
   await first;
   expect(calls).toHaveLength(1);
 });
