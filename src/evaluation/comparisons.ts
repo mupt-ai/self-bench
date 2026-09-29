@@ -190,6 +190,7 @@ export async function createComparison(
             modelCredentialId: credential.id,
             sandboxCredentialId: sandbox.id,
             provider: route.provider,
+            auth: credential.auth,
           },
         }),
       );

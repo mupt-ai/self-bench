@@ -63,6 +63,7 @@ export async function setUpTrial(
     jobs: join(trialRoot, "jobs"),
     ...(task.images ? { images: task.images } : {}),
     ...gateway,
+    modelAuth: execution.auth,
     child: prepared.env,
     guard: prepared.guard,
   };

@@ -5,7 +5,9 @@
  *   node dist/evaluation/recompute-cost.js <repoId> <evaluationId>           # dry run
  *   node dist/evaluation/recompute-cost.js <repoId> <evaluationId> --apply   # save a snapshot
  *
- * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Apply
+ * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Runs
+ * recorded before the model credential's sign-in type was saved with the evaluation look it up in
+ * SELFBENCH_DATABASE_URL when set; without it, Codex sign-in cache writes are not inferred. Apply
  * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
  * Only the cost fields change. It refuses runs that are still queued or running.
  */
@@ -14,19 +16,36 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { type ArtifactStore, createArtifactStore } from "../artifacts/index.js";
 import { loadConfig } from "../contracts/config/index.js";
+import { openDatabase } from "../db/client.js";
+import { releaseCredentials } from "../public/release-sources.js";
 import { trialCost } from "./cost.js";
+import { evaluationCredentialOrg } from "./execution.js";
 import { record } from "./output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
-import type { EvaluationTrial } from "./types.js";
+import type { EvaluationRun, EvaluationTrial } from "./types.js";
+
+type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
+/** The sign-in type of a saved model credential, deleted ones included. */
+export type ModelAuthLookup = (
+  orgId: number,
+  credentialId: string,
+) => Promise<ModelAuth | undefined>;
 
 type CostFields = Pick<
   EvaluationTrial,
-  "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource"
+  "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
 >;
-const costKeys = ["modelVerified", "apiCostUsd", "tokenUsage", "costSource"] as const;
+const costKeys = [
+  "modelVerified",
+  "apiCostUsd",
+  "tokenUsage",
+  "costSource",
+  "cacheWritesInferred",
+] as const;
 
 interface RecomputeReport {
   status: string;
+  auth: ModelAuth | "unknown";
   trials: { index: number; before: CostFields; after?: CostFields; changed: boolean }[];
   applied: boolean;
 }
@@ -36,17 +55,35 @@ const costFields = (trial: CostFields): CostFields =>
     costKeys.flatMap((key) => (trial[key] === undefined ? [] : [[key, trial[key]]])),
   );
 
+async function modelAuth(
+  run: EvaluationRun,
+  lookup: ModelAuthLookup | undefined,
+): Promise<ModelAuth | undefined> {
+  if (run.credentials?.auth) return run.credentials.auth;
+  if (run.credentials?.modelCredentialId === "managed-model") return "api-key";
+  const orgId = evaluationCredentialOrg(run);
+  if (!lookup || !run.credentials || !orgId) return undefined;
+  return lookup(orgId, run.credentials.modelCredentialId);
+}
+
 export async function recomputeEvaluationCost(
   store: ArtifactStore,
   repoId: number,
   id: string,
   apply: boolean,
+  lookup?: ModelAuthLookup,
 ): Promise<RecomputeReport> {
   const run = await getEvaluation(store, repoId, id);
   if (!run) throw new Error("Evaluation not found");
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");
-  const report: RecomputeReport = { status: run.status, trials: [], applied: false };
+  const auth = await modelAuth(run, lookup);
+  const report: RecomputeReport = {
+    status: run.status,
+    auth: auth ?? "unknown",
+    trials: [],
+    applied: false,
+  };
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
     const names = trial.artifacts.filter((name) =>
@@ -58,11 +95,12 @@ export async function recomputeEvaluationCost(
       if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
     }
     const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
-    if (!result) {
+    // Without the sign-in type, an earlier recompute's inferred cache writes cannot be rederived.
+    if (!result || (!auth && trial.cacheWritesInferred)) {
       report.trials.push({ index, before, changed: false });
       continue;
     }
-    const after = trialCost(run, trial.harness, files, record(JSON.parse(result[1])));
+    const after = trialCost(run, trial.harness, files, record(JSON.parse(result[1])), auth);
     const changed = !isDeepStrictEqual(before, after);
     report.trials.push({ index, before, after, changed });
     if (changed) {
@@ -82,11 +120,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (!repoId || !/^\d+$/.test(repoId) || !id)
     throw new Error("Usage: recompute-cost.js <repoId> <evaluationId> [--apply]");
   const store = createArtifactStore(loadConfig().artifact);
-  const report = await recomputeEvaluationCost(
-    store,
-    Number(repoId),
-    id,
-    process.argv.includes("--apply"),
-  );
-  console.log(JSON.stringify(report, null, 2));
+  const url = process.env.SELFBENCH_DATABASE_URL;
+  const database = url ? await openDatabase(url, { light: true }) : undefined;
+  try {
+    const lookup: ModelAuthLookup | undefined = database
+      ? async (orgId, credentialId) =>
+          (await releaseCredentials(database.db, orgId)).get(credentialId)?.auth
+      : undefined;
+    const report = await recomputeEvaluationCost(
+      store,
+      Number(repoId),
+      id,
+      process.argv.includes("--apply"),
+      lookup,
+    );
+    console.log(JSON.stringify(report, null, 2));
+  } finally {
+    await database?.close();
+  }
 }

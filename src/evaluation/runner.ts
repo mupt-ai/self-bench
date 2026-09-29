@@ -159,6 +159,7 @@ async function runTrial(context: {
   jobs: string;
   guard: HarborOutputGuard;
   model: string;
+  modelAuth: "api-key" | "codex-login";
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   images?: TaskImages;
@@ -207,7 +208,7 @@ async function runTrial(context: {
       const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
-      Object.assign(trial, trialCost(run, trial.harness, files, parsed));
+      Object.assign(trial, trialCost(run, trial.harness, files, parsed, context.modelAuth));
       const rewards = record(record(parsed.verifier_result).rewards);
       trial.rewards = Object.fromEntries(
         Object.entries(rewards).filter(

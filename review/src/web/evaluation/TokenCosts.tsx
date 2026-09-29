@@ -7,7 +7,7 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
   const counts = [
     ["Uncached Input", usage.input],
     ["Cached Input", usage.cacheRead],
-    ["Cache Writes", usage.cacheWrite],
+    [trial.cacheWritesInferred ? "Cache Writes (Inferred)" : "Cache Writes", usage.cacheWrite],
     ["Output", usage.output],
   ] as const;
   return (
@@ -26,6 +26,8 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
         </div>
       </dl>
       <p className="mb-6 text-xs text-muted-foreground">
+        {trial.cacheWritesInferred &&
+          "Codex sign-in does not report cache writes; eligible uncached input is counted as inferred cache writes. Exact cache-write tokens may differ due to provider rounding. "}
         {trial.apiCostUsd === undefined
           ? "Cost unavailable: incomplete pricing or usage records."
           : `${trial.costSource === "harbor" ? "Harbor’s per-request" : "Reference-rate"} estimate from token usage. Not an invoice; sandbox charges excluded.`}

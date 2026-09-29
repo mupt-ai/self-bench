@@ -268,6 +268,8 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing input");
     expect(input.pricing).toMatchObject({ input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 });
+    // The sign-in type rides with the run so its cost can account for unreported cache writes.
+    expect(input.credentials?.auth).toBe("codex-login");
     const execution = await credentialExecution(
       input,
       home,
@@ -277,6 +279,7 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
     expect(execution.child.OPENAI_API_KEY).toBeUndefined();
     expect(await readFile(execution.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(auth);
     expect(execution.secrets).toContain("fake-refresh");
+    expect(execution.auth).toBe("codex-login");
   } finally {
     await fixture.close();
     await rm(home, { recursive: true, force: true });
