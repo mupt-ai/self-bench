@@ -7,6 +7,19 @@ import { thinkingLabel } from "../evaluation/run-presentation";
 import { SearchInput } from "../ui";
 import type { PreviewSetting } from "./api";
 
+/**
+ * An endpoint that wraps where a URL reads best: after a colon, and before a slash or a dot, so
+ * `gpu.acme.internal:8000/v1` splits as `gpu.acme.internal:` and `8000/v1`, not mid-token.
+ */
+function wrappable(endpoint: string): React.ReactNode[] {
+  return (
+    endpoint
+      .split(/(?<=:)|(?=[/.])/)
+      // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed string, in order.
+      .flatMap((part, index) => (index ? [<wbr key={index} />, part] : [part]))
+  );
+}
+
 /** The columns that tell two settings of one model apart. */
 function columnsOf(setting: PreviewSetting) {
   return {
@@ -19,6 +32,7 @@ function columnsOf(setting: PreviewSetting) {
 }
 
 /** Model, harness, reasoning, provider, access, tasks. */
+// Every cell wraps onto as many lines as it needs, long endpoints included, so nothing is cut off.
 const grid =
   "grid grid-cols-[minmax(10rem,1.6fr)_minmax(5.5rem,0.9fr)_minmax(5rem,0.8fr)_minmax(7rem,1.2fr)_minmax(7.5rem,0.9fr)_4.5rem] items-center gap-x-3";
 
@@ -142,30 +156,32 @@ export function SettingsPicker({
             <>
               <span className="sr-only">{setting.label}</span>
               {/* A ticked endpoint that shares its model's setting: its name on the public page. */}
-              {number ? <span className="truncate text-foreground">Endpoint {number}</span> : null}
+              {number ? (
+                <span className="min-w-0 break-words text-foreground">Endpoint {number}</span>
+              ) : null}
             </>
           ) : (
-            <span className="truncate font-medium text-foreground">{setting.label}</span>
+            <span className="min-w-0 break-words font-medium text-foreground">{setting.label}</span>
           )}
         </span>
-        <span className="truncate">{columns.harness}</span>
-        <span className="truncate">{columns.reasoning}</span>
+        <span className="min-w-0 break-words">{columns.harness}</span>
+        <span className="min-w-0 break-words">{columns.reasoning}</span>
         <span className="min-w-0">
-          <span className="block truncate">{columns.provider}</span>
+          <span className="block break-words">{columns.provider}</span>
           {columns.host && (
             <span
-              className="block truncate text-xs"
+              className="block break-words text-xs"
               title={
                 number
                   ? `${setting.endpoint}, shown publicly as ${setting.label} (Endpoint ${number})`
                   : setting.endpoint
               }
             >
-              {columns.host}
+              {wrappable(columns.host)}
             </span>
           )}
         </span>
-        <span className="truncate">{columns.access}</span>
+        <span className="min-w-0 break-words">{columns.access}</span>
         <span className="text-right">
           {setting.coverage.length} / {tasks}
         </span>
@@ -224,7 +240,7 @@ export function SettingsPicker({
                       disabled={disabled}
                       onChange={() => set(keys, count < keys.length)}
                     />
-                    <span className="min-w-0 truncate font-medium text-foreground">{model}</span>
+                    <span className="min-w-0 break-words font-medium text-foreground">{model}</span>
                   </label>
                   {members.map((setting, index) =>
                     row(setting, { last: index === members.length - 1 }),
