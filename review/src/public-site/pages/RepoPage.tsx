@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from "react-router";
 import { Avatar } from "../components/Avatar";
 import {
@@ -15,6 +16,7 @@ import { flightTo, revealFade, shownLine } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
 import { PANEL } from "../frame";
+import { motionOff } from "../motion";
 import { APP_URL } from "../PublicLayout";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
@@ -80,13 +82,27 @@ function Results({ page }: { page: PublicRepoPage }) {
   const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
   // Chart above the table, or beside it on a wide window; remembered across visits.
   const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
+  const article = useRef<HTMLElement>(null);
   const chooseLayout = (next: ResultsLayout) => {
-    setLayout(next);
+    if (next === layout) return;
     rememberResultsLayout(next);
+    const apply = () => flushSync(() => setLayout(next));
+    // The blocks glide to their new places (theme.css); with motion off, or in a browser
+    // without view transitions, they move at once.
+    const page = article.current;
+    if (!page || motionOff() || typeof document.startViewTransition !== "function") {
+      apply();
+      return;
+    }
+    page.setAttribute("data-morphing", "");
+    document
+      .startViewTransition(apply)
+      .finished.finally(() => page.removeAttribute("data-morphing"));
   };
   const side = layout === "side";
   return (
     <article
+      ref={article}
       // Side by side, on a window wide enough for it, the page widens past its usual column to
       // the rulers (at most 110rem), so the chart and the table each have room.
       className={`flex flex-col gap-8 ${
@@ -96,7 +112,7 @@ function Results({ page }: { page: PublicRepoPage }) {
       }`}
       {...shownLine(`${repository.fullName}/${release.publisher.login}`)}
     >
-      <header className="flex flex-col gap-3">
+      <header className="flex flex-col gap-3" data-morph="title">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex shrink-0" {...flightTo("avatar")}>
             <Avatar src={repository.ownerAvatarUrl} size={32} />
@@ -121,7 +137,7 @@ function Results({ page }: { page: PublicRepoPage }) {
               {compactNumber(repository.stars)}
             </span>
           )}
-          <span className="ml-auto self-center">
+          <span className="ml-auto self-center" data-morph="toggle">
             <LayoutToggle layout={layout} onChange={chooseLayout} />
           </span>
         </div>
@@ -158,6 +174,7 @@ function Results({ page }: { page: PublicRepoPage }) {
         }`}
       >
         <section
+          data-morph="chart"
           className={`flex flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -175,7 +192,7 @@ function Results({ page }: { page: PublicRepoPage }) {
           </div>
         </section>
 
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3" data-morph="table">
           <h2 className="text-sm font-medium">All Settings</h2>
           <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
           <p className="text-xs text-muted-foreground">
@@ -186,7 +203,7 @@ function Results({ page }: { page: PublicRepoPage }) {
       </div>
 
       {page.lines.length > 1 && (
-        <section ref={lines} className="flex flex-col gap-3">
+        <section ref={lines} className="flex flex-col gap-3" data-morph="lines">
           <h2 className="text-sm font-medium">Other Benchmarks of This Repo</h2>
           <ul className={`divide-y divide-border ${PANEL}`}>
             {page.lines.map((line) => {

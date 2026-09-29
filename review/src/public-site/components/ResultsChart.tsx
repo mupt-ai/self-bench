@@ -1,5 +1,5 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PublicSetting } from "../contract";
 import {
   accuracyTick,
@@ -48,6 +48,15 @@ export function ResultsChart({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  // A layout switch changes the chart's width in one commit. Measuring before paint redraws it
+  // at the new width in that same frame, so the page's layout transition moves the chart as it
+  // will be, not a stretched picture of the old one.
+  useLayoutEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const next = Math.max(320, element.getBoundingClientRect().width);
+    if (Math.abs(next - width) >= 0.5) setWidth(next);
+  });
   const narrow = width < 560;
   const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
