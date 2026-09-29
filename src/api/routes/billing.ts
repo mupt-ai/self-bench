@@ -6,11 +6,7 @@ import {
   CreditGrantLimitError,
 } from "../../db/billing.js";
 import type { User, UserStore } from "../../db/users.js";
-import {
-  billingCreditAdminOrgId,
-  loadBillingPolicy,
-  type StripeConfig,
-} from "../../generation/billing/config.js";
+import { loadBillingPolicy, type StripeConfig } from "../../generation/billing/config.js";
 import { fetchOrgMemberships } from "../../third_party/github/oauth.js";
 import {
   createCheckoutSession,
@@ -71,8 +67,8 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           canManage: org.role === "admin" && !user.apiKey,
           canGrantCredits:
             org.kind === "org" &&
-            !!(options.creditAdminOrgId ?? billingCreditAdminOrgId()) &&
-            org.githubId === (options.creditAdminOrgId ?? billingCreditAdminOrgId()) &&
+            !!options.creditAdminOrgId &&
+            org.githubId === options.creditAdminOrgId &&
             org.role === "admin" &&
             !user.apiKey &&
             !!options.config,
@@ -95,7 +91,7 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
         return true;
       }
       if (match[2] === "credits") {
-        const trustedAdminOrgId = options.creditAdminOrgId ?? billingCreditAdminOrgId();
+        const trustedAdminOrgId = options.creditAdminOrgId;
         if (
           user.apiKey ||
           org.kind !== "org" ||

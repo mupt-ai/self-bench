@@ -13,7 +13,7 @@ import { createUserStore } from "../db/users.js";
 import { createVault } from "../db/vault.js";
 import { evaluationStarter, evaluationStopper } from "../evaluation/start.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
-import { loadStripeConfig } from "../generation/billing/config.js";
+import { billingCreditAdminOrgId, loadStripeConfig } from "../generation/billing/config.js";
 import { generationCost } from "../generation/billing/cost-status.js";
 import { startBillingDispatcher } from "../generation/billing/outbox.js";
 import { generationRecordPath } from "../generation/settings/credentials.js";
@@ -68,6 +68,7 @@ export async function openSite(
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
   const stripe = loadStripeConfig();
+  const creditAdminOrgId = billingCreditAdminOrgId();
   const billingStore = createBillingStore(database.db, !!stripe);
   const billingDispatcher = stripe ? startBillingDispatcher(billingStore, stripe) : undefined;
   const publicUrl = auth.publicUrl;
@@ -110,6 +111,7 @@ export async function openSite(
       store: billingStore,
       ...(stripe ? { config: stripe } : {}),
       publicUrl,
+      ...(creditAdminOrgId ? { creditAdminOrgId } : {}),
       githubApiUrl: auth.githubApiUrl,
       githubToken: (githubId) => users.gitHubToken(githubId),
     }),
