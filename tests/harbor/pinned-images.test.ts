@@ -52,7 +52,7 @@ async function storedTask(store: LocalArtifactStore, split: boolean) {
 }
 
 /**
- * Harbor stand-in: the nop run passes smoke and nop, the oracle passes, and when given an image
+ * Harbor stand-in: the smoke-and-nop run passes both, the oracle passes, and when given an image
  * record directory it writes the images its sandboxes "started from", as selfbench_modal.py does.
  */
 async function fakeHarbor(root: string): Promise<string> {
@@ -75,13 +75,14 @@ if (record) {
   fs.writeFileSync(path.join(directory, 'agent'), 'im-Agent1\\n');
   fs.writeFileSync(path.join(directory, 'verifier'), 'im-Verifier1');
 }
-const rewards = agent === 'nop'
-  ? { smoke_exit_code: 0, nop_patch_applied: 1, nop_setup_completed: 1, nop_fail_to_pass: 0, nop_pass_to_pass: 1 }
+const smoke = agent !== 'oracle';
+const rewards = smoke
+  ? { patch_applied: 1, setup_completed: 1, fail_to_pass: 0, pass_to_pass: 1 }
   : { patch_applied: 1, setup_completed: 1, fail_to_pass: 1, pass_to_pass: 1, deterministic: 1 };
 const job = path.join(args[args.indexOf('--jobs-dir') + 1], args[args.indexOf('--job-name') + 1]);
 fs.mkdirSync(path.join(job, 'trial'), { recursive: true });
 fs.writeFileSync(path.join(job, 'result.json'), '{}');
-fs.writeFileSync(path.join(job, 'trial', 'result.json'), JSON.stringify({ verifier_result: { rewards } }));
+fs.writeFileSync(path.join(job, 'trial', 'result.json'), JSON.stringify({ verifier_result: { rewards }, ...(smoke ? { agent_result: { metadata: { smoke_exit_code: 0 } } } : {}) }));
 `,
   );
   await chmod(join(bin, "harbor"), 0o700);
@@ -113,7 +114,10 @@ for (const environment of ["modal", "e2b"] as const) {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as string[]);
-    expect(calls.map((args) => args[args.indexOf("--agent") + 1])).toEqual(["nop", "oracle"]);
+    expect(calls.map((args) => args[args.indexOf("--agent") + 1])).toEqual([
+      "harbor_smoke:SmokeAgent",
+      "oracle",
+    ]);
     if (environment === "modal") {
       expect(result.images).toEqual(images);
       // Only the oracle, which runs the task's real test.sh, records what trials will start from.

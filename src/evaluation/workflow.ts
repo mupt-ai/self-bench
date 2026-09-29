@@ -5,13 +5,14 @@ import {
   executeChild,
   isCancellation,
   ParentClosePolicy,
+  patched,
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
-import { trialInput } from "./trial-input.js";
+import { preparesTaskImages, trialInput } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
 
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
@@ -27,6 +28,15 @@ const trial = () =>
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
     taskQueue: harborTaskQueue(workflowInfo().taskQueue),
   });
+// Building a large task's two images from cold takes minutes; retrying once covers a lost worker.
+const prepare = () =>
+  proxyActivities<EvaluationActivities>({
+    startToCloseTimeout: "90 minutes",
+    heartbeatTimeout: "2 minutes",
+    cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
+    retry: { maximumAttempts: 2 },
+    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+  });
 const records = proxyActivities<EvaluationActivities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 5, nonRetryableErrorTypes: REFUSED },
@@ -36,26 +46,60 @@ const records = proxyActivities<EvaluationActivities>({
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
  * at once, so a trial's history stands alone in Temporal and the Harbor queue sees the whole
  * evaluation. Cancelling the evaluation cancels every trial workflow and waits for each to record
- * where it stopped; closing it any other way terminates them.
+ * where it stopped; closing it any other way terminates them. A task's trials start once its
+ * images are built (taskImagesReady).
  */
 export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Promise<void> {
   const { workflowId } = workflowInfo();
+  // Evaluations started before images were prepared replay without it.
+  const ready = patched("prepare-task-images")
+    ? taskImagesReady(input, prepare())
+    : async () => undefined;
   try {
     await runEvaluationTrials(
       input,
       records,
-      (input, index) =>
-        executeChild(selfBenchSolverTrialWorkflow, {
+      async (input, index) => {
+        await ready(index);
+        await executeChild(selfBenchSolverTrialWorkflow, {
           workflowId: `${workflowId}/trial/${index}`,
           args: [trialInput(input, index), index],
           cancellationType: ChildWorkflowCancellationType.WAIT_CANCELLATION_COMPLETED,
           parentClosePolicy: ParentClosePolicy.TERMINATE,
-        }),
+        });
+      },
       MAX_PENDING_TRIAL_WORKFLOWS,
     );
   } catch {
     await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));
   }
+}
+
+/**
+ * Waits, per trial, for its task's images: the first trial of each task builds them once
+ * (prepareTaskImages) and the task's other trials wait on that build. A failed build only means
+ * the trials build as they did before, so it never fails a trial.
+ */
+export function taskImagesReady(
+  input: EvaluationInput,
+  harbor: Pick<EvaluationActivities, "prepareTaskImages">,
+): (index: number) => Promise<void> {
+  if (!preparesTaskImages(input.sandbox)) return async () => undefined;
+  const builds = new Map<number, Promise<void>>();
+  return (index) => {
+    const task = Math.floor(index / input.harnesses.length);
+    let build = builds.get(task);
+    if (!build) {
+      build = harbor.prepareTaskImages(trialInput(input, index)).then(
+        () => undefined,
+        (error) => {
+          if (isCancellation(error)) throw error;
+        },
+      );
+      builds.set(task, build);
+    }
+    return build;
+  };
 }
 
 /** One trial of an evaluation: its Harbor activity, and its failure when it recorded none. */

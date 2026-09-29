@@ -10,3 +10,11 @@ export function trialInput(input: EvaluationInput, index: number): EvaluationInp
   const task = input.tasks[Math.floor(index / input.harnesses.length)];
   return { ...input, tasks: task ? [task] : [] };
 }
+
+/**
+ * Whether an evaluation on this sandbox builds each task's images before the task's trials start
+ * (prepareTaskImages): Modal and E2B keep a built image or template for every later trial.
+ */
+export function preparesTaskImages(sandbox: EvaluationInput["sandbox"]): boolean {
+  return sandbox === "modal" || sandbox === "e2b";
+}

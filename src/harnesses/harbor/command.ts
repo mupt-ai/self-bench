@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { delimiter, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 
@@ -85,6 +87,25 @@ export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.Pr
     COLUMNS: "320",
     HARBOR_TELEMETRY: "off",
   };
+}
+
+/**
+ * The Python interpreter Harbor itself runs on (the `harbor` executable's shebang), for scripts
+ * that drive Harbor's environments directly, such as runtime/selfbench_prepare.py.
+ */
+export async function harborPython(env: NodeJS.ProcessEnv): Promise<string> {
+  for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
+    const shebang = await readFile(join(directory, "harbor"), "utf8").then(
+      (text) => text.split("\n", 1)[0],
+      () => undefined,
+    );
+    if (shebang === undefined) continue;
+    const interpreter = shebang.startsWith("#!") ? shebang.slice(2).trim() : "";
+    if (!isAbsolute(interpreter) || /\s/.test(interpreter))
+      throw new Error("Harbor's launcher does not name its Python interpreter");
+    return interpreter;
+  }
+  throw new Error("Harbor is not installed on this worker");
 }
 
 /** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */

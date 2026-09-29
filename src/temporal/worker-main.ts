@@ -45,7 +45,7 @@ const { verifyCompiled, ...generation } = createActivities(
   database ? createUsageStore(database.db) : undefined,
 );
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
-const { runSolverTrial, ...evaluation } = createEvaluationActivities(
+const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
   snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
@@ -77,7 +77,7 @@ const workers = await Promise.all([
           connection,
           namespace: config.temporal.namespace,
           taskQueue: harborTaskQueue(config.temporal.taskQueue),
-          activities: { verifyCompiled, runSolverTrial },
+          activities: { verifyCompiled, runSolverTrial, prepareTaskImages },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
