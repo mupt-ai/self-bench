@@ -110,6 +110,9 @@ if (idleExitMs) {
 try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
-  await database?.close();
-  await closeSentry();
+  try {
+    await database?.close();
+  } finally {
+    await closeSentry();
+  }
 }

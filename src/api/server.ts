@@ -40,7 +40,11 @@ export async function startApi(
   const connection = await connectTemporalClient(config.temporal);
   const client = new Client({ connection, namespace: config.temporal.namespace });
   const artifacts = createArtifactStore(config.artifact);
-  const site = options.auth ? await openSite(options.auth, config, client, artifacts) : undefined;
+  // Telemetry config for both sites' pages; empty unless keys are set.
+  const head = telemetryMetaTag();
+  const site = options.auth
+    ? await openSite(options.auth, config, client, artifacts, head)
+    : undefined;
   const localDatabase =
     !site && process.env.SELFBENCH_DATABASE_URL
       ? await openDatabase(process.env.SELFBENCH_DATABASE_URL)
@@ -54,7 +58,6 @@ export async function startApi(
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
   };
-  const head = telemetryMetaTag();
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);

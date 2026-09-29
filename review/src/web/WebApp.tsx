@@ -38,6 +38,8 @@ export function WebApp() {
     let cancelled = false;
     const expired = () => {
       cancelled = true;
+      // Whoever signs in next may be someone else; their events must not join this person's.
+      forgetPerson();
       setSession({ status: "anonymous" });
     };
     window.addEventListener(SESSION_EXPIRED, expired);

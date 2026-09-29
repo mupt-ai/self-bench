@@ -59,7 +59,7 @@ export function createGenerationBatches(
         .then((reference) => store.completeExport(runId, reference))
         .catch((error) => {
           console.error(`Batch ${runId} export failed; it will be retried`);
-          reportError(error, { tags: { batch_step: "export" } });
+          reportError(error, { tags: { batch_step: "export" }, repeatKey: `export:${runId}` });
         })
         .finally(() => exports.delete(runId)),
     );
@@ -118,7 +118,7 @@ export function createGenerationBatches(
       prepare(runId)
         .catch((error) => {
           console.error(`Batch ${runId} preparation failed; it will be retried`);
-          reportError(error, { tags: { batch_step: "prepare" } });
+          reportError(error, { tags: { batch_step: "prepare" }, repeatKey: `prepare:${runId}` });
         })
         .finally(() => preparing.delete(runId)),
     );
@@ -141,7 +141,10 @@ export function createGenerationBatches(
     results.forEach((result, index) => {
       if (result.status === "rejected") {
         console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);
-        reportError(result.reason, { tags: { batch_step: "reconcile" } });
+        reportError(result.reason, {
+          tags: { batch_step: "reconcile" },
+          repeatKey: `reconcile:${runIds[index]}`,
+        });
       }
     });
   };
@@ -150,7 +153,7 @@ export function createGenerationBatches(
     pending = tick()
       .catch((error) => {
         console.error("Batch reconciliation failed; persisted batches will be retried");
-        reportError(error, { tags: { batch_step: "plan" } });
+        reportError(error, { tags: { batch_step: "plan" }, repeatKey: "plan" });
       })
       .finally(() => {
         pending = undefined;

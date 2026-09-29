@@ -29,20 +29,43 @@ let person: Person | null | undefined;
 const early: unknown[] = [];
 let sentryPending = false;
 
+/**
+ * The app's paths and page titles name repositories, private ones included, and a task's run id
+ * carries the repository too. Outside selfbench.dev, analytics sees only the route.
+ */
+const REPO_PATH = /\/repos\/[^/?#\s"'\\]+\/[^/?#\s"'\\]+(\/tasks\/[^/?#\s"'\\]+)?/g;
+
+function withoutRepoNames<T>(value: T): T {
+  const json = JSON.stringify(value).replace(
+    REPO_PATH,
+    (_, task?: string) => `/repos/:owner/:name${task ? "/tasks/:runId" : ""}`,
+  );
+  return JSON.parse(json) as T;
+}
+
 export function startTelemetry(site: "app" | "public-site"): void {
   const config = readConfig();
   if (!config) return;
   const release = config.release ? { release: config.release } : {};
+  const app = site === "app";
   if (config.sentryDsn) {
     const dsn = config.sentryDsn;
     sentryPending = true;
+    // Until the SDK has loaded and installed its own handlers, keep what the page throws.
+    const keep = (event: ErrorEvent | PromiseRejectionEvent) =>
+      reportError(event instanceof ErrorEvent ? (event.error ?? event.message) : event.reason);
+    window.addEventListener("error", keep);
+    window.addEventListener("unhandledrejection", keep);
     void import("./sentry-browser").then((sdk) => {
       sdk.init({
         dsn,
         environment: config.environment,
         ...release,
         initialScope: { tags: { site } },
+        ...(app ? { beforeSend: withoutRepoNames, beforeBreadcrumb: withoutRepoNames } : {}),
       });
+      window.removeEventListener("error", keep);
+      window.removeEventListener("unhandledrejection", keep);
       sentry = sdk;
       sentryPending = false;
       applyPerson();
@@ -56,6 +79,27 @@ export function startTelemetry(site: "app" | "public-site"): void {
         ...(config.posthogHost ? { api_host: config.posthogHost } : {}),
         defaults: "2026-08-30",
         person_profiles: "identified_only",
+        ...(app
+          ? {
+              // The app shows API key secrets and private repository names on screen.
+              disable_session_recording: true,
+              mask_all_text: true,
+              mask_all_element_attributes: true,
+              // Flag requests send the person's first URL, which no event hook sees. The app
+              // uses no flags or remote config, so it makes none.
+              advanced_disable_flags: true,
+              before_send: (event) => {
+                if (!event) return event;
+                const { title: _, ...properties } = event.properties;
+                return {
+                  ...event,
+                  properties: withoutRepoNames(properties),
+                  ...(event.$set ? { $set: withoutRepoNames(event.$set) } : {}),
+                  ...(event.$set_once ? { $set_once: withoutRepoNames(event.$set_once) } : {}),
+                };
+              },
+            }
+          : {}),
       });
       client.register({ site, environment: config.environment, ...release });
       posthog = client;

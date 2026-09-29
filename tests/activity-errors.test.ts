@@ -1,19 +1,23 @@
 import { expect, test } from "bun:test";
-import { CancelledFailure, CompleteAsyncError, type Context } from "@temporalio/activity";
+import {
+  ApplicationFailure,
+  CancelledFailure,
+  CompleteAsyncError,
+  type Context,
+} from "@temporalio/activity";
 import { activityErrorInterceptor } from "../src/temporal/activity-errors.js";
 
-const context = {
-  info: {
-    activityType: "runSolverTrial",
-    activityId: "1",
-    attempt: 3,
-    taskQueue: "selfbench-dev-harbor",
-    workflowExecution: { workflowId: "eval-one/trial/one", runId: "r" },
-    workflowType: "solverTrialWorkflow",
-  },
-} as unknown as Context;
-
-function run(failure: unknown) {
+function run(failure: unknown, attempt: number) {
+  const context = {
+    info: {
+      activityType: "runSolverTrial",
+      activityId: "1",
+      attempt,
+      taskQueue: "selfbench-dev-harbor",
+      workflowExecution: { workflowId: "eval-one/trial/one", runId: "r" },
+      workflowType: "solverTrialWorkflow",
+    },
+  } as unknown as Context;
   const reports: { error: unknown; tags: unknown }[] = [];
   const execute = activityErrorInterceptor((error, { tags } = {}) => reports.push({ error, tags }))(
     context,
@@ -23,9 +27,9 @@ function run(failure: unknown) {
   return { result, reports };
 }
 
-test("a failed attempt is reported with what failed, then rethrown for Temporal to retry", async () => {
+test("a first failed attempt is reported with what failed, then rethrown for Temporal to retry", async () => {
   const failure = new Error("harbor exited 1");
-  const { result, reports } = run(failure);
+  const { result, reports } = run(failure, 1);
   await expect(result).rejects.toBe(failure);
   expect(reports).toEqual([
     {
@@ -33,7 +37,7 @@ test("a failed attempt is reported with what failed, then rethrown for Temporal 
       tags: {
         activity_type: "runSolverTrial",
         workflow_type: "solverTrialWorkflow",
-        attempt: 3,
+        attempt: 1,
         task_queue: "selfbench-dev-harbor",
       },
     },
@@ -41,10 +45,24 @@ test("a failed attempt is reported with what failed, then rethrown for Temporal 
 });
 
 test.each([
-  ["handed to a started sandbox", new CompleteAsyncError()],
-  ["cancelled", new CancelledFailure("CANCELLED")],
-])("an activity %s is not reported", async (_, ending) => {
-  const { result, reports } = run(ending);
-  await expect(result).rejects.toBe(ending);
-  expect(reports).toHaveLength(0);
+  ["a retry of a failure", new Error("harbor exited 1"), 3, false],
+  [
+    "a failure that ends retries",
+    ApplicationFailure.nonRetryable("unsafe task", "Unsafe"),
+    3,
+    true,
+  ],
+  ["a server timeout", new CancelledFailure("TIMED_OUT"), 2, true],
+  ["a cancellation", new CancelledFailure("CANCELLED"), 1, false],
+  ["a hand-off to a started sandbox", new CompleteAsyncError(), 1, false],
+  [
+    "a user's generation settings",
+    ApplicationFailure.nonRetryable("bad key", "GenerationConfiguration"),
+    1,
+    false,
+  ],
+])("%s", async (_, failure, attempt, reported) => {
+  const { result, reports } = run(failure, attempt);
+  await expect(result).rejects.toBe(failure);
+  expect(reports).toHaveLength(reported ? 1 : 0);
 });

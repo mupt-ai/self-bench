@@ -37,7 +37,7 @@ export function startBillingDispatcher(
         );
         await store.delivered(event.id, event.attempts);
       } catch (error) {
-        reportError(error, { tags: { billing_step: "meter-event" } });
+        reportError(error, { tags: { billing_step: "meter-event" }, repeatKey: "meter-event" });
         await store.failed(event.id, event.attempts, error);
       }
     }

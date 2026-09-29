@@ -19,6 +19,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     openRouterRates.stop();
     void stop()
+      .catch((error) => console.error("SelfBench API did not stop cleanly", error))
       .then(() => Promise.allSettled([closeAnalytics(), closeSentry()]))
       .finally(() => process.exit(0));
   });

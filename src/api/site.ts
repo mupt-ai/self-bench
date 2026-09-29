@@ -34,7 +34,6 @@ import { createPullRequestRoutes, type PullRequestRoutes } from "./routes/pull-r
 import { createReleaseRoutes, type ReleaseRoutes } from "./routes/releases.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./routes/repos.js";
 import { createTaskRoutes, type TaskRoutes } from "./routes/tasks.js";
-import { telemetryMetaTag } from "./telemetry-meta.js";
 
 interface Site {
   users: ReturnType<typeof createUserStore>;
@@ -62,6 +61,8 @@ export async function openSite(
   config: SelfBenchConfig,
   client: Client,
   artifacts: ArtifactStore,
+  /** Tags for the results site pages' head: the telemetry config. */
+  head: string,
 ): Promise<Site> {
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
@@ -144,7 +145,7 @@ export async function openSite(
             root: `${projectRoot(import.meta.url)}/dist/public-site`,
             publicRoutes: publicReleases,
             limiter,
-            head: telemetryMetaTag(),
+            head,
           }),
         }
       : {}),

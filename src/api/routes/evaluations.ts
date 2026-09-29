@@ -92,6 +92,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               ...(await comparisonStatus(artifacts, record)),
               submissionError,
             });
+            return !submissionError;
           };
           if (request.method === "POST" && !id) {
             const draft = comparisonSchema.parse(
@@ -106,6 +107,10 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               draft,
               env,
             );
+            const submitted = await resume(
+              record,
+              "Comparison saved. Some submissions were not confirmed; resume safely using this comparison.",
+            );
             track(
               user,
               "comparison started",
@@ -114,12 +119,10 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
                 models: draft.models.length,
                 harnesses: draft.models.reduce((sum, model) => sum + model.harnesses.length, 0),
                 sandbox: draft.sandbox,
+                // False when some runs were not confirmed; resuming submits them later.
+                submitted,
               },
               tenant,
-            );
-            await resume(
-              record,
-              "Comparison saved. Some submissions were not confirmed; resume safely using this comparison.",
             );
           } else if (request.method === "GET" && !id) {
             const records = await vault.comparisons.listForRepo(repo.id);
