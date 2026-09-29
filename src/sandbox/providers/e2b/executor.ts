@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
-import { CommandExitError, type CommandHandle, E2B } from "e2b";
+import { CommandExitError, type CommandHandle, E2B, RateLimitError } from "e2b";
 import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { raceAbort, shellQuote } from "../../../lib/util.js";
-import type {
-  SandboxExecutor,
-  SandboxRequest,
-  SandboxRunOptions,
-  StartedSandbox,
+import {
+  SandboxCapacityError,
+  type SandboxExecutor,
+  type SandboxRequest,
+  type SandboxRunOptions,
+  type StartedSandbox,
 } from "../../contracts.js";
 import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
 
@@ -48,7 +49,7 @@ export class E2BSandboxExecutor implements SandboxExecutor {
   close(): void {}
 
   private async open(request: SandboxRequest): Promise<SandboxSession> {
-    const sandbox = await this.#sandbox.create(this.config.image, {
+    const creating = this.#sandbox.create(this.config.image, {
       lifecycle: { onTimeout: "kill" },
       metadata: {
         selfbench_run: request.runId.slice(0, 256),
@@ -56,6 +57,12 @@ export class E2BSandboxExecutor implements SandboxExecutor {
       },
       requestTimeoutMs: Math.min(CREATE_REQUEST_TIMEOUT_MS, request.timeoutMs),
       timeoutMs: request.timeoutMs,
+    });
+    const sandbox = await creating.catch((error: unknown) => {
+      // E2B answers 429 once the team runs its plan's concurrent sandboxes.
+      throw error instanceof RateLimitError
+        ? new SandboxCapacityError(error.message, { cause: error })
+        : error;
     });
     return {
       id: sandbox.sandboxId,

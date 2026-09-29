@@ -97,6 +97,18 @@ export class SandboxExecutionError extends Error {
   }
 }
 
+/**
+ * The provider refused a new sandbox because the account is at its concurrent-sandbox quota.
+ * Its name is the Temporal failure type workflows wait on (the workflow bundle shares it).
+ */
+export class SandboxCapacityError extends Error {
+  static readonly type = "SandboxCapacityError";
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = SandboxCapacityError.type;
+  }
+}
+
 /** A sandbox left running by `start`: enough to stop it later and bill for its lifetime. */
 export interface StartedSandbox {
   readonly sandboxId: string;
