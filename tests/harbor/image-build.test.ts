@@ -45,11 +45,16 @@ test("a base image its registry does not serve is handed to the author", async (
   expect(log).toContain("manifest unknown");
 });
 
-test("a base image pull the registry throttled stays an infrastructure failure", async () => {
-  const env = await modalPrinting(pull("toomanyrequests: You have reached your pull rate limit"));
-  expect(
-    await authoredImageBuildFailure(failure, env, new AbortController().signal),
-  ).toBeUndefined();
+test("a base image pull the registry throttled or denied stays an infrastructure failure", async () => {
+  for (const reason of [
+    "toomanyrequests: You have reached your pull rate limit",
+    "denied: requested access to the resource is denied",
+  ]) {
+    const env = await modalPrinting(pull(reason));
+    expect(
+      await authoredImageBuildFailure(failure, env, new AbortController().signal),
+    ).toBeUndefined();
+  }
 });
 
 test("a build Modal itself failed stays an infrastructure failure", async () => {
