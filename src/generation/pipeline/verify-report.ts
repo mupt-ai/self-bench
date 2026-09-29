@@ -19,7 +19,6 @@ export function nopGatePassed(rewards: HarborRewards): boolean {
     reward(rewards, "patch_applied") >= 1 &&
     reward(rewards, "setup_completed") >= 1 &&
     reward(rewards, "fail_to_pass") === 0 &&
-    (rewards.structured_results !== 1 || rewards.fail_to_pass_exit_code === 10) &&
     reward(rewards, "pass_to_pass") >= 1
   );
 }
@@ -88,7 +87,7 @@ export function renderVerifyReport(report: VerifyReport): string {
     "## 4. Smoke command (agent image, user, and network allowlist)",
     gateText(report.smoke, "failed"),
     "",
-    `Evidence mode: ${report.nop.rewards.structured_results === 1 ? "JUnit named outcomes (JSON evidence in verifier logs)" : "command-level (individual transitions unproven)"}. Repeatability is two consecutive target runs in the same environment.`,
+    "Repeatability is two consecutive target runs in the same environment.",
     "",
     "## 5. nop run (base snapshot + held-out tests, no solution)",
     `Expected ${expectationText(NOP_EXPECTATIONS)}.`,

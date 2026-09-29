@@ -153,7 +153,6 @@ export async function compileHarborTask(
         definitionSha256: sha256(JSON.stringify(task.definition)),
         testPatchSha256: sha256(task.testPatch),
         goldPatchSha256: sha256(task.goldPatch),
-        testEvidence: task.definition.testResults?.format ?? "command-level",
         referenceDependencyProvisioning: preinstallGoldDependencies,
         environmentSha256: sha256(JSON.stringify(task.definition.environment)),
       },

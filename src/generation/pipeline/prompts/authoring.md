@@ -63,7 +63,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 }
 ```
 
-`testCommand` contains `{tests}` exactly once; failToPass and passToPass are the selectors it receives. Paths are repository-relative. testSelection.mode is reused, augmented, or authored. For exact per-test results, add `"testResults": {"format": "junit", "failToPass": ["classname::name"], "passToPass": [...]}`, write the report to "$SELFBENCH_JUNIT_REPORT" on every run, and install python3 in rootSetupCommand.
+`testCommand` contains `{tests}` exactly once; failToPass and passToPass are the selectors it receives. Paths are repository-relative. testSelection.mode is reused, augmented, or authored.
 
 # Isolate the Tests
 

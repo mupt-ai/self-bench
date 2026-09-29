@@ -31,7 +31,6 @@ describe("static submission check", () => {
       "tests/Dockerfile",
       "tests/root-setup.sh",
       "tests/runtime/command.sh",
-      "tests/runtime/junit.py",
       "tests/setup.sh",
       "tests/test.sh",
     ]);
@@ -179,35 +178,14 @@ describe("reuse-first contracts", () => {
       check({ testSelection: { ...selection, reused: [] } }, { testPatch: "", goldPatch }).ok,
     ).toBe(false);
   });
-  test("structured identities are disjoint and regression declarations align", () => {
-    expect(
-      check({ testResults: { format: "junit", failToPass: ["a", "a"], passToPass: [] } }).ok,
-    ).toBe(false);
-    expect(
-      check({ testResults: { format: "junit", failToPass: ["a"], passToPass: ["a"] } }).ok,
-    ).toBe(false);
-    expect(check({ testResults: { format: "junit", failToPass: ["a"], passToPass: [] } }).ok).toBe(
-      true,
-    );
-  });
-  test("renders structured verifier and valid shell for both modes", async () => {
-    for (const overrides of [
-      {},
-      { testResults: { format: "junit" as const, failToPass: ["suite::feature"], passToPass: [] } },
-    ]) {
-      const result = check(overrides);
-      const script = result.rendered?.["tests/test.sh"] ?? "";
-      const root = await mkdtemp(join(tmpdir(), "selfbench-script-syntax-"));
-      try {
-        await writeFile(join(root, "test.sh"), script);
-        expect((await runCommand("bash", ["-n", join(root, "test.sh")])).exitCode).toBe(0);
-        if ("testResults" in overrides) {
-          expect(result.rendered?.["tests/runtime/command.sh"]).toContain("SELFBENCH_JUNIT_REPORT");
-          expect(result.rendered?.["tests/Dockerfile"]).toContain("command -v python3");
-        }
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
+  test("renders a verifier script that is valid shell", async () => {
+    const script = check({}).rendered?.["tests/test.sh"] ?? "";
+    const root = await mkdtemp(join(tmpdir(), "selfbench-script-syntax-"));
+    try {
+      await writeFile(join(root, "test.sh"), script);
+      expect((await runCommand("bash", ["-n", join(root, "test.sh")])).exitCode).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

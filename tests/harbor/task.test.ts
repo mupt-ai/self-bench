@@ -177,11 +177,6 @@ describe("Harbor task compiler", () => {
         excluded: [],
         coverage: "Existing tests cover the request.",
       },
-      testResults: {
-        format: "junit",
-        failToPass: ["suite::target"],
-        passToPass: ["suite::a", "suite::b"],
-      },
     };
     await writeFile(join(authored, "definition.json"), JSON.stringify(baseOnlyDefinition));
     await writeFile(join(authored, "test.patch"), "");
@@ -194,7 +189,6 @@ describe("Harbor task compiler", () => {
     const baseManifest = JSON.parse(
       await readFile(join(baseOutput, ".selfbench-manifest.json"), "utf8"),
     );
-    expect(baseManifest.testEvidence).toBe("junit");
     expect(baseManifest.referenceDependencyProvisioning).toBe(true);
   });
 
