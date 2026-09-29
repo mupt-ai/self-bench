@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { verifierRuntimeFiles } from "../generation/task/runtime-assets.js";
 import { projectRoot } from "../lib/project-paths.js";
+import { tail } from "../lib/util.js";
 import type { SandboxFile, SandboxRunOptions } from "./contracts.js";
 import { taskSandbox } from "./task-context.js";
 
@@ -36,7 +37,11 @@ export async function taskOperation(
     options,
   );
   options.signal?.throwIfAborted();
-  if (result.exitCode !== 0)
-    throw new Error(`Sandbox ${operation} failed (exit ${result.exitCode})`);
+  if (result.exitCode !== 0) {
+    const detail = tail(result.stderr.trim(), 2_000);
+    throw new Error(
+      `Sandbox ${operation} failed (exit ${result.exitCode})${detail ? `: ${detail}` : ""}`,
+    );
+  }
   return result;
 }
