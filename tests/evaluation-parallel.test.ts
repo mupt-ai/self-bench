@@ -136,6 +136,83 @@ test("a trial whose setup failed before Harbor ran is retried, and its last atte
   expect(calls).toHaveLength(1);
 });
 
+test("a trial whose worker was lost before its solver started runs on the next attempt", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  // The first attempt's worker stalls in setup (a preempted pod), so Temporal retries the trial.
+  let resume = () => {};
+  const stalled = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  let reached = () => {};
+  const setUp = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const lost = executeTrial(store, input, 0, {
+    env: {},
+    vault,
+    command: (async (name, args, commandOptions) => {
+      reached();
+      await stalled;
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  });
+  await setUp;
+  await executeTrial(store, input, 0, { env: {}, vault, command });
+  // A stalled attempt that comes back never starts Harbor or overwrites the outcome.
+  resume();
+  await expect(lost).rejects.toThrow("refusing to repeat model spend");
+  expect(calls).toHaveLength(1);
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  expect(trial?.status).toBe("completed");
+  expect(trial?.solverStartedAt).toBeString();
+});
+
+test("a trial whose worker was lost after its solver started is not run again", async () => {
+  const { store, vault, input } = await started();
+  let reached = () => {};
+  const solving = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  let finish = () => {};
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const { calls, command } = harbor(async () => {
+    reached();
+    await finished;
+  });
+  const first = executeTrial(store, input, 0, { env: {}, vault, command });
+  await solving;
+  await expect(executeTrial(store, input, 0, { env: {}, vault, command })).rejects.toThrow(
+    "refusing to repeat model spend",
+  );
+  finish();
+  await first;
+  expect(calls).toHaveLength(1);
+});
+
+test("a stopping worker hands a trial that has not started its solver to the next attempt", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  const stopping = new AbortController();
+  stopping.abort();
+  await expect(
+    executeTrial(store, input, 0, {
+      env: {},
+      vault,
+      command,
+      retry: true,
+      stopping: stopping.signal,
+    }),
+  ).rejects.toThrow("Worker stopped before the solver started");
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  expect(trial?.status).toBe("queued");
+  expect(calls).toHaveLength(0);
+  await executeTrial(store, input, 0, { env: {}, vault, command });
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+});
+
 function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {
   const events: string[] = [];
   return {

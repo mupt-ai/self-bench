@@ -48,10 +48,16 @@ const { verifyCompiled, ...generation } = createActivities(
   database ? createUsageStore(database.db) : undefined,
 );
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
+// A SIGTERM (a preempted pod, a scale-in or a rollout) usually kills the worker before a trial
+// could finish, so trials that have not started their solver hand themselves to another worker.
+// Temporal's own handler, installed with the connection, drains the rest.
+const stopping = new AbortController();
+process.once("SIGTERM", () => stopping.abort());
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
   createArtifactStore(config.artifact),
   vault,
   snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
+  stopping.signal,
 );
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 // A stopping worker (SIGTERM on a scale-in or rollout) stops polling at once and lets in-flight

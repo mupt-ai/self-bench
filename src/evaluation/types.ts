@@ -58,6 +58,10 @@ export interface EvaluationTrial {
   steps: SolverStep[];
   artifacts: string[];
   startedAt?: string;
+  /** The attempt holding a running trial; another attempt may take it over until the solver starts. */
+  claim?: string;
+  /** When Harbor started; from then on the trial may have spent, so it never runs again. */
+  solverStartedAt?: string;
   finishedAt?: string;
   modelVerified?: boolean;
   apiCostUsd?: number;

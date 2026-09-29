@@ -12,6 +12,7 @@ import { HARBOR_PROCESS_TIMEOUT_MS, harborRunArguments } from "../harnesses/harb
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
+import { claimTrial } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent } from "./execution.js";
 import { thinkingArguments } from "./models.js";
@@ -25,7 +26,7 @@ import {
   trajectorySteps,
   trialLog,
 } from "./output.js";
-import { evaluationPrefix, RepeatSpendError, updateEvaluation } from "./store.js";
+import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
@@ -67,13 +68,15 @@ export interface RunnerOptions {
    * starts is then returned to the queue for it, unless the failure is final (refuseTrial).
    */
   retry?: boolean;
+  /** Aborts when the worker is being stopped: a trial not yet solving then leaves for another. */
+  stopping?: AbortSignal;
 }
 
 /**
- * Runs one trial of a started evaluation. The trial is claimed (queued to running) in the record
- * before any model spend, so a second delivery of the same trial refuses instead of re-running it.
- * A retryable failure before the solver starts returns the claim for the next attempt. Every save
- * replaces only this trial, so trials running in parallel never overwrite each other.
+ * Runs one trial of a started evaluation under this attempt's claim (claimTrial), so the solver
+ * starts at most once however often the trial is delivered. A retryable failure before the solver
+ * starts returns the claim for the next attempt. Every save replaces only this trial, so trials
+ * running in parallel never overwrite each other.
  */
 export async function executeTrial(
   store: ArtifactStore,
@@ -81,19 +84,9 @@ export async function executeTrial(
   index: number,
   options: RunnerOptions = {},
 ): Promise<void> {
-  const run = await updateEvaluation(store, input.repoId, input.id, (run) => {
-    const trial = run.trials[index];
-    if (run.status !== "running" || trial?.status !== "queued") throw new RepeatSpendError();
-    trial.status = "running";
-    trial.startedAt = new Date().toISOString();
-  });
-  const trial = run.trials[index] as EvaluationTrial;
-  const save = () =>
-    updateEvaluation(store, input.repoId, input.id, (latest) => {
-      // A trial finalized elsewhere (its evaluation failed, or it timed out) stays as it was left.
-      if (latest.status !== "running" || latest.trials[index]?.status !== "running") return false;
-      latest.trials[index] = trial;
-    }).then(() => undefined);
+  const claim = await claimTrial(store, input, index);
+  const { run, trial } = claim;
+  const save = () => claim.save(trial);
   const root = await mkdtemp(join(tmpdir(), "selfbench-evaluation-"));
   const command = options.command ?? runCommand;
   const environment = options.env ?? process.env;
@@ -102,14 +95,6 @@ export async function executeTrial(
     .map(([, value]) => value ?? "")
     .filter(Boolean);
   const redact = (text: string) => redactOutput(text, secrets);
-  // Returns the claimed trial to the queue, so the next attempt can claim it again.
-  const requeue = () =>
-    updateEvaluation(store, input.repoId, input.id, (latest) => {
-      const current = latest.trials[index];
-      if (latest.status !== "running" || current?.status !== "running") return false;
-      current.status = "queued";
-      delete current.startedAt;
-    });
   // The solver may spend from the moment it starts, so only a failure before then is retried.
   let solving = false;
   let retrying = false;
@@ -119,9 +104,13 @@ export async function executeTrial(
       command,
       env: environment,
     });
+    if (options.stopping?.aborted) throw new Error("Worker stopped before the solver started");
+    trial.solverStartedAt = await claim.startSolver();
     solving = true;
     await runTrial({ store, run, trial, index, save, ...ready, command, redact, options });
   } catch (error) {
+    // This attempt lost its claim; whoever holds the trial now records its outcome.
+    if (error instanceof RepeatSpendError) throw error;
     const message = redact(error instanceof Error ? error.message : "Solver failed");
     // A retry needs the trial back in the queue; if that write fails, the failure is recorded here.
     retrying =
@@ -129,7 +118,7 @@ export async function executeTrial(
       options.retry === true &&
       !options.signal?.aborted &&
       !(error instanceof ApplicationFailure && error.nonRetryable) &&
-      (await requeue().then(
+      (await claim.requeue().then(
         () => true,
         () => false,
       ));
