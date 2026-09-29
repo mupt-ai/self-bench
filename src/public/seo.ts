@@ -35,7 +35,10 @@ export function defaultLineOf(lines: readonly PublishedLine[]): PublishedLine | 
 const percent = (value: number) => `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 const dollars = (value: number) => `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
 
-/** A repository page's description: what was measured, and the two settings its cards name. */
+/**
+ * A repository page's description: the two settings its cards name, then what was measured.
+ * Search results show only the first 150 or so characters, so the picks come first.
+ */
 export function repositoryDescription(line: PublishedLine): string {
   const { release } = line;
   const { fullName } = release.repository;
@@ -44,11 +47,12 @@ export function repositoryDescription(line: PublishedLine): string {
   const cheapest = chosen.find((pick) => pick.roles.includes("cheapest"))?.setting;
   const settings = release.settings.length;
   return [
-    `Which coding agent works best on ${fullName}? ${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its own merged pull requests.`,
+    `Which coding agent works best on ${fullName}?`,
     best ? `Most accurate: ${best.model.label}, ${percent(best.accuracy)}.` : "",
     cheapest && cheapest !== best
-      ? `Cheapest on the frontier: ${cheapest.model.label}, ${dollars(cheapest.costPerTaskUsd)} per task.`
+      ? `Cheapest: ${cheapest.model.label}, ${dollars(cheapest.costPerTaskUsd)} per task.`
       : "",
+    `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
   ]
     .filter(Boolean)
     .join(" ");

@@ -33,13 +33,13 @@ test("a repository's description names what was measured and the settings its ca
     setting("Off Frontier", 40, 2, false),
   ];
   expect(repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", settings))).toBe(
-    "Which coding agent works best on earendil-works/pi? 3 model settings scored on 47 tasks from its own merged pull requests. Most accurate: Claude Opus 5.5, 72.3%. Cheapest on the frontier: GPT-5.5 Mini, $0.042 per task.",
+    "Which coding agent works best on earendil-works/pi? Most accurate: Claude Opus 5.5, 72.3%. Cheapest: GPT-5.5 Mini, $0.042 per task. 3 model settings scored on 47 tasks from its merged pull requests.",
   );
   // One setting that is both picks is named once.
   expect(
     repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", [setting("Solo", 80, 1)])),
   ).toBe(
-    "Which coding agent works best on earendil-works/pi? 1 model setting scored on 47 tasks from its own merged pull requests. Most accurate: Solo, 80%.",
+    "Which coding agent works best on earendil-works/pi? Most accurate: Solo, 80%. 1 model setting scored on 47 tasks from its merged pull requests.",
   );
 });
 

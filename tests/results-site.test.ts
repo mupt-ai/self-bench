@@ -156,7 +156,7 @@ test("each page has its own title, description and address, in place of the buil
   expect(all(repository, /<title>([^<]*)<\/title>/)).toEqual([
     "vercel/next.js: Coding Agent Benchmark · SelfBench",
   ]);
-  expect(repository).toContain("12 tasks from its own merged pull requests");
+  expect(repository).toContain("12 tasks from its merged pull requests");
   // One page whatever the casing, at the repository's own; its default line is the same page.
   expect(repository).toContain(
     '<link rel="canonical" href="https://selfbench.test/vercel/next.js" />',
