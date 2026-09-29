@@ -1,8 +1,6 @@
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import {
   collectOutput,
@@ -12,24 +10,17 @@ import {
   trajectorySteps,
 } from "../src/evaluation/output.js";
 import { solverArguments } from "../src/evaluation/runner.js";
-import {
-  evaluationPrefix,
-  getEvaluation,
-  initialEvaluation,
-  listEvaluations,
-  saveEvaluation,
-} from "../src/evaluation/store.js";
+import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
 import {
   assertEvaluationBundleSize,
   MAX_EVALUATION_BUNDLE_BYTES,
 } from "../src/evaluation/task-bundle.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
-import { runCommand } from "../src/lib/process.js";
-import { credentialedInput, testModelSecret } from "./support/evaluation-fixture.js";
+import type { runCommand } from "../src/lib/process.js";
+import { testModelSecret } from "./support/evaluation-fixture.js";
 import { runEvaluation } from "./support/evaluation-run.js";
-import { memoryVault } from "./support/evaluation-vault.js";
+import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
-const directories: string[] = [];
 test("PostHog-sized bundles pass the compressed size guard, but oversized bundles do not", () => {
   expect(() => assertEvaluationBundleSize(373_934_442)).not.toThrow();
   expect(() => assertEvaluationBundleSize(MAX_EVALUATION_BUNDLE_BYTES + 1)).toThrow(
@@ -41,35 +32,6 @@ test("solver invocation carries the selected thinking level", () => {
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
   expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
 });
-afterEach(async () => {
-  await Promise.all(
-    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
-async function fixture(toml = 'version = "1.0"') {
-  const root = await mkdtemp(join(tmpdir(), "evaluation-test-"));
-  directories.push(root);
-  const task = join(root, "task", "harbor-task");
-  await mkdir(task, { recursive: true });
-  await writeFile(join(task, "task.toml"), toml);
-  await runCommand("tar", [
-    "-czf",
-    join(root, "task.tar.gz"),
-    "-C",
-    join(root, "task"),
-    "harbor-task",
-  ]);
-  const store = new LocalArtifactStore(join(root, "artifacts"));
-  const vault = memoryVault();
-  const input = await credentialedInput(vault);
-  await store.put(
-    input.tasks[0]?.bundleKey ?? "",
-    await readFile(join(root, "task.tar.gz")),
-    "application/gzip",
-  );
-  await saveEvaluation(store, initialEvaluation(input, "Test model"));
-  return { root, store, input, vault };
-}
 const trajectory = {
   steps: [
     {
@@ -84,7 +46,7 @@ const trajectory = {
   ],
 };
 test("saved credentials reach the solver; host auth never does", async () => {
-  const { input, vault } = await fixture();
+  const { input, vault } = await runnerFixture();
   const { child } = await credentialExecution(
     input,
     "/temporary-home",
@@ -128,7 +90,7 @@ test("solver argv cannot trigger author/oracle gates or implicit retries", () =>
   expect(args).not.toContain("nop");
 });
 test("mocked Harbor persists live output, structured tool results and final scores without secrets", async () => {
-  const { store, input, vault } = await fixture();
+  const { store, input, vault } = await runnerFixture();
   let calls = 0;
   let sawLive = false;
   const command: typeof runCommand = async (name, args, options) => {
@@ -186,7 +148,7 @@ test("setup failures a retry cannot fix fail the trial at once, before a model c
     ["version", "wrong-version", "does not match supported"],
     ["bundle", HARBOR_VERSION, "Task bundle is missing"],
   ] as const) {
-    const { root, store, input, vault } = await fixture();
+    const { root, store, input, vault } = await runnerFixture();
     if (scenario === "credential")
       await vault.credentials.remove(1, input.credentials?.modelCredentialId ?? "");
     if (scenario === "bundle") await rm(join(root, "artifacts", input.tasks[0]?.bundleKey ?? ""));
@@ -208,7 +170,7 @@ test("setup failures a retry cannot fix fail the trial at once, before a model c
   }
 });
 test("missing verifier results are failures, never invented zero scores", async () => {
-  const { store, input, vault } = await fixture();
+  const { store, input, vault } = await runnerFixture();
   // Once Harbor has run, the trial is never retried, though attempts remain.
   await runEvaluation(store, input, {
     env: {},
@@ -226,8 +188,10 @@ test("missing verifier results are failures, never invented zero scores", async 
   expect(run?.trials[0]?.rewards).toEqual({});
 });
 test("a bundle that asks for host credentials fails its trial before Harbor runs", async () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises Harbor's host interpolation.
-  const { store, input, vault } = await fixture('[verifier.env]\nKEY = "${OPENAI_API_KEY}"\n');
+  const { store, input, vault } = await runnerFixture(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises Harbor's host interpolation.
+    '[verifier.env]\nKEY = "${OPENAI_API_KEY}"\n',
+  );
   let calls = 0;
   await runEvaluation(store, input, {
     env: {},
@@ -243,7 +207,7 @@ test("a bundle that asks for host credentials fails its trial before Harbor runs
   expect(calls).toBe(0);
 });
 test("output collector excludes symlinks, credential files and arbitrary artifacts", async () => {
-  const { root } = await fixture();
+  const { root } = await runnerFixture();
   const logs = join(root, "logs");
   await mkdir(logs);
   await writeFile(join(root, "secret.txt"), "private");

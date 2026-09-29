@@ -20,11 +20,13 @@ import {
   boundedSteps,
   collectOutput,
   completeLines,
+  piFailure,
   piSteps,
   record,
   redactOutput,
   trajectorySteps,
   trialLog,
+  wholeTranscripts,
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { setUpTrial } from "./trial-setup.js";
@@ -208,7 +210,9 @@ async function runTrial(context: {
       const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
-      Object.assign(trial, trialCost(run, trial.harness, files, parsed, context.modelAuth));
+      // Long transcripts are cut for storage; cost and failures need every request.
+      const records = await wholeTranscripts(jobs, files);
+      Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
       const rewards = record(record(parsed.verifier_result).rewards);
       trial.rewards = Object.fromEntries(
         Object.entries(rewards).filter(
@@ -220,6 +224,10 @@ async function runTrial(context: {
         throw new Error(
           String(record(parsed.exception_info).exception_message ?? "Harbor trial failed"),
         );
+      // Pi exits 0 in JSON mode when its last request fails, so Harbor scores the unfinished work.
+      const pi = [...records].find(([name]) => name.endsWith("/pi.txt"));
+      const failure = pi && piFailure(pi[1]);
+      if (failure) throw new Error(`Pi stopped on a model error: ${failure}`);
       if (Object.keys(trial.rewards).length === 0)
         throw new Error("Harbor returned no verifier scores");
     }

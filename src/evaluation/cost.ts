@@ -1,6 +1,6 @@
 import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
-import { record } from "./output.js";
+import { record, TRUNCATED_OUTPUT } from "./output.js";
 import type { EvaluationRun, EvaluationTrial, Harness, TokenUsage } from "./types.js";
 
 const count = (value: unknown): value is number =>
@@ -64,6 +64,36 @@ function inferSubscriptionWrites(
   return changed ? { usage: inferred, costUsd } : "unchanged";
 }
 
+/**
+ * Pi's assistant messages, or undefined when the stream cannot account for all of them. A stream
+ * stored from its tail has lost its early message_end events, but its final agent_end lists every
+ * message of that agent run. The run must start with the prompt: a retry's run starts with its
+ * first reply, and the attempts before it are gone.
+ */
+function piAssistantMessages(text: string): Record<string, unknown>[] | undefined {
+  const truncated = text.startsWith(TRUNCATED_OUTPUT);
+  const events: Record<string, unknown>[] = [];
+  for (const line of text.split("\n").filter(Boolean)) {
+    try {
+      events.push(record(JSON.parse(line)));
+    } catch {
+      // Only the notice and the line the cut went through may precede the first whole event.
+      if (!truncated || events.length) return undefined;
+    }
+  }
+  if (!truncated)
+    return events
+      .filter((event) => event.type === "message_end")
+      .map((event) => record(event.message))
+      .filter((message) => message.role === "assistant");
+  const ends = events.filter((event) => event.type === "agent_end");
+  const [end] = ends;
+  if (ends.length !== 1 || !end || end.willRetry || !Array.isArray(end.messages)) return undefined;
+  const messages = end.messages.map(record);
+  if (messages.find((message) => message.role !== "system")?.role !== "user") return undefined;
+  return messages.filter((message) => message.role === "assistant");
+}
+
 export function trialCost(
   run: EvaluationRun,
   harness: Harness,
@@ -84,24 +114,17 @@ export function trialCost(
   let verified = false;
   let reportedCost: number | undefined;
   let cacheWritesInferred = false;
+  let largestPrompt: number | undefined;
   if (harness === "pi") {
     const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
     if (!text) return {};
-    const messages: Record<string, unknown>[] = [];
-    for (const line of text.split("\n").filter(Boolean)) {
-      let event: Record<string, unknown>;
-      try {
-        event = record(JSON.parse(line));
-      } catch {
-        return {};
-      }
-      const message = record(event.message);
-      if (event.type === "message_end" && message.role === "assistant") messages.push(message);
-    }
+    const messages = piAssistantMessages(text);
+    if (!messages) return {};
     verified =
       messages.length > 0 &&
       messages.every((message) => `${message.provider}/${message.model}` === run.modelName);
     const totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    largestPrompt = 0;
     for (const message of messages) {
       const tokens = record(message.usage);
       for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) {
@@ -109,6 +132,10 @@ export function trialCost(
         if (!count(value)) return { modelVerified: verified };
         totals[key] += value;
       }
+      largestPrompt = Math.max(
+        largestPrompt,
+        Number(tokens.input) + Number(tokens.cacheRead) + Number(tokens.cacheWrite),
+      );
     }
     usage = totals;
   } else if (harness === "codex") {
@@ -166,11 +193,9 @@ export function trialCost(
       costSource: cacheWritesInferred ? "reference-rates" : "harbor",
     };
   if (!pricing) return measured;
-  if (
-    pricing.maxInputTokens &&
-    usage.input + usage.cacheRead + usage.cacheWrite > pricing.maxInputTokens
-  )
-    return measured;
+  // The bound is per request; without per-request records the trial's total stands in for one.
+  const prompt = largestPrompt ?? usage.input + usage.cacheRead + usage.cacheWrite;
+  if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return measured;
   const apiCostUsd =
     (usage.input * pricing.input +
       usage.output * pricing.output +

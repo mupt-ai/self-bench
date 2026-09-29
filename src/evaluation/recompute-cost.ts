@@ -7,9 +7,10 @@
  *
  * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Runs
  * recorded before the model credential's sign-in type was saved with the evaluation look it up in
- * SELFBENCH_DATABASE_URL when set; without it, Codex sign-in cache writes are not inferred. Apply
- * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
- * Only the cost fields change. It refuses runs that are still queued or running.
+ * SELFBENCH_DATABASE_URL when set, or take it from --auth=codex-login|api-key when the database is
+ * out of reach; without either, Codex sign-in cache writes are not inferred. A recorded sign-in type
+ * always wins over the flag. Apply appends a new snapshot and never rewrites old ones, so the
+ * previous revision stays readable. Only the cost fields change. It refuses runs that are still queued or running.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,7 +119,12 @@ export async function recomputeEvaluationCost(
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [repoId, id] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!repoId || !/^\d+$/.test(repoId) || !id)
-    throw new Error("Usage: recompute-cost.js <repoId> <evaluationId> [--apply]");
+    throw new Error(
+      "Usage: recompute-cost.js <repoId> <evaluationId> [--apply] [--auth=codex-login|api-key]",
+    );
+  const flag = process.argv.find((arg) => arg.startsWith("--auth="))?.slice("--auth=".length);
+  if (flag !== undefined && flag !== "codex-login" && flag !== "api-key")
+    throw new Error("--auth must be codex-login or api-key");
   const store = createArtifactStore(loadConfig().artifact);
   const url = process.env.SELFBENCH_DATABASE_URL;
   const database = url ? await openDatabase(url, { light: true }) : undefined;
@@ -126,7 +132,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const lookup: ModelAuthLookup | undefined = database
       ? async (orgId, credentialId) =>
           (await releaseCredentials(database.db, orgId)).get(credentialId)?.auth
-      : undefined;
+      : flag && (async () => flag);
     const report = await recomputeEvaluationCost(
       store,
       Number(repoId),
