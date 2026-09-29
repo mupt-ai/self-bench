@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isSitePage } from "../src/api/http.js";
+import { isReviewAssetPath, isSitePage } from "../src/api/http.js";
 
 describe("site page routing", () => {
   test.each([
@@ -30,4 +30,11 @@ describe("site page routing", () => {
   ])("keeps API, auth, and asset requests out of the app shell: %s", (pathname) => {
     expect(isSitePage(pathname)).toBe(false);
   });
+
+  test.each(["/favicon.ico", "/favicon.svg", "/icon-192.png", "/apple-touch-icon.png"])(
+    "serves the site icon %s from the build",
+    (pathname) => {
+      expect(isReviewAssetPath(pathname)).toBe(true);
+    },
+  );
 });

@@ -38,9 +38,18 @@ export function bearerMatches(request: IncomingMessage, token: string): boolean 
   );
 }
 
+/** The site's icons, at the root where browsers and search engines look for them. */
+const ICONS = new Set([
+  "/dari-logo.svg",
+  "/favicon.ico",
+  "/favicon.svg",
+  "/icon-192.png",
+  "/apple-touch-icon.png",
+]);
+
 /** Paths of the built review app that are served without authentication. */
 export function isReviewAssetPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/dari-logo.svg" || pathname.startsWith("/assets/");
+  return pathname === "/" || ICONS.has(pathname) || pathname.startsWith("/assets/");
 }
 
 /** Serves a built file of the app; `head` is added to the page shell's head (telemetry config). */
