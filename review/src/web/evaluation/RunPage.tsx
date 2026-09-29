@@ -27,7 +27,11 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const key = `selfbench-run:${url}`;
-  const [state, setState] = React.useState<{ draft: ComparisonDraft; submitted: boolean }>(() => {
+  const [state, setState] = React.useState<{
+    draft: ComparisonDraft;
+    submitted: boolean;
+    sandboxDefaultPending?: boolean;
+  }>(() => {
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem(key);
@@ -62,6 +66,16 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           setModels(result.models);
           setSandboxes(result.sandboxes);
           setManaged(result.managed ?? { models: false, sandbox: false });
+          setState((current) => {
+            if (!current.sandboxDefaultPending || current.submitted) return current;
+            return {
+              ...current,
+              sandboxDefaultPending: false,
+              draft: result.managed?.sandbox
+                ? { ...current.draft, sandbox: "managed", sandboxCredentialId: "managed-sandbox" }
+                : current.draft,
+            };
+          });
         }
       },
       (cause) => {
@@ -277,7 +291,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           ready={ready}
           tasksReady={tasksReady}
           pairs={pairs}
-          onChange={(value) => setState({ ...state, draft: value })}
+          onChange={(value) => setState({ ...state, draft: value, sandboxDefaultPending: false })}
           onSubmit={() => void submit()}
         />
       </div>
