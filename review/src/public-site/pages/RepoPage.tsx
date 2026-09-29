@@ -14,8 +14,14 @@ import { APP_URL } from "../PublicLayout";
 import { picks } from "../picks";
 import { scrollArea } from "../scroll-area";
 import { useSource } from "../source-context";
-import { useLoad } from "../use-load";
+import { loadMemory, useLoad } from "../use-load";
 import { useTitle } from "../use-title";
+
+/**
+ * Repository pages read during the visit, so coming back to one draws it at once, from the
+ * first frame, while it is checked in the background. The latest 50 are kept.
+ */
+const visited = loadMemory<PublicRepoPage | undefined>(50);
 
 export function RepoPage() {
   const { owner = "", name = "", publisher } = useParams();
@@ -27,6 +33,7 @@ export function RepoPage() {
     () => (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
     // Runs of one repository share a group, so switching between them keeps the page up.
     fullName.toLowerCase(),
+    visited,
   );
   if (state.status === "loading") return <p className="text-muted-foreground">Loading…</p>;
   if (state.status === "error" || !state.value) return <NoResults fullName={fullName} />;

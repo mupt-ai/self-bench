@@ -132,7 +132,10 @@ Anonymous, read-only, and served before sign-in. Only each release's public payl
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/public/releases` | Every line's current release (`lines`) |
+| `GET` | `/api/public/directory` | Every line as a home page card (`cards`): repository, publisher, counts, the cheapest and most accurate frontier settings, the frontier's names and numbers, and `defaultLine` for the line each repository shows by default. Newest release first |
 | `GET` | `/api/public/repos/:owner/:name` | The current release of each line of one repository; `404` when nothing is released |
+
+Responses come from a snapshot of every current line, read at most once every 5 seconds per server, and afresh after a release or withdrawal on that server. A successful response carries `cache-control: public, max-age=60` and an `ETag`; a request whose `If-None-Match` names it gets a bodyless `304`. Misses and errors carry `no-store`. Each client IP may make 300 requests a minute, in bursts of up to 60, before a `429` with `retry-after`.
 
 ## Organization credentials
 

@@ -4,11 +4,18 @@ import { Link, useNavigate } from "react-router";
 import type { PublicRepoSummary } from "../contract";
 import { flightFrom, repoCard } from "../effects/marks";
 import { revealNavigate } from "../effects/page-reveal";
-import { ago, cleanDescription, compactNumber, dollars, percent, publisherName } from "../format";
+import {
+  ago,
+  cleanDescription,
+  compactNumber,
+  dollars,
+  percent,
+  publisherName,
+  ROLE_LABELS,
+} from "../format";
 import { PANEL } from "../frame";
 import { Avatar } from "./Avatar";
 import { CircledArrow } from "./card-marks";
-import { Picks } from "./Picks";
 
 /** How many frontier settings the hover preview lists; more would not fit the card. */
 const PREVIEW_LINES = ["first", "second", "third", "fourth", "fifth"] as const;
@@ -83,7 +90,7 @@ export function RepoCard({
           >
             {card.repository.description ? cleanDescription(card.repository.description) : ""}
           </p>
-          <Picks picks={card.picks} compact />
+          <CardPicks picks={card.picks} />
           <div className="-mx-4 mt-auto flex items-center gap-3 border-t border-border px-4 pt-2.5 text-xs text-muted-foreground">
             <span className="flex min-w-0 max-w-1/2 items-center gap-1.5">
               <Avatar src={card.publisher.avatarUrl} size={14} />
@@ -109,6 +116,26 @@ export function RepoCard({
         <FrontierPreview card={card} />
       </div>
     </Link>
+  );
+}
+
+/** The card's two picks, one line each: roles, model, accuracy, cost per task. */
+function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {picks.map((pick) => (
+        <li key={pick.setting.id} className="flex items-baseline gap-2 text-xs">
+          <span className="w-24 shrink-0 text-foreground/70">
+            {pick.roles.map((role) => ROLE_LABELS[role]).join(" · ")}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium">{pick.setting.model.label}</span>
+          <span className="shrink-0 font-mono tabular-nums">{percent(pick.setting.accuracy)}</span>
+          <span className="w-14 shrink-0 text-right font-mono tabular-nums text-muted-foreground">
+            {dollars(pick.setting.costPerTaskUsd)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

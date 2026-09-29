@@ -1,12 +1,12 @@
+import { directoryOf } from "../../../src/public/directory";
 import type { PublicRepoPage, PublicRepoSummary } from "./contract";
-import { repoSummary } from "./summary";
 
 /**
  * Where public pages get their data. Pages call only this. Fixtures implement it during
  * development; the public API implements it later, with no page changes.
  */
 export interface PublicSource {
-  /** Every repository with at least one release, as directory cards, newest release first. */
+  /** Each repository's default line, as directory cards, newest release first. */
   listRepos(): Promise<PublicRepoSummary[]>;
   /** Every release line as a card, newest first. Search shows one result per line. */
   listLines(): Promise<PublicRepoSummary[]>;
@@ -21,7 +21,8 @@ const sameName = (left: string, right: string) => left.toLowerCase() === right.t
 /**
  * A source over pages held in memory. One page per release line. A repository's default
  * line is its endorsed line, else its most recently released one, for the directory and the
- * repository page alike. Used by tests and the local fixture loader.
+ * repository page alike. The directory's cards are built exactly as the server builds them.
+ * Used by tests and the local fixture loader.
  */
 export function memorySource(pages: readonly PublicRepoPage[]): PublicSource {
   const newestFirst = (candidates: readonly PublicRepoPage[]) =>
@@ -45,22 +46,14 @@ export function memorySource(pages: readonly PublicRepoPage[]): PublicSource {
       endorsed: line.endorsed,
     })),
   });
+  const cards = () =>
+    directoryOf(pages.map((page) => ({ release: page.release, endorsed: page.endorsed })));
   return {
     async listRepos() {
-      const byRepository = new Map<number, PublicRepoPage[]>();
-      for (const page of newestFirst(pages)) {
-        const id = page.release.repository.id;
-        byRepository.set(id, [...(byRepository.get(id) ?? []), page]);
-      }
-      const defaults: PublicRepoPage[] = [];
-      for (const lines of byRepository.values()) {
-        const chosen = defaultLine(lines);
-        if (chosen) defaults.push(chosen);
-      }
-      return newestFirst(defaults).map(repoSummary);
+      return cards().filter((card) => card.defaultLine);
     },
     async listLines() {
-      return newestFirst(pages).map(repoSummary);
+      return cards();
     },
     async getRepo(owner, name) {
       const lines = linesOf(owner, name);

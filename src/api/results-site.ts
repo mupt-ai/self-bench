@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
-import type { ReleaseStore } from "../db/releases.js";
-import { contentType, sendJson } from "./http.js";
+import { repositoryPath, segmentsOf } from "../public/paths.js";
+import { contentType, sendJson, sendTagged, type TaggedBody, tagged } from "./http.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 
@@ -15,7 +15,7 @@ export interface ResultsSiteOptions {
   indexable: boolean;
   /** The built public site, `dist/public-site`. */
   root: string;
-  releases: Pick<ReleaseStore, "currentLinesFor">;
+  /** The public API, whose snapshot of released lines also decides each page's status. */
   publicRoutes: PublicReleaseRoutes;
   limiter?: RateLimiter;
 }
@@ -38,6 +38,14 @@ function sameHost(protocol: string): (value: string | undefined) => string | und
   };
 }
 
+/**
+ * A page that exists is the same for everyone: the CDN may keep it a minute, and is cleared on
+ * every deploy, because the page names that build's scripts. Browsers check it on every visit,
+ * a bodyless 304 while it is unchanged, so none keeps a page from before a deploy.
+ */
+const PAGE_CACHE = "public, max-age=0, s-maxage=60";
+const HTML_TYPE = "text/html; charset=utf-8";
+
 const escapeAttribute = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
@@ -51,14 +59,16 @@ export function createResultsSite(options: ResultsSiteOptions) {
   const normalize = sameHost(site.protocol);
   const host = normalize(site.host);
   const root = resolve(options.root);
-  let shell: Promise<string> | undefined;
+  let shell: Promise<TaggedBody> | undefined;
   const page = () => {
     shell ??= readFile(resolve(root, "index.html"), "utf8").then((html) =>
-      html.replace(
-        "</head>",
-        `    <meta name="selfbench-app-url" content="${escapeAttribute(options.appUrl)}" />\n${
-          options.indexable ? "" : '    <meta name="robots" content="noindex" />\n'
-        }  </head>`,
+      tagged(
+        html.replace(
+          "</head>",
+          `    <meta name="selfbench-app-url" content="${escapeAttribute(options.appUrl)}" />\n${
+            options.indexable ? "" : '    <meta name="robots" content="noindex" />\n'
+          }  </head>`,
+        ),
       ),
     );
     shell.catch(() => {
@@ -76,13 +86,16 @@ export function createResultsSite(options: ResultsSiteOptions) {
       () => undefined,
     );
   };
-  /** 200 for the directory and released repositories, 404 for anything the site cannot show. */
+  /**
+   * 200 for the directory and released repositories, 404 for anything the site cannot show. A
+   * path that cannot name a repository is refused without a lookup.
+   */
   const statusOf = async (pathname: string) => {
     if (pathname === "/") return 200;
-    const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-    const [owner, name, publisher] = parts;
-    if (!owner || !name || parts.length > 3) return 404;
-    const lines = await options.releases.currentLinesFor(`${owner}/${name}`);
+    const path = repositoryPath(segmentsOf(pathname));
+    if (!path) return 404;
+    const { publisher } = path;
+    const lines = await options.publicRoutes.linesFor(`${path.owner}/${path.name}`);
     const found = publisher
       ? lines.some((line) => line.release.publisher.login.toLowerCase() === publisher.toLowerCase())
       : lines.length > 0;
@@ -130,25 +143,35 @@ export function createResultsSite(options: ResultsSiteOptions) {
       // which is what crawlers and link previews see; the page itself renders in the browser.
       const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
       if (!verdict.ok) {
+        response.setHeader("cache-control", "no-store");
         response.setHeader("retry-after", String(verdict.retryAfter));
         sendJson(response, 429, { error: "Too many requests; try again shortly" });
         return true;
       }
-      let html: string;
+      let html: TaggedBody;
       try {
         html = await page();
       } catch {
+        response.setHeader("cache-control", "no-store");
         sendJson(response, 503, { error: "The public site is not built" });
         return true;
       }
       const status = await statusOf(url.pathname).catch(() => 404);
-      response.writeHead(status, {
-        "content-type": "text/html; charset=utf-8",
-        "content-length": Buffer.byteLength(html),
+      if (status === 200) {
+        sendTagged(request, response, html, {
+          "cache-control": PAGE_CACHE,
+          "content-type": HTML_TYPE,
+        });
+        return true;
+      }
+      // Not cached anywhere, so a repository's first release shows as soon as it is made.
+      response.writeHead(404, {
+        "content-type": HTML_TYPE,
+        "content-length": Buffer.byteLength(html.body),
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
       });
-      response.end(html);
+      response.end(html.body);
       return true;
     },
   };

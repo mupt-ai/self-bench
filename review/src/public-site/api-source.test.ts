@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { directoryOf } from "../../../src/public/directory";
 import { apiSource } from "./api-source";
 import { page } from "./test-fixture";
 
@@ -8,14 +9,14 @@ afterEach(() => {
 });
 
 /** Answers the public API from `routes`, recording each requested path. */
-function serve(routes: Record<string, { status?: number; lines?: unknown[] }>) {
+function serve(routes: Record<string, { status?: number; body?: unknown }>) {
   const calls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const path = String(input);
     calls.push(path);
     const route = routes[path];
     if (!route) return new Response(null, { status: 404 });
-    return Response.json({ lines: route.lines ?? [] }, { status: route.status ?? 200 });
+    return Response.json(route.body ?? {}, { status: route.status ?? 200 });
   }) as typeof fetch;
   return calls;
 }
@@ -27,11 +28,12 @@ const dari = page({
   publisher: { login: "mupt-ai", kind: "org" },
 });
 const line = (from: ReturnType<typeof page>) => ({ release: from.release, endorsed: false });
+const directory = { body: { cards: directoryOf([line(acme), line(dari)]) } };
 
-test("the directory reads every current release once and keeps the newest line per repository", async () => {
-  const calls = serve({ "/api/public/releases": { lines: [line(acme), line(dari)] } });
+test("the directory reads every card once and lists each repository's default line", async () => {
+  const calls = serve({ "/api/public/directory": directory });
   const cards = await apiSource().listRepos();
-  expect(calls).toEqual(["/api/public/releases"]);
+  expect(calls).toEqual(["/api/public/directory"]);
   expect(cards).toHaveLength(1);
   expect(cards[0]?.releaseId).toBe("dari-release");
   expect(await apiSource().listLines()).toHaveLength(2);
@@ -40,7 +42,7 @@ test("the directory reads every current release once and keeps the newest line p
 test("a repository page reads only its repository and lists every line", async () => {
   const [owner, name] = acme.release.repository.fullName.split("/") as [string, string];
   const calls = serve({
-    [`/api/public/repos/${owner}/${name}`]: { lines: [line(acme), line(dari)] },
+    [`/api/public/repos/${owner}/${name}`]: { body: { lines: [line(acme), line(dari)] } },
   });
   const shown = await apiSource().getLine(owner, name, acme.release.publisher.login);
   expect(calls).toEqual([`/api/public/repos/${owner}/${name}`]);
@@ -52,7 +54,7 @@ test("a repository page reads only its repository and lists every line", async (
 });
 
 test("concurrent directory reads share one request; later reads fetch again", async () => {
-  const calls = serve({ "/api/public/releases": { lines: [line(acme)] } });
+  const calls = serve({ "/api/public/directory": directory });
   const source = apiSource();
   await Promise.all([source.listRepos(), source.listLines()]);
   expect(calls).toHaveLength(1);
@@ -61,7 +63,7 @@ test("concurrent directory reads share one request; later reads fetch again", as
 });
 
 test("nothing released is undefined; a server error is an error", async () => {
-  serve({ "/api/public/releases": { status: 503 } });
+  serve({ "/api/public/directory": { status: 503 } });
   expect(await apiSource().getRepo("nobody", "nothing")).toBeUndefined();
   await expect(apiSource().listRepos()).rejects.toThrow("503");
 });
