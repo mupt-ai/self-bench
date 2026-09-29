@@ -81,14 +81,11 @@ export const escapeAttribute = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
 /** The client hung up mid-request or mid-response: nothing on the server failed. */
-export function clientWentAway(error: unknown): boolean {
+export function clientWentAway(error: unknown, responseStarted = false): boolean {
+  if (error instanceof Error && error.message === "aborted") return true;
+  if (!responseStarted) return false;
   const code = (error as NodeJS.ErrnoException | null)?.code;
-  return (
-    code === "ERR_STREAM_PREMATURE_CLOSE" ||
-    code === "ECONNRESET" ||
-    code === "EPIPE" ||
-    (error instanceof Error && error.message === "aborted")
-  );
+  return code === "ERR_STREAM_PREMATURE_CLOSE" || code === "ECONNRESET" || code === "EPIPE";
 }
 
 export function sendApiError(response: ServerResponse, error: unknown): void {

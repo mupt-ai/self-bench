@@ -124,7 +124,7 @@ export async function startApi(
       sendJson(response, 404, { error: "not found" });
     } catch (error) {
       if (response.headersSent) {
-        if (!clientWentAway(error)) reportError(error);
+        if (!clientWentAway(error, true)) reportError(error);
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }
