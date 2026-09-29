@@ -104,7 +104,7 @@ export async function executeTrial(
     const signals = [options.signal, stopping].filter((signal) => signal !== undefined);
     const ready = await setUpTrial(store, input, run, trial, root, secrets, {
       ...options,
-      ...(signals.length > 0 ? { signal: AbortSignal.any(signals) } : {}),
+      ...(signals.length > 0 ? { setupSignal: AbortSignal.any(signals) } : {}),
       command,
       env: environment,
     });

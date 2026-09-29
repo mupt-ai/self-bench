@@ -218,6 +218,29 @@ test("a stopping worker hands a trial in setup to the next attempt, but runs its
   expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
 });
 
+test("a worker that stops once a solver has started leaves that solver running", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  const stopping = new AbortController();
+  let aborted: boolean | undefined;
+  await executeTrial(store, input, 0, {
+    env: {},
+    vault,
+    retry: true,
+    stopping: stopping.signal,
+    command: (async (name, args, commandOptions) => {
+      if (args[0] !== "--version") {
+        stopping.abort();
+        aborted = commandOptions?.signal?.aborted;
+      }
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  });
+  expect(aborted).toBe(false);
+  expect(calls).toHaveLength(1);
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+});
+
 function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {
   const events: string[] = [];
   return {
