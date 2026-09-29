@@ -4,14 +4,17 @@ import {
   harborRunsServices,
 } from "../../contracts/config/providers.js";
 import type { TaskEnvironment } from "../../contracts/index.js";
+import { parseImageReference } from "./image-registry.js";
 
 const secretName = /(?:TOKEN|SECRET|PRIVATE_KEY|ACCESS_KEY|API_KEY|CREDENTIAL)/i;
 const passwordName = /PASSWORD/i;
-const pinnedImage =
-  /^(?:[a-z0-9.-]+(?::[0-9]+)?\/)?(?:[a-z0-9._-]+\/)*[a-z0-9._-]+(?::[A-Za-z0-9._-]+)?@sha256:[a-f0-9]{64}$/;
 
+/**
+ * The authored contract: images name a tag (the worker pins it) or a digest copied from the
+ * repository. {@link assertPinnedImages} holds the compiled contract to digests.
+ */
 export function assertEnvironmentPolicy(environment: TaskEnvironment): void {
-  assertPinnedImage(environment.baseImage, "environment baseImage");
+  assertImageReference(environment.baseImage, "environment baseImage");
   rejectSecretMaterial(environment.rootSetupCommand, "rootSetupCommand");
   rejectSecretMaterial(environment.setupCommand, "setupCommand");
   rejectSecretMaterial(environment.smokeCommand, "smokeCommand");
@@ -22,7 +25,7 @@ export function assertEnvironmentPolicy(environment: TaskEnvironment): void {
   }
   const serviceNames = new Set<string>();
   for (const service of environment.services) {
-    assertPinnedImage(service.image, `service ${service.name} image`);
+    assertImageReference(service.image, `service ${service.name} image`);
     if (serviceNames.has(service.name)) {
       throw new Error(`environment repeats service ${service.name}`);
     }
@@ -54,9 +57,28 @@ export function assertServicesSupported(
   );
 }
 
-function assertPinnedImage(image: string, scope: string): void {
-  if (!pinnedImage.test(image)) {
-    throw new Error(`${scope} must be a valid OCI reference pinned by sha256 digest`);
+/** Every image in a compiled contract is pinned, so the task builds the same image every time. */
+export function assertPinnedImages(environment: TaskEnvironment): void {
+  const images: [string, string][] = [
+    [environment.baseImage, "environment baseImage"],
+    ...environment.services.map((service): [string, string] => [
+      service.image,
+      `service ${service.name} image`,
+    ]),
+  ];
+  for (const [image, scope] of images) {
+    if (!parseImageReference(image)?.digest) {
+      throw new Error(`${scope} must be pinned by sha256 digest`);
+    }
+  }
+}
+
+function assertImageReference(image: string, scope: string): void {
+  const reference = parseImageReference(image);
+  if (!reference?.tag && !reference?.digest) {
+    throw new Error(
+      `${scope} must be an image reference with a tag, such as node:22-bookworm, or a sha256 digest copied from the repository`,
+    );
   }
 }
 

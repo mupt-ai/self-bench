@@ -53,7 +53,7 @@ Every task also needs a held-out test patch that shares no files with the refere
 
 - **Instruction.** It may restate the PR's request but may not add behavior inferred only from the implementation or tests.
 - **No test-to-gold coupling.** Held-out tests exercise a public API, command, persistence boundary, or extension seam. They may not import the gold's private helpers or pin internal SQL, query counts, private schemas, telemetry layout, incidental error wording, or UI composition unless the request makes that public.
-- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles. Images are pinned by digest; secret-named variables take only fixed placeholders. Services render as Docker Compose, so tasks with services cannot verify on E2B (Harbor's E2B environment drops the compose file). When the gold changes a dependency manifest, the hidden verifier image reruns setup with it and resets source files to the base.
+- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles. The agent names images by tag, or by a digest the repository itself pins; the trusted compiler pins each tag to the digest its registry serves and rejects a reference the registry does not serve, so every compiled task builds from digest-pinned images. Secret-named variables take only fixed placeholders. Services render as Docker Compose, so tasks with services cannot verify on E2B (Harbor's E2B environment drops the compose file). When the gold changes a dependency manifest, the hidden verifier image reruns setup with it and resets source files to the base.
 
 ## What the evaluated agent sees
 

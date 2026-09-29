@@ -5,7 +5,11 @@ import { sha256 } from "../../lib/hash.js";
 import { runCommand } from "../../lib/process.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { dependencyManifestPatch } from "./dependencies.js";
-import { assertEnvironmentEvidence, assertEnvironmentPolicy } from "./environment-policy.js";
+import {
+  assertEnvironmentEvidence,
+  assertEnvironmentPolicy,
+  assertPinnedImages,
+} from "./environment-policy.js";
 import { assertGoldAvoidsPassToPass, assertSafePatchPaths, assertSafeTaskPaths } from "./paths.js";
 import {
   agentDockerfile,
@@ -29,6 +33,7 @@ async function loadAuthoredTask(directory: string): Promise<AuthoredTaskFiles> {
     JSON.parse(await readFile(join(directory, "definition.json"), "utf8")),
   );
   assertEnvironmentPolicy(definition.environment);
+  assertPinnedImages(definition.environment);
   assertSafeTaskPaths(definition);
   const [testPatch, goldPatch] = await Promise.all([
     readFile(join(directory, "test.patch"), "utf8"),

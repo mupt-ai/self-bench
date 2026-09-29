@@ -51,7 +51,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
   "resources": { "cpus": 4, "memoryMb": 8192, "storageMb": 20480 },
   "environment": {
     "schemaVersion": 1,
-    "baseImage": "node:22-bookworm@sha256:<digest>",
+    "baseImage": "node:22-bookworm",
     "rootSetupCommand": "apt-get update && apt-get install -y --no-install-recommends bash git",
     "setupCommand": "bun install --frozen-lockfile",
     "smokeCommand": "bun --version",
@@ -80,7 +80,8 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 
 # Environment
 
-- Derive it from the repository's CI: an @sha256-pinned image, a setupCommand that installs and builds, and a smokeCommand that prints what it checks. Only literal, non-secret environment values.
+- Derive it from the repository's CI: a base image, a setupCommand that installs and builds, and a smokeCommand that prints what it checks. Only literal, non-secret environment values.
+- Name images by tag (`node:22-bookworm`, `postgres:16`); the worker pins each tag to its current digest. Add `@sha256:` only when the repository itself pins that digest, copied exactly. Never write a digest yourself. `skopeo inspect docker://IMAGE` confirms a tag exists.
 - The solver agent works in the agent image as root, with the HOME and caches setupCommand left, and its network is limited to its model provider. setupCommand must leave every tool the agent needs to run the tests ready offline (package managers, Corepack shims, toolchains). smokeCommand runs under exactly those conditions, so exercise those tools there (for example `pnpm --version`), not just the base image.
 - The harness applies the patch and then runs only testCommand. If the tests need a rebuild of the changed source, testCommand must do that build.
 

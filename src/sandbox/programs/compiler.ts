@@ -2,6 +2,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isHarborEnvironment } from "../../contracts/config/providers.js";
+import {
+  pinEnvironmentImages,
+  RegistryUnavailableError,
+} from "../../generation/task/image-registry.js";
 import { staticCheckSubmission } from "../../generation/task/static.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { errorMessage } from "../../lib/util.js";
@@ -10,9 +14,11 @@ import { compileSubmittedTask, TaskCompilerInfrastructureError } from "../task-c
 
 // Trusted compile of one submission (definition.json, test.patch, gold.patch in a tarball):
 // schema, policy, paths, patches, audit, candidate identity, then the rendered Harbor task.
-// Writes /work/result.json {compileErrors, auditBlockers} and /work/compiled.tar.gz. When the
-// compiler itself cannot run (e.g. the clone fails) it writes neither and exits 1, so the attempt
-// fails and is retried.
+// Image tags are pinned to the digest their registry serves now, and a digest the registry does
+// not serve is an author error. Writes /work/result.json {compileErrors, auditBlockers},
+// /work/compiled.tar.gz, and the pinned /work/definition.json. When the compiler itself cannot run
+// (e.g. the clone fails or a registry is down) it writes neither and exits 1, so the attempt fails
+// and is retried.
 const work = process.env.SELFBENCH_COMPILER_WORK ?? "/work";
 const submission = join(work, "submission");
 const input = JSON.parse(await readFile(join(work, "input.json"), "utf8"));
@@ -42,6 +48,7 @@ const auditBlockers = check.errors
   .filter((error) => error.gate === "audit")
   .map((error) => error.message);
 let bundle: Uint8Array = Buffer.alloc(0);
+let pinnedDefinition = "";
 if (compileErrors.length === 0) {
   const definition = JSON.parse(definitionJson ?? "{}");
   const { candidate } = input;
@@ -64,11 +71,21 @@ if (compileErrors.length === 0) {
     );
   }
   if (compileErrors.length === 0) {
+    const pinned = await pinEnvironmentImages(definition.environment).catch((error) => {
+      if (!(error instanceof RegistryUnavailableError)) throw error;
+      process.stderr.write(`compiler could not run: ${errorMessage(error)}\n`);
+      process.exit(1);
+    });
+    compileErrors.push(...pinned.problems.map((problem) => `[environment] ${problem}`));
+    definition.environment = pinned.environment;
+    pinnedDefinition = `${JSON.stringify(definition, null, 2)}\n`;
+  }
+  if (compileErrors.length === 0) {
     try {
       bundle = await compileSubmittedTask({
         taskId: definition.taskId,
         repositoryUrl: input.repositoryUrl,
-        definitionBytes: Buffer.from(`${JSON.stringify(definition, null, 2)}\n`),
+        definitionBytes: Buffer.from(pinnedDefinition),
         sourceBundle,
         ...(process.env.GH_TOKEN ? { token: process.env.GH_TOKEN } : {}),
       });
@@ -86,6 +103,7 @@ if (compileErrors.length === 0) {
 }
 await writeFile(join(work, "compiled.tar.gz"), bundle);
 if (bundle.byteLength > 0) {
+  await writeFile(join(work, "definition.json"), pinnedDefinition);
   // Optional: without the split files the check falls back to the full bundle.
   await splitGateBundle(join(work, "compiled.tar.gz"), work).catch((error) =>
     process.stderr.write(`gate bundle split failed: ${errorMessage(error)}\n`),
