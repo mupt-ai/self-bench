@@ -86,6 +86,10 @@ run "results_site_cdn" {
     error_message = "Query strings never split the cache, and the last good copy is served through a day of errors."
   }
   assert {
+    condition     = google_compute_backend_service.results_site[0].log_config[0].enable && google_compute_backend_service.results_site[0].log_config[0].sample_rate == 1
+    error_message = "Every request to the results site is logged, cache hits included."
+  }
+  assert {
     condition     = one([for rule in google_compute_url_map.api.host_rule : rule.path_matcher if contains(tolist(rule.hosts), "selfbench.example")]) == "results-site" && google_compute_url_map.api.path_matcher[0].default_url_redirect[0].host_redirect == "selfbench.example"
     error_message = "Only the results site's host routes to the CDN backend; www still redirects."
   }

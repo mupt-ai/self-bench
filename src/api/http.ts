@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
@@ -73,50 +73,6 @@ export function sendApiError(response: ServerResponse, error: unknown): void {
   sendJson(response, status, {
     error: status === 500 ? "internal server error" : errorMessage(error),
   });
-}
-
-/** A response body fixed in advance, with a tag that changes whenever the body does. */
-export interface TaggedBody {
-  readonly body: string;
-  readonly etag: string;
-}
-
-/** Tags `body` with a hash of its bytes: the same body always gets the same tag. */
-export function tagged(body: string): TaggedBody {
-  return { body, etag: `"${createHash("sha256").update(body).digest("base64url").slice(0, 27)}"` };
-}
-
-/** Whether an `If-None-Match` header names `etag` (weak or strong), or is `*`. */
-function names(header: string | undefined, etag: string): boolean {
-  if (!header) return false;
-  return header
-    .split(",")
-    .map((entry) => entry.trim().replace(/^W\//, ""))
-    .some((entry) => entry === "*" || entry === etag);
-}
-
-/**
- * Sends a tagged body with status 200, or, when the request already holds it (its
- * `If-None-Match` names the tag), a 304 with no body. Its cache-control goes on both.
- */
-export function sendTagged(
-  request: IncomingMessage,
-  response: ServerResponse,
-  { body, etag }: TaggedBody,
-  headers: { "cache-control": string; "content-type": string },
-): void {
-  response.setHeader("etag", etag);
-  response.setHeader("cache-control", headers["cache-control"]);
-  if (names(request.headers["if-none-match"], etag)) {
-    response.writeHead(304).end();
-    return;
-  }
-  response.writeHead(200, {
-    "content-type": headers["content-type"],
-    "content-length": Buffer.byteLength(body),
-    "x-content-type-options": "nosniff",
-  });
-  response.end(body);
 }
 
 export function sendJson(response: ServerResponse, status: number, value: unknown): void {
