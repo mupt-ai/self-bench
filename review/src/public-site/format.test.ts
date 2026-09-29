@@ -43,9 +43,9 @@ test("vendors are named as they write it, and unknown vendors keep their id", ()
 });
 
 test("custom models that differ only by endpoint are numbered, not told apart by host", () => {
-  const onEndpoint = (hash: string, accuracy: number) =>
+  const onEndpoint = (number: number, accuracy: number) =>
     setting({
-      id: `my-llama|pi|custom|api-key|default|#${hash}`,
+      id: `my-llama|pi|custom|api-key|default|#${number}`,
       model: { catalogId: "custom", name: "my-llama", label: "my-llama" },
       harness: "pi",
       provider: "custom",
@@ -53,8 +53,8 @@ test("custom models that differ only by endpoint are numbered, not told apart by
       reasoningLevel: "default",
       accuracy,
     });
-  const first = onEndpoint("1a2b3c4d", 60);
-  const second = onEndpoint("5e6f7a8b", 55);
+  const first = onEndpoint(1, 60);
+  const second = onEndpoint(2, 55);
   const all = [first, second];
   expect(settingLabel(first, all)).toBe("my-llama (Endpoint 1)");
   expect(settingLabel(second, all)).toBe("my-llama (Endpoint 2)");

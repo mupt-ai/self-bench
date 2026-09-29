@@ -1,5 +1,6 @@
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
+import { publicIds } from "./endpoint-numbers.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
 
@@ -42,7 +43,7 @@ export function approvedKeys(tasks: readonly ReleaseTask[]): string[] {
     .sort();
 }
 
-/** Settings with at least one result on an approved task, in id order. */
+/** Settings with at least one result on an approved task, in id order, then key order. */
 export function candidates(
   bySetting: ReadonlyMap<string, SettingResults>,
   approved: readonly string[],
@@ -54,7 +55,11 @@ export function candidates(
       coverage: new Set([...entry.results.keys()].filter((key) => allowed.has(key))),
     }))
     .filter((entry) => entry.coverage.size > 0)
-    .sort((left, right) => left.setting.id.localeCompare(right.setting.id));
+    .sort(
+      (left, right) =>
+        left.setting.id.localeCompare(right.setting.id) ||
+        left.setting.key.localeCompare(right.setting.key),
+    );
 }
 
 const covers = (candidate: Candidate, tasks: Iterable<string>) => {
@@ -117,12 +122,13 @@ export function frontierOf<T extends { id: string; accuracy: number; costPerTask
 
 function publicSetting(
   setting: Setting,
+  id: string,
 ): Omit<
   ReleaseSetting,
   "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "onFrontier"
 > {
   return {
-    id: setting.id,
+    id,
     model: { catalogId: setting.catalogId, name: setting.modelName, label: setting.label },
     harness: setting.harness,
     reasoningLevel: setting.reasoningLevel,
@@ -132,8 +138,13 @@ function publicSetting(
   };
 }
 
-/** Each chosen setting's aggregates over exactly `tasks`, with the frontier marked. */
+/**
+ * Each chosen setting's aggregates over exactly `tasks`, with the frontier marked. Custom settings
+ * that differ only by endpoint are numbered among the chosen ones, in key order, which is also
+ * the order they are listed in.
+ */
 export function scores(chosen: readonly Candidate[], tasks: readonly string[]): ReleaseSetting[] {
+  const ids = publicIds(chosen.map((entry) => entry.setting));
   const scored = chosen.map((entry) => {
     const trials = tasks.map((task) => {
       const result = entry.results.get(task);
@@ -143,7 +154,7 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
     const totalCostUsd = trials.reduce((sum, trial) => sum + (trial.apiCostUsd ?? 0), 0);
     return {
-      ...publicSetting(entry.setting),
+      ...publicSetting(entry.setting, ids.get(entry.setting.key) ?? entry.setting.id),
       tasks: tasks.length,
       passed,
       accuracy: (passed / tasks.length) * 100,

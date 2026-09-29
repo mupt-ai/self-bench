@@ -2,7 +2,6 @@ import { findModel, type ThinkingLevel } from "../contracts/models.js";
 import { eligibleTrial } from "../evaluation/eligible.js";
 import { evaluationTaskKey, type Harness } from "../evaluation/models.js";
 import type { EvaluationRun, EvaluationTrial } from "../evaluation/types.js";
-import { sha256 } from "../lib/hash.js";
 import type { ReleaseProvider, ReleaseSignIn } from "./release-types.js";
 
 /**
@@ -23,7 +22,10 @@ const MANAGED_MODEL = "managed-model";
 export interface Setting {
   /** Private identity, including a custom endpoint. Stable and unambiguous. */
   key: string;
-  /** Public identity: the same, with a custom endpoint replaced by a short digest. */
+  /**
+   * Public identity: the same without the endpoint, so custom settings on two endpoints share it
+   * until a release numbers them (`publicIds` in endpoint-numbers.ts).
+   */
   id: string;
   catalogId: string;
   modelName: string;
@@ -59,7 +61,7 @@ function settingOf(
   const publicParts = [model, harness, provider, signIn, reasoningLevel];
   return {
     key: JSON.stringify([...publicParts, endpoint]),
-    id: [...publicParts, ...(custom ? [`#${sha256(endpoint).slice(0, 8)}`] : [])].join("|"),
+    id: publicParts.join("|"),
     catalogId,
     modelName: typed ?? run.modelName,
     // The catalog's current name, so old and new runs of one model are labelled alike.

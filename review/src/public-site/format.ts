@@ -22,7 +22,8 @@ export function cleanDescription(text: string): string {
  * The name shown for a setting. When two settings of one release share a model label, the
  * access and harness that tell them apart are appended, so points and rows stay distinct. Custom
  * models that still match (the same typed name on different endpoints, whose hosts are private)
- * are numbered in release order: "(Endpoint 1)", "(Endpoint 2)".
+ * are numbered in release order: "(Endpoint 1)", "(Endpoint 2)". A release lists them in the
+ * order of the `|#1`, `|#2` its ids end in, so the label and the id name the same setting.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
   const twins = all.filter((other) => other.model.label === setting.model.label);
