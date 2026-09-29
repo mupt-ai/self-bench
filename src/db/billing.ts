@@ -70,7 +70,7 @@ export function createBillingStore(db: Database, configured: boolean) {
         .select({ orgId: orgBilling.orgId, customerId: orgBilling.stripeCustomerId })
         .from(orgBilling)
         .innerJoin(orgs, eq(orgBilling.orgId, orgs.id))
-        .where(and(eq(orgs.login, login), eq(orgs.kind, "org")));
+        .where(and(sql`lower(${orgs.login}) = lower(${login})`, eq(orgs.kind, "org")));
       return target?.customerId
         ? { orgId: target.orgId, customerId: target.customerId }
         : undefined;

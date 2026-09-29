@@ -132,7 +132,7 @@ test("only mupt-ai browser admins can grant Stripe invoice credits to existing c
   // Registered team has a Stripe customer; grants must not create new customers.
   await server.store.saveCustomer(server.teamId, "cus_1");
   const body = JSON.stringify({
-    targetOrg: "team",
+    targetOrg: "TEAM",
     amountCents: 1234,
     reason: "Courtesy",
     requestId: crypto.randomUUID(),
