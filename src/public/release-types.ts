@@ -37,7 +37,11 @@ export interface ReleasePublisher {
 
 /** One model configuration, scored over every task in the release. */
 export interface ReleaseSetting {
-  /** Opaque and stable within a release line; safe to use as a React key or URL fragment. */
+  /**
+   * Opaque and unique within a release; safe to use as a React key or URL fragment. Custom
+   * settings that differ only by endpoint end in `|#1`, `|#2`, … in the order they are listed,
+   * and may be numbered differently in another release.
+   */
   id: string;
   model: { catalogId: string; name: string; label: string };
   harness: Harness;

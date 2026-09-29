@@ -197,11 +197,11 @@ function syntheticPages(): PublicRepoPage[] {
           0.12,
           { provider: "custom", custom: true, reasoningLevel: "default", onFrontier: true },
         ),
-        // One typed model name on two endpoints: nothing public tells them apart but the
-        // endpoint's fingerprint in the id, so the page numbers them.
-        ...["1a2b3c4d", "5e6f7a8b"].map((hash, index) =>
+        // One typed model name on two endpoints: nothing public tells them apart but the number
+        // their ids end in, so the page numbers them the same way.
+        ...[1, 2].map((number, index) =>
           manySetting(
-            `my-llama-70b|pi|custom|api-key|default|#${hash}`,
+            `my-llama-70b|pi|custom|api-key|default|#${number}`,
             { catalogId: "custom", name: "my-llama-70b", label: "my-llama-70b" },
             index === 0 ? 25 : 22,
             index === 0 ? 0.6 : 0.48,
