@@ -1,7 +1,26 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
+import {
+  accuracyTick,
+  dollars as tickDollars,
+  VENDOR_CHIPS,
+  vendorPoint,
+} from "../../public-site/format";
 import { type BenchmarkPoint, dollars } from "./benchmark";
+
+/** The plot's colors and type, taken from the app theme so it follows light and dark. */
+const THEMED = [
+  "[--pareto-background:var(--card)]",
+  "[--pareto-tooltip-background:var(--background)]",
+  "[--pareto-foreground:var(--foreground)]",
+  "[--pareto-muted:var(--muted-fg)]",
+  "[--pareto-grid:var(--border)]",
+  "[--pareto-point:var(--faint)]",
+  "[--pareto-frontier:var(--foreground)]",
+  "[--pareto-frontier-line:var(--muted-fg)]",
+  "[--pareto-font-family:var(--mono)]",
+].join(" ");
 
 export function ParetoChart({
   points,
@@ -20,7 +39,9 @@ export function ParetoChart({
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
+  const narrow = width < 640;
   const oneHarness = new Set(points.map((point) => point.harness)).size === 1;
+  const lowest = Math.min(...points.map((point) => point.accuracy));
   return (
     <section ref={container} className="panel p-4 sm:p-6" aria-label="Accuracy versus Cost">
       {!points.length ? (
@@ -34,35 +55,58 @@ export function ParetoChart({
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className="[--pareto-background:var(--card)] [--pareto-foreground:var(--foreground)] [--pareto-muted:var(--muted-fg)] [--pareto-grid:var(--border)] [--pareto-point:var(--faint)] [--pareto-frontier:var(--foreground)] [--pareto-font-family:var(--mono)] [&>text[font-size='14']]:text-[17px] [&_text[font-size='11']]:text-[13px] [&_text[font-size='10']]:text-[12px] [&_text[font-size='8']]:text-[10px]"
+            className={THEMED}
             title="Model Comparison"
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
-            height={width < 640 ? 300 : Math.round(Math.min(520, Math.max(380, width * 0.55)))}
-            showLegend={width >= 640}
-            points={points.map((point) => ({
-              id: point.id,
-              label: oneHarness
-                ? point.name
-                : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`,
-              x: point.cost,
-              y: point.accuracy,
-              description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
-            }))}
+            // Room for the title and the vendor chips above the plot: a row on a desktop, a few
+            // on a phone.
+            height={narrow ? 440 : Math.round(Math.min(560, Math.max(440, width * 0.55)))}
+            textScale={narrow ? 1.3 : 1.2}
+            showLegend={!narrow}
+            showPointLabels="frontier"
+            labelPlacement="auto"
+            showTooltip
+            // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
+            hoverRadius={36}
+            // The public repository page's vendor chips: hovering one fades the rest.
+            {...VENDOR_CHIPS}
+            showSettings
+            points={points.map((point) => {
+              const source = { provider: point.provider, model: { name: point.model } };
+              const customModel = point.provider === "custom" ? point.model : undefined;
+              return {
+                id: point.id,
+                label: oneHarness
+                  ? point.name
+                  : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`,
+                x: point.cost,
+                y: point.accuracy,
+                ...vendorPoint(source, customModel),
+                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+              };
+            })}
             xAxis={{
               label: "Cost per Task",
               objective: "minimize",
-              includeZero: true,
-              ticks: width < 640 ? 3 : 5,
-              format: dollars,
+              // Costs span orders of magnitude; on a log axis cheap runs spread out instead of
+              // crowding against zero, and equal distances are equal price ratios.
+              scale: "log",
+              nice: true,
+              ticks: narrow ? 4 : 6,
+              // A short mark under each price, tying the label to its place on the axis.
+              tickMarks: true,
+              format: (value) => (value === 0 ? "$0.00" : tickDollars(value)),
             }}
             yAxis={{
               label: "Accuracy",
               objective: "maximize",
-              // Auto range leaves headroom above the top point; never label past 100%.
-              format: (value) => (value > 100 ? "" : `${value.toFixed(0)}%`),
+              // A little headroom so the top points and their labels clear the edge.
+              domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
+              nice: true,
+              ticks: 6,
+              format: accuracyTick,
             }}
-            showPointLabels={width < 640 ? "none" : "frontier"}
             onSelect={(selected) => {
               const point = points.find((entry) => entry.id === selected.id);
               if (point) onSelect(point.runId);
