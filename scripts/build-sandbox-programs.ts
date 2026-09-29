@@ -10,10 +10,12 @@ const extensions = ["authoring", "reviewer"] as const;
 
 await mkdir(outputDirectory, { recursive: true });
 await mkdir(join(outputDirectory, "harnesses/harbor/runtime"), { recursive: true });
-await copyFile(
-  join(root, "src/harnesses/harbor/runtime/harbor_gateway.py"),
-  join(outputDirectory, "harnesses/harbor/runtime/harbor_gateway.py"),
-);
+for (const adapter of ["harbor_gateway.py", "harbor_smoke.py"]) {
+  await copyFile(
+    join(root, "src/harnesses/harbor/runtime", adapter),
+    join(outputDirectory, "harnesses/harbor/runtime", adapter),
+  );
+}
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own

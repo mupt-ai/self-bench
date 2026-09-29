@@ -47,6 +47,8 @@ It does not receive the held-out test patch or reference solution. Harbor mounts
 
 The agent image commits the tree as it stands after `setup.sh` (the `selfbench-setup` commit) and snapshots that repository state to `/opt/selfbench/base.git`. The agent's diff (`agent.patch`) is therefore taken against the post-setup snapshot: files that setup creates and does not gitignore are never part of the agent's patch and cannot collide with the verifier image, which runs the same setup. The verifier image keeps the base commit as `HEAD`; when the gold patch changes dependency manifests it resets only those manifest paths after its extra setup pass.
 
+The agent runs as `root` in `/app`, the same user, `HOME`, and caches `setup.sh` used at image build, so every tool setup installed is usable offline. Its network is an allowlist of the model provider's hosts. Because a root agent can reach `/opt/selfbench/base.git`, the baseline is not trusted on its own: the collect hook also writes `/opt/selfbench/agent-base`, the tree id of the snapshot commit beneath the baseline, and the verifier refuses the patch (`patch_applied=0`) unless it matches the tree of its own `HEAD`, which the agent never touches. The verifier then applies the patch to its own clean copy with held-out test paths excluded, restores held-out and pass-to-pass test files from `HEAD`, and applies the test patch, so a tampered baseline or patch can only produce a tree the agent could have written in `/app` directly.
+
 Held-out tests must exercise an existing public API, command, persistence boundary, or extension seam. They may not import gold-specific private helpers or prescribe exact internal SQL, query counts, private schemas, object identity, telemetry layout, incidental error wording, or UI composition unless the source request explicitly makes that artifact public.
 
 ## Authoring rounds and verification
@@ -59,7 +61,7 @@ Each workflow step is a sequential activity: `runAuthoringTurn` (one sandbox, en
 
 The Harbor gates prove:
 
-1. `nop`: the smoke command succeeds in the built image, then selected new tests fail on the base snapshot while selected regressions pass;
+1. `nop`: the smoke command succeeds under the agent's conditions (agent image, `[agent]` user, agent network allowlist), then selected new tests fail on the base snapshot while selected regressions pass;
 2. `oracle`: the reference patch applies and every selected test passes;
 3. determinism: the fail-to-pass selection passes a second time with the oracle.
 
@@ -71,7 +73,7 @@ Every candidate in the discovered pool runs as its own child workflow in paralle
 
 SelfBench does not infer a generic language toolchain. The authoring agent derives the environment contract from the exact pinned base commit: runtime, dependency installation, builds, fixtures, and local services come from the closest matching CI job, repository Dockerfile, devcontainer, lockfiles, and test scripts.
 
-The resulting contract pins the base and service images by digest, records repository-file evidence for each choice, keeps service credentials local and non-secret, and separates verifier-only services from the agent environment. Services are rendered as a Docker Compose file, which Harbor runs on Docker, Modal, Vercel, and Daytona; Harbor 0.23.0's E2B environment builds only the Dockerfile and drops the compose file, so both the in-sandbox static check and the trusted compiler reject services when the run verifies on E2B. Secret-named variables are accepted only with fixed placeholder literals; values that look like real key material or interpolate host variables are rejected. The declared smoke command runs in the built verifier image before the `nop` split, so an environment defect is reported to the authoring agent as a red smoke or build gate rather than discovered later.
+The resulting contract pins the base and service images by digest, records repository-file evidence for each choice, keeps service credentials local and non-secret, and separates verifier-only services from the agent environment. Services are rendered as a Docker Compose file, which Harbor runs on Docker, Modal, Vercel, and Daytona; Harbor 0.23.0's E2B environment builds only the Dockerfile and drops the compose file, so both the in-sandbox static check and the trusted compiler reject services when the run verifies on E2B. Secret-named variables are accepted only with fixed placeholder literals; values that look like real key material or interpolate host variables are rejected. The declared smoke command runs in the agent phase of the first gate trial, through the `harbor_smoke:SmokeAgent` adapter in place of Harbor's `nop` agent: agent image, `[agent]` user, and agent network allowlist. A task whose tools the agent cannot use (for example a package manager that downloads itself on first use) fails the smoke gate with the smoke output, before the `nop` split runs, rather than being discovered as a zero score in an evaluation.
 
 When the reference patch changes a recognized dependency manifest or lockfile, the hidden verifier image repeats setup with the trusted reference state and then resets source files to the base snapshot. This prevents stale base dependencies from invalidating the oracle without exposing the reference patch to the coding-agent environment.
 

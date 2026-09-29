@@ -27,7 +27,7 @@ export function taskToml(task: TaskDefinition): string {
   };
   return `${[
     `schema_version = ${tomlString(HARBOR_SCHEMA_VERSION)}`,
-    'artifacts = ["/opt/selfbench/agent.patch"]',
+    'artifacts = ["/opt/selfbench/agent.patch", "/opt/selfbench/agent-base"]',
     "",
     "[task]",
     `name = ${tomlString(`selfbench/${task.taskId}`)}`,
@@ -40,7 +40,7 @@ export function taskToml(task: TaskDefinition): string {
     "",
     "[agent]",
     `timeout_sec = ${task.timeouts.agentSeconds}.0`,
-    'user = "agent"',
+    'user = "root"',
     'network_mode = "allowlist"',
     'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     "",
@@ -54,7 +54,7 @@ export function taskToml(task: TaskDefinition): string {
     'service = "main"',
     'user = "root"',
     `timeout_sec = ${Math.min(task.timeouts.testsSeconds, 300)}.0`,
-    'command = "git --git-dir=/opt/selfbench/base.git --work-tree=/app add -A && git --git-dir=/opt/selfbench/base.git --work-tree=/app diff --cached --binary HEAD > /opt/selfbench/agent.patch"',
+    `command = ${tomlString(COLLECT_AGENT_PATCH)}`,
     "",
     "[environment]",
     'network_mode = "public"',
@@ -71,21 +71,25 @@ export function taskToml(task: TaskDefinition): string {
     `storage_mb = ${task.resources.storageMb}`,
   ].join("\n")}\n`;
 }
+// The agent runs as root, so it can reach base.git. The hook records the baseline's history as
+// tree ids (post-setup, then snapshot); the verifier checks it against its own untouched HEAD.
+const BASE_GIT = "git --git-dir=/opt/selfbench/base.git --work-tree=/app";
+const COLLECT_AGENT_PATCH = [
+  `${BASE_GIT} log --format=%T HEAD > /opt/selfbench/agent-base`,
+  `${BASE_GIT} add -A`,
+  `${BASE_GIT} diff --cached --binary HEAD > /opt/selfbench/agent.patch`,
+].join(" && ");
+
 export function agentDockerfile(task: TaskDefinition): string {
   // The post-setup tree is committed as the baseline for agent.patch, so files that setup.sh
   // creates and does not gitignore never land in the agent's diff and never collide with the
-  // verifier image, which ran the same setup.
+  // verifier image, which ran the same setup. The agent runs as root with setup's HOME and
+  // caches, exactly as setup left them.
   return `${baseDockerfile(task)}
-RUN useradd --create-home --shell /bin/bash agent \\
-    && git -C /app add -A \\
+RUN git -C /app add -A \\
     && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\
     && mkdir -p /opt/selfbench \\
-    && cp -a /app/.git /opt/selfbench/base.git \\
-    && chown -R agent:agent /app /home/agent \\
-    && chown -R root:root /opt/selfbench \\
-    && chmod 700 /opt/selfbench
-ENV HOME=/home/agent
-USER agent
+    && cp -a /app/.git /opt/selfbench/base.git
 WORKDIR /app
 `;
 }

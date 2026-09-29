@@ -85,7 +85,7 @@ export function renderVerifyReport(report: VerifyReport): string {
     "## 3. Image build",
     gateText(report.build, report.build.infrastructure ? "failed (infrastructure)" : "failed"),
     "",
-    "## 4. Smoke command (verifier image, runtime user)",
+    "## 4. Smoke command (agent image, user, and network allowlist)",
     gateText(report.smoke, "failed"),
     "",
     `Evidence mode: ${report.nop.rewards.structured_results === 1 ? "JUnit named outcomes (JSON evidence in verifier logs)" : "command-level (individual transitions unproven)"}. Repeatability is two consecutive target runs in the same environment.`,

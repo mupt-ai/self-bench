@@ -108,12 +108,17 @@ describe("Harbor task compiler", () => {
     expect(taskToml).toContain(
       'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     );
+    // The agent is root, like setup.sh at build time, so it sees setup's HOME and caches.
+    expect(taskToml).toContain(
+      '[agent]\ntimeout_sec = 1.0\nuser = "root"\nnetwork_mode = "allowlist"',
+    );
     const agentDockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
     expect(agentDockerfile).not.toContain("gold.patch");
+    expect(agentDockerfile).not.toMatch(/useradd --create-home|^USER (?!root)|ENV HOME/m);
     // agent.patch is diffed against the post-setup snapshot, so non-ignored setup outputs never
     // land in the agent's patch and never collide with the verifier image's own setup.
     expect(agentDockerfile).toContain(
-      "&& git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
+      "RUN git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null -c user.email=selfbench@local -c user.name=selfbench commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
     );
     expect(agentDockerfile).not.toContain("reset --hard");
     expect(agentDockerfile).not.toContain("clean -fdq");
