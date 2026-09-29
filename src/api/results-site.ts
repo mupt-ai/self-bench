@@ -5,6 +5,14 @@ import { repositoryPath, segmentsOf } from "../public/paths.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
+import {
+  headTags,
+  homeHead,
+  notFoundHead,
+  type PageHead,
+  repositoryHead,
+  sitemapOf,
+} from "./site-head.js";
 import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
 
 export interface ResultsSiteOptions {
@@ -49,6 +57,9 @@ function sameHost(protocol: string): (value: string | undefined) => string | und
 const PAGE_CACHE = "public, max-age=0, s-maxage=60";
 const HTML_TYPE = "text/html; charset=utf-8";
 
+/** The build's own title and description, which each page's head replaces. */
+const BUILT_HEAD = [/\n?[ \t]*<title>[^<]*<\/title>/, /\n?[ \t]*<meta name="description"[^>]*>/];
+
 /**
  * The public results site, served by the same API process on its own host. On that host only
  * the public site answers: its API, its files, and its pages. Sign-in, the app's API, and every
@@ -59,16 +70,16 @@ export function createResultsSite(options: ResultsSiteOptions) {
   const normalize = sameHost(site.protocol);
   const host = normalize(site.host);
   const root = resolve(options.root);
-  let shell: Promise<TaggedBody> | undefined;
-  const page = () => {
+  const origin = site.origin;
+  let shell: Promise<string> | undefined;
+  /** The built page with the tags every page shares; `</head>` is left for the page's own. */
+  const built = () => {
     shell ??= readFile(resolve(root, "index.html"), "utf8").then((html) =>
-      tagged(
-        html.replace(
-          "</head>",
-          `    <meta name="selfbench-app-url" content="${escapeAttribute(options.appUrl)}" />\n${
-            options.indexable ? "" : '    <meta name="robots" content="noindex" />\n'
-          }${options.head ? `    ${options.head}\n` : ""}  </head>`,
-        ),
+      BUILT_HEAD.reduce((rest, tag) => rest.replace(tag, ""), html).replace(
+        "</head>",
+        `    <meta name="selfbench-app-url" content="${escapeAttribute(options.appUrl)}" />\n${
+          options.indexable ? "" : '    <meta name="robots" content="noindex" />\n'
+        }${options.head ? `    ${options.head}\n` : ""}</head>`,
       ),
     );
     shell.catch(() => {
@@ -76,6 +87,8 @@ export function createResultsSite(options: ResultsSiteOptions) {
     });
     return shell;
   };
+  const page = async (head: PageHead) =>
+    tagged((await built()).replace("</head>", `${headTags(head, origin)}  </head>`));
   /** A built file for this path, or undefined; never outside the build, never the shell. */
   const file = async (pathname: string) => {
     if (pathname === "/" || pathname.endsWith("/") || pathname === "/index.html") return undefined;
@@ -87,19 +100,17 @@ export function createResultsSite(options: ResultsSiteOptions) {
     );
   };
   /**
-   * 200 for the directory and released repositories, 404 for anything the site cannot show. A
-   * path that cannot name a repository is refused without a lookup.
+   * The page's head, with 200 for the directory and released repositories and 404 for anything
+   * the site cannot show. A path that cannot name a repository is refused without a lookup.
    */
-  const statusOf = async (pathname: string) => {
-    if (pathname === "/") return 200;
+  const pageOf = async (pathname: string): Promise<{ status: 200 | 404; head: PageHead }> => {
+    if (pathname === "/") return { status: 200, head: homeHead(origin) };
     const path = repositoryPath(segmentsOf(pathname));
-    if (!path) return 404;
-    const { publisher } = path;
-    const lines = await options.publicRoutes.linesFor(`${path.owner}/${path.name}`);
-    const found = publisher
-      ? lines.some((line) => line.release.publisher.login.toLowerCase() === publisher.toLowerCase())
-      : lines.length > 0;
-    return found ? 200 : 404;
+    if (!path) return { status: 404, head: notFoundHead() };
+    const fullName = `${path.owner}/${path.name}`;
+    const lines = await options.publicRoutes.linesFor(fullName).catch(() => []);
+    const head = repositoryHead(origin, lines, path.publisher);
+    return head ? { status: 200, head } : { status: 404, head: notFoundHead(fullName) };
   };
 
   return {
@@ -117,7 +128,9 @@ export function createResultsSite(options: ResultsSiteOptions) {
         return true;
       }
       if (url.pathname === "/robots.txt") {
-        const body = `User-agent: *\n${options.indexable ? "Allow" : "Disallow"}: /\n`;
+        const body = options.indexable
+          ? `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`
+          : "User-agent: *\nDisallow: /\n";
         response.writeHead(200, {
           "content-type": "text/plain; charset=utf-8",
           "cache-control": "public, max-age=3600",
@@ -139,8 +152,9 @@ export function createResultsSite(options: ResultsSiteOptions) {
         response.end(found.body);
         return true;
       }
-      // A page: the site's shell. Its status says whether the repository has anything released,
-      // which is what crawlers and link previews see; the page itself renders in the browser.
+      // A page: the site's shell, with the page's own title, description and address. Its status
+      // says whether the repository has anything released, which is what crawlers and link
+      // previews see; the page itself renders in the browser.
       const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
       if (!verdict.ok) {
         response.setHeader("cache-control", "no-store");
@@ -148,15 +162,30 @@ export function createResultsSite(options: ResultsSiteOptions) {
         sendJson(response, 429, { error: "Too many requests; try again shortly" });
         return true;
       }
+      // Every page the site can show, read from the released lines like the pages themselves, so
+      // it lists a release as soon as its page shows it. Kept a minute by the CDN, as pages are.
+      if (url.pathname === "/sitemap.xml" && options.indexable) {
+        const repositories = await options.publicRoutes.repositories().catch(() => undefined);
+        if (!repositories) {
+          response.setHeader("cache-control", "no-store");
+          sendJson(response, 503, { error: "Try again shortly" });
+          return true;
+        }
+        sendTagged(request, response, tagged(sitemapOf(origin, repositories)), {
+          "cache-control": PAGE_CACHE,
+          "content-type": "application/xml; charset=utf-8",
+        });
+        return true;
+      }
+      const { status, head } = await pageOf(url.pathname);
       let html: TaggedBody;
       try {
-        html = await page();
+        html = await page(head);
       } catch {
         response.setHeader("cache-control", "no-store");
         sendJson(response, 503, { error: "The public site is not built" });
         return true;
       }
-      const status = await statusOf(url.pathname).catch(() => 404);
       if (status === 200) {
         sendTagged(request, response, html, {
           "cache-control": PAGE_CACHE,

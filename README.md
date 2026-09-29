@@ -5,6 +5,8 @@
 
 **SelfBench builds private coding-agent benchmarks from your repository's merged pull requests, so you can compare agents and models on your own codebase.**
 
+Published results for open-source repositories are at **[selfbench.dev](https://selfbench.dev)**.
+
 For each merged PR, SelfBench rebuilds the task from the commit before the change: the PR's own request becomes the instruction, and an authoring agent writes hidden tests and a reference solution. A task is accepted only if the tests fail without a solution, pass with the original implementation, pass again on a rerun, and survive an independent review. Every accepted task is a native [Harbor](https://harborframework.com/) task.
 
 ## Using SelfBench
