@@ -119,7 +119,7 @@ run "worker_pool" {
     error_message = "The worker runs the same release image as a fixed pool."
   }
   assert {
-    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8"] && google_cloud_run_v2_worker_pool.worker.template[0].containers[0].command[3] == "dist/temporal/worker-main.js"
+    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "dev"] && google_cloud_run_v2_worker_pool.worker.template[0].containers[0].command[3] == "dist/temporal/worker-main.js"
     error_message = "The worker polls with the configured activity concurrency."
   }
   assert {
@@ -246,7 +246,7 @@ run "worker_pool_leaves_harbor_to_gke" {
     secret_versions          = { shared = 7, api = 3, worker = 1, temporal = 2 }
   }
   assert {
-    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "workflows"]
+    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "dev", "workflows"]
     error_message = "The pool polls only the workflow queue once Harbor work is on GKE."
   }
 }

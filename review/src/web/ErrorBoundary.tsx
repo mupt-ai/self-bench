@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { reportError } from "../telemetry";
 import { Button } from "./ui";
 
 /** Keep a render crash from replacing the whole app with a blank root. */
@@ -7,6 +8,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    reportError(error);
   }
 
   render() {

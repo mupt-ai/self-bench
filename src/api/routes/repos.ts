@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { User, UserStore } from "../../db/users.js";
+import { track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -89,6 +90,14 @@ export function createConnectedRepoRoutes(
             private: found.private,
             connectedBy: user.id,
           }));
+        if (!existing)
+          track(
+            user,
+            "repo connected",
+            // A private repository's name stays out of analytics.
+            { private: repo.private, ...(repo.private ? {} : { repo: repo.fullName }) },
+            tenant,
+          );
         sendJson(response, existing ? 200 : 201, { repo: publicRepo(repo) });
         return true;
       }

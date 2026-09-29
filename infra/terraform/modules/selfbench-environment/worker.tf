@@ -39,6 +39,10 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
         name  = "SELFBENCH_ACTIVITY_CONCURRENCY"
         value = tostring(var.activity_concurrency)
       }
+      env {
+        name  = "SELFBENCH_ENVIRONMENT"
+        value = var.environment
+      }
       # Once the GKE Harbor workers are proven, this pool leaves the Harbor queue to them.
       dynamic "env" {
         for_each = var.worker_pool_polls_harbor ? [] : ["workflows"]

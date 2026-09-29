@@ -1,5 +1,6 @@
 # Every value is set by Terraform (gke.tf, helm_release.workers).
 image: ""
+environment: ""
 runtimeAccount: ""
 secrets:
   shared: ""

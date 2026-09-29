@@ -28,6 +28,7 @@ import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluati
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
+import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
@@ -91,6 +92,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               ...(await comparisonStatus(artifacts, record)),
               submissionError,
             });
+            return !submissionError;
           };
           if (request.method === "POST" && !id) {
             const draft = comparisonSchema.parse(
@@ -105,9 +107,22 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               draft,
               env,
             );
-            await resume(
+            const submitted = await resume(
               record,
               "Comparison saved. Some submissions were not confirmed; resume safely using this comparison.",
+            );
+            track(
+              user,
+              "comparison started",
+              {
+                tasks: draft.tasks.length,
+                models: draft.models.length,
+                harnesses: draft.models.reduce((sum, model) => sum + model.harnesses.length, 0),
+                sandbox: draft.sandbox,
+                // False when some runs were not confirmed; resuming submits them later.
+                submitted,
+              },
+              tenant,
             );
           } else if (request.method === "GET" && !id) {
             const records = await vault.comparisons.listForRepo(repo.id);

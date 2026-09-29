@@ -61,6 +61,8 @@ export async function openSite(
   config: SelfBenchConfig,
   client: Client,
   artifacts: ArtifactStore,
+  /** Tags for the results site pages' head: the telemetry config. */
+  head: string,
 ): Promise<Site> {
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
@@ -143,6 +145,7 @@ export async function openSite(
             root: `${projectRoot(import.meta.url)}/dist/public-site`,
             publicRoutes: publicReleases,
             limiter,
+            head,
           }),
         }
       : {}),

@@ -9,7 +9,7 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
       <SiteSidebar
-        user={{ login: "example-user" }}
+        user={{ githubId: 1, login: "example-user" }}
         org={org}
         orgs={[org]}
         onSelect={() => {}}
@@ -38,7 +38,7 @@ test("sidebar supports the compact icon mode", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter initialEntries={["/"]}>
       <SiteSidebar
-        user={{ login: "example-user" }}
+        user={{ githubId: 1, login: "example-user" }}
         org={{ login: "example-account", kind: "org", role: "admin" }}
         orgs={[]}
         onSelect={() => {}}

@@ -114,6 +114,7 @@ resource "helm_release" "workers" {
   wait = false
   values = [yamlencode({
     image          = var.image
+    environment    = var.environment
     runtimeAccount = google_service_account.runtime.email
     secrets = {
       shared   = "projects/${var.project_id}/secrets/${google_secret_manager_secret.runtime["shared-env"].secret_id}/versions/${var.secret_versions.shared}"

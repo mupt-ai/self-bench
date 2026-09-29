@@ -22,6 +22,7 @@ import {
   GENERATION_REQUIRED,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
+import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -147,6 +148,16 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           });
           return true;
         }
+        const counts = parsed.data.candidateCounts;
+        track(
+          user,
+          "batch started",
+          {
+            candidates: counts.easy + counts.medium + counts.hard,
+            ...(generation ? generationProperties(generation.settings) : {}),
+          },
+          tenant,
+        );
         sendJson(response, 202, { run, runId: input.runId });
         return true;
       }

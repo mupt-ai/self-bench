@@ -8,6 +8,9 @@ import { fixtureSource } from "../src/public-site/fixture-source";
 import { syntheticSource } from "../src/public-site/mobile/checks/synthetic";
 import { PublicRoutes } from "../src/public-site/PublicRoutes";
 import { SourceContext } from "../src/public-site/source-context";
+import { startTelemetry } from "../src/telemetry";
+
+startTelemetry("public-site");
 
 const root = document.getElementById("root");
 if (!root) throw new Error("public site root is missing");

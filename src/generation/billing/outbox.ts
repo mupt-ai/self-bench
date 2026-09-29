@@ -1,4 +1,5 @@
 import type { BillingStore } from "../../db/billing.js";
+import { reportError } from "../../lib/telemetry/sentry.js";
 import { sendMeterEvent } from "../../third_party/stripe/client.js";
 import type { StripeConfig } from "./config.js";
 
@@ -36,6 +37,7 @@ export function startBillingDispatcher(
         );
         await store.delivered(event.id, event.attempts);
       } catch (error) {
+        reportError(error, { tags: { billing_step: "meter-event" }, repeatKey: "meter-event" });
         await store.failed(event.id, event.attempts, error);
       }
     }

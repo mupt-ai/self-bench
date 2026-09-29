@@ -73,6 +73,11 @@ resource "google_cloud_run_v2_service" "api" {
       image = var.image
       # Starting the API migrates the database, so a release's schema lands before its worker.
       command = ["node", "--env-file=/secrets/shared/env", "--env-file=/secrets/api/env", "dist/api/main.js"]
+      # Tags Sentry and PostHog events with the environment they came from.
+      env {
+        name  = "SELFBENCH_ENVIRONMENT"
+        value = var.environment
+      }
       ports {
         container_port = 8080
       }

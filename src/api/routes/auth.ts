@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ApiKeyError, type ApiKeyStore, presentedApiKey } from "../../db/api-keys.js";
 import type { Org, User, UserStore } from "../../db/users.js";
+import { track } from "../../lib/telemetry/posthog.js";
 import {
   authorizeUrl,
   exchangeCode,
@@ -141,6 +142,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
       sendRedirect(response, loginPath(signedIn.error));
       return;
     }
+    track(signedIn.user, "user signed in");
     setCookie(response, SESSION_COOKIE, signer.issue(signedIn.user.githubId), {
       maxAgeSeconds: SESSION_TTL_SECONDS,
       secure,
@@ -187,11 +189,13 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
 
 /** The browser-facing shape of a user: display fields only. */
 function publicUser(user: User): {
+  githubId: number;
   login: string;
   name?: string;
   avatarUrl?: string;
 } {
   return {
+    githubId: user.githubId,
     login: user.login,
     ...(user.name ? { name: user.name } : {}),
     ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),

@@ -52,6 +52,8 @@ spec:
             env:
               - name: SELFBENCH_WORKER_ROLE
                 value: harbor
+              - name: SELFBENCH_ENVIRONMENT
+                value: {{ .Values.environment | quote }}
               - name: SELFBENCH_HARBOR_CONCURRENCY
                 value: "10"
               - name: SELFBENCH_WORKER_IDLE_EXIT_SECONDS
