@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { HarborEnvironment } from "../contracts/config/providers.js";
 import type { ThinkingLevel } from "../contracts/models.js";
+import type { TaskImages } from "../contracts/task.js";
 import type { Vault } from "../db/vault.js";
+import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -12,8 +14,8 @@ import {
   harborRunArguments,
 } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
+import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
-import { extractRegularArchive } from "../lib/archive.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
 import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
@@ -29,15 +31,8 @@ import {
   trialLog,
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError, updateEvaluation } from "./store.js";
+import { unpackTrialTask } from "./task-bundle.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
-
-// PostHog task bundles include compressed repository snapshots larger than 350 MiB.
-// Keep a bounded compressed size; extractRegularArchive separately caps unpacked data.
-export const MAX_EVALUATION_BUNDLE_BYTES = 512 * 1024 * 1024;
-
-export function assertEvaluationBundleSize(size: number): void {
-  if (size > MAX_EVALUATION_BUNDLE_BYTES) throw new Error("Task bundle exceeds 512 MiB");
-}
 
 export function solverArguments(
   taskPath: string,
@@ -47,6 +42,7 @@ export function solverArguments(
   sandbox: HarborEnvironment,
   thinking?: ThinkingLevel,
   extraAllowedHosts: readonly string[] = [],
+  images?: TaskImages,
 ): string[] {
   return harborRunArguments({
     taskPath,
@@ -56,6 +52,8 @@ export function solverArguments(
     environment: sandbox,
     solver: { model, agentArguments: thinkingArguments(harness, thinking) },
     extraAllowedHosts,
+    // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
+    ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
   });
 }
 export interface RunnerOptions {
@@ -67,6 +65,8 @@ export interface RunnerOptions {
   /** The least time between saves of a running trial's live output; scales with trial count. */
   progressMs?: number;
   vault?: Pick<Vault, "credentials" | "comparisons">;
+  /** Signs the snapshot links Modal image builds fetch; see unpackTrialTask. */
+  snapshotLink?: SandboxCallback;
 }
 
 /**
@@ -117,22 +117,10 @@ export async function executeTrial(
     if (!task) throw new Error("Evaluation task snapshot is missing");
     const trialRoot = join(root, "trial");
     await mkdir(trialRoot);
-    const bundle = await store.getByKey(task.bundleKey);
-    if (!bundle) throw new Error("Task bundle is missing");
-    assertEvaluationBundleSize(bundle.byteLength);
-    const archive = join(trialRoot, "task.tar.gz");
-    await writeFile(archive, bundle, { mode: 0o600 });
-    const extracted = join(trialRoot, "task");
-    await mkdir(extracted);
-    await extractRegularArchive(
-      archive,
-      extracted,
-      options.signal ? { signal: options.signal } : {},
-    );
-    const taskPath = await readFile(join(extracted, "harbor-task", "task.toml")).then(
-      () => join(extracted, "harbor-task"),
-      () => extracted,
-    );
+    const taskPath = await unpackTrialTask(store, task, run.sandbox, trialRoot, {
+      ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
     const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal);
     await runTrial({
@@ -143,6 +131,7 @@ export async function executeTrial(
       save,
       taskPath,
       jobs: join(trialRoot, "jobs"),
+      ...(task.images ? { images: task.images } : {}),
       ...gateway,
       child: prepared.env,
       guard: prepared.guard,
@@ -176,6 +165,7 @@ async function runTrial(context: {
   model: string;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
+  images?: TaskImages;
   command: typeof runCommand;
   redact: (text: string) => string;
   options: RunnerOptions;
@@ -269,6 +259,7 @@ async function runTrial(context: {
           run.sandbox,
           run.thinking,
           context.extraAllowedHosts,
+          context.images,
         ),
         {
           env: child,

@@ -18,6 +18,9 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       "0000_glossy_johnny_blaze.sql",
       "0001_evaluation_records.sql",
       "0002_task_deletion.sql",
+      // The current task store writes every tasks column; later nullable columns on tasks are
+      // independent of the repo_runs migrations under test, so they are added up front.
+      "0014_task_images.sql",
     ]) {
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }

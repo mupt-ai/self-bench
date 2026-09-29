@@ -21,12 +21,16 @@ export function pipelineStatus(progress: Pick<TaskProgress, "status">): Pipeline
   }
 }
 
-/** The bundle and definition of an accepted task, written onto its row once. */
+/** The bundle, definition, and pinned images of an accepted task, written onto its row once. */
 export async function acceptedTaskFields(
   artifacts: ArtifactStore,
   task: AuthoredTask,
-): Promise<Pick<TaskUpsert, "bundleKey" | "definition">> {
+): Promise<Pick<TaskUpsert, "bundleKey" | "definition" | "images">> {
   const bundleKey = artifactKey(task.bundle);
   const definition = JSON.parse(Buffer.from(await artifacts.get(task.definition)).toString("utf8"));
-  return { ...(bundleKey ? { bundleKey } : {}), definition };
+  return {
+    ...(bundleKey ? { bundleKey } : {}),
+    definition,
+    ...(task.images ? { images: task.images } : {}),
+  };
 }
