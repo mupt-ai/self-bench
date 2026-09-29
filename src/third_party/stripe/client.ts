@@ -55,6 +55,7 @@ export async function createStripeCustomer(
 export async function verifyMeteredPrice(
   config: StripeConfig,
   unitScale: number,
+  meterEventName: string,
   options?: StripeRequestOptions,
 ): Promise<void> {
   const price = await stripeRequest<{
@@ -78,6 +79,23 @@ export async function verifyMeteredPrice(
     throw new Error(
       `Stripe metered price does not match SelfBench's ${unitScale} units per USD; fix the price before starting billing`,
     );
+  }
+  const meter = await stripeRequest<{
+    event_name?: string;
+    status?: string;
+    default_aggregation?: { formula?: string };
+    customer_mapping?: { type?: string; event_payload_key?: string };
+    value_settings?: { event_payload_key?: string };
+  }>(config, `/v1/billing/meters/${encodeURIComponent(price.recurring.meter)}`, {}, options);
+  if (
+    meter.event_name !== meterEventName ||
+    meter.status !== "active" ||
+    meter.default_aggregation?.formula !== "sum" ||
+    meter.customer_mapping?.type !== "by_id" ||
+    meter.customer_mapping.event_payload_key !== "stripe_customer_id" ||
+    meter.value_settings?.event_payload_key !== "value"
+  ) {
+    throw new Error("Stripe meter does not match SelfBench's usage event contract");
   }
 }
 

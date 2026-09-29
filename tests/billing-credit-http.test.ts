@@ -13,7 +13,10 @@ const stripe = {
   apiVersion: "2025-09-30.clover" as const,
 };
 
-async function billingServer(priceUnitCents = "0.00001") {
+async function billingServer(
+  priceUnitCents = "0.00001",
+  meterEventName = "selfbench_managed_usage",
+) {
   const database = await testDatabase();
   const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
   const admin = await users.upsert({
@@ -73,6 +76,14 @@ async function billingServer(priceUnitCents = "0.00001") {
         }
         return Response.json({ id: "cbtxn_1" });
       }
+      if (url.endsWith("/v1/billing/meters/mtr_1"))
+        return Response.json({
+          event_name: meterEventName,
+          status: "active",
+          default_aggregation: { formula: "sum" },
+          customer_mapping: { type: "by_id", event_payload_key: "stripe_customer_id" },
+          value_settings: { event_payload_key: "value" },
+        });
       if (url.endsWith("/v1/customers")) return Response.json({ id: "cus_1" });
       if (url.endsWith("/v1/checkout/sessions"))
         return Response.json({ url: "https://checkout.stripe.test/c" });
@@ -130,6 +141,22 @@ afterEach(async () => {
 
 test("checkout refuses a Stripe price whose meter units do not equal displayed dollars", async () => {
   const server = await billingServer("0.000001");
+  stop = server.stop;
+  const response = await server.request("/api/orgs/team/billing/checkout", {
+    method: "POST",
+    headers: {
+      origin: "http://billing.test",
+      "content-type": "application/json",
+      "x-user": "owner",
+    },
+    body: "{}",
+  });
+  expect(response.status).toBe(503);
+  expect(server.stripeCalls).not.toContain("POST https://api.stripe.com/v1/checkout/sessions");
+});
+
+test("checkout rejects a correctly priced but unrelated meter", async () => {
+  const server = await billingServer("0.00001", "unrelated_meter");
   stop = server.stop;
   const response = await server.request("/api/orgs/team/billing/checkout", {
     method: "POST",

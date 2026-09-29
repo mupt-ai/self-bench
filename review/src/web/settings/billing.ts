@@ -34,15 +34,33 @@ export function fetchBilling(org: string): Promise<BillingStatus> {
   return requestJson<BillingStatus>(`/api/orgs/${encodeURIComponent(org)}/billing`);
 }
 
+export interface CreditGrantRequest {
+  targetOrg: string;
+  amountCents: number;
+  reason: string;
+  requestId: string;
+}
+
+export type CreditGrantResult =
+  | { id: string; pending?: false }
+  | { pending: true; requestId: string };
+
 export async function grantBillingCredit(
   org: string,
-  input: { targetOrg: string; amountCents: number; reason: string; requestId: string },
-): Promise<void> {
-  await requestJson<{ id: string }>(`/api/orgs/${encodeURIComponent(org)}/billing/credits`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  input: CreditGrantRequest,
+): Promise<CreditGrantResult> {
+  const result = await requestJson<CreditGrantResult>(
+    `/api/orgs/${encodeURIComponent(org)}/billing/credits`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (result.pending === true && result.requestId === input.requestId) return result;
+  if ("id" in result && typeof result.id === "string" && result.id.startsWith("cbtxn_"))
+    return result;
+  throw new Error("Stripe credit response was not confirmed. Reconcile before granting again.");
 }
 
 export async function startBillingSession(

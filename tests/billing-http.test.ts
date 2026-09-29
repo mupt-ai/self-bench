@@ -73,6 +73,14 @@ async function billingServer(priceUnitCents = "0.00001") {
         });
         return Response.json({ id: "cbtxn_1" });
       }
+      if (url.endsWith("/v1/billing/meters/mtr_1"))
+        return Response.json({
+          event_name: "selfbench_managed_usage",
+          status: "active",
+          default_aggregation: { formula: "sum" },
+          customer_mapping: { type: "by_id", event_payload_key: "stripe_customer_id" },
+          value_settings: { event_payload_key: "value" },
+        });
       if (url.endsWith("/v1/customers")) return Response.json({ id: "cus_1" });
       if (url.endsWith("/v1/checkout/sessions"))
         return Response.json({ url: "https://checkout.stripe.test/c" });

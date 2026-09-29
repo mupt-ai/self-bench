@@ -196,6 +196,7 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           await verifyMeteredPrice(
             options.config,
             options.unitScale ?? loadBillingPolicy().unitScale,
+            loadBillingPolicy().meterEventName,
             requestOptions,
           );
         } catch (error) {
