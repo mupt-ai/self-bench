@@ -7,7 +7,8 @@
  *
  * Needs SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY. It is idempotent: rows keep
  * their original IDs and inserts skip IDs that already exist. The source records are left in
- * place, so rolling back the code needs no data restore. See docs/operations.md.
+ * place, so rolling back the code needs no data restore. Stop the API and worker and back up the
+ * database before applying.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
