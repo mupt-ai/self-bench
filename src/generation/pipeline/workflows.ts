@@ -64,12 +64,12 @@ const harbor = () =>
   });
 
 /**
- * Starts a sandbox, waiting while the provider account is at its concurrent-sandbox quota. The
- * provider is the only thing that knows its quota; a waiting workflow holds no worker slot and
- * spends no activity retry, and tries again once a minute.
+ * Starts a sandbox, waiting while the provider account is at its concurrent-sandbox quota. A
+ * waiting workflow holds no worker slot and spends no activity retry. Waits double from one
+ * minute to eight, spreading many waiters' retries and keeping a long wait out of the history.
  */
 async function whenSandboxFree<T>(start: () => Promise<T>): Promise<T> {
-  for (;;) {
+  for (let minutes = 1; ; minutes = Math.min(minutes * 2, 8)) {
     try {
       return await start();
     } catch (error) {
@@ -78,7 +78,7 @@ async function whenSandboxFree<T>(start: () => Promise<T>): Promise<T> {
         error.cause instanceof ApplicationFailure &&
         error.cause.type === SandboxCapacityError.type;
       if (!full) throw error;
-      await sleep("1 minute");
+      await sleep(minutes * 60_000);
     }
   }
 }
