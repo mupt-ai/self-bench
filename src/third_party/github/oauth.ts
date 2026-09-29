@@ -47,10 +47,15 @@ export async function validateGitHubIdentity(
       cache: "no-store",
     });
     if (!response.ok) {
+      // GitHub answers an exhausted primary rate limit with 403, not 429.
+      const rateLimited =
+        response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0";
       throw new GitHubIdentityError(
-        response.status === 401 || response.status === 403 || response.status === 429
-          ? response.status
-          : 503,
+        rateLimited
+          ? 429
+          : response.status === 401 || response.status === 403 || response.status === 429
+            ? response.status
+            : 503,
       );
     }
     const profile: unknown = await response.json();
