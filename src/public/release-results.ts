@@ -1,4 +1,4 @@
-import { findModel, type ThinkingLevel } from "../contracts/models.js";
+import { findModel, listedOpenRouterModels, type ThinkingLevel } from "../contracts/models.js";
 import { eligibleTrial } from "../evaluation/eligible.js";
 import { evaluationTaskKey, type Harness } from "../evaluation/models.js";
 import type { EvaluationRun, EvaluationTrial } from "../evaluation/types.js";
@@ -65,7 +65,11 @@ function settingOf(
     catalogId,
     modelName: typed ?? run.modelName,
     // The catalog's current name, so old and new runs of one model are labelled alike.
-    label: typed ?? findModel(catalogId)?.label ?? run.modelLabel,
+    label:
+      typed ??
+      findModel(catalogId)?.label ??
+      listedOpenRouterModels().find((listed) => listed.id === catalogId)?.label ??
+      run.modelLabel,
     harness,
     reasoningLevel,
     provider,

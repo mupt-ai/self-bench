@@ -57,9 +57,15 @@ export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): Thin
   if (harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2"))
     return ["default"];
   // Custom endpoints are typed in by the user; the catalog only describes its own models.
-  const levels = model.provider === "custom" ? undefined : model.thinking;
-  if (!levels) return ["default"];
-  return levels.filter((level) => !harnesses.includes("pi") || level !== "max");
+  const levels = (model.provider === "custom" ? undefined : model.thinking)?.filter(
+    (level) => !harnesses.includes("pi") || level !== "max",
+  );
+  return levels?.length ? levels : ["default"];
+}
+
+/** The level a row runs at when none is chosen: high where offered, else the first offered. */
+export function defaultThinking(levels: readonly ThinkingLevel[]): ThinkingLevel {
+  return levels.includes("high") ? "high" : (levels[0] ?? "default");
 }
 
 export function thinkingArguments(harness: Harness, level?: ThinkingLevel): string[] {

@@ -7,6 +7,7 @@ import {
   withReferencePricing,
 } from "../src/evaluation/catalog.js";
 import {
+  defaultThinking,
   harnessIds,
   modelRoutes,
   routeFor,
@@ -56,6 +57,24 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(thinkingOptions(kimi, ["pi"])).toEqual(["low", "high"]);
   expect(thinkingOptions(sol, ["codex"])).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
   expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
+});
+
+test("a row with no chosen level runs at high, or else the first level its model offers", () => {
+  const model: CatalogModel = {
+    id: "vendor/model",
+    provider: "openrouter",
+    model: "vendor/model",
+    label: "Model",
+    harnesses: ["pi"],
+    source: "",
+    thinking: ["low", "max"],
+  };
+  expect(defaultThinking(thinkingOptions(model, ["pi"]))).toBe("low");
+  expect(defaultThinking(thinkingOptions(model, ["codex"]))).toBe("low");
+  expect(thinkingOptions({ ...model, thinking: ["max"] }, ["pi"])).toEqual(["default"]);
+  expect(defaultThinking(thinkingOptions({ ...model, thinking: ["low", "high"] }, ["pi"]))).toBe(
+    "high",
+  );
 });
 
 test("current catalog exposes explicit model IDs and dated provider pricing", () => {

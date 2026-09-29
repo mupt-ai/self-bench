@@ -9,6 +9,7 @@ import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
 import {
+  defaultThinking,
   evaluationTaskKey,
   harnessIds,
   modelIdPattern,
@@ -113,6 +114,7 @@ export async function createComparison(
     throw new Error("Select your matching sandbox credential");
   const seen = new Set<string>();
   const createdAt = new Date().toISOString();
+  const catalogModels = evaluationCatalog();
   const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
     const model: CatalogModel | undefined =
       selected.catalogId === "custom" && selected.customModel
@@ -124,7 +126,7 @@ export async function createComparison(
             model: selected.customModel,
             harnesses: ["pi"],
           }
-        : evaluationCatalog().find((entry) => entry.id === selected.catalogId);
+        : catalogModels.find((entry) => entry.id === selected.catalogId);
     if (!model || (selected.catalogId !== "custom" && selected.customModel))
       throw new Error("Unknown model");
     const managedModel = selected.credentialId === "managed-model";
@@ -146,7 +148,7 @@ export async function createComparison(
     )
       throw new Error("Unsupported or repeated harness");
     const levels = thinkingOptions(model, selected.harnesses);
-    const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
+    const thinking = selected.thinking ?? defaultThinking(levels);
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
     const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;

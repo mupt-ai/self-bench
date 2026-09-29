@@ -81,7 +81,9 @@ test("the catalog lists agent-capable models in OpenRouter's popularity order", 
     url = input;
     return Response.json({
       data: [
-        agent("z-ai/glm-5.3-flash", { reasoning: { supported_efforts: ["max", "high", "low"] } }),
+        agent("z-ai/glm-5.3-flash", { reasoning: { supported_efforts: ["max", "none", "low"] } }),
+        agent("vendor/retiring", { expiration_date: "2026-10-15" }),
+        agent("vendor/any-effort", { reasoning: { supported_efforts: null } }),
         agent("vendor/no-tools", { supported_parameters: ["reasoning"] }),
         agent("vendor/images", { architecture: { output_modalities: ["image"] } }),
         agent("vendor/model:free"),
@@ -96,10 +98,15 @@ test("the catalog lists agent-capable models in OpenRouter's popularity order", 
     {
       id: "z-ai/glm-5.3-flash",
       label: "Name of z-ai/glm-5.3-flash",
-      thinking: ["low", "high", "max"],
+      thinking: ["off", "low", "max"],
+    },
+    {
+      id: "vendor/any-effort",
+      label: "Name of vendor/any-effort",
+      thinking: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
     },
     { id: "moonshotai/kimi-k3", label: "moonshotai/kimi-k3" },
   ]);
   await expect(refreshOpenRouterCatalog(respond([], 503))).rejects.toThrow(/503/);
-  expect(listedOpenRouterModels()).toHaveLength(2);
+  expect(listedOpenRouterModels()).toHaveLength(3);
 });

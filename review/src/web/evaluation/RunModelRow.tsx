@@ -3,7 +3,12 @@ import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { harnessOptions, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import {
+  defaultThinking,
+  harnessOptions,
+  routeFor,
+  thinkingOptions,
+} from "../../../../src/evaluation/models";
 import { Input, SearchInput, Select } from "../ui";
 import type { Harness } from "./api";
 import { matchingModels, nextModelSelection } from "./model-selection";
@@ -30,7 +35,7 @@ export function RunModelRow({
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
   const route = credential ? routeFor(model, credential.kind) : undefined;
   const levels = thinkingOptions(model, selected.harnesses);
-  const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
+  const thinking = selected.thinking ?? defaultThinking(levels);
   const selectCredential = (credentialId: string) => {
     const nextCredential = credentials.find((entry) => entry.id === credentialId);
     const nextRoute = nextCredential ? routeFor(model, nextCredential.kind) : undefined;

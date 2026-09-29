@@ -1,7 +1,8 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { defaultThinking, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { matchesQuery } from "../word-search";
 import type { Harness } from "./api";
 
 export const customModel: CatalogModel = {
@@ -13,12 +14,6 @@ export const customModel: CatalogModel = {
   source: "",
 };
 
-const words = (text: string) =>
-  text
-    .toLowerCase()
-    .split(/[\s:·()/._-]+/)
-    .filter(Boolean);
-
 /**
  * The models whose name or id has a word starting with each word of `query`, in catalog order, so
  * "kimi" or "qwen coder" narrow hundreds of models. The row's current model always stays listed.
@@ -28,12 +23,9 @@ export function matchingModels(
   query: string,
   selectedId: string,
 ): CatalogModel[] {
-  const wanted = words(query);
-  return models.filter((model) => {
-    if (model.id === selectedId) return true;
-    const own = words(`${model.label} ${model.id}`);
-    return wanted.every((word) => own.some((part) => part.startsWith(word)));
-  });
+  return models.filter(
+    (model) => model.id === selectedId || matchesQuery(`${model.label} ${model.id}`, query),
+  );
 }
 
 export function nextModelSelection(
@@ -58,8 +50,7 @@ export function hasModelSelection(
   candidate: ComparisonDraft["models"][number],
 ): boolean {
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) =>
-    selection.thinking ??
-    (thinkingOptions(model, selection.harnesses).includes("high") ? "high" : "default");
+    selection.thinking ?? defaultThinking(thinkingOptions(model, selection.harnesses));
   return selections.some(
     (selection) =>
       selection.catalogId === candidate.catalogId &&

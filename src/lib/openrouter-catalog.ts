@@ -3,6 +3,7 @@ import {
   type Rates,
   setOpenRouterModels,
   setOpenRouterRates,
+  type ThinkingLevel,
   thinkingLevels,
 } from "../contracts/models.js";
 import { modelIdPattern } from "../evaluation/models.js";
@@ -16,7 +17,8 @@ interface OpenRouterEntry {
   pricing?: unknown;
   architecture?: { input_modalities?: unknown; output_modalities?: unknown };
   supported_parameters?: unknown;
-  reasoning?: { supported_efforts?: unknown };
+  reasoning?: { supported_efforts?: unknown } | null;
+  expiration_date?: unknown;
 }
 
 /**
@@ -41,10 +43,7 @@ export async function refreshOpenRouterCatalog(fetcher: typeof fetch = fetch): P
     const cacheWrite = perMillion(pricing.input_cache_write) ?? input;
     rates.set(entry.id, { rates: [input, output, cacheRead, cacheWrite], asOf });
     if (drivesAgents(entry.id, entry)) {
-      const efforts = entry.reasoning?.supported_efforts;
-      const thinking = Array.isArray(efforts)
-        ? thinkingLevels.filter((level) => efforts.includes(level))
-        : [];
+      const thinking = reasoningLevels(entry.reasoning);
       listed.push({
         id: entry.id,
         label: typeof entry.name === "string" && entry.name ? entry.name : entry.id,
@@ -52,14 +51,15 @@ export async function refreshOpenRouterCatalog(fetcher: typeof fetch = fetch): P
       });
     }
   }
-  if (!rates.size) throw new Error("OpenRouter returned no prices for catalog models");
+  if (!rates.size) throw new Error("OpenRouter returned no prices");
   setOpenRouterRates(rates);
   setOpenRouterModels(listed);
 }
 
 /**
  * Every harness is an agent loop over text, so a model must call tools and read and write text.
- * Variants (`:free`, `:batch`, ...) and OpenRouter's own routers are left out.
+ * Variants (`:free`, `:batch`, ...), OpenRouter's own routers and models it has scheduled for
+ * removal are left out.
  */
 function drivesAgents(id: string, entry: OpenRouterEntry): boolean {
   const text = (modalities: unknown) => Array.isArray(modalities) && modalities.includes("text");
@@ -67,10 +67,26 @@ function drivesAgents(id: string, entry: OpenRouterEntry): boolean {
     modelIdPattern.test(id) &&
     !id.includes(":") &&
     !id.startsWith("openrouter/") &&
+    !entry.expiration_date &&
     Array.isArray(entry.supported_parameters) &&
     entry.supported_parameters.includes("tools") &&
     text(entry.architecture?.input_modalities) &&
     text(entry.architecture?.output_modalities)
+  );
+}
+
+/**
+ * The levels a reasoning model accepts. OpenRouter lists its efforts, or leaves them null when it
+ * accepts every effort; it calls reasoning turned off "none", which the catalog calls "off".
+ */
+function reasoningLevels(reasoning: OpenRouterEntry["reasoning"]): ThinkingLevel[] {
+  if (!reasoning) return [];
+  const efforts = reasoning.supported_efforts;
+  return thinkingLevels.filter(
+    (level) =>
+      level !== "default" &&
+      (efforts === null ||
+        (Array.isArray(efforts) && efforts.includes(level === "off" ? "none" : level))),
   );
 }
 
