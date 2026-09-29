@@ -21,6 +21,7 @@ test("thinking levels use lowercase in selectors and run summaries", () => {
         model: "gpt-6-astra",
         harnesses: ["codex"],
         source: "",
+        thinking: ["low", "medium", "high", "xhigh", "max"],
       }}
       credentials={[]}
       onChange={() => {}}

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { hasModelSelection, nextModelSelection } from "./model-selection";
+import { hasModelSelection, matchingModels, nextModelSelection } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 const model: CatalogModel = {
@@ -32,7 +32,12 @@ test("requested harness chooses a compatible credential and respects login restr
 });
 
 test("duplicates match model, effective thinking level, and harness, not credential", () => {
-  const astra: CatalogModel = { ...model, id: "gpt-6-astra", provider: "openai" };
+  const astra: CatalogModel = {
+    ...model,
+    id: "gpt-6-astra",
+    provider: "openai",
+    thinking: ["low", "medium", "high", "xhigh", "max"],
+  };
   const selection: ComparisonDraft["models"][number] = {
     catalogId: astra.id,
     credentialId: "first",
@@ -123,4 +128,20 @@ test("an empty inline row offers the catalog and disables dependent controls", (
   expect(html).toContain("Test Model");
   expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
   expect(html).not.toContain('role="dialog"');
+});
+
+test("model search matches word starts in names and ids, keeping the chosen model", () => {
+  const listed = (id: string, label: string): CatalogModel => ({ ...model, id, label });
+  const models = [
+    listed("qwen/qwen4-coder", "Qwen: Qwen4 Coder"),
+    listed("kimi-k3", "Kimi K3"),
+    listed("z-ai/glm-5.3", "Z.ai: GLM 5.3"),
+  ];
+  const ids = (query: string, selected = "") =>
+    matchingModels(models, query, selected).map((entry) => entry.id);
+  expect(ids("")).toEqual(["qwen/qwen4-coder", "kimi-k3", "z-ai/glm-5.3"]);
+  expect(ids("qwen cod")).toEqual(["qwen/qwen4-coder"]);
+  expect(ids("glm")).toEqual(["z-ai/glm-5.3"]);
+  expect(ids("oder")).toEqual([]);
+  expect(ids("glm", "kimi-k3")).toEqual(["kimi-k3", "z-ai/glm-5.3"]);
 });

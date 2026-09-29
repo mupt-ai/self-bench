@@ -15,6 +15,7 @@ const astra: CatalogModel = {
   label: "GPT-6 Astra",
   harnesses: ["codex", "pi"],
   source: "",
+  thinking: ["low", "medium", "high", "xhigh", "max"],
 };
 const custom: CatalogModel = {
   id: "custom",

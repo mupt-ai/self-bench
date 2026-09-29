@@ -8,7 +8,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
-import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
+import { keepOpenRouterCatalogFresh } from "../lib/openrouter-catalog.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -30,8 +30,8 @@ removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
 const { role, shutdownGraceMs, idleExitMs } = workerProcessSettings(process.env);
 await checkSandboxBackends(config);
-// Managed usage is billed at OpenRouter's live list prices; see openrouter-rates.ts.
-await keepOpenRouterRatesFresh().ready;
+// Managed usage is billed at OpenRouter's live list prices; see openrouter-catalog.ts.
+await keepOpenRouterCatalogFresh().ready;
 
 const connection = await connectTemporalWorker(config.temporal);
 // Stored credentials need both the database and the key; without them only local runs work.

@@ -7,7 +7,7 @@ import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
-import { type CatalogModel, catalog, hostedSandboxes } from "./catalog.js";
+import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
 import {
   evaluationTaskKey,
   harnessIds,
@@ -32,7 +32,7 @@ export const comparisonSchema = z
       .array(
         z
           .object({
-            catalogId: z.string().max(80),
+            catalogId: z.string().max(200),
             customModel: z.string().regex(modelIdPattern).optional(),
             credentialId: z.union([z.uuid(), z.literal("managed-model")]),
             thinking: z.enum(thinkingLevels).optional(),
@@ -124,7 +124,7 @@ export async function createComparison(
             model: selected.customModel,
             harnesses: ["pi"],
           }
-        : catalog.find((entry) => entry.id === selected.catalogId);
+        : evaluationCatalog().find((entry) => entry.id === selected.catalogId);
     if (!model || (selected.catalogId !== "custom" && selected.customModel))
       throw new Error("Unknown model");
     const managedModel = selected.credentialId === "managed-model";

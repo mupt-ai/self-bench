@@ -13,6 +13,29 @@ export const customModel: CatalogModel = {
   source: "",
 };
 
+const words = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[\s:·()/._-]+/)
+    .filter(Boolean);
+
+/**
+ * The models whose name or id has a word starting with each word of `query`, in catalog order, so
+ * "kimi" or "qwen coder" narrow hundreds of models. The row's current model always stays listed.
+ */
+export function matchingModels(
+  models: CatalogModel[],
+  query: string,
+  selectedId: string,
+): CatalogModel[] {
+  const wanted = words(query);
+  return models.filter((model) => {
+    if (model.id === selectedId) return true;
+    const own = words(`${model.label} ${model.id}`);
+    return wanted.every((word) => own.some((part) => part.startsWith(word)));
+  });
+}
+
 export function nextModelSelection(
   model: CatalogModel,
   credentials: CredentialInfo[],

@@ -5,7 +5,8 @@
  *
  * A model with a `vendor` runs on that vendor's own key under its `id`; every model also runs
  * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF; server
- * processes replace the OpenRouter rates with OpenRouter's live list prices (openrouter-rates.ts).
+ * processes replace the OpenRouter rates with OpenRouter's live list prices, and evaluation adds
+ * every other model OpenRouter lists (openrouter-catalog.ts).
  */
 
 export const thinkingLevels = [
@@ -151,30 +152,55 @@ export function setOpenRouterRates(rates: typeof openRouterRates): void {
   openRouterRates = rates;
 }
 
+/** A model OpenRouter lists that a coding agent can drive. */
+export interface ListedModel {
+  /** The OpenRouter id. */
+  readonly id: string;
+  readonly label: string;
+  /** The reasoning efforts OpenRouter says it accepts, in display order. */
+  readonly thinking?: readonly ThinkingLevel[];
+}
+
+/** OpenRouter's agent-capable models, most popular first; empty until a server process loads them. */
+let openRouterModels: readonly ListedModel[] = [];
+
+export function setOpenRouterModels(listed: readonly ListedModel[]): void {
+  openRouterModels = listed;
+}
+
+export function listedOpenRouterModels(): readonly ListedModel[] {
+  return openRouterModels;
+}
+
 export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);
 }
 
 /** Reference pricing for running `model` on its vendor's key or through OpenRouter. */
 export function modelPricing(model: Model, via: "native" | "openRouter"): ModelPricing | undefined {
-  const live = via === "openRouter" ? openRouterRates.get(model.openRouter) : undefined;
-  const rates = live?.rates ?? model.rates?.[via];
+  if (via === "openRouter") return openRouterPricing(model.openRouter, model.rates?.openRouter);
+  const rates = model.rates?.native;
   if (!rates) return undefined;
-  const [input, output, cacheRead, cacheWrite] = rates;
-  return {
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    source:
-      via === "openRouter"
-        ? `https://openrouter.ai/${model.openRouter}`
-        : model.vendor === "anthropic"
-          ? "https://platform.claude.com/docs/en/about-claude/pricing"
-          : model.source,
-    asOf: live?.asOf ?? RATES_AS_OF,
-    maxInputTokens: 200_000,
-  };
+  const source =
+    model.vendor === "anthropic"
+      ? "https://platform.claude.com/docs/en/about-claude/pricing"
+      : model.source;
+  return pricing(rates, source, RATES_AS_OF);
+}
+
+/** OpenRouter's live list price for `id`, else the `reference` rates the catalog records. */
+export function openRouterPricing(id: string, reference?: Rates): ModelPricing | undefined {
+  const live = openRouterRates.get(id);
+  const rates = live?.rates ?? reference;
+  return rates && pricing(rates, `https://openrouter.ai/${id}`, live?.asOf ?? RATES_AS_OF);
+}
+
+function pricing(
+  [input, output, cacheRead, cacheWrite]: Rates,
+  source: string,
+  asOf: string,
+): ModelPricing {
+  return { input, output, cacheRead, cacheWrite, source, asOf, maxInputTokens: 200_000 };
 }
 
 /**

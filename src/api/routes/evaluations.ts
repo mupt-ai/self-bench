@@ -13,8 +13,8 @@ import {
   type StopEvaluation,
 } from "../../evaluation/cancel.js";
 import {
-  catalog,
   catalogVersion,
+  evaluationCatalog,
   hostedSandboxes,
   withReferencePricing,
 } from "../../evaluation/catalog.js";
@@ -177,7 +177,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       if (section === "catalog") {
         sendJson(response, 200, {
           version: catalogVersion,
-          models: catalog.map(withReferencePricing),
+          models: evaluationCatalog().map(withReferencePricing),
           sandboxes: hostedSandboxes,
           customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
           managed: {

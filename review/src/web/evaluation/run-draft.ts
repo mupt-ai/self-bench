@@ -14,7 +14,7 @@ const draftStateSchema = z.object({
     models: z
       .array(
         z.object({
-          catalogId: z.string().max(80),
+          catalogId: z.string().max(200),
           credentialId: z.string().max(36),
           thinking: z.enum(thinkingLevels).optional(),
           customModel: z.string().max(200).optional(),
