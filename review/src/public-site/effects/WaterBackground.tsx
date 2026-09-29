@@ -1,71 +1,12 @@
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import { motionOff } from "../motion";
-
-const VERTEX = `attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
-
-// Three water surfaces, all drawn as a 4x4 ordered dither so they read as grain, not blur.
-//   mode 0: rings centred on the page spreading outwards, as if the page had touched the water.
-//   mode 1: the same rings travelling inwards.
-//   mode 2: sparse raindrops landing at random, each ring widening and fading.
-// Every mode is calm behind the content and livelier toward the window edges.
-const FRAGMENT = `
-precision mediump float;
-uniform vec2 size;
-uniform float time;
-uniform vec3 tint;
-uniform float strength;
-uniform float mode;
-uniform float coverage;
-
-float hash(float n) { return fract(sin(n) * 43758.5453); }
-
-float rings(vec2 q, float t, float direction) {
-  float angle = atan(q.y, q.x);
-  float r = length(q);
-  r += 0.035 * sin(angle * 3.0 + t * 0.15) + 0.02 * sin(angle * 7.0 - t * 0.22);
-  // With direction -1 the phase falls over time and each crest moves to a larger radius.
-  float s = direction * t;
-  float h = sin(r * 14.0 + s * 0.9) * 0.55
-          + sin(r * 23.0 + s * 1.4 + angle * 2.0) * 0.28
-          + sin(r * 37.0 + s * 2.0 - angle * 3.0) * 0.14;
-  return smoothstep(0.3, 0.85, h);
-}
-
-float rain(vec2 q, float t) {
-  float aspect = size.x / size.y;
-  float shade = 0.0;
-  for (int i = 0; i < 9; i++) {
-    float fi = float(i);
-    float period = 4.0 + hash(fi * 7.13) * 3.0;
-    float phase = t / period + hash(fi * 3.31);
-    float drop = floor(phase) * 17.0 + fi * 1.93;
-    float age = fract(phase);
-    vec2 centre = (vec2(hash(drop * 1.7), hash(drop * 2.9)) - 0.5) * vec2(aspect, 1.0);
-    float d = length(q - centre);
-    float front = age * 0.55;
-    // A short train of ripples just inside the widening front, fading as the drop ages.
-    float train = exp(-pow((front - d) * 9.0, 2.0)) * step(d, front + 0.02);
-    float crest = 0.5 + 0.5 * cos((front - d) * 80.0);
-    shade += train * crest * (1.0 - age) * smoothstep(0.0, 0.04, age);
-  }
-  return clamp(shade, 0.0, 1.0);
-}
-
-float bayer2(vec2 a) { a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }
-float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
-
-void main() {
-  vec2 q = (gl_FragCoord.xy - 0.5 * size) / size.y;
-  float shade = mode < 1.5 ? rings(q, time, mode < 0.5 ? -1.0 : 1.0) : rain(q, time);
-  float edge = smoothstep(0.18, 0.75, length(q * vec2(0.8, 1.0)));
-  shade = clamp(shade * (0.35 + 0.65 * edge) * coverage, 0.0, 1.0);
-  // Strictly above the threshold, so flat water draws nothing at all.
-  float dot4 = step(bayer4(gl_FragCoord.xy) + 0.04, shade);
-  // Premultiplied (the canvas default), so a pixel without a dot is (0,0,0,0) and composites
-  // as empty in every browser, rather than relying on the browser honouring unpremultiplied.
-  float alpha = dot4 * strength;
-  gl_FragColor = vec4(tint * alpha, alpha);
-}`;
+import {
+  type RunningWater,
+  runWater,
+  type Water,
+  type WaterReply,
+  type WaterState,
+} from "./water-paint";
 
 const MODES: Record<string, number> = { out: 0, in: 1, rain: 2 };
 
@@ -75,7 +16,7 @@ const MODES: Record<string, number> = { out: 0, in: 1, rain: 2 };
  * `--ripple-coverage` scales how much of each wave draws dots, and `--ripple-speed` how fast
  * the water moves.
  */
-function readWater(root: HTMLElement) {
+function readWater(root: HTMLElement): Water {
   const style = getComputedStyle(root);
   const [red = 0, green = 0, blue = 0] = style
     .getPropertyValue("--ripple")
@@ -87,117 +28,168 @@ function readWater(root: HTMLElement) {
   const speed = Number.parseFloat(style.getPropertyValue("--ripple-speed"));
   const choice = root.dataset.water ?? "out";
   return {
-    tint: [red / 255, green / 255, blue / 255] as const,
+    tint: [red / 255, green / 255, blue / 255],
     strength: Number.isFinite(strength) ? strength : 0.3,
     coverage: Number.isFinite(coverage) ? coverage : 1,
     speed: Number.isFinite(speed) ? speed : 1,
-    mode: choice === "off" ? undefined : (MODES[choice] ?? 0),
+    // Off by choice, from the widgets or the settings menu: no water at all.
+    mode: choice === "off" || root.dataset.motion === "off" ? undefined : (MODES[choice] ?? 0),
   };
 }
 
+/** The water is drawn at half the window's resolution: it is grain, not detail. */
+const SCALE = 0.5;
+
+/** What the water needs from the page now. */
+function stateOf(canvas: HTMLCanvasElement): WaterState {
+  return {
+    water: readWater(document.documentElement),
+    still: motionOff(),
+    hidden: document.hidden,
+    width: Math.floor(canvas.clientWidth * SCALE),
+    height: Math.floor(canvas.clientHeight * SCALE),
+  };
+}
+
+/** Runs `start` once the browser is idle after the first render, or soon after where it cannot say. */
+function whenIdle(start: () => void): () => void {
+  if (typeof requestIdleCallback === "function") {
+    const id = requestIdleCallback(start, { timeout: 1500 });
+    return () => cancelIdleCallback(id);
+  }
+  const id = setTimeout(start, 250);
+  return () => clearTimeout(id);
+}
+
+/**
+ * Starts the water on a worker, so the GPU context's slow start and every frame stay off the
+ * main thread, and calls `ready` with it. Where the browser cannot hand a worker its canvases,
+ * or the worker cannot draw WebGL on them, it runs here instead. Returns how to stop it.
+ */
+function startWater(
+  canvas: HTMLCanvasElement,
+  bands: HTMLCanvasElement | null,
+  shown: () => void,
+  ready: (water: RunningWater) => void,
+): () => void {
+  const here = () => {
+    const water = runWater(canvas, bands, shown);
+    if (water) ready(water);
+    return () => water?.stop();
+  };
+  if (typeof Worker !== "function" || !("transferControlToOffscreen" in canvas)) return here();
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL("./water.worker.ts", import.meta.url), { type: "module" });
+  } catch {
+    // Browsers without module workers.
+    return here();
+  }
+  let stop = () => worker.terminate();
+  const fallBack = () => {
+    worker.terminate();
+    stop = here();
+  };
+  // Until the canvases are handed over, the water can still start here instead.
+  worker.onerror = fallBack;
+  worker.onmessage = ({ data }: MessageEvent<WaterReply>) => {
+    if (data === "shown") shown();
+    if (data === "no-webgl") fallBack();
+    if (data !== "webgl") return;
+    worker.onerror = null;
+    try {
+      const offscreen = canvas.transferControlToOffscreen();
+      const offscreenBands = bands?.transferControlToOffscreen() ?? null;
+      worker.postMessage(
+        { canvas: offscreen, bands: offscreenBands },
+        offscreenBands ? [offscreen, offscreenBands] : [offscreen],
+      );
+    } catch {
+      // Already handed over, when the dev server reloads this component in place: no water.
+      worker.terminate();
+      return;
+    }
+    ready({ update: (state) => worker.postMessage({ state }), stop: () => worker.terminate() });
+  };
+  return () => stop();
+}
+
+/** Keeps `water` in step with the page: its look, motion setting, visibility, and size. */
+function follow(water: RunningWater, canvas: HTMLCanvasElement): () => void {
+  const update = () => water.update(stateOf(canvas));
+  update();
+  // Theme, palette, and mode changes all land on the root element's attributes.
+  const observer = new MutationObserver(update);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme", "data-water", "data-motion", "style"],
+  });
+  const lessMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  lessMotion.addEventListener("change", update);
+  document.addEventListener("visibilitychange", update);
+  // A still frame (less motion) is redrawn on resize, or it would stretch.
+  window.addEventListener("resize", update);
+  return () => {
+    observer.disconnect();
+    lessMotion.removeEventListener("change", update);
+    document.removeEventListener("visibilitychange", update);
+    window.removeEventListener("resize", update);
+  };
+}
+
+/** Hidden until the first frame is drawn (`data-shown`), then faded in; at once for less motion. */
+const FADE_IN =
+  "opacity-0 transition-opacity duration-700 motion-reduce:transition-none data-[shown]:opacity-100";
+
 /**
  * Faint water behind the page. Rendered at half resolution, paused when the tab is hidden,
- * drawn once, still, for visitors whose system prefers less motion, and not drawn at all when
- * they turn animations off in the settings menu.
+ * drawn once, still, for visitors who prefer less motion, and not drawn at all when they turn
+ * animations off in the settings menu. It starts once the page is up and the browser is idle,
+ * on a worker where it can, and fades in: a GPU context is slow to start, and would otherwise
+ * hold back the page. `bands` is the canvas over the pinned header and footer (`WaterBands`),
+ * which gets a copy of every frame.
  */
-export function WaterBackground({ bands = false }: { bands?: boolean }) {
+export function WaterBackground({ bands }: { bands?: RefObject<HTMLCanvasElement | null> }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const element = canvas.current;
-    const gl = element?.getContext("webgl", { antialias: false });
-    if (!element || !gl) return;
-    const shader = (type: number, source: string) => {
-      const created = gl.createShader(type);
-      if (!created) return undefined;
-      gl.shaderSource(created, source);
-      gl.compileShader(created);
-      return created;
+    const band = bands?.current ?? null;
+    if (!element) return;
+    const shown = () => {
+      element.dataset.shown = "";
+      if (band) band.dataset.shown = "";
     };
-    const program = gl.createProgram();
-    const vertex = shader(gl.VERTEX_SHADER, VERTEX);
-    const fragment = shader(gl.FRAGMENT_SHADER, FRAGMENT);
-    if (!program || !vertex || !fragment) return;
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
-    // biome-ignore lint/correctness/useHookAtTopLevel: WebGL's useProgram, not a React hook
-    gl.useProgram(program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    const position = gl.getAttribLocation(program, "p");
-    gl.enableVertexAttribArray(position);
-    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-    // No blending: one pass over a cleared canvas, so the dot opacity is written as is.
-    const uniform = (name: string) => gl.getUniformLocation(program, name);
-    const root = document.documentElement;
-    let water = readWater(root);
-    let frame = 0;
-    // The water's own clock, advanced at the theme's speed, so a speed change (on a theme
-    // switch) changes the pace smoothly instead of jumping to a different moment.
-    let clock = 7;
-    let last = 0;
-    const draw = (now: number) => {
-      const still = motionOff();
-      if (last) clock += (Math.min(now - last, 100) / 1000) * water.speed;
-      last = now;
-      const scale = 0.5;
-      const width = Math.floor(element.clientWidth * scale);
-      const height = Math.floor(element.clientHeight * scale);
-      if (element.width !== width || element.height !== height) {
-        element.width = width;
-        element.height = height;
-        gl.viewport(0, 0, width, height);
-      }
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      // Off by choice, from the widgets or the settings menu: no water at all.
-      if (water.mode === undefined || root.dataset.motion === "off") return;
-      gl.uniform2f(uniform("size"), width, height);
-      // Starts part-way in (7s), so raindrops are already falling on the first view.
-      gl.uniform1f(uniform("time"), still ? 7 : clock);
-      gl.uniform3f(uniform("tint"), ...water.tint);
-      gl.uniform1f(uniform("strength"), water.strength);
-      gl.uniform1f(uniform("mode"), water.mode);
-      gl.uniform1f(uniform("coverage"), water.coverage);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (!still) frame = requestAnimationFrame(draw);
-    };
-    const restart = () => {
-      cancelAnimationFrame(frame);
-      last = 0;
-      if (!document.hidden) frame = requestAnimationFrame(draw);
-    };
-    restart();
-    // Theme, palette, and mode changes all land on the root element's attributes.
-    const observer = new MutationObserver(() => {
-      water = readWater(root);
-      restart();
+    let stop = () => {};
+    let unfollow = () => {};
+    const cancel = whenIdle(() => {
+      stop = startWater(element, band, shown, (water) => {
+        unfollow = follow(water, element);
+      });
     });
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-theme", "data-water", "data-motion", "style"],
-    });
-    document.addEventListener("visibilitychange", restart);
-    // A still frame (reduced motion) is redrawn on resize, or it would stretch.
-    window.addEventListener("resize", restart);
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", restart);
-      window.removeEventListener("resize", restart);
+      cancel();
+      stop();
+      unfollow();
     };
-  }, []);
-  // `bands`: a second copy shown only over the pinned header and footer (whose backgrounds
-  // hide the first), drawn to the same viewport, so the water runs on unbroken behind them.
+  }, [bands]);
   return (
     <canvas
       ref={canvas}
-      className={
-        bands
-          ? "pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_var(--bar-top),transparent_var(--bar-top)_calc(100%-var(--bar-bottom)),black_calc(100%-var(--bar-bottom)))]"
-          : "pointer-events-none fixed inset-0 -z-10 h-full w-full"
-      }
+      className={`pointer-events-none fixed inset-0 -z-10 h-full w-full ${FADE_IN}`}
+    />
+  );
+}
+
+/**
+ * The water again, over the pinned header and footer, whose solid backgrounds hide the canvas
+ * behind the page: a canvas masked to those two strips, which `WaterBackground` copies each
+ * frame into, so the water runs on unbroken behind them. Place it where it should stack.
+ */
+export function WaterBands({ ref }: { ref: RefObject<HTMLCanvasElement | null> }) {
+  return (
+    <canvas
+      ref={ref}
+      className={`pointer-events-none fixed inset-0 z-[7] h-full w-full [mask-image:linear-gradient(black_0_var(--bar-top),transparent_var(--bar-top)_calc(100%-var(--bar-bottom)),black_calc(100%-var(--bar-bottom)))] ${FADE_IN}`}
     />
   );
 }
