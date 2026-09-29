@@ -1,6 +1,6 @@
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
-import { publicIds } from "./endpoint-numbers.js";
+import { compareKeys, publicIds } from "./endpoint-numbers.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
 
@@ -58,7 +58,7 @@ export function candidates(
     .sort(
       (left, right) =>
         left.setting.id.localeCompare(right.setting.id) ||
-        left.setting.key.localeCompare(right.setting.key),
+        compareKeys(left.setting.key, right.setting.key),
     );
 }
 

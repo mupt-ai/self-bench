@@ -59,6 +59,25 @@ test("custom models that differ only by endpoint are numbered, not told apart by
   expect(settingLabel(first, all)).toBe("my-llama (Endpoint 1)");
   expect(settingLabel(second, all)).toBe("my-llama (Endpoint 2)");
   expect(settingLabel(first, [first])).toBe("my-llama");
+  // The id's number wins over listing order, so the label always names the id's setting.
+  expect(settingLabel(first, [second, first])).toBe("my-llama (Endpoint 1)");
+});
+
+test("an older release's fingerprinted twins are numbered in listing order", () => {
+  const old = (fingerprint: string) =>
+    setting({
+      id: `my-llama|pi|custom|api-key|default|#${fingerprint}`,
+      model: { catalogId: "custom", name: "my-llama", label: "my-llama" },
+      harness: "pi",
+      provider: "custom",
+      custom: true,
+      reasoningLevel: "default",
+    });
+  const [a, b] = [old("12345678"), old("9abcdef0")];
+  expect([a, b].map((entry) => settingLabel(entry, [a, b]))).toEqual([
+    "my-llama (Endpoint 1)",
+    "my-llama (Endpoint 2)",
+  ]);
 });
 
 test("accuracy ticks above 100% are left unlabelled", () => {

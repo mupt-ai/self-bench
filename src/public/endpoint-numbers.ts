@@ -17,6 +17,15 @@ export interface NumberedSetting {
   custom: boolean;
 }
 
+/**
+ * Private keys in one fixed order, by character code: the same on every server whatever its
+ * locale, which `localeCompare` is not. Numbering and listing both use it, so a release lists
+ * endpoints in the order of their numbers.
+ */
+export function compareKeys(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 /** Each setting's public id within one release, by key. */
 export function publicIds(settings: readonly NumberedSetting[]): Map<string, string> {
   const twins = new Map<string, string[]>();
@@ -26,14 +35,17 @@ export function publicIds(settings: readonly NumberedSetting[]): Map<string, str
   const ids = new Map<string, string>();
   for (const setting of settings) {
     const keys = setting.custom ? (twins.get(setting.id) ?? []) : [];
-    const number = [...keys].sort().indexOf(setting.key) + 1;
+    const number = [...keys].sort(compareKeys).indexOf(setting.key) + 1;
     ids.set(setting.key, keys.length > 1 ? `${setting.id}|#${number}` : setting.id);
   }
   return ids;
 }
 
-/** The endpoint number in a public id, if it has one. */
+/**
+ * The endpoint number in a public id, if it has one. One to three digits: an older release's
+ * endpoint fingerprint (eight hex characters) is not a number, even when it is all digits.
+ */
 export function endpointNumber(publicId: string): number | undefined {
-  const match = /\|#(\d+)$/.exec(publicId);
+  const match = /\|#(\d{1,3})$/.exec(publicId);
   return match ? Number(match[1]) : undefined;
 }

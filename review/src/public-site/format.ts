@@ -1,4 +1,5 @@
 import type { ParetoPlotProps, ParetoPoint } from "@mupt-ai/dari-pareto";
+import { endpointNumber } from "../../../src/public/endpoint-numbers";
 import type { PickRole, PublicPublisher, PublicSetting } from "./contract";
 
 /** Display names for workspace logins whose GitHub name differs from the product name. */
@@ -22,8 +23,9 @@ export function cleanDescription(text: string): string {
  * The name shown for a setting. When two settings of one release share a model label, the
  * access and harness that tell them apart are appended, so points and rows stay distinct. Custom
  * models that still match (the same typed name on different endpoints, whose hosts are private)
- * are numbered in release order: "(Endpoint 1)", "(Endpoint 2)". A release lists them in the
- * order of the `|#1`, `|#2` its ids end in, so the label and the id name the same setting.
+ * are numbered "(Endpoint 1)", "(Endpoint 2)" by the `|#1`, `|#2` their ids end in, so the label
+ * and the id always name the same setting; an older release's ids carry no number, and those
+ * are numbered in release order.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
   const twins = all.filter((other) => other.model.label === setting.model.label);
@@ -36,7 +38,9 @@ export function settingLabel(setting: PublicSetting, all: readonly PublicSetting
     Boolean,
   );
   const same = twins.filter((other) => other.custom && visible(other) === visible(setting));
-  if (setting.custom && same.length > 1) extra.push(`Endpoint ${same.indexOf(setting) + 1}`);
+  if (setting.custom && same.length > 1) {
+    extra.push(`Endpoint ${endpointNumber(setting.id) ?? same.indexOf(setting) + 1}`);
+  }
   return extra.length ? `${setting.model.label} (${extra.join(", ")})` : setting.model.label;
 }
 

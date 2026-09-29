@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { endpointNumber, publicIds } from "../src/public/endpoint-numbers.js";
+import { compareKeys, endpointNumber, publicIds } from "../src/public/endpoint-numbers.js";
 import { buildRelease, previewRelease } from "../src/public/release-build.js";
 import { approvedTasks, full, inputs } from "./support/release-fixture.js";
 
@@ -41,4 +41,28 @@ test("endpoint numbers go to custom twins only, in key order", () => {
   expect([...ids.values()]).toEqual(["m|#2", "m|#1", "n", "o"]);
   expect(endpointNumber("m|#2")).toBe(2);
   expect(endpointNumber("n")).toBeUndefined();
+});
+
+test("a release lists endpoints in the order of their numbers, whatever the server's locale", () => {
+  // By character code "B" sorts before "a"; by localeCompare it sorts after.
+  const credentials = new Map([
+    ["lower", { auth: "api-key" as const, endpoint: "https://a.example/v1" }],
+    ["upper", { auth: "api-key" as const, endpoint: "https://B.example/v1" }],
+  ]);
+  const all = inputs({
+    runs: ["lower", "upper"].map((credential) =>
+      full("qwen", ["t1"], { provider: "custom", credential }),
+    ),
+    tasks: approvedTasks(["t1"]),
+    credentials,
+  });
+  const keys = previewRelease(all).settings.map((setting) => setting.key);
+  const ids = buildRelease(all, keys, context).payload.settings.map((setting) => setting.id);
+  expect(ids.map(endpointNumber)).toEqual([1, 2]);
+  expect([...keys].sort(compareKeys)).toEqual(keys);
+});
+
+test("an older release's all-digit fingerprint is not an endpoint number", () => {
+  expect(endpointNumber("m|pi|custom|api-key|default|#12345678")).toBeUndefined();
+  expect(endpointNumber("m|pi|custom|api-key|default|#2")).toBe(2);
 });
