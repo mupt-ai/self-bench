@@ -142,6 +142,82 @@ test("Pi cache-write tokens are charged separately and truncated events fail clo
   ).toBeUndefined();
 });
 
+test("Codex sign-in bills eligible unreported fresh input as cache writes, like Dari", () => {
+  const luna = { ...pricing, input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 };
+  const input = { ...evaluationInput(), pricing: { ...luna, maxInputTokens: 40_000 } };
+  const signIn = initialEvaluation(
+    {
+      ...input,
+      credentials: {
+        modelCredentialId: "model",
+        sandboxCredentialId: "sandbox",
+        provider: "openai",
+        auth: "codex-login",
+      },
+    },
+    "Test",
+  );
+  // Shaped like Harbor's Codex trajectory for a sign-in run: writes always reported as zero.
+  const call = (prompt: number, cached: number, output: number, cost: number, written = 0) => ({
+    source: "agent",
+    model_name: "test-model",
+    metrics: {
+      prompt_tokens: prompt,
+      completion_tokens: output,
+      ...(cached ? { cached_tokens: cached } : {}),
+      cost_usd: cost,
+      extra: { cache_write_input_tokens: written },
+    },
+  });
+  const trajectory = {
+    final_metrics: { extra: { total_cache_write_input_tokens: 5000 } },
+    steps: [
+      call(22_980, 11_008, 236, 0.001), // cacheable: 11,972 fresh tokens become writes
+      call(800, 0, 10, 0.0001), // under OpenAI's 1,024-token minimum: stays input
+      call(30_000, 20_000, 100, 0.002, 5000), // writes reported: left as reported
+    ],
+  };
+  const files = () => new Map([["solver/trial/agent/trajectory.json", JSON.stringify(trajectory)]]);
+  // The trial's 53,780 prompt tokens exceed the 40,000 per-request bound; no single request does.
+  const result = {
+    agent_result: {
+      n_input_tokens: 53_780,
+      n_cache_tokens: 31_008,
+      n_output_tokens: 346,
+      cost_usd: 0.0031,
+    },
+  };
+  const inferred = trialCost(signIn, "codex", files(), result);
+  expect(inferred).toMatchObject({
+    modelVerified: true,
+    tokenUsage: { input: 5800, output: 346, cacheRead: 31_008, cacheWrite: 16_972 },
+    cacheWritesInferred: true,
+    costSource: "reference-rates",
+  });
+  expect(inferred.apiCostUsd).toBeCloseTo(
+    (5800 * 0.1 + 346 * 0.5 + 31_008 * 0.01 + 16_972 * 0.125) / 1_000_000,
+    12,
+  );
+  // An API key reports its own writes, so Harbor's per-request cost stands.
+  expect(trialCost(signIn, "codex", files(), result, "api-key")).toEqual({
+    modelVerified: true,
+    tokenUsage: { input: 17_772, output: 346, cacheRead: 31_008, cacheWrite: 5000 },
+    apiCostUsd: 0.0031,
+    costSource: "harbor",
+  });
+  // A request beyond the per-request bound, or records that disagree, leave the cost unknown.
+  const [first] = trajectory.steps;
+  if (!first) throw new Error("Missing step");
+  first.metrics.prompt_tokens += 20_000;
+  const bigger = { agent_result: { ...result.agent_result, n_input_tokens: 73_780 } };
+  expect(trialCost(signIn, "codex", files(), bigger).apiCostUsd).toBeUndefined();
+  first.metrics.prompt_tokens -= 20_000;
+  expect(trialCost(signIn, "codex", files(), bigger)).toEqual({
+    modelVerified: true,
+    tokenUsage: { input: 37_772, output: 346, cacheRead: 31_008, cacheWrite: 5000 },
+  });
+});
+
 test("OpenRouter Codex trials verify against the gateway model name Harbor records", () => {
   const input = {
     ...evaluationInput(),

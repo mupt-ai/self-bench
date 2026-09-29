@@ -104,7 +104,7 @@ export async function credentialExecution(
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
-  return { profile: { model: input.modelName }, child, secrets };
+  return { profile: { model: input.modelName }, child, secrets, auth: info.auth };
 }
 
 const gateways = {

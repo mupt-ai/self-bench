@@ -128,3 +128,89 @@ test("recompute re-derives stored OpenRouter Codex costs and writes only on appl
   });
   expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
 });
+
+test("recompute infers sign-in cache writes only once the credential's sign-in type is known", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
+  directories.push(directory);
+  const store = new LocalArtifactStore(directory);
+  // Recorded before evaluations saved the model credential's sign-in type.
+  const run = initialEvaluation(
+    {
+      ...evaluationInput(),
+      credentialOrgId: 7,
+      pricing: {
+        input: 0.1,
+        output: 0.5,
+        cacheRead: 0.01,
+        cacheWrite: 0.125,
+        source: "https://provider.example/pricing",
+        asOf: "2026-09-23",
+      },
+      credentials: {
+        modelCredentialId: "model",
+        sandboxCredentialId: "sandbox",
+        provider: "openai",
+      },
+    },
+    "Test",
+  );
+  const trial = run.trials[0];
+  if (!trial) throw new Error("Missing trial");
+  trial.status = "completed";
+  run.status = "completed";
+  const trajectory = {
+    steps: [
+      {
+        source: "agent",
+        model_name: "test-model",
+        metrics: {
+          prompt_tokens: 2000,
+          completion_tokens: 10,
+          cost_usd: 0.000205,
+          extra: { cache_write_input_tokens: 0 },
+        },
+      },
+    ],
+  };
+  const result = {
+    agent_result: {
+      n_input_tokens: 2000,
+      n_cache_tokens: 0,
+      n_output_tokens: 10,
+      cost_usd: 0.000205,
+    },
+  };
+  for (const [name, body] of [
+    ["0/solver/task__1/agent/trajectory.json", trajectory],
+    ["0/solver/task__1/result.json", result],
+  ] as const) {
+    trial.artifacts.push(name);
+    await store.put(
+      `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+      Buffer.from(JSON.stringify(body)),
+      "text/plain",
+    );
+  }
+  await saveEvaluation(store, run);
+
+  const unknown = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+  expect(unknown.auth).toBe("unknown");
+  expect(unknown.trials[0]?.after).toMatchObject({ costSource: "harbor", apiCostUsd: 0.000205 });
+
+  const lookups: [number, string][] = [];
+  const signIn = await recomputeEvaluationCost(store, run.repoId, run.id, false, async (...key) => {
+    lookups.push(key);
+    return "codex-login";
+  });
+  expect(lookups).toEqual([[7, "model"]]);
+  expect(signIn.auth).toBe("codex-login");
+  expect(signIn.trials[0]?.after).toMatchObject({
+    tokenUsage: { input: 0, output: 10, cacheRead: 0, cacheWrite: 2000 },
+    cacheWritesInferred: true,
+    costSource: "reference-rates",
+  });
+  expect(signIn.trials[0]?.after?.apiCostUsd).toBeCloseTo(
+    (2000 * 0.125 + 10 * 0.5) / 1_000_000,
+    12,
+  );
+});

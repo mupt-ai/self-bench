@@ -32,6 +32,7 @@ export interface EvaluationInput {
     modelCredentialId: string;
     sandboxCredentialId: string;
     provider: "openai" | "anthropic" | "openrouter" | "custom";
+    auth?: "api-key" | "codex-login";
   };
 }
 export interface SolverStep {
@@ -61,6 +62,7 @@ export interface EvaluationTrial {
   modelVerified?: boolean;
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;
+  cacheWritesInferred?: boolean;
   costSource?: "harbor" | "reference-rates";
 }
 export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
