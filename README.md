@@ -20,9 +20,16 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 
 Model and sandbox access is either managed by SelfBench (billed under **Billing**) or your organization's own keys under **Credentials**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
 
-## Deploying
+## Self-hosting
 
-SelfBench runs on GCP: the API on Cloud Run, the Temporal worker as a Cloud Run worker pool, Harbor work on GKE Autopilot pods scaled by KEDA, Cloud SQL, and GCS. Terraform owns all of it, and GitHub Actions deploys `main` to dev and releases to prod. See [infra/README.md](infra/README.md).
+SelfBench's reference deployment runs on GCP: Cloud Run for the API and Temporal worker, with optional GKE Autopilot workers for Harbor jobs, plus Cloud SQL and GCS.
+
+1. Provision a GCP project, billing, Terraform state bucket, and GitHub Actions Workload Identity Federation.
+2. Configure Terraform inputs and store runtime secrets in Secret Manager.
+3. Apply the environment with Terraform, or configure the protected GitHub `dev` and `prod` environments to deploy through Actions.
+4. Point your domain at the provisioned load balancer and configure GitHub OAuth for the app URL.
+
+For prerequisites, exact Terraform commands, runtime configuration, GitHub Actions setup, and optional GKE workers, see the [self-hosting and infrastructure guide](infra/README.md).
 
 ## Development
 
