@@ -17,6 +17,8 @@ import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
+
+type RunState = { draft: ComparisonDraft; submitted: boolean; sandboxDefaultPending?: boolean };
 export function RunPage() {
   const scope = useEvaluationScope();
   return <RunContent key={scope.url} {...scope} />;
@@ -27,11 +29,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const key = `selfbench-run:${url}`;
-  const [state, setState] = React.useState<{
-    draft: ComparisonDraft;
-    submitted: boolean;
-    sandboxDefaultPending?: boolean;
-  }>(() => {
+  const [state, setState] = React.useState<RunState>(() => {
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem(key);
@@ -261,17 +259,14 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
                   draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)
                 }
                 onClick={() =>
-                  setState((current) => ({
-                    ...current,
+                  setState({
+                    ...state,
                     draft: {
-                      ...current.draft,
-                      models: [
-                        ...current.draft.models,
-                        { catalogId: "", credentialId: "", harnesses: [] },
-                      ],
+                      ...draft,
+                      models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
                     },
                     submitted: false,
-                  }))
+                  })
                 }
               >
                 <Plus className="size-4" aria-hidden="true" />
@@ -282,9 +277,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             models={[...models, customModel]}
             credentials={availableCredentials}
             draft={draft}
-            onChange={(value) =>
-              setState((current) => ({ ...current, draft: value, submitted: false }))
-            }
+            onChange={(value) => setState({ ...state, draft: value, submitted: false })}
           />
         </fieldset>
         <RunExecution
