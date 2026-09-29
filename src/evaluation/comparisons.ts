@@ -87,7 +87,8 @@ export async function createComparison(
     throw new Error("Every task must be human-approved in this repository");
   const frozen = bundles.map((task) => {
     if (!task?.bundleKey) throw new Error("Task bundle unavailable");
-    return { runId: task.runId, taskId: task.taskId, bundleKey: task.bundleKey };
+    const { runId, taskId, bundleKey, images } = task;
+    return { runId, taskId, bundleKey, ...(images ? { images } : {}) };
   });
   const completed = selection.skipCompleted
     ? completedConfigurationTasks(await listEvaluations(store, scope.repoId))

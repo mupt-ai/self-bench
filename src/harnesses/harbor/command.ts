@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { delimiter, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 
@@ -18,6 +20,8 @@ export interface HarborRunCommand {
   solver?: { model: string; agentArguments: readonly string[] };
   /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
   extraAllowedHosts?: readonly string[];
+  /** Harbor `--ek` settings for the environment, such as pinnedImageKwargs. */
+  environmentKwargs?: Readonly<Record<string, string>>;
   quiet?: boolean;
 }
 
@@ -31,7 +35,7 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     input.agent,
     ...(input.solver ? ["--model", input.solver.model] : []),
     "--env",
-    input.environment,
+    harborEnvironmentArgument(input.environment),
     "--jobs-dir",
     input.jobsPath,
     "--job-name",
@@ -46,8 +50,21 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
+    ...Object.entries(input.environmentKwargs ?? {}).flatMap(([key, value]) => [
+      "--ek",
+      `${key}=${value}`,
+    ]),
     ...(input.solver?.agentArguments ?? []),
   ];
+}
+
+/**
+ * Modal runs through SelfBench's subclass of Harbor's Modal environment (runtime/selfbench_modal.py),
+ * which records the images a run built and starts trials from a task's pinned images. With no
+ * pins it behaves exactly like `--env modal`; every other provider is Harbor's own.
+ */
+function harborEnvironmentArgument(environment: HarborEnvironment): string {
+  return environment === "modal" ? "selfbench_modal:SelfBenchModalEnvironment" : environment;
 }
 
 /** Callers must first resolve their distinct generation/solver credential boundaries. */
@@ -70,6 +87,25 @@ export function harborProcessEnvironment(resolved: NodeJS.ProcessEnv): NodeJS.Pr
     COLUMNS: "320",
     HARBOR_TELEMETRY: "off",
   };
+}
+
+/**
+ * The Python interpreter Harbor itself runs on (the `harbor` executable's shebang), for scripts
+ * that drive Harbor's environments directly, such as runtime/selfbench_prepare.py.
+ */
+export async function harborPython(env: NodeJS.ProcessEnv): Promise<string> {
+  for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
+    const shebang = await readFile(join(directory, "harbor"), "utf8").then(
+      (text) => text.split("\n", 1)[0],
+      () => undefined,
+    );
+    if (shebang === undefined) continue;
+    const interpreter = shebang.startsWith("#!") ? shebang.slice(2).trim() : "";
+    if (!isAbsolute(interpreter) || /\s/.test(interpreter))
+      throw new Error("Harbor's launcher does not name its Python interpreter");
+    return interpreter;
+  }
+  throw new Error("Harbor is not installed on this worker");
 }
 
 /** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */

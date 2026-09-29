@@ -75,7 +75,11 @@ export async function syncBatchProgress(options: {
           : {}),
       ...(accepted && item.result?.task
         ? previous?.bundleKey && previous.definition
-          ? { bundleKey: previous.bundleKey, definition: previous.definition }
+          ? {
+              bundleKey: previous.bundleKey,
+              definition: previous.definition,
+              ...(previous.images ? { images: previous.images } : {}),
+            }
           : await acceptedTaskFields(artifacts, item.result.task)
         : {}),
     });

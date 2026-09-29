@@ -126,7 +126,7 @@ The workflow:
 6. applies that same local plan with the apply identity. The new API revision migrates the database as it starts, then the worker pool rolls;
 7. checks the public API and results site.
 
-GitHub environment protection is the approval boundary. Terraform provides state locking. The workflow does not maintain a custom plan-manifest service or a separate private plan bucket.
+GitHub environment protection is the approval boundary. Terraform provides state locking. Dev accepts the default branch (push or manual dispatch); prod accepts only a published, non-draft, non-prerelease release whose commit is on the default branch. `infra/ci/verify-source.sh` checks this before cloud authentication. The planner and apply identities are separate service accounts reached through OIDC/WIF, never service-account keys. The saved plan stays on the ephemeral runner and is applied by path; a retried job plans again.
 
 ## Cloud Run
 

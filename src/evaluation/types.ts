@@ -1,4 +1,5 @@
 import type { ModelPricing, ThinkingLevel } from "../contracts/models.js";
+import type { TaskImages } from "../contracts/task.js";
 import type { Harness } from "./models.js";
 
 export type { Harness } from "./models.js";
@@ -8,6 +9,8 @@ interface EvaluationTask {
   runId: string;
   taskId: string;
   bundleKey: string;
+  /** The Modal images the task was verified on; Modal trials start from them. */
+  images?: TaskImages;
 }
 export interface EvaluationInput {
   id: string;
