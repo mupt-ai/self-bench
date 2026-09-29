@@ -121,6 +121,25 @@ export function trajectorySteps(value: unknown): SolverStep[] {
     };
   });
 }
+/** The error Pi's run ended on, if its last reply failed rather than finishing. */
+export function piFailure(text: string): string | undefined {
+  let last: Record<string, unknown> | undefined;
+  for (const line of text.split("\n")) {
+    let event: Record<string, unknown>;
+    try {
+      event = record(JSON.parse(line));
+    } catch {
+      continue;
+    }
+    const message = record(event.message);
+    if (event.type === "message_end" && message.role === "assistant") last = message;
+  }
+  const reason = last?.stopReason;
+  if (reason !== "error" && reason !== "aborted") return undefined;
+  return typeof last?.errorMessage === "string" && last.errorMessage
+    ? last.errorMessage.slice(0, 2000)
+    : `Model request ${reason}`;
+}
 export function piSteps(text: string): SolverStep[] {
   const steps: SolverStep[] = [];
   for (const line of text.split("\n")) {
@@ -161,6 +180,9 @@ export function piSteps(text: string): SolverStep[] {
   return steps.slice(-500);
 }
 
+/** Prefixed to a log collectOutput cut to its last megabyte. */
+export const TRUNCATED_OUTPUT = "[Earlier output truncated]\n";
+
 export async function collectOutput(root: string): Promise<Map<string, string>> {
   const found = new Map<string, string>();
   let remaining = 4 * 1024 * 1024;
@@ -194,7 +216,7 @@ export async function collectOutput(root: string): Promise<Map<string, string>> 
           const { bytesRead } = await file.read(buffer, 0, size, offset);
           found.set(
             name,
-            `${offset ? "[Earlier output truncated]\n" : ""}${buffer.subarray(0, bytesRead).toString("utf8")}`,
+            `${offset ? TRUNCATED_OUTPUT : ""}${buffer.subarray(0, bytesRead).toString("utf8")}`,
           );
           remaining -= bytesRead;
         } finally {
@@ -205,4 +227,43 @@ export async function collectOutput(root: string): Promise<Map<string, string>> 
   };
   await walk(root, "", 0);
   return found;
+}
+
+/** Transcripts past this size keep only their collected part. */
+const WHOLE_TRANSCRIPT_BYTES = 32 * 1024 * 1024;
+
+/**
+ * The collected files with each Harbor trial's transcript read whole, for cost and failure checks.
+ * collectOutput cuts long transcripts and can skip them once its budget is spent.
+ */
+export async function wholeTranscripts(
+  root: string,
+  files: Map<string, string>,
+): Promise<Map<string, string>> {
+  const whole = new Map(files);
+  const trials = await readdir(join(root, "solver"), { withFileTypes: true }).catch(() => []);
+  for (const trial of trials) {
+    const agent = `solver/${trial.name}/agent`;
+    if (
+      !trial.isDirectory() ||
+      !(await lstat(join(root, agent)).catch(() => undefined))?.isDirectory()
+    )
+      continue;
+    for (const name of [`${agent}/pi.txt`, `${agent}/trajectory.json`]) {
+      const file = await open(join(root, name), constants.O_RDONLY | constants.O_NOFOLLOW).catch(
+        () => undefined,
+      );
+      if (!file) continue;
+      try {
+        const stat = await file.stat();
+        if (stat.isFile() && stat.size <= WHOLE_TRANSCRIPT_BYTES)
+          whole.set(name, await file.readFile("utf8"));
+      } catch {
+        // The collected part, if any, stands.
+      } finally {
+        await file.close();
+      }
+    }
+  }
+  return whole;
 }

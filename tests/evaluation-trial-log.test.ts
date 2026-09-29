@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
@@ -127,6 +127,18 @@ test("recompute re-derives stored OpenRouter Codex costs and writes only on appl
     status: "completed",
   });
   expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
+  // The runner priced the whole transcript; a stored copy cut too far to count keeps that cost.
+  await writeFile(
+    join(
+      directory,
+      evaluationPrefix(run.repoId, run.id),
+      "artifacts/0/solver/task__1/agent/trajectory.json",
+    ),
+    JSON.stringify(trajectory).slice(0, 40),
+  );
+  const cut = await recomputeEvaluationCost(store, run.repoId, run.id, true);
+  expect(cut.trials[0]?.changed).toBe(false);
+  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBe(0.25);
 });
 
 test("recompute infers sign-in cache writes only once the credential's sign-in type is known", async () => {
@@ -196,6 +208,17 @@ test("recompute infers sign-in cache writes only once the credential's sign-in t
   const unknown = await recomputeEvaluationCost(store, run.repoId, run.id, false);
   expect(unknown.auth).toBe("unknown");
   expect(unknown.trials[0]?.after).toMatchObject({ costSource: "harbor", apiCostUsd: 0.000205 });
+
+  // The operator's --auth stands in when the saved credential cannot be looked up.
+  const flagged = await recomputeEvaluationCost(
+    store,
+    run.repoId,
+    run.id,
+    false,
+    undefined,
+    "codex-login",
+  );
+  expect(flagged.trials[0]?.after).toMatchObject({ cacheWritesInferred: true });
 
   const lookups: [number, string][] = [];
   const signIn = await recomputeEvaluationCost(store, run.repoId, run.id, false, async (...key) => {

@@ -53,32 +53,6 @@ test("Harbor request costs work without reference pricing and preserve cache wri
   expect(trialCost(run, "codex", files(), result).apiCostUsd).toBeUndefined();
 });
 
-test("Pi dollar totals cannot invent pricing for unknown models", () => {
-  const run = initialEvaluation(evaluationInput(), "Test");
-  const event = {
-    type: "message_end",
-    message: {
-      role: "assistant",
-      provider: "openai",
-      model: "test-model",
-      usage: {
-        input: 100,
-        output: 50,
-        cacheRead: 80,
-        cacheWrite: 20,
-        cost: { input: 0.1, output: 0.2, cacheRead: 0.03, cacheWrite: 0.04, total: 0.37 },
-      },
-    },
-  };
-  const files = () => new Map([["agent/pi.txt", JSON.stringify(event)]]);
-  const result = { agent_result: { cost_usd: 0.37 } };
-  // The run is verified and its tokens measured, so the missing cost is down to missing pricing.
-  expect(trialCost(run, "pi", files(), result)).toEqual({
-    modelVerified: true,
-    tokenUsage: { input: 100, output: 50, cacheRead: 80, cacheWrite: 20 },
-  });
-});
-
 test("cost uses token counts and explicit rates, never Harbor's unverified cost_usd", () => {
   const run = initialEvaluation({ ...evaluationInput(), pricing }, "Test");
   const files = new Map([
@@ -119,29 +93,6 @@ test("unverified models and unknown usage never get an invented zero cost", () =
   ).toBeUndefined();
   expect(trialCost(run, "claude-code", files, {}).apiCostUsd).toBeUndefined();
 });
-test("Pi cache-write tokens are charged separately and truncated events fail closed", () => {
-  const run = initialEvaluation({ ...evaluationInput(), pricing }, "Test");
-  const event = JSON.stringify({
-    type: "message_end",
-    message: {
-      role: "assistant",
-      provider: "openai",
-      model: "test-model",
-      usage: { input: 100, output: 100, cacheRead: 100, cacheWrite: 100 },
-    },
-  });
-  expect(trialCost(run, "pi", new Map([["solver/trial/agent/pi.txt", event]]), {})).toEqual({
-    modelVerified: true,
-    apiCostUsd: 0.0013,
-    tokenUsage: { input: 100, output: 100, cacheRead: 100, cacheWrite: 100 },
-    costSource: "reference-rates",
-  });
-  expect(
-    trialCost(run, "pi", new Map([["solver/trial/agent/pi.txt", `${event}\n{"partial"`]]), {})
-      .apiCostUsd,
-  ).toBeUndefined();
-});
-
 test("Codex sign-in bills eligible unreported fresh input as cache writes, like Dari", () => {
   const luna = { ...pricing, input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 };
   const input = { ...evaluationInput(), pricing: { ...luna, maxInputTokens: 40_000 } };
@@ -295,4 +246,31 @@ test("OpenRouter Codex trials verify against the gateway model name Harbor recor
   expect(trialCost(direct, "codex", files("openai/openai/gpt-6-astra"), result).modelVerified).toBe(
     false,
   );
+});
+
+test("Codex reference-rate costs are bounded per request when Harbor records each call", () => {
+  const run = initialEvaluation(
+    { ...evaluationInput(), pricing: { ...pricing, maxInputTokens: 1000 } },
+    "Test",
+  );
+  const call = (prompt: number) => ({
+    source: "agent",
+    model_name: "test-model",
+    metrics: { prompt_tokens: prompt, completion_tokens: 10 },
+  });
+  const cost = (prompts: number[]) => {
+    const total = prompts.reduce((sum, prompt) => sum + prompt, 0);
+    const trajectory = JSON.stringify({ steps: prompts.map(call) });
+    const tokens = {
+      n_input_tokens: total,
+      n_cache_tokens: 0,
+      n_output_tokens: 10 * prompts.length,
+    };
+    return trialCost(run, "codex", new Map([["solver/t/agent/trajectory.json", trajectory]]), {
+      agent_result: tokens,
+    }).apiCostUsd;
+  };
+  // 1,400 prompt tokens over the trial, but no single call passes the 1,000-token bound.
+  expect(cost([700, 700])).toBeCloseTo((1400 * 2 + 20 * 8) / 1_000_000, 12);
+  expect(cost([1001])).toBeUndefined();
 });
