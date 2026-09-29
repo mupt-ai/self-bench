@@ -2,6 +2,12 @@ import { Star } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from "react-router";
 import { Avatar } from "../components/Avatar";
+import {
+  LayoutToggle,
+  type ResultsLayout,
+  readResultsLayout,
+  rememberResultsLayout,
+} from "../components/LayoutToggle";
 import { ModelTable } from "../components/ModelTable";
 import { ResultsChart } from "../components/ResultsChart";
 import type { PublicRepoPage } from "../contract";
@@ -72,9 +78,22 @@ function Results({ page }: { page: PublicRepoPage }) {
   // The chart's pointer and vendor chips mark the same settings in the table.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
+  // Chart above the table, or beside it on a wide window; remembered across visits.
+  const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
+  const chooseLayout = (next: ResultsLayout) => {
+    setLayout(next);
+    rememberResultsLayout(next);
+  };
+  const side = layout === "side";
   return (
     <article
-      className="flex flex-col gap-8"
+      // Side by side, on a window wide enough for it, the page widens past its usual column to
+      // the rulers (at most 110rem), so the chart and the table each have room.
+      className={`flex flex-col gap-8 ${
+        side
+          ? "min-[90rem]:mx-[calc(50%_-_min(100vw_-_2*var(--edge)_-_2*var(--gutter),110rem)/2)]"
+          : ""
+      }`}
       {...shownLine(`${repository.fullName}/${release.publisher.login}`)}
     >
       <header className="flex flex-col gap-3">
@@ -102,6 +121,9 @@ function Results({ page }: { page: PublicRepoPage }) {
               {compactNumber(repository.stars)}
             </span>
           )}
+          <span className="ml-auto self-center">
+            <LayoutToggle layout={layout} onChange={chooseLayout} />
+          </span>
         </div>
         {repository.description && (
           <p className="line-clamp-2 max-w-3xl text-muted-foreground" {...flightTo("description")}>
@@ -127,30 +149,41 @@ function Results({ page }: { page: PublicRepoPage }) {
         </p>
       </header>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
-          <p className="text-xs text-muted-foreground">
-            Filled points are on the frontier: nothing is both cheaper and more accurate.
-          </p>
-        </div>
-        <div className={`p-2 ${PANEL}`}>
-          <ResultsChart
-            settings={release.settings}
-            onActiveChange={setActiveId}
-            onHighlightChange={setHighlighted}
-          />
-        </div>
-      </section>
+      {/* Side by side, the chart stays in view while the table scrolls past it. */}
+      <div
+        className={`flex flex-col gap-8 ${
+          side
+            ? "min-[90rem]:grid min-[90rem]:grid-cols-[minmax(420px,2fr)_minmax(720px,3fr)] min-[90rem]:items-start min-[90rem]:gap-6"
+            : ""
+        }`}
+      >
+        <section
+          className={`flex flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
+            <p className="text-xs text-muted-foreground">
+              Filled points are on the frontier: nothing is both cheaper and more accurate.
+            </p>
+          </div>
+          <div className={`p-2 ${PANEL}`}>
+            <ResultsChart
+              settings={release.settings}
+              onActiveChange={setActiveId}
+              onHighlightChange={setHighlighted}
+            />
+          </div>
+        </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">All Settings</h2>
-        <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
-        <p className="text-xs text-muted-foreground">
-          Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
-          requests in this repository; their tests and reference solutions stay private.
-        </p>
-      </section>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium">All Settings</h2>
+          <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
+          <p className="text-xs text-muted-foreground">
+            Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
+            requests in this repository; their tests and reference solutions stay private.
+          </p>
+        </section>
+      </div>
 
       {page.lines.length > 1 && (
         <section ref={lines} className="flex flex-col gap-3">
