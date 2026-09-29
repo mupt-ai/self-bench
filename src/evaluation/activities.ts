@@ -26,6 +26,7 @@ export function createEvaluationActivities(
   store: ArtifactStore,
   vault?: Vault,
   snapshotLink?: SandboxCallback,
+  stopping?: AbortSignal,
 ): EvaluationActivities {
   const heartbeating = async <T>(run: (options: RunnerOptions) => Promise<T>): Promise<T> => {
     const context = Context.current();
@@ -34,6 +35,7 @@ export function createEvaluationActivities(
       return await run({
         ...(vault ? { vault } : {}),
         ...(snapshotLink ? { snapshotLink } : {}),
+        ...(stopping ? { stopping } : {}),
         signal: context.cancellationSignal,
         heartbeat: () => context.heartbeat(),
       });

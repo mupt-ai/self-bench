@@ -136,6 +136,99 @@ test("a trial whose setup failed before Harbor ran is retried, and its last atte
   expect(calls).toHaveLength(1);
 });
 
+test("a trial whose worker was lost before its solver started runs on the next attempt", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  // The first attempt's worker stalls in setup (a preempted pod), so Temporal retries the trial.
+  const stalled = Promise.withResolvers<void>();
+  const setUp = Promise.withResolvers<void>();
+  const lost = executeTrial(store, input, 0, {
+    env: {},
+    vault,
+    command: (async (name, args, commandOptions) => {
+      setUp.resolve();
+      await stalled.promise;
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  });
+  await setUp.promise;
+  await executeTrial(store, input, 0, { env: {}, vault, command });
+  // A stalled attempt that comes back never starts Harbor or overwrites the outcome.
+  stalled.resolve();
+  await expect(lost).rejects.toThrow("refusing to repeat model spend");
+  expect(calls).toHaveLength(1);
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  expect(trial?.status).toBe("completed");
+  expect(trial?.solverStartedAt).toBeString();
+});
+
+test("a trial whose worker was lost after its solver started is not run again", async () => {
+  const { store, vault, input } = await started();
+  const solving = Promise.withResolvers<void>();
+  const finished = Promise.withResolvers<void>();
+  const { calls, command } = harbor(async () => {
+    solving.resolve();
+    await finished.promise;
+  });
+  const first = executeTrial(store, input, 0, { env: {}, vault, command });
+  await solving.promise;
+  await expect(executeTrial(store, input, 0, { env: {}, vault, command })).rejects.toThrow(
+    "refusing to repeat model spend",
+  );
+  finished.resolve();
+  await first;
+  expect(calls).toHaveLength(1);
+});
+
+test("a stopping worker hands a trial in setup to the next attempt, but runs its last attempt", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  // SIGTERM lands while the trial is in setup.
+  const stopping = new AbortController();
+  const options = {
+    env: {},
+    vault,
+    retry: true,
+    stopping: stopping.signal,
+    command: (async (name, args, commandOptions) => {
+      stopping.abort();
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  };
+  await expect(executeTrial(store, input, 0, options)).rejects.toThrow(
+    "Worker stopped before the solver started",
+  );
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  expect(trial?.status).toBe("queued");
+  expect(trial?.claim).toBeUndefined();
+  expect(calls).toHaveLength(0);
+  await executeTrial(store, input, 0, { ...options, retry: false });
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+});
+
+test("a worker that stops once a solver has started leaves that solver running", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  const stopping = new AbortController();
+  let aborted: boolean | undefined;
+  await executeTrial(store, input, 0, {
+    env: {},
+    vault,
+    retry: true,
+    stopping: stopping.signal,
+    command: (async (name, args, commandOptions) => {
+      if (args[0] !== "--version") {
+        stopping.abort();
+        aborted = commandOptions?.signal?.aborted;
+      }
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  });
+  expect(aborted).toBe(false);
+  expect(calls).toHaveLength(1);
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+});
+
 function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {
   const events: string[] = [];
   return {

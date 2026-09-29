@@ -10,12 +10,14 @@ import { SandboxCapacityError } from "../sandbox/contracts.js";
 
 /**
  * Failures that are how things are meant to go: a user's generation settings or credentials, a
- * full provider (the workflow waits and starts again), and a trial that already spent.
+ * full provider (the workflow waits and starts again), a trial that already spent, and a trial
+ * a stopping worker handed to another.
  */
 const EXPECTED = new Set([
   "GenerationConfiguration",
   SandboxCapacityError.type,
   "RepeatSpendError",
+  "WorkerStoppingError",
 ]);
 
 /**

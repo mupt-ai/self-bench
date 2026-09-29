@@ -17,6 +17,7 @@ import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js
  * Readies a claimed trial for its solver under `root`: its credentials, a supported Harbor, its
  * checked task, and the gateway its harness reaches the model through. Nothing here spends model
  * money. Secrets are added to `secrets` as they are resolved, so any later error can be redacted.
+ * `setupSignal` stops the setup; the returned guard, which Harbor runs under, follows only `signal`.
  */
 export async function setUpTrial(
   store: ArtifactStore,
@@ -25,7 +26,11 @@ export async function setUpTrial(
   trial: EvaluationTrial,
   root: string,
   secrets: string[],
-  options: RunnerOptions & { command: typeof runCommand; env: NodeJS.ProcessEnv },
+  options: RunnerOptions & {
+    command: typeof runCommand;
+    env: NodeJS.ProcessEnv;
+    setupSignal?: AbortSignal;
+  },
 ) {
   const home = join(root, "home");
   await mkdir(home, { mode: 0o700 });
@@ -36,14 +41,14 @@ export async function setUpTrial(
   const version = await options.command("harbor", ["--version"], {
     env: child,
     timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.version,
-    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   try {
     assertHarborVersion(version.stdout);
   } catch (error) {
     throw refuseTrial(error instanceof Error ? error.message : "Unsupported Harbor");
   }
-  options.signal?.throwIfAborted();
+  options.setupSignal?.throwIfAborted();
   const task = input.tasks.find(
     (candidate) => candidate.runId === trial.runId && candidate.taskId === trial.taskId,
   );
@@ -52,7 +57,7 @@ export async function setUpTrial(
   await mkdir(trialRoot);
   const taskPath = await unpackTrialTask(store, task, run.sandbox, trialRoot, {
     ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
   const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal).catch(
