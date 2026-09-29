@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { reportError } from "../../lib/telemetry/sentry.js";
 
 /** Model token consumption, matching Pi's per-message usage records. */
 export interface TokenUsage {
@@ -63,5 +64,6 @@ export async function recordStageUsage(entry: StageUsage): Promise<void> {
     await store.record(entry);
   } catch (error) {
     console.error("Failed to record managed usage", error);
+    reportError(error, { tags: { billing_step: "record-usage" } });
   }
 }

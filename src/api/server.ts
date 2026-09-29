@@ -5,6 +5,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
+import { reportError } from "../lib/telemetry/sentry.js";
 import { connectTemporalClient } from "../temporal/connection.js";
 import type { AuthConfig } from "./auth/config.js";
 import { sendExpiredSession } from "./auth/session-expired.js";
@@ -23,6 +24,7 @@ import { handleRunRoute } from "./routes/runs.js";
 import { handleSandboxRoute } from "./routes/sandbox.js";
 import { handleSnapshotRoute } from "./routes/snapshots.js";
 import { openSite } from "./site.js";
+import { telemetryMetaTag } from "./telemetry-meta.js";
 
 export interface ApiOptions {
   /** When set, the API also serves the selfbench.dev site: GitHub sign-in and session cookies. */
@@ -52,6 +54,7 @@ export async function startApi(
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
   };
+  const head = telemetryMetaTag();
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -66,12 +69,12 @@ export async function startApi(
         if (await site.auth.handle(request, url, response)) return;
         if (await site.publicReleases.handle(request, url, response)) return;
         if (request.method === "GET" && isSitePage(url.pathname)) {
-          await sendReviewAsset(response, "/");
+          await sendReviewAsset(response, "/", head);
           return;
         }
       }
       if (request.method === "GET" && isReviewAssetPath(url.pathname)) {
-        await sendReviewAsset(response, url.pathname);
+        await sendReviewAsset(response, url.pathname, head);
         return;
       }
       // Sandbox jobs authenticate with their own signed grant, not a user or the API token.
@@ -117,6 +120,7 @@ export async function startApi(
       sendJson(response, 404, { error: "not found" });
     } catch (error) {
       if (response.headersSent) {
+        reportError(error);
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
       }

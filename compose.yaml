@@ -49,6 +49,10 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_SANDBOX_SECRET: ${SELFBENCH_SANDBOX_SECRET:-selfbench-local-sandbox-callback-secret}
   SELFBENCH_SANDBOX_CALLBACK_URL: ${SELFBENCH_SANDBOX_CALLBACK_URL:-http://api:8080}
   SELFBENCH_DOCKER_NETWORK: ${SELFBENCH_DOCKER_NETWORK:-${COMPOSE_PROJECT_NAME}_default}
+  # Error reporting, off unless a DSN is set. Events are tagged with this environment
+  # (`local` when unset), so a stack can share the deployed Sentry project.
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SELFBENCH_ENVIRONMENT: ${SELFBENCH_ENVIRONMENT:-}
 
 services:
   postgres:
@@ -127,6 +131,10 @@ services:
       SELFBENCH_STRIPE_WEBHOOK_SECRET: ${SELFBENCH_STRIPE_WEBHOOK_SECRET:-}
       SELFBENCH_STRIPE_PRICE_ID: ${SELFBENCH_STRIPE_PRICE_ID:-}
       SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: /run/selfbench-stripe/webhook-secret
+      # Browser error reporting and product analytics, handed to the pages at runtime.
+      SENTRY_BROWSER_DSN: ${SENTRY_BROWSER_DSN:-}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
     ports:
       - "127.0.0.1::8080"
     volumes:

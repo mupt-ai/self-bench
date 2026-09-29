@@ -1,6 +1,7 @@
 import React from "react";
 
 export interface SiteUser {
+  githubId: number;
   login: string;
   name?: string;
   avatarUrl?: string;

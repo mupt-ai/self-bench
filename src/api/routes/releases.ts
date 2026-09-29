@@ -14,6 +14,7 @@ import {
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { Org, User, UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
+import { track } from "../../lib/telemetry/posthog.js";
 import {
   type BuiltRelease,
   buildRelease,
@@ -177,6 +178,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         },
       });
       options.onPublicChange?.();
+      track(scope.user, "release published", { repo: github.fullName }, scope.tenant);
       const after = await releases.list(scope.line);
       sendJson(response, 201, { release: summaryOf(row, after) });
     } catch (error) {

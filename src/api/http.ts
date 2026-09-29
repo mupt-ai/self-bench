@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { z } from "zod";
 import { projectRoot } from "../lib/project-paths.js";
+import { reportError } from "../lib/telemetry/sentry.js";
 import { bearerToken, errorMessage } from "../lib/util.js";
 
 export async function readBody(
@@ -42,7 +43,12 @@ export function isReviewAssetPath(pathname: string): boolean {
   return pathname === "/" || pathname === "/dari-logo.svg" || pathname.startsWith("/assets/");
 }
 
-export async function sendReviewAsset(response: ServerResponse, pathname: string): Promise<void> {
+/** Serves a built file of the app; `head` is added to the page shell's head (telemetry config). */
+export async function sendReviewAsset(
+  response: ServerResponse,
+  pathname: string,
+  head = "",
+): Promise<void> {
   const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
   const root = resolve(projectRoot(import.meta.url), "dist/review");
   const path = resolve(root, relativePath);
@@ -51,7 +57,11 @@ export async function sendReviewAsset(response: ServerResponse, pathname: string
     return;
   }
   try {
-    const body = await readFile(path);
+    const file = await readFile(path);
+    const body =
+      head && relativePath === "index.html"
+        ? Buffer.from(file.toString("utf8").replace("</head>", `  ${head}\n  </head>`))
+        : file;
     response.writeHead(200, {
       "content-type": contentType(path),
       "content-length": body.byteLength,
@@ -67,9 +77,15 @@ export async function sendReviewAsset(response: ServerResponse, pathname: string
   }
 }
 
+export const escapeAttribute = (value: string) =>
+  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+
 export function sendApiError(response: ServerResponse, error: unknown): void {
   const status = apiErrorStatus(error);
-  if (status === 500) console.error(error);
+  if (status === 500) {
+    console.error(error);
+    reportError(error);
+  }
   sendJson(response, status, {
     error: status === 500 ? "internal server error" : errorMessage(error),
   });

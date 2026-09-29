@@ -28,6 +28,7 @@ import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluati
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
+import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
@@ -104,6 +105,17 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               { repoId: repo.id, orgId: tenant.id, tenant: tenant.login, login: user.login },
               draft,
               env,
+            );
+            track(
+              user,
+              "comparison started",
+              {
+                tasks: draft.tasks.length,
+                models: draft.models.length,
+                harnesses: draft.models.reduce((sum, model) => sum + model.harnesses.length, 0),
+                sandbox: draft.sandbox,
+              },
+              tenant,
             );
             await resume(
               record,

@@ -21,6 +21,7 @@ import {
   taskRunId,
   type WorkflowStarter,
 } from "../../generation/tasks/start.js";
+import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import {
   candidateFromPullRequest,
@@ -195,6 +196,12 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         runId: row.runId,
         ...(generation ? { generation } : {}),
       });
+      track(
+        user,
+        "pull request task started",
+        generation ? generationProperties(generation.settings) : {},
+        tenant,
+      );
       sendJson(response, 201, { task: taskItem(row) });
       return true;
     },

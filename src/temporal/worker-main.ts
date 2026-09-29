@@ -9,8 +9,10 @@ import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { keepOpenRouterRatesFresh } from "../lib/openrouter-rates.js";
+import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
+import { activityErrorInterceptor } from "./activity-errors.js";
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 import { idleTracker } from "./idle-exit.js";
@@ -23,6 +25,7 @@ import { resolveHarborConcurrency } from "./worker-memory.js";
  * ~300 MiB Python client, so that queue's concurrency is sized to memory. `SELFBENCH_WORKER_ROLE`
  * limits a process to one queue so each can scale on its own backlog.
  */
+initSentry("worker");
 removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
 const { role, shutdownGraceMs, idleExitMs } = workerProcessSettings(process.env);
@@ -66,7 +69,9 @@ const workers = await Promise.all([
           workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
           activities: { ...generation, ...evaluation },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
-          interceptors: { activity: [activityEventInterceptor(), idle.interceptor] },
+          interceptors: {
+            activity: [activityEventInterceptor(), activityErrorInterceptor(), idle.interceptor],
+          },
           shutdownGraceTime: shutdownGraceMs,
         }),
       ]),
@@ -79,7 +84,7 @@ const workers = await Promise.all([
           taskQueue: harborTaskQueue(config.temporal.taskQueue),
           activities: { verifyCompiled, runSolverTrial, prepareTaskImages },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
-          interceptors: { activity: [idle.interceptor] },
+          interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
         }),
       ]),
@@ -106,4 +111,5 @@ try {
   await Promise.all(workers.map((worker) => worker.run()));
 } finally {
   await database?.close();
+  await closeSentry();
 }

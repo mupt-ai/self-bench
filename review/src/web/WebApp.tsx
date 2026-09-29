@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { SESSION_EXPIRED } from "../session-expired";
+import { forgetPerson, identifyPerson } from "../telemetry";
 import { BatchesPage } from "./batches/BatchesPage";
 import { BatchPage } from "./batches/BatchPage";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -48,8 +49,12 @@ export function WebApp() {
       window.removeEventListener(SESSION_EXPIRED, expired);
     };
   }, []);
+  React.useEffect(() => {
+    if (session.status === "signed-in") identifyPerson(session.user);
+  }, [session]);
   const signOut = React.useCallback(async () => {
     await requestSignOut();
+    forgetPerson();
     setSession({ status: "anonymous" });
   }, []);
   const value = React.useMemo(() => ({ session, signOut }), [session, signOut]);

@@ -1,7 +1,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { startTelemetry } from "./telemetry";
 import "./theme.css";
 import { WebApp } from "./web/WebApp";
+
+startTelemetry("app");
 
 const root = document.getElementById("root");
 if (!root) {

@@ -6,6 +6,7 @@ import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import { createUsageStore } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { reportError } from "../../lib/telemetry/sentry.js";
 import { errorMessage, settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
@@ -56,7 +57,10 @@ export function createGenerationBatches(
       runId,
       exportBatch(batch, artifacts, vault, usage)
         .then((reference) => store.completeExport(runId, reference))
-        .catch(() => console.error(`Batch ${runId} export failed; it will be retried`))
+        .catch((error) => {
+          console.error(`Batch ${runId} export failed; it will be retried`);
+          reportError(error, { tags: { batch_step: "export" } });
+        })
         .finally(() => exports.delete(runId)),
     );
   };
@@ -112,7 +116,10 @@ export function createGenerationBatches(
     preparing.set(
       runId,
       prepare(runId)
-        .catch(() => console.error(`Batch ${runId} preparation failed; it will be retried`))
+        .catch((error) => {
+          console.error(`Batch ${runId} preparation failed; it will be retried`);
+          reportError(error, { tags: { batch_step: "prepare" } });
+        })
         .finally(() => preparing.delete(runId)),
     );
   };
@@ -132,15 +139,18 @@ export function createGenerationBatches(
     const results = await settleWithLimit(runIds, BATCH_SWEEP_CONCURRENCY, reconcile);
     // Credentials/upstream outages leave the batch as it was; the next tick retries it.
     results.forEach((result, index) => {
-      if (result.status === "rejected")
+      if (result.status === "rejected") {
         console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);
+        reportError(result.reason, { tags: { batch_step: "reconcile" } });
+      }
     });
   };
   const poll = () => {
     if (stopped || pending) return;
     pending = tick()
-      .catch(() => {
+      .catch((error) => {
         console.error("Batch reconciliation failed; persisted batches will be retried");
+        reportError(error, { tags: { batch_step: "plan" } });
       })
       .finally(() => {
         pending = undefined;

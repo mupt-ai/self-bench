@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { repositoryPath, segmentsOf } from "../public/paths.js";
-import { contentType, sendJson } from "./http.js";
+import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
@@ -19,6 +19,8 @@ export interface ResultsSiteOptions {
   /** The public API, whose snapshot of released lines also decides each page's status. */
   publicRoutes: PublicReleaseRoutes;
   limiter?: RateLimiter;
+  /** Tags added to every page's head: the telemetry config (`telemetry-meta.ts`). */
+  head?: string;
 }
 
 /**
@@ -47,9 +49,6 @@ function sameHost(protocol: string): (value: string | undefined) => string | und
 const PAGE_CACHE = "public, max-age=0, s-maxage=60";
 const HTML_TYPE = "text/html; charset=utf-8";
 
-const escapeAttribute = (value: string) =>
-  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
-
 /**
  * The public results site, served by the same API process on its own host. On that host only
  * the public site answers: its API, its files, and its pages. Sign-in, the app's API, and every
@@ -68,7 +67,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
           "</head>",
           `    <meta name="selfbench-app-url" content="${escapeAttribute(options.appUrl)}" />\n${
             options.indexable ? "" : '    <meta name="robots" content="noindex" />\n'
-          }  </head>`,
+          }${options.head ? `    ${options.head}\n` : ""}  </head>`,
         ),
       ),
     );
