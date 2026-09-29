@@ -16,11 +16,11 @@ SelfBench turns merged pull requests into Harbor tasks. This page covers the pip
 A batch is a Postgres record that the API advances every five seconds (`src/generation/batches/`), not a Temporal parent workflow.
 
 1. **Provenance.** The API pins the default branch's head and lists up to 500 merged PRs with the submitter's GitHub token. Each PR from a non-bot author that clears the size gate becomes a provenance record: its exact title and body, with common credential forms redacted. No model writes request text.
-2. **Discovery.** PRs are split into shards, each one `selfBenchDiscoveryShardWorkflow`. Discovery targets 1.5× the requested count per tier. Candidates are deduplicated by source PR.
+2. **Discovery.** PRs are split into shards, each one `selfBenchDiscoveryShardWorkflow`. Each shard sees a pool of about 1.5× the requested count in PRs (at least 25) and proposes up to its share of each tier's count. Candidates are deduplicated by source PR.
 3. **Authoring and review.** Every candidate runs as one `selfBenchAuthorWorkflow`. Nothing is backfilled: a rejected candidate is a rejection in the batch status, and a batch can accept more tasks than it asked for.
 4. **Export.** Once every candidate settles, accepted tasks are packed into the batch export.
 
-**Add PR** skips discovery and authors a single chosen PR.
+**Add PRs** skips discovery and authors each chosen PR as its own candidate.
 
 Agents run in fresh sandboxes (Docker locally; Modal, Vercel, or E2B hosted) built from `Dockerfile.sandbox`. A sandbox reports back to the API over signed callbacks (`/api/sandbox/*`) rather than holding a worker connection, and uploads everything it produces under `runs/<runId>/…` in the artifact store. Harbor gates and solver trials run on a separate `<task queue>-harbor` queue, which the GKE workers serve in production.
 
@@ -37,7 +37,7 @@ One authoring agent session owns the whole task: the instruction, the test comma
 3. **oracle**: the reference patch applies and every selected test passes;
 4. **determinism**: the fail-to-pass tests pass a second time with the oracle.
 
-The next turn resumes the same session in a fresh sandbox with the report as its next message. A round allows five `verify` calls and ends with `submit_task`. A fresh read-only review agent then judges each green submission: accept, reject, or send suggestions back for another authoring round. Three failed rounds reject the candidate; three consecutive Harbor infrastructure failures mark it `infrastructure_failed`.
+The next turn resumes the same session in a fresh sandbox with the report as its next message. A round allows five `verify` calls and ends with `submit_task`. A fresh read-only review agent then judges each green submission: accept, reject, or send suggestions back for another authoring round. Three failed rounds reject the candidate; a step that still fails after its retries (a Harbor check gets four attempts) marks it `infrastructure_failed`.
 
 The authoring prompt, including the anti-coupling rules, is [`src/generation/pipeline/prompts/authoring.md`](../src/generation/pipeline/prompts/authoring.md).
 

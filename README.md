@@ -12,7 +12,7 @@ For each merged PR, SelfBench rebuilds the task from the commit before the chang
 Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.dev):
 
 1. **Sign in** with GitHub and **connect a repository**.
-2. **Batch Generation**: choose how many easy, medium, and hard tasks to build, or **Add PR** to build one from a chosen pull request. A batch takes hours; it keeps running after you close the page.
+2. **Batch Generation**: choose how many easy, medium, and hard tasks to build, or use **Add PRs** on the Dataset page to build one task from each pull request you pick. A batch takes hours; it keeps running after you close the page.
 3. **Dataset**: inspect each task (instruction, environment, hidden tests, reference patch, pipeline artifacts) and approve or reject it.
 4. **Run**: pick models, harnesses, and a sandbox, and run them on the approved tasks.
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
