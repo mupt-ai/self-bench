@@ -7,6 +7,7 @@ import {
   billingWebhookEvents,
   generationUsage,
   orgBilling,
+  orgs,
 } from "./schema.js";
 
 export interface BillingUsageSummary {
@@ -63,6 +64,16 @@ export function createBillingStore(db: Database, configured: boolean) {
         sandboxSeconds: row?.sandboxSeconds ?? 0,
         sandboxBillableUsd: row?.sandboxBillableUsd ?? 0,
       };
+    },
+    async creditTarget(login: string): Promise<{ orgId: number; customerId: string } | undefined> {
+      const [target] = await db
+        .select({ orgId: orgBilling.orgId, customerId: orgBilling.stripeCustomerId })
+        .from(orgBilling)
+        .innerJoin(orgs, eq(orgBilling.orgId, orgs.id))
+        .where(and(eq(orgs.login, login), eq(orgs.kind, "org")));
+      return target?.customerId
+        ? { orgId: target.orgId, customerId: target.customerId }
+        : undefined;
     },
     async customerId(orgId: number): Promise<string | undefined> {
       const [row] = await db

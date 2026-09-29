@@ -52,6 +52,56 @@ export async function createStripeCustomer(
   );
 }
 
+export async function verifyMeteredPrice(
+  config: StripeConfig,
+  unitScale: number,
+  options?: StripeRequestOptions,
+): Promise<void> {
+  const price = await stripeRequest<{
+    currency: string;
+    active: boolean;
+    billing_scheme: string;
+    recurring?: { usage_type?: string; meter?: string };
+    unit_amount_decimal?: string | null;
+  }>(config, `/v1/prices/${encodeURIComponent(config.priceId)}`, {}, options);
+  // Stripe expresses unit_amount_decimal in cents; SelfBench's scale is units per dollar.
+  const expectedCents = 100 / unitScale;
+  if (
+    !price.active ||
+    price.currency !== "usd" ||
+    price.billing_scheme !== "per_unit" ||
+    price.recurring?.usage_type !== "metered" ||
+    !price.recurring.meter ||
+    !price.unit_amount_decimal ||
+    Number(price.unit_amount_decimal) !== expectedCents
+  ) {
+    throw new Error(
+      `Stripe metered price does not match SelfBench's ${unitScale} units per USD; fix the price before starting billing`,
+    );
+  }
+}
+
+/** A negative balance transaction credits future Stripe invoices in USD cents. */
+export async function grantStripeCredit(
+  config: StripeConfig,
+  input: { customerId: string; amountCents: number; description: string; idempotencyKey: string },
+  options?: StripeRequestOptions,
+): Promise<{ id: string }> {
+  return stripeRequest(
+    config,
+    `/v1/customers/${encodeURIComponent(input.customerId)}/balance_transactions`,
+    {
+      method: "POST",
+      body: formBody({
+        amount: String(-input.amountCents),
+        currency: "usd",
+        description: input.description,
+      }),
+    },
+    { ...options, idempotencyKey: input.idempotencyKey },
+  );
+}
+
 export async function createCheckoutSession(
   config: StripeConfig,
   input: { customerId: string; orgId: number; successUrl: string; cancelUrl: string },

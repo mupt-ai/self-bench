@@ -25,7 +25,7 @@ function sign(body: Buffer) {
   return `t=${timestamp},v1=${v1}`;
 }
 
-async function billingServer() {
+async function billingServer(priceUnitCents = "0.00001") {
   const database = await testDatabase();
   const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
   const admin = await users.upsert({
@@ -33,7 +33,10 @@ async function billingServer() {
     login: "owner",
     token: "gho",
     scopes: "",
-    orgs: [{ githubId: 2, login: "team", role: "admin" }],
+    orgs: [
+      { githubId: 2, login: "team", role: "admin" },
+      { githubId: 4, login: "mupt-ai", role: "admin" },
+    ],
   });
   const member = await users.upsert({
     githubId: 3,
@@ -43,7 +46,10 @@ async function billingServer() {
     orgs: [{ githubId: 2, login: "team", role: "member" }],
   });
   const store = createBillingStore(database.db, true);
+  const teamId = (await users.orgsFor(admin.id)).find((org) => org.login === "team")?.id;
+  if (!teamId) throw new Error("team missing");
   const stripeCalls: string[] = [];
+  const credits: { body: URLSearchParams; key: string | null }[] = [];
   const routes = createBillingRoutes({
     users,
     store,
@@ -52,6 +58,21 @@ async function billingServer() {
     fetchImpl: (async (input, init) => {
       const url = String(input);
       stripeCalls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/v1/prices/price_metered"))
+        return Response.json({
+          active: true,
+          currency: "usd",
+          billing_scheme: "per_unit",
+          recurring: { usage_type: "metered", meter: "mtr_1" },
+          unit_amount_decimal: priceUnitCents,
+        });
+      if (url.endsWith("/v1/customers/cus_1/balance_transactions")) {
+        credits.push({
+          body: new URLSearchParams(String(init?.body)),
+          key: new Headers(init?.headers).get("idempotency-key"),
+        });
+        return Response.json({ id: "cbtxn_1" });
+      }
       if (url.endsWith("/v1/customers")) return Response.json({ id: "cus_1" });
       if (url.endsWith("/v1/checkout/sessions"))
         return Response.json({ url: "https://checkout.stripe.test/c" });
@@ -82,7 +103,9 @@ async function billingServer() {
     fetch(`http://127.0.0.1:${address.port}${path}`, init);
   return {
     store,
+    teamId,
     stripeCalls,
+    credits,
     request,
     stop: async () => {
       await new Promise<void>((resolve, reject) =>
@@ -147,6 +170,78 @@ test("admins can start Checkout and the portal; members only read status", async
       })
     ).status,
   ).toBe(403);
+});
+
+test("checkout refuses a Stripe price whose meter units do not equal displayed dollars", async () => {
+  const server = await billingServer("0.000001");
+  stop = server.stop;
+  const response = await server.request("/api/orgs/team/billing/checkout", {
+    method: "POST",
+    headers: {
+      origin: "http://billing.test",
+      "content-type": "application/json",
+      "x-user": "owner",
+    },
+    body: "{}",
+  });
+  expect(response.status).toBe(503);
+  expect(server.stripeCalls).not.toContain("POST https://api.stripe.com/v1/checkout/sessions");
+});
+
+test("only mupt-ai browser admins can grant Stripe invoice credits to existing customers", async () => {
+  const server = await billingServer();
+  stop = server.stop;
+  // Registered team has a Stripe customer; grants must not create new customers.
+  await server.store.saveCustomer(server.teamId, "cus_1");
+  const body = JSON.stringify({
+    targetOrg: "team",
+    amountCents: 1234,
+    reason: "Courtesy",
+    requestId: crypto.randomUUID(),
+  });
+  const headers = {
+    origin: "http://billing.test",
+    "content-type": "application/json",
+    "x-user": "owner",
+  };
+  const grant = await server.request("/api/orgs/mupt-ai/billing/credits", {
+    method: "POST",
+    headers,
+    body,
+  });
+  expect(grant.status).toBe(200);
+  expect(server.credits[0]?.body.get("amount")).toBe("-1234");
+  expect(server.credits[0]?.body.get("currency")).toBe("usd");
+  const retry = await server.request("/api/orgs/mupt-ai/billing/credits", {
+    method: "POST",
+    headers,
+    body,
+  });
+  expect(retry.status).toBe(200);
+  expect(server.credits[1]?.key).toBe(server.credits[0]?.key);
+  for (const [path, changedHeaders, changedBody] of [
+    ["/api/orgs/team/billing/credits", headers, body],
+    ["/api/orgs/mupt-ai/billing/credits", { ...headers, "x-user": "member" }, body],
+    ["/api/orgs/mupt-ai/billing/credits", { ...headers, origin: "https://evil.example" }, body],
+    [
+      "/api/orgs/mupt-ai/billing/credits",
+      headers,
+      JSON.stringify({
+        targetOrg: "team",
+        amountCents: -1,
+        reason: "Bad",
+        requestId: crypto.randomUUID(),
+      }),
+    ],
+  ] as const) {
+    const denied = await server.request(path, {
+      method: "POST",
+      headers: changedHeaders,
+      body: changedBody,
+    });
+    expect(denied.status).toBeGreaterThanOrEqual(400);
+  }
+  expect(server.credits).toHaveLength(2);
 });
 
 test("signed webhooks update subscription state and ignore duplicates", async () => {

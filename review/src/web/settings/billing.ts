@@ -17,6 +17,7 @@ import { requestJson } from "../api";
 
 export interface BillingStatus extends BillingEligibility {
   canManage: boolean;
+  canGrantCredits?: boolean;
   usage: BillingUsageSummary;
 }
 
@@ -31,6 +32,17 @@ export function formatBillingDollars(value: number): string {
 
 export function fetchBilling(org: string): Promise<BillingStatus> {
   return requestJson<BillingStatus>(`/api/orgs/${encodeURIComponent(org)}/billing`);
+}
+
+export async function grantBillingCredit(
+  org: string,
+  input: { targetOrg: string; amountCents: number; reason: string; requestId: string },
+): Promise<void> {
+  await requestJson<{ id: string }>(`/api/orgs/${encodeURIComponent(org)}/billing/credits`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 export async function startBillingSession(

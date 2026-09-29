@@ -162,7 +162,10 @@ Metered Stripe billing applies only to managed model and sandbox usage. Organiza
 | `GET` | `/api/orgs/:org/billing` | Subscription status: `configured`, `eligible`, `status`, `canManage`, and optional customer/period fields |
 | `POST` | `/api/orgs/:org/billing/checkout` | Creates a Stripe Checkout session; `200 { url }`. Browser session, admin only |
 | `POST` | `/api/orgs/:org/billing/portal` | Creates a Stripe Customer Portal session; `200 { url }`. Browser session, admin only |
+| `POST` | `/api/orgs/mupt-ai/billing/credits` | Grants a future-invoice Stripe customer balance credit to a registered organization with a Stripe customer. Browser session of a `mupt-ai` org admin only; JSON `{ targetOrg, amountCents, reason, requestId }` where `requestId` is a UUID reused on retries. Amount is 1–1,000,000 USD cents. Does not change recorded usage or past invoices. |
 | `POST` | `/api/stripe/webhook` | Stripe webhook (unauthenticated, `Stripe-Signature` verified) |
+
+Checkout validates that the configured Stripe metered USD price has a per-unit amount of `100 / SELFBENCH_BILLING_UNIT_SCALE` cents (default `0.00001` cents per event unit). Fix a mismatched price before starting new subscriptions. Existing subscriptions and past invoices must be inspected and corrected in Stripe separately. The site's usage total is all-time recorded usage, not a current-period invoice balance; credits do not reduce it.
 
 `GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 
