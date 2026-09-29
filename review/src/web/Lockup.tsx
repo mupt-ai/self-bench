@@ -1,5 +1,5 @@
+import { clsx } from "clsx";
 import { Link } from "react-router";
-import { cn } from "./primitives/cn";
 
 /** The dari turtle mark, as shipped in the approved login mock. */
 function DariMark() {
@@ -45,10 +45,7 @@ export function Lockup({
       {showName && (
         <span className="flex min-w-0 flex-col gap-0.5">
           <strong
-            className={cn(
-              "font-mono leading-none font-bold tracking-wide",
-              compact ? "text-base" : "text-lg",
-            )}
+            className={clsx("font-mono font-bold tracking-wide", compact ? "text-base" : "text-lg")}
           >
             self-bench
           </strong>
@@ -57,7 +54,9 @@ export function Lockup({
       )}
     </>
   );
-  const classNames = cn("inline-flex min-w-0 items-center gap-2.5 text-foreground", className);
+  // Plain joining, not `cn`: selfbench.dev shows this logo too, and nothing here needs
+  // tailwind-merge, which would otherwise ship in its bundle for this alone.
+  const classNames = clsx("inline-flex min-w-0 items-center gap-2.5 text-foreground", className);
 
   if (href) {
     return (
