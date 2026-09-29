@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
@@ -18,7 +19,7 @@ import {
 } from "../ui";
 import { ActiveEvaluations } from "./ActiveEvaluations";
 import { type EvaluationRun, evaluationRequest, evaluationUrl } from "./api";
-import { benchmarkPoints, dollars, runAccuracy } from "./benchmark";
+import { benchmarkPoints, customEndpoints, dollars, runAccuracy } from "./benchmark";
 import { ComparisonHistory } from "./ComparisonHistory";
 import { EvaluationResults } from "./EvaluationResults";
 import { ParetoChart } from "./ParetoChart";
@@ -36,7 +37,22 @@ export function EvaluationPage() {
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [dataset, setDataset] = React.useState("");
+  const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
   useDocumentTitle(`Results · ${repo}`);
+  // Custom endpoints for the chart. The page works without them.
+  React.useEffect(() => {
+    let disposed = false;
+    evaluationRequest<{ credentials: CredentialInfo[] }>(
+      `/api/orgs/${encodeURIComponent(org.login)}/credentials`,
+    )
+      .then((result) => {
+        if (!disposed) setCredentials(result.credentials);
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [org.login]);
   React.useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -148,7 +164,11 @@ export function EvaluationPage() {
               </Select>
             </label>
           )}
-          <ParetoChart points={comparable} onSelect={(id) => setSearch({ run: id })} />
+          <ParetoChart
+            points={comparable}
+            endpoints={customEndpoints(comparable, credentials)}
+            onSelect={(id) => setSearch({ run: id })}
+          />
           <section className="mt-8">
             <SectionHeader title="Configuration × Task Results" />
             {runs.some((run) => run.trials.length > 0) && (

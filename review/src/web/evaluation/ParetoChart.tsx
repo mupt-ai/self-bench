@@ -7,7 +7,8 @@ import {
   VENDOR_CHIPS,
   vendorPoint,
 } from "../../public-site/format";
-import { type BenchmarkPoint, dollars } from "./benchmark";
+import { type BenchmarkPoint, type CustomEndpoint, dollars } from "./benchmark";
+import { endpointLabel } from "./credential-presentation";
 
 /** The plot's colors and type, taken from the app theme so it follows light and dark. */
 const THEMED = [
@@ -24,9 +25,12 @@ const THEMED = [
 
 export function ParetoChart({
   points,
+  endpoints = new Map(),
   onSelect,
 }: {
   points: BenchmarkPoint[];
+  /** Custom points' endpoints and public numbers, by point id (`customEndpoints`). */
+  endpoints?: ReadonlyMap<string, CustomEndpoint>;
   onSelect(id: string): void;
 }) {
   const container = useRef<HTMLElement>(null);
@@ -75,15 +79,21 @@ export function ParetoChart({
             points={points.map((point) => {
               const source = { provider: point.provider, model: { name: point.model } };
               const customModel = point.provider === "custom" ? point.model : undefined;
+              const label = oneHarness
+                ? point.name
+                : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`;
+              // A custom endpoint shows its host, and the number the public page would give it.
+              const custom = endpoints.get(point.id);
               return {
                 id: point.id,
-                label: oneHarness
-                  ? point.name
-                  : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`,
+                label: custom?.number ? `${label} (Endpoint ${custom.number})` : label,
                 x: point.cost,
                 y: point.accuracy,
                 ...vendorPoint(source, customModel),
-                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+                description: [
+                  `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+                  ...(custom ? [endpointLabel(custom.endpoint)] : []),
+                ].join(" · "),
               };
             })}
             xAxis={{

@@ -1,19 +1,11 @@
 import { Check, Minus } from "lucide-react";
 import React from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
-import { credentialAccess, providers } from "../evaluation/credential-presentation";
+import { endpointNumber, publicIds } from "../../../../src/public/endpoint-numbers";
+import { credentialAccess, endpointLabel, providers } from "../evaluation/credential-presentation";
 import { thinkingLabel } from "../evaluation/run-presentation";
 import { SearchInput } from "../ui";
 import type { PreviewSetting } from "./api";
-
-/** The endpoint's host, or the endpoint itself when it does not parse as a URL. */
-function hostOf(endpoint: string): string {
-  try {
-    return new URL(endpoint).hostname;
-  } catch {
-    return endpoint;
-  }
-}
 
 /** The columns that tell two settings of one model apart. */
 function columnsOf(setting: PreviewSetting) {
@@ -21,7 +13,7 @@ function columnsOf(setting: PreviewSetting) {
     harness: harnessLabels[setting.harness],
     reasoning: thinkingLabel(setting.reasoningLevel),
     provider: providers.find((entry) => entry.id === setting.provider)?.label ?? setting.provider,
-    host: setting.endpoint ? hostOf(setting.endpoint) : "",
+    host: setting.endpoint ? endpointLabel(setting.endpoint) : "",
     access: credentialAccess({ kind: setting.provider, auth: setting.signIn }),
   };
 }
@@ -115,6 +107,9 @@ export function SettingsPicker({
   const groups = new Map<string, PreviewSetting[]>();
   for (const setting of visible)
     groups.set(setting.label, [...(groups.get(setting.label) ?? []), setting]);
+  // The number each ticked custom endpoint will carry publicly, when another shares its setting.
+  const released = publicIds(settings.filter((setting) => ticked.has(setting.key)));
+  const position = new Map(settings.map((setting, index) => [setting.key, index]));
   const set = (keys: readonly string[], on: boolean) => {
     const next = new Set(ticked);
     for (const key of keys) {
@@ -125,8 +120,10 @@ export function SettingsPicker({
   };
 
   const row = (setting: PreviewSetting, child: { last: boolean } | undefined) => {
-    const id = `${idBase}-${setting.id}`;
+    // Custom settings on two endpoints share an id, so the row's position names its box.
+    const id = `${idBase}-${position.get(setting.key)}`;
     const columns = columnsOf(setting);
+    const number = endpointNumber(released.get(setting.key) ?? "");
     return (
       <label
         key={setting.key}
@@ -142,7 +139,11 @@ export function SettingsPicker({
             onChange={(on) => set([setting.key], on)}
           />
           {child ? (
-            <span className="sr-only">{setting.label}</span>
+            <>
+              <span className="sr-only">{setting.label}</span>
+              {/* A ticked endpoint that shares its model's setting: its name on the public page. */}
+              {number ? <span className="truncate text-foreground">Endpoint {number}</span> : null}
+            </>
           ) : (
             <span className="truncate font-medium text-foreground">{setting.label}</span>
           )}
@@ -151,7 +152,18 @@ export function SettingsPicker({
         <span className="truncate">{columns.reasoning}</span>
         <span className="min-w-0">
           <span className="block truncate">{columns.provider}</span>
-          {columns.host && <span className="block truncate text-xs">{columns.host}</span>}
+          {columns.host && (
+            <span
+              className="block truncate text-xs"
+              title={
+                number
+                  ? `${setting.endpoint}, shown publicly as ${setting.label} (Endpoint ${number})`
+                  : setting.endpoint
+              }
+            >
+              {columns.host}
+            </span>
+          )}
         </span>
         <span className="truncate">{columns.access}</span>
         <span className="text-right">
