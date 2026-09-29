@@ -166,7 +166,11 @@ export async function harborRun(
   const agent = run === "nop" ? SMOKE_AGENT : "oracle";
   const jobName = `${taskId}-${run}-${crypto.randomUUID().slice(0, 8)}`;
   const env = harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment));
-  const version = await runCommand("harbor", ["--version"], { env, timeoutMs: 15_000, signal });
+  const version = await runCommand("harbor", ["--version"], {
+    env,
+    timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.version,
+    signal,
+  });
   assertHarborVersion(version.stdout);
   const harbor = await prepareHarborRun(taskDirectory, root, env, signal).catch(refuseWithoutRetry);
   const feed =

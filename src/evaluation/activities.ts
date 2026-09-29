@@ -1,4 +1,4 @@
-import { Context } from "@temporalio/activity";
+import { Context, type Info } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
@@ -16,6 +16,12 @@ export interface EvaluationActivities {
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
 }
+/** Whether Temporal runs another attempt if this one fails; an unknown policy counts as no. */
+function retries({ attempt, retryPolicy }: Info): boolean {
+  const maximum = retryPolicy?.maximumAttempts;
+  return maximum !== undefined && (maximum === 0 || attempt < maximum);
+}
+
 export function createEvaluationActivities(
   store: ArtifactStore,
   vault?: Vault,
@@ -40,7 +46,9 @@ export function createEvaluationActivities(
     prepareTaskImages: (input) =>
       heartbeating((options) => prepareTaskImages(store, input, options)),
     runSolverTrial: (input, index) =>
-      heartbeating((options) => executeTrial(store, input, index, options)),
+      heartbeating((options) =>
+        executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
+      ),
     failSolverTrial: (input, index) => failTrial(store, input, index),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),
     failSolverEvaluation: (input) =>

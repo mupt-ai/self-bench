@@ -9,6 +9,9 @@ export const HARBOR_VERSION = "0.23.0";
 export const HARBOR_PROCESS_TIMEOUT_MS = {
   gate: 3 * 60 * 60 * 1000,
   solver: 2 * 60 * 60 * 1000,
+  // The worker image has no bytecode for Harbor and cannot cache it, so every call imports Harbor
+  // from source; ten at once on a new 2-vCPU worker took longer than 15 seconds.
+  version: 60 * 1000,
 } as const;
 
 export interface HarborRunCommand {

@@ -1,24 +1,19 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { HarborEnvironment } from "../contracts/config/providers.js";
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
-import {
-  assertHarborVersion,
-  HARBOR_PROCESS_TIMEOUT_MS,
-  harborProcessEnvironment,
-  harborRunArguments,
-} from "../harnesses/harbor/command.js";
+import { HARBOR_PROCESS_TIMEOUT_MS, harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
-import { prepareHarborRun } from "../harnesses/harbor/task-safety.js";
 import { runCommand } from "../lib/process.js";
 import { trialCost } from "./cost.js";
-import { credentialExecution, gatewayTrial, solverAgent } from "./execution.js";
+import { solverAgent } from "./execution.js";
 import { thinkingArguments } from "./models.js";
 import {
   boundedSteps,
@@ -31,7 +26,7 @@ import {
   trialLog,
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError, updateEvaluation } from "./store.js";
-import { unpackTrialTask } from "./task-bundle.js";
+import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 export function solverArguments(
@@ -67,12 +62,18 @@ export interface RunnerOptions {
   vault?: Pick<Vault, "credentials" | "comparisons">;
   /** Signs the snapshot links Modal image builds fetch; see unpackTrialTask. */
   snapshotLink?: SandboxCallback;
+  /**
+   * Another attempt follows if this one throws: a trial whose setup fails before its solver
+   * starts is then returned to the queue for it, unless the failure is final (refuseTrial).
+   */
+  retry?: boolean;
 }
 
 /**
  * Runs one trial of a started evaluation. The trial is claimed (queued to running) in the record
  * before any model spend, so a second delivery of the same trial refuses instead of re-running it.
- * Every save replaces only this trial, so trials running in parallel never overwrite each other.
+ * A retryable failure before the solver starts returns the claim for the next attempt. Every save
+ * replaces only this trial, so trials running in parallel never overwrite each other.
  */
 export async function executeTrial(
   store: ArtifactStore,
@@ -101,51 +102,46 @@ export async function executeTrial(
     .map(([, value]) => value ?? "")
     .filter(Boolean);
   const redact = (text: string) => redactOutput(text, secrets);
+  // Returns the claimed trial to the queue, so the next attempt can claim it again.
+  const requeue = () =>
+    updateEvaluation(store, input.repoId, input.id, (latest) => {
+      const current = latest.trials[index];
+      if (latest.status !== "running" || current?.status !== "running") return false;
+      current.status = "queued";
+      delete current.startedAt;
+    });
+  // The solver may spend from the moment it starts, so only a failure before then is retried.
+  let solving = false;
+  let retrying = false;
   try {
-    const home = join(root, "home");
-    await mkdir(home, { mode: 0o700 });
-    if (!options.vault) throw new Error("Credential storage unavailable on the worker");
-    const execution = await credentialExecution(input, home, environment, options.vault);
-    secrets.push(...execution.secrets);
-    const child = harborProcessEnvironment(execution.child);
-    const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
-    assertHarborVersion(version.stdout);
-    options.signal?.throwIfAborted();
-    const task = input.tasks.find(
-      (candidate) => candidate.runId === trial.runId && candidate.taskId === trial.taskId,
-    );
-    if (!task) throw new Error("Evaluation task snapshot is missing");
-    const trialRoot = join(root, "trial");
-    await mkdir(trialRoot);
-    const taskPath = await unpackTrialTask(store, task, run.sandbox, trialRoot, {
-      ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
-    const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
-    const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal);
-    await runTrial({
-      store,
-      run,
-      trial,
-      index,
-      save,
-      taskPath,
-      jobs: join(trialRoot, "jobs"),
-      ...(task.images ? { images: task.images } : {}),
-      ...gateway,
-      child: prepared.env,
-      guard: prepared.guard,
+    const ready = await setUpTrial(store, input, run, trial, root, secrets, {
+      ...options,
       command,
-      redact,
-      options,
+      env: environment,
     });
+    solving = true;
+    await runTrial({ store, run, trial, index, save, ...ready, command, redact, options });
   } catch (error) {
+    const message = redact(error instanceof Error ? error.message : "Solver failed");
+    // A retry needs the trial back in the queue; if that write fails, the failure is recorded here.
+    retrying =
+      !solving &&
+      options.retry === true &&
+      !options.signal?.aborted &&
+      !(error instanceof ApplicationFailure && error.nonRetryable) &&
+      (await requeue().then(
+        () => true,
+        () => false,
+      ));
+    if (retrying) throw new Error(message);
     trial.status = "failed";
-    trial.error = redact(error instanceof Error ? error.message : "Solver failed");
+    trial.error = message;
   } finally {
-    trial.finishedAt = new Date().toISOString();
     try {
-      await save();
+      if (!retrying) {
+        trial.finishedAt = new Date().toISOString();
+        await save();
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }

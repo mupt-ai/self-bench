@@ -7,6 +7,7 @@ import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../sandbox/gate-bundle.js";
 import { snapshotLinkUrl } from "../sandbox/snapshot-link.js";
+import { refuseTrial } from "./execution.js";
 import type { EvaluationInput } from "./types.js";
 
 // PostHog task bundles include compressed repository snapshots larger than 350 MiB.
@@ -14,7 +15,7 @@ import type { EvaluationInput } from "./types.js";
 export const MAX_EVALUATION_BUNDLE_BYTES = 512 * 1024 * 1024;
 
 export function assertEvaluationBundleSize(size: number): void {
-  if (size > MAX_EVALUATION_BUNDLE_BYTES) throw new Error("Task bundle exceeds 512 MiB");
+  if (size > MAX_EVALUATION_BUNDLE_BYTES) throw refuseTrial("Task bundle exceeds 512 MiB");
 }
 
 const COMPILED_BUNDLE = "/harbor-task.tar.gz";
@@ -55,7 +56,7 @@ export async function unpackTrialTask(
     return directory;
   }
   const bundle = await store.getByKey(task.bundleKey);
-  if (!bundle) throw new Error("Task bundle is missing");
+  if (!bundle) throw refuseTrial("Task bundle is missing");
   assertEvaluationBundleSize(bundle.byteLength);
   const archive = join(trialRoot, "task.tar.gz");
   await writeFile(archive, bundle, { mode: 0o600 });
