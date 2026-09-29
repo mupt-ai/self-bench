@@ -36,6 +36,7 @@ export async function setUpTrial(
   const version = await options.command("harbor", ["--version"], {
     env: child,
     timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.version,
+    ...(options.signal ? { signal: options.signal } : {}),
   });
   try {
     assertHarborVersion(version.stdout);

@@ -123,15 +123,17 @@ export async function executeTrial(
     await runTrial({ store, run, trial, index, save, ...ready, command, redact, options });
   } catch (error) {
     const message = redact(error instanceof Error ? error.message : "Solver failed");
+    // A retry needs the trial back in the queue; if that write fails, the failure is recorded here.
     retrying =
       !solving &&
       options.retry === true &&
       !options.signal?.aborted &&
-      !(error instanceof ApplicationFailure && error.nonRetryable);
-    if (retrying) {
-      await requeue();
-      throw new Error(message);
-    }
+      !(error instanceof ApplicationFailure && error.nonRetryable) &&
+      (await requeue().then(
+        () => true,
+        () => false,
+      ));
+    if (retrying) throw new Error(message);
     trial.status = "failed";
     trial.error = message;
   } finally {

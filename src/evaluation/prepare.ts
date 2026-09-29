@@ -51,6 +51,7 @@ export async function prepareTaskImages(
     const version = await command("harbor", ["--version"], {
       env: child,
       timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.version,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     assertHarborVersion(version.stdout);
     const taskPath = await unpackTrialTask(store, task, input.sandbox, root, {
