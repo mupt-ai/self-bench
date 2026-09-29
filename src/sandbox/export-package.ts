@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
 import { runCommand } from "../lib/process.js";
 
 /**
@@ -39,6 +38,6 @@ export async function packageExport(): Promise<void> {
 
 async function fileSha256(path: string): Promise<string> {
   const hash = createHash("sha256");
-  await pipeline(createReadStream(path), hash);
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
