@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { ApplicationFailure } from "@temporalio/common";
 import { modelApiKeyVariable } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
@@ -11,6 +12,14 @@ import {
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import type { EvaluationInput, Harness } from "./types.js";
+
+/**
+ * A trial setup failure that every attempt would meet again (a missing or oversized bundle, an
+ * unusable credential, an unsupported Harbor): the trial fails at once instead of retrying.
+ */
+export function refuseTrial(message: string): ApplicationFailure {
+  return ApplicationFailure.nonRetryable(message, "TrialRefused");
+}
 
 /** The organization whose credentials an evaluation uses. */
 function evaluationCredentialOrg(input: EvaluationInput): number | undefined {
@@ -26,7 +35,7 @@ export async function credentialExecution(
 ) {
   const orgId = evaluationCredentialOrg(input);
   if (!input.credentials || !orgId || !input.comparisonId)
-    throw new Error("Credential references missing");
+    throw refuseTrial("Credential references missing");
   const comparison = await comparisons.find(input.comparisonId);
   const saved =
     comparison?.orgId === orgId && comparison.repoId === input.repoId
@@ -38,7 +47,7 @@ export async function credentialExecution(
       ? { ...saved, tasks: saved.tasks.filter((task) => isDeepStrictEqual(task, input.tasks[0])) }
       : saved;
   if (!reserved || !isDeepStrictEqual(reserved, input))
-    throw new Error("Execution does not match the reserved comparison");
+    throw refuseTrial("Execution does not match the reserved comparison");
   const managedModel = input.credentials.modelCredentialId === "managed-model";
   const managedSandbox = input.credentials.sandboxCredentialId === "managed-sandbox";
   const info = managedModel
@@ -53,7 +62,7 @@ export async function credentialExecution(
     sandbox.kind !== input.sandbox ||
     info.kind !== input.credentials.provider
   )
-    throw new Error("Credential unavailable");
+    throw refuseTrial("Credential unavailable");
   const modelSecret = managedModel
     ? managedModelKey(env)
     : (await credentials.secret(orgId, info.id))?.value;
@@ -66,7 +75,7 @@ export async function credentialExecution(
     : managedModal
       ? { value: managedModal.MODAL_TOKEN_SECRET, tokenId: managedModal.MODAL_TOKEN_ID }
       : await credentials.secret(orgId, sandbox.id);
-  if (!modelSecret || !sandboxSecret) throw new Error("Credential unavailable");
+  if (!modelSecret || !sandboxSecret) throw refuseTrial("Credential unavailable");
   const child: NodeJS.ProcessEnv = {
     PATH: env.PATH,
     HOME: home,
@@ -77,7 +86,7 @@ export async function credentialExecution(
   const secrets = [modelSecret, sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(Boolean);
   if (info.auth === "codex-login") {
     if (input.harnesses.some((harness) => harness !== "codex"))
-      throw new Error("Codex login requires Codex harness");
+      throw refuseTrial("Codex login requires Codex harness");
     const authPath = join(home, "codex-auth.json");
     await writeFile(authPath, modelSecret, { mode: 0o600 });
     child.CODEX_AUTH_JSON_PATH = authPath;
@@ -159,7 +168,7 @@ export function gatewayTrial(
   }
   const gateway = gateways[provider];
   const key = env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("Gateway credential is unavailable");
+  if (!key) throw refuseTrial("Gateway credential is unavailable");
   const harborModel = gatewayModel(provider, harness, model);
   const child = { ...env };
   delete child.OPENROUTER_API_KEY;

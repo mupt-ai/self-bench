@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import {
   assertHarborVersion,
+  HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborPython,
   harborPythonPath,
@@ -47,7 +48,10 @@ export async function prepareTaskImages(
       options.vault,
     );
     const child = harborProcessEnvironment(execution.child);
-    const version = await command("harbor", ["--version"], { env: child, timeoutMs: 15_000 });
+    const version = await command("harbor", ["--version"], {
+      env: child,
+      timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.version,
+    });
     assertHarborVersion(version.stdout);
     const taskPath = await unpackTrialTask(store, task, input.sandbox, root, {
       ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),

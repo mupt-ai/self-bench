@@ -19,7 +19,9 @@ import type { EvaluationInput } from "./types.js";
 const REFUSED = ["RepeatSpendError"];
 // One trial is one `harbor run` (capped at 2 hours) plus its bundle and artifact transfers. A retry
 // reaches Harbor only if the earlier attempt never claimed the trial (it landed on a worker without
-// this activity, or failed before the claim saved); a claimed trial refuses with RepeatSpendError.
+// this activity, or failed before the claim saved) or returned the claim when its setup failed
+// before the solver started (executeTrial); a claimed trial refuses with RepeatSpendError. The
+// last attempt records its own setup failure on the trial.
 const trial = () =>
   proxyActivities<EvaluationActivities>({
     startToCloseTimeout: "150 minutes",

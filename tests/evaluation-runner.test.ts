@@ -179,19 +179,23 @@ test("mocked Harbor persists live output, structured tool results and final scor
   );
   expect(calls).toBe(1);
 });
-test("missing credentials and incompatible Harbor fail before a model command", async () => {
+test("setup failures a retry cannot fix fail the trial at once, before a model command", async () => {
   for (const [scenario, version, error] of [
     // The Harbor version is right here, so only the missing credential can stop the run.
     ["credential", HARBOR_VERSION, "Credential unavailable"],
     ["version", "wrong-version", "does not match supported"],
+    ["bundle", HARBOR_VERSION, "Task bundle is missing"],
   ] as const) {
-    const { store, input, vault } = await fixture();
+    const { root, store, input, vault } = await fixture();
     if (scenario === "credential")
       await vault.credentials.remove(1, input.credentials?.modelCredentialId ?? "");
+    if (scenario === "bundle") await rm(join(root, "artifacts", input.tasks[0]?.bundleKey ?? ""));
     let calls = 0;
+    // Retries remain, so a failure returned to the queue would end as a generic interruption.
     await runEvaluation(store, input, {
       env: {},
       vault,
+      retry: true,
       command: async (_name, args) => {
         if (args[0] !== "--version") calls += 1;
         return { stdout: version, stderr: "", exitCode: 0 };
@@ -205,9 +209,11 @@ test("missing credentials and incompatible Harbor fail before a model command", 
 });
 test("missing verifier results are failures, never invented zero scores", async () => {
   const { store, input, vault } = await fixture();
+  // Once Harbor has run, the trial is never retried, though attempts remain.
   await runEvaluation(store, input, {
     env: {},
     vault,
+    retry: true,
     command: async (_name, args) => ({
       stdout: args[0] === "--version" ? HARBOR_VERSION : "",
       stderr: "",

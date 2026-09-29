@@ -11,7 +11,7 @@ import { getEvaluation } from "../src/evaluation/store.js";
 import { trialInput } from "../src/evaluation/trial-input.js";
 import { runEvaluationTrials, runTrial } from "../src/evaluation/workflow.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
-import { runCommand } from "../src/lib/process.js";
+import { CommandTimeoutError, runCommand } from "../src/lib/process.js";
 import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 
@@ -106,6 +106,34 @@ test("a trial never runs Harbor twice, and a trial failed elsewhere stays failed
   expect(trial?.status).toBe("failed");
   expect(trial?.error).toContain("timed out");
   await expect(startEvaluation(store, input)).rejects.toThrow("refusing to repeat model spend");
+});
+
+test("a trial whose setup failed before Harbor ran is retried, and its last attempt records why", async () => {
+  const { store, vault, input } = await started();
+  const { calls, command } = harbor();
+  // A new worker's first `harbor --version` calls outlast their timeout.
+  let timeouts = 1;
+  const options = {
+    env: {},
+    vault,
+    retry: true,
+    command: (async (name, args, commandOptions) => {
+      if (args[0] === "--version" && timeouts-- > 0)
+        throw new CommandTimeoutError("harbor --version", 60_000);
+      return command(name, args, commandOptions);
+    }) satisfies typeof runCommand,
+  };
+  await expect(executeTrial(store, trialInput(input, 0), 0, options)).rejects.toThrow(
+    "exceeded 60000ms",
+  );
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("queued");
+  await executeTrial(store, trialInput(input, 0), 0, options);
+  timeouts = 1;
+  await executeTrial(store, trialInput(input, 1), 1, { ...options, retry: false });
+  const trials = (await getEvaluation(store, input.repoId, input.id))?.trials;
+  expect(trials?.slice(0, 2).map((trial) => trial.status)).toEqual(["completed", "failed"]);
+  expect(trials?.[1]?.error).toBe("harbor --version exceeded 60000ms");
+  expect(calls).toHaveLength(1);
 });
 
 function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {
