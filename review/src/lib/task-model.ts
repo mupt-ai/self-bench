@@ -2,12 +2,6 @@ import type { TaskFileEntry, TaskFiles } from "../types";
 import { type DockerInstruction, parseDockerfile } from "./dockerfile";
 import { parseToml, type TomlSection } from "./toml";
 
-interface ScriptFile {
-  label: string;
-  path: string;
-  text: string;
-}
-
 interface DockerImage {
   label: string;
   path: string;
@@ -67,23 +61,12 @@ export interface TaskModel {
   testPatch?: string;
   dependencyPatch?: string;
   images: DockerImage[];
-  scripts: ScriptFile[];
   compose?: string;
   /** Path of the file `compose` was read from, so Open Raw shows the same copy. */
   composePath?: string;
 }
 
 const COMPOSE_PATHS = ["tests/docker-compose.yaml", "environment/docker-compose.yaml"];
-
-const SCRIPT_LABELS: [string, string][] = [
-  ["environment/root-setup.sh", "Root Setup (Agent Image)"],
-  ["environment/setup.sh", "Setup (Agent Image)"],
-  ["environment/smoke.sh", "Smoke (Agent Image)"],
-  ["tests/root-setup.sh", "Root Setup (Verifier Image)"],
-  ["tests/setup.sh", "Setup (Verifier Image)"],
-  ["tests/test.sh", "Verifier test.sh"],
-  ["solution/solve.sh", "Oracle solve.sh"],
-];
 
 export function buildTaskModel(files: TaskFiles): TaskModel {
   const byPath = new Map(files.files.map((file) => [file.path, file]));
@@ -107,11 +90,6 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
       instructions: parseDockerfile(file.text),
     });
   }
-  const scripts: ScriptFile[] = [];
-  for (const [path, label] of SCRIPT_LABELS) {
-    const body = text(path);
-    if (body !== undefined) scripts.push({ label, path, text: body });
-  }
   const instruction = text("instruction.md") ?? definition?.prompt;
   const goldPatch = text("solution/gold.patch") ?? text("gold.patch");
   const testPatch = text("tests/test.patch") ?? text("test.patch");
@@ -129,7 +107,6 @@ export function buildTaskModel(files: TaskFiles): TaskModel {
     ...(testPatch !== undefined ? { testPatch } : {}),
     ...(dependencyPatch !== undefined ? { dependencyPatch } : {}),
     images,
-    scripts,
     ...(compose !== undefined && composePath ? { compose, composePath } : {}),
   };
 }
