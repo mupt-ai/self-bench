@@ -1,3 +1,5 @@
+import { thinkingLevels } from "../../../../src/contracts/models";
+import { type SortDirection, sortRows, useTableSort } from "../../lib/table-sort";
 import type { PublicSetting } from "../contract";
 import {
   accessLabel,
@@ -10,19 +12,48 @@ import {
 } from "../format";
 import { AdaptiveTable, type Column } from "../mobile/AdaptiveTable";
 
-/** Every setting, most accurate first, with bars so the table reads as a chart too. */
-export function ModelTable({ settings }: { settings: PublicSetting[] }) {
-  const rows = [...settings].sort(
+type SortKey = "reasoning" | "accuracy" | "cost";
+
+/** What each sortable column sorts by, and the way it sorts first. */
+const SORTS: Record<SortKey, { value: (row: PublicSetting) => number; first: SortDirection }> = {
+  // Reasoning levels in the catalog's order, from default and off up to max.
+  reasoning: { value: (row) => thinkingLevels.indexOf(row.reasoningLevel), first: "desc" },
+  accuracy: { value: (row) => row.accuracy, first: "desc" },
+  cost: { value: (row) => row.costPerTaskUsd, first: "asc" },
+};
+const FIRST = Object.fromEntries(
+  Object.entries(SORTS).map(([key, sort]) => [key, sort.first]),
+) as Record<SortKey, SortDirection>;
+
+/**
+ * Every setting, most accurate first, with bars so the table reads as a chart too. Reasoning,
+ * accuracy and cost sort from their headers. `activeId` and `highlighted` come from the chart:
+ * the setting its pointer is on, and the settings of the vendor chip it highlights.
+ */
+export function ModelTable({
+  settings,
+  activeId = null,
+  highlighted = null,
+}: {
+  settings: PublicSetting[];
+  activeId?: string | null;
+  highlighted?: ReadonlySet<string> | null;
+}) {
+  const { sort, toggle } = useTableSort<SortKey>({ key: "accuracy", direction: "desc" }, FIRST);
+  // Most accurate, then cheapest: the order settings that tie keep under any sort.
+  const ranked = [...settings].sort(
     (left, right) => right.accuracy - left.accuracy || left.costPerTaskUsd - right.costPerTaskUsd,
   );
+  const rows = sortRows(ranked, SORTS[sort.key].value, sort.direction);
   const maxCost = Math.max(...rows.map((row) => row.costPerTaskUsd), 0.01);
-  const columns: Column<PublicSetting>[] = [
+  const columns: Column<PublicSetting, SortKey>[] = [
     {
       header: "Model",
       role: "title",
       cell: (row) => (
-        <span className="flex items-center gap-2 font-medium">
-          <span className="size-2 shrink-0" style={{ background: vendorColor(row) }} />
+        // Baselines line up, so the frontier tag sits on the name's line, not its middle.
+        <span className="flex items-baseline gap-2 font-medium">
+          <span className="size-2 shrink-0 self-center" style={{ background: vendorColor(row) }} />
           {settingLabel(row, settings)}
           {row.onFrontier && (
             <span
@@ -36,7 +67,12 @@ export function ModelTable({ settings }: { settings: PublicSetting[] }) {
       ),
     },
     { header: "Harness", role: "detail", cell: harnessLabel },
-    { header: "Reasoning", role: "detail", cell: reasoningLabel },
+    {
+      header: "Reasoning",
+      role: "detail",
+      cell: reasoningLabel,
+      sort: { key: "reasoning", first: SORTS.reasoning.first },
+    },
     { header: "Access", role: "detail", cell: accessLabel },
     {
       header: "Accuracy",
@@ -45,6 +81,7 @@ export function ModelTable({ settings }: { settings: PublicSetting[] }) {
       cell: (row) => (
         <Bar value={row.accuracy / 100} label={percent(row.accuracy)} color="var(--foreground)" />
       ),
+      sort: { key: "accuracy", first: SORTS.accuracy.first },
     },
     {
       header: "Cost / Task",
@@ -57,9 +94,27 @@ export function ModelTable({ settings }: { settings: PublicSetting[] }) {
           color="var(--muted-fg)"
         />
       ),
+      sort: { key: "cost", first: SORTS.cost.first },
     },
   ];
-  return <AdaptiveTable columns={columns} rows={rows} rowKey={(row) => row.id} />;
+  return (
+    <AdaptiveTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      sort={sort}
+      onSort={toggle}
+      rowClassName={(row) =>
+        row.id === activeId
+          ? "bg-muted"
+          : highlighted === null
+            ? ""
+            : highlighted.has(row.id)
+              ? "bg-muted/50"
+              : "opacity-45"
+      }
+    />
+  );
 }
 
 function Bar({ value, label, color }: { value: number; label: string; color: string }) {

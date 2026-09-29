@@ -23,7 +23,10 @@ const columns: Column<Row>[] = [
 const html = renderToStaticMarkup(
   <AdaptiveTable columns={columns} rows={rows} rowKey={(row) => row.id} />,
 );
-const [table = "", cards = ""] = html.split("<ul");
+// The cards start at their wrapper, which hides them wherever the table shows.
+const cardsAt = html.indexOf('<div class="@min-[45rem]:hidden');
+const table = html.slice(0, cardsAt);
+const cards = html.slice(cardsAt);
 
 test("one column list renders both a table and cards, switched by the table's own width", () => {
   expect(html.startsWith('<div class="@container">')).toBe(true);
@@ -46,4 +49,25 @@ test("a card places each column by its role", () => {
   // Details keep their header for screen readers.
   expect(first).toContain('<span class="sr-only">Harness: </span>');
   expect(cards.match(/<li/g)).toHaveLength(2);
+});
+
+test("a sortable column's header sorts, and the cards get the same controls", () => {
+  const sortable: Column<Row, "score">[] = columns.map(({ header, role, cell }) =>
+    header === "Accuracy"
+      ? { header, role, cell, sort: { key: "score", first: "desc" } }
+      : { header, role, cell },
+  );
+  const sorted = renderToStaticMarkup(
+    <AdaptiveTable
+      columns={sortable}
+      rows={rows}
+      rowKey={(row) => row.id}
+      sort={{ key: "score", direction: "desc" }}
+      onSort={() => {}}
+    />,
+  );
+  expect(sorted).toContain('aria-sort="descending"');
+  // Pressed again, the sorted column flips.
+  expect(sorted.match(/aria-label="Sort by Accuracy, ascending"/g)).toHaveLength(2);
+  expect(sorted).toContain(">Sort By<");
 });

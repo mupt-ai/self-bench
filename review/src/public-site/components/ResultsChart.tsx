@@ -23,8 +23,20 @@ const THEMED = [
   "[--pareto-font-family:var(--mono)]",
 ].join(" ");
 
-/** Accuracy against cost per task, one point per setting, colored by model vendor. */
-export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
+/**
+ * Accuracy against cost per task, one point per setting, colored by model vendor. It tells the
+ * page which setting the pointer is on, and which settings a vendor chip highlights, so the
+ * table below can mark the same rows.
+ */
+export function ResultsChart({
+  settings,
+  onActiveChange,
+  onHighlightChange,
+}: {
+  settings: PublicSetting[];
+  onActiveChange?: (id: string | null) => void;
+  onHighlightChange?: (ids: ReadonlySet<string> | null) => void;
+}) {
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
   useEffect(() => {
@@ -45,6 +57,10 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
         showLegend={false}
+        onActivePointChange={(point) => onActiveChange?.(point?.id ?? null)}
+        onHighlightChange={(points) =>
+          onHighlightChange?.(points ? new Set(points.map((point) => point.id)) : null)
+        }
         width={width}
         // Room for the vendor chips above the plot: a row on a desktop, a few taller rows on a
         // phone, where each chip is a fingertip high.

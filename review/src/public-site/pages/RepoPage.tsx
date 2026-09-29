@@ -1,9 +1,8 @@
 import { Star } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from "react-router";
 import { Avatar } from "../components/Avatar";
 import { ModelTable } from "../components/ModelTable";
-import { Picks } from "../components/Picks";
 import { ResultsChart } from "../components/ResultsChart";
 import type { PublicRepoPage } from "../contract";
 import { flightTo, revealFade, shownLine } from "../effects/marks";
@@ -11,7 +10,6 @@ import { plainClick } from "../effects/page-reveal";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
 import { PANEL } from "../frame";
 import { APP_URL } from "../PublicLayout";
-import { picks } from "../picks";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
@@ -71,6 +69,9 @@ function Results({ page }: { page: PublicRepoPage }) {
   }, [release.releaseId]);
   const { repository } = release;
   const [owner, name] = repository.fullName.split("/");
+  // The chart's pointer and vendor chips mark the same settings in the table.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
   return (
     <article
       className="flex flex-col gap-8"
@@ -127,11 +128,6 @@ function Results({ page }: { page: PublicRepoPage }) {
       </header>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">On this eval set of {release.tasks} tasks</h2>
-        <Picks picks={picks(release.settings)} settings={release.settings} />
-      </section>
-
-      <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
           <p className="text-xs text-muted-foreground">
@@ -139,13 +135,17 @@ function Results({ page }: { page: PublicRepoPage }) {
           </p>
         </div>
         <div className={`p-2 ${PANEL}`}>
-          <ResultsChart settings={release.settings} />
+          <ResultsChart
+            settings={release.settings}
+            onActiveChange={setActiveId}
+            onHighlightChange={setHighlighted}
+          />
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">All Settings</h2>
-        <ModelTable settings={release.settings} />
+        <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
         <p className="text-xs text-muted-foreground">
           Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
           requests in this repository; their tests and reference solutions stay private.

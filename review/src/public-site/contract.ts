@@ -1,4 +1,4 @@
-import type { DirectoryCard, SettingPick } from "../../../src/public/directory";
+import type { DirectoryCard } from "../../../src/public/directory";
 import type {
   PublishedRelease,
   ReleasePublisher,
@@ -35,9 +35,6 @@ export interface PublicRepoPage {
 }
 
 export type { PickRole } from "../../../src/public/directory";
-
-/** A frontier setting singled out on the picks strip, with every role it holds. */
-export type PublicPick = SettingPick<PublicSetting>;
 
 /**
  * One entry of the home page directory: a release line reduced to its card, as the server
