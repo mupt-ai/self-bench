@@ -96,19 +96,18 @@ function renderTaskFiles(
 ): RenderedTaskFiles {
   const dependencySetupPatch = dependencyManifestPatch(goldPatch);
   const preinstallGoldDependencies = dependencySetupPatch.length > 0;
-  const verifierScript = testScript(definition, testPatch);
   return {
     "task.toml": taskToml(definition),
     "instruction.md": `${definition.prompt.trim()}\n`,
     "definition.json": `${JSON.stringify(definition, null, 2)}\n`,
     "environment/Dockerfile": agentDockerfile(definition),
     ...environmentScripts("environment", definition),
+    "environment/smoke.sh": smokeScript(definition),
     ...Object.fromEntries(
       Object.entries(verifierRuntimeFiles()).map(([path, content]) => [`tests/${path}`, content]),
     ),
     "tests/Dockerfile": verifierDockerfile(definition, dependencySetupPatch),
-    "tests/test.sh": verifierScript,
-    "tests/task-test.sh": verifierScript,
+    "tests/test.sh": testScript(definition, testPatch),
     ...environmentScripts("tests", definition),
     ...(definition.environment.services.length > 0
       ? { "tests/docker-compose.yaml": serviceComposeYaml(definition) }
@@ -122,7 +121,6 @@ function environmentScripts(directory: string, definition: TaskDefinition): Rend
   return {
     [`${directory}/root-setup.sh`]: posixShellScript(definition.environment.rootSetupCommand),
     [`${directory}/setup.sh`]: bashScript(definition.environment.setupCommand),
-    [`${directory}/smoke.sh`]: smokeScript(definition),
   };
 }
 
