@@ -64,9 +64,7 @@ try {
     await readFile(join(installRoot, "node_modules", ".bin", name));
   }
   for (const asset of [
-    "dist/generation/task/runtime/junit.py",
     "dist/generation/task/runtime/command.sh",
-    "dist/runtime/junit.py",
     "dist/runtime/command.sh",
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
@@ -108,7 +106,6 @@ try {
       `
     const {verifierRuntimeFiles} = await import(${JSON.stringify(runtimeModule)});
     const files = verifierRuntimeFiles();
-    if (!files["runtime/junit.py"].includes("def main")) throw new Error("missing Python runtime");
     if (!files["runtime/command.sh"].includes("run_verifier_command")) throw new Error("missing shell runtime");
     console.log("runtime assets verified");
   `,

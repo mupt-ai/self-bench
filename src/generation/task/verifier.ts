@@ -28,7 +28,6 @@ export function testScript(task: TaskDefinition, testPatch: string): string {
   // Regression tests are graded at their base version, so a solver edit that renames or removes
   // the selected tests cannot fail pass-to-pass on its own.
   const regressionPaths = passToPassTestPaths(task).map(shellQuote).join(" ");
-  const structured = task.testResults;
   const f2p = taskCommand(task, task.failToPass);
   const p2p = task.passToPass.length > 0 ? taskCommand(task, task.passToPass) : "true";
   return `#!/bin/bash
@@ -99,10 +98,10 @@ fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   cd ${shellQuote(`/app/${task.workdir}`)}
-  if run_verifier_command ${shellQuote(f2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
+  if run_verifier_command ${shellQuote(f2p)}; then
     fail_to_pass_exit_code=0
     fail_to_pass=1
-    if run_verifier_command ${shellQuote(f2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.failToPass ?? []))}; then
+    if run_verifier_command ${shellQuote(f2p)}; then
       fail_to_pass_repeat_exit_code=0
       deterministic=1
     else
@@ -114,7 +113,7 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   if [ "${task.passToPass.length}" -eq 0 ]; then
     pass_to_pass_exit_code=0
     pass_to_pass=1
-  elif run_verifier_command ${shellQuote(p2p)} ${structured ? "junit" : "command"} ${shellQuote(JSON.stringify(structured?.passToPass ?? []))}; then
+  elif run_verifier_command ${shellQuote(p2p)}; then
     pass_to_pass_exit_code=0
     pass_to_pass=1
   else
@@ -125,7 +124,7 @@ fi
 reward=0
 if [ "$patch_applied" -eq 1 ] && [ "$fail_to_pass" -eq 1 ] && [ "$pass_to_pass" -eq 1 ] && [ "$deterministic" -eq 1 ]; then reward=1; fi
 cat > /logs/verifier/reward.json <<EOF
-{"structured_results": ${structured ? 1 : 0}, "reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic, "setup_completed": $setup_completed, "fail_to_pass_exit_code": $fail_to_pass_exit_code, "fail_to_pass_repeat_exit_code": $fail_to_pass_repeat_exit_code, "pass_to_pass_exit_code": $pass_to_pass_exit_code}
+{"reward": $reward, "patch_applied": $patch_applied, "fail_to_pass": $fail_to_pass, "pass_to_pass": $pass_to_pass, "deterministic": $deterministic, "setup_completed": $setup_completed, "fail_to_pass_exit_code": $fail_to_pass_exit_code, "fail_to_pass_repeat_exit_code": $fail_to_pass_repeat_exit_code, "pass_to_pass_exit_code": $pass_to_pass_exit_code}
 EOF
 exit 0
 `;

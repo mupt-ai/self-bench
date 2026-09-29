@@ -7,7 +7,6 @@ import {
   type Candidate,
   type ReviewRoundResult,
   type RunRequest,
-  taskDefinitionSchema,
   verifyReportSchema,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
@@ -27,6 +26,9 @@ export interface ReviewRoundInput {
 }
 
 const VERDICT = "/work/verdict/verdict.json";
+// Review reads only the prompt, so a candidate verified under an older definition schema (such
+// as the removed JUnit `testResults`) is still reviewed.
+const reviewedDefinitionSchema = z.object({ prompt: z.string().min(1) });
 const verdictSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), reason: z.string().min(1) }),
   z.object({
@@ -67,7 +69,7 @@ export async function startReviewRound(
   ]);
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8")));
   if (!report.green) throw new Error("review requires a green report");
-  const definition = taskDefinitionSchema.parse(
+  const definition = reviewedDefinitionSchema.parse(
     JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
   );
   return await startAgent({

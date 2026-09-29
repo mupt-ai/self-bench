@@ -113,14 +113,6 @@ const taskDraftDefinitionSchema = z
       })
       .strict()
       .optional(),
-    testResults: z
-      .object({
-        format: z.literal("junit"),
-        failToPass: z.array(z.string().min(1)).min(1),
-        passToPass: z.array(z.string().min(1)),
-      })
-      .strict()
-      .optional(),
     sourcePr: z.number().int().positive(),
     sourceUrl: z.string().url(),
     prompt: z.string().min(1),
@@ -141,22 +133,6 @@ const taskDraftDefinitionSchema = z
   })
   .strict()
   .superRefine((definition, context) => {
-    if (definition.testResults) {
-      const ids = [...definition.testResults.failToPass, ...definition.testResults.passToPass];
-      if (new Set(ids).size !== ids.length)
-        context.addIssue({
-          code: "custom",
-          path: ["testResults"],
-          message: "JUnit test IDs must be unique and disjoint",
-        });
-      if ((definition.passToPass.length === 0) !== (definition.testResults.passToPass.length === 0))
-        context.addIssue({
-          code: "custom",
-          path: ["testResults", "passToPass"],
-          message:
-            "JUnit regression IDs and regression selectors must both be present or both empty",
-        });
-    }
     if (
       definition.testSelection?.mode === "base-only" &&
       (definition.testSelection.reused.length === 0 || definition.testSelection.added.length > 0)
