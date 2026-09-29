@@ -1,193 +1,97 @@
+import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
 import type { PublicSetting } from "../contract";
-import { dollars, harnessLabel, percent, settingLabel, vendorColor } from "../format";
-import { nearest, niceTicks, placeLabels } from "./chart-layout";
+import {
+  accuracyTick,
+  dollars,
+  harnessLabel,
+  settingLabel,
+  VENDOR_CHIPS,
+  vendorPoint,
+} from "../format";
 
-const MARGIN = { top: 16, right: 24, bottom: 44, left: 48 };
+/** The plot's colors and type, taken from the site theme so it follows light and dark. */
+const THEMED = [
+  "[--pareto-background:var(--card)]",
+  "[--pareto-tooltip-background:var(--background)]",
+  "[--pareto-foreground:var(--foreground)]",
+  "[--pareto-muted:var(--muted-fg)]",
+  "[--pareto-grid:var(--border)]",
+  "[--pareto-point:var(--faint)]",
+  "[--pareto-frontier:var(--foreground)]",
+  "[--pareto-frontier-line:var(--muted-fg)]",
+  "[--pareto-font-family:var(--mono)]",
+].join(" ");
 
-/** Accuracy against cost per task, one point per setting, frontier joined by a line. */
+/** Accuracy against cost per task, one point per setting, colored by model vendor. */
 export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
-  const [hovered, setHovered] = useState<string>();
   useEffect(() => {
     const element = frame.current;
     if (!element || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => entry && setWidth(entry.contentRect.width));
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(Math.max(320, entry.contentRect.width));
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const height = width < 560 ? 300 : 420;
-  const inner = {
-    x: MARGIN.left,
-    y: MARGIN.top,
-    width: width - MARGIN.left - MARGIN.right,
-    height: height - MARGIN.top - MARGIN.bottom,
-  };
-  const xTicks = niceTicks(
-    Math.max(...settings.map((s) => s.costPerTaskUsd), 0.01) * 1.08,
-    width < 560 ? 3 : 5,
-  );
-  const xMax = xTicks.at(-1) ?? 1;
-  const yMin = Math.max(
-    0,
-    Math.floor((Math.min(...settings.map((s) => s.accuracy)) - 10) / 10) * 10,
-  );
-  const yTicks = niceTicks(100 - yMin, 5)
-    .map((tick) => tick + yMin)
-    .filter((tick) => tick <= 100);
-  const scaleX = (value: number) => inner.x + (value / xMax) * inner.width;
-  const scaleY = (value: number) =>
-    inner.y + inner.height - ((value - yMin) / (100 - yMin)) * inner.height;
-  const points = settings.map((setting) => ({
-    id: setting.id,
-    setting,
-    x: scaleX(setting.costPerTaskUsd),
-    y: scaleY(setting.accuracy),
-    label: settingLabel(setting, settings),
-    priority: setting.onFrontier ? 1 : 0,
-  }));
-  const labels = placeLabels(points, inner);
-  const frontier = points.filter((point) => point.setting.onFrontier).sort((a, b) => a.x - b.x);
-  const active = points.find((point) => point.id === hovered);
-  // A mouse inspects the point nearest the pointer as it moves; a finger taps a point to
-  // inspect it, and taps empty space to put it away. On the tap's pointerup: a touch that turns
-  // into a scroll ends in pointercancel instead, so scrolling across the chart opens nothing.
-  const inspect = (event: React.PointerEvent<SVGSVGElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    setHovered(nearest(points, { x: event.clientX - box.left, y: event.clientY - box.top })?.id);
-  };
+  const narrow = width < 560;
+  const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
-    <div ref={frame} className="relative">
-      <svg
+    <div ref={frame}>
+      <ParetoPlot
+        className={THEMED}
+        title="Accuracy versus cost per task for every model setting"
+        showTitle={false}
+        showLegend={false}
         width={width}
-        height={height}
-        role="img"
-        aria-label="Accuracy versus cost per task for every model setting"
+        // Room for the vendor chips above the plot: a row on a desktop, a few taller rows on a
+        // phone, where each chip is a fingertip high.
+        height={narrow ? 440 : 450}
         // Larger text on a narrow chart, which a phone shows at arm's length.
-        className={`block font-mono ${width < 560 ? "text-[12px]" : "text-[11px]"}`}
-        onPointerMove={(event) => event.pointerType === "mouse" && inspect(event)}
-        onPointerUp={(event) => event.pointerType !== "mouse" && inspect(event)}
-        onPointerLeave={(event) => event.pointerType === "mouse" && setHovered(undefined)}
-      >
-        <rect
-          x={inner.x}
-          y={inner.y}
-          width={inner.width}
-          height={inner.height}
-          fill="var(--card)"
-        />
-        {yTicks.map((tick) => (
-          <g key={`y${tick}`}>
-            <line
-              x1={inner.x}
-              x2={inner.x + inner.width}
-              y1={scaleY(tick)}
-              y2={scaleY(tick)}
-              stroke="var(--border)"
-            />
-            <text
-              x={inner.x - 8}
-              y={scaleY(tick) + 4}
-              textAnchor="end"
-              fill="var(--muted-fg)"
-            >{`${tick}%`}</text>
-          </g>
-        ))}
-        {xTicks.map((tick) => (
-          <g key={`x${tick}`}>
-            <line
-              x1={scaleX(tick)}
-              x2={scaleX(tick)}
-              y1={inner.y}
-              y2={inner.y + inner.height}
-              stroke="var(--border)"
-              strokeDasharray="2 3"
-            />
-            <text
-              x={scaleX(tick)}
-              y={inner.y + inner.height + 18}
-              textAnchor="middle"
-              fill="var(--muted-fg)"
-            >
-              {dollars(tick)}
-            </text>
-          </g>
-        ))}
-        <text x={inner.x + inner.width} y={height - 6} textAnchor="end" fill="var(--muted-fg)">
-          Cost per Task →
-        </text>
-        <text
-          x={12}
-          y={inner.y + 4}
-          fill="var(--muted-fg)"
-          transform={`rotate(-90 12 ${inner.y + 4})`}
-          textAnchor="end"
-        >
-          ↑ Accuracy
-        </text>
-        {frontier.length > 1 && (
-          <polyline
-            points={frontier.map((point) => `${point.x},${point.y}`).join(" ")}
-            fill="none"
-            stroke="var(--foreground)"
-            strokeOpacity={0.35}
-            strokeWidth={1.5}
-          />
-        )}
-        {points.map((point) => (
-          <circle
-            key={point.id}
-            cx={point.x}
-            cy={point.y}
-            r={point.id === hovered ? 6.5 : point.setting.onFrontier ? 5 : 4}
-            fill={point.setting.onFrontier ? vendorColor(point.setting) : "var(--card)"}
-            stroke={vendorColor(point.setting)}
-            strokeWidth={2}
-          />
-        ))}
-        {labels.map((label) => (
-          <text
-            key={`l${label.id}`}
-            x={label.x}
-            y={label.y}
-            textAnchor={label.anchor}
-            fill="var(--foreground)"
-            opacity={hovered && hovered !== label.id ? 0.35 : 0.85}
-          >
-            {points.find((point) => point.id === label.id)?.label}
-          </text>
-        ))}
-      </svg>
-      {active && (
-        <div
-          className="pointer-events-none absolute z-10 w-56 border border-border bg-card p-3 text-xs shadow-sm"
-          style={{
-            // Beside the point, on whichever side has room for the card (224px wide).
-            left: active.x + 238 <= width ? active.x + 14 : Math.max(0, active.x - 238),
-            top: Math.max(active.y - 20, 0),
-          }}
-        >
-          <div className="flex items-center gap-2 font-medium">
-            <span className="size-2" style={{ background: vendorColor(active.setting) }} />
-            {active.label}
-          </div>
-          <div className="mt-1 text-muted-foreground">
-            {harnessLabel(active.setting)} · {active.setting.reasoningLevel}
-          </div>
-          <dl className="mt-2 grid grid-cols-2 gap-y-1 font-mono tabular-nums">
-            <dt className="text-muted-foreground">Accuracy</dt>
-            <dd className="text-right">{percent(active.setting.accuracy)}</dd>
-            <dt className="text-muted-foreground">Passed</dt>
-            <dd className="text-right">{`${active.setting.passed} / ${active.setting.tasks}`}</dd>
-            <dt className="text-muted-foreground">Cost / Task</dt>
-            <dd className="text-right">{dollars(active.setting.costPerTaskUsd)}</dd>
-          </dl>
-          {active.setting.onFrontier && (
-            <div className="mt-2 text-muted-foreground">On the frontier</div>
-          )}
-        </div>
-      )}
+        textScale={narrow ? 1.35 : 1.25}
+        showPointLabels={narrow ? "frontier" : "all"}
+        labelPlacement="auto"
+        showTooltip
+        // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
+        hoverRadius={36}
+        // A chip per vendor above the plot, shared with the app's chart: hovering one fades the
+        // other vendors' settings.
+        {...VENDOR_CHIPS}
+        // A quiet corner button for making the chart's text smaller or larger.
+        showSettings
+        points={settings.map((setting) => ({
+          id: setting.id,
+          label: settingLabel(setting, settings),
+          x: setting.costPerTaskUsd,
+          y: setting.accuracy,
+          ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
+          description: `${harnessLabel(setting)} · ${setting.reasoningLevel} · ${setting.passed} / ${setting.tasks} passed`,
+        }))}
+        xAxis={{
+          label: "Cost per Task",
+          objective: "minimize",
+          // Costs span orders of magnitude; on a log axis cheap settings spread out instead
+          // of crowding against zero, and equal distances are equal price ratios.
+          scale: "log",
+          nice: true,
+          ticks: narrow ? 4 : 6,
+          // A short mark under each price, tying the label to its place on the axis.
+          tickMarks: true,
+          // "$0.00" rather than dollars()'s "$0", so the first tick matches the ones after it.
+          format: (value) => (value === 0 ? "$0.00" : dollars(value)),
+        }}
+        yAxis={{
+          label: "Accuracy",
+          objective: "maximize",
+          // A little headroom so the top points and their labels clear the edge.
+          domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
+          nice: true,
+          ticks: 6,
+          format: accuracyTick,
+        }}
+      />
     </div>
   );
 }
