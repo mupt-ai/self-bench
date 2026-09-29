@@ -1,6 +1,6 @@
 # HTTP API reference
 
-Everything the selfbench.dev site can do is available over HTTP. This document lists every route, how to authenticate, and what each call expects. The CLI-facing run routes under `/v1` are shared with the site and are also listed at the end.
+Everything the web app can do is available over HTTP. This document lists every route, how to authenticate, and what each call expects.
 
 All responses are JSON unless noted. Errors carry `{ "error": "message" }` and sometimes a `code`. Paths that contain a repository take the connected repository's `owner/name` as two segments, so `/api/orgs/mupt-ai/repos/mupt-ai/self-bench/tasks` lists the tasks of `mupt-ai/self-bench` inside the `mupt-ai` organization. `:org` is a GitHub organization login, or your own login for the personal account; it is matched case-insensitively.
 
@@ -113,6 +113,8 @@ Relative to `/api/orgs/:org/repos/:owner/:name/evaluations`. Runs start only thr
 | `POST` | `/comparisons` | Body per `comparisonSchema` in `src/evaluation/comparisons.ts`: `id` (uuid), `tasks`, `models` (`catalogId`, `credentialId`, `harnesses`, optional `customModel` and `thinking`), `sandbox`, the sandbox credential, and optional `skipCompleted`. Managed deployments also accept the catalog-advertised managed credential choices. Creates and dispatches the comparison; `202`. A `submissionError` field means some runs were not confirmed and should be resumed |
 | `GET` | `/comparisons/:id` | One comparison with per-model run status |
 | `POST` | `/comparisons/:id/resume` | Re-dispatches unconfirmed runs with the same run ids; `202` |
+| `POST` | `/comparisons/:id/cancel` | Cancels every run of the comparison; finished trials keep their results |
+| `POST` | `/:id/cancel` | Cancels one evaluation run |
 
 ## Releases
 
@@ -166,7 +168,7 @@ Metered Stripe billing applies only to managed model and sandbox usage. Organiza
 
 ## Run artifacts and run routes
 
-The site's task pages read bundles and raw artifacts through the run routes that the CLI also uses. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. Start runs with the batch routes above.
+The site's task pages read bundles and raw artifacts through these run routes. With a session or API key they are scoped to the caller like every other route; with `SELFBENCH_API_TOKEN` they are the operator's Harbor Ledger API. Start runs with the batch routes above.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

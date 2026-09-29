@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { TaskImages } from "../contracts/index.js";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -173,6 +174,8 @@ export const tasks = pgTable(
     reason: text("reason"),
     bundleKey: text("bundle_key"),
     definition: jsonb("definition").$type<Record<string, unknown>>(),
+    /** The Modal images the accepted revision was verified on; trials on Modal start from them. */
+    images: jsonb("images").$type<TaskImages>(),
     reviewDecision: text("review_decision", { enum: ["approve", "reject"] }),
     reviewNote: text("review_note"),
     reviewedBy: bigint("reviewed_by", { mode: "number" }).references(() => users.id),
@@ -218,7 +221,6 @@ export const apiKeys = pgTable(
 export const generationBatches = pgTable("generation_batches", {
   runId: text("run_id").primaryKey(),
   state: jsonb("state").$type<import("../generation/batches/types.js").GenerationBatch>().notNull(),
-  /** Dispatch order: older batches start their work first. */
   createdAt: timestamptz("created_at").notNull().defaultNow(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });

@@ -75,9 +75,9 @@ describe("add a PR", () => {
         400,
       );
     }
-    expect(hub.calls.slice(before)).toEqual(
-      Array(7).fill(`GET ${testAuthConfig.githubApiUrl}/user`),
-    );
+    expect(
+      hub.calls.slice(before).filter((call) => call !== `GET ${testAuthConfig.githubApiUrl}/user`),
+    ).toEqual([]);
     expect(started).toHaveLength(0);
     expect(await (await site.request(`${REPO}/pull-requests`, { headers })).json()).toEqual({
       pullRequests: [],

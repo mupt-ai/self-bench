@@ -23,6 +23,7 @@ export function taskFrom(row: {
     ...(task.reason ? { reason: task.reason } : {}),
     ...(task.bundleKey ? { bundleKey: task.bundleKey } : {}),
     ...(task.definition ? { definition: task.definition } : {}),
+    ...(task.images ? { images: task.images } : {}),
     ...(task.reviewDecision
       ? {
           review: {

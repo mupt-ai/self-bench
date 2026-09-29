@@ -7,7 +7,7 @@
  *
  * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Apply
  * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
- * Only the cost fields change. See docs/operations.md.
+ * Only the cost fields change. It refuses runs that are still queued or running.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

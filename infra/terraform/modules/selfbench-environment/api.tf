@@ -144,6 +144,11 @@ resource "google_compute_backend_service" "results_site" {
     "Referrer-Policy: strict-origin-when-cross-origin",
   ]
   enable_cdn = true
+  # Every request, cache hits included.
+  log_config {
+    enable      = true
+    sample_rate = 1
+  }
   cdn_policy {
     cache_mode = "USE_ORIGIN_HEADERS"
     # While the API errors, or a stale copy is being refreshed, the last good copy is served

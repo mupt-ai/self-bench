@@ -7,7 +7,7 @@ import { notePath } from "./effects/history-transitions";
 import { lineOf, scrollRoot, select, siteEdge } from "./effects/marks";
 import { returnHome } from "./effects/page-return";
 import { plainClick } from "./effects/page-reveal";
-import { WaterBackground } from "./effects/WaterBackground";
+import { WaterBackground, WaterBands } from "./effects/WaterBackground";
 import { EDGE_FRAME, FRAME, RULER_WIDTH } from "./frame";
 import { followJourney, homeView, journeyFrom, repositoryOf } from "./home-view";
 import { RulerScrollbar } from "./RulerScrollbar";
@@ -45,6 +45,7 @@ const FOOTER = "h-[49px]";
 export function PublicLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const bands = useRef<HTMLCanvasElement>(null);
   useEffect(() => notePath(location.pathname), [location.pathname]);
   // Tracks the trip from the home page, entry by entry (see `followJourney`).
   const previousKey = useRef<string>(undefined);
@@ -72,7 +73,7 @@ export function PublicLayout() {
   };
   return (
     <div className="relative isolate flex min-h-dvh flex-col pt-(--bar-top) pb-(--bar-bottom) text-foreground">
-      <WaterBackground />
+      <WaterBackground bands={bands} />
       <CursorAura />
       {/* Referenced by theme.css to tint logos in dark mode: channels scaled, blue kept most. */}
       <svg aria-hidden="true" className="absolute size-0">
@@ -101,7 +102,7 @@ export function PublicLayout() {
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 bottom-0 z-[7] h-(--bar-bottom) bg-background"
       />
-      <WaterBackground bands />
+      <WaterBands ref={bands} />
       <header
         {...siteEdge("top")}
         className="fixed inset-x-0 top-0 z-[7] h-(--bar-top) border-b border-border"

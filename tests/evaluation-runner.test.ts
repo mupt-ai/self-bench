@@ -11,11 +11,7 @@ import {
   redactOutput,
   trajectorySteps,
 } from "../src/evaluation/output.js";
-import {
-  assertEvaluationBundleSize,
-  MAX_EVALUATION_BUNDLE_BYTES,
-  solverArguments,
-} from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/runner.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -23,6 +19,10 @@ import {
   listEvaluations,
   saveEvaluation,
 } from "../src/evaluation/store.js";
+import {
+  assertEvaluationBundleSize,
+  MAX_EVALUATION_BUNDLE_BYTES,
+} from "../src/evaluation/task-bundle.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 import { credentialedInput, testModelSecret } from "./support/evaluation-fixture.js";

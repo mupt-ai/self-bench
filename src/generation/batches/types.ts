@@ -12,8 +12,6 @@ import type { DiscoveryShardInput } from "../pipeline/activities.js";
 export interface BatchItem {
   workflowId: string;
   cancelled?: boolean;
-  /** Committed before an RPC; an ambiguous start remains owned by this batch. */
-  dispatchAttempted?: boolean;
   /** Epoch ms of the last successful observation; throttles polling of running executions. */
   observedAt?: number;
   cost?: SandboxCostSnapshot;
@@ -42,6 +40,8 @@ type BatchPhase =
 export function isFinished(phase: BatchPhase): boolean {
   return (FINISHED_PHASES as readonly BatchPhase[]).includes(phase);
 }
+
+export const settled = (item: BatchItem) => item.result !== undefined || item.error !== undefined;
 
 /** Immutable inputs are recorded before dispatch; only the application advances this record. */
 export interface GenerationBatch {

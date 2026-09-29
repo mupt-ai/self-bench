@@ -2,9 +2,10 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { repositoryPath, segmentsOf } from "../public/paths.js";
-import { contentType, sendJson, sendTagged, type TaggedBody, tagged } from "./http.js";
+import { contentType, sendJson } from "./http.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
+import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
 
 export interface ResultsSiteOptions {
   /** Where selfbench.dev lives; requests for its host are this site's, all others the app's. */
