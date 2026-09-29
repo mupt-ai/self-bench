@@ -31,6 +31,7 @@ async function fixture() {
   let identity = 42;
   let calls = 0;
   let networkFailure = false;
+  let clock = Date.parse("2026-09-28T12:00:00Z");
   const hub = fakeGitHub();
   const fetchImpl = (async (input, init) => {
     if (String(input).endsWith("/user")) {
@@ -44,7 +45,11 @@ async function fixture() {
     return hub.fetch(input, init);
   }) as typeof fetch;
   directory = await mkdtemp(join(tmpdir(), "selfbench-auth-authority-"));
-  site = await startAuthServer({ fetchImpl, artifacts: new LocalArtifactStore(directory) });
+  site = await startAuthServer({
+    fetchImpl,
+    artifacts: new LocalArtifactStore(directory),
+    now: () => new Date(clock),
+  });
   const user = await site.users.upsert({
     githubId: 42,
     login: "test-user",
@@ -80,6 +85,9 @@ async function fixture() {
     fetchImpl,
     cookie,
     calls: () => calls,
+    advance: (ms: number) => {
+      clock += ms;
+    },
     upstream: (nextStatus: number, nextIdentity = 42, offline = false) => {
       status = nextStatus;
       identity = nextIdentity;
@@ -122,7 +130,33 @@ test("GitHub failure blocks DELETE with no task or user mutation; valid identity
   expect(valid.status).toBe(200);
   expect((await f.site.db.select().from(tasks))[0]?.deletedAt).not.toBeNull();
   f.upstream(401);
+  f.advance(60_000);
   expect((await f.site.request("/api/me", { headers: { cookie: f.cookie } })).status).toBe(401);
+});
+
+test("a passed identity check is reused for a minute, then GitHub is asked again", async () => {
+  const f = await fixture();
+  const me = () => f.site.request("/api/me", { headers: { cookie: f.cookie } });
+  const statuses = await Promise.all([me(), me(), me()]);
+  expect(statuses.map((response) => response.status)).toEqual([200, 200, 200]);
+  f.upstream(401);
+  f.advance(59_000);
+  expect((await me()).status).toBe(200);
+  expect(f.calls()).toBe(1);
+  f.advance(1_000);
+  expect((await me()).status).toBe(401);
+  expect(f.calls()).toBe(2);
+});
+
+test("an exhausted rate limit reads as rate limited, not denied", async () => {
+  const fetchImpl = (async () =>
+    Response.json(
+      { message: "API rate limit exceeded" },
+      { status: 403, headers: { "x-ratelimit-remaining": "0" } },
+    )) as unknown as typeof fetch;
+  await expect(
+    validateGitHubIdentity(testAuthConfig, "mock-token", 42, fetchImpl),
+  ).rejects.toMatchObject({ status: 429 });
 });
 
 test("anonymous/login routes avoid identity calls and /api/me checks identity exactly once", async () => {

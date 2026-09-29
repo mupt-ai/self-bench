@@ -19,6 +19,11 @@ import { bearerMatches, sendJson } from "../http.js";
 
 export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
 const STATE_TTL_SECONDS = 10 * 60;
+/**
+ * How long a passed identity check is trusted. Pages poll the API every few seconds, and asking
+ * GitHub on every request exhausts the user's token quota, which GitHub then answers with 403.
+ */
+const IDENTITY_TTL_MS = 60 * 1000;
 
 /** Why a sign-in attempt bounced back to /login; the page renders one line per code. */
 type LoginError = "state" | "denied" | "github" | "organization";
@@ -54,6 +59,20 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     fetchImpl,
     now,
   });
+  // One check per user and token, shared by concurrent requests; failures are never kept.
+  const identities = new Map<number, { token: string; at: number; check: Promise<void> }>();
+  const validateIdentity = (githubId: number, token: string): Promise<void> => {
+    const cached = identities.get(githubId);
+    if (cached && cached.token === token && now().getTime() - cached.at < IDENTITY_TTL_MS)
+      return cached.check;
+    const check = validateGitHubIdentity(config, token, githubId, fetchImpl);
+    const entry = { token, at: now().getTime(), check };
+    identities.set(githubId, entry);
+    check.catch(() => {
+      if (identities.get(githubId) === entry) identities.delete(githubId);
+    });
+    return check;
+  };
 
   const authenticate = async (
     request: IncomingMessage,
@@ -70,7 +89,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     if (!claims) return undefined;
     const token = await users.gitHubToken(claims.githubId);
     if (!token) throw new GitHubIdentityError(401);
-    await validateGitHubIdentity(config, token, claims.githubId, fetchImpl);
+    await validateIdentity(claims.githubId, token);
     if (!(await gate.permits(claims.githubId, token))) throw new OrgAccessError();
     return users.findByGitHubId(claims.githubId);
   };
