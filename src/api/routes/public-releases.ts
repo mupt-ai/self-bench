@@ -3,8 +3,9 @@ import type { ReleaseStore } from "../../db/releases.js";
 import { directoryOf } from "../../public/directory.js";
 import { repositoryPath, segmentsOf } from "../../public/paths.js";
 import type { PublishedLine } from "../../public/release-types.js";
-import { sendJson, sendTagged, type TaggedBody, tagged } from "../http.js";
+import { sendJson } from "../http.js";
 import { clientIp, type RateLimiter } from "../rate-limit.js";
+import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
 
 /** How long the snapshot of released lines is served before the next read of the table. */
 const SNAPSHOT_MS = 5_000;
