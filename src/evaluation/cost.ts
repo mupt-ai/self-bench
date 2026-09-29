@@ -21,7 +21,7 @@ function inferSubscriptionWrites(
   const pricing = run.pricing;
   // Without a write premium the buckets price identically.
   if (!pricing || pricing.cacheWrite <= pricing.input) return "unchanged";
-  const calls = harborCallUsage(trajectory, { requireCost: false });
+  const calls = harborCallUsage(trajectory);
   if (!calls) return null;
   const original: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const inferred: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -58,8 +58,7 @@ function inferSubscriptionWrites(
     original.input !== usage.input ||
     original.output !== usage.output ||
     original.cacheRead !== usage.cacheRead ||
-    original.cacheWrite !== usage.cacheWrite ||
-    !Number.isFinite(costUsd)
+    original.cacheWrite !== usage.cacheWrite
   )
     return null;
   return changed ? { usage: inferred, costUsd } : "unchanged";

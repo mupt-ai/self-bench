@@ -209,6 +209,7 @@ export function buildRelease(
               costUsd: trial?.apiCostUsd,
               costSource: trial?.costSource,
               tokens: trial?.tokenUsage,
+              cacheWritesInferred: trial?.cacheWritesInferred,
               startedAt: trial?.startedAt,
               finishedAt: trial?.finishedAt,
               evaluationId: result?.run.id,

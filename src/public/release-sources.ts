@@ -37,7 +37,7 @@ async function releaseTasks(db: Database, repoId: number): Promise<ReleaseTask[]
 }
 
 /** The sign-in type and endpoint of every model credential the workspace ever had. */
-async function releaseCredentials(
+export async function releaseCredentials(
   db: Database,
   orgId: number,
 ): Promise<Map<string, CredentialFacts>> {

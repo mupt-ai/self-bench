@@ -22,7 +22,9 @@ export function refuseTrial(message: string): ApplicationFailure {
 }
 
 /** The organization whose credentials an evaluation uses. */
-function evaluationCredentialOrg(input: EvaluationInput): number | undefined {
+export function evaluationCredentialOrg(
+  input: Pick<EvaluationInput, "credentialOrgId" | "credentialOwnerId">,
+): number | undefined {
   return input.credentialOrgId ?? input.credentialOwnerId;
 }
 

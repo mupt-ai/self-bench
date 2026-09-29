@@ -14,13 +14,12 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { type ArtifactStore, createArtifactStore } from "../artifacts/index.js";
 import { loadConfig } from "../contracts/config/index.js";
 import { openDatabase } from "../db/client.js";
-import { credentials } from "../db/schema.js";
+import { releaseCredentials } from "../public/release-sources.js";
 import { trialCost } from "./cost.js";
+import { evaluationCredentialOrg } from "./execution.js";
 import { record } from "./output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
@@ -62,7 +61,7 @@ async function modelAuth(
 ): Promise<ModelAuth | undefined> {
   if (run.credentials?.auth) return run.credentials.auth;
   if (run.credentials?.modelCredentialId === "managed-model") return "api-key";
-  const orgId = run.credentialOrgId ?? run.credentialOwnerId;
+  const orgId = evaluationCredentialOrg(run);
   if (!lookup || !run.credentials || !orgId) return undefined;
   return lookup(orgId, run.credentials.modelCredentialId);
 }
@@ -96,7 +95,8 @@ export async function recomputeEvaluationCost(
       if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
     }
     const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
-    if (!result) {
+    // Without the sign-in type, an earlier recompute's inferred cache writes cannot be rederived.
+    if (!result || (!auth && trial.cacheWritesInferred)) {
       report.trials.push({ index, before, changed: false });
       continue;
     }
@@ -124,14 +124,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const database = url ? await openDatabase(url, { light: true }) : undefined;
   try {
     const lookup: ModelAuthLookup | undefined = database
-      ? async (orgId, credentialId) => {
-          if (!z.uuid().safeParse(credentialId).success) return undefined;
-          const [row] = await database.db
-            .select({ auth: credentials.auth })
-            .from(credentials)
-            .where(and(eq(credentials.orgId, orgId), eq(credentials.id, credentialId)));
-          return row?.auth === "codex-login" || row?.auth === "api-key" ? row.auth : undefined;
-        }
+      ? async (orgId, credentialId) =>
+          (await releaseCredentials(database.db, orgId)).get(credentialId)?.auth
       : undefined;
     const report = await recomputeEvaluationCost(
       store,

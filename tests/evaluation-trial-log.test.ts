@@ -213,4 +213,11 @@ test("recompute infers sign-in cache writes only once the credential's sign-in t
     (2000 * 0.125 + 10 * 0.5) / 1_000_000,
     12,
   );
+  // Applied, then recomputed without the credential lookup: the inferred writes are kept.
+  await recomputeEvaluationCost(store, run.repoId, run.id, true, async () => "codex-login");
+  const again = await recomputeEvaluationCost(store, run.repoId, run.id, true);
+  expect(again.applied).toBe(false);
+  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.cacheWritesInferred).toBe(
+    true,
+  );
 });

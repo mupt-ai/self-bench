@@ -15,7 +15,6 @@ export interface HarborCallUsage {
 /** Per-agent-request token buckets from Harbor's trajectory, or undefined if incomplete. */
 export function harborCallUsage(
   trajectory: Record<string, unknown>,
-  { requireCost = true }: { requireCost?: boolean } = {},
 ): HarborCallUsage[] | undefined {
   const steps = Array.isArray(trajectory.steps) ? trajectory.steps.map(record) : [];
   const calls = steps.filter((step) => step.source === "agent" && step.metrics);
@@ -35,7 +34,6 @@ export function harborCallUsage(
       !count(output) ||
       !count(cached) ||
       !count(written) ||
-      (requireCost && (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0)) ||
       cached + written > prompt
     )
       return undefined;
@@ -53,7 +51,7 @@ export function harborCallUsage(
 export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsage, total: unknown) {
   if (typeof total !== "number" || !Number.isFinite(total) || total < 0) return undefined;
   const calls = harborCallUsage(trajectory);
-  if (!calls) return undefined;
+  if (!calls || calls.some((call) => call.cost === undefined)) return undefined;
   const sums = calls.reduce<Required<HarborCallUsage>>(
     (sum, call) => ({
       input: sum.input + call.input,
