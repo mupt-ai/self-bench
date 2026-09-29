@@ -34,6 +34,9 @@
   --aura: color-mix(in srgb, rgb(var(--ripple)) 50%, var(--brand));
   /* The fire's scorch uses the background water's own colour. */
   --scorch: rgb(var(--ripple));
+  /* Colors for custom models listed one by one in the results chart, after the vendors'. */
+  --custom-model-1: #5a6b86;
+  --custom-model-2: #0e8f9e;
   --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -68,4 +71,6 @@
   --aura: color-mix(in srgb, rgb(var(--ripple)) 55%, var(--foreground));
   /* Dimmer than the water in dark mode: blue on near-black glares at full strength. */
   --scorch: color-mix(in srgb, rgb(var(--ripple)) 62%, var(--background));
+  --custom-model-1: #8d9bb3;
+  --custom-model-2: #22b3c4;
 }

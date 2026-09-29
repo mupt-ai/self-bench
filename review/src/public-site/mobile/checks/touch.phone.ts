@@ -65,12 +65,15 @@ test("a tap on a chart point shows its details, and a tap away hides them", asyn
   await open(page, REPOSITORY);
   // The first point, centred on the screen, and the spot in the chart farthest from every
   // point that is in view and clear of the header.
+  // The chart's points are the first circle of each `.pareto-point` (dari-pareto); its chips and
+  // settings button draw circles too.
   const { point, away } = await page
-    .locator('svg[role="img"]')
+    .locator("svg:has(.pareto-point)")
     .first()
     .evaluate((svg) => {
-      svg.querySelector("circle")?.scrollIntoView({ block: "center", behavior: "instant" });
-      const centres = [...svg.querySelectorAll("circle")].map((circle) => {
+      const marks = [...svg.querySelectorAll(".pareto-point > circle:first-child")];
+      marks[0]?.scrollIntoView({ block: "center", behavior: "instant" });
+      const centres = marks.map((circle) => {
         const box = circle.getBoundingClientRect();
         return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
       });
@@ -91,17 +94,18 @@ test("a tap on a chart point shows its details, and a tap away hides them", asyn
     });
   expect(point, "The chart has no points to tap.").toBeDefined();
   if (!point) return;
-  const text = () => page.getByRole("main").innerText();
-  const before = await text();
+  // The point's details are the chart's hover card.
+  const cards = () => page.locator(".pareto-tooltip").count();
+  expect(await cards()).toBe(0);
   await page.touchscreen.tap(point.x, point.y);
   await expect
-    .poll(text, {
+    .poll(cards, {
       message:
         "A tap on a point showed nothing. On touch, the chart inspects on the tap's pointerup.",
     })
-    .not.toBe(before);
+    .toBe(1);
   await page.touchscreen.tap(away.x, away.y);
   await expect
-    .poll(text, { message: "A tap away from every point left the details open." })
-    .toBe(before);
+    .poll(cards, { message: "A tap away from every point left the details open." })
+    .toBe(0);
 });

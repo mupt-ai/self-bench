@@ -11,6 +11,11 @@
 - Write the intended casing in the source. Do not add CSS `capitalize` or a runtime title-casing utility; existing intentional uppercase badge styling may remain.
 - Apply this rule to new UI and update label-sensitive tests when changing existing copy.
 
+## Model Vendors
+
+- Every model vendor has one color and one display name, in `VENDOR_COLORS` and `VENDOR_NAMES` in `review/src/public-site/format.ts`. Both results charts (the selfbench.dev repository page and the app's Results page) and the public tables use them, so a vendor looks the same everywhere.
+- When a new vendor becomes available, whether through a new direct provider or through OpenRouter (whose model names start with the vendor, as in `z-ai/glm-5.3`), add it to both. An unlisted vendor falls back to the grey that Custom uses and to its raw id. Pick a hue that stays distinct from the other vendors in both light and dark mode.
+
 ## Public Site
 
 - Work under `review/src/public-site/` (selfbench.dev) also follows `review/src/public-site/AGENTS.md`: how pages adapt to phones, and when and how to run the phone checks.

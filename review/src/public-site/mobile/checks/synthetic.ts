@@ -1,6 +1,53 @@
-import type { PublicRepoPage } from "../../contract";
+import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
+
+type Model = PublicSetting["model"];
+
+const openai = (id: string, label: string): Model => ({
+  catalogId: id,
+  name: `openai/${id}`,
+  label,
+});
+const anthropic = (id: string, label: string): Model => ({
+  catalogId: id,
+  name: `anthropic/${id}`,
+  label,
+});
+/** An OpenRouter model, named "vendor/model" as the catalog names them. */
+const routed = (name: string, label: string): Model => ({
+  catalogId: name.split("/")[1] ?? name,
+  name,
+  label,
+});
+
+/**
+ * A setting that passed `passed` of 40 tasks at `cost` per task, run the way its vendor's
+ * models usually are: Codex for OpenAI, Claude Code for Anthropic, Pi through OpenRouter.
+ */
+function manySetting(
+  id: string,
+  model: Model,
+  passed: number,
+  cost: number,
+  overrides: Partial<PublicSetting> = {},
+): PublicSetting {
+  const [vendor] = model.name.split("/");
+  const direct = vendor === "openai" || vendor === "anthropic";
+  return setting({
+    id,
+    model,
+    harness: vendor === "openai" ? "codex" : vendor === "anthropic" ? "claude-code" : "pi",
+    provider: direct ? vendor : "openrouter",
+    tasks: 40,
+    passed,
+    accuracy: (passed / 40) * 100,
+    costPerTaskUsd: cost,
+    totalCostUsd: Math.round(cost * 40 * 100) / 100,
+    onFrontier: false,
+    ...overrides,
+  });
+}
 
 /**
  * Made-up repositories for the phone checks, each one a case phones find hard. `bun run
@@ -96,6 +143,71 @@ function syntheticPages(): PublicRepoPage[] {
           accuracy: 97,
           costPerTaskUsd: 4.9,
         }),
+      ],
+    }),
+    // Every vendor in the model catalog on one chart: a same-model twin, near misses in cost
+    // and accuracy, and a custom endpoint. The busiest chart the labels have to fit.
+    page({
+      releaseId: "synthetic-many-vendors",
+      releasedAt: "2026-09-20T10:00:00Z",
+      repository: {
+        id: 1005,
+        fullName: "example-org/many-models",
+        description: "Every vendor in the catalog on one eval set.",
+        stars: 12_400,
+      },
+      tasks: 40,
+      settings: [
+        manySetting("alpha-codex", alpha, 38, 3.4, { onFrontier: true }),
+        manySetting("alpha-pi", alpha, 37, 3.05, { harness: "pi", onFrontier: true }),
+        manySetting("alpha-mini", openai("alpha-mini", "Alpha 5 Mini"), 32, 0.9, {
+          reasoningLevel: "medium",
+          onFrontier: true,
+        }),
+        manySetting("beta-opus", anthropic("beta-opus", "Beta Opus"), 39, 5.1, {
+          onFrontier: true,
+        }),
+        manySetting("beta-sonnet", anthropic("beta-sonnet", "Beta Sonnet"), 35, 2.2),
+        manySetting("beta-haiku", anthropic("beta-haiku", "Beta Haiku"), 28, 0.6),
+        manySetting("gamma-pro", routed("google/gamma-pro", "Gamma Pro"), 36, 1.9, {
+          onFrontier: true,
+        }),
+        manySetting("gamma-flash", routed("google/gamma-flash", "Gamma Flash"), 27, 0.25, {
+          reasoningLevel: "low",
+          onFrontier: true,
+        }),
+        manySetting("delta", routed("deepseek/delta-v4", "Delta V4"), 31, 0.45, {
+          onFrontier: true,
+        }),
+        manySetting("epsilon", routed("z-ai/epsilon-5", "Epsilon 5"), 31, 0.55),
+        manySetting("zeta", routed("moonshotai/zeta-k3", "Zeta K3"), 34, 1.1, {
+          onFrontier: true,
+        }),
+        manySetting(
+          "in-house",
+          { catalogId: "in-house", name: "in-house-coder-70b", label: "in-house-coder-70b" },
+          23,
+          0.35,
+          { provider: "custom", custom: true, reasoningLevel: "default" },
+        ),
+        manySetting(
+          "sql",
+          { catalogId: "sql", name: "acme-sql-13b", label: "acme-sql-13b" },
+          21,
+          0.12,
+          { provider: "custom", custom: true, reasoningLevel: "default", onFrontier: true },
+        ),
+        // One typed model name on two endpoints: nothing public tells them apart but the
+        // endpoint's fingerprint in the id, so the page numbers them.
+        ...["1a2b3c4d", "5e6f7a8b"].map((hash, index) =>
+          manySetting(
+            `my-llama-70b|pi|custom|api-key|default|#${hash}`,
+            { catalogId: "custom", name: "my-llama-70b", label: "my-llama-70b" },
+            index === 0 ? 25 : 22,
+            index === 0 ? 0.6 : 0.48,
+            { provider: "custom", custom: true, reasoningLevel: "default" },
+          ),
+        ),
       ],
     }),
     // The longest names and description a card and a title have to fit.
