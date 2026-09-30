@@ -93,12 +93,14 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
     browser.sessionStorage.removeItem(key);
     const pendingCatalog = Promise.withResolvers<Response>();
     await mount(true, pendingCatalog.promise);
-    const model = container.querySelector<HTMLSelectElement>('select[aria-label="Model"]');
-    if (!model) throw new Error("Missing model selector");
-    await act(async () => {
-      model.value = "custom";
-      model.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
-    });
+    const model = container.querySelector<HTMLButtonElement>('button[aria-label="Model"]');
+    if (!model) throw new Error("Missing model picker");
+    await act(async () => model.click());
+    const custom = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+      (option) => option.textContent === "Custom Model",
+    );
+    if (!custom) throw new Error("Missing Custom Model option");
+    await act(async () => custom.click());
     await act(async () =>
       pendingCatalog.resolve(
         Response.json({
