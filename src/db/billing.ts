@@ -1,10 +1,12 @@
 import { and, eq, lte, or, sql } from "drizzle-orm";
 import { type BillingEligibility, eligibilityFrom } from "../generation/billing/eligibility.js";
+import { type RefundInput, refundSince } from "./billing-refunds.js";
 import type { Database } from "./client.js";
 import {
   billingCreditGrants,
   billingOutbox,
   billingRateSnapshots,
+  billingRefunds,
   billingWebhookEvents,
   generationUsage,
   orgBilling,
@@ -34,6 +36,9 @@ export interface BillingUsageSummary {
   readonly modelBillableUsd: number;
   readonly sandboxSeconds: number;
   readonly sandboxBillableUsd: number;
+  /** The part of the billable amount sent to Stripe; usage from before billing was set up is not. */
+  readonly billedUsd: number;
+  readonly refundedUsd: number;
 }
 
 export interface SubscriptionState {
@@ -60,10 +65,18 @@ export function createBillingStore(db: Database, configured: boolean) {
           modelBillableUsd: sql<number>`coalesce(sum(${generationUsage.modelBillableUnits}::float8 / nullif(${billingRateSnapshots.unitScale}, 0)) filter (where ${generationUsage.managedModel}), 0)::float8`,
           sandboxSeconds: sql<number>`coalesce(sum(${generationUsage.sandboxSeconds}) filter (where ${generationUsage.managedSandbox}), 0)::int`,
           sandboxBillableUsd: sql<number>`coalesce(sum(${generationUsage.sandboxBillableUnits}::float8 / nullif(${billingRateSnapshots.unitScale}, 0)) filter (where ${generationUsage.managedSandbox}), 0)::float8`,
+          billedUsd: sql<number>`coalesce(sum(${billingOutbox.value}::float8 / nullif(${billingRateSnapshots.unitScale}, 0)), 0)::float8`,
         })
         .from(generationUsage)
         .leftJoin(billingRateSnapshots, eq(generationUsage.rateSnapshotId, billingRateSnapshots.id))
+        .leftJoin(billingOutbox, eq(billingOutbox.usageId, generationUsage.id))
         .where(eq(generationUsage.orgId, orgId));
+      const [refunds] = await db
+        .select({
+          usd: sql<number>`coalesce(sum(${billingRefunds.units}::float8 / ${billingRefunds.unitScale}), 0)::float8`,
+        })
+        .from(billingRefunds)
+        .where(eq(billingRefunds.orgId, orgId));
       const modelTokens = {
         input: row?.input ?? 0,
         output: row?.output ?? 0,
@@ -76,8 +89,11 @@ export function createBillingStore(db: Database, configured: boolean) {
         modelBillableUsd: row?.modelBillableUsd ?? 0,
         sandboxSeconds: row?.sandboxSeconds ?? 0,
         sandboxBillableUsd: row?.sandboxBillableUsd ?? 0,
+        billedUsd: row?.billedUsd ?? 0,
+        refundedUsd: refunds?.usd ?? 0,
       };
     },
+    refundSince: (input: RefundInput) => refundSince(db, input),
     async beginCreditGrant(input: {
       requestId: string;
       adminUserId: number;
@@ -139,14 +155,24 @@ export function createBillingStore(db: Database, configured: boolean) {
           ),
         );
     },
-    async creditTarget(login: string): Promise<{ orgId: number; customerId: string } | undefined> {
+    async creditTarget(
+      login: string,
+    ): Promise<{ orgId: number; customerId: string; subscriptionId?: string } | undefined> {
       const [target] = await db
-        .select({ orgId: orgBilling.orgId, customerId: orgBilling.stripeCustomerId })
+        .select({
+          orgId: orgBilling.orgId,
+          customerId: orgBilling.stripeCustomerId,
+          subscriptionId: orgBilling.stripeSubscriptionId,
+        })
         .from(orgBilling)
         .innerJoin(orgs, eq(orgBilling.orgId, orgs.id))
         .where(and(sql`lower(${orgs.login}) = lower(${login})`, eq(orgs.kind, "org")));
       return target?.customerId
-        ? { orgId: target.orgId, customerId: target.customerId }
+        ? {
+            orgId: target.orgId,
+            customerId: target.customerId,
+            ...(target.subscriptionId ? { subscriptionId: target.subscriptionId } : {}),
+          }
         : undefined;
     },
     async customerId(orgId: number): Promise<string | undefined> {

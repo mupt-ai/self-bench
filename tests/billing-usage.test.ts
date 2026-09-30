@@ -195,3 +195,41 @@ test("a started sandbox is recorded and billed once however often its stop retri
     await database.close();
   }
 });
+
+test("a refund cancels only billed usage since the period start that no refund covered", async () => {
+  const { database, org } = await orgFixture();
+  try {
+    const billing = createBillingStore(database.db, true);
+    const usage = createUsageStore(database.db);
+    // Recorded before billing was set up, so never sent to Stripe or refunded.
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-unbilled" });
+    await billing.saveCustomer(org.id, "cus_test");
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-old" });
+    await database.db
+      .update(billingOutbox)
+      .set({ createdAt: new Date("2026-08-01T00:00:00Z") })
+      .where(eq(billingOutbox.identifier, "selfbench-usage-2"));
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-open" });
+    const refund = {
+      orgId: org.id,
+      customerId: "cus_test",
+      adminUserId: 1,
+      reason: "Goodwill",
+      since: new Date("2026-09-01T00:00:00Z"),
+      unitScale: 10_000_000,
+      eventName: "selfbench_managed_usage",
+    };
+    const first = await billing.refundSince(refund);
+    expect(first?.units).toBe(20_009_200);
+    expect(await billing.refundSince(refund)).toBeUndefined();
+    const events = await database.db.select().from(billingOutbox);
+    expect(events.find((event) => event.refundId === first?.id)?.value).toBe(-20_009_200);
+
+    const summary = await billing.usage(org.id);
+    expect(summary.modelBillableUsd + summary.sandboxBillableUsd).toBeCloseTo(6.00276, 5);
+    expect(summary.billedUsd).toBeCloseTo(4.00184, 5);
+    expect(summary.refundedUsd).toBeCloseTo(2.00092, 5);
+  } finally {
+    await database.close();
+  }
+});

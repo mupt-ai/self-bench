@@ -11,6 +11,8 @@ export interface BillingUsageSummary {
   modelBillableUsd: number;
   sandboxSeconds: number;
   sandboxBillableUsd: number;
+  billedUsd: number;
+  refundedUsd: number;
 }
 
 import { checkSessionExpired } from "../../session-expired";
@@ -72,6 +74,20 @@ export async function grantBillingCredit(
   if ("id" in result && typeof result.id === "string" && result.id.startsWith("cbtxn_"))
     return result;
   throw new Error("Stripe credit response was not confirmed. Reconcile before granting again.");
+}
+
+export function refundBillingUsage(
+  org: string,
+  input: { targetOrg: string; reason: string },
+): Promise<{ refundedUsd: number }> {
+  return requestJson<{ refundedUsd: number }>(
+    `/api/orgs/${encodeURIComponent(org)}/billing/refunds`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export async function startBillingSession(

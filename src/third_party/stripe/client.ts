@@ -120,6 +120,20 @@ export async function grantStripeCredit(
   );
 }
 
+/** Start of the subscription's open billing period; periods live on items in this API version. */
+export async function subscriptionPeriodStart(
+  config: StripeConfig,
+  subscriptionId: string,
+  options?: StripeRequestOptions,
+): Promise<Date> {
+  const subscription = await stripeRequest<{
+    items?: { data?: { current_period_start?: number }[] };
+  }>(config, `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {}, options);
+  const start = subscription.items?.data?.[0]?.current_period_start;
+  if (typeof start !== "number") throw new Error("Stripe subscription has no open period");
+  return new Date(start * 1000);
+}
+
 export async function createCheckoutSession(
   config: StripeConfig,
   input: { customerId: string; orgId: number; successUrl: string; cancelUrl: string },
