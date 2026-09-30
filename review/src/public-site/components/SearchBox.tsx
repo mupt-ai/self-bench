@@ -37,7 +37,7 @@ export function SearchBox({
       />
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-sm text-foreground/60 touch:text-base transition-opacity duration-200 ${
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-sm text-foreground/65 touch:text-base transition-opacity duration-200 ${
           focused || query ? "opacity-0" : "opacity-100"
         }`}
       >
