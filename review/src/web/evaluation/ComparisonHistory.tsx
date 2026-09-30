@@ -11,11 +11,12 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
     let disposed = false;
     evaluationRequest<{ comparisons: ComparisonStatus[] }>(`${url}/comparisons`).then(
       (result) => {
-        if (!disposed) setComparisons(result.comparisons.slice().reverse());
+        // Newest first, as the API lists them.
+        if (!disposed) setComparisons(result.comparisons);
       },
       () => {
         if (!disposed)
-          setError("Saved comparisons could not be loaded. Individual runs remain below.");
+          setError("Saved comparisons could not be loaded. Every run is still in the table above.");
       },
     );
     return () => {
@@ -33,7 +34,7 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
             <tr>
               <th>Created</th>
               <th>Models</th>
-              <th>Completed Trials</th>
+              <th>Finished Trials</th>
               <th>Open</th>
             </tr>
           </thead>

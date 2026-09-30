@@ -106,16 +106,3 @@ export function customEndpoints(
 export function dollars(value: number): string {
   return `$${value.toFixed(value < 0.01 ? 4 : value < 1 ? 3 : 2)}`;
 }
-export function runAccuracy(run: EvaluationRun, harness: string): number | undefined {
-  const trials = run.trials.filter((trial) => trial.harness === harness);
-  if (
-    !trials.length ||
-    trials.some(
-      (trial) => trial.status !== "completed" || ![0, 1].includes(trial.rewards.reward ?? -1),
-    )
-  )
-    return undefined;
-  return (
-    (trials.reduce((sum, trial) => sum + (trial.rewards.reward ?? 0), 0) / trials.length) * 100
-  );
-}

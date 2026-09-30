@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
-import { type BenchmarkPoint, benchmarkPoints, customEndpoints, runAccuracy } from "./benchmark";
+import { type BenchmarkPoint, benchmarkPoints, customEndpoints } from "./benchmark";
 
 test("only complete, priced, verified runs enter the comparison", () => {
   const run = initialEvaluation(
@@ -31,9 +31,6 @@ test("only complete, priced, verified runs enter the comparison", () => {
   expect(benchmarkPoints([run])[0]).toMatchObject({ accuracy: 100, cost: 0.02 });
   delete trial.apiCostUsd;
   expect(benchmarkPoints([run])).toEqual([]);
-  expect(runAccuracy(run, "codex")).toBe(100);
-  trial.status = "failed";
-  expect(runAccuracy(run, "codex")).toBeUndefined();
 });
 test("dataset snapshots are order-independent and change when task bundles change", () => {
   const input = evaluationInput();
