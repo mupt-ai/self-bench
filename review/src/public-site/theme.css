@@ -3,6 +3,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./palette.css";
+@import "./fonts/fonts.css";
 @import "./frame.css";
 @import "./page-text.css";
 @import "./mobile/mobile.css";
