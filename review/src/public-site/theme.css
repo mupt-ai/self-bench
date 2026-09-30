@@ -111,9 +111,20 @@ html {
 [data-morphing] [data-morph="lines"] {
   view-transition-name: repo-lines;
 }
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
+/*
+ * The switching blocks are drawn above the whole page, pinned header and footer included, so
+ * the page itself stays out of the switch, drawn live beneath them, and the blocks show only
+ * between the header and the footer, passing under both as the page does when it scrolls.
+ */
+:root[data-morph-to] {
+  view-transition-name: none;
+}
+:root[data-morph-to]::view-transition {
+  mask-image: linear-gradient(
+    transparent var(--bar-top),
+    black var(--bar-top) calc(100% - var(--bar-bottom)),
+    transparent calc(100% - var(--bar-bottom))
+  );
 }
 ::view-transition-group(repo-title),
 ::view-transition-group(layout-toggle),
