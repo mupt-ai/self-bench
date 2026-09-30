@@ -80,10 +80,11 @@ export function DemoRunPage() {
   return (
     <PageContent>
       <PageHeader
+        className="mb-6"
         title="Run · Demo Repository"
         description="Compare models and harnesses against accepted tasks."
       />
-      <Notice className="mb-4">
+      <Notice className="mb-5">
         Demo mode · Sample data only. You can explore the controls, but no evaluations are
         submitted.
       </Notice>
@@ -131,7 +132,6 @@ export function DemoRunPage() {
           submitted={false}
           busy={false}
           ready={draft.tasks.length > 0 && pairs > 0}
-          tasksReady
           pairs={pairs}
           readOnly
           onChange={(next) => setDraft(next)}
