@@ -105,7 +105,7 @@ export function ResultsAlerts({
     <ul className="panel mb-4 divide-y divide-border" aria-label="Alerts">
       {alerts.map((alert) => (
         <li
-          key={`${alert.kind}/${alert.configuration ?? alert.task?.key}/${alert.title}`}
+          key={`${alert.kind}/${alert.configuration ?? alert.task?.key}/${alert.detail}`}
           className="grid grid-cols-[4px_1.5rem_minmax(0,1fr)_auto] items-center gap-2.5 bg-card py-2 pr-3"
         >
           <span

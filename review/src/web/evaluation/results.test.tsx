@@ -164,6 +164,22 @@ test("running, queued and cancelled configurations", () => {
   expect(configurations.some((configuration) => needsAttention(review, configuration))).toBe(false);
 });
 
+test("a started run whose tasks are all queued is preparing, and can stall", () => {
+  const preparing = run("preparing", { status: "running", createdAt: at(120) }, [
+    { taskId: "task-1" },
+    { taskId: "task-2" },
+  ]);
+  const waiting = run("waiting", { status: "queued", thinking: "low" }, [{ taskId: "task-1" }]);
+  const configurations = configurationsOf([preparing, waiting], credentials, NOW);
+  expect(configurations.map((configuration) => configuration.status).sort()).toEqual([
+    "queued",
+    "running",
+  ]);
+  const review = reviewOf(configurations, NOW);
+  expect(review.alerts.map((alert) => alert.kind)).toEqual(["stalled"]);
+  expect(review.alerts[0]?.detail).toStartWith("Still preparing, and nothing has");
+});
+
 test("a repeated error, results that won't chart, and a stall need attention", () => {
   const broken = run("broken", {}, [
     errored("task-1", "Harbor exited with code 137"),

@@ -77,6 +77,16 @@ export interface Configuration {
   status: "running" | "queued" | "done" | "cancelled";
 }
 
+/**
+ * A result under way: running, or queued in a run that has started, which may still be preparing
+ * its sandboxes and task images.
+ */
+export function inProgress(result: TaskResult): boolean {
+  return (
+    result.outcome === "running" || (result.outcome === "queued" && result.run.status === "running")
+  );
+}
+
 /** The managed model credential has no stored entry; it is OpenRouter with an API key. */
 const MANAGED_MODEL = "managed-model";
 
@@ -216,14 +226,13 @@ function configurationOf(identity: Identity, results: TaskResult[], numbers: Map
       ? { costPerTask: costs.reduce((sum, cost) => sum + cost, 0) / costs.length }
       : {}),
     spend: results.reduce((sum, { trial }) => sum + (trial.apiCostUsd ?? 0), 0),
-    status:
-      counts.running > 0 || (counts.queued > 0 && finished > 0)
-        ? "running"
-        : counts.queued > 0
-          ? "queued"
-          : counts.cancelled > 0
-            ? "cancelled"
-            : "done",
+    status: latest.some(inProgress)
+      ? "running"
+      : counts.queued > 0
+        ? "queued"
+        : counts.cancelled > 0
+          ? "cancelled"
+          : "done",
   };
   return configuration;
 }

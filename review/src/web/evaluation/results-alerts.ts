@@ -1,4 +1,4 @@
-import type { Configuration, TaskResult } from "./results-model";
+import { type Configuration, inProgress, type TaskResult } from "./results-model";
 import {
   configurationName,
   errorMessage,
@@ -54,10 +54,10 @@ const SLOWEST_MULTIPLE = 2;
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** Running tasks, and nothing finishing or starting for longer than a task should take. */
+/** Tasks under way, and nothing finishing or starting for longer than a task should take. */
 function stallOf(configuration: Configuration, now: number): Stall | undefined {
-  const running = configuration.latest.filter((result) => result.outcome === "running");
-  if (!running.length) return undefined;
+  const active = configuration.latest.filter(inProgress);
+  if (!active.length) return undefined;
   const took = configuration.batches.flatMap((batch) =>
     batch.results.flatMap((result) =>
       result.trial.status === "completed" && result.minutes !== undefined ? [result.minutes] : [],
@@ -67,7 +67,7 @@ function stallOf(configuration: Configuration, now: number): Stall | undefined {
   const limit =
     slowest === undefined ? FIRST_FINISH_LIMIT : Math.max(1, slowest * SLOWEST_MULTIPLE);
   // Idle since a trial of these runs last finished or started: a start means a worker moved on.
-  const runs = new Set(running.map((result) => result.run.id));
+  const runs = new Set(active.map((result) => result.run.id));
   const times = configuration.batches.flatMap((batch) =>
     batch.results.flatMap(({ run, trial }) =>
       runs.has(run.id)
@@ -77,7 +77,7 @@ function stallOf(configuration: Configuration, now: number): Stall | undefined {
   );
   const since = times.length
     ? Math.max(...times)
-    : Math.min(...running.map(({ run }) => Date.parse(run.createdAt)));
+    : Math.min(...active.map(({ run }) => Date.parse(run.createdAt)));
   const idle = (now - since) / 60_000;
   if (!Number.isFinite(idle) || idle <= limit) return undefined;
   return { idle, limit, ...(slowest !== undefined ? { slowest } : {}) };
@@ -150,6 +150,7 @@ export function reviewOf(
     if (stall) {
       review.stalls.set(configuration.key, stall);
       const running = configuration.counts.running;
+      const doing = running ? `${plural(running, "task")} running` : "Still preparing";
       review.alerts.push({
         kind: "stalled",
         severity: "warn",
@@ -157,8 +158,8 @@ export function reviewOf(
         title: `${name} may have stalled`,
         detail:
           stall.slowest === undefined
-            ? `${plural(running, "task")} running, and nothing has finished or started in ${minutesLabel(stall.idle)}, past the ${stall.limit} min limit for a first result.`
-            : `${plural(running, "task")} running, and nothing has finished or started in ${minutesLabel(stall.idle)}; the slowest task it finished took ${minutesLabel(stall.slowest)}, so it flags past ${minutesLabel(stall.limit)}.`,
+            ? `${doing}, and nothing has finished or started in ${minutesLabel(stall.idle)}, past the ${stall.limit} min limit for a first result.`
+            : `${doing}, and nothing has finished or started in ${minutesLabel(stall.idle)}; the slowest task it finished took ${minutesLabel(stall.slowest)}, so it flags past ${minutesLabel(stall.limit)}.`,
       });
       flags.push({ severity: "warn", text: "Stalled" });
     }

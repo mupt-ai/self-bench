@@ -140,6 +140,8 @@ export function EvaluationPage() {
       ) : (
         <>
           <ResultsOverview
+            // Filters, focus and open rows belong to one repository.
+            key={url}
             runs={runs}
             credentials={credentials}
             onOpenRun={(id) => setSearch({ run: id })}
