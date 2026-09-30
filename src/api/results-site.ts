@@ -7,6 +7,7 @@ import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
+import { homeBody, notFoundBody, repositoryBody } from "./site-body.js";
 import {
   headTags,
   homeHead,
@@ -69,6 +70,8 @@ const HTML_TYPE = "text/html; charset=utf-8";
 
 /** The build's own title and description, which each page's head replaces. */
 const BUILT_HEAD = [/\n?[ \t]*<title>[^<]*<\/title>/, /\n?[ \t]*<meta name="description"[^>]*>/];
+/** The build's empty root, which holds each page's text until the site's script replaces it. */
+const BUILT_ROOT = /<div id="root"([^>]*)>\s*<\/div>/;
 
 /**
  * The public results site, served by the same API process on its own host. On that host only
@@ -97,8 +100,16 @@ export function createResultsSite(options: ResultsSiteOptions) {
     });
     return shell;
   };
-  const page = async (head: PageHead) =>
-    tagged((await built()).replace("</head>", `${headTags(head, origin)}  </head>`));
+  // Replaced by functions, so a `$` in the text (a price, a model's name) is never a pattern.
+  const page = async (head: PageHead, body: string) =>
+    tagged(
+      (await built())
+        .replace("</head>", () => `${headTags(head, origin)}  </head>`)
+        .replace(
+          BUILT_ROOT,
+          (_, attributes: string) => `<div id="root"${attributes}>${body}</div>`,
+        ),
+    );
   /** Preview images already drawn, by release id, oldest first. */
   const cards = new Map<string, Buffer>();
   const cardFor = (release: PublishedRelease) => {
@@ -124,17 +135,26 @@ export function createResultsSite(options: ResultsSiteOptions) {
     );
   };
   /**
-   * The page's head, with 200 for the directory and released repositories and 404 for anything
-   * the site cannot show. A path that cannot name a repository is refused without a lookup.
+   * The page's head and text, with 200 for the directory and released repositories and 404 for
+   * anything the site cannot show. A path that cannot name a repository is refused without a
+   * lookup. Both read the snapshot of released lines, never the database.
    */
-  const pageOf = async (pathname: string): Promise<{ status: 200 | 404; head: PageHead }> => {
-    if (pathname === "/") return { status: 200, head: homeHead(origin) };
+  const pageOf = async (
+    pathname: string,
+  ): Promise<{ status: 200 | 404; head: PageHead; body: string }> => {
+    if (pathname === "/") {
+      const repositories = await options.publicRoutes.repositories().catch(() => []);
+      return { status: 200, head: homeHead(origin), body: homeBody(repositories) };
+    }
     const path = repositoryPath(segmentsOf(pathname));
-    if (!path) return { status: 404, head: notFoundHead() };
+    if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
     const fullName = `${path.owner}/${path.name}`;
     const lines = await options.publicRoutes.linesFor(fullName).catch(() => []);
     const head = repositoryHead(origin, lines, path.publisher);
-    return head ? { status: 200, head } : { status: 404, head: notFoundHead(fullName) };
+    const body = repositoryBody(lines, path.publisher);
+    return head && body
+      ? { status: 200, head, body }
+      : { status: 404, head: notFoundHead(fullName), body: notFoundBody(fullName) };
   };
 
   return {
@@ -208,9 +228,10 @@ export function createResultsSite(options: ResultsSiteOptions) {
         response.end(found.body);
         return true;
       }
-      // A page: the site's shell, with the page's own title, description and address. Its status
-      // says whether the repository has anything released, which is what crawlers and link
-      // previews see; the page itself renders in the browser.
+      // A page: the site's shell, with the page's own title, description and address, and its
+      // text for readers that run no scripts. Its status says whether the repository has anything
+      // released, which is what crawlers and link previews see; the page itself renders in the
+      // browser.
       const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
       if (!verdict.ok) {
         response.setHeader("cache-control", "no-store");
@@ -233,10 +254,10 @@ export function createResultsSite(options: ResultsSiteOptions) {
         });
         return true;
       }
-      const { status, head } = await pageOf(url.pathname);
+      const { status, head, body } = await pageOf(url.pathname);
       let html: TaggedBody;
       try {
-        html = await page(head);
+        html = await page(head, body);
       } catch {
         response.setHeader("cache-control", "no-store");
         sendJson(response, 503, { error: "The public site is not built" });

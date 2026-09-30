@@ -15,6 +15,9 @@ export const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Reposi
 export const HOME_DESCRIPTION =
   "SelfBench measures AI coding agents and models on tasks from a repository's own merged pull requests, to show which works best on your code. By dari.dev.";
 
+/** The home page's heading, which the server also writes for readers that run no scripts. */
+export const HOME_HEADING = "Find the best models for your repo";
+
 export function repositoryTitle(fullName: string): string {
   return `${fullName}: Coding Agent Benchmark · ${SITE_NAME}`;
 }
@@ -46,11 +49,18 @@ function nameBeside(setting: ReleaseSetting, other?: ReleaseSetting): string {
 }
 
 /**
+ * The longest description search engines show whole: Bing flags longer ones, and Google cuts
+ * them off around here.
+ */
+const DESCRIPTION_LIMIT = 160;
+
+/**
  * A repository page's description: its most accurate setting and the best one for less (the next
  * on the frontier: the most accurate of the settings that cost less), then what was measured.
- * Search results show only the first 150 or so characters, so the picks come first.
+ * Search results show only the first 150 or so characters, so the picks come first, and whole
+ * sentences are left off the end rather than cut.
  */
-export function repositoryDescription(line: PublishedLine): string {
+export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_LIMIT): string {
   const { release } = line;
   const [best, next] = frontierSettings(release.settings).sort(
     (left, right) =>
@@ -59,14 +69,19 @@ export function repositoryDescription(line: PublishedLine): string {
       left.id.localeCompare(right.id),
   );
   const settings = release.settings.length;
-  return [
+  const [question, ...rest] = [
     `Which coding agent works best on ${release.repository.fullName}?`,
     best ? `Most accurate: ${nameBeside(best, next)}, ${scored(best)} per task.` : "",
     next ? `Best for less: ${nameBeside(next, best)}, ${scored(next)}.` : "",
     `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean);
+  // Whole sentences, in order, while they fit; the question always leads.
+  let text = question ?? "";
+  for (const part of rest) {
+    if (text.length + 1 + part.length > limit) break;
+    text = `${text} ${part}`;
+  }
+  return text;
 }
 
 /**

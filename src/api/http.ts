@@ -83,6 +83,10 @@ export async function sendReviewAsset(
 export const escapeAttribute = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
+/** Text written between HTML tags. */
+export const escapeText = (value: string) =>
+  value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
 /** The client hung up mid-request or mid-response: nothing on the server failed. */
 export function clientWentAway(error: unknown, responseStarted = false): boolean {
   if (error instanceof Error && error.message === "aborted") return true;

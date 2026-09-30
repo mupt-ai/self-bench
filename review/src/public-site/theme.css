@@ -4,6 +4,7 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./palette.css";
 @import "./frame.css";
+@import "./page-text.css";
 @import "./mobile/mobile.css";
 
 /* The Vite root is review/public-site, so Tailwind must be told where the components live. */

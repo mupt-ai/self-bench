@@ -75,7 +75,7 @@ beforeAll(async () => {
   await writeFile(join(outside, "secret.txt"), "not part of the build");
   await writeFile(
     join(root, "index.html"),
-    '<html><head>\n    <title>Built</title>\n    <meta name="description" content="Built." />\n  </head><body>shell</body></html>',
+    '<html><head>\n    <title>Built</title>\n    <meta name="description" content="Built." />\n  </head><body>shell<div id="root"></div></body></html>',
   );
   await writeFile(join(root, "assets", "main-abc123.js"), "console.log(1)");
   await writeFile(join(root, "dari-logo.svg"), "<svg/>");
@@ -284,4 +284,13 @@ test("a repository page's preview is its release's card, which the site draws as
   expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   expect((await get("/og/vercel/next.js/umbrella.png")).status).toBe(200);
   expect((await get("/og/nobody/nothing.png")).status).toBe(404);
+});
+
+test("each page's text is in its root before any script runs, with one heading", async () => {
+  for (const path of ["/", "/vercel/next.js", "/vercel/next.js/umbrella", "/nobody/nothing"]) {
+    const html = await (await get(path)).text();
+    const root = html.slice(html.indexOf('<div id="root">'));
+    expect(root).toStartWith('<div id="root"><main class="page-text"');
+    expect(html.split("<h1").length - 1).toBe(1);
+  }
 });
