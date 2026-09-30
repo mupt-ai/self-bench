@@ -130,6 +130,17 @@ export function createPublicReleaseRoutes(
     async repositories(): Promise<PublishedLine[][]> {
       return [...(await snapshot()).byRepository.values()];
     },
+    /**
+     * The body /api/public/directory answers, for the home page to carry into its first render:
+     * the same bytes, built once per snapshot for both.
+     */
+    async directoryBody(): Promise<string> {
+      return (await snapshot()).directory().body;
+    },
+    /** The body /api/public/repos/<owner>/<name> answers, or undefined when nothing is released. */
+    async repositoryBody(fullName: string): Promise<string | undefined> {
+      return (await snapshot()).repository(fullName)?.body;
+    },
     /** Answers /api/public/*; true when the response was sent. */
     async handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean> {
       if (!url.pathname.startsWith("/api/public/")) return false;

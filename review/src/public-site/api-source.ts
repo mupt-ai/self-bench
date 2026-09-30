@@ -13,9 +13,31 @@ async function read<T>(url: string): Promise<T | undefined> {
   return (await response.json()) as T;
 }
 
+/**
+ * The API response the server carried in the page for its first render (src/api/site-body.ts),
+ * by the address it answers. It is read once and removed, so only the page the browser loaded
+ * uses it; every later page reads the API.
+ */
+function carriedData(): Map<string, unknown> {
+  const carried = new Map<string, unknown>();
+  const element = typeof document === "undefined" ? null : document.getElementById("page-data");
+  const url = element?.dataset.url;
+  if (element && url) {
+    try {
+      carried.set(url, JSON.parse(element.textContent ?? ""));
+    } catch {
+      // A block that does not parse is left unused: the page reads the API as it would anyway.
+    }
+    element.remove();
+  }
+  return carried;
+}
+
 /** One repository's current releases, as pages for the in-memory source. */
-async function linesFrom(url: string): Promise<PublicRepoPage[]> {
-  const { lines } = (await read<{ lines: PublishedLine[] }>(url)) ?? { lines: [] };
+async function linesFrom(
+  answer: Promise<{ lines: PublishedLine[] } | undefined>,
+): Promise<PublicRepoPage[]> {
+  const { lines } = (await answer) ?? { lines: [] };
   // The source fills `lines` from the other lines of the same repository.
   return lines.map((line) => ({ release: line.release, endorsed: line.endorsed, lines: [] }));
 }
@@ -25,13 +47,20 @@ async function linesFrom(url: string): Promise<PublicRepoPage[]> {
  * already reduced to what a card shows; a repository page reads only its own lines, and
  * `memorySource` picks its default line exactly as it does for fixtures.
  */
-export function apiSource(base = ""): PublicSource {
+export function apiSource(base = "", carried = carriedData()): PublicSource {
+  /** `url`'s response: the page's carried copy the first time, else the API's. */
+  const answer = async <T>(url: string): Promise<T | undefined> => {
+    if (!carried.has(url)) return read<T>(url);
+    const value = carried.get(url) as T;
+    carried.delete(url);
+    return value;
+  };
   // The home page asks for repositories and lines together; concurrent callers share one
   // request, and the next call after it settles fetches again.
   let directory: Promise<PublicRepoSummary[]> | undefined;
   const everything = () => {
     if (!directory) {
-      const request = read<{ cards: PublicRepoSummary[] }>(`${base}/api/public/directory`).then(
+      const request = answer<{ cards: PublicRepoSummary[] }>(`${base}/api/public/directory`).then(
         (answer) => answer?.cards ?? [],
       );
       const settled = () => {
@@ -45,7 +74,7 @@ export function apiSource(base = ""): PublicSource {
   const repository = async (owner: string, name: string) =>
     memorySource(
       await linesFrom(
-        `${base}/api/public/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+        answer(`${base}/api/public/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
       ),
     );
   return {

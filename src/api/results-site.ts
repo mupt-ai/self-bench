@@ -7,16 +7,8 @@ import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
-import { homeBody, notFoundBody, repositoryBody } from "./site-body.js";
-import {
-  headTags,
-  homeHead,
-  lineAt,
-  notFoundHead,
-  type PageHead,
-  repositoryHead,
-  sitemapOf,
-} from "./site-head.js";
+import { headTags, lineAt, type PageHead, sitemapOf } from "./site-head.js";
+import { sitePages } from "./site-pages.js";
 import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
 
 export interface ResultsSiteOptions {
@@ -101,13 +93,13 @@ export function createResultsSite(options: ResultsSiteOptions) {
     return shell;
   };
   // Replaced by functions, so a `$` in the text (a price, a model's name) is never a pattern.
-  const page = async (head: PageHead, body: string) =>
+  const page = async (head: PageHead, body: string, data = "") =>
     tagged(
       (await built())
         .replace("</head>", () => `${headTags(head, origin)}  </head>`)
         .replace(
           BUILT_ROOT,
-          (_, attributes: string) => `<div id="root"${attributes}>${body}</div>`,
+          (_, attributes: string) => `<div id="root"${attributes}>${body}</div>${data}`,
         ),
     );
   /** Preview images already drawn, by release id, oldest first. */
@@ -134,35 +126,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
       () => undefined,
     );
   };
-  /**
-   * The page's head and text, with 200 for the directory and released repositories and 404 for
-   * anything the site cannot show. A path that cannot name a repository is refused without a
-   * lookup. Both read the snapshot of released lines, never the database. `partial` marks a home
-   * page written without its directory, because the snapshot could not be read: it is still
-   * served, but never cached, so the CDN never keeps a directory with nothing in it.
-   */
-  const pageOf = async (
-    pathname: string,
-  ): Promise<{ status: 200 | 404; head: PageHead; body: string; partial?: boolean }> => {
-    if (pathname === "/") {
-      const repositories = await options.publicRoutes.repositories().catch(() => undefined);
-      return {
-        status: 200,
-        head: homeHead(origin),
-        body: homeBody(repositories ?? []),
-        partial: !repositories,
-      };
-    }
-    const path = repositoryPath(segmentsOf(pathname));
-    if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
-    const fullName = `${path.owner}/${path.name}`;
-    const lines = await options.publicRoutes.linesFor(fullName).catch(() => []);
-    const head = repositoryHead(origin, lines, path.publisher);
-    const body = repositoryBody(lines, path.publisher);
-    return head && body
-      ? { status: 200, head, body }
-      : { status: 404, head: notFoundHead(fullName), body: notFoundBody(fullName) };
-  };
+  const pageOf = sitePages(origin, options.publicRoutes);
 
   return {
     /** Answers every request for the public host; false when the request is the app's. */
@@ -261,10 +225,10 @@ export function createResultsSite(options: ResultsSiteOptions) {
         });
         return true;
       }
-      const { status, head, body, partial } = await pageOf(url.pathname);
+      const { status, head, body, data, partial } = await pageOf(url.pathname);
       let html: TaggedBody;
       try {
-        html = await page(head, body);
+        html = await page(head, body, data);
       } catch {
         response.setHeader("cache-control", "no-store");
         sendJson(response, 503, { error: "The public site is not built" });

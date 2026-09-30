@@ -167,3 +167,20 @@ export function notFoundBody(fullName?: string): string {
     HOME_LINK,
   ]);
 }
+
+/**
+ * Past this, a page carries no data and the site fetches it as it does between pages: the block
+ * is read before the page can draw, so it must stay small next to the page itself.
+ */
+const DATA_LIMIT = 256 * 1024;
+
+/**
+ * The API response a page's first render reads, carried in the page itself: `body` is exactly
+ * what `url` answers. The site takes it instead of asking (api-source.ts), which saves the round
+ * trip between the script starting and the page appearing. `<` is escaped, so nothing in a
+ * release can close the script.
+ */
+export function pageData(url: string, body: string | undefined): string {
+  if (body === undefined || body.length > DATA_LIMIT) return "";
+  return `<script type="application/json" id="page-data" data-url="${escapeAttribute(url)}">${body.replaceAll("<", "\\u003c")}</script>`;
+}
