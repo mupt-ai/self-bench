@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createBatchStore } from "../../src/db/batches.js";
+import { generationBatches } from "../../src/db/schema.js";
 import { createBatchActivities } from "../../src/generation/batches/activities.js";
 import * as exporter from "../../src/generation/batches/export.js";
 import * as preparer from "../../src/generation/batches/prepare.js";
@@ -46,9 +47,20 @@ const result = (id: string, status: "accepted" | "rejected", taskId = id) => ({
     : {}),
 });
 
+let shared: Awaited<ReturnType<typeof testDatabase>> | undefined;
+
+/** A fresh batch record; cases within a test share one database, one batch at a time. */
 async function activitiesFor(state: Partial<GenerationBatch>) {
-  const database = await testDatabase();
-  cleanups.push(() => database.close());
+  if (!shared) {
+    const database = await testDatabase();
+    shared = database;
+    cleanups.push(async () => {
+      shared = undefined;
+      await database.close();
+    });
+  }
+  const database = shared;
+  await database.db.delete(generationBatches);
   const directory = await mkdtemp(join(tmpdir(), "batch-activities-"));
   cleanups.push(() => rm(directory, { recursive: true, force: true }));
   const vault = memoryVault();

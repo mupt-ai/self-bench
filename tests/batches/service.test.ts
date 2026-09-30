@@ -20,7 +20,8 @@ afterEach(async () => {
 });
 
 /** A service over a real database and a Temporal client that knows one batch workflow. */
-async function service(workflow: { status?: string; startError?: Error } = {}) {
+async function service() {
+  const workflow: { status?: string; startError?: Error } = {};
   const database = await testDatabase();
   cleanups.push(() => database.close());
   const directory = await mkdtemp(join(tmpdir(), "batch-service-"));
@@ -62,16 +63,17 @@ async function service(workflow: { status?: string; startError?: Error } = {}) {
     new LocalArtifactStore(directory),
     "generation",
   );
-  const create = (state: Partial<GenerationBatch>) =>
+  // Each case uses its own run ID, so one database serves the whole test.
+  const create = (runId: string, state: Partial<GenerationBatch>) =>
     store.create({
-      run,
+      run: { ...run, runId },
       taskQueue: "generation",
       phase: "authoring",
       shards: [],
-      candidates: [{ workflowId: `${run.runId}/candidate/one`, candidate: candidate("one", 1) }],
+      candidates: [{ workflowId: `${runId}/candidate/one`, candidate: candidate("one", 1) }],
       ...state,
     });
-  return { batches, store, started, cancelled, create };
+  return { batches, store, started, cancelled, create, workflow };
 }
 
 test("start records the batch, then starts its workflow under the run ID", async () => {
@@ -92,49 +94,49 @@ test("start records the batch, then starts its workflow under the run ID", async
   await expect(f.batches.start(run)).rejects.toThrow("Batch ID already exists");
 
   // A start whose earlier response was lost finds the workflow already running.
-  const retried = await service({
-    startError: new WorkflowExecutionAlreadyStartedError("started", run.runId, "x"),
-  });
-  await retried.batches.start(run);
-  expect((await retried.store.read(run.runId))?.phase).toBe("preparing");
+  f.workflow.startError = new WorkflowExecutionAlreadyStartedError("started", "retried", "x");
+  await f.batches.start({ ...run, runId: "retried" });
+  expect((await f.store.read("retried"))?.phase).toBe("preparing");
 });
 
 test("cancel shows the cancel at once and cancels the workflow, even one that already closed", async () => {
-  const f = await service({ status: "RUNNING" });
-  await f.create({});
-  await f.batches.cancel(run.runId);
-  expect((await f.store.read(run.runId))?.phase).toBe("cancelling");
-  expect(f.cancelled).toEqual([run.runId]);
-  const closed = await service();
-  await closed.create({ phase: "complete" });
-  await closed.batches.cancel(run.runId);
-  expect((await closed.store.read(run.runId))?.phase).toBe("complete");
+  const f = await service();
+  f.workflow.status = "RUNNING";
+  await f.create("running", {});
+  await f.batches.cancel("running");
+  expect((await f.store.read("running"))?.phase).toBe("cancelling");
+  expect(f.cancelled).toEqual(["running"]);
+  delete f.workflow.status;
+  await f.create("closed", { phase: "complete" });
+  await f.batches.cancel("closed");
+  expect((await f.store.read("closed"))?.phase).toBe("complete");
 });
 
 test("a read settles a batch whose workflow closed or never started without recording an outcome", async () => {
-  const running = await service({ status: "RUNNING" });
-  await running.create({});
-  expect((await running.batches.status(run.runId)).phase).toBe("authoring");
+  const f = await service();
+  const status = async (runId: string, workflowStatus: string | undefined) => {
+    if (workflowStatus) f.workflow.status = workflowStatus;
+    else delete f.workflow.status;
+    return f.batches.status(runId);
+  };
+  await f.create("running", {});
+  expect((await status("running", "RUNNING")).phase).toBe("authoring");
 
-  const terminated = await service({ status: "TERMINATED" });
-  await terminated.create({});
-  expect(await terminated.batches.status(run.runId)).toMatchObject({
+  await f.create("terminated", {});
+  expect(await status("terminated", "TERMINATED")).toMatchObject({
     phase: "failed",
     error: "Batch workflow terminated without recording an outcome.",
     tasks: [{ candidateId: "one", status: "infrastructure_failed" }],
   });
 
-  const timedOut = await service({ status: "TIMED_OUT" });
-  await timedOut.create({ phase: "cancelling" });
-  expect((await timedOut.batches.status(run.runId)).phase).toBe("cancelled");
+  await f.create("timed-out", { phase: "cancelling" });
+  expect((await status("timed-out", "TIMED_OUT")).phase).toBe("cancelled");
 
-  const starting = await service();
-  await starting.create({ phase: "preparing", acceptedAt: Date.now() });
-  expect((await starting.batches.status(run.runId)).phase).toBe("preparing");
+  await f.create("starting", { phase: "preparing", acceptedAt: Date.now() });
+  expect((await status("starting", undefined)).phase).toBe("preparing");
 
-  const lost = await service();
-  await lost.create({ phase: "preparing", acceptedAt: Date.now() - 10 * 60_000 });
-  expect(await lost.batches.status(run.runId)).toMatchObject({
+  await f.create("lost", { phase: "preparing", acceptedAt: Date.now() - 10 * 60_000 });
+  expect(await status("lost", undefined)).toMatchObject({
     phase: "failed",
     error: "Batch workflow never started. Start another batch.",
   });
