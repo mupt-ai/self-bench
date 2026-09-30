@@ -1,5 +1,5 @@
-# Pods act as the runtime Google service account (Workload Identity), and mount the pinned
-# shared and worker env-file bundles from Secret Manager.
+# Pods act as the runtime Google service account (Workload Identity), and mount one file per
+# worker secret from Secret Manager.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -10,15 +10,15 @@ metadata:
 apiVersion: secrets-store.csi.x-k8s.io/v1
 kind: SecretProviderClass
 metadata:
-  name: selfbench-worker-env
+  name: selfbench-worker-secrets
 spec:
   provider: gke
   parameters:
     secrets: |
-      - resourceName: {{ .Values.secrets.shared | quote }}
-        path: shared-env
-      - resourceName: {{ .Values.secrets.worker | quote }}
-        path: worker-env
+      {{- range .Values.secrets.files }}
+      - resourceName: {{ .resourceName | quote }}
+        path: {{ .path | quote }}
+      {{- end }}
 ---
 # KEDA reads the Temporal API key as its own identity (keda/keda-operator).
 apiVersion: keda.sh/v1alpha1

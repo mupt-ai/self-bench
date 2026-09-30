@@ -4,8 +4,8 @@ locals {
   lb_domains = concat(var.api_domains, keys(var.redirect_domains))
 }
 
-# The API's own identity: artifacts, the shared and API secrets, and URL signing. Never the
-# worker's secret.
+# The API's own identity: artifacts, API and shared secret values, and URL signing. Never the
+# worker's token.
 resource "google_service_account" "api" {
   project      = var.project_id
   account_id   = "${local.name}-api"
@@ -16,13 +16,6 @@ resource "google_storage_bucket_iam_member" "api_artifacts" {
   bucket = google_storage_bucket.artifacts.name
   role   = "roles/storage.objectUser"
   member = "serviceAccount:${google_service_account.api.email}"
-}
-resource "google_secret_manager_secret_iam_member" "api_reader" {
-  for_each  = toset(["shared", "api"])
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.api.email}"
 }
 resource "google_service_account_iam_member" "api_signer" {
   service_account_id = google_service_account.api.name
@@ -41,6 +34,8 @@ resource "google_cloud_run_v2_service" "api" {
   ingress              = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   invoker_iam_disabled = true
   template {
+    # A new label on each deploy starts fresh instances, which read the latest secret versions.
+    labels                           = merge(local.labels, { release = var.release_id })
     service_account                  = google_service_account.api.email
     timeout                          = "900s"
     max_instance_request_concurrency = 250
@@ -56,27 +51,33 @@ resource "google_cloud_run_v2_service" "api" {
         subnetwork = google_compute_subnetwork.app.id
       }
     }
-    dynamic "volumes" {
-      for_each = google_secret_manager_secret_iam_member.api_reader
-      content {
-        name = volumes.key
-        secret {
-          secret = google_secret_manager_secret.runtime["${volumes.key}-env"].secret_id
-          items {
-            version = var.secret_versions[volumes.key]
-            path    = "env"
-          }
-        }
-      }
-    }
     containers {
       image = var.image
       # Starting the API migrates the database, so a release's schema lands before its worker.
-      command = ["node", "--env-file=/secrets/shared/env", "--env-file=/secrets/api/env", "dist/api/main.js"]
+      command = ["node", "dist/api/main.js"]
       # Tags Sentry and PostHog events with the environment they came from.
       env {
         name  = "SELFBENCH_ENVIRONMENT"
         value = var.environment
+      }
+      dynamic "env" {
+        for_each = local.api_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.api_secret_env
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
       }
       ports {
         container_port = 8080
@@ -87,13 +88,6 @@ resource "google_cloud_run_v2_service" "api" {
         cpu_idle          = false
         startup_cpu_boost = true
       }
-      dynamic "volume_mounts" {
-        for_each = google_secret_manager_secret_iam_member.api_reader
-        content {
-          name       = volume_mounts.key
-          mount_path = "/secrets/${volume_mounts.key}"
-        }
-      }
       startup_probe {
         http_get {
           path = "/healthz"
@@ -103,6 +97,10 @@ resource "google_cloud_run_v2_service" "api" {
       }
     }
   }
+  depends_on = [
+    google_secret_manager_secret_iam_member.api_reader,
+    google_secret_manager_secret_iam_member.api_temporal_reader,
+  ]
 }
 
 resource "google_compute_global_address" "api" {

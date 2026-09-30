@@ -65,4 +65,5 @@ resource "google_sql_database" "app" {
   }
 }
 # The DB login/password and TLS connection string are intentionally NOT Terraform-managed.
-# Provision a scoped login through an approved DB-admin path, then store its URL in Secret Manager.
+# Provision a scoped login through an approved DB-admin path, then add its URL to
+# selfbench-database-url.

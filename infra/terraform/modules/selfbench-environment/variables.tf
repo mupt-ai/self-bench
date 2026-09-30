@@ -74,13 +74,82 @@ variable "image" {
     error_message = "Use an Artifact Registry selfbench image pinned by digest."
   }
 }
-variable "secret_versions" {
-  description = "Pinned Secret Manager versions of the shared, api and worker env-file bundles, and of the Temporal API key KEDA reads when gke_workers is on."
-  type        = object({ shared = number, api = number, worker = number, temporal = optional(number) })
+variable "release_id" {
+  description = "Deploy run identity. It labels each Cloud Run revision, so every release starts instances that read the latest secret versions."
+  type        = string
+  default     = "manual"
   validation {
-    condition     = !var.gke_workers || var.secret_versions.temporal != null
-    error_message = "The GKE workers need a pinned version of the selfbench-temporal-api-key secret."
+    condition     = can(regex("^[a-z0-9_-]{1,63}$", var.release_id))
+    error_message = "Use a label-safe release ID: lowercase letters, digits, underscores or hyphens."
   }
+}
+variable "public_url" {
+  description = "The app's public HTTPS origin, used for OAuth callbacks and sandbox callbacks."
+  type        = string
+  validation {
+    condition     = can(regex("^https://[a-zA-Z0-9.-]+(:[0-9]+)?$", var.public_url))
+    error_message = "Use an HTTPS origin such as https://app.selfbench.dev."
+  }
+}
+variable "results_site_url" {
+  description = "The public results site's HTTPS origin."
+  type        = string
+  validation {
+    condition     = can(regex("^https://[a-zA-Z0-9.-]+(:[0-9]+)?$", var.results_site_url))
+    error_message = "Use an HTTPS origin such as https://selfbench.dev."
+  }
+}
+variable "github_oauth_client_id" {
+  description = "This environment's GitHub OAuth app client ID. Its client secret lives in selfbench-github-oauth-client-secret."
+  type        = string
+  validation {
+    condition     = length(trimspace(var.github_oauth_client_id)) > 0
+    error_message = "Set the GitHub OAuth app client ID."
+  }
+}
+variable "stripe_price_id" {
+  description = "Stripe metered price ID. Setting it turns on billing and requires the Stripe key and webhook secrets."
+  type        = string
+  default     = null
+}
+variable "billing_credit_admin_org_id" {
+  description = "Numeric GitHub organization ID whose admins may grant credits and refunds. Null disables them."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.billing_credit_admin_org_id == null || (var.billing_credit_admin_org_id > 0 && floor(var.billing_credit_admin_org_id) == var.billing_credit_admin_org_id)
+    error_message = "Use a positive numeric GitHub organization ID."
+  }
+}
+variable "managed_openrouter" {
+  description = "Offer managed models through the platform OpenRouter key in selfbench-managed-openrouter-api-key."
+  type        = bool
+  default     = false
+}
+variable "managed_e2b" {
+  description = "Offer managed sandboxes through the platform E2B key in selfbench-managed-e2b-api-key."
+  type        = bool
+  default     = false
+}
+variable "managed_modal" {
+  description = "Verify managed runs through the platform Modal token secrets."
+  type        = bool
+  default     = false
+}
+variable "sentry_dsn" {
+  description = "Server Sentry DSN. It is public by design, so it is deploy config rather than a secret."
+  type        = string
+  default     = null
+}
+variable "sentry_browser_dsn" {
+  description = "Browser Sentry DSN. It is public by design, so it is deploy config rather than a secret."
+  type        = string
+  default     = null
+}
+variable "posthog_api_key" {
+  description = "PostHog project API key. It is public by design, so it is deploy config rather than a secret."
+  type        = string
+  default     = null
 }
 variable "activity_concurrency" {
   description = "Temporal activity slots per worker instance."
@@ -106,21 +175,19 @@ variable "gke_workers" {
   default     = false
 }
 variable "temporal_address" {
-  description = "Temporal frontend host:port KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_ADDRESS."
+  description = "Temporal frontend host:port for the app and KEDA."
   type        = string
-  default     = ""
   validation {
-    condition     = !var.gke_workers || can(regex("^[a-z0-9.-]+:[0-9]+$", var.temporal_address))
-    error_message = "The GKE workers need the Temporal address as host:port."
+    condition     = can(regex("^[a-z0-9.-]+:[0-9]+$", var.temporal_address))
+    error_message = "Use the Temporal address as host:port."
   }
 }
 variable "temporal_namespace" {
-  description = "Temporal namespace KEDA reads queue backlogs from; the same as SELFBENCH_TEMPORAL_NAMESPACE."
+  description = "Temporal namespace for the app and KEDA."
   type        = string
-  default     = ""
   validation {
-    condition     = !var.gke_workers || length(var.temporal_namespace) > 0
-    error_message = "The GKE workers need the Temporal namespace."
+    condition     = length(var.temporal_namespace) > 0
+    error_message = "Set the Temporal namespace."
   }
 }
 variable "harbor_worker_max_replicas" {
