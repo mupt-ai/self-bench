@@ -264,3 +264,24 @@ test("a client over its limit is told to wait, and files stay unlimited", async 
     await new Promise<void>((resolve) => limited.instance.close(() => resolve()));
   }
 });
+
+test("a repository page's preview is its release's card, which the site draws as a PNG", async () => {
+  const page = await (await get("/vercel/next.js")).text();
+  expect(page).toContain(
+    '<meta property="og:image" content="https://selfbench.test/og/vercel/next.js.png?v=acme%402026-09-02T00%3A00%3A00Z" />',
+  );
+  expect(page).toContain('<meta name="twitter:card" content="summary_large_image" />');
+  // Another publisher's line has its own card.
+  expect(await (await get("/vercel/next.js/umbrella")).text()).toContain(
+    "https://selfbench.test/og/vercel/next.js/Umbrella.png?v=",
+  );
+
+  const image = await get("/og/vercel/next.js.png");
+  expect(image.status).toBe(200);
+  expect(image.headers.get("content-type")).toBe("image/png");
+  expect(image.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=86400");
+  const bytes = new Uint8Array(await image.arrayBuffer());
+  expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  expect((await get("/og/vercel/next.js/umbrella.png")).status).toBe(200);
+  expect((await get("/og/nobody/nothing.png")).status).toBe(404);
+});

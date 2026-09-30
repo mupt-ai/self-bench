@@ -13,7 +13,7 @@
 
 ## Model Vendors
 
-- Every model vendor has one color and one display name, in `VENDOR_COLORS` and `VENDOR_NAMES` in `review/src/public-site/format.ts`. Both results charts (the selfbench.dev repository page and the app's Results page) and the public tables use them, so a vendor looks the same everywhere.
+- Every model vendor has one color and one display name, in `VENDOR_COLORS` and `VENDOR_NAMES` in `src/public/vendors.ts`. Both results charts (the selfbench.dev repository page and the app's Results page), the public tables, and the link preview images the server draws use them, so a vendor looks the same everywhere.
 - When a new vendor becomes available, whether through a new direct provider or through OpenRouter (whose model names start with the vendor, as in `z-ai/glm-5.3`), add it to both. An unlisted vendor falls back to the grey that Custom uses and to its raw id. Pick a hue that stays distinct from the other vendors in both light and dark mode.
 
 ## Public Site

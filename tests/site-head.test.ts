@@ -121,3 +121,25 @@ test("a publisher with no line has no page", () => {
   ).toBeUndefined();
   expect(repositoryHead(origin, [])).toBeUndefined();
 });
+
+test("a repository's head points link previews at its release's card; others keep the icon", () => {
+  const lines = [
+    line("mupt-ai", "2026-09-02T00:00:00Z", [setting("Solo", 80, 1)]),
+    line("acme", "2026-09-01T00:00:00Z", [setting("Solo", 70, 1)]),
+  ];
+  const head = repositoryHead(origin, lines);
+  expect(head?.image?.url).toBe(
+    `${origin}/og/earendil-works/pi.png?v=mupt-ai%402026-09-02T00%3A00%3A00Z`,
+  );
+  expect(repositoryHead(origin, lines, "ACME")?.image?.url).toStartWith(
+    `${origin}/og/earendil-works/pi/acme.png?v=`,
+  );
+  const tags = headTags(head ?? { title: "", description: "" }, origin);
+  expect(tags).toContain('<meta property="og:image:width" content="1200" />');
+  expect(tags).toContain('<meta name="twitter:card" content="summary_large_image" />');
+  expect(tags).not.toContain("icon-192.png");
+
+  const plain = headTags({ title: "SelfBench", description: "Home" }, origin);
+  expect(plain).toContain(`<meta property="og:image" content="${origin}/icon-192.png" />`);
+  expect(plain).toContain('<meta name="twitter:card" content="summary" />');
+});

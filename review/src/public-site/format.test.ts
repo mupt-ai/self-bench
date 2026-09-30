@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { accuracyTick, settingLabel, vendorColor, vendorName } from "./format";
+import { accuracyTick, compactNumber, settingLabel, vendorColor, vendorName } from "./format";
 import { setting } from "./test-fixture";
 
 test("twin model labels are told apart by what differs between them", () => {
@@ -84,4 +84,11 @@ test("accuracy ticks above 100% are left unlabelled", () => {
   expect(accuracyTick(100)).toBe("100%");
   expect(accuracyTick(92.5)).toBe("92.5%");
   expect(accuracyTick(102.5)).toBe("");
+});
+
+test("counts shorten to thousands, and past a million to millions", () => {
+  expect(compactNumber(950)).toBe("950");
+  expect(compactNumber(9_500)).toBe("9.5k");
+  expect(compactNumber(137_842)).toBe("138k");
+  expect(compactNumber(1_250_000)).toBe("1.3M");
 });

@@ -9,6 +9,7 @@ import {
   siteStructuredData,
 } from "../public/seo.js";
 import { escapeAttribute } from "./http.js";
+import { CARD_HEIGHT, CARD_WIDTH, cardPath } from "./link-card.js";
 
 /**
  * What a selfbench.dev page tells search engines and link previews before any script runs. The
@@ -21,6 +22,11 @@ export interface PageHead {
   canonical?: string;
   /** Who the site is, as schema.org data: on the home page only. */
   structuredData?: Record<string, unknown>;
+  /**
+   * The picture a shared link shows, 1200 × 630: a repository's card, drawn for its release
+   * (link-card.ts). Pages without one show the site's icon in a small card instead.
+   */
+  image?: { url: string; alt: string };
 }
 
 export function homeHead(origin: string): PageHead {
@@ -42,20 +48,31 @@ export function repositoryHead(
   lines: readonly PublishedLine[],
   publisher?: string,
 ): PageHead | undefined {
-  const fallback = defaultLineOf(lines);
-  const line = publisher
-    ? lines.find((each) => each.release.publisher.login.toLowerCase() === publisher.toLowerCase())
-    : fallback;
+  const line = lineAt(lines, publisher);
   if (!line) return undefined;
   const { fullName } = line.release.repository;
+  const own = line === defaultLineOf(lines) ? undefined : line.release.publisher.login;
   return {
     title: repositoryTitle(fullName),
     description: repositoryDescription(line),
-    canonical:
-      line === fallback
-        ? `${origin}/${fullName}`
-        : `${origin}/${fullName}/${line.release.publisher.login}`,
+    canonical: own ? `${origin}/${fullName}/${own}` : `${origin}/${fullName}`,
+    // The release in the address, so a new release's card is fetched afresh, not an old copy.
+    image: {
+      url: `${origin}${cardPath(fullName, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
+      alt: `Accuracy against cost per task for each model setting on ${fullName}`,
+    },
   };
+}
+
+/** The line a repository address shows: its publisher's, or the repository's default one. */
+export function lineAt(
+  lines: readonly PublishedLine[],
+  publisher?: string,
+): PublishedLine | undefined {
+  if (!publisher) return defaultLineOf(lines);
+  return lines.find(
+    (each) => each.release.publisher.login.toLowerCase() === publisher.toLowerCase(),
+  );
 }
 
 /** A page the site cannot show: named as the site will name it, with no address of its own. */
@@ -86,8 +103,18 @@ export function headTags(head: PageHead, origin: string): string {
     ...(head.canonical
       ? [`<meta property="og:url" content="${escapeAttribute(head.canonical)}" />`]
       : []),
-    `<meta property="og:image" content="${escapeAttribute(origin)}/icon-192.png" />`,
-    '<meta name="twitter:card" content="summary" />',
+    ...(head.image
+      ? [
+          `<meta property="og:image" content="${escapeAttribute(head.image.url)}" />`,
+          `<meta property="og:image:width" content="${CARD_WIDTH}" />`,
+          `<meta property="og:image:height" content="${CARD_HEIGHT}" />`,
+          `<meta property="og:image:alt" content="${escapeAttribute(head.image.alt)}" />`,
+          '<meta name="twitter:card" content="summary_large_image" />',
+        ]
+      : [
+          `<meta property="og:image" content="${escapeAttribute(origin)}/icon-192.png" />`,
+          '<meta name="twitter:card" content="summary" />',
+        ]),
     ...(head.structuredData
       ? [`<script type="application/ld+json">${scriptJson(head.structuredData)}</script>`]
       : []),
