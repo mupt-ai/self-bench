@@ -36,6 +36,7 @@ export function AdaptiveTable<Row, Key extends string = string>({
   sort,
   onSort,
   rowClassName,
+  onRowHover,
 }: {
   columns: Column<Row, Key>[];
   /** In the order to show them; a sortable table's owner sorts them (see `useTableSort`). */
@@ -46,9 +47,23 @@ export function AdaptiveTable<Row, Key extends string = string>({
   onSort?: (key: Key) => void;
   /** Extra classes for a row, as a table row and as a card: a highlight, say. */
   rowClassName?: (row: Row) => string;
+  /**
+   * The row a mouse or pen is over, then null once it leaves; touch leaves this to taps. The
+   * owner then marks that row itself (`rowClassName`), in place of the table's own hover.
+   */
+  onRowHover?: (row: Row | null) => void;
 }) {
   const role = (wanted: ColumnRole) => columns.filter((column) => column.role === wanted);
   const details = role("detail");
+  const hover = (row: Row) =>
+    onRowHover && {
+      onPointerEnter: (event: React.PointerEvent) => {
+        if (event.pointerType !== "touch") onRowHover(row);
+      },
+      onPointerLeave: (event: React.PointerEvent) => {
+        if (event.pointerType !== "touch") onRowHover(null);
+      },
+    };
   const metrics = role("metric");
   const sortButton = (column: Column<Row, Key>) =>
     column.sort && sort && onSort ? (
@@ -82,7 +97,8 @@ export function AdaptiveTable<Row, Key extends string = string>({
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className={`border-b border-border transition-[opacity,background-color] last:border-b-0 hover:bg-muted/60 ${rowClassName?.(row) ?? ""}`}
+                className={`border-b border-border transition-[opacity,background-color] last:border-b-0 ${onRowHover ? "" : "hover:bg-muted/60"} ${rowClassName?.(row) ?? ""}`}
+                {...hover(row)}
               >
                 {columns.map((column) => (
                   <td
@@ -112,6 +128,7 @@ export function AdaptiveTable<Row, Key extends string = string>({
             <li
               key={rowKey(row)}
               className={`flex flex-col gap-2 px-3 py-3 text-sm transition-[opacity,background-color] ${rowClassName?.(row) ?? ""}`}
+              {...hover(row)}
             >
               {role("title").map((column) => (
                 <div key={column.header}>{column.cell(row)}</div>

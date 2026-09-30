@@ -32,10 +32,13 @@ export function ResultsChart({
   settings,
   onActiveChange,
   onHighlightChange,
+  selectedId = null,
 }: {
   settings: PublicSetting[];
   onActiveChange?: (id: string | null) => void;
   onHighlightChange?: (ids: ReadonlySet<string> | null) => void;
+  /** A setting to light up as if pointed at: the table row under the pointer. */
+  selectedId?: string | null;
 }) {
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
@@ -66,6 +69,7 @@ export function ResultsChart({
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
         showLegend={false}
+        selectedId={selectedId}
         onActivePointChange={(point) => onActiveChange?.(point?.id ?? null)}
         onHighlightChange={(points) =>
           onHighlightChange?.(points ? new Set(points.map((point) => point.id)) : null)

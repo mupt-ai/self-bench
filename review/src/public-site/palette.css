@@ -25,6 +25,8 @@
   /* Card edges and the ruler lines, derived from the text colour so every palette follows. */
   --panel-border: color-mix(in srgb, var(--foreground) 15%, transparent);
   --ruler: color-mix(in srgb, var(--foreground) 10%, transparent);
+  /* A table row the results chart points at, or that points at the chart. */
+  --row-mark: var(--muted);
   /* Background water: dot colour as "r g b" (0-255) and dot opacity. */
   --ripple: 72 61 46;
   --ripple-strength: 0.14;
@@ -62,6 +64,8 @@
   --warn-fg: hsl(38 80% 60%);
   --panel-border: color-mix(in srgb, var(--foreground) 9%, transparent);
   --ruler: color-mix(in srgb, var(--foreground) 7%, transparent);
+  /* Silvery blue: the plain muted fill is too close to a card's to see. */
+  --row-mark: hsl(212 45% 80% / 0.1);
   --ripple: 110 165 255;
   --ripple-strength: 0.1;
   --ripple-coverage: 0.6;

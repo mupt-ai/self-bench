@@ -77,9 +77,11 @@ function Results({ page }: { page: PublicRepoPage }) {
   }, [release.releaseId]);
   const { repository } = release;
   const [owner, name] = repository.fullName.split("/");
-  // The chart's pointer and vendor chips mark the same settings in the table.
+  // The chart's pointer and vendor chips mark the same settings in the table, and the table
+  // row under the pointer lights up its point.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
+  const [rowId, setRowId] = useState<string | null>(null);
   // Another line of this repository reuses the page with other settings: nothing stays marked
   // from the last one (the chart, keyed by release, starts afresh too).
   const [markedRelease, setMarkedRelease] = useState(release.releaseId);
@@ -87,6 +89,7 @@ function Results({ page }: { page: PublicRepoPage }) {
     setMarkedRelease(release.releaseId);
     setActiveId(null);
     setHighlighted(null);
+    setRowId(null);
   }
   // Chart above the table, or beside it on a wide window; remembered across visits.
   const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
@@ -203,13 +206,19 @@ function Results({ page }: { page: PublicRepoPage }) {
               settings={release.settings}
               onActiveChange={setActiveId}
               onHighlightChange={setHighlighted}
+              selectedId={rowId}
             />
           </div>
         </section>
 
         <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
           <h2 className="text-sm font-medium">All Settings</h2>
-          <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
+          <ModelTable
+            settings={release.settings}
+            activeId={activeId ?? rowId}
+            highlighted={highlighted}
+            onRowHover={setRowId}
+          />
           <p className="text-xs text-muted-foreground">
             Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
             requests in this repository; their tests and reference solutions stay private.

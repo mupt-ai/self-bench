@@ -28,16 +28,19 @@ const FIRST = Object.fromEntries(
 /**
  * Every setting, most accurate first, with bars so the table reads as a chart too. Reasoning,
  * accuracy and cost sort from their headers. `activeId` and `highlighted` come from the chart:
- * the setting its pointer is on, and the settings of the vendor chip it highlights.
+ * the setting its pointer is on, and the settings of the vendor chip it highlights. A row the
+ * pointer is on goes the other way, through `onRowHover`, to light up its point.
  */
 export function ModelTable({
   settings,
   activeId = null,
   highlighted = null,
+  onRowHover,
 }: {
   settings: PublicSetting[];
   activeId?: string | null;
   highlighted?: ReadonlySet<string> | null;
+  onRowHover?: (id: string | null) => void;
 }) {
   const { sort, toggle } = useTableSort<SortKey>({ key: "accuracy", direction: "desc" }, FIRST);
   // Most accurate, then cheapest: the order settings that tie keep under any sort.
@@ -104,9 +107,10 @@ export function ModelTable({
       rowKey={(row) => row.id}
       sort={sort}
       onSort={toggle}
+      onRowHover={onRowHover && ((row) => onRowHover(row?.id ?? null))}
       rowClassName={(row) =>
         row.id === activeId
-          ? "bg-muted"
+          ? "bg-(--row-mark)"
           : highlighted === null
             ? ""
             : highlighted.has(row.id)
@@ -120,7 +124,8 @@ export function ModelTable({
 function Bar({ value, label, color }: { value: number; label: string; color: string }) {
   return (
     <span className="flex items-center gap-2">
-      <span className="h-1.5 flex-1 bg-muted">
+      {/* A see-through track, so a marked row's colour shows through it. */}
+      <span className="h-1.5 flex-1 bg-foreground/5">
         <span
           className="block h-full"
           style={{ width: `${Math.max(2, value * 100)}%`, background: color, opacity: 0.7 }}
