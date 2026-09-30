@@ -19,3 +19,13 @@
 ## Public Site
 
 - Work under `review/src/public-site/` (selfbench.dev) also follows `review/src/public-site/AGENTS.md`: how pages adapt to phones, and when and how to run the phone checks.
+
+## Site Icons
+
+- The app and selfbench.dev share one set of icons in `review/public/`, the static folder of both builds, served from the site root:
+  - `dari-logo.svg`: the mark, and the SVG tab icon.
+  - `favicon.ico`: the mark at 48, 32 and 16px, for tabs and search results.
+  - `icon-192.png`: the mark with a white ring (a 32-unit white stroke on its circle), on transparency.
+  - `apple-touch-icon.png`: the ringed mark on a black square, 180px, for phone home screens.
+- Keep `favicon.ico` and `apple-touch-icon.png` at the root under those names: browsers and crawlers request those paths without reading the page.
+- Both `index.html` files link the same icons, and the app serves each one without sign-in (`ICONS` in `src/api/http.ts`). `tests/site-icons.test.ts` checks both, so a new icon needs all three.

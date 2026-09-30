@@ -126,6 +126,10 @@ export function createPublicReleaseRoutes(
     async linesFor(fullName: string): Promise<PublishedLine[]> {
       return (await snapshot()).byRepository.get(fullName.toLowerCase()) ?? [];
     },
+    /** Every repository's current lines, for selfbench.dev's sitemap. */
+    async repositories(): Promise<PublishedLine[][]> {
+      return [...(await snapshot()).byRepository.values()];
+    },
     /** Answers /api/public/*; true when the response was sent. */
     async handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean> {
       if (!url.pathname.startsWith("/api/public/")) return false;

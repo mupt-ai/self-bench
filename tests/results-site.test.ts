@@ -16,12 +16,25 @@ let root: string;
 let server: Server;
 let base: string;
 let reads = 0;
-const line = (fullName: string, publisher: string) =>
-  ({ release: { repository: { fullName }, publisher: { login: publisher } } }) as PublishedLine;
+const line = (fullName: string, publisher: string, releasedAt: string) =>
+  ({
+    release: {
+      releaseId: `${publisher}@${releasedAt}`,
+      releasedAt,
+      repository: { fullName },
+      publisher: { login: publisher },
+      tasks: 12,
+      settings: [],
+    },
+    endorsed: false,
+  }) as unknown as PublishedLine;
 const store = {
   async currentLines() {
     reads += 1;
-    return [line("vercel/next.js", "acme")];
+    return [
+      line("vercel/next.js", "acme", "2026-09-02T00:00:00Z"),
+      line("vercel/next.js", "Umbrella", "2026-09-01T00:00:00Z"),
+    ];
   },
 } as unknown as ReleaseStore;
 
@@ -62,10 +75,11 @@ beforeAll(async () => {
   await writeFile(join(outside, "secret.txt"), "not part of the build");
   await writeFile(
     join(root, "index.html"),
-    "<html><head><title>Self-Bench</title></head><body>shell</body></html>",
+    '<html><head>\n    <title>Built</title>\n    <meta name="description" content="Built." />\n  </head><body>shell</body></html>',
   );
   await writeFile(join(root, "assets", "main-abc123.js"), "console.log(1)");
   await writeFile(join(root, "dari-logo.svg"), "<svg/>");
+  await writeFile(join(root, "favicon.ico"), "icon");
   ({ instance: server, base } = await start(true));
 });
 afterAll(async () => {
@@ -107,12 +121,71 @@ test("a page that exists may be kept by the CDN a minute, and browsers check it 
   const etag = home.headers.get("etag");
   expect(etag).toMatch(/^"[\w-]+"$/);
   const repository = await get("/vercel/next.js");
-  expect(repository.headers.get("etag")).toBe(etag);
+  expect(repository.headers.get("etag")).toMatch(/^"[\w-]+"$/);
   // A check with the tag it holds costs a bodyless 304.
-  const unchanged = await get("/vercel/next.js", { headers: { "if-none-match": etag ?? "" } });
+  const unchanged = await get("/vercel/next.js", {
+    headers: { "if-none-match": repository.headers.get("etag") ?? "" },
+  });
   expect(unchanged.status).toBe(304);
   expect(await unchanged.text()).toBe("");
   expect(unchanged.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+});
+
+/** The tags of `html` that match `pattern`, by their first group. */
+const all = (html: string, pattern: RegExp) =>
+  [...html.matchAll(new RegExp(pattern, "g"))].map((match) => match[1]);
+
+test("each page has its own title, description and address, in place of the build's", async () => {
+  const home = await (await get("/")).text();
+  expect(all(home, /<title>([^<]*)<\/title>/)).toEqual([
+    "SelfBench: Benchmark Coding Agents on Your Own Repository",
+  ]);
+  expect(all(home, /<meta name="description" content="([^"]*)"/)).toHaveLength(1);
+  expect(home).not.toContain("Built");
+  expect(home).toContain('<link rel="canonical" href="https://selfbench.test/" />');
+  expect(home).toContain(
+    '<meta property="og:image" content="https://selfbench.test/icon-192.png" />',
+  );
+  const [data] = all(home, /<script type="application\/ld\+json">([^<]*)<\/script>/);
+  expect(JSON.parse(data ?? "")["@graph"][0]).toMatchObject({
+    "@type": "WebSite",
+    name: "SelfBench",
+  });
+
+  const repository = await (await get("/VERCEL/Next.js")).text();
+  expect(all(repository, /<title>([^<]*)<\/title>/)).toEqual([
+    "vercel/next.js: Coding Agent Benchmark · SelfBench",
+  ]);
+  expect(repository).toContain("12 tasks from its merged pull requests");
+  // One page whatever the casing, at the repository's own; its default line is the same page.
+  expect(repository).toContain(
+    '<link rel="canonical" href="https://selfbench.test/vercel/next.js" />',
+  );
+  expect(await (await get("/vercel/next.js/ACME")).text()).toContain(
+    '<link rel="canonical" href="https://selfbench.test/vercel/next.js" />',
+  );
+  expect(await (await get("/vercel/next.js/umbrella")).text()).toContain(
+    '<link rel="canonical" href="https://selfbench.test/vercel/next.js/Umbrella" />',
+  );
+  expect(repository).not.toContain("ld+json");
+
+  const missing = await (await get("/nobody/nothing")).text();
+  expect(all(missing, /<title>([^<]*)<\/title>/)).toEqual([
+    "nobody/nothing: Coding Agent Benchmark · SelfBench",
+  ]);
+  expect(missing).not.toContain("canonical");
+});
+
+test("the sitemap lists every page the site can show, from the released lines", async () => {
+  const sitemap = await get("/sitemap.xml");
+  expect(sitemap.status).toBe(200);
+  expect(sitemap.headers.get("content-type")).toContain("application/xml");
+  expect(sitemap.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+  expect(all(await sitemap.text(), /<loc>([^<]*)<\/loc>/)).toEqual([
+    "https://selfbench.test/",
+    "https://selfbench.test/vercel/next.js",
+    "https://selfbench.test/vercel/next.js/Umbrella",
+  ]);
 });
 
 test("a page that does not exist is never cached, so a first release shows at once", async () => {
@@ -133,6 +206,8 @@ test("built files are served, hashed ones cached for good", async () => {
   expect(script.headers.get("cache-control")).toContain("immutable");
   const logo = await get("/dari-logo.svg");
   expect(logo.headers.get("cache-control")).toBe("public, max-age=3600");
+  const icon = await get("/favicon.ico");
+  expect(icon.headers.get("content-type")).toBe("image/x-icon");
   // An encoded slash survives URL parsing, so the server itself must refuse to leave the build.
   const escaped = await get("/..%2fsecret.txt");
   expect(escaped.status).toBe(404);
@@ -147,7 +222,9 @@ test("the app's surface does not exist on the public host", async () => {
 });
 
 test("robots.txt allows indexing only where the site is indexable", async () => {
-  expect(await (await get("/robots.txt")).text()).toBe("User-agent: *\nAllow: /\n");
+  expect(await (await get("/robots.txt")).text()).toBe(
+    "User-agent: *\nAllow: /\n\nSitemap: https://selfbench.test/sitemap.xml\n",
+  );
   const dev = await start(false);
   try {
     const robots = await fetch(`${dev.base}/robots.txt`, { headers: { host: "selfbench.test" } });
@@ -155,6 +232,9 @@ test("robots.txt allows indexing only where the site is indexable", async () => 
     expect(robots.headers.get("x-robots-tag")).toBe("noindex");
     const page = await fetch(`${dev.base}/`, { headers: { host: "selfbench.test" } });
     expect(await page.text()).toContain('<meta name="robots" content="noindex" />');
+    // A site search engines may not index has no sitemap to offer them.
+    const sitemap = await fetch(`${dev.base}/sitemap.xml`, { headers: { host: "selfbench.test" } });
+    expect(sitemap.status).toBe(404);
   } finally {
     dev.instance.closeAllConnections();
     await new Promise<void>((resolve) => dev.instance.close(() => resolve()));

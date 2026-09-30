@@ -8,6 +8,7 @@ import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
 import { scrollArea } from "../scroll-area";
+import { HOME_TITLE } from "../seo";
 import type { PublicSource } from "../source";
 import { useSource } from "../source-context";
 import { useTitle } from "../use-title";
@@ -49,7 +50,7 @@ function useHomeData(source: PublicSource) {
 }
 
 export function HomePage() {
-  useTitle("Self-Bench · dari.dev");
+  useTitle(HOME_TITLE);
   const { data, failed } = useHomeData(useSource());
   const location = useLocation();
   const [params, setParams] = useSearchParams();

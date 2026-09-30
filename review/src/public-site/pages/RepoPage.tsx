@@ -13,6 +13,7 @@ import { PANEL } from "../frame";
 import { APP_URL } from "../PublicLayout";
 import { picks } from "../picks";
 import { scrollArea } from "../scroll-area";
+import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
 import { loadMemory, useLoad } from "../use-load";
 import { useTitle } from "../use-title";
@@ -27,13 +28,18 @@ export function RepoPage() {
   const { owner = "", name = "", publisher } = useParams();
   const source = useSource();
   const fullName = `${owner}/${name}`;
-  useTitle(`${fullName} · Self-Bench · dari.dev`);
   const state = useLoad(
     `${fullName}/${publisher ?? ""}`,
     () => (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
     // Runs of one repository share a group, so switching between them keeps the page up.
     fullName.toLowerCase(),
     visited,
+  );
+  // The repository's own casing once it is known, as the server writes it.
+  useTitle(
+    repositoryTitle(
+      (state.status === "ready" && state.value?.release.repository.fullName) || fullName,
+    ),
   );
   if (state.status === "loading") return <p className="text-muted-foreground">Loading…</p>;
   if (state.status === "error" || !state.value) return <NoResults fullName={fullName} />;
