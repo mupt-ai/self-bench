@@ -174,7 +174,10 @@ export async function createPortalSession(
   );
 }
 
-/** Stripe Billing Meter Events v2. The identifier and HTTP key make retries idempotent. */
+/**
+ * Stripe Billing Meter Events. The identifier and HTTP key make retries idempotent. v2 only
+ * accepts positive values, so a refund's negative event goes through v1, which nets it out.
+ */
 export async function sendMeterEvent(
   config: StripeConfig,
   event: {
@@ -186,6 +189,22 @@ export async function sendMeterEvent(
   },
   options?: StripeRequestOptions,
 ): Promise<{ identifier?: string }> {
+  if (event.value < 0)
+    return stripeRequest(
+      config,
+      "/v1/billing/meter_events",
+      {
+        method: "POST",
+        body: formBody({
+          event_name: event.eventName,
+          identifier: event.identifier,
+          timestamp: String(Math.floor(event.timestamp.getTime() / 1000)),
+          "payload[stripe_customer_id]": event.customerId,
+          "payload[value]": String(event.value),
+        }),
+      },
+      { ...options, idempotencyKey: event.identifier },
+    );
   return stripeRequest(
     config,
     "/v2/billing/meter_events",

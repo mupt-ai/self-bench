@@ -233,3 +233,53 @@ test("a refund cancels only billed usage since the period start that no refund c
     await database.close();
   }
 });
+
+test("a refund's negative meter event goes through the Stripe API version that accepts it", async () => {
+  const { database, org } = await orgFixture();
+  try {
+    const billing = createBillingStore(database.db, true);
+    await billing.saveCustomer(org.id, "cus_test");
+    await createUsageStore(database.db).record({ ...managedRow, orgId: org.id });
+    await billing.refundSince({
+      orgId: org.id,
+      customerId: "cus_test",
+      adminUserId: 1,
+      reason: "Goodwill",
+      since: new Date(0),
+      unitScale: 10_000_000,
+      eventName: "selfbench_managed_usage",
+    });
+    const sent: { url: string; value: string | null | undefined }[] = [];
+    const dispatcher = startBillingDispatcher(
+      billing,
+      {
+        secretKey: "sk_test",
+        webhookSecret: "whsec",
+        priceId: "price_1",
+        apiVersion: "2025-09-30.clover",
+      },
+      {
+        intervalMs: 60_000,
+        fetchImpl: (async (input, init) => {
+          const url = String(input);
+          const body = String(init?.body);
+          sent.push({
+            url,
+            value: url.includes("/v1/")
+              ? new URLSearchParams(body).get("payload[value]")
+              : (JSON.parse(body) as { payload: { value: string } }).payload.value,
+          });
+          return Response.json({});
+        }) as typeof fetch,
+      },
+    );
+    dispatcher.wake();
+    await dispatcher.close();
+    expect(sent).toEqual([
+      { url: "https://api.stripe.com/v2/billing/meter_events", value: "20009200" },
+      { url: "https://api.stripe.com/v1/billing/meter_events", value: "-20009200" },
+    ]);
+  } finally {
+    await database.close();
+  }
+});
