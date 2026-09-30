@@ -7,6 +7,7 @@ import { BatchPage } from "./batches/BatchPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ComparisonPage } from "./evaluation/ComparisonPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
+import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
@@ -73,6 +74,7 @@ export function WebApp() {
             <ErrorBoundary>
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/demo/run" element={<DemoRunPage />} />
                 <Route element={<RequireUser />}>
                   <Route index element={<ReposPage />} />
                   <Route path="settings/credentials" element={<CredentialsPage />} />

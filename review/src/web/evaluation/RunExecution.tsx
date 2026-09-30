@@ -17,6 +17,8 @@ export function RunExecution({
   pairs,
   onChange,
   onSubmit,
+  onRunMissing,
+  readOnly = false,
 }: {
   repo: string;
   draft: ComparisonDraft;
@@ -29,21 +31,25 @@ export function RunExecution({
   pairs: number;
   onChange(value: ComparisonDraft): void;
   onSubmit(): void;
+  onRunMissing(): void;
+  readOnly?: boolean;
 }) {
   return (
     <aside className="panel min-w-0 xl:sticky xl:top-6">
       <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <h2 className="text-sm font-semibold">Execution</h2>
-        <Link
-          className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
-        >
-          Credentials
-        </Link>
+        {!readOnly && (
+          <Link
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
+          >
+            Credentials
+          </Link>
+        )}
       </div>
       <fieldset
         className="grid min-w-0 gap-4 border-0 p-4 sm:grid-cols-2 xl:grid-cols-1"
-        disabled={busy || submitted}
+        disabled={readOnly || busy || submitted}
       >
         <label className={fieldStyles} htmlFor="runpage-field-0">
           Sandbox
@@ -112,14 +118,29 @@ export function RunExecution({
         </dl>
         <Button
           type="button"
+          className="mb-2 w-full"
+          disabled={readOnly || busy || submitted || !ready}
+          onClick={onRunMissing}
+        >
+          Run Missing Tasks
+        </Button>
+        <Button
+          type="button"
           variant="primary"
           className="w-full"
-          disabled={busy || (!submitted && !ready)}
+          disabled={readOnly || busy || (!submitted && !ready)}
           onClick={onSubmit}
         >
           <Play className="size-4" aria-hidden="true" />
-          {busy ? "Saving Comparison…" : submitted ? "Retry Same Comparison" : "Run Comparison"}
+          {busy
+            ? "Saving Comparison…"
+            : submitted
+              ? "Retry Same Comparison"
+              : "Run Full Comparison"}
         </Button>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          Run Missing Tasks skips completed results; Run Full Comparison runs all selected tasks.
+        </p>
         {!ready && !submitted && (
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             {!tasksReady

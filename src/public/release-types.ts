@@ -38,17 +38,17 @@ export interface ReleasePublisher {
 /** One model configuration, scored over every task in the release. */
 export interface ReleaseSetting {
   /**
-   * Opaque and unique within a release; safe to use as a React key or URL fragment. Custom
-   * settings that differ only by endpoint end in `|#1`, `|#2`, … in the order they are listed,
-   * and may be numbered differently in another release.
+   * Unique within a release: model, harness, and reasoning level. Safe as a React key or URL fragment.
    */
   id: string;
   model: { catalogId: string; name: string; label: string };
   harness: Harness;
   reasoningLevel: ThinkingLevel;
+  /** Model vendor (or custom), not the route used for any one task. */
   provider: ReleaseProvider;
-  signIn: ReleaseSignIn;
-  /** True for a custom OpenAI-compatible endpoint; the host is not public. */
+  /** Legacy releases had a single sign-in type. Combined releases omit this field. */
+  signIn?: ReleaseSignIn;
+  /** True for a custom model; endpoint hosts are not public. */
   custom: boolean;
   tasks: number;
   passed: number;

@@ -41,11 +41,9 @@ test("individual task deselection removes slash-containing task IDs", async () =
             sandboxCredentialId: "",
           }}
           tasksReady
-          canRun
           disabled={false}
           onChange={setTasks}
           onSkipCompleted={() => {}}
-          onRunMissing={() => {}}
         />
       </MemoryRouter>
     );

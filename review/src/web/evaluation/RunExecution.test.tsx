@@ -28,22 +28,24 @@ function renderExecution(ready: boolean, pairs: number, tasksReady = true) {
         onSubmit={() => {
           throw new Error("Render must not start an evaluation");
         }}
+        onRunMissing={() => {
+          throw new Error("Render must not start an evaluation");
+        }}
       />
     </MemoryRouter>,
   );
 }
 
-/** The Run Comparison button's opening tag; placeholder options are disabled too, so the
- * panel as a whole always contains a disabled attribute. */
-function runButton(html: string): string {
-  return html.match(/<button[^>]*>(?=(?:(?!<\/button>)[\s\S])*Run Comparison)/)?.[0] ?? "";
+/** The Full Comparison button's opening tag; placeholder options are disabled too. */
+function fullButton(html: string): string {
+  return html.match(/<button[^>]*>(?=(?:(?!<\/button>)[\s\S])*Run Full Comparison)/)?.[0] ?? "";
 }
 
 test("execution explains why a run is unavailable", () => {
   expect(renderExecution(false, 0, false)).toContain("Accepted tasks are required to run.");
   expect(renderExecution(false, 0)).toContain("Add a model to continue.");
   expect(renderExecution(false, 2)).toContain("Select a sandbox credential to continue.");
-  expect(runButton(renderExecution(false, 2))).toContain('disabled=""');
+  expect(fullButton(renderExecution(false, 2))).toContain('disabled=""');
 });
 
 test("managed execution hides provider credentials and does not name its backend", () => {
@@ -67,6 +69,7 @@ test("managed execution hides provider credentials and does not name its backend
         pairs={1}
         onChange={() => {}}
         onSubmit={() => {}}
+        onRunMissing={() => {}}
       />
     </MemoryRouter>,
   );
@@ -79,7 +82,9 @@ test("ready execution shows the trial total and enables the run action", () => {
   const html = renderExecution(true, 2);
   expect(html).toContain("Total Trials");
   expect(html).toContain(">2</dd>");
-  expect(runButton(html)).toMatch(/^<button/);
-  expect(runButton(html)).not.toContain('disabled=""');
+  expect(fullButton(html)).toMatch(/^<button/);
+  expect(fullButton(html)).not.toContain('disabled=""');
+  expect(html.indexOf("Run Missing Tasks")).toBeLessThan(html.indexOf("Run Full Comparison"));
+  expect(html).toContain("Run Missing Tasks skips completed results");
   expect(html).toContain("Model and sandbox usage is billed by your providers.");
 });

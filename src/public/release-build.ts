@@ -237,15 +237,19 @@ export function buildRelease(
       releasedTasks: taskList.filter((task) => released.has(task.key)),
       allTasks: taskList,
       settingsDetail: Object.fromEntries(
-        chosen.map((entry) => [entry.setting.key, detailOf(entry, tasks)]),
+        chosen.map((entry) => [entry.setting.key, detailOf(entry, tasks, inputs.credentials)]),
       ),
       results,
     },
   };
 }
 
-/** Private per-setting detail: endpoint, pricing, token sums, and trial dates. */
-function detailOf(entry: Candidate, tasks: readonly string[]) {
+/** Private per-setting detail: routes, pricing, token sums, and trial dates. */
+function detailOf(
+  entry: Candidate,
+  tasks: readonly string[],
+  credentials: ReadonlyMap<string, CredentialFacts>,
+) {
   const chosen = tasks.flatMap((task) => {
     const result = entry.results.get(task);
     return result ? [result] : [];
@@ -261,7 +265,12 @@ function detailOf(entry: Candidate, tasks: readonly string[]) {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .at(-1);
   return {
-    endpoint: entry.setting.endpoint,
+    routes: chosen.map(({ run }) => ({
+      evaluationId: run.id,
+      provider: run.credentials?.provider,
+      signIn: credentials.get(run.credentials?.modelCredentialId ?? "")?.auth,
+      endpoint: credentials.get(run.credentials?.modelCredentialId ?? "")?.endpoint,
+    })),
     sandbox: latestRun?.sandbox,
     pricing: latestRun?.pricing,
     tokens: {

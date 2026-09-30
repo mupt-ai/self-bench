@@ -237,8 +237,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         onSkipCompleted={(skipCompleted) =>
           setState((current) => ({ ...current, draft: { ...current.draft, skipCompleted } }))
         }
-        onRunMissing={() => void submit(true)}
-        canRun={ready}
         disabled={busy || state.submitted}
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
@@ -292,6 +290,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           pairs={pairs}
           onChange={(value) => setState({ ...state, draft: value, sandboxDefaultPending: false })}
           onSubmit={() => void submit()}
+          onRunMissing={() => void submit(true)}
         />
       </div>
     </PageContent>

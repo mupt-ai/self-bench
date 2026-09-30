@@ -13,11 +13,12 @@ const context = {
 };
 const tPrev = names(1, 40);
 const sPrev = names(1, 10).map((index) => `s${index.slice(1)}`);
-const keyOf = (model: string, rest: string[] = ["codex", "openai", "api-key", "default", ""]) =>
-  JSON.stringify([model, ...rest]);
+const keyOf = (model: string) => JSON.stringify([model, "codex", "default"]);
+const legacyKeyOf = (model: string) =>
+  JSON.stringify([model, "codex", "openai", "api-key", "default", ""]);
 const previous = (declined: string[] = []) => ({
   tasks: tPrev.map(key),
-  settings: sPrev.map((model) => keyOf(model)),
+  settings: sPrev.map((model) => legacyKeyOf(model)),
   declined,
 });
 const ticked = (preview: ReturnType<typeof previewRelease>) =>
@@ -105,7 +106,9 @@ test("a task released before, removed, and approved again is labelled returning"
 });
 
 test("a setting declined last time stays unticked", () => {
-  const preview = previewRelease(inputs({ runs: baseRuns(), previous: previous([keyOf("s10")]) }));
+  const preview = previewRelease(
+    inputs({ runs: baseRuns(), previous: previous([legacyKeyOf("s10")]) }),
+  );
   expect(ticked(preview)).toHaveLength(9);
   expect(ticked(preview)).not.toContain("S10");
 });
@@ -159,35 +162,43 @@ test("failed, unverified, fractional, and costless trials are not results", () =
   expect(previewRelease(all).settings[0]?.coverage).toEqual([0]);
 });
 
-test("endpoints and sign-in types are separate settings; hosts stay private", () => {
+test("provider, sign-in, and endpoint runs combine by model with the latest trial per task", () => {
+  const older = run({
+    model: "gpt-6-sol",
+    thinking: "high",
+    results: { t1: { rewards: { reward: 0 }, apiCostUsd: 2 }, t2: 1 },
+  });
+  const routed = run({
+    model: "openai/gpt-6-sol",
+    provider: "openrouter",
+    thinking: "high",
+    results: { t1: { rewards: { reward: 1 }, apiCostUsd: 3 } },
+  });
   const all = inputs({
     runs: [
+      older,
+      routed,
       full("qwen", ["t1"], { provider: "custom", credential: "host-a" }),
-      full("qwen", ["t1"], { provider: "custom", credential: "host-b" }),
-      full("sol", ["t1"], { credential: "key" }),
-      full("sol", ["t1"], { credential: "chatgpt" }),
+      full("qwen", ["t2"], { provider: "custom", credential: "host-b" }),
     ],
-    tasks: approvedTasks(["t1"]),
+    tasks: approvedTasks(["t1", "t2"]),
   });
   const preview = previewRelease(all);
-  expect(preview.settings).toHaveLength(4);
+  expect(preview.settings).toHaveLength(2);
+  expect(preview.settings.map((setting) => setting.coverage)).toEqual([
+    [0, 1],
+    [0, 1],
+  ]);
   const release = buildRelease(
     all,
     preview.settings.map((setting) => setting.key),
     context,
   );
-  const text = JSON.stringify(release.payload);
-  expect(text).not.toContain("a.example");
-  expect(text).not.toContain("b.example");
-  const custom = release.payload.settings.filter((setting) => setting.custom);
-  expect(new Set(custom.map((setting) => setting.id)).size).toBe(2);
-  expect(custom[0]?.model.name).toBe("qwen");
-  expect(release.payload.settings.map((setting) => setting.signIn).sort()).toEqual([
-    "api-key",
-    "api-key",
-    "api-key",
-    "codex-login",
-  ]);
+  const sol = release.payload.settings.find((setting) => setting.model.label === "GPT-6 Sol");
+  expect(sol).toMatchObject({ passed: 2, totalCostUsd: 4, tasks: 2 });
+  expect(sol?.signIn).toBeUndefined();
+  expect(release.payload.settings.find((setting) => setting.custom)?.tasks).toBe(2);
+  expect(JSON.stringify(release.payload)).not.toMatch(/a\.example|b\.example|endpoint/);
 });
 
 test("the same inputs give the same hash, whatever the run order", () => {

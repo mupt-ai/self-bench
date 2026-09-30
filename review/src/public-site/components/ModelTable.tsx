@@ -2,7 +2,6 @@ import { thinkingLevels } from "../../../../src/contracts/models";
 import { type SortDirection, sortRows, useTableSort } from "../../lib/table-sort";
 import type { PublicSetting } from "../contract";
 import {
-  accessLabel,
   dollars,
   harnessLabel,
   percent,
@@ -76,7 +75,6 @@ export function ModelTable({
       cell: reasoningLabel,
       sort: { key: "reasoning", first: SORTS.reasoning.first },
     },
-    { header: "Access", role: "detail", cell: accessLabel },
     {
       header: "Accuracy",
       role: "metric",
