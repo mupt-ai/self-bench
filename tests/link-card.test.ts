@@ -1,28 +1,6 @@
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { costRange, costTicks } from "../src/api/link-card.js";
-
-const costs = (...values: number[]) => values.map((costPerTaskUsd) => ({ costPerTaskUsd }));
-
-test("the preview's cost axis runs from low to high even when every cost is $0", () => {
-  const [low, high] = costRange(costs(0, 0));
-  expect(low).toBeLessThan(high);
-  expect(10 ** low).toBeLessThan(1);
-  expect(10 ** high).toBeGreaterThan(1);
-});
-
-test("the preview's cost axis spans the costs themselves, with a little room each side", () => {
-  const [low, high] = costRange(costs(2, 0, 5));
-  expect(10 ** low).toBeCloseTo(2 / 1.3, 6);
-  expect(10 ** high).toBeCloseTo(5 * 1.3, 6);
-});
-
-test("the preview's cost axis always has numbers, even for one price or a tight cluster", () => {
-  expect(costTicks(costs(3))).toEqual([3]);
-  expect(costTicks(costs(3, 3.4))).toEqual([3, 3.4]);
-  expect(costTicks(costs(0.12, 0.45, 5.1))).toEqual([0.1, 0.2, 0.5, 1, 2, 5]);
-  expect(costTicks(costs(0, 0))).toEqual([1]);
-});
+import { nameLayout } from "../src/api/link-card.js";
 
 test("the preview finds its fonts from any working directory", () => {
   // A fresh process started elsewhere, as a server can be: the fonts are found beside the module.
@@ -40,4 +18,38 @@ test("the preview finds its fonts from any working directory", () => {
   expect(run.stderr.toString()).toBe("");
   expect(run.exitCode).toBe(0);
   expect(Number(run.stdout.toString())).toBeGreaterThan(10_000);
+});
+
+test("the preview sets a short name on one line, as large as it goes", () => {
+  expect(nameLayout("vercel/next.js")).toEqual({ size: 112, lines: ["vercel/next.js"] });
+});
+
+test("the preview puts a longer name's owner over its repository", () => {
+  const { size, lines } = nameLayout("kubernetes-sigs/cluster-api-provider-aws");
+  expect(lines).toEqual(["kubernetes-sigs/", "cluster-api-provider-aws"]);
+  expect(size).toBeGreaterThanOrEqual(72);
+});
+
+test("the preview wraps a long repository evenly under its owner", () => {
+  const { size, lines } = nameLayout(
+    "an-organisation-with-a-long-name/a-repository-with-an-unusually-long-name",
+  );
+  expect(lines).toEqual([
+    "an-organisation-with-a-long-name/",
+    "a-repository-with-an-",
+    "unusually-long-name",
+  ]);
+  expect(size).toBeGreaterThanOrEqual(48);
+});
+
+test("the preview fits the longest names GitHub allows in three lines", () => {
+  const owner = "o".repeat(39);
+  const repo = "a-repository-name-".repeat(6).slice(0, 100);
+  const { size, lines } = nameLayout(`${owner}/${repo}`);
+  const room = Math.floor((1200 - 144) / (size * 0.6));
+  expect(size).toBe(48);
+  expect(lines).toHaveLength(3);
+  expect(lines[0]).toMatch(/^…o+\/$/);
+  expect(lines[2]).toMatch(/…$/);
+  for (const line of lines) expect(line.length).toBeLessThanOrEqual(room);
 });

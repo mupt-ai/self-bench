@@ -1,9 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
-import { harnessLabels } from "../evaluation/models.js";
-import type { PublishedRelease, ReleaseSetting } from "../public/release-types.js";
-import { vendorColor } from "../public/vendors.js";
+import type { PublishedRelease } from "../public/release-types.js";
 
 /**
  * The picture a shared repository page shows in Slack, X, LinkedIn, Discord and iMessage: the
@@ -20,16 +18,14 @@ const HEIGHT = CARD_HEIGHT;
 export function cardPath(fullName: string, publisher?: string): string {
   return `/og/${fullName}${publisher ? `/${publisher}` : ""}.png`;
 }
-const PAD = 64;
+const PAD = 72;
 
 /** The site's dark palette (review/src/public-site/palette.css), which reads well in any feed. */
 const INK = {
-  background: "#090c10",
   card: "#10151b",
   foreground: "#d5dce3",
-  muted: "#8b949e",
-  faint: "#5e6670",
-  border: "#222933",
+  // A step lighter than the site's muted grey, to read at a third of the size.
+  muted: "#a1aab4",
 } as const;
 
 /** JetBrains Mono, the site's face, bundled with its license in assets/fonts. */
@@ -62,8 +58,6 @@ const escapeXml = (text: string) =>
     .replaceAll('"', "&quot;");
 const clip = (text: string, length: number) =>
   text.length <= length ? text : `${text.slice(0, length - 1)}…`;
-const percent = (value: number) => `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
-const dollars = (value: number) => (value === 0 ? "$0" : `$${value.toFixed(value < 0.1 ? 3 : 2)}`);
 const compact = (value: number) =>
   value >= 1_000_000
     ? `${(value / 1_000_000).toFixed(1)}M`
@@ -72,159 +66,121 @@ const compact = (value: number) =>
       : String(value);
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** A setting as a preview names it: its model, and its harness when the model runs in several. */
-function nameOf(setting: ReleaseSetting, all: readonly ReleaseSetting[]) {
-  const twins = all.filter((other) => other.model.label === setting.model.label);
-  const harnesses = new Set(twins.map((other) => other.harness));
-  if (harnesses.size === 1) return setting.model.label;
-  return `${setting.model.label} (${harnessLabels[setting.harness] ?? setting.harness})`;
+/** Where the header's ink ends: the lockup and the address above it. */
+const HEADER = 166;
+
+/** The width text may take: the card less its margins. */
+const LINE = WIDTH - PAD * 2;
+const chars = (size: number) => Math.floor(LINE / (size * ADVANCE) + 1e-9);
+
+/** Splits `text` into lines of at most `perLine` characters, breaking after - _ or . when it can. */
+function wrap(text: string, perLine: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const piece of text.match(/[^-_.]+[-_.]?|[-_.]/g) ?? []) {
+    if (line.length + piece.length <= perLine) {
+      line += piece;
+      continue;
+    }
+    if (line) lines.push(line);
+    line = piece;
+    while (line.length > perLine) {
+      lines.push(line.slice(0, perLine));
+      line = line.slice(perLine);
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
-/** The frontier's settings from most accurate down: what the card lists beside its chart. */
-function frontier(settings: readonly ReleaseSetting[]) {
-  return settings
-    .filter((setting) => setting.onFrontier)
-    .sort((left, right) => right.accuracy - left.accuracy);
+/** `wrap`, with its lines as even as they go: the narrowest width that needs no more of them. */
+function balanced(text: string, perLine: number): string[] {
+  const lines = wrap(text, perLine);
+  for (let width = Math.ceil(text.length / lines.length); width < perLine; width++) {
+    const even = wrap(text, width);
+    if (even.length === lines.length) return even;
+  }
+  return lines;
 }
 
 /**
- * The chart's cost axis, as log10 of its ends: the settings' costs, padded a little on each side.
- * $0 costs sit at the axis start. A release with only $0 costs, as sign-in runs record, gets a
- * short range around $1, so the axis still runs from low to high.
+ * The repository's name as the card sets it, as large as it goes up to 112px: on one line while
+ * that stays at least 80px, else the owner over the repository. A name longer still keeps the
+ * owner to one line and wraps the repository over two, from 72px down to 48px; at 48px the
+ * owner is shortened from the left and the repository cut short.
  */
-export function costRange(
-  settings: readonly Pick<ReleaseSetting, "costPerTaskUsd">[],
-): [number, number] {
-  const costs = settings.map((setting) => setting.costPerTaskUsd).filter((cost) => cost > 0);
-  if (costs.length === 0) return [Math.log10(1 / 1.3), Math.log10(1.3)];
-  return [Math.log10(Math.min(...costs) / 1.3), Math.log10(Math.max(...costs) * 1.3)];
+export function nameLayout(fullName: string): { size: number; lines: string[] } {
+  const slash = fullName.indexOf("/");
+  const owner = fullName.slice(0, slash + 1);
+  const repo = fullName.slice(slash + 1);
+  const fit = (lineLength: number) => Math.min(112, LINE / (lineLength * ADVANCE));
+  const one = fit(fullName.length);
+  const two = fit(Math.max(owner.length, repo.length));
+  if (one >= 80 || one >= two) return { size: one, lines: [fullName] };
+  if (two >= 72) return { size: two, lines: [owner, repo] };
+  for (let size = 72; size >= 48; size -= 2) {
+    const repoLines = balanced(repo, chars(size));
+    if (owner.length <= chars(size) && repoLines.length <= 2)
+      return { size, lines: [owner, ...repoLines] };
+  }
+  const room = chars(48);
+  const [first = "", ...rest] = balanced(repo, room);
+  return {
+    size: 48,
+    lines: [
+      owner.length <= room ? owner : `…${owner.slice(owner.length - room + 1)}`,
+      first,
+      ...(rest.length > 0 ? [clip(rest.join(""), room)] : []),
+    ],
+  };
 }
-
-/** Round prices; the cost axis labels those inside its range. */
-const ROUND_PRICES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
 
 /**
- * The prices the cost axis labels: the round ones inside its range, or, where fewer than two
- * fit (one price, or a tight cluster between round ones), the settings' own lowest and highest.
+ * The preview image of one release, as SVG. Unfurlers show it at a third to a half of its size,
+ * and keep it as it was when the link was shared, so it says only what holds for a while, and
+ * large: the site above, then the repository and how much was measured, centred in the space
+ * below. No results: they change as settings are added, and the page's own preview text names
+ * them.
  */
-export function costTicks(settings: readonly Pick<ReleaseSetting, "costPerTaskUsd">[]): number[] {
-  const [low, high] = costRange(settings);
-  const round = ROUND_PRICES.filter(
-    (price) => Math.log10(price) >= low && Math.log10(price) <= high,
-  );
-  const costs = settings.map((setting) => setting.costPerTaskUsd).filter((cost) => cost > 0);
-  if (round.length >= 2 || costs.length === 0) return round;
-  return [...new Set([Math.min(...costs), Math.max(...costs)])];
-}
-
-/** Accuracy against cost on a log axis, frontier filled and joined, the rest as rings. */
-function chart(
-  settings: readonly ReleaseSetting[],
-  box: { x: number; y: number; w: number; h: number },
-) {
-  const [low, high] = costRange(settings);
-  const floor = Math.max(
-    0,
-    Math.floor((Math.min(100, ...settings.map((s) => s.accuracy)) - 5) / 10) * 10,
-  );
-  const x = (cost: number) =>
-    box.x + (cost > 0 ? ((Math.log10(cost) - low) / (high - low)) * box.w : 0);
-  const y = (accuracy: number) => box.y + box.h - ((accuracy - floor) / (100 - floor)) * box.h;
-  const grid = [floor, floor + (100 - floor) / 2, 100]
-    .map(
-      (value) =>
-        `<line x1="${box.x}" x2="${box.x + box.w}" y1="${y(value)}" y2="${y(value)}" stroke="${INK.border}" stroke-width="2"/>` +
-        `<text x="${box.x - 14}" y="${y(value) + 7}" font-size="20" fill="${INK.faint}" text-anchor="end">${value}%</text>`,
-    )
-    .join("");
-  const line = [...frontier(settings)]
-    .sort((left, right) => left.costPerTaskUsd - right.costPerTaskUsd)
-    .map((setting) => `${x(setting.costPerTaskUsd).toFixed(1)},${y(setting.accuracy).toFixed(1)}`)
-    .join(" ");
-  // Rings first, so the frontier's filled points sit on top.
-  const points = [...settings]
-    .sort((left, right) => Number(left.onFrontier) - Number(right.onFrontier))
-    .map((setting) => {
-      const at = `cx="${x(setting.costPerTaskUsd).toFixed(1)}" cy="${y(setting.accuracy).toFixed(1)}"`;
-      const color = vendorColor(setting);
-      return setting.onFrontier
-        ? `<circle ${at} r="9" fill="${color}" stroke="${INK.card}" stroke-width="3"/>`
-        : `<circle ${at} r="6.5" fill="${INK.card}" stroke="${color}" stroke-width="3"/>`;
-    })
-    .join("");
-  const ticks = costTicks(settings)
-    .map(
-      (tick) =>
-        `<line x1="${x(tick)}" x2="${x(tick)}" y1="${box.y + box.h}" y2="${box.y + box.h + 8}" stroke="${INK.faint}" stroke-width="2"/>` +
-        `<text x="${x(tick)}" y="${box.y + box.h + 34}" font-size="18" fill="${INK.faint}" text-anchor="middle">${dollars(tick)}</text>`,
-    )
-    .join("");
-  return `${grid}${ticks}<polyline points="${line}" fill="none" stroke="${INK.muted}" stroke-width="2.5" stroke-dasharray="8 9" opacity="0.8"/>${points}
-    <text x="${box.x + box.w}" y="${box.y + box.h + 72}" font-size="18" fill="${INK.faint}" text-anchor="end" letter-spacing="1.5">COST PER TASK →</text>`;
-}
-
-/** The preview image of one release, as SVG: the repository, its frontier, and the chart. */
 function cardSvg(release: PublishedRelease): string {
-  const { repository, publisher } = release;
-  // The name shrinks to fit one line, from 64px down to 36px. Past that the owner is shortened
-  // from the left, keeping the repository's own name whole, and only then the end is cut.
-  const nameSize = Math.max(
-    36,
-    Math.min(64, (WIDTH - PAD * 2) / (repository.fullName.length * ADVANCE)),
-  );
-  const room = Math.floor((WIDTH - PAD * 2) / (nameSize * ADVANCE));
-  const [owner = "", repo = ""] = repository.fullName.split("/");
-  const name =
-    repository.fullName.length <= room
-      ? repository.fullName
-      : repo.length + 3 <= room
-        ? `…${owner.slice(owner.length - (room - repo.length - 2))}/${repo}`
-        : clip(repo, room);
-  const hasStars = repository.stars !== undefined;
-  // Single spaces, as SVG draws runs of spaces as one; the stars' separator ends the text, so
-  // the star follows it one space on.
-  const facts = `${[
-    plural(release.tasks, "task"),
-    plural(release.settings.length, "setting"),
-    `run by ${publisher.login}`,
-  ].join(" · ")}${hasStars ? " ·" : ""}`;
-  const nameLine = 118 + nameSize * 0.82;
-  const factsLine = nameLine + 42;
-  // The stars after the facts, as the site's cards show them: a star, then the count.
-  const starX = PAD + (facts.length + 1) * 22 * ADVANCE;
-  const stars =
-    repository.stars === undefined
-      ? ""
-      : `<path d="${STAR}" transform="translate(${starX.toFixed(1)} ${(factsLine - 18).toFixed(1)}) scale(0.83)" fill="${INK.muted}"/>
-  <text x="${(starX + 24).toFixed(1)}" y="${factsLine.toFixed(1)}" font-size="22" fill="${INK.muted}">${compact(repository.stars)}</text>`;
-  const listed = frontier(release.settings).slice(0, 5);
-  const rows = listed
-    .map((setting, index) => {
-      const top = 312 + index * 50;
-      return `<rect x="${PAD}" y="${top - 17}" width="18" height="18" fill="${vendorColor(setting)}"/>
-        <text x="${PAD + 30}" y="${top}" font-size="26" fill="${INK.foreground}">${escapeXml(clip(nameOf(setting, release.settings), 17))}</text>
-        <text x="${PAD + 430}" y="${top}" font-size="26" fill="${INK.foreground}" text-anchor="end" font-weight="700">${percent(setting.accuracy)}</text>
-        <text x="${PAD + 450}" y="${top}" font-size="22" fill="${INK.muted}">${dollars(setting.costPerTaskUsd)}</text>`;
-    })
+  const { repository } = release;
+  const { size, lines } = nameLayout(repository.fullName);
+  const leading = size * 1.1;
+  // The name and the facts under it, centred as they look (from the name's capitals to the facts'
+  // descenders) between the header and the card's foot.
+  const inked = size * 0.07 + lines.length * leading + 66;
+  const top = (HEADER + HEIGHT) / 2 - inked / 2;
+  const name = lines
+    .map(
+      (line, index) =>
+        `<text x="${PAD}" y="${(top + size * 0.8 + index * leading).toFixed(1)}" font-size="${size.toFixed(1)}" fill="${INK.foreground}" font-weight="700">${escapeXml(line)}</text>`,
+    )
     .join("");
-  // The dari mark, 52px wide, beside "self-bench" over "by dari.dev", as the site's header has it.
-  const markScale = 0.08;
-  const mark = `<g transform="translate(${(PAD - 178 * markScale).toFixed(1)} ${(60 - 340 * markScale).toFixed(1)}) scale(${markScale})" fill="${INK.foreground}">${DARI_MARK.map((d) => `<path d="${d}"/>`).join("")}</g>`;
+  const factsLine = top + lines.length * leading + 56;
+  // Single spaces, as SVG draws runs of spaces as one; the stars' separator ends the text, so the
+  // star follows it one space on, as the site's cards show them: a star, then the count. Stars
+  // are short ("143k"), so the line fits at 44px; it shrinks should a count ever run long.
+  const count = repository.stars === undefined ? "" : compact(repository.stars);
+  const facts = `${[plural(release.tasks, "task"), plural(release.settings.length, "setting")].join(" · ")}${count ? " ·" : ""}`;
+  const ems = (facts.length + (count ? 1 + count.length : 0)) * ADVANCE + (count ? 1 : 0);
+  const factsSize = Math.min(44, LINE / ems);
+  const starX = PAD + (facts.length + 1) * factsSize * ADVANCE;
+  const stars = count
+    ? `<path d="${STAR}" transform="translate(${starX.toFixed(1)} ${(factsLine - factsSize * 0.78).toFixed(1)}) scale(${(factsSize / 29).toFixed(3)})" fill="${INK.muted}"/>
+  <text x="${(starX + factsSize).toFixed(1)}" y="${factsLine.toFixed(1)}" font-size="${factsSize.toFixed(1)}" fill="${INK.muted}" font-weight="500">${count}</text>`
+    : "";
+  // The dari mark, 128px wide, beside "self-bench" over "by dari.dev", as the site's header has it.
+  const markScale = 128 / 658;
+  const mark = `<g transform="translate(${(PAD - 178 * markScale).toFixed(1)} ${(88 - 340 * markScale).toFixed(1)}) scale(${markScale.toFixed(4)})" fill="${INK.foreground}">${DARI_MARK.map((d) => `<path d="${d}"/>`).join("")}</g>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" font-family="JetBrains Mono">
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="${INK.background}"/>
-  <rect x="24" y="24" width="${WIDTH - 48}" height="${HEIGHT - 48}" fill="${INK.card}" stroke="${INK.border}" stroke-width="2"/>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${INK.card}"/>
   ${mark}
-  <text x="${PAD + 66}" y="72" font-size="24" fill="${INK.foreground}" font-weight="700">self-bench</text>
-  <text x="${PAD + 66}" y="96" font-size="17" fill="${INK.muted}">by dari.dev</text>
-  <text x="${WIDTH - PAD}" y="84" font-size="20" fill="${INK.muted}" text-anchor="end">selfbench.dev</text>
-  <text x="${PAD}" y="${nameLine.toFixed(1)}" font-size="${nameSize.toFixed(1)}" fill="${INK.foreground}" font-weight="700">${escapeXml(name)}</text>
-  <text x="${PAD}" y="${factsLine.toFixed(1)}" font-size="22" fill="${INK.muted}">${escapeXml(facts)}</text>
+  <text x="${PAD + 156}" y="112" font-size="60" fill="${INK.foreground}" font-weight="700">self-bench</text>
+  <text x="${PAD + 156}" y="158" font-size="36" fill="${INK.muted}" font-weight="500">by dari.dev</text>
+  <text x="${WIDTH - PAD}" y="112" font-size="48" fill="${INK.foreground}" font-weight="500" text-anchor="end">selfbench.dev</text>
+  ${name}
+  <text x="${PAD}" y="${factsLine.toFixed(1)}" font-size="${factsSize.toFixed(1)}" fill="${INK.muted}" font-weight="500">${escapeXml(facts)}</text>
   ${stars}
-  <text x="${PAD}" y="272" font-size="16" fill="${INK.faint}" letter-spacing="1.5">PARETO FRONTIER</text>
-  <text x="${PAD + 430}" y="272" font-size="16" fill="${INK.faint}" letter-spacing="1.5" text-anchor="end">ACCURACY</text>
-  <text x="${PAD + 450}" y="272" font-size="16" fill="${INK.faint}" letter-spacing="1.5">$/TASK</text>
-  ${rows}
-  ${chart(release.settings, { x: 680, y: 262, w: 456, h: 250 })}
 </svg>`;
 }
 
