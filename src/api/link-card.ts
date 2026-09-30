@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 import { harnessLabels } from "../evaluation/models.js";
 import type { PublishedRelease, ReleaseSetting } from "../public/release-types.js";
@@ -33,7 +34,8 @@ const INK = {
 
 /** JetBrains Mono, the site's face, bundled with its license in assets/fonts. */
 const FONTS = ["Regular", "Medium", "Bold"].map((weight) =>
-  resolve(process.cwd(), `assets/fonts/JetBrainsMono-${weight}.ttf`),
+  // Beside this module (src/api, or dist/api once built), so any working directory finds them.
+  fileURLToPath(new URL(`../../assets/fonts/JetBrainsMono-${weight}.ttf`, import.meta.url)),
 );
 /** The dari mark's paths (review/src/web/Lockup.tsx), in a 1024 box; the mark spans x 178–836, y 340–643. */
 const DARI_MARK = [
@@ -98,6 +100,23 @@ export function costRange(
   return [Math.log10(Math.min(...costs) / 1.3), Math.log10(Math.max(...costs) * 1.3)];
 }
 
+/** Round prices; the cost axis labels those inside its range. */
+const ROUND_PRICES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+
+/**
+ * The prices the cost axis labels: the round ones inside its range, or, where fewer than two
+ * fit (one price, or a tight cluster between round ones), the settings' own lowest and highest.
+ */
+export function costTicks(settings: readonly Pick<ReleaseSetting, "costPerTaskUsd">[]): number[] {
+  const [low, high] = costRange(settings);
+  const round = ROUND_PRICES.filter(
+    (price) => Math.log10(price) >= low && Math.log10(price) <= high,
+  );
+  const costs = settings.map((setting) => setting.costPerTaskUsd).filter((cost) => cost > 0);
+  if (round.length >= 2 || costs.length === 0) return round;
+  return [...new Set([Math.min(...costs), Math.max(...costs)])];
+}
+
 /** Accuracy against cost on a log axis, frontier filled and joined, the rest as rings. */
 function chart(
   settings: readonly ReleaseSetting[],
@@ -133,8 +152,7 @@ function chart(
         : `<circle ${at} r="6.5" fill="${INK.card}" stroke="${color}" stroke-width="3"/>`;
     })
     .join("");
-  const ticks = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]
-    .filter((tick) => Math.log10(tick) >= low && Math.log10(tick) <= high)
+  const ticks = costTicks(settings)
     .map(
       (tick) =>
         `<line x1="${x(tick)}" x2="${x(tick)}" y1="${box.y + box.h}" y2="${box.y + box.h + 8}" stroke="${INK.faint}" stroke-width="2"/>` +
@@ -212,6 +230,9 @@ function cardSvg(release: PublishedRelease): string {
 
 /** The preview image as a PNG, which every unfurler accepts (SVG is not). */
 export function cardPng(release: PublishedRelease): Buffer {
+  // resvg draws a missing font as no text at all, so a card without its fonts fails instead.
+  const missing = FONTS.find((file) => !existsSync(file));
+  if (missing) throw new Error(`The link preview's font is missing: ${missing}`);
   const png = new Resvg(cardSvg(release), {
     font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: "JetBrains Mono" },
     fitTo: { mode: "width", value: WIDTH },

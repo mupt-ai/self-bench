@@ -16,6 +16,7 @@
     "self-bench": "dist/api/cli/bin.js"
   },
   "files": [
+    "assets",
     "dist",
     "src/harnesses/pi/extensions",
     "drizzle",
