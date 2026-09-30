@@ -81,10 +81,19 @@ export function ago(iso: string, now = Date.now()): string {
   return iso.slice(0, 10);
 }
 
-export const ROLE_LABELS: Record<PickRole, string> = {
+const ROLE_LABELS: Record<PickRole, string> = {
   cheapest: "Cheapest",
   mostAccurate: "Most Accurate",
 };
+
+/**
+ * What a pick is called on a card. A setting that is both the cheapest and the most accurate, as
+ * the only one on its frontier is, is called Most Accurate: both would not fit its column, and
+ * being the cheapest of one says nothing.
+ */
+export function pickLabel(roles: readonly PickRole[]): string {
+  return ROLE_LABELS[roles.includes("mostAccurate") ? "mostAccurate" : "cheapest"];
+}
 
 const HARNESS_LABELS: Record<PublicSetting["harness"], string> = {
   codex: "Codex",

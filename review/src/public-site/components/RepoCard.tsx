@@ -10,8 +10,8 @@ import {
   compactNumber,
   dollars,
   percent,
+  pickLabel,
   publisherName,
-  ROLE_LABELS,
 } from "../format";
 import { PANEL } from "../frame";
 import { Avatar } from "./Avatar";
@@ -119,15 +119,21 @@ export function RepoCard({
   );
 }
 
-/** The card's two picks, one line each: roles, model, accuracy, cost per task. */
+/**
+ * The card's two picks, one line each: what it is, model, accuracy, cost per task. A lone pick,
+ * the cheapest and the most accurate at once, sits on the second line, where Most Accurate goes.
+ */
 function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
   return (
     <ul className="flex flex-col gap-1.5">
+      {picks.length === 1 && (
+        <li aria-hidden="true" className="text-xs">
+          &nbsp;
+        </li>
+      )}
       {picks.map((pick) => (
         <li key={pick.setting.id} className="flex items-baseline gap-2 text-xs">
-          <span className="w-24 shrink-0 text-foreground/70">
-            {pick.roles.map((role) => ROLE_LABELS[role]).join(" · ")}
-          </span>
+          <span className="w-24 shrink-0 text-foreground/70">{pickLabel(pick.roles)}</span>
           <span className="min-w-0 flex-1 truncate font-medium">{pick.setting.model.label}</span>
           <span className="shrink-0 font-mono tabular-nums">{percent(pick.setting.accuracy)}</span>
           <span className="w-14 shrink-0 text-right font-mono tabular-nums text-muted-foreground">

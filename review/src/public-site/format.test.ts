@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { accuracyTick, compactNumber, settingLabel, vendorColor, vendorName } from "./format";
+import {
+  accuracyTick,
+  compactNumber,
+  pickLabel,
+  settingLabel,
+  vendorColor,
+  vendorName,
+} from "./format";
 import { setting } from "./test-fixture";
 
 test("twin model labels are told apart by what differs between them", () => {
@@ -91,4 +98,10 @@ test("counts shorten to thousands, and past a million to millions", () => {
   expect(compactNumber(9_500)).toBe("9.5k");
   expect(compactNumber(137_842)).toBe("138k");
   expect(compactNumber(1_250_000)).toBe("1.3M");
+});
+
+test("a pick that is both the cheapest and the most accurate is called Most Accurate", () => {
+  expect(pickLabel(["cheapest", "mostAccurate"])).toBe("Most Accurate");
+  expect(pickLabel(["mostAccurate"])).toBe("Most Accurate");
+  expect(pickLabel(["cheapest"])).toBe("Cheapest");
 });
