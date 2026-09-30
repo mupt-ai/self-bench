@@ -17,6 +17,8 @@ import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { useEvaluationScope } from "./useEvaluationScope";
+
+type RunState = { draft: ComparisonDraft; submitted: boolean; sandboxDefaultPending?: boolean };
 export function RunPage() {
   const scope = useEvaluationScope();
   return <RunContent key={scope.url} {...scope} />;
@@ -27,7 +29,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const key = `selfbench-run:${url}`;
-  const [state, setState] = React.useState<{ draft: ComparisonDraft; submitted: boolean }>(() => {
+  const [state, setState] = React.useState<RunState>(() => {
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem(key);
@@ -62,6 +64,16 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           setModels(result.models);
           setSandboxes(result.sandboxes);
           setManaged(result.managed ?? { models: false, sandbox: false });
+          setState((current) => {
+            if (!current.sandboxDefaultPending || current.submitted) return current;
+            return {
+              ...current,
+              sandboxDefaultPending: false,
+              draft: result.managed?.sandbox
+                ? { ...current.draft, sandbox: "managed", sandboxCredentialId: "managed-sandbox" }
+                : current.draft,
+            };
+          });
         }
       },
       (cause) => {
@@ -248,6 +260,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
                 }
                 onClick={() =>
                   setState({
+                    ...state,
                     draft: {
                       ...draft,
                       models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
@@ -264,7 +277,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             models={[...models, customModel]}
             credentials={availableCredentials}
             draft={draft}
-            onChange={(value) => setState({ draft: value, submitted: false })}
+            onChange={(value) => setState({ ...state, draft: value, submitted: false })}
           />
         </fieldset>
         <RunExecution
@@ -277,7 +290,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           ready={ready}
           tasksReady={tasksReady}
           pairs={pairs}
-          onChange={(value) => setState({ ...state, draft: value })}
+          onChange={(value) => setState({ ...state, draft: value, sandboxDefaultPending: false })}
           onSubmit={() => void submit()}
         />
       </div>

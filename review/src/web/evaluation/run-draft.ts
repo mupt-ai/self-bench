@@ -8,6 +8,7 @@ const tasksSchema = z.array(
 );
 const draftStateSchema = z.object({
   submitted: z.boolean(),
+  sandboxDefaultPending: z.boolean().optional(),
   draft: z.object({
     id: z.uuid(),
     tasks: tasksSchema,
@@ -49,6 +50,7 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
   }
   return {
     submitted: false,
+    sandboxDefaultPending: true,
     draft: {
       id: evaluationRequestId(),
       tasks,
