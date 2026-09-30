@@ -80,6 +80,14 @@ function Results({ page }: { page: PublicRepoPage }) {
   // The chart's pointer and vendor chips mark the same settings in the table.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
+  // Another line of this repository reuses the page with other settings: nothing stays marked
+  // from the last one (the chart, keyed by release, starts afresh too).
+  const [markedRelease, setMarkedRelease] = useState(release.releaseId);
+  if (markedRelease !== release.releaseId) {
+    setMarkedRelease(release.releaseId);
+    setActiveId(null);
+    setHighlighted(null);
+  }
   // Chart above the table, or beside it on a wide window; remembered across visits.
   const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
   const article = useRef<HTMLElement>(null);
@@ -175,7 +183,8 @@ function Results({ page }: { page: PublicRepoPage }) {
       >
         <section
           data-morph="chart"
-          className={`flex flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
+          // min-w-0: side by side, each column keeps to its grid track, whatever its content.
+          className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
@@ -185,6 +194,7 @@ function Results({ page }: { page: PublicRepoPage }) {
           </div>
           <div className={`p-2 ${PANEL}`}>
             <ResultsChart
+              key={release.releaseId}
               settings={release.settings}
               onActiveChange={setActiveId}
               onHighlightChange={setHighlighted}
@@ -192,7 +202,7 @@ function Results({ page }: { page: PublicRepoPage }) {
           </div>
         </section>
 
-        <section className="flex flex-col gap-3" data-morph="table">
+        <section className="flex min-w-0 flex-col gap-3" data-morph="table">
           <h2 className="text-sm font-medium">All Settings</h2>
           <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
           <p className="text-xs text-muted-foreground">
