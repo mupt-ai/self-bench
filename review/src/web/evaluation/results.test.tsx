@@ -165,10 +165,16 @@ test("running, queued and cancelled configurations", () => {
 });
 
 test("a started run whose tasks are all queued is preparing, and can stall", () => {
-  const preparing = run("preparing", { status: "running", createdAt: at(120) }, [
+  // An earlier batch's 20-minute task doesn't shorten the limit for setup.
+  const earlier = run("earlier", { createdAt: at(400) }, [passed("task-1", 20)]);
+  const preparing = run("preparing", { status: "running", createdAt: at(80) }, [
     { taskId: "task-1" },
     { taskId: "task-2" },
   ]);
+  expect(reviewOf(configurationsOf([earlier, preparing], credentials, NOW), NOW).alerts).toEqual(
+    [],
+  );
+  preparing.createdAt = at(120);
   const waiting = run("waiting", { status: "queued", thinking: "low" }, [{ taskId: "task-1" }]);
   const configurations = configurationsOf([preparing, waiting], credentials, NOW);
   expect(configurations.map((configuration) => configuration.status).sort()).toEqual([

@@ -30,10 +30,12 @@ export interface Alert {
 }
 
 interface Stall {
-  /** Minutes since a task last finished or started. */
+  /** Minutes since a task last finished or started, or since the runs began. */
   idle: number;
   limit: number;
-  /** The slowest finished task, when one has finished. */
+  /** Whether no task of these runs has started yet: they are still preparing. */
+  preparing: boolean;
+  /** The slowest finished task the limit comes from, when it comes from one. */
   slowest?: number;
 }
 
@@ -54,18 +56,13 @@ const SLOWEST_MULTIPLE = 2;
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** Tasks under way, and nothing finishing or starting for longer than a task should take. */
+/**
+ * Tasks under way, and nothing finishing or starting for longer than a task should take. Runs still
+ * preparing get the first-result limit, since setup takes as long as it takes whatever the tasks do.
+ */
 function stallOf(configuration: Configuration, now: number): Stall | undefined {
   const active = configuration.latest.filter(inProgress);
   if (!active.length) return undefined;
-  const took = configuration.batches.flatMap((batch) =>
-    batch.results.flatMap((result) =>
-      result.trial.status === "completed" && result.minutes !== undefined ? [result.minutes] : [],
-    ),
-  );
-  const slowest = took.length ? Math.max(...took) : undefined;
-  const limit =
-    slowest === undefined ? FIRST_FINISH_LIMIT : Math.max(1, slowest * SLOWEST_MULTIPLE);
   // Idle since a trial of these runs last finished or started: a start means a worker moved on.
   const runs = new Set(active.map((result) => result.run.id));
   const times = configuration.batches.flatMap((batch) =>
@@ -75,12 +72,36 @@ function stallOf(configuration: Configuration, now: number): Stall | undefined {
         : [],
     ),
   );
-  const since = times.length
-    ? Math.max(...times)
-    : Math.min(...active.map(({ run }) => Date.parse(run.createdAt)));
+  const preparing = !times.length;
+  const since = preparing
+    ? Math.min(...active.map(({ run }) => Date.parse(run.createdAt)))
+    : Math.max(...times);
+  const took = configuration.batches.flatMap((batch) =>
+    batch.results.flatMap((result) =>
+      result.trial.status === "completed" && result.minutes !== undefined ? [result.minutes] : [],
+    ),
+  );
+  const slowest = preparing || !took.length ? undefined : Math.max(...took);
+  const limit =
+    slowest === undefined ? FIRST_FINISH_LIMIT : Math.max(1, slowest * SLOWEST_MULTIPLE);
   const idle = (now - since) / 60_000;
   if (!Number.isFinite(idle) || idle <= limit) return undefined;
-  return { idle, limit, ...(slowest !== undefined ? { slowest } : {}) };
+  return { idle, limit, preparing, ...(slowest !== undefined ? { slowest } : {}) };
+}
+
+/** What a stall banner says: what's under way, how long it has been idle, and why that's long. */
+function stallDetail(configuration: Configuration, stall: Stall): string {
+  const idle = minutesLabel(stall.idle);
+  if (stall.preparing) {
+    return `Still preparing, and nothing has started in ${idle}, past the ${stall.limit} min limit for setup.`;
+  }
+  const { running, queued } = configuration.counts;
+  const doing = running
+    ? `${plural(running, "task")} running`
+    : `${plural(queued, "task")} waiting to start`;
+  return stall.slowest === undefined
+    ? `${doing}, and nothing has finished or started in ${idle}, past the ${stall.limit} min limit for a first result.`
+    : `${doing}, and nothing has finished or started in ${idle}; the slowest task it finished took ${minutesLabel(stall.slowest)}, so it flags past ${minutesLabel(stall.limit)}.`;
 }
 
 function taskProblemsOf(configurations: readonly Configuration[]) {
@@ -149,17 +170,12 @@ export function reviewOf(
     const stall = stallOf(configuration, now);
     if (stall) {
       review.stalls.set(configuration.key, stall);
-      const running = configuration.counts.running;
-      const doing = running ? `${plural(running, "task")} running` : "Still preparing";
       review.alerts.push({
         kind: "stalled",
         severity: "warn",
         configuration: configuration.key,
         title: `${name} may have stalled`,
-        detail:
-          stall.slowest === undefined
-            ? `${doing}, and nothing has finished or started in ${minutesLabel(stall.idle)}, past the ${stall.limit} min limit for a first result.`
-            : `${doing}, and nothing has finished or started in ${minutesLabel(stall.idle)}; the slowest task it finished took ${minutesLabel(stall.slowest)}, so it flags past ${minutesLabel(stall.limit)}.`,
+        detail: stallDetail(configuration, stall),
       });
       flags.push({ severity: "warn", text: "Stalled" });
     }
