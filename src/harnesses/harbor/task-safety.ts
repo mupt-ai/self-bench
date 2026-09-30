@@ -66,13 +66,13 @@ export async function prepareHarborRun(
 
 /**
  * Refuses a task that would pull host environment into the sandbox, and rewrites task.toml from
- * the parsed value so Harbor reads exactly what was checked. A run that starts the agent sets
- * its time here; whatever the task says is ignored.
+ * the parsed value so Harbor reads exactly what was checked, with `agentSeconds` for the agent
+ * whatever the task says.
  */
 export async function assertHostSafeTask(
   taskDirectory: string,
   harborEnv: NodeJS.ProcessEnv,
-  agentSeconds?: number,
+  agentSeconds: number,
 ): Promise<void> {
   const path = join(taskDirectory, "task.toml");
   const raw = await readFile(path);
@@ -86,10 +86,7 @@ export async function assertHostSafeTask(
   }
   if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
   rejectHostKeys(config, "");
-  if (agentSeconds !== undefined) {
-    const agent = isRecord(config.agent) ? config.agent : {};
-    config.agent = { ...agent, timeout_sec: agentSeconds };
-  }
+  config.agent = { ...(isRecord(config.agent) ? config.agent : {}), timeout_sec: agentSeconds };
   await writeFile(path, stringify(config));
 
   for (const compose of await composeFiles(taskDirectory)) {

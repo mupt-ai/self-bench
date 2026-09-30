@@ -66,7 +66,7 @@ export async function setUpTrial(
     trialRoot,
     gateway.child,
     options.signal,
-    trialTimeouts(input.agentMinutes).agentSeconds,
+    trialTimeouts(run.agentMinutes).agentSeconds,
   ).catch(refuseWithoutRetry);
   return {
     taskPath,

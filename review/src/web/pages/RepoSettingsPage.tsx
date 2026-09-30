@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams } from "react-router";
-import { AGENT_MINUTES } from "../../../../src/contracts/index";
+import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import { type ConnectedRepo, fetchConnectedRepo, updateRepo } from "../api";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";

@@ -54,11 +54,15 @@ async function taskDirectory(toml: string, compose?: string): Promise<string> {
   return root;
 }
 
-test("a compiler-rendered task passes and task.toml is rewritten to the same configuration", async () => {
+test("a compiler-rendered task passes and task.toml is rewritten to the same configuration plus the agent's time", async () => {
   const toml = taskToml(definition);
   const root = await taskDirectory(toml, serviceComposeYaml(definition));
-  await assertHostSafeTask(root, harborEnv);
-  expect(parse(await readFile(join(root, "task.toml"), "utf8"))).toEqual(parse(toml));
+  await assertHostSafeTask(root, harborEnv, 60);
+  const rendered = parse(toml);
+  expect(parse(await readFile(join(root, "task.toml"), "utf8"))).toEqual({
+    ...rendered,
+    agent: { ...(rendered.agent as object), timeout_sec: 60 },
+  });
 });
 
 test.each([
@@ -74,7 +78,9 @@ test.each([
   ["mcp servers", '[[environment.mcp_servers]]\nname = "x"\ncommand = "sh"\n'],
 ])("task.toml with %s is refused", async (_label, toml) => {
   const root = await taskDirectory(`schema_version = "1.4"\n${toml}`);
-  await expect(assertHostSafeTask(root, harborEnv)).rejects.toBeInstanceOf(UnsafeHarborTaskError);
+  await expect(assertHostSafeTask(root, harborEnv, 60)).rejects.toBeInstanceOf(
+    UnsafeHarborTaskError,
+  );
 });
 
 test("a run gives the agent its time, whatever an older task set", async () => {
@@ -90,7 +96,7 @@ test("a run gives the agent its time, whatever an older task set", async () => {
 
 test("free-form metadata may use any key", async () => {
   const root = await taskDirectory('schema_version = "1.4"\n[metadata]\nenv = "prod"\n');
-  await assertHostSafeTask(root, harborEnv);
+  await assertHostSafeTask(root, harborEnv, 60);
 });
 
 test("a compose file may not name a credential the Harbor process holds", async () => {
@@ -105,21 +111,23 @@ test("a compose file may not name a credential the Harbor process holds", async 
       'schema_version = "1.4"\n',
       JSON.stringify({ services: { main: { command: ["sh", "-c", `echo ${reference}`] } } }),
     );
-    await expect(assertHostSafeTask(root, harborEnv)).rejects.toThrow("MODAL_TOKEN_SECRET");
+    await expect(assertHostSafeTask(root, harborEnv, 60)).rejects.toThrow("MODAL_TOKEN_SECRET");
   }
   const harmless = await taskDirectory(
     'schema_version = "1.4"\n',
     JSON.stringify({ services: { main: { command: ["sh", "-c", "echo $$HOME $$UNSET_NAME"] } } }),
   );
-  await assertHostSafeTask(harmless, harborEnv);
+  await assertHostSafeTask(harmless, harborEnv, 60);
 });
 
 test("an oversized compose file is refused before it is read", async () => {
   const root = await taskDirectory('schema_version = "1.4"\n', `# ${"x".repeat(300 * 1024)}\n`);
-  await expect(assertHostSafeTask(root, harborEnv)).rejects.toThrow("compose file is too large");
+  await expect(assertHostSafeTask(root, harborEnv, 60)).rejects.toThrow(
+    "compose file is too large",
+  );
 });
 
 test("an unparseable task.toml is refused", async () => {
   const root = await taskDirectory("[environment\n");
-  await expect(assertHostSafeTask(root, harborEnv)).rejects.toThrow("does not parse");
+  await expect(assertHostSafeTask(root, harborEnv, 60)).rejects.toThrow("does not parse");
 });
