@@ -194,12 +194,7 @@ function Results({ page }: { page: PublicRepoPage }) {
           // min-w-0: side by side, each column keeps to its grid track, whatever its content.
           className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
-            <p className="text-xs text-muted-foreground">
-              Filled points are on the frontier: nothing is both cheaper and more accurate.
-            </p>
-          </div>
+          <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
           <div className={`p-2 ${PANEL}`}>
             <ResultsChart
               key={release.releaseId}
@@ -209,6 +204,10 @@ function Results({ page }: { page: PublicRepoPage }) {
               selectedId={rowId}
             />
           </div>
+          {/* Under the chart, as the table's note is under it, so the two start level. */}
+          <p className="text-xs text-muted-foreground">
+            Filled points are on the frontier: nothing is both cheaper and more accurate.
+          </p>
         </section>
 
         <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
