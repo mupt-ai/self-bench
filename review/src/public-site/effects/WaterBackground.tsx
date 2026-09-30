@@ -32,8 +32,8 @@ function readWater(root: HTMLElement): Water {
     strength: Number.isFinite(strength) ? strength : 0.3,
     coverage: Number.isFinite(coverage) ? coverage : 1,
     speed: Number.isFinite(speed) ? speed : 1,
-    // Off by choice, from the widgets or the settings menu: no water at all.
-    mode: choice === "off" || root.dataset.motion === "off" ? undefined : (MODES[choice] ?? 0),
+    // Off by choice, from the widgets: no water at all.
+    mode: choice === "off" ? undefined : (MODES[choice] ?? 0),
   };
 }
 
@@ -114,7 +114,7 @@ function startWater(
   return () => stop();
 }
 
-/** Keeps `water` in step with the page: its look, motion setting, visibility, and size. */
+/** Keeps `water` in step with the page: its look, less motion, visibility, and size. */
 function follow(water: RunningWater, canvas: HTMLCanvasElement): () => void {
   const update = () => water.update(stateOf(canvas));
   update();
@@ -122,7 +122,7 @@ function follow(water: RunningWater, canvas: HTMLCanvasElement): () => void {
   const observer = new MutationObserver(update);
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-theme", "data-water", "data-motion", "style"],
+    attributeFilter: ["data-theme", "data-water", "style"],
   });
   const lessMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   lessMotion.addEventListener("change", update);
@@ -143,11 +143,10 @@ const FADE_IN =
 
 /**
  * Faint water behind the page. Rendered at half resolution, paused when the tab is hidden,
- * drawn once, still, for visitors who prefer less motion, and not drawn at all when they turn
- * animations off in the settings menu. It starts once the page is up and the browser is idle,
- * on a worker where it can, and fades in: a GPU context is slow to start, and would otherwise
- * hold back the page. `bands` is the canvas over the pinned header and footer (`WaterBands`),
- * which gets a copy of every frame.
+ * and drawn once, still, for visitors who prefer less motion. It starts once the page is up
+ * and the browser is idle, on a worker where it can, and fades in: a GPU context is slow to
+ * start, and would otherwise hold back the page. `bands` is the canvas over the pinned header
+ * and footer (`WaterBands`), which gets a copy of every frame.
  */
 export function WaterBackground({ bands }: { bands?: RefObject<HTMLCanvasElement | null> }) {
   const canvas = useRef<HTMLCanvasElement>(null);

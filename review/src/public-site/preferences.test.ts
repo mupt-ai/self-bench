@@ -48,7 +48,7 @@ test("a choice made on selfbench.dev is written to the shared parent domain", ()
 
 test("other hosts keep a host-only cookie, which local ports still share", () => {
   const local = browser("127.0.0.1", "http:");
-  sharedPreferences(local.from)?.setItem("selfbench-motion", "off");
+  sharedPreferences(local.from)?.setItem("selfbench-theme", "dark");
   expect(local.written[0]).not.toContain("Domain=");
   expect(local.written[0]).not.toContain("Secure");
   expect(browser("notselfbench.dev").written).toEqual([]);
@@ -63,7 +63,7 @@ test("the shared cookie wins over this origin's older local choice", () => {
   expect(preferences?.getItem("selfbench-theme")).toBe("light");
   app.from.jar.cookie = "selfbench-theme=dark";
   expect(preferences?.getItem("selfbench-theme")).toBe("dark");
-  expect(preferences?.getItem("selfbench-motion")).toBeNull();
+  expect(preferences?.getItem("selfbench-system")).toBeNull();
 });
 
 test("both sites apply the saved choice with the same script before first paint", () => {

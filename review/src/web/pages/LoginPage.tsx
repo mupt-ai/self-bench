@@ -3,7 +3,6 @@ import { Navigate, useSearchParams } from "react-router";
 import { OutLink } from "../../public-site/components/OutLink";
 import { WaterBackground } from "../../public-site/effects/WaterBackground";
 import { EDGE_FRAME, PANEL, RULER_WIDTH } from "../../public-site/frame";
-import { SettingsMenu } from "../../public-site/SettingsMenu";
 import { ThemeToggle } from "../../public-site/ThemeToggle";
 import { Lockup } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
@@ -42,11 +41,8 @@ export function LoginPage() {
       <header className="shrink-0 border-b border-border">
         <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
           <Lockup href={PUBLIC_SITE_URL} />
-          {/* As on selfbench.dev: 32px icon buttons 4px apart, the last glyph on the frame edge. */}
-          <span className="-mr-2 flex items-center gap-1">
-            <ThemeToggle />
-            <SettingsMenu />
-          </span>
+          {/* As on selfbench.dev: the 32px theme button, its glyph on the frame edge. */}
+          <ThemeToggle className="-mr-2" />
         </div>
       </header>
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12">

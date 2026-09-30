@@ -90,15 +90,6 @@ html {
   scroll-padding-bottom: var(--bar-bottom);
 }
 
-/* "Disable Animations" in the settings menu: every transition and animation becomes instant. */
-:root[data-motion="off"] *,
-:root[data-motion="off"] *::before,
-:root[data-motion="off"] *::after {
-  transition-duration: 0s !important;
-  transition-delay: 0s !important;
-  animation: none !important;
-}
-
 /* The /pitchforks easter egg: villagers bob as they walk; torch flames flicker. */
 @keyframes mob-bob {
   50% {
