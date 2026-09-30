@@ -22,7 +22,7 @@ provider "helm" {
   }
 }
 # Existing environments created these secret containers while moving off env-file bundles.
-# Import them once so Terraform manages their labels and IAM without re-creating them.
+# Set import_runtime_secrets for that one migration; new environments let Terraform create them.
 locals {
   imported_runtime_secrets = {
     database_url               = "selfbench-database-url"
@@ -41,7 +41,7 @@ locals {
   }
 }
 import {
-  for_each = local.imported_runtime_secrets
+  for_each = var.import_runtime_secrets ? local.imported_runtime_secrets : {}
   to       = module.selfbench.google_secret_manager_secret.value[each.key]
   id       = "projects/${var.project_id}/secrets/${each.value}"
 }

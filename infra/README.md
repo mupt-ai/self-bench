@@ -69,7 +69,7 @@ Use the independent `prod` root, project, state bucket, and variables for produc
 
 ## Runtime Configuration
 
-Terraform creates one Secret Manager container for each sensitive runtime value. Values are loaded out of band so they never enter Terraform state:
+Terraform creates one Secret Manager container for each sensitive runtime value. Existing environments migrated from env-file bundles set `import_runtime_secrets` to adopt containers created before that release. Values are loaded out of band so they never enter Terraform state:
 
 ```sh
 printf '%s' "$VALUE" | gcloud secrets versions add selfbench-session-secret --project PROJECT --data-file=-
