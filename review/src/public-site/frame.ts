@@ -1,6 +1,6 @@
 /*
  * The frame's classes. Their measurements are CSS variables in frame.css, narrowed there for
- * compact screens, so everything built on them adapts on its own. Both sites' stylesheets
+ * smaller screens, so everything built on them adapts on its own. Both sites' stylesheets
  * import frame.css; a page using these classes needs nothing more.
  */
 
@@ -11,12 +11,12 @@
 export const FRAME = "mx-auto w-full max-w-6xl px-(--gutter)";
 
 /**
- * Where the ruler lines sit: `--edge` in from each window side, a proportional margin on
- * large screens (6% of the width, 24px to 160px) and close to the edges on a phone.
+ * Where the ruler lines sit: `--edge` in from each window side, 6% of the width and at most
+ * 160px. A window too narrow for them has none (`rulerless:`, in frame.css).
  */
 export const RULER_WIDTH = "w-[calc(100%-2*var(--edge))]";
 
-/** The header and footer span the full width between the rulers. */
+/** The header and footer span the full width between the rulers, or the window without them. */
 export const EDGE_FRAME = "mx-auto w-[calc(100%-2*var(--edge))] px-(--bar-inset)";
 
 /** Raised surface for cards and panels: a firmer edge and a soft drop, not a pencil line. */

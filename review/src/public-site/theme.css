@@ -73,8 +73,14 @@
 /* The page colour sits on html so the water canvas can draw between it and the content. */
 html {
   background: var(--background);
-  /* The window scrolls the page; its scrollbar is the right ruler line (RulerScrollbar). */
+  /*
+   * The window scrolls the page; its scrollbar is the right ruler line (RulerScrollbar), or
+   * the browser's own where there are no rulers.
+   */
   scrollbar-width: none;
+  @variant rulerless {
+    scrollbar-width: auto;
+  }
   /*
    * The header and footer are pinned over the page (PublicLayout), so what shows of it is the
    * band between them: focus, find-in-page, and scrollIntoView bring things into that band,

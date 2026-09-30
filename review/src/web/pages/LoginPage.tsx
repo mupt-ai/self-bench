@@ -37,7 +37,7 @@ export function LoginPage() {
       <WaterBackground />
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler)`}
+        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler) rulerless:hidden`}
       />
       <header className="shrink-0 border-b border-border">
         <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>

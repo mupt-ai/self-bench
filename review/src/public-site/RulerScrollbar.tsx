@@ -17,7 +17,8 @@ function metrics(area: ScrollArea): ScrollMetrics {
  * browser's own is hidden. While the page scrolls, a darker stretch of the line shows the
  * visible share of the page and where it is, then fades once the page settles. Dragging it
  * scrolls, and pressing elsewhere on the line jumps there; hovering the line brings it back.
- * Like the browser's own, it is rigid: it never stretches with the page's rubber-band.
+ * Like the browser's own, it is rigid: it never stretches with the page's rubber-band. Without
+ * the rulers (frame.css) it is left out, and the browser's own scrollbar is back (theme.css).
  */
 export function RulerScrollbar() {
   const [band, setBand] = useState<{ top: number; height: number }>();
@@ -103,7 +104,7 @@ export function RulerScrollbar() {
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none fixed left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2`}
+      className={`pointer-events-none fixed left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 rulerless:hidden`}
       style={{ top: band.top, height: band.height }}
     >
       {/*

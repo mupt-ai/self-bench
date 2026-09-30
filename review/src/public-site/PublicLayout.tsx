@@ -40,7 +40,8 @@ const FOOTER = "h-[49px]";
 /**
  * The frame every public page shares. The window scrolls, with the header and footer pinned
  * over it (see scroll-area.ts), so the browser's own scrolling, rubber-band included, applies
- * to the page. Two ruler lines run the full height at the frame's edges.
+ * to the page. Two ruler lines run the full height at the frame's edges, on a window wide
+ * enough for them (frame.css).
  */
 export function PublicLayout() {
   const location = useLocation();
@@ -86,7 +87,7 @@ export function PublicLayout() {
       </svg>
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler)`}
+        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler) rulerless:hidden`}
       />
       <RulerScrollbar />
       {/*
