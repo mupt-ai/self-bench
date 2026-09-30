@@ -9,4 +9,13 @@ cloud_sql_tier = "db-custom-1-3840"
 cloud_sql_availability_type = "ZONAL"
 cloud_sql_retained_backups = 7
 activity_concurrency = 8
-# image and secret_versions are supplied by the deploy workflow.
+temporal_address = "YOUR-TEMPORAL-ENDPOINT:7233"
+temporal_namespace = "YOUR-TEMPORAL-NAMESPACE"
+github_oauth_client_id = "YOUR-GITHUB-OAUTH-CLIENT-ID"
+# Optional non-secret settings. Their matching secret values must exist before enabling them.
+# stripe_price_id = "price_YOUR-METERED-PRICE"
+# billing_credit_admin_org_id = 123456789
+# managed_openrouter = true
+# managed_e2b = true
+# managed_modal = true
+# image, release_id, public_url and results_site_url are supplied by the deploy workflow.

@@ -2,13 +2,17 @@
 mock_provider "google" {}
 mock_provider "helm" {}
 variables {
-  project_id           = "selfbench-dev-testing"
-  environment          = "dev"
-  region               = "us-central1"
-  api_domains          = ["app.selfbench.example", "selfbench.example"]
-  image                = "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench/selfbench@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  secret_versions      = { shared = 7, api = 3, worker = 1 }
-  activity_concurrency = 8
+  project_id             = "selfbench-dev-testing"
+  environment            = "dev"
+  region                 = "us-central1"
+  api_domains            = ["app.selfbench.example", "selfbench.example"]
+  image                  = "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench/selfbench@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  activity_concurrency   = 8
+  public_url             = "https://app.selfbench.example"
+  results_site_url       = "https://selfbench.example"
+  github_oauth_client_id = "oauth-client"
+  temporal_address       = "us-central1.gcp.api.temporal.io:7233"
+  temporal_namespace     = "selfbench-dev.abc12"
 }
 run "dev_foundation" {
   command = plan
@@ -29,8 +33,8 @@ run "dev_foundation" {
     error_message = "Release tags must not be overwritten."
   }
   assert {
-    condition     = length(google_secret_manager_secret.runtime) == 3 && output.deployment.task_queue == "selfbench-dev"
-    error_message = "Keep three role-separated bundles and the matching dev queue."
+    condition     = length(google_secret_manager_secret.value) == 13 && output.deployment.task_queue == "selfbench-dev"
+    error_message = "Each sensitive value has its own secret, and dev uses the matching queue."
   }
   assert {
     condition     = google_project_iam_custom_role.artifact_signer.permissions == toset(["iam.serviceAccounts.signBlob"])
@@ -51,16 +55,31 @@ run "api_on_cloud_run" {
     error_message = "The API reaches private Cloud SQL through the VPC."
   }
   assert {
-    condition     = google_cloud_run_v2_service.api.template[0].containers[0].image == var.image && google_cloud_run_v2_service.api.template[0].containers[0].command == tolist(["node", "--env-file=/secrets/shared/env", "--env-file=/secrets/api/env", "dist/api/main.js"])
-    error_message = "The API runs the release image with its pinned env-files."
+    condition     = google_cloud_run_v2_service.api.template[0].containers[0].image == var.image && google_cloud_run_v2_service.api.template[0].containers[0].command == tolist(["node", "dist/api/main.js"]) && length(google_cloud_run_v2_service.api.template[0].volumes) == 0
+    error_message = "The API reads env values directly, with no env-file bundle mounts."
   }
   assert {
-    condition     = toset([for volume in google_cloud_run_v2_service.api.template[0].volumes : "${volume.name}:${one(volume.secret[0].items).version}"]) == toset(["api:3", "shared:7"])
-    error_message = "The API mounts the pinned shared and API bundles, never the worker's."
+    condition = {
+      for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.name => env.value_source[0].secret_key_ref[0].secret
+      if length(env.value_source) > 0
+      } == {
+      GITHUB_OAUTH_CLIENT_SECRET    = "selfbench-github-oauth-client-secret"
+      SELFBENCH_API_TOKEN           = "selfbench-api-token"
+      SELFBENCH_DATABASE_URL        = "selfbench-database-url"
+      SELFBENCH_EVAL_CREDENTIAL_KEY = "selfbench-eval-credential-key"
+      SELFBENCH_SANDBOX_SECRET      = "selfbench-sandbox-secret"
+      SELFBENCH_SESSION_SECRET      = "selfbench-session-secret"
+      SELFBENCH_TEMPORAL_API_KEY    = "selfbench-temporal-api-key"
+    }
+    error_message = "The API reads only its required per-value secrets, never the worker token."
   }
   assert {
-    condition     = google_service_account.api.account_id == "selfbench-dev-api" && keys(google_secret_manager_secret_iam_member.api_reader) == ["api", "shared"]
-    error_message = "The API has its own identity and never reads the worker's secret."
+    condition     = alltrue([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value_source[0].secret_key_ref[0].version == "latest" if length(env.value_source) > 0])
+    error_message = "Each deploy starts API instances on the latest secret versions."
+  }
+  assert {
+    condition     = google_service_account.api.account_id == "selfbench-dev-api" && keys(google_secret_manager_secret_iam_member.api_reader) == ["api_token", "database_url", "eval_credential_key", "github_oauth_client_secret", "sandbox_secret", "session_secret"]
+    error_message = "The API has its own identity and reads only API or shared secret values."
   }
   assert {
     condition     = length(google_certificate_manager_dns_authorization.api) == 3 && google_compute_url_map.api.path_matcher[0].default_url_redirect[0].host_redirect == "selfbench.example"
@@ -119,12 +138,56 @@ run "worker_pool" {
     error_message = "The worker runs the same release image as a fixed pool."
   }
   assert {
-    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "dev"] && google_cloud_run_v2_worker_pool.worker.template[0].containers[0].command[3] == "dist/temporal/worker-main.js"
+    condition     = google_cloud_run_v2_worker_pool.worker.template[0].containers[0].command == tolist(["node", "dist/temporal/worker-main.js"]) && length(google_cloud_run_v2_worker_pool.worker.template[0].volumes) == 0
+    error_message = "The worker reads env values directly, with no env-file bundle mounts."
+  }
+  assert {
+    condition     = one([for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value if env.name == "SELFBENCH_ACTIVITY_CONCURRENCY"]) == "8"
     error_message = "The worker polls with the configured activity concurrency."
   }
   assert {
-    condition     = keys(google_secret_manager_secret_iam_member.runtime_reader) == ["shared", "worker"]
-    error_message = "The worker must not read the API's secret."
+    condition = {
+      for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.name => env.value_source[0].secret_key_ref[0].secret
+      if length(env.value_source) > 0
+      } == {
+      SELFBENCH_API_TOKEN           = "selfbench-worker-api-token"
+      SELFBENCH_DATABASE_URL        = "selfbench-database-url"
+      SELFBENCH_EVAL_CREDENTIAL_KEY = "selfbench-eval-credential-key"
+      SELFBENCH_SANDBOX_SECRET      = "selfbench-sandbox-secret"
+      SELFBENCH_TEMPORAL_API_KEY    = "selfbench-temporal-api-key"
+    }
+    error_message = "The worker reads its own token and shared values, never API-only secrets."
+  }
+  assert {
+    condition     = keys(google_secret_manager_secret_iam_member.runtime_reader) == ["database_url", "eval_credential_key", "sandbox_secret", "worker_api_token"]
+    error_message = "The worker must not read API-only secret values."
+  }
+}
+run "optional_secret_values" {
+  command = plan
+  variables {
+    stripe_price_id             = "price_test"
+    billing_credit_admin_org_id = 154857038
+    managed_openrouter          = true
+    managed_e2b                 = true
+    managed_modal               = true
+  }
+  assert {
+    condition = toset(keys(google_secret_manager_secret_iam_member.api_reader)) == toset([
+      "api_token", "database_url", "eval_credential_key", "github_oauth_client_secret",
+      "managed_e2b_api_key", "managed_modal_token_id", "managed_modal_token_secret",
+      "managed_openrouter_api_key", "sandbox_secret", "session_secret",
+      "stripe_secret_key", "stripe_webhook_secret",
+    ])
+    error_message = "Enabled optional values are readable by the API, including both Stripe secrets."
+  }
+  assert {
+    condition     = !contains(keys(google_secret_manager_secret_iam_member.runtime_reader), "stripe_secret_key") && contains(keys(google_secret_manager_secret_iam_member.runtime_reader), "managed_modal_token_secret")
+    error_message = "Workers get managed provider values but never Stripe."
+  }
+  assert {
+    condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID"]) == "154857038"
+    error_message = "The billing admin org is plain deploy config."
   }
 }
 run "prod_foundation" {
@@ -198,10 +261,8 @@ run "gke_workers_off_by_default" {
 run "gke_workers" {
   command = plan
   variables {
-    gke_workers        = true
-    temporal_address   = "us-central1.gcp.api.temporal.io:7233"
-    temporal_namespace = "selfbench-dev.abc12"
-    secret_versions    = { shared = 7, api = 3, worker = 1, temporal = 2 }
+    gke_workers = true
+
   }
   override_resource {
     target          = google_service_account.runtime
@@ -220,16 +281,21 @@ run "gke_workers" {
     error_message = "Nodes run as their own account, which can pull the release image."
   }
   assert {
-    condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["shared", "worker"]
-    error_message = "Worker pods must not read the API's secret."
+    condition     = keys(google_secret_manager_secret_iam_member.worker_pod_reader) == ["database_url", "eval_credential_key", "sandbox_secret", "worker_api_token"]
+    error_message = "Worker pods must not read API-only secret values."
   }
   assert {
     condition = yamldecode(helm_release.workers[0].values[0]).secrets == {
-      shared   = "projects/selfbench-dev-testing/secrets/selfbench-shared-env/versions/7"
-      worker   = "projects/selfbench-dev-testing/secrets/selfbench-worker-env/versions/1"
-      temporal = { id = "selfbench-temporal-api-key", version = "2" }
+      files = [
+        { resourceName = "projects/selfbench-dev-testing/secrets/selfbench-worker-api-token/versions/latest", path = "SELFBENCH_API_TOKEN" },
+        { resourceName = "projects/selfbench-dev-testing/secrets/selfbench-database-url/versions/latest", path = "SELFBENCH_DATABASE_URL" },
+        { resourceName = "projects/selfbench-dev-testing/secrets/selfbench-eval-credential-key/versions/latest", path = "SELFBENCH_EVAL_CREDENTIAL_KEY" },
+        { resourceName = "projects/selfbench-dev-testing/secrets/selfbench-sandbox-secret/versions/latest", path = "SELFBENCH_SANDBOX_SECRET" },
+        { resourceName = "projects/selfbench-dev-testing/secrets/selfbench-temporal-api-key/versions/latest", path = "SELFBENCH_TEMPORAL_API_KEY" },
+      ]
+      temporal = { id = "selfbench-temporal-api-key", version = "latest" }
     }
-    error_message = "Worker pods and KEDA read pinned secret versions."
+    error_message = "Worker pods and KEDA read the latest per-value secrets."
   }
   assert {
     condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 20
@@ -241,12 +307,9 @@ run "worker_pool_leaves_harbor_to_gke" {
   variables {
     gke_workers              = true
     worker_pool_polls_harbor = false
-    temporal_address         = "us-central1.gcp.api.temporal.io:7233"
-    temporal_namespace       = "selfbench-dev.abc12"
-    secret_versions          = { shared = 7, api = 3, worker = 1, temporal = 2 }
   }
   assert {
-    condition     = [for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value] == ["8", "dev", "workflows"]
+    condition     = one([for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value if env.name == "SELFBENCH_WORKER_ROLE"]) == "workflows"
     error_message = "The pool polls only the workflow queue once Harbor work is on GKE."
   }
 }
@@ -255,8 +318,11 @@ run "harbor_queue_always_polled" {
   variables { worker_pool_polls_harbor = false }
   expect_failures = [var.worker_pool_polls_harbor]
 }
-run "gke_workers_need_temporal_settings" {
+run "temporal_settings_required" {
   command = plan
-  variables { gke_workers = true }
-  expect_failures = [var.secret_versions, var.temporal_address, var.temporal_namespace]
+  variables {
+    temporal_address   = ""
+    temporal_namespace = ""
+  }
+  expect_failures = [var.temporal_address, var.temporal_namespace]
 }

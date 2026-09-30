@@ -24,7 +24,10 @@ output "deployment" {
         url_map = google_compute_url_map.api.name
       }
     }
-    secret_ids = { for key, secret in google_secret_manager_secret.runtime : key => secret.secret_id }
+    secret_ids = merge(
+      { for key, secret in google_secret_manager_secret.value : key => secret.secret_id },
+      { temporal_api_key = google_secret_manager_secret.temporal_api_key.secret_id },
+    )
     database = var.create_cloud_sql ? {
       instance   = google_sql_database_instance.app[0].connection_name
       private_ip = google_sql_database_instance.app[0].private_ip_address

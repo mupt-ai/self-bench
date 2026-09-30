@@ -27,7 +27,7 @@ Model and sandbox access is either managed by SelfBench (billed under **Billing*
 SelfBench's reference deployment runs on GCP: Cloud Run for the API and Temporal worker, with optional GKE Autopilot workers for Harbor jobs, plus Cloud SQL and GCS.
 
 1. Provision a GCP project, billing, Terraform state bucket, and GitHub Actions Workload Identity Federation.
-2. Configure Terraform inputs and store runtime secrets in Secret Manager.
+2. Configure Terraform inputs and store each runtime secret value in its own Secret Manager secret.
 3. Apply the environment with Terraform, or configure the protected GitHub `dev` and `prod` environments to deploy through Actions.
 4. Point your domain at the provisioned load balancer and configure GitHub OAuth for the app URL.
 

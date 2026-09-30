@@ -41,26 +41,7 @@ resource "google_artifact_registry_repository_iam_member" "runtime_reader" {
   role       = "roles/artifactregistry.reader"
   member     = "serviceAccount:${google_service_account.runtime.email}"
 }
-# Bundles map to protected runtime env-files, not Terraform variables. Keep values out of state.
-resource "google_secret_manager_secret" "runtime" {
-  for_each  = toset(["shared-env", "api-env", "worker-env"])
-  project   = var.project_id
-  secret_id = "selfbench-${each.value}"
-  labels    = local.labels
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-  lifecycle {
-    prevent_destroy = true
-  }
-  depends_on = [google_project_service.api]
-}
-# The Temporal API key alone, for KEDA to read queue backlogs when gke_workers is on. It exists
-# in every environment so a version can be loaded and pinned before the workers are turned on.
+# The Temporal API key, read by the app and by KEDA for queue backlogs.
 resource "google_secret_manager_secret" "temporal_api_key" {
   project   = var.project_id
   secret_id = "selfbench-temporal-api-key"
@@ -77,15 +58,6 @@ resource "google_secret_manager_secret" "temporal_api_key" {
   }
   depends_on = [google_project_service.api]
 }
-# The worker never reads the API's secret.
-resource "google_secret_manager_secret_iam_member" "runtime_reader" {
-  for_each  = toset(["shared", "worker"])
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime.email}"
-}
-
 # Verifier material is delivered to hosted sandboxes through short-lived signed GCS URLs.
 # Cloud Run's metadata-server credentials have no local signing key; authorize ONLY signBlob on
 # the signer's own service account.

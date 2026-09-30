@@ -53,7 +53,7 @@ resource "google_container_cluster" "workers" {
     cluster_secondary_range_name  = "gke-pods"
     services_secondary_range_name = "gke-services"
   }
-  # Pods mount their pinned env-file bundles straight from Secret Manager.
+  # Pods mount each secret value straight from Secret Manager.
   secret_manager_config {
     enabled = true
   }
@@ -75,11 +75,19 @@ resource "google_service_account_iam_member" "runtime_workload_identity" {
   # The cluster creates the workload identity pool these members name.
   depends_on = [google_container_cluster.workers]
 }
-# The Secret Manager add-on mounts bundles as the pod's own Kubernetes identity.
+# The Secret Manager add-on mounts values as the pod's own Kubernetes identity.
 resource "google_secret_manager_secret_iam_member" "worker_pod_reader" {
-  for_each   = var.gke_workers ? toset(["shared", "worker"]) : toset([])
+  for_each   = var.gke_workers ? { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.worker } : {}
   project    = var.project_id
-  secret_id  = google_secret_manager_secret.runtime["${each.value}-env"].secret_id
+  secret_id  = google_secret_manager_secret.value[each.key].secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
+  depends_on = [google_container_cluster.workers]
+}
+resource "google_secret_manager_secret_iam_member" "worker_pod_temporal_reader" {
+  count      = local.gke
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.temporal_api_key.secret_id
   role       = "roles/secretmanager.secretAccessor"
   member     = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
   depends_on = [google_container_cluster.workers]
@@ -116,10 +124,13 @@ resource "helm_release" "workers" {
     image          = var.image
     environment    = var.environment
     runtimeAccount = google_service_account.runtime.email
+    env            = local.shared_env
     secrets = {
-      shared   = "projects/${var.project_id}/secrets/${google_secret_manager_secret.runtime["shared-env"].secret_id}/versions/${var.secret_versions.shared}"
-      worker   = "projects/${var.project_id}/secrets/${google_secret_manager_secret.runtime["worker-env"].secret_id}/versions/${var.secret_versions.worker}"
-      temporal = { id = google_secret_manager_secret.temporal_api_key.secret_id, version = tostring(var.secret_versions.temporal) }
+      files = [for name, secret_id in local.worker_secret_env : {
+        resourceName = "projects/${var.project_id}/secrets/${secret_id}/versions/latest"
+        path         = name
+      }]
+      temporal = { id = google_secret_manager_secret.temporal_api_key.secret_id, version = "latest" }
     }
     temporal = {
       address   = var.temporal_address
@@ -132,6 +143,7 @@ resource "helm_release" "workers" {
     helm_release.keda,
     google_service_account_iam_member.runtime_workload_identity,
     google_secret_manager_secret_iam_member.worker_pod_reader,
+    google_secret_manager_secret_iam_member.worker_pod_temporal_reader,
     google_secret_manager_secret_iam_member.keda_temporal_reader,
   ]
 }

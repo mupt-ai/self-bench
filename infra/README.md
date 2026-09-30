@@ -10,7 +10,7 @@ SelfBench runs on a small GCP stack managed with Terraform:
 - Artifact Registry and Secret Manager
 - GitHub Actions authentication through Workload Identity Federation
 
-Terraform owns everything, including each release: the image digest and pinned secret versions are Terraform inputs. GitHub Actions builds the image and applies the plan.
+Terraform owns everything, including each release: the image digest, public origins and non-secret runtime settings are Terraform inputs. GitHub Actions builds the image and applies the plan.
 
 ## Layout
 
@@ -20,7 +20,6 @@ infra/
 │   ├── environments/{dev,prod}/
 │   └── modules/selfbench-environment/
 ├── runtime/
-│   ├── secret-versions/{dev,prod}.json
 │   └── *.env.example
 ├── ci/verify-source.sh
 └── check.sh
@@ -56,7 +55,7 @@ cp backend.hcl.example backend.hcl
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Set `image` to a pushed digest and `secret_versions` to the manifest's versions, then initialize, review a saved plan, and apply that exact plan:
+Set `image`, `public_url`, `results_site_url` and the other runtime inputs, then initialize, review a saved plan, and apply that exact plan:
 
 ```sh
 terraform init -backend-config=backend.hcl -input=false
@@ -70,20 +69,33 @@ Use the independent `prod` root, project, state bucket, and variables for produc
 
 ## Runtime Configuration
 
-Create these Secret Manager secrets in each environment:
+Terraform creates one Secret Manager container for each sensitive runtime value. Existing environments migrated from env-file bundles set `import_runtime_secrets` to adopt containers created before that release. Values are loaded out of band so they never enter Terraform state:
 
-- `selfbench-shared-env`
-- `selfbench-api-env`
-- `selfbench-worker-env`
-
-Use the files under `infra/runtime/*.env.example` as the key layout. Store actual values only in Secret Manager. Cloud Run mounts each pinned version as a file that Node loads with `--env-file`: the API reads the shared and API bundles, and the worker reads the shared and worker bundles. Record the numeric version of each secret in:
-
-```text
-infra/runtime/secret-versions/dev.json
-infra/runtime/secret-versions/prod.json
+```sh
+printf '%s' "$VALUE" | gcloud secrets versions add selfbench-session-secret --project PROJECT --data-file=-
 ```
 
-Deployments never use `latest`. Images are deployed by immutable Artifact Registry digest.
+Required secrets:
+
+- `selfbench-database-url`
+- `selfbench-eval-credential-key`
+- `selfbench-sandbox-secret`
+- `selfbench-temporal-api-key`
+- `selfbench-github-oauth-client-secret`
+- `selfbench-session-secret`
+- `selfbench-api-token`
+- `selfbench-worker-api-token`
+
+Optional secrets must have a version before their feature is enabled:
+
+- `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `stripe_price_id` is set
+- `selfbench-managed-openrouter-api-key` when `managed_openrouter` is true
+- `selfbench-managed-e2b-api-key` when `managed_e2b` is true
+- `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_modal` is true
+
+Cloud Run and GKE read `latest` when new instances start. Add a secret version, then deploy; the deploy labels new Cloud Run revisions with its run ID, so every release starts instances with the latest values. Running instances keep the values they started with until they are replaced.
+
+Non-secret runtime settings live in `TF_INPUTS_JSON` or are derived by Terraform. See `infra/runtime/*.env.example` for the full split. Images are deployed by immutable Artifact Registry digest.
 
 The runtime expects:
 
@@ -121,7 +133,7 @@ The workflow:
 1. validates the repository and application;
 2. verifies the source event before cloud authentication;
 3. builds and pushes a digest-pinned image;
-4. creates a saved Terraform plan with the planner identity, with that digest, the pinned secret versions and the activity concurrency as inputs;
+4. creates a saved Terraform plan with the planner identity, with that digest, the public origins, run ID and activity concurrency as inputs;
 5. creates a Cloud SQL backup;
 6. applies that same local plan with the apply identity. The new API revision migrates the database as it starts, then the worker pool rolls;
 7. checks the public API and results site.
@@ -145,12 +157,12 @@ With `"gke_workers": true`, Harbor work (the `<task queue>-harbor` queue: Harbor
 To turn it on:
 
 1. Grant the apply role `roles/container.admin`, and the plan role `container.clusters.get` plus read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records. Both also need `compute.instanceGroupManagers.get` and `.list`: the provider reads the cluster's node pools through them.
-2. Add a version holding only `SELFBENCH_TEMPORAL_API_KEY` to the `selfbench-temporal-api-key` secret (Terraform creates it empty), and record it as `"temporal"` in `infra/runtime/secret-versions/<env>.json`.
+2. Add the Temporal API key as a version of `selfbench-temporal-api-key`.
 3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` to `TF_INPUTS_JSON`, and release.
 
 ## Operational Notes
 
 - Dev and prod must not share projects, buckets, databases, Temporal namespaces, OAuth apps, or secrets.
-- The API and the worker run under separate service accounts and read only their own secrets.
+- The API and the worker run under separate service accounts and read only the secret values they need.
 - Roll back an image only when database migrations and Temporal workflow replay remain compatible.
-- Keep previous image digests and secret versions. Never auto-roll back a database migration.
+- Keep previous image digests and secret versions. Disable old secret versions only after the instances using them have been replaced. Never auto-roll back a database migration.

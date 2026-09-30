@@ -50,12 +50,21 @@ spec:
         containers:
           - name: worker
             image: {{ .Values.image | quote }}
+            # The CSI driver mounts files; export each one under its env name before Node starts.
             command:
-              - node
-              - --env-file=/secrets/shared-env
-              - --env-file=/secrets/worker-env
-              - dist/temporal/worker-main.js
+              - /bin/sh
+              - -ec
+              - |
+                for file in /secrets/*; do
+                  name=${file##*/}
+                  export "$name=$(cat "$file")"
+                done
+                exec node dist/temporal/worker-main.js
             env:
+              {{- range $name, $value := .Values.env }}
+              - name: {{ $name | quote }}
+                value: {{ $value | quote }}
+              {{- end }}
               - name: SELFBENCH_WORKER_ROLE
                 value: harbor
               - name: SELFBENCH_ENVIRONMENT
@@ -81,7 +90,7 @@ spec:
               driver: secrets-store-gke.csi.k8s.io
               readOnly: true
               volumeAttributes:
-                secretProviderClass: selfbench-worker-env
+                secretProviderClass: selfbench-worker-secrets
           # Ten unpacked task bundles and their Harbor downloads, on a disk of the pod's own.
           - name: scratch
             ephemeral:

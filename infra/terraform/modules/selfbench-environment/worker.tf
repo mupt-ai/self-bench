@@ -11,6 +11,7 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
     manual_instance_count = var.worker_instances
   }
   template {
+    labels          = merge(local.labels, { release = var.release_id })
     service_account = google_service_account.runtime.email
     vpc_access {
       egress = "PRIVATE_RANGES_ONLY"
@@ -19,22 +20,9 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
         subnetwork = google_compute_subnetwork.app.id
       }
     }
-    dynamic "volumes" {
-      for_each = google_secret_manager_secret_iam_member.runtime_reader
-      content {
-        name = volumes.key
-        secret {
-          secret = google_secret_manager_secret.runtime["${volumes.key}-env"].secret_id
-          items {
-            version = var.secret_versions[volumes.key]
-            path    = "env"
-          }
-        }
-      }
-    }
     containers {
       image   = var.image
-      command = ["node", "--env-file=/secrets/shared/env", "--env-file=/secrets/worker/env", "dist/temporal/worker-main.js"]
+      command = ["node", "dist/temporal/worker-main.js"]
       env {
         name  = "SELFBENCH_ACTIVITY_CONCURRENCY"
         value = tostring(var.activity_concurrency)
@@ -42,6 +30,25 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
       env {
         name  = "SELFBENCH_ENVIRONMENT"
         value = var.environment
+      }
+      dynamic "env" {
+        for_each = local.shared_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.worker_secret_env
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
       }
       # Once the GKE Harbor workers are proven, this pool leaves the Harbor queue to them.
       dynamic "env" {
@@ -56,15 +63,12 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
       resources {
         limits = { cpu = "2", memory = "8Gi" }
       }
-      dynamic "volume_mounts" {
-        for_each = google_secret_manager_secret_iam_member.runtime_reader
-        content {
-          name       = volume_mounts.key
-          mount_path = "/secrets/${volume_mounts.key}"
-        }
-      }
     }
   }
   # The API migrates the schema on start; the worker rolls only after it is ready.
-  depends_on = [google_cloud_run_v2_service.api]
+  depends_on = [
+    google_cloud_run_v2_service.api,
+    google_secret_manager_secret_iam_member.runtime_reader,
+    google_secret_manager_secret_iam_member.runtime_temporal_reader,
+  ]
 }

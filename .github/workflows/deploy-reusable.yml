@@ -110,12 +110,13 @@ jobs:
         with:
           terraform_version: 1.14.2
           terraform_wrapper: false
-      # The release is plain Terraform input: the pushed digest, pinned secret versions and
+      # The release is plain Terraform input: the pushed digest, public origins, run identity and
       # worker concurrency. Applying it rolls the API revision, then the worker pool.
       - name: Generate Terraform Plan
         id: plan
         env:
           IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           export TF_DATA_DIR="$RUNNER_TEMP/terraform-data"
@@ -125,10 +126,12 @@ jobs:
           results_site_domain="${SELFBENCH_RESULTS_SITE_URL#https://}"
           results_site_domain="$(tr '[:upper:]' '[:lower:]' <<<"${results_site_domain%%:*}")"
           jq -n --argjson inputs "$TF_INPUTS_JSON" --arg image "$IMAGE" \
-              --argjson secret_versions "$RUNTIME_SECRET_VERSIONS" \
+              --arg release_id "$RELEASE_ID" \
+              --arg public_url "$SELFBENCH_PUBLIC_URL" \
+              --arg results_site_url "$SELFBENCH_RESULTS_SITE_URL" \
               --argjson activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
               --arg results_site_domain "$results_site_domain" \
-              '$inputs + {image: $image, secret_versions: $secret_versions, activity_concurrency: $activity_concurrency, results_site_domain: $results_site_domain}' \
+              '$inputs + {image: $image, release_id: $release_id, public_url: $public_url, results_site_url: $results_site_url, activity_concurrency: $activity_concurrency, results_site_domain: $results_site_domain}' \
             > "$RUNNER_TEMP/terraform.tfvars.json"
           terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
           terraform -chdir="$root" validate
