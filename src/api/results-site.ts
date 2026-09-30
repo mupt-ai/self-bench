@@ -137,14 +137,21 @@ export function createResultsSite(options: ResultsSiteOptions) {
   /**
    * The page's head and text, with 200 for the directory and released repositories and 404 for
    * anything the site cannot show. A path that cannot name a repository is refused without a
-   * lookup. Both read the snapshot of released lines, never the database.
+   * lookup. Both read the snapshot of released lines, never the database. `partial` marks a home
+   * page written without its directory, because the snapshot could not be read: it is still
+   * served, but never cached, so the CDN never keeps a directory with nothing in it.
    */
   const pageOf = async (
     pathname: string,
-  ): Promise<{ status: 200 | 404; head: PageHead; body: string }> => {
+  ): Promise<{ status: 200 | 404; head: PageHead; body: string; partial?: boolean }> => {
     if (pathname === "/") {
-      const repositories = await options.publicRoutes.repositories().catch(() => []);
-      return { status: 200, head: homeHead(origin), body: homeBody(repositories) };
+      const repositories = await options.publicRoutes.repositories().catch(() => undefined);
+      return {
+        status: 200,
+        head: homeHead(origin),
+        body: homeBody(repositories ?? []),
+        partial: !repositories,
+      };
     }
     const path = repositoryPath(segmentsOf(pathname));
     if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
@@ -254,7 +261,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
         });
         return true;
       }
-      const { status, head, body } = await pageOf(url.pathname);
+      const { status, head, body, partial } = await pageOf(url.pathname);
       let html: TaggedBody;
       try {
         html = await page(head, body);
@@ -265,7 +272,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
       }
       if (status === 200) {
         sendTagged(request, response, html, {
-          "cache-control": PAGE_CACHE,
+          "cache-control": partial ? "no-store" : PAGE_CACHE,
           "content-type": HTML_TYPE,
         });
         return true;
