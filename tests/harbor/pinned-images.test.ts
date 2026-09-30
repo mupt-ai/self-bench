@@ -189,7 +189,7 @@ test("a Modal trial of a compile without the split files unpacks the full bundle
   expect(await readFile(join(directory, "environment/repo.tar.gz"), "utf8")).toBe("snapshot");
 });
 
-test("the Modal environment starts from its role's pin, falls back when Modal lost it, and records the image", async () => {
+test("the Modal environment starts from its role's pin, falls back when Modal lost it, records the image, and bounds sandbox lifetime", async () => {
   const record = await temporary();
   const result = await runCommand("python3", [
     "-c",
@@ -207,6 +207,7 @@ exception.NotFoundError, exception.PermissionDeniedError, exception.InvalidError
 harbor_modal = types.ModuleType("harbor.environments.modal")
 class ModalEnvironment:
     def __init__(self, environment_dir, compose=False, **kwargs):
+        self.kwargs = kwargs
         self.environment_dir = pathlib.Path(environment_dir)
         self._compose_mode = compose
         self._image = Image("im-Built")
@@ -234,6 +235,11 @@ async def check():
     composed = module.SelfBenchModalEnvironment("/task/tests", compose=True, verifier_image="im-Verifier1")
     await composed._create_sandbox()
     assert composed.started == ["im-Built"], composed.started
+    # A sandbox whose trial stops without cleaning up ends within hours, not Harbor's 24.
+    for environment in (agent, verifier, composed):
+        assert environment.kwargs == {"sandbox_timeout_secs": 10800, "sandbox_idle_timeout_secs": 1800}, environment.kwargs
+    tuned = module.SelfBenchModalEnvironment("/task/tests", sandbox_idle_timeout_secs=None)
+    assert tuned.kwargs["sandbox_idle_timeout_secs"] is None, tuned.kwargs
 asyncio.run(check())
 `,
     fileURLToPath(

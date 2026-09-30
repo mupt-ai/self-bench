@@ -6,7 +6,8 @@ IDs with the accepted task. A trial passes them back as ``agent_image`` / ``veri
 environment kwargs and starts from ``Image.from_id``, so it neither resolves nor builds the
 Dockerfile. A pin Modal no longer knows (another workspace, or an image Modal dropped) falls
 back to the Dockerfile build Harbor would have done. Compose tasks (Harbor's Docker-in-Docker
-strategy) never pin: their sandbox image is the DinD host, not the task.
+strategy) never pin: their sandbox image is the DinD host, not the task. Every sandbox also
+gets a lifetime and an idle limit, so one whose trial stopped without cleaning up ends itself.
 """
 
 from __future__ import annotations
@@ -24,6 +25,13 @@ UNUSABLE_PIN = (NotFoundError, PermissionDeniedError, InvalidError)
 # Harbor builds the agent from the task's environment/ and a separate verifier from its tests/.
 _ROLES = {"environment": "agent", "tests": "verifier"}
 
+# Harbor's defaults keep a sandbox for a day with no idle limit, so a trial stopped mid-run
+# (cancelled, timed out, or its worker replaced) left its sandbox running for 24 hours. No Harbor
+# process outlives the 3-hour gate cap (HARBOR_PROCESS_TIMEOUT_MS), and Modal counts a sandbox
+# with a command running as active, so a live trial never sits idle for half an hour.
+SANDBOX_LIFETIME_SECS = 3 * 60 * 60
+SANDBOX_IDLE_SECS = 30 * 60
+
 
 class SelfBenchModalEnvironment(ModalEnvironment):
     def __init__(
@@ -32,9 +40,16 @@ class SelfBenchModalEnvironment(ModalEnvironment):
         agent_image: str | None = None,
         verifier_image: str | None = None,
         image_record_dir: str | None = None,
+        sandbox_timeout_secs: int = SANDBOX_LIFETIME_SECS,
+        sandbox_idle_timeout_secs: int | None = SANDBOX_IDLE_SECS,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            *args,
+            sandbox_timeout_secs=sandbox_timeout_secs,
+            sandbox_idle_timeout_secs=sandbox_idle_timeout_secs,
+            **kwargs,
+        )
         self._selfbench_role = _ROLES.get(self.environment_dir.name)
         pins = {"agent": agent_image, "verifier": verifier_image}
         self._selfbench_pin = pins.get(self._selfbench_role) if self._selfbench_role else None
