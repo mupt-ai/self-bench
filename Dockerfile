@@ -30,6 +30,8 @@ RUN mkdir -p /var/lib/selfbench/artifacts && chown -R node:node /var/lib/selfben
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle ./drizzle
+# The fonts the results site draws its link preview images with.
+COPY --from=build /app/assets ./assets
 COPY --from=build /app/src/harnesses/pi/extensions ./src/harnesses/pi/extensions
 COPY package.json ./package.json
 # The managed E2B template is built from this packaged file when a run needs it.

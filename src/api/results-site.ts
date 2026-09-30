@@ -2,12 +2,15 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import { repositoryPath, segmentsOf } from "../public/paths.js";
+import type { PublishedRelease } from "../public/release-types.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
+import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import {
   headTags,
   homeHead,
+  lineAt,
   notFoundHead,
   type PageHead,
   repositoryHead,
@@ -55,6 +58,13 @@ function sameHost(protocol: string): (value: string | undefined) => string | und
  * a bodyless 304 while it is unchanged, so none keeps a page from before a deploy.
  */
 const PAGE_CACHE = "public, max-age=0, s-maxage=60";
+/**
+ * A link preview image stays the same for its release (its address carries the release id), so
+ * the CDN may keep it a day; browsers an hour, in case one is fetched without the id.
+ */
+const CARD_CACHE = "public, max-age=3600, s-maxage=86400";
+/** How many preview images are kept drawn, by release: each takes a few tens of milliseconds. */
+const CARDS_KEPT = 100;
 const HTML_TYPE = "text/html; charset=utf-8";
 
 /** The build's own title and description, which each page's head replaces. */
@@ -89,6 +99,20 @@ export function createResultsSite(options: ResultsSiteOptions) {
   };
   const page = async (head: PageHead) =>
     tagged((await built()).replace("</head>", `${headTags(head, origin)}  </head>`));
+  /** Preview images already drawn, by release id, oldest first. */
+  const cards = new Map<string, Buffer>();
+  const cardFor = (release: PublishedRelease) => {
+    let png = cards.get(release.releaseId);
+    if (!png) {
+      png = cardPng(release);
+      cards.set(release.releaseId, png);
+      for (const key of cards.keys()) {
+        if (cards.size <= CARDS_KEPT) break;
+        cards.delete(key);
+      }
+    }
+    return png;
+  };
   /** A built file for this path, or undefined; never outside the build, never the shell. */
   const file = async (pathname: string) => {
     if (pathname === "/" || pathname.endsWith("/") || pathname === "/index.html") return undefined;
@@ -136,6 +160,38 @@ export function createResultsSite(options: ResultsSiteOptions) {
           "cache-control": "public, max-age=3600",
         });
         response.end(body);
+        return true;
+      }
+      // A repository's link preview image: /og/<owner>/<name>.png, or …/<name>/<publisher>.png.
+      const card = /^\/og\/(.+)\.png$/.exec(url.pathname);
+      if (card) {
+        const path = repositoryPath(segmentsOf(card[1] ?? ""));
+        const lines = path
+          ? await options.publicRoutes.linesFor(`${path.owner}/${path.name}`).catch(() => [])
+          : [];
+        const release = path ? lineAt(lines, path.publisher)?.release : undefined;
+        if (!release) {
+          sendJson(response, 404, { error: "not found" });
+          return true;
+        }
+        // Drawing costs CPU, so a new image counts against the client's limit; a kept one does not.
+        const verdict = cards.has(release.releaseId)
+          ? { ok: true as const }
+          : (options.limiter?.take(clientIp(request)) ?? { ok: true as const });
+        if (!verdict.ok) {
+          response.setHeader("cache-control", "no-store");
+          response.setHeader("retry-after", String(verdict.retryAfter));
+          sendJson(response, 429, { error: "Too many requests; try again shortly" });
+          return true;
+        }
+        const png = cardFor(release);
+        response.writeHead(200, {
+          "content-type": "image/png",
+          "content-length": png.byteLength,
+          "cache-control": CARD_CACHE,
+          "x-content-type-options": "nosniff",
+        });
+        response.end(request.method === "HEAD" ? undefined : png);
         return true;
       }
       const found = await file(url.pathname).catch(() => undefined);

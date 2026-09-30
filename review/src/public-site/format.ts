@@ -1,6 +1,15 @@
 import type { ParetoPlotProps, ParetoPoint } from "@mupt-ai/dari-pareto";
 import { endpointNumber } from "../../../src/public/endpoint-numbers";
+import {
+  CUSTOM_VENDOR,
+  type ModelSource,
+  vendorColor,
+  vendorName,
+} from "../../../src/public/vendors";
 import type { PickRole, PublicPublisher, PublicSetting } from "./contract";
+
+// Vendor colors and names are the server's too, for the link preview images; one table serves both.
+export { vendorColor, vendorName } from "../../../src/public/vendors";
 
 /** Display names for workspace logins whose GitHub name differs from the product name. */
 const PUBLISHER_NAMES: Record<string, string> = { "mupt-ai": "dari.dev" };
@@ -96,53 +105,6 @@ export function accessLabel(setting: Pick<PublicSetting, "custom" | "signIn" | "
 export function reasoningLabel(setting: Pick<PublicSetting, "reasoningLevel">): string {
   const level = setting.reasoningLevel;
   return level === "xhigh" ? "X-High" : level.charAt(0).toUpperCase() + level.slice(1);
-}
-
-/** What a model's vendor is read from: a public setting, or a run in the app. */
-type ModelSource = { provider: string; model: { name: string } };
-
-/** The model's vendor, which colors its point: OpenRouter models by the vendor they route to. */
-function vendor(setting: ModelSource): string {
-  if (setting.provider !== "openrouter") return setting.provider;
-  // Catalog names put the vendor first ("z-ai/glm-5.3"); some exports prefix the gateway.
-  const [first, second] = setting.model.name.split("/");
-  return (first === "openrouter" ? second : first) ?? "openrouter";
-}
-
-// Every vendor in the model catalog needs its own color here and a name in VENDOR_NAMES; an
-// unlisted one would look like Custom (AGENTS.md, Model Vendors).
-const VENDOR_COLORS: Record<string, string> = {
-  openai: "#0f9f7a",
-  anthropic: "#d4714e",
-  google: "#3b7ddd",
-  "z-ai": "#8b5cf6",
-  deepseek: "#4f63d8",
-  moonshotai: "#c0457a",
-  custom: "#8a8580",
-};
-
-export function vendorColor(setting: ModelSource): string {
-  return VENDOR_COLORS[vendor(setting)] ?? "#8a8580";
-}
-
-/** The group custom endpoints share, whatever model they serve. */
-const CUSTOM_VENDOR = "Custom";
-
-/** Vendors as they write their own names; any other vendor keeps its id. */
-const VENDOR_NAMES: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  google: "Google",
-  "z-ai": "Z.ai",
-  deepseek: "DeepSeek",
-  moonshotai: "Moonshot AI",
-  custom: CUSTOM_VENDOR,
-};
-
-/** The name of the model's vendor, for grouping points by who made the model. */
-export function vendorName(setting: ModelSource): string {
-  const id = vendor(setting);
-  return VENDOR_NAMES[id] ?? id;
 }
 
 /**
