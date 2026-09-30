@@ -4,12 +4,12 @@
  * app's theme.css both import it, so anything built on the frame (selfbench.dev, and the app's
  * sign-in page) gets the same measurements.
  *
- * The defaults are in the base layer, so the compact values below win wherever they apply.
+ * The defaults are in the base layer, so the values below win wherever they apply.
  */
 @layer base {
   :root {
     /* How far each ruler line sits in from its window edge. */
-    --edge: clamp(24px, 6vw, 160px);
+    --edge: min(6vw, 160px);
     /* The page's side padding. */
     --gutter: 1.5rem;
     /* The header's and footer's side padding, inside the rulers. */
@@ -22,14 +22,30 @@
   }
 }
 
-/* A small or short screen (the compact variant in mobile/mobile.css): rulers close to the
-   window's edges, and the page just inside them. */
+/*
+ * The rulers only where the page's full column (72rem) fits between them, 6% in from each side:
+ * from 82rem wide, and never on a phone. On a narrower window they would cut into the page, so
+ * they are left out, the header and footer reach the window's sides, and their content lines up
+ * with the page's. `rulerless:` styles apply there. (The block form keeps the comma inside one
+ * media query; the one-line form would split the variant in two.)
+ */
+@custom-variant rulerless {
+  @media (width < 82rem), (height < 32rem) {
+    @slot;
+  }
+}
+@media (width < 82rem), (height < 32rem) {
+  :root {
+    --edge: 0px;
+    --bar-inset: var(--gutter);
+  }
+}
+
+/* A small or short screen (the compact variant in mobile/mobile.css): the page closer to the
+   window's sides. */
 @media (width < 40rem), (height < 32rem) {
   :root {
-    --edge: 10px;
     --gutter: 1rem;
-    /* Header and footer content lines up with the page's, not further in. */
-    --bar-inset: calc(var(--gutter) - var(--edge));
     --bar-top: 56px;
     /* The footer is not pinned: it closes the page instead (PublicLayout). */
     --bar-bottom: 0px;

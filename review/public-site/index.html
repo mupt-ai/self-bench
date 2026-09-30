@@ -41,9 +41,6 @@
         save("selfbench-theme", theme);
         save("selfbench-system", system);
         if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
-        var motion = read("selfbench-motion");
-        if (motion) save("selfbench-motion", motion);
-        if (motion === "off") document.documentElement.setAttribute("data-motion", "off");
       } catch (error) {}
     </script>
   </head>

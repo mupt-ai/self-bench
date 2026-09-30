@@ -11,7 +11,6 @@ import { WaterBackground, WaterBands } from "./effects/WaterBackground";
 import { EDGE_FRAME, FRAME, RULER_WIDTH } from "./frame";
 import { followJourney, homeView, journeyFrom, repositoryOf } from "./home-view";
 import { RulerScrollbar } from "./RulerScrollbar";
-import { SettingsMenu } from "./SettingsMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** The app's origin: set by the server that serves the site, prod's app otherwise. */
@@ -40,7 +39,8 @@ const FOOTER = "h-[49px]";
 /**
  * The frame every public page shares. The window scrolls, with the header and footer pinned
  * over it (see scroll-area.ts), so the browser's own scrolling, rubber-band included, applies
- * to the page. Two ruler lines run the full height at the frame's edges.
+ * to the page. Two ruler lines run the full height at the frame's edges, on a window wide
+ * enough for them (frame.css).
  */
 export function PublicLayout() {
   const location = useLocation();
@@ -86,7 +86,7 @@ export function PublicLayout() {
       </svg>
       <div
         aria-hidden="true"
-        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler)`}
+        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler) rulerless:hidden`}
       />
       <RulerScrollbar />
       {/*
@@ -122,14 +122,10 @@ export function PublicLayout() {
               Sign In
             </a>
             {/*
-              The icons sit in 32px buttons with 8px of space around each glyph. Grouped 4px
-              apart, every visible gap in the nav comes out at 20px, and pulling the group out
-              by 8px puts the last glyph on the frame edge.
+              The theme button is 32px with 8px of space around its glyph, so the nav's gap
+              comes out at 20px, and pulling it out by 8px puts the glyph on the frame edge.
             */}
-            <span className="-mr-2 flex items-center gap-1">
-              <ThemeToggle />
-              <SettingsMenu />
-            </span>
+            <ThemeToggle className="-mr-2" />
           </nav>
         </div>
       </header>

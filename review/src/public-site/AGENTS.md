@@ -13,9 +13,10 @@ the page.
 The layer (`mobile/mobile.css`, `mobile/device.ts`, `mobile/AdaptiveTable.tsx`):
 
 - Space: the frame's measurements are CSS variables (`--edge`, `--gutter`, `--bar-inset`,
-  `--bar-top`, `--bar-bottom`, `--page-pad`, in `theme.css`), narrowed for phones in
-  `mobile.css`. Frame pages with `frame.ts` (`FRAME`, `EDGE_FRAME`, `RULER_WIDTH`) and those
-  variables, not fixed pixels.
+  `--bar-top`, `--bar-bottom`, `--page-pad`), in `frame.css` and narrowed there for phones.
+  Frame pages with `frame.ts` (`FRAME`, `EDGE_FRAME`, `RULER_WIDTH`) and those variables, not
+  fixed pixels. The ruler lines show only where the page's full column fits between them (from
+  82rem wide, never on a phone); `rulerless:` styles apply where they are left out.
 - `compact:` is a small or short screen, a phone either way up (width under 40rem or height
   under 32rem). Use it for sizes that must differ on a phone.
 - `touch:` is a finger (`pointer: coarse`). `hover:` already applies only where the pointer can
