@@ -11,6 +11,9 @@ export default defineConfig({
   build: {
     outDir: "../../dist/public-site",
     emptyOutDir: true,
+    // Fonts stay files, fetched only for the characters a page uses, rather than riding in the
+    // stylesheet that holds up the first paint (see src/public-site/fonts/fonts.css).
+    assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined),
   },
   server: {
     port: 5174,
