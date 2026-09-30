@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { paretoFrontier } from "@mupt-ai/dari-pareto";
+import { setOpenRouterModels } from "../src/contracts/models.js";
 import { previewRelease } from "../src/public/release-build.js";
 import { frontierOf } from "../src/public/release-rule.js";
 import { approvedTasks, full, inputs, names, run } from "./support/release-fixture.js";
@@ -11,6 +12,17 @@ test("a model no longer in the catalog keeps the name its runs recorded", () => 
   const retired = run({ model: "openai-terra56", results: { t1: 1 } });
   const preview = previewRelease(inputs({ runs: [retired], tasks: approvedTasks(["t1"]) }));
   expect(preview.settings[0]?.label).toBe(retired.modelLabel);
+});
+
+test("a model only OpenRouter lists is named as OpenRouter lists it", () => {
+  const listed = run({ model: "qwen/qwen4-coder", provider: "openrouter", results: { t1: 1 } });
+  setOpenRouterModels([{ id: "qwen/qwen4-coder", label: "Qwen: Qwen4 Coder" }]);
+  try {
+    const preview = previewRelease(inputs({ runs: [listed], tasks: approvedTasks(["t1"]) }));
+    expect(preview.settings[0]?.label).toBe("Qwen: Qwen4 Coder");
+  } finally {
+    setOpenRouterModels([]);
+  }
 });
 
 test("unresolvable settings (no credentials block, unknown credential) are ignored", () => {

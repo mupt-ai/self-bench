@@ -1,7 +1,8 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { defaultThinking, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { matchesQuery } from "../word-search";
 import type { Harness } from "./api";
 
 export const customModel: CatalogModel = {
@@ -12,6 +13,11 @@ export const customModel: CatalogModel = {
   harnesses: ["pi"],
   source: "",
 };
+
+/** The models whose name or id has a word starting with each word of `query`, in catalog order. */
+export function matchingModels(models: CatalogModel[], query: string): CatalogModel[] {
+  return models.filter((model) => matchesQuery(`${model.label} ${model.id}`, query));
+}
 
 export function nextModelSelection(
   model: CatalogModel,
@@ -35,8 +41,7 @@ export function hasModelSelection(
   candidate: ComparisonDraft["models"][number],
 ): boolean {
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) =>
-    selection.thinking ??
-    (thinkingOptions(model, selection.harnesses).includes("high") ? "high" : "default");
+    selection.thinking ?? defaultThinking(thinkingOptions(model, selection.harnesses));
   return selections.some(
     (selection) =>
       selection.catalogId === candidate.catalogId &&

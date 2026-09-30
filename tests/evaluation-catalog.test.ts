@@ -1,6 +1,13 @@
-import { expect, test } from "bun:test";
-import { type CatalogModel, catalog, withReferencePricing } from "../src/evaluation/catalog.js";
+import { afterEach, expect, test } from "bun:test";
+import { setOpenRouterModels, setOpenRouterRates } from "../src/contracts/models.js";
 import {
+  type CatalogModel,
+  catalog,
+  evaluationCatalog,
+  withReferencePricing,
+} from "../src/evaluation/catalog.js";
+import {
+  defaultThinking,
   harnessIds,
   modelRoutes,
   routeFor,
@@ -12,6 +19,63 @@ import {
   generationModelPricing,
   generationModels,
 } from "../src/generation/settings/models.js";
+
+afterEach(() => {
+  setOpenRouterModels([]);
+  setOpenRouterRates(new Map());
+});
+
+test("OpenRouter's popular models join the curated ones, which keep their routes and levels", () => {
+  expect(evaluationCatalog()).toEqual(catalog);
+  setOpenRouterModels([
+    { id: "qwen/qwen4-coder", label: "Qwen: Qwen4 Coder", thinking: ["low", "high", "max"] },
+    { id: "moonshotai/kimi-k3", label: "MoonshotAI: Kimi K3", thinking: ["low", "high", "max"] },
+    { id: "openai/gpt-6-sol", label: "OpenAI: GPT-6 Sol", thinking: ["low"] },
+  ]);
+  setOpenRouterRates(
+    new Map([["qwen/qwen4-coder", { rates: [1, 4, 0.1, 1], asOf: "2026-09-29" }]]),
+  );
+  const models = evaluationCatalog();
+  expect(models.slice(0, 3).map((model) => model.id)).toEqual([
+    "qwen/qwen4-coder",
+    "kimi-k3",
+    "gpt-6-sol",
+  ]);
+  expect(models).toHaveLength(catalog.length + 1);
+  const [qwen, kimi, sol] = models;
+  if (!qwen || !kimi || !sol) throw new Error("Missing models");
+  expect(modelRoutes(qwen)).toEqual([
+    {
+      ...qwen,
+      harnesses: [...harnessIds],
+      pricing: expect.objectContaining({ input: 1, output: 4, asOf: "2026-09-29" }),
+    },
+  ]);
+  expect(qwen).toMatchObject({ provider: "openrouter", model: "qwen/qwen4-coder" });
+  expect(thinkingOptions(qwen, ["pi"])).toEqual(["low", "high"]);
+  // Kimi has no curated levels, so OpenRouter's apply; Sol keeps its own and its OpenAI route.
+  expect(thinkingOptions(kimi, ["pi"])).toEqual(["low", "high"]);
+  expect(thinkingOptions(sol, ["codex"])).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
+  expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
+});
+
+test("a row with no chosen level runs at high, or else the first level its model offers", () => {
+  const model: CatalogModel = {
+    id: "vendor/model",
+    provider: "openrouter",
+    model: "vendor/model",
+    label: "Model",
+    harnesses: ["pi"],
+    source: "",
+    thinking: ["low", "max"],
+  };
+  expect(defaultThinking(thinkingOptions(model, ["pi"]))).toBe("low");
+  expect(defaultThinking(thinkingOptions(model, ["codex"]))).toBe("low");
+  expect(thinkingOptions({ ...model, thinking: ["max"] }, ["pi"])).toEqual(["default"]);
+  expect(defaultThinking(thinkingOptions({ ...model, thinking: ["low", "high"] }, ["pi"]))).toBe(
+    "high",
+  );
+});
 
 test("current catalog exposes explicit model IDs and dated provider pricing", () => {
   expect(new Set(catalog.map((model) => model.id)).size).toBe(catalog.length);

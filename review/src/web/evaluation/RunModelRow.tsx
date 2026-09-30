@@ -2,9 +2,15 @@ import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { harnessOptions, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import {
+  defaultThinking,
+  harnessOptions,
+  routeFor,
+  thinkingOptions,
+} from "../../../../src/evaluation/models";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
+import { ModelPicker } from "./ModelPicker";
 import { nextModelSelection } from "./model-selection";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
@@ -28,7 +34,7 @@ export function RunModelRow({
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
   const route = credential ? routeFor(model, credential.kind) : undefined;
   const levels = thinkingOptions(model, selected.harnesses);
-  const thinking = selected.thinking ?? (levels.includes("high") ? "high" : "default");
+  const thinking = selected.thinking ?? defaultThinking(levels);
   const selectCredential = (credentialId: string) => {
     const nextCredential = credentials.find((entry) => entry.id === credentialId);
     const nextRoute = nextCredential ? routeFor(model, nextCredential.kind) : undefined;
@@ -54,13 +60,10 @@ export function RunModelRow({
     <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
       <div className="min-w-0 sm:col-span-3 xl:col-span-1">
         <span className={mobileLabel}>Model</span>
-        <Select
-          className="text-sm md:text-sm"
-          aria-label="Model"
+        <ModelPicker
+          models={models}
           value={selected.catalogId}
-          onChange={(event) => {
-            const nextModel = models.find((entry) => entry.id === event.target.value);
-            if (!nextModel) return;
+          onSelect={(nextModel) => {
             const next = nextModelSelection(nextModel, credentials, selected.harnesses[0]) ??
               nextModelSelection(nextModel, credentials) ?? {
                 catalogId: nextModel.id,
@@ -74,16 +77,7 @@ export function RunModelRow({
               next.thinking = selected.thinking;
             onChange(next);
           }}
-        >
-          <option value="" disabled>
-            Select Model
-          </option>
-          {models.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </Select>
+        />
         {model.id === "custom" && (
           <Input
             aria-label="Custom Model ID"

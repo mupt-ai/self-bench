@@ -5,6 +5,7 @@ import { endpointNumber, publicIds } from "../../../../src/public/endpoint-numbe
 import { credentialAccess, endpointLabel, providers } from "../evaluation/credential-presentation";
 import { thinkingLabel } from "../evaluation/run-presentation";
 import { SearchInput } from "../ui";
+import { matchesQuery } from "../word-search";
 import type { PreviewSetting } from "./api";
 
 /**
@@ -107,17 +108,9 @@ export function SettingsPicker({
   onChange(next: Set<string>): void;
 }) {
   const idBase = React.useId();
-  const wordsOf = (text: string) =>
-    text
-      .toLowerCase()
-      .split(/[\s·()/.-]+/)
-      .filter(Boolean);
-  const words = wordsOf(query);
-  // Each word must start a word of the row, so "pi" finds the Pi harness, not "API Key".
-  const visible = settings.filter((setting) => {
-    const tokens = wordsOf([setting.label, ...Object.values(columnsOf(setting))].join(" "));
-    return words.every((word) => tokens.some((token) => token.startsWith(word)));
-  });
+  const visible = settings.filter((setting) =>
+    matchesQuery([setting.label, ...Object.values(columnsOf(setting))].join(" "), query),
+  );
   const groups = new Map<string, PreviewSetting[]>();
   for (const setting of visible)
     groups.set(setting.label, [...(groups.get(setting.label) ?? []), setting]);

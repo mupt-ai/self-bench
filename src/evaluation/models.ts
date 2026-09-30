@@ -1,4 +1,4 @@
-import { findModel, type ThinkingLevel } from "../contracts/models.js";
+import type { ThinkingLevel } from "../contracts/models.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
 
 export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
@@ -26,9 +26,8 @@ const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = 
 
 /** Every credential route for a model: its native provider (if any) and OpenRouter. */
 export function modelRoutes(model: CatalogModel): CatalogModel[] {
-  const entry = model.provider === "custom" ? undefined : findModel(model.id);
   const routed =
-    entry?.openRouter ??
+    model.openRouter ??
     (model.provider === "openrouter" || model.provider === "custom"
       ? model.model
       : `${model.provider}/${model.model}`);
@@ -58,9 +57,15 @@ export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): Thin
   if (harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2"))
     return ["default"];
   // Custom endpoints are typed in by the user; the catalog only describes its own models.
-  const levels = model.provider === "custom" ? undefined : findModel(model.id)?.thinking;
-  if (!levels) return ["default"];
-  return levels.filter((level) => !harnesses.includes("pi") || level !== "max");
+  const levels = (model.provider === "custom" ? undefined : model.thinking)?.filter(
+    (level) => !harnesses.includes("pi") || level !== "max",
+  );
+  return levels?.length ? levels : ["default"];
+}
+
+/** The level a row runs at when none is chosen: high where offered, else the first offered. */
+export function defaultThinking(levels: readonly ThinkingLevel[]): ThinkingLevel {
+  return levels.includes("high") ? "high" : (levels[0] ?? "default");
 }
 
 export function thinkingArguments(harness: Harness, level?: ThinkingLevel): string[] {

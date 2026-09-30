@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { setOpenRouterModels, setOpenRouterRates } from "../src/contracts/models.js";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
@@ -174,6 +175,45 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(4);
   } finally {
+    await fixture.close();
+  }
+});
+
+test("a model only OpenRouter lists runs through OpenRouter at its listed price", async () => {
+  const fixture = await evaluationServer();
+  const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+  const id = "qwen/qwen4-coder";
+  setOpenRouterModels([{ id, label: "Qwen: Qwen4 Coder", thinking: ["low", "high"] }]);
+  setOpenRouterRates(new Map([[id, { rates: [1, 4, 0.1, 1], asOf: "2026-09-29" }]]));
+  try {
+    const save = async (kind: string) => {
+      const response = await fixture.request(
+        "/api/orgs/avyay/credentials",
+        post({ kind, name: kind, value: `fake-${kind}` }),
+      );
+      return (await response.json()).id as string;
+    };
+    const credentialId = await save("openrouter");
+    const draft = {
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      sandbox: "e2b",
+      sandboxCredentialId: await save("e2b"),
+      models: [{ catalogId: "vendor/unlisted", credentialId, harnesses: ["pi"] }],
+    };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    draft.models = [{ catalogId: id, credentialId, harnesses: ["pi"] }];
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect(fixture.starts[0]).toMatchObject({
+      model: id,
+      modelName: `openrouter/${id}`,
+      thinking: "high",
+      pricing: { input: 1, output: 4, source: `https://openrouter.ai/${id}` },
+      credentials: { provider: "openrouter" },
+    });
+  } finally {
+    setOpenRouterModels([]);
+    setOpenRouterRates(new Map());
     await fixture.close();
   }
 });
