@@ -261,7 +261,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
             </InfoTooltip>
           </div>
           <RunModelTable
-            models={[customModel, ...models]}
+            models={[...models, customModel]}
             credentials={availableCredentials}
             draft={draft}
             onChange={(value) => setState({ draft: value, submitted: false })}

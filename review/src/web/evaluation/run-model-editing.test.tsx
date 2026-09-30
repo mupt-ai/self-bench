@@ -96,13 +96,16 @@ test("same-model rows remain editable while duplicate configurations cannot run"
       { catalogId: "", credentialId: "", harnesses: [] },
     ],
     async (browser) => {
-      const model = browser.document.querySelectorAll('select[aria-label="Model"]')[1];
-      if (!(model instanceof browser.HTMLSelectElement)) throw new Error("Missing model dropdown");
-      await act(async () => {
-        model.value = astra.id;
-        model.dispatchEvent(new browser.Event("change", { bubbles: true }));
-      });
-      expect(model.value).toBe(astra.id);
+      const model = browser.document.querySelectorAll('button[aria-label="Model"]')[1];
+      if (!(model instanceof browser.HTMLButtonElement)) throw new Error("Missing model picker");
+      await act(async () => model.click());
+      const option = [...browser.document.querySelectorAll('[role="option"]')].find(
+        (entry) => entry.textContent === astra.label,
+      );
+      if (!(option instanceof browser.HTMLButtonElement)) throw new Error("Missing Astra option");
+      await act(async () => option.click());
+      expect(model.textContent).toBe(astra.label);
+      expect(browser.document.querySelector('[role="listbox"]')).toBeNull();
       expect(browser.document.querySelector('[role="alert"]')?.textContent).toContain(
         "Duplicate configurations cannot run",
       );
@@ -122,7 +125,7 @@ test("same-model rows remain editable while duplicate configurations cannot run"
       expect(
         browser.document.querySelector('button[aria-label="Run"]')?.hasAttribute("disabled"),
       ).toBe(false);
-      expect(browser.document.querySelectorAll('select[aria-label="Model"]')[1]).toBe(model);
+      expect(browser.document.querySelectorAll('button[aria-label="Model"]')[1]).toBe(model);
       await act(async () => {
         reasoning.value = "high";
         reasoning.dispatchEvent(new browser.Event("change", { bubbles: true }));

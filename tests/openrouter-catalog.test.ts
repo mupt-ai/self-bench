@@ -67,15 +67,18 @@ test("a failed or empty refresh keeps the last good rates", async () => {
   expect(modelPricing(sol(), "openRouter")).toMatchObject({ input: 2, output: 10 });
 });
 
-test("the catalog lists agent-capable models in OpenRouter's popularity order", async () => {
+test("the catalog lists agent-capable models frontier first, then by popularity", async () => {
   let url = "";
   const agent = (id: string, extra: object = {}) => ({
     id,
-    name: `Name of ${id}`,
+    name: `Vendor: Name of ${id}`,
     pricing: { prompt: "0.000001", completion: "0.000002" },
     architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] },
     supported_parameters: ["tools", "reasoning"],
     ...extra,
+  });
+  const scored = (index: number) => ({
+    benchmarks: { artificial_analysis: { intelligence_index: index } },
   });
   await refreshOpenRouterCatalog((async (input: string) => {
     url = input;
@@ -83,30 +86,32 @@ test("the catalog lists agent-capable models in OpenRouter's popularity order", 
       data: [
         agent("z-ai/glm-5.3-flash", { reasoning: { supported_efforts: ["max", "none", "low"] } }),
         agent("vendor/retiring", { expiration_date: "2026-10-15" }),
-        agent("vendor/any-effort", { reasoning: { supported_efforts: null } }),
+        agent("vendor/any-effort", { reasoning: { supported_efforts: null }, ...scored(40) }),
         agent("vendor/no-tools", { supported_parameters: ["reasoning"] }),
         agent("vendor/images", { architecture: { output_modalities: ["image"] } }),
         agent("vendor/model:free"),
         agent("openrouter/auto"),
         agent("vendor/varies", { pricing: { prompt: "-1", completion: "0.000002" } }),
-        agent("moonshotai/kimi-k3", { name: "" }),
+        agent("moonshotai/kimi-k3", { name: "", ...scored(43.6) }),
+        agent("vendor/unscored"),
       ],
     });
   }) as unknown as typeof fetch);
   expect(url).toEndWith("/api/v1/models?sort=most-popular");
   expect(listedOpenRouterModels()).toEqual([
-    {
-      id: "z-ai/glm-5.3-flash",
-      label: "Name of z-ai/glm-5.3-flash",
-      thinking: ["off", "low", "max"],
-    },
+    { id: "moonshotai/kimi-k3", label: "moonshotai/kimi-k3" },
     {
       id: "vendor/any-effort",
       label: "Name of vendor/any-effort",
       thinking: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
     },
-    { id: "moonshotai/kimi-k3", label: "moonshotai/kimi-k3" },
+    {
+      id: "z-ai/glm-5.3-flash",
+      label: "Name of z-ai/glm-5.3-flash",
+      thinking: ["off", "low", "max"],
+    },
+    { id: "vendor/unscored", label: "Name of vendor/unscored" },
   ]);
   await expect(refreshOpenRouterCatalog(respond([], 503))).rejects.toThrow(/503/);
-  expect(listedOpenRouterModels()).toHaveLength(3);
+  expect(listedOpenRouterModels()).toHaveLength(4);
 });

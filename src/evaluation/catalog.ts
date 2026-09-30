@@ -52,7 +52,7 @@ export const catalog: CatalogModel[] = models.map((model) => {
 });
 
 /**
- * Every model OpenRouter lists for agents, most popular first. A curated model takes its place
+ * Every model OpenRouter lists for agents, frontier first. A curated model takes its place
  * in that order and keeps its own levels, falling back to OpenRouter's; curated models OpenRouter
  * does not list follow at the end. Before the first load it is the curated catalog alone.
  */

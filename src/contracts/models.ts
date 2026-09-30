@@ -161,7 +161,7 @@ export interface ListedModel {
   readonly thinking?: readonly ThinkingLevel[];
 }
 
-/** OpenRouter's agent-capable models, most popular first; empty until a server process loads them. */
+/** OpenRouter's agent-capable models, frontier first; empty until a server process loads them. */
 let openRouterModels: readonly ListedModel[] = [];
 
 export function setOpenRouterModels(listed: readonly ListedModel[]): void {

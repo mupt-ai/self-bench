@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
@@ -9,9 +8,10 @@ import {
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
-import { Input, SearchInput, Select } from "../ui";
+import { Input, Select } from "../ui";
 import type { Harness } from "./api";
-import { matchingModels, nextModelSelection } from "./model-selection";
+import { ModelPicker } from "./ModelPicker";
+import { nextModelSelection } from "./model-selection";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
 
@@ -31,7 +31,6 @@ export function RunModelRow({
   onChange(value: ModelSelection): void;
 }) {
   const selected = selection ?? { catalogId: model.id, credentialId: "", harnesses: [] };
-  const [query, setQuery] = useState("");
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
   const route = credential ? routeFor(model, credential.kind) : undefined;
   const levels = thinkingOptions(model, selected.harnesses);
@@ -61,20 +60,10 @@ export function RunModelRow({
     <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
       <div className="min-w-0 sm:col-span-3 xl:col-span-1">
         <span className={mobileLabel}>Model</span>
-        <SearchInput
-          className="mb-2"
-          placeholder="Search Models"
-          aria-label="Search Models"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <Select
-          className="text-sm md:text-sm"
-          aria-label="Model"
+        <ModelPicker
+          models={models}
           value={selected.catalogId}
-          onChange={(event) => {
-            const nextModel = models.find((entry) => entry.id === event.target.value);
-            if (!nextModel) return;
+          onSelect={(nextModel) => {
             const next = nextModelSelection(nextModel, credentials, selected.harnesses[0]) ??
               nextModelSelection(nextModel, credentials) ?? {
                 catalogId: nextModel.id,
@@ -88,16 +77,7 @@ export function RunModelRow({
               next.thinking = selected.thinking;
             onChange(next);
           }}
-        >
-          <option value="" disabled>
-            Select Model
-          </option>
-          {matchingModels(models, query, selected.catalogId).map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </Select>
+        />
         {model.id === "custom" && (
           <Input
             aria-label="Custom Model ID"

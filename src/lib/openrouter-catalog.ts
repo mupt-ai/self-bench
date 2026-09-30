@@ -19,12 +19,14 @@ interface OpenRouterEntry {
   supported_parameters?: unknown;
   reasoning?: { supported_efforts?: unknown } | null;
   expiration_date?: unknown;
+  benchmarks?: { artificial_analysis?: { intelligence_index?: unknown } | null } | null;
 }
 
 /**
- * Loads OpenRouter's list prices and its models, most popular first. A model OpenRouter does not
- * price keeps the catalog's reference rates; OpenRouter omits cache prices for providers that do
- * not charge separately for caching, and those fall back to the input price.
+ * Loads OpenRouter's list prices and its models, frontier first: by the Artificial Analysis
+ * intelligence index OpenRouter reports, then the unscored ones by popularity. A model OpenRouter
+ * does not price keeps the catalog's reference rates; OpenRouter omits cache prices for providers
+ * that do not charge separately for caching, and those fall back to the input price.
  */
 export async function refreshOpenRouterCatalog(fetcher: typeof fetch = fetch): Promise<void> {
   const response = await fetcher(MODELS_URL, { signal: AbortSignal.timeout(10_000) });
@@ -32,7 +34,7 @@ export async function refreshOpenRouterCatalog(fetcher: typeof fetch = fetch): P
   const body = (await response.json()) as { data?: OpenRouterEntry[] };
   const asOf = new Date().toISOString().slice(0, 10);
   const rates = new Map<string, { rates: Rates; asOf: string }>();
-  const listed: ListedModel[] = [];
+  const listed: (ListedModel & { intelligence: number })[] = [];
   for (const entry of body.data ?? []) {
     if (typeof entry.id !== "string") continue;
     const pricing = (entry.pricing ?? {}) as Record<string, unknown>;
@@ -44,16 +46,26 @@ export async function refreshOpenRouterCatalog(fetcher: typeof fetch = fetch): P
     rates.set(entry.id, { rates: [input, output, cacheRead, cacheWrite], asOf });
     if (drivesAgents(entry.id, entry)) {
       const thinking = reasoningLevels(entry.reasoning);
+      const index = entry.benchmarks?.artificial_analysis?.intelligence_index;
       listed.push({
         id: entry.id,
-        label: typeof entry.name === "string" && entry.name ? entry.name : entry.id,
+        label: modelName(entry.name) ?? entry.id,
         ...(thinking.length ? { thinking } : {}),
+        intelligence: typeof index === "number" && Number.isFinite(index) ? index : -1,
       });
     }
   }
   if (!rates.size) throw new Error("OpenRouter returned no prices");
   setOpenRouterRates(rates);
-  setOpenRouterModels(listed);
+  // The sort is stable, so equal and unscored models keep OpenRouter's popularity order.
+  listed.sort((left, right) => right.intelligence - left.intelligence);
+  setOpenRouterModels(listed.map(({ intelligence: _intelligence, ...model }) => model));
+}
+
+/** OpenRouter's name without its vendor prefix: "Kimi K3", not "MoonshotAI: Kimi K3". */
+function modelName(name: unknown): string | undefined {
+  if (typeof name !== "string") return undefined;
+  return name.replace(/^[^:]+:\s*/, "").trim() || undefined;
 }
 
 /**

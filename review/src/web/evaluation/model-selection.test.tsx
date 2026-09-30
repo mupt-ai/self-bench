@@ -106,7 +106,7 @@ test("selection uses Codex for a compatible login credential", () => {
   ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
 });
 
-test("an empty inline row offers the catalog and disables dependent controls", () => {
+test("an empty inline row offers the model picker and disables dependent controls", () => {
   const draft: ComparisonDraft = {
     id: "draft",
     tasks: [],
@@ -125,23 +125,21 @@ test("an empty inline row offers the catalog and disables dependent controls", (
     />,
   );
   expect(html).toContain("Select Model");
-  expect(html).toContain("Test Model");
+  expect(html).toContain('aria-haspopup="listbox"');
   expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
   expect(html).not.toContain('role="dialog"');
 });
 
-test("model search matches word starts in names and ids, keeping the chosen model", () => {
+test("model search matches word starts in names and ids", () => {
   const listed = (id: string, label: string): CatalogModel => ({ ...model, id, label });
   const models = [
-    listed("qwen/qwen4-coder", "Qwen: Qwen4 Coder"),
+    listed("qwen/qwen4-coder", "Qwen4 Coder"),
     listed("kimi-k3", "Kimi K3"),
-    listed("z-ai/glm-5.3", "Z.ai: GLM 5.3"),
+    listed("z-ai/glm-5.3", "GLM 5.3"),
   ];
-  const ids = (query: string, selected = "") =>
-    matchingModels(models, query, selected).map((entry) => entry.id);
+  const ids = (query: string) => matchingModels(models, query).map((entry) => entry.id);
   expect(ids("")).toEqual(["qwen/qwen4-coder", "kimi-k3", "z-ai/glm-5.3"]);
   expect(ids("qwen cod")).toEqual(["qwen/qwen4-coder"]);
-  expect(ids("glm")).toEqual(["z-ai/glm-5.3"]);
+  expect(ids("z-ai")).toEqual(["z-ai/glm-5.3"]);
   expect(ids("oder")).toEqual([]);
-  expect(ids("glm", "kimi-k3")).toEqual(["kimi-k3", "z-ai/glm-5.3"]);
 });

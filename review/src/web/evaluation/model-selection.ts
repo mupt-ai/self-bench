@@ -14,18 +14,9 @@ export const customModel: CatalogModel = {
   source: "",
 };
 
-/**
- * The models whose name or id has a word starting with each word of `query`, in catalog order, so
- * "kimi" or "qwen coder" narrow hundreds of models. The row's current model always stays listed.
- */
-export function matchingModels(
-  models: CatalogModel[],
-  query: string,
-  selectedId: string,
-): CatalogModel[] {
-  return models.filter(
-    (model) => model.id === selectedId || matchesQuery(`${model.label} ${model.id}`, query),
-  );
+/** The models whose name or id has a word starting with each word of `query`, in catalog order. */
+export function matchingModels(models: CatalogModel[], query: string): CatalogModel[] {
+  return models.filter((model) => matchesQuery(`${model.label} ${model.id}`, query));
 }
 
 export function nextModelSelection(
