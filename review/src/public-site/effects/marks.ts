@@ -42,6 +42,12 @@ export const flightFrom = (part: FlightPart) => ({ [FLIGHT]: part });
 export const flightTo = (part: FlightPart) => ({ [FLIGHT_TARGET]: part });
 /** A line that fades in whole during the page reveal instead of being assembled. */
 export const revealFade = { [REVEAL]: "fade" };
+/**
+ * A section that leaves as one when the page is taken apart: if the card a title returns to
+ * touches any of it, its heading and notes go first with its panel, rather than being left
+ * standing once the panel has gone.
+ */
+export const revealGroup = { [REVEAL]: "group" };
 
 export const select = {
   scrollRoot: `[${SCROLL_ROOT}]`,
@@ -55,6 +61,7 @@ export const select = {
   flightFrom: (part?: string) => (part ? `[${FLIGHT}="${part}"]` : `[${FLIGHT}]`),
   flightTo: (part: string) => `[${FLIGHT_TARGET}="${part}"]`,
   revealFade: `[${REVEAL}="fade"]`,
+  revealGroup: `[${REVEAL}="group"]`,
 };
 
 /** The run a repository page element is showing. */

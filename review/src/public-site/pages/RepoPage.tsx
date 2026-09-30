@@ -12,7 +12,7 @@ import {
 import { ModelTable } from "../components/ModelTable";
 import { ResultsChart } from "../components/ResultsChart";
 import type { PublicRepoPage } from "../contract";
-import { flightTo, revealFade, shownLine } from "../effects/marks";
+import { flightTo, revealFade, revealGroup, shownLine } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
 import { PANEL } from "../frame";
@@ -186,6 +186,7 @@ function Results({ page }: { page: PublicRepoPage }) {
         }`}
       >
         <section
+          {...revealGroup}
           data-morph="chart"
           // min-w-0: side by side, each column keeps to its grid track, whatever its content.
           className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
@@ -206,7 +207,7 @@ function Results({ page }: { page: PublicRepoPage }) {
           </div>
         </section>
 
-        <section className="flex min-w-0 flex-col gap-3" data-morph="table">
+        <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
           <h2 className="text-sm font-medium">All Settings</h2>
           <ModelTable settings={release.settings} activeId={activeId} highlighted={highlighted} />
           <p className="text-xs text-muted-foreground">
@@ -217,7 +218,7 @@ function Results({ page }: { page: PublicRepoPage }) {
       </div>
 
       {page.lines.length > 1 && (
-        <section ref={lines} className="flex flex-col gap-3" data-morph="lines">
+        <section ref={lines} className="flex flex-col gap-3" data-morph="lines" {...revealGroup}>
           <h2 className="text-sm font-medium">Other Benchmarks of This Repo</h2>
           <ul className={`divide-y divide-border ${PANEL}`}>
             {page.lines.map((line) => {
