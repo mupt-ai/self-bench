@@ -8,7 +8,7 @@ import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
 import { scrollArea } from "../scroll-area";
-import { HOME_TITLE } from "../seo";
+import { HOME_HEADING, HOME_TITLE } from "../seo";
 import type { PublicSource } from "../source";
 import { useSource } from "../source-context";
 import { useTitle } from "../use-title";
@@ -116,7 +116,7 @@ export function HomePage() {
       */}
       <section className="@container mx-auto flex w-full max-w-2xl flex-col items-center gap-4 text-center">
         <h1 className="text-[length:min(1.5rem,100cqi/16)] leading-[calc(2/1.5)] font-semibold tracking-tight">
-          Find the best models for your repo
+          {HOME_HEADING}
         </h1>
         <SearchBox query={query} onChange={setQuery} />
       </section>

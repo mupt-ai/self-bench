@@ -1,0 +1,92 @@
+/*
+ * The page as the server writes it (src/api/site-body.ts): its text, for readers that run no
+ * scripts and for the moment before the site's script replaces it. Nothing here hides or
+ * animates it. It sits in the page's column, below where the header will be, its heading where
+ * the page's own lands, in the page's type and colours, so the page builds up around it.
+ */
+.page-text {
+  /* The home heading sizes to the column, as the page's does. */
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: calc(var(--bar-top) + var(--page-pad)) var(--gutter) var(--page-pad);
+
+  h1 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+  }
+  h1.name {
+    font-family: var(--mono);
+    font-weight: 500;
+    letter-spacing: normal;
+  }
+  h2 {
+    margin-top: 1.25rem;
+    font-weight: 500;
+  }
+  p {
+    max-width: 48rem;
+    color: var(--muted-fg);
+  }
+  a {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+    text-underline-offset: 4px;
+  }
+  li {
+    display: flex;
+    flex-direction: column;
+  }
+  li + li {
+    margin-top: 0.5rem;
+  }
+  li > a {
+    font-family: var(--mono);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  li > span {
+    color: var(--muted-fg);
+  }
+}
+
+/* The home page and a page not found are centred, as the page's are. */
+.page-text:is([data-page="home"], [data-page="missing"]) {
+  align-items: center;
+  text-align: center;
+}
+.page-text[data-page="home"] h1 {
+  font-size: min(1.5rem, 100cqi / 16);
+}
+.page-text[data-page="missing"] {
+  padding-top: calc(var(--bar-top) + var(--page-pad) + 4rem);
+}
+
+/* The table scrolls inside itself on a narrow screen, never the page. */
+.page-text-table {
+  overflow-x: auto;
+
+  table {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    padding: 0.375rem 1.5rem 0.375rem 0;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  th {
+    font-weight: 500;
+  }
+  thead th {
+    color: var(--muted-fg);
+  }
+}

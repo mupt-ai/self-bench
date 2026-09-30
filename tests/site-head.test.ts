@@ -52,7 +52,7 @@ test("a repository's description names its most accurate setting and the best on
       setting("Off Frontier", 40, 2, false),
     ]),
   ).toBe(
-    "Which coding agent works best on earendil-works/pi? Most accurate: Claude Opus 5.5, 72.3% at $1.50 per task. Best for less: GPT-5.5 Mini, 51% at $0.042. 3 model settings scored on 47 tasks from its merged pull requests.",
+    "Which coding agent works best on earendil-works/pi? Most accurate: Claude Opus 5.5, 72.3% at $1.50 per task. Best for less: GPT-5.5 Mini, 51% at $0.042.",
   );
   // The next setting on the frontier, not the cheapest one.
   expect(
@@ -69,8 +69,32 @@ test("a repository's description names its most accurate setting and the best on
   );
   // A frontier of one names it once.
   expect(described([setting("Solo", 80, 1)])).toBe(
-    "Which coding agent works best on earendil-works/pi? Most accurate: Solo, 80% at $1.00 per task. 1 model setting scored on 47 tasks from its merged pull requests.",
+    "Which coding agent works best on earendil-works/pi? Most accurate: Solo, 80% at $1.00 per task.",
   );
+});
+
+test("a description fits a search result: whole sentences, in order, within 160 characters", () => {
+  const settings = [setting("Claude Opus 5.5", 72.34, 1.5), setting("GPT-5.5 Mini", 51, 0.042)];
+  const full = repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", settings), Infinity);
+  expect(full).toEndWith("2 model settings scored on 47 tasks from its merged pull requests.");
+  expect(described(settings).length).toBeLessThanOrEqual(160);
+  // Long names leave out the best for less, and never cut a sentence.
+  const long = described([
+    setting("A Very Long Custom Model Label With Many Words", 90, 1),
+    setting("Another Very Long Custom Model Label Too", 80, 0.5),
+  ]);
+  expect(long).toEndWith("90% at $1.00 per task.");
+  expect(long.length).toBeLessThanOrEqual(160);
+  // The question always leads, even when a repository's name alone fills the space.
+  const named = {
+    ...line("mupt-ai", "2026-09-01T00:00:00Z", settings),
+  } as PublishedLine;
+  const longName = `${"o".repeat(39)}/${"n".repeat(100)}`;
+  const huge = repositoryDescription({
+    ...named,
+    release: { ...named.release, repository: { ...named.release.repository, fullName: longName } },
+  });
+  expect(huge).toBe(`Which coding agent works best on ${longName}?`);
 });
 
 test("the default line is the endorsed one, else the newest", () => {
