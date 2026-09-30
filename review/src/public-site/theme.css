@@ -90,6 +90,87 @@ html {
   scroll-padding-bottom: var(--bar-bottom);
 }
 
+/*
+ * The repository page's layout switch (RepoPage): its blocks glide from where they were to
+ * where they go. Each is named only while it switches (data-morphing on the page), and each
+ * shows as it will be, already drawn at its new size, with no cross-fade, so nothing appears
+ * twice or drifts apart from the block it belongs to. The rest of the page does not move.
+ */
+[data-morphing] [data-morph="title"] {
+  view-transition-name: repo-title;
+}
+[data-morphing] [data-morph="toggle"] {
+  view-transition-name: layout-toggle;
+}
+[data-morphing] [data-morph="chart"] {
+  view-transition-name: results-chart;
+}
+[data-morphing] [data-morph="table"] {
+  view-transition-name: results-table;
+}
+[data-morphing] [data-morph="lines"] {
+  view-transition-name: repo-lines;
+}
+/*
+ * The switching blocks are drawn above the whole page, pinned header and footer included, so
+ * the page itself stays out of the switch, drawn live beneath them, and the blocks show only
+ * between the header and the footer, passing under both as the page does when it scrolls.
+ */
+:root[data-morph-to] {
+  view-transition-name: none;
+}
+:root[data-morph-to]::view-transition {
+  mask-image: linear-gradient(
+    transparent var(--bar-top),
+    black var(--bar-top) calc(100% - var(--bar-bottom)),
+    transparent calc(100% - var(--bar-bottom))
+  );
+}
+::view-transition-group(repo-title),
+::view-transition-group(layout-toggle),
+::view-transition-group(results-chart),
+::view-transition-group(results-table),
+::view-transition-group(repo-lines) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(repo-title),
+::view-transition-old(layout-toggle),
+::view-transition-old(results-chart),
+::view-transition-old(results-table),
+::view-transition-old(repo-lines) {
+  animation: none;
+  opacity: 0;
+}
+/* The chart and the table scale as a whole on their way, keeping their proportions. */
+::view-transition-new(results-chart),
+::view-transition-new(results-table) {
+  animation: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+}
+/*
+ * Into the stacked layout the chart and the table grow, and taller for their width than they
+ * were. Fitted whole into their old boxes they would first shrink, then grow; instead they keep
+ * their height from the start and uncover their new width as their boxes widen.
+ */
+:root[data-morph-to="stacked"]::view-transition-new(results-chart),
+:root[data-morph-to="stacked"]::view-transition-new(results-table) {
+  object-fit: cover;
+}
+/* The title, the switch and the other benchmarks keep their size and only move. */
+::view-transition-new(repo-title),
+::view-transition-new(layout-toggle),
+::view-transition-new(repo-lines) {
+  animation: none;
+  width: 100%;
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+
 /* The /pitchforks easter egg: villagers bob as they walk; torch flames flicker. */
 @keyframes mob-bob {
   50% {

@@ -1,17 +1,23 @@
 import { Star } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from "react-router";
 import { Avatar } from "../components/Avatar";
+import {
+  LayoutToggle,
+  type ResultsLayout,
+  readResultsLayout,
+  rememberResultsLayout,
+} from "../components/LayoutToggle";
 import { ModelTable } from "../components/ModelTable";
-import { Picks } from "../components/Picks";
 import { ResultsChart } from "../components/ResultsChart";
 import type { PublicRepoPage } from "../contract";
-import { flightTo, revealFade, shownLine } from "../effects/marks";
+import { flightTo, revealFade, revealGroup, shownLine } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
 import { PANEL } from "../frame";
+import { motionOff } from "../motion";
 import { APP_URL } from "../PublicLayout";
-import { picks } from "../picks";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
@@ -71,12 +77,64 @@ function Results({ page }: { page: PublicRepoPage }) {
   }, [release.releaseId]);
   const { repository } = release;
   const [owner, name] = repository.fullName.split("/");
+  // The chart's pointer and vendor chips mark the same settings in the table, and the table
+  // row under the pointer lights up its point.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
+  const [rowId, setRowId] = useState<string | null>(null);
+  // Another line of this repository reuses the page with other settings: nothing stays marked
+  // from the last one (the chart, keyed by release, starts afresh too).
+  const [markedRelease, setMarkedRelease] = useState(release.releaseId);
+  if (markedRelease !== release.releaseId) {
+    setMarkedRelease(release.releaseId);
+    setActiveId(null);
+    setHighlighted(null);
+    setRowId(null);
+  }
+  // Chart above the table, or beside it on a wide window; remembered across visits.
+  const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
+  const article = useRef<HTMLElement>(null);
+  const glide = useRef<ViewTransition | null>(null);
+  const chooseLayout = (next: ResultsLayout) => {
+    if (next === layout) return;
+    rememberResultsLayout(next);
+    const apply = () => flushSync(() => setLayout(next));
+    // The blocks glide to their new places (theme.css); with motion off, or in a browser
+    // without view transitions, they move at once.
+    const page = article.current;
+    if (!page || motionOff() || typeof document.startViewTransition !== "function") {
+      apply();
+      return;
+    }
+    // The root says which way it goes: the transition's pictures hang off the root element.
+    const root = document.documentElement;
+    page.setAttribute("data-morphing", "");
+    root.dataset.morphTo = next;
+    // A switch made mid-glide cuts the last one short; only the latest one clears up, or the
+    // earlier one would clear the marks the new one is using.
+    const transition = document.startViewTransition(apply);
+    glide.current = transition;
+    transition.finished.finally(() => {
+      if (glide.current !== transition) return;
+      glide.current = null;
+      page.removeAttribute("data-morphing");
+      delete root.dataset.morphTo;
+    });
+  };
+  const side = layout === "side";
   return (
     <article
-      className="flex flex-col gap-8"
+      ref={article}
+      // Side by side, on a window wide enough for it, the page widens past its usual column to
+      // the rulers (at most 110rem), so the chart and the table each have room.
+      className={`flex flex-col gap-8 ${
+        side
+          ? "min-[90rem]:mx-[calc(50%_-_min(100vw_-_2*var(--edge)_-_2*var(--gutter),110rem)/2)]"
+          : ""
+      }`}
       {...shownLine(`${repository.fullName}/${release.publisher.login}`)}
     >
-      <header className="flex flex-col gap-3">
+      <header className="flex flex-col gap-3" data-morph="title">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex shrink-0" {...flightTo("avatar")}>
             <Avatar src={repository.ownerAvatarUrl} size={32} />
@@ -101,6 +159,9 @@ function Results({ page }: { page: PublicRepoPage }) {
               {compactNumber(repository.stars)}
             </span>
           )}
+          <span className="ml-auto self-center" data-morph="toggle">
+            <LayoutToggle layout={layout} onChange={chooseLayout} />
+          </span>
         </div>
         {repository.description && (
           <p className="line-clamp-2 max-w-3xl text-muted-foreground" {...flightTo("description")}>
@@ -126,34 +187,53 @@ function Results({ page }: { page: PublicRepoPage }) {
         </p>
       </header>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">On this eval set of {release.tasks} tasks</h2>
-        <Picks picks={picks(release.settings)} settings={release.settings} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      {/* Side by side, the chart stays in view while the table scrolls past it. */}
+      <div
+        className={`flex flex-col gap-8 ${
+          side
+            ? "min-[90rem]:grid min-[90rem]:grid-cols-[minmax(420px,2fr)_minmax(720px,3fr)] min-[90rem]:items-start min-[90rem]:gap-6"
+            : ""
+        }`}
+      >
+        <section
+          {...revealGroup}
+          data-morph="chart"
+          // min-w-0: side by side, each column keeps to its grid track, whatever its content.
+          className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
+        >
           <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
+          <div className={`p-2 ${PANEL}`}>
+            <ResultsChart
+              key={release.releaseId}
+              settings={release.settings}
+              onActiveChange={setActiveId}
+              onHighlightChange={setHighlighted}
+              selectedId={rowId}
+            />
+          </div>
+          {/* Under the chart, as the table's note is under it, so the two start level. */}
           <p className="text-xs text-muted-foreground">
             Filled points are on the frontier: nothing is both cheaper and more accurate.
           </p>
-        </div>
-        <div className={`p-2 ${PANEL}`}>
-          <ResultsChart settings={release.settings} />
-        </div>
-      </section>
+        </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">All Settings</h2>
-        <ModelTable settings={release.settings} />
-        <p className="text-xs text-muted-foreground">
-          Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
-          requests in this repository; their tests and reference solutions stay private.
-        </p>
-      </section>
+        <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
+          <h2 className="text-sm font-medium">All Settings</h2>
+          <ModelTable
+            settings={release.settings}
+            activeId={activeId ?? rowId}
+            highlighted={highlighted}
+            onRowHover={setRowId}
+          />
+          <p className="text-xs text-muted-foreground">
+            Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
+            requests in this repository; their tests and reference solutions stay private.
+          </p>
+        </section>
+      </div>
 
       {page.lines.length > 1 && (
-        <section ref={lines} className="flex flex-col gap-3">
+        <section ref={lines} className="flex flex-col gap-3" data-morph="lines" {...revealGroup}>
           <h2 className="text-sm font-medium">Other Benchmarks of This Repo</h2>
           <ul className={`divide-y divide-border ${PANEL}`}>
             {page.lines.map((line) => {

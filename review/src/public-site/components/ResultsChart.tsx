@@ -1,5 +1,5 @@
 import { ParetoPlot } from "@mupt-ai/dari-pareto";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PublicSetting } from "../contract";
 import {
   accuracyTick,
@@ -23,8 +23,23 @@ const THEMED = [
   "[--pareto-font-family:var(--mono)]",
 ].join(" ");
 
-/** Accuracy against cost per task, one point per setting, colored by model vendor. */
-export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
+/**
+ * Accuracy against cost per task, one point per setting, colored by model vendor. It tells the
+ * page which setting the pointer is on, and which settings a vendor chip highlights, so the
+ * table below can mark the same rows.
+ */
+export function ResultsChart({
+  settings,
+  onActiveChange,
+  onHighlightChange,
+  selectedId = null,
+}: {
+  settings: PublicSetting[];
+  onActiveChange?: (id: string | null) => void;
+  onHighlightChange?: (ids: ReadonlySet<string> | null) => void;
+  /** A setting to light up as if pointed at: the table row under the pointer. */
+  selectedId?: string | null;
+}) {
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
   useEffect(() => {
@@ -36,6 +51,15 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  // A layout switch changes the chart's width in one commit. Measuring before paint redraws it
+  // at the new width in that same frame, so the page's layout transition moves the chart as it
+  // will be, not a stretched picture of the old one.
+  useLayoutEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const next = Math.max(320, element.getBoundingClientRect().width);
+    if (Math.abs(next - width) >= 0.5) setWidth(next);
+  });
   const narrow = width < 560;
   const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
@@ -45,6 +69,11 @@ export function ResultsChart({ settings }: { settings: PublicSetting[] }) {
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
         showLegend={false}
+        selectedId={selectedId}
+        onActivePointChange={(point) => onActiveChange?.(point?.id ?? null)}
+        onHighlightChange={(points) =>
+          onHighlightChange?.(points ? new Set(points.map((point) => point.id)) : null)
+        }
         width={width}
         // Room for the vendor chips above the plot: a row on a desktop, a few taller rows on a
         // phone, where each chip is a fingertip high.

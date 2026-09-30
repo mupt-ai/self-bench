@@ -88,17 +88,32 @@ export function disassemble(
     right: number,
     bottom: number,
   ) => rect.left < right && rect.right > left && rect.top < bottom && rect.bottom > top;
-  const cut = first
-    ? rects.filter((rect) =>
-        overlaps(
-          rect,
-          first.left - FIRST_MARGIN,
-          first.top - FIRST_MARGIN,
-          first.left + first.width + FIRST_MARGIN,
-          first.top + first.height + FIRST_MARGIN,
-        ),
-      )
-    : [];
+  const near = (rect: { left: number; right: number; top: number; bottom: number }) =>
+    first !== undefined &&
+    overlaps(
+      rect,
+      first.left - FIRST_MARGIN,
+      first.top - FIRST_MARGIN,
+      first.left + first.width + FIRST_MARGIN,
+      first.top + first.height + FIRST_MARGIN,
+    );
+  const cut = rects.filter(near);
+  // A section the card touches goes first whole, heading and notes with its panel, so none of
+  // it is left standing wherever the page's layout put it. So does a section beside one of
+  // those, sharing its rows (side by side), so the page doesn't come apart a column at a time.
+  if (first) {
+    const groups = [...inner.querySelectorAll(select.revealGroup)].map((group) => ({
+      box: group.getBoundingClientRect(),
+      parts: visibleRects(group, select.revealFade),
+    }));
+    const touched = groups.filter((group) => group.parts.some(near));
+    for (const group of groups) {
+      const beside = touched.some(
+        (other) => other.box.top < group.box.bottom && other.box.bottom > group.box.top,
+      );
+      if (beside) cut.push(...group.parts);
+    }
+  }
   const pieces: { x: number; y: number; at: number }[] = [];
   for (let y = keep - frame.top; y < height; y += TILE) {
     for (let x = 0; x < width; x += TILE) {

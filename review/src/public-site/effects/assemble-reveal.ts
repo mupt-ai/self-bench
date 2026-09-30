@@ -111,10 +111,15 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
         top: rect.top - page.top,
         bottom: rect.bottom - page.top,
       }));
+      // A page can reach past the content's own box (a repository page widened side by side to
+      // the rulers); the pieces and the solid area span all of it, or its edges would stay
+      // hidden until the page is whole.
+      const left = Math.floor(Math.min(0, ...rects.map((rect) => rect.left)) / TILE) * TILE;
+      const right = Math.max(width, ...rects.map((rect) => rect.right));
       const pieces: { x: number; y: number; lag: number; startedAt: number }[] = [];
       // Tiles sit on a fixed grid from the page's top.
       for (let y = Math.max(0, Math.floor(startLine / TILE) * TILE); y < page.height; y += TILE) {
-        for (let x = 0; x < width; x += TILE) {
+        for (let x = left; x < right; x += TILE) {
           const filled = rects.some(
             (rect) =>
               rect.left < x + TILE && rect.right > x && rect.top < y + TILE && rect.bottom > y,
@@ -150,7 +155,7 @@ export function assembleForReveal(content: HTMLElement, area: ScrollArea): Assem
           for (const piece of pieces)
             if (piece.startedAt < 0 || now - piece.startedAt < PLACE_MS)
               solid = Math.min(solid, piece.y);
-          shown.add(0, 0, width, Math.max(startLine, solid));
+          shown.add(left, 0, right - left, Math.max(startLine, solid));
           let waiting = false;
           for (const piece of pieces) {
             if (piece.startedAt < 0) {
