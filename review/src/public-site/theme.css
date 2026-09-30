@@ -140,6 +140,15 @@ html {
   object-fit: contain;
   object-position: left top;
 }
+/*
+ * Into the stacked layout the chart and the table grow, and taller for their width than they
+ * were. Fitted whole into their old boxes they would first shrink, then grow; instead they keep
+ * their height from the start and uncover their new width as their boxes widen.
+ */
+:root[data-morph-to="stacked"]::view-transition-new(results-chart),
+:root[data-morph-to="stacked"]::view-transition-new(results-table) {
+  object-fit: cover;
+}
 /* The title, the switch and the other benchmarks keep their size and only move. */
 ::view-transition-new(repo-title),
 ::view-transition-new(layout-toggle),

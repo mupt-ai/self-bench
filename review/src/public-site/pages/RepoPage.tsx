@@ -102,10 +102,14 @@ function Results({ page }: { page: PublicRepoPage }) {
       apply();
       return;
     }
+    // The root says which way it goes: the transition's pictures hang off the root element.
+    const root = document.documentElement;
     page.setAttribute("data-morphing", "");
-    document
-      .startViewTransition(apply)
-      .finished.finally(() => page.removeAttribute("data-morphing"));
+    root.dataset.morphTo = next;
+    document.startViewTransition(apply).finished.finally(() => {
+      page.removeAttribute("data-morphing");
+      delete root.dataset.morphTo;
+    });
   };
   const side = layout === "side";
   return (
