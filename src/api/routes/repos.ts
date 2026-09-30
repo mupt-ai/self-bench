@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
+import { AGENT_MINUTES, isAgentMinutes } from "../../contracts/agent-limit.js";
+import type { ConnectedRepo, RepoSettings, RepoStore } from "../../db/repos.js";
 import type { User, UserStore } from "../../db/users.js";
 import { track } from "../../lib/telemetry/posthog.js";
+import { isRecord } from "../../lib/util.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -111,14 +113,14 @@ export function createConnectedRepoRoutes(
         return true;
       }
       if (item?.[2] && item[3] && request.method === "PATCH") {
-        const body = JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}") as {
-          continuous?: unknown;
-        };
-        if (typeof body.continuous !== "boolean") {
-          sendJson(response, 400, { error: "continuous must be a boolean" });
+        const settings = repoSettings(
+          JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}"),
+        );
+        if (typeof settings === "string") {
+          sendJson(response, 400, { error: settings });
           return true;
         }
-        const repo = await repos.setContinuous(tenant.id, `${item[2]}/${item[3]}`, body.continuous);
+        const repo = await repos.update(tenant.id, `${item[2]}/${item[3]}`, settings);
         if (!repo) {
           sendJson(response, 404, { error: "not connected" });
           return true;
@@ -140,12 +142,29 @@ export function createConnectedRepoRoutes(
   };
 }
 
+/** The settings a PATCH changes, or why the body is refused. */
+function repoSettings(body: unknown): RepoSettings | string {
+  if (!isRecord(body)) return "body must be an object";
+  const { continuous, agentMinutes, ...rest } = body;
+  if (Object.keys(rest).length > 0) return `unknown settings: ${Object.keys(rest).join(", ")}`;
+  if (continuous === undefined && agentMinutes === undefined) return "no settings to change";
+  if (continuous !== undefined && typeof continuous !== "boolean")
+    return "continuous must be a boolean";
+  if (agentMinutes !== undefined && !isAgentMinutes(agentMinutes))
+    return `agentMinutes must be a whole number from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max}`;
+  return {
+    ...(continuous === undefined ? {} : { continuous }),
+    ...(agentMinutes === undefined ? {} : { agentMinutes }),
+  };
+}
+
 /** The browser-facing shape of a connected repo. */
 function publicRepo(repo: ConnectedRepo): {
   fullName: string;
   defaultBranch: string;
   private: boolean;
   continuous: boolean;
+  agentMinutes: number;
   connectedBy: string;
   connectedAt: string;
 } {
@@ -154,6 +173,7 @@ function publicRepo(repo: ConnectedRepo): {
     defaultBranch: repo.defaultBranch,
     private: repo.private,
     continuous: repo.continuous,
+    agentMinutes: repo.agentMinutes,
     connectedBy: repo.connectedBy.login,
     connectedAt: repo.connectedAt,
   };

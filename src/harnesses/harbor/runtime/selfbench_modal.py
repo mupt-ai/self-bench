@@ -27,7 +27,8 @@ _ROLES = {"environment": "agent", "tests": "verifier"}
 
 # Harbor's defaults keep a sandbox for a day with no idle limit, so a trial stopped mid-run
 # (cancelled, timed out, or its worker replaced) left its sandbox running for 24 hours. No Harbor
-# process outlives the 3-hour gate cap (HARBOR_PROCESS_TIMEOUT_MS), and Modal counts a sandbox
+# process outlives the 3-hour gate cap (HARBOR_PROCESS_TIMEOUT_MS) or a solver trial with the most
+# agent minutes (trialTimeouts, under 3 hours), and Modal counts a sandbox
 # with a command running as active, so a live trial never sits idle for half an hour.
 SANDBOX_LIFETIME_SECS = 3 * 60 * 60
 SANDBOX_IDLE_SECS = 30 * 60

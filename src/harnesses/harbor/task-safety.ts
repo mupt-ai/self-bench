@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import { parse, stringify } from "smol-toml";
+import { trialTimeouts } from "../../contracts/agent-limit.js";
 import { isRecord } from "../../lib/util.js";
 import {
   guardHarborOutput,
@@ -44,30 +45,34 @@ export function refuseWithoutRetry(error: unknown): never {
 }
 
 /**
- * Readies one Harbor run under `root` (whose `jobs/` holds its output): checks the task, and
- * guards the output directories. Harbor stages sandbox downloads in TMPDIR, so the run gets its
- * own under `root` where the guard sees them.
+ * Readies one Harbor run under `root` (whose `jobs/` holds its output): checks the task, gives
+ * its agent `agentSeconds` (a solver's default for the generation gates' oracle and smoke agents),
+ * and guards the output directories. Harbor stages sandbox downloads in TMPDIR, so the run gets
+ * its own under `root` where the guard sees them.
  */
 export async function prepareHarborRun(
   taskDirectory: string,
   root: string,
   env: NodeJS.ProcessEnv,
   signal?: AbortSignal,
+  agentSeconds = trialTimeouts().agentSeconds,
 ): Promise<{ env: NodeJS.ProcessEnv; guard: HarborOutputGuard }> {
   const scratch = join(root, "tmp");
   await mkdir(scratch, { recursive: true });
   const child = { ...env, TMPDIR: scratch };
-  await assertHostSafeTask(taskDirectory, child);
+  await assertHostSafeTask(taskDirectory, child, agentSeconds);
   return { env: child, guard: guardHarborOutput([join(root, "jobs"), scratch], signal) };
 }
 
 /**
  * Refuses a task that would pull host environment into the sandbox, and rewrites task.toml from
- * the parsed value so Harbor reads exactly what was checked.
+ * the parsed value so Harbor reads exactly what was checked. A run that starts the agent sets
+ * its time here; whatever the task says is ignored.
  */
 export async function assertHostSafeTask(
   taskDirectory: string,
   harborEnv: NodeJS.ProcessEnv,
+  agentSeconds?: number,
 ): Promise<void> {
   const path = join(taskDirectory, "task.toml");
   const raw = await readFile(path);
@@ -81,6 +86,10 @@ export async function assertHostSafeTask(
   }
   if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
   rejectHostKeys(config, "");
+  if (agentSeconds !== undefined) {
+    const agent = isRecord(config.agent) ? config.agent : {};
+    config.agent = { ...agent, timeout_sec: agentSeconds };
+  }
   await writeFile(path, stringify(config));
 
   for (const compose of await composeFiles(taskDirectory)) {

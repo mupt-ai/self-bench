@@ -215,6 +215,7 @@ export async function evaluationServer(
     apiKeys,
     artifacts,
     tasks,
+    repos,
     repo,
     starts,
     stops,

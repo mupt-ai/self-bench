@@ -3,12 +3,11 @@ import { delimiter, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 
-/** Process policy shared by generation gates and solver trials, not provider lifetimes. */
+/** Process policy for generation gates, not provider lifetimes; solver trials use trialTimeouts. */
 export const HARBOR_VERSION = "0.23.0";
 
 export const HARBOR_PROCESS_TIMEOUT_MS = {
   gate: 3 * 60 * 60 * 1000,
-  solver: 2 * 60 * 60 * 1000,
   // The worker image has no bytecode for Harbor and cannot cache it, so every call imports Harbor
   // from source; ten at once on a new 2-vCPU worker took longer than 15 seconds.
   version: 60 * 1000,

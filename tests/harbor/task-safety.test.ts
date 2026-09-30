@@ -77,6 +77,17 @@ test.each([
   await expect(assertHostSafeTask(root, harborEnv)).rejects.toBeInstanceOf(UnsafeHarborTaskError);
 });
 
+test("a run gives the agent its time, whatever an older task set", async () => {
+  const root = await taskDirectory(
+    'schema_version = "1.4"\n[agent]\ntimeout_sec = 2400.0\nuser = "root"\n',
+  );
+  await assertHostSafeTask(root, harborEnv, 3600);
+  expect(parse(await readFile(join(root, "task.toml"), "utf8")).agent).toEqual({
+    timeout_sec: 3600,
+    user: "root",
+  });
+});
+
 test("free-form metadata may use any key", async () => {
   const root = await taskDirectory('schema_version = "1.4"\n[metadata]\nenv = "prod"\n');
   await assertHostSafeTask(root, harborEnv);

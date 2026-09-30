@@ -119,7 +119,8 @@ const taskDraftDefinitionSchema = z
     timeouts: z
       .object({
         setupSeconds: z.number().int().positive(),
-        agentSeconds: z.number().int().positive(),
+        /** Ignored: each repo sets its agent's time (trialTimeouts). Older tasks still carry it. */
+        agentSeconds: z.number().int().positive().optional(),
         testsSeconds: z.number().int().positive(),
       })
       .strict(),

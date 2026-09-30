@@ -36,7 +36,7 @@ interface DefinitionLike {
   sourcePr?: number;
   sourceUrl?: string;
   prompt?: string;
-  timeouts?: { setupSeconds?: number; agentSeconds?: number; testsSeconds?: number };
+  timeouts?: { setupSeconds?: number; testsSeconds?: number };
   resources?: { cpus?: number; memoryMb?: number; storageMb?: number };
   environment?: {
     baseImage?: string;

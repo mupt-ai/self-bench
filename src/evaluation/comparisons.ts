@@ -9,6 +9,9 @@ import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
 import {
+  completedConfigurationTasks,
+  configurationIdentity,
+  configurationTaskKey,
   defaultThinking,
   evaluationTaskKey,
   harnessIds,
@@ -51,6 +54,7 @@ export const comparisonSchema = z
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 export interface ComparisonScope {
   repoId: number;
+  agentMinutes: number;
   orgId: number;
   tenant: string;
   login: string;
@@ -181,6 +185,7 @@ export async function createComparison(
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
+          agentMinutes: scope.agentMinutes,
           repoId: scope.repoId,
           tenant: scope.tenant,
           startedBy: scope.login,
@@ -215,39 +220,6 @@ export async function createComparison(
     throw new Error("Comparison ID belongs to a different selection");
   return record;
 }
-function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
-  return JSON.stringify([model, thinking ?? "default", harness]);
-}
-
-function configurationTaskKey(
-  model: string,
-  thinking: string | undefined,
-  harness: string,
-  runId: string,
-  taskId: string,
-) {
-  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
-}
-
-function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
-  const completed = new Set<string>();
-  for (const run of runs) {
-    for (const trial of run.trials) {
-      if (trial.status === "completed")
-        completed.add(
-          configurationTaskKey(
-            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
-            run.thinking,
-            trial.harness,
-            trial.runId,
-            trial.taskId,
-          ),
-        );
-    }
-  }
-  return completed;
-}
-
 export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
   const runs = await Promise.all(
     record.inputs.map(async (input) => {

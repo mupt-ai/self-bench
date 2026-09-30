@@ -48,7 +48,7 @@ export function EnvironmentSheet({
               [
                 "Timeouts",
                 timeouts
-                  ? `setup ${timeouts.setupSeconds ?? "?"}s · agent ${timeouts.agentSeconds ?? "?"}s · tests ${timeouts.testsSeconds ?? "?"}s`
+                  ? `setup ${timeouts.setupSeconds ?? "?"}s · tests ${timeouts.testsSeconds ?? "?"}s`
                   : "—",
               ],
               [

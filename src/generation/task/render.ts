@@ -37,8 +37,8 @@ export function taskToml(task: TaskDefinition): string {
     "[metadata]",
     ...Object.entries(metadata).map(([key, value]) => `${key} = ${tomlValue(value)}`),
     "",
+    // Each run gives the agent its time (prepareHarborRun), so the task sets none.
     "[agent]",
-    `timeout_sec = ${task.timeouts.agentSeconds}.0`,
     'user = "root"',
     'network_mode = "allowlist"',
     'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',

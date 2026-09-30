@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { TaskImages } from "../contracts/index.js";
+import { AGENT_MINUTES, type TaskImages } from "../contracts/index.js";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -123,6 +123,8 @@ export const repos = pgTable(
     private: boolean("private").notNull().default(false),
     /** Opt-in: keep building tasks as pull requests merge, rather than only on demand. */
     continuous: boolean("continuous").notNull().default(false),
+    /** How long a solver's agent may work on each task in this repo's evaluations. */
+    agentMinutes: integer("agent_minutes").notNull().default(AGENT_MINUTES.default),
     connectedBy: bigint("connected_by", { mode: "number" })
       .notNull()
       .references(() => users.id),

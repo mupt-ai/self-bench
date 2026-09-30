@@ -47,7 +47,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
     "excluded": [],
     "coverage": "How the tests cover the request."
   },
-  "timeouts": { "setupSeconds": 900, "agentSeconds": 2400, "testsSeconds": 900 },
+  "timeouts": { "setupSeconds": 900, "testsSeconds": 900 },
   "resources": { "cpus": 4, "memoryMb": 8192, "storageMb": 20480 },
   "environment": {
     "schemaVersion": 1,

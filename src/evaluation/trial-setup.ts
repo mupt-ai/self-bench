@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { trialTimeouts } from "../contracts/agent-limit.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -60,9 +61,13 @@ export async function setUpTrial(
     ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
-  const prepared = await prepareHarborRun(taskPath, trialRoot, gateway.child, options.signal).catch(
-    refuseWithoutRetry,
-  );
+  const prepared = await prepareHarborRun(
+    taskPath,
+    trialRoot,
+    gateway.child,
+    options.signal,
+    trialTimeouts(input.agentMinutes).agentSeconds,
+  ).catch(refuseWithoutRetry);
   return {
     taskPath,
     jobs: join(trialRoot, "jobs"),

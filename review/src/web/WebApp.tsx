@@ -14,6 +14,7 @@ import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RepoPage } from "./pages/RepoPage";
+import { RepoSettingsPage } from "./pages/RepoSettingsPage";
 import { ReposPage } from "./pages/ReposPage";
 import { TaskPage } from "./pages/TaskPage";
 import { RepoLayout } from "./RepoLayout";
@@ -90,6 +91,7 @@ export function WebApp() {
                     <Route path="releases" element={<ReleasesPage />} />
                     <Route path="dataset" element={<Navigate to=".." replace />} />
                     <Route path="run" element={<RunPage />} />
+                    <Route path="settings" element={<RepoSettingsPage />} />
                     <Route
                       path="settings/credentials"
                       element={<Navigate to="/settings/credentials" replace />}

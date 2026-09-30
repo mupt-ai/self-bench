@@ -145,6 +145,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
       sandbox: "e2b",
       sandboxCredentialId: sandboxKey,
     };
+    await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 75 });
     fixture.failStart(true);
     const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(saved.status).toBe(202);
@@ -155,6 +156,9 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     if (!comparison) throw new Error("Missing comparison");
     expect(comparison.inputs[0]?.tasks).toEqual(comparison.inputs[1]?.tasks);
     expect(comparison.inputs[0]?.thinking).toBe("xhigh");
+    // The repo's agent limit is frozen with the tasks; changing it later leaves this run alone.
+    expect(comparison.inputs.map((input) => input.agentMinutes)).toEqual([75, 75]);
+    await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 20 });
     expect(JSON.stringify(comparison)).not.toContain("model-secret");
     const deletion = await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}));
     expect(deletion.status).toBe(400);
@@ -169,6 +173,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     expect(fixture.starts.map((input) => input.id)).toEqual(
       comparison.inputs.map((input) => input.id),
     );
+    expect(fixture.starts.map((input) => input.agentMinutes)).toEqual([75, 75]);
     const changed = await fixture.request(
       `${fixture.base}/comparisons`,
       post({ ...draft, sandbox: "modal" }),

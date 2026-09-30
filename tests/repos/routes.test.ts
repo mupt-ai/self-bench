@@ -103,27 +103,37 @@ describe("connected repos routes", () => {
     expect(await preserved.json()).toMatchObject({ repos: [{ fullName: "Mupt-AI/self-bench" }] });
   });
 
-  test("toggles continuous per repo", async () => {
+  test("changes a repo's settings", async () => {
     const { site, headers } = await bootSignedIn({ orgs: [], repos: [{ full_name: "avyay/x" }] });
     const created = await site.request("/api/orgs/avyay/repos", {
       method: "POST",
       headers,
       body: JSON.stringify({ fullName: "avyay/x" }),
     });
-    expect(await created.json()).toMatchObject({ repo: { continuous: false } });
-    const on = await site.request("/api/orgs/avyay/repos/avyay/x", {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ continuous: true }),
-    });
+    expect(await created.json()).toMatchObject({ repo: { continuous: false, agentMinutes: 40 } });
+    const patch = (body: unknown) =>
+      site.request("/api/orgs/avyay/repos/avyay/x", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+    const on = await patch({ continuous: true });
     expect(on.status).toBe(200);
-    expect(await on.json()).toMatchObject({ repo: { continuous: true } });
-    const bad = await site.request("/api/orgs/avyay/repos/avyay/x", {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ continuous: "yes" }),
-    });
-    expect(bad.status).toBe(400);
+    expect(await on.json()).toMatchObject({ repo: { continuous: true, agentMinutes: 40 } });
+    const longer = await patch({ agentMinutes: 60 });
+    expect(await longer.json()).toMatchObject({ repo: { continuous: true, agentMinutes: 60 } });
+    for (const bad of [
+      { continuous: "yes" },
+      { agentMinutes: 9 },
+      { agentMinutes: 91 },
+      { agentMinutes: 45.5 },
+      { agentMinutes: "60" },
+      { private: false },
+      {},
+    ])
+      expect((await patch(bad)).status).toBe(400);
+    const read = await site.request("/api/orgs/avyay/repos/avyay/x", { headers });
+    expect(await read.json()).toMatchObject({ repo: { continuous: true, agentMinutes: 60 } });
     const missing = await site.request("/api/orgs/avyay/repos/avyay/none", {
       method: "PATCH",
       headers,
@@ -187,9 +197,9 @@ describe("postgres repo store", () => {
       "Mupt-AI/b",
       "Mupt-AI/a-renamed",
     ]);
-    expect((await store.setContinuous(org.id, "mupt-ai/b", true))?.continuous).toBe(true);
+    expect((await store.update(org.id, "mupt-ai/b", { continuous: true }))?.continuous).toBe(true);
     expect((await store.find(org.id, "Mupt-AI/b"))?.continuous).toBe(true);
-    expect(await store.setContinuous(org.id, "mupt-ai/nope", true)).toBeUndefined();
+    expect(await store.update(org.id, "mupt-ai/nope", { continuous: true })).toBeUndefined();
     expect(await store.disconnect(org.id, "MUPT-AI/B")).toBe(true);
     expect(await store.disconnect(org.id, "MUPT-AI/B")).toBe(false);
     expect((await store.list(org.id)).map((repo) => repo.fullName)).toEqual(["Mupt-AI/a-renamed"]);

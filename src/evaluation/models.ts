@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "../contracts/models.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
+import type { EvaluationRun } from "./types.js";
 
 export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
 export type Harness = (typeof harnessIds)[number];
@@ -73,4 +74,43 @@ export function thinkingArguments(harness: Harness, level?: ThinkingLevel): stri
   const name = harness === "pi" ? "thinking" : "reasoning_effort";
   const value = harness === "codex" && level === "off" ? "none" : level;
   return ["--agent-kwarg", `${name}=${value}`];
+}
+
+/** One model, thinking and harness configuration; a comparison selects each once. */
+export function configurationIdentity(
+  model: string,
+  thinking: string | undefined,
+  harness: string,
+) {
+  return JSON.stringify([model, thinking ?? "default", harness]);
+}
+
+export function configurationTaskKey(
+  model: string,
+  thinking: string | undefined,
+  harness: string,
+  runId: string,
+  taskId: string,
+) {
+  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
+}
+
+/** The configuration-task keys a repo's earlier runs already completed. */
+export function completedConfigurationTasks(runs: readonly EvaluationRun[]) {
+  const completed = new Set<string>();
+  for (const run of runs) {
+    for (const trial of run.trials) {
+      if (trial.status === "completed")
+        completed.add(
+          configurationTaskKey(
+            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
+            run.thinking,
+            trial.harness,
+            trial.runId,
+            trial.taskId,
+          ),
+        );
+    }
+  }
+  return completed;
 }
