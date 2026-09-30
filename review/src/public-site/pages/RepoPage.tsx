@@ -94,6 +94,7 @@ function Results({ page }: { page: PublicRepoPage }) {
   // Chart above the table, or beside it on a wide window; remembered across visits.
   const [layout, setLayout] = useState<ResultsLayout>(readResultsLayout);
   const article = useRef<HTMLElement>(null);
+  const glide = useRef<ViewTransition | null>(null);
   const chooseLayout = (next: ResultsLayout) => {
     if (next === layout) return;
     rememberResultsLayout(next);
@@ -109,7 +110,13 @@ function Results({ page }: { page: PublicRepoPage }) {
     const root = document.documentElement;
     page.setAttribute("data-morphing", "");
     root.dataset.morphTo = next;
-    document.startViewTransition(apply).finished.finally(() => {
+    // A switch made mid-glide cuts the last one short; only the latest one clears up, or the
+    // earlier one would clear the marks the new one is using.
+    const transition = document.startViewTransition(apply);
+    glide.current = transition;
+    transition.finished.finally(() => {
+      if (glide.current !== transition) return;
+      glide.current = null;
       page.removeAttribute("data-morphing");
       delete root.dataset.morphTo;
     });
