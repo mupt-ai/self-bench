@@ -25,7 +25,7 @@ function sign(body: Buffer) {
   return `t=${timestamp},v1=${v1}`;
 }
 
-async function billingServer() {
+async function billingServer(priceUnitCents = "0.00001") {
   const database = await testDatabase();
   const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
   const admin = await users.upsert({
@@ -33,7 +33,10 @@ async function billingServer() {
     login: "owner",
     token: "gho",
     scopes: "",
-    orgs: [{ githubId: 2, login: "team", role: "admin" }],
+    orgs: [
+      { githubId: 2, login: "team", role: "admin" },
+      { githubId: 4, login: "mupt-ai", role: "admin" },
+    ],
   });
   const member = await users.upsert({
     githubId: 3,
@@ -43,7 +46,10 @@ async function billingServer() {
     orgs: [{ githubId: 2, login: "team", role: "member" }],
   });
   const store = createBillingStore(database.db, true);
+  const teamId = (await users.orgsFor(admin.id)).find((org) => org.login === "team")?.id;
+  if (!teamId) throw new Error("team missing");
   const stripeCalls: string[] = [];
+  const credits: { body: URLSearchParams; key: string | null }[] = [];
   const routes = createBillingRoutes({
     users,
     store,
@@ -52,6 +58,29 @@ async function billingServer() {
     fetchImpl: (async (input, init) => {
       const url = String(input);
       stripeCalls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/v1/prices/price_metered"))
+        return Response.json({
+          active: true,
+          currency: "usd",
+          billing_scheme: "per_unit",
+          recurring: { usage_type: "metered", meter: "mtr_1" },
+          unit_amount_decimal: priceUnitCents,
+        });
+      if (url.endsWith("/v1/customers/cus_1/balance_transactions")) {
+        credits.push({
+          body: new URLSearchParams(String(init?.body)),
+          key: new Headers(init?.headers).get("idempotency-key"),
+        });
+        return Response.json({ id: "cbtxn_1" });
+      }
+      if (url.endsWith("/v1/billing/meters/mtr_1"))
+        return Response.json({
+          event_name: "selfbench_managed_usage",
+          status: "active",
+          default_aggregation: { formula: "sum" },
+          customer_mapping: { type: "by_id", event_payload_key: "stripe_customer_id" },
+          value_settings: { event_payload_key: "value" },
+        });
       if (url.endsWith("/v1/customers")) return Response.json({ id: "cus_1" });
       if (url.endsWith("/v1/checkout/sessions"))
         return Response.json({ url: "https://checkout.stripe.test/c" });
@@ -82,7 +111,9 @@ async function billingServer() {
     fetch(`http://127.0.0.1:${address.port}${path}`, init);
   return {
     store,
+    teamId,
     stripeCalls,
+    credits,
     request,
     stop: async () => {
       await new Promise<void>((resolve, reject) =>

@@ -34,6 +34,21 @@ export interface BillingPolicy {
   readonly meterEventName: string;
 }
 
+/** Credit grants are disabled unless an immutable GitHub organization id is explicitly trusted. */
+export function billingCreditAdminOrgId(
+  environment: NodeJS.ProcessEnv = process.env,
+): number | undefined {
+  const raw = emptyStringAsUndefined(environment.SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID);
+  if (raw === undefined) return undefined;
+  const id = Number(raw);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(
+      "SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID must be a positive GitHub organization ID",
+    );
+  }
+  return id;
+}
+
 export function loadBillingPolicy(environment: NodeJS.ProcessEnv = process.env): BillingPolicy {
   const value = policySchema.parse(environment);
   return {

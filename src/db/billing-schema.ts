@@ -116,6 +116,20 @@ export const billingOutbox = pgTable(
   (table) => [index("billing_outbox_delivery").on(table.status, table.nextAttemptAt)],
 );
 
+/** Durable idempotency and audit log for privileged invoice-credit grants. */
+export const billingCreditGrants = pgTable("billing_credit_grants", {
+  requestId: text("request_id").primaryKey(),
+  adminUserId: bigint("admin_user_id", { mode: "number" }).notNull(),
+  targetOrgId: bigint("target_org_id", { mode: "number" })
+    .notNull()
+    .references(() => orgs.id, { onDelete: "restrict" }),
+  amountCents: integer("amount_cents").notNull(),
+  reason: text("reason").notNull(),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeTransactionId: text("stripe_transaction_id"),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});
+
 /** Stripe event ids already applied, so webhook retries do not double-apply subscription state. */
 export const billingWebhookEvents = pgTable("billing_webhook_events", {
   id: text("id").primaryKey(),

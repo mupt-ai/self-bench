@@ -11,6 +11,7 @@ import {
   formatBillingDollars,
   startBillingSession,
 } from "./billing";
+import { CreditGrant } from "./CreditGrant";
 
 const statusLabels: Record<string, string> = {
   disabled: "Not Configured",
@@ -111,6 +112,7 @@ function BillingContent({ org }: { org: string }) {
         <div className="grid gap-8">
           <BillingSummary data={data} />
           <BillingStatusCard data={data} />
+          {data.canGrantCredits && <CreditGrant org={org} />}
           <BillingUsage usage={data.usage} />
         </div>
       )}
