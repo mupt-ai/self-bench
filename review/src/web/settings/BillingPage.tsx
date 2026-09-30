@@ -12,6 +12,7 @@ import {
   startBillingSession,
 } from "./billing";
 import { CreditGrant } from "./CreditGrant";
+import { UsageRefund } from "./UsageRefund";
 
 const statusLabels: Record<string, string> = {
   disabled: "Not Configured",
@@ -113,6 +114,7 @@ function BillingContent({ org }: { org: string }) {
           <BillingSummary data={data} />
           <BillingStatusCard data={data} />
           {data.canGrantCredits && <CreditGrant org={org} />}
+          {data.canGrantCredits && <UsageRefund org={org} onRefunded={() => void load()} />}
           <BillingUsage usage={data.usage} />
         </div>
       )}
@@ -121,8 +123,12 @@ function BillingContent({ org }: { org: string }) {
 }
 
 export function BillingSummary({ data }: { data: BillingStatus }) {
-  const modelCost = data.usage.modelBillableUsd;
-  const sandboxCost = data.usage.sandboxBillableUsd;
+  const {
+    modelBillableUsd: modelCost,
+    sandboxBillableUsd: sandboxCost,
+    billedUsd: billed,
+    refundedUsd: refunded,
+  } = data.usage;
   const totalCost = modelCost + sandboxCost;
   return (
     <section aria-labelledby="billing-summary-title" className="border border-border bg-card">
@@ -132,18 +138,20 @@ export function BillingSummary({ data }: { data: BillingStatus }) {
             id="billing-summary-title"
             className="text-xs tracking-wider text-muted-foreground uppercase"
           >
-            Total Recorded Cost
+            {data.configured ? "Billed Cost" : "Total Recorded Cost"}
           </p>
           <p className="mt-2 text-3xl font-medium tracking-tight tabular-nums">
-            {formatBillingDollars(totalCost)}
+            {formatBillingDollars(data.configured ? Math.max(0, billed - refunded) : totalCost)}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            All-time billable managed usage. Final invoices and payments are managed in Stripe.
+            {data.configured
+              ? `Managed usage billed through Stripe${refunded > 0 ? `, less ${formatBillingDollars(refunded)} refunded` : ""}. Final invoices and payments are managed in Stripe.`
+              : "All-time billable managed usage. Final invoices and payments are managed in Stripe."}
           </p>
         </div>
         <div className="p-5">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-muted-foreground">Cost Breakdown</span>
+            <span className="text-muted-foreground">Recorded Cost Breakdown</span>
             <span className="tabular-nums text-foreground">{formatBillingDollars(totalCost)}</span>
           </div>
           <div

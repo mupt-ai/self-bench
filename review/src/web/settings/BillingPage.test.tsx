@@ -18,6 +18,8 @@ const status: BillingStatus = {
     modelBillableUsd: 1.25,
     sandboxSeconds: 125,
     sandboxBillableUsd: 0.08,
+    billedUsd: 1.33,
+    refundedUsd: 0,
   },
 };
 
@@ -38,7 +40,7 @@ test("subscription summary exposes access, period, and limit availability", () =
 });
 
 test("billing summary derives cost visualization from recorded usage", () => {
-  const html = renderToStaticMarkup(<BillingSummary data={status} />);
+  const html = renderToStaticMarkup(<BillingSummary data={{ ...status, configured: false }} />);
   expect(html).toContain("Total Recorded Cost");
   expect(html).toContain("$1.33");
   expect(html).toContain("Models");
@@ -48,4 +50,17 @@ test("billing summary derives cost visualization from recorded usage", () => {
   expect(html).toContain('role="img"');
   expect(html).not.toContain("cus_test");
   expect(html).not.toContain("sub_test");
+});
+
+test("billed cost excludes unbilled usage and nets out refunds", () => {
+  const html = renderToStaticMarkup(
+    <BillingSummary
+      data={{ ...status, usage: { ...status.usage, billedUsd: 1.2, refundedUsd: 1.15 } }}
+    />,
+  );
+  expect(html).toContain("Billed Cost");
+  expect(html).toContain("$0.05");
+  expect(html).toContain("less $1.15 refunded");
+  expect(html).toContain("Recorded Cost Breakdown");
+  expect(html).toContain("$1.33");
 });

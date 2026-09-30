@@ -1,7 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -90,14 +92,37 @@ export const orgBilling = pgTable("org_billing", {
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
 
-/** Meter events to send to Stripe; written in the usage transaction, delivered by the API. */
+/**
+ * Usage handed back to an organization. Each refund is one negative meter event that cancels
+ * the usage already sent to Stripe in the open billing period, so its invoice line nets out.
+ */
+export const billingRefunds = pgTable("billing_refunds", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: bigint("org_id", { mode: "number" })
+    .notNull()
+    .references(() => orgs.id, { onDelete: "restrict" }),
+  /** Null for refunds recorded by an operator outside the app. */
+  adminUserId: bigint("admin_user_id", { mode: "number" }),
+  reason: text("reason").notNull(),
+  /** Positive billable units handed back; the meter event carries the negative value. */
+  units: bigint("units", { mode: "number" }).notNull(),
+  unitScale: integer("unit_scale").notNull(),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});
+
+/**
+ * Meter events to send to Stripe, delivered by the API. A usage event is written in the usage
+ * transaction; a refund event is written with its refund.
+ */
 export const billingOutbox = pgTable(
   "billing_outbox",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     usageId: bigint("usage_id", { mode: "number" })
-      .notNull()
       .references(() => generationUsage.id)
+      .unique(),
+    refundId: bigint("refund_id", { mode: "number" })
+      .references(() => billingRefunds.id)
       .unique(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
     identifier: text("identifier").notNull().unique(),
@@ -113,7 +138,10 @@ export const billingOutbox = pgTable(
     sentAt: timestamptz("sent_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  (table) => [index("billing_outbox_delivery").on(table.status, table.nextAttemptAt)],
+  (table) => [
+    index("billing_outbox_delivery").on(table.status, table.nextAttemptAt),
+    check("billing_outbox_source", sql`num_nonnulls(${table.usageId}, ${table.refundId}) = 1`),
+  ],
 );
 
 /** Durable idempotency and audit log for privileged invoice-credit grants. */

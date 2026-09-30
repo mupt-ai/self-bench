@@ -7,7 +7,6 @@ import {
 } from "../../db/billing.js";
 import type { User, UserStore } from "../../db/users.js";
 import { loadBillingPolicy, type StripeConfig } from "../../generation/billing/config.js";
-import { fetchOrgMemberships } from "../../third_party/github/oauth.js";
 import {
   createCheckoutSession,
   createPortalSession,
@@ -19,8 +18,9 @@ import { applyStripeWebhook, verifyStripeWebhook } from "../../third_party/strip
 import { stripeWebhookSecret } from "../../third_party/stripe/webhook-secret.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
+import { refundUsage, verifiedCreditAdmin } from "./billing-admin.js";
 
-const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/billing(?:\/(checkout|portal|credits))?$/;
+const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/billing(?:\/(checkout|portal|credits|refunds))?$/;
 const MAX_CREDIT_GRANT_CENTS = 10_000;
 const creditInput = z
   .object({
@@ -90,40 +90,8 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
         sendJson(response, 503, { error: "Stripe billing is not configured" });
         return true;
       }
-      if (match[2] === "credits") {
-        const trustedAdminOrgId = options.creditAdminOrgId;
-        if (
-          user.apiKey ||
-          org.kind !== "org" ||
-          !trustedAdminOrgId ||
-          org.githubId !== trustedAdminOrgId ||
-          !options.githubApiUrl ||
-          !options.githubToken
-        ) {
-          sendJson(response, 403, { error: "Only mupt-ai organization admins can grant credits" });
-          return true;
-        }
-        const githubToken = await options.githubToken(user.githubId);
-        if (!githubToken) {
-          sendJson(response, 403, { error: "Admin membership could not be verified" });
-          return true;
-        }
-        const memberships = await fetchOrgMemberships(
-          { githubApiUrl: options.githubApiUrl },
-          githubToken,
-          options.fetchImpl ?? fetch,
-        );
-        if (
-          !memberships.some(
-            (membership) =>
-              membership.githubId === trustedAdminOrgId && membership.role === "admin",
-          )
-        ) {
-          sendJson(response, 403, {
-            error: "Current GitHub organization admin membership is required",
-          });
-          return true;
-        }
+      if (match[2] === "credits" || match[2] === "refunds") {
+        if (!(await verifiedCreditAdmin(options, org, user, response))) return true;
         let input: unknown;
         try {
           input = JSON.parse((await readBody(request, 4096)).toString());
@@ -132,6 +100,8 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
           sendJson(response, 400, { error: "Valid JSON required" });
           return true;
         }
+        if (match[2] === "refunds")
+          return refundUsage(options, input, user, response, options.config);
         const parsed = creditInput.safeParse(input);
         if (!parsed.success) {
           sendJson(response, 400, {

@@ -195,3 +195,91 @@ test("a started sandbox is recorded and billed once however often its stop retri
     await database.close();
   }
 });
+
+test("a refund cancels only billed usage since the period start that no refund covered", async () => {
+  const { database, org } = await orgFixture();
+  try {
+    const billing = createBillingStore(database.db, true);
+    const usage = createUsageStore(database.db);
+    // Recorded before billing was set up, so never sent to Stripe or refunded.
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-unbilled" });
+    await billing.saveCustomer(org.id, "cus_test");
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-old" });
+    await database.db
+      .update(billingOutbox)
+      .set({ createdAt: new Date("2026-08-01T00:00:00Z") })
+      .where(eq(billingOutbox.identifier, "selfbench-usage-2"));
+    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-open" });
+    const refund = {
+      orgId: org.id,
+      customerId: "cus_test",
+      adminUserId: 1,
+      reason: "Goodwill",
+      since: new Date("2026-09-01T00:00:00Z"),
+      unitScale: 10_000_000,
+      eventName: "selfbench_managed_usage",
+    };
+    const first = await billing.refundSince(refund);
+    expect(first?.units).toBe(20_009_200);
+    expect(await billing.refundSince(refund)).toBeUndefined();
+    const events = await database.db.select().from(billingOutbox);
+    expect(events.find((event) => event.refundId === first?.id)?.value).toBe(-20_009_200);
+
+    const summary = await billing.usage(org.id);
+    expect(summary.modelBillableUsd + summary.sandboxBillableUsd).toBeCloseTo(6.00276, 5);
+    expect(summary.billedUsd).toBeCloseTo(4.00184, 5);
+    expect(summary.refundedUsd).toBeCloseTo(2.00092, 5);
+  } finally {
+    await database.close();
+  }
+});
+
+test("a refund's negative meter event goes through the Stripe API version that accepts it", async () => {
+  const { database, org } = await orgFixture();
+  try {
+    const billing = createBillingStore(database.db, true);
+    await billing.saveCustomer(org.id, "cus_test");
+    await createUsageStore(database.db).record({ ...managedRow, orgId: org.id });
+    await billing.refundSince({
+      orgId: org.id,
+      customerId: "cus_test",
+      adminUserId: 1,
+      reason: "Goodwill",
+      since: new Date(0),
+      unitScale: 10_000_000,
+      eventName: "selfbench_managed_usage",
+    });
+    const sent: { url: string; value: string | null | undefined }[] = [];
+    const dispatcher = startBillingDispatcher(
+      billing,
+      {
+        secretKey: "sk_test",
+        webhookSecret: "whsec",
+        priceId: "price_1",
+        apiVersion: "2025-09-30.clover",
+      },
+      {
+        intervalMs: 60_000,
+        fetchImpl: (async (input, init) => {
+          const url = String(input);
+          const body = String(init?.body);
+          sent.push({
+            url,
+            value: url.includes("/v1/")
+              ? new URLSearchParams(body).get("payload[value]")
+              : (JSON.parse(body) as { payload: { value: string } }).payload.value,
+          });
+          return Response.json({});
+        }) as typeof fetch,
+      },
+    );
+    dispatcher.wake();
+    await dispatcher.close();
+    expect(sent).toEqual([
+      { url: "https://api.stripe.com/v2/billing/meter_events", value: "20009200" },
+      { url: "https://api.stripe.com/v1/billing/meter_events", value: "-20009200" },
+    ]);
+  } finally {
+    await database.close();
+  }
+});

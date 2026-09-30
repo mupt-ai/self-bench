@@ -8,6 +8,8 @@ const usage = {
   modelBillableUsd: 1.25,
   sandboxSeconds: 125,
   sandboxBillableUsd: 0.08,
+  billedUsd: 1.33,
+  refundedUsd: 0,
 };
 
 test("billing usage visualizes model and sandbox consumption", () => {
@@ -34,6 +36,8 @@ test("billing usage has a clear zero-data state", () => {
         modelBillableUsd: 0,
         sandboxSeconds: 0,
         sandboxBillableUsd: 0,
+        billedUsd: 0,
+        refundedUsd: 0,
       }}
     />,
   );

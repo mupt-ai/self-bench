@@ -120,6 +120,20 @@ export async function grantStripeCredit(
   );
 }
 
+/** Start of the subscription's open billing period; periods live on items in this API version. */
+export async function subscriptionPeriodStart(
+  config: StripeConfig,
+  subscriptionId: string,
+  options?: StripeRequestOptions,
+): Promise<Date> {
+  const subscription = await stripeRequest<{
+    items?: { data?: { current_period_start?: number }[] };
+  }>(config, `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {}, options);
+  const start = subscription.items?.data?.[0]?.current_period_start;
+  if (typeof start !== "number") throw new Error("Stripe subscription has no open period");
+  return new Date(start * 1000);
+}
+
 export async function createCheckoutSession(
   config: StripeConfig,
   input: { customerId: string; orgId: number; successUrl: string; cancelUrl: string },
@@ -160,7 +174,10 @@ export async function createPortalSession(
   );
 }
 
-/** Stripe Billing Meter Events v2. The identifier and HTTP key make retries idempotent. */
+/**
+ * Stripe Billing Meter Events. The identifier and HTTP key make retries idempotent. v2 only
+ * accepts positive values, so a refund's negative event goes through v1, which nets it out.
+ */
 export async function sendMeterEvent(
   config: StripeConfig,
   event: {
@@ -172,6 +189,22 @@ export async function sendMeterEvent(
   },
   options?: StripeRequestOptions,
 ): Promise<{ identifier?: string }> {
+  if (event.value < 0)
+    return stripeRequest(
+      config,
+      "/v1/billing/meter_events",
+      {
+        method: "POST",
+        body: formBody({
+          event_name: event.eventName,
+          identifier: event.identifier,
+          timestamp: String(Math.floor(event.timestamp.getTime() / 1000)),
+          "payload[stripe_customer_id]": event.customerId,
+          "payload[value]": String(event.value),
+        }),
+      },
+      { ...options, idempotencyKey: event.identifier },
+    );
   return stripeRequest(
     config,
     "/v2/billing/meter_events",
