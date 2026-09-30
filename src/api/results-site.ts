@@ -4,6 +4,7 @@ import { resolve, sep } from "node:path";
 import { repositoryPath, segmentsOf } from "../public/paths.js";
 import type { PublishedRelease } from "../public/release-types.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
+import { INDEXNOW_KEY_PATH, sendIndexNowKey } from "./indexnow.js";
 import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
@@ -143,6 +144,10 @@ export function createResultsSite(options: ResultsSiteOptions) {
       }
       if (/^\/(api|auth|v1)(\/|$)/.test(url.pathname)) {
         sendJson(response, 404, { error: "not found" });
+        return true;
+      }
+      if (options.indexable && url.pathname === INDEXNOW_KEY_PATH) {
+        sendIndexNowKey(response);
         return true;
       }
       if (url.pathname === "/robots.txt") {

@@ -182,6 +182,9 @@ test("withdrawing falls back to the previous release; the next release chains to
     method: "POST",
   });
   expect(withdrawn.status).toBe(200);
+  // Each release and the withdrawal name what changed, for search engines to be told.
+  expect(server.changes.at(-1)).toEqual({ fullName: "vercel/next.js", publisher: "acme" });
+  expect(server.changes).toHaveLength(3);
   page = await (await server.request("/api/public/repos/vercel/next.js", {}, null)).json();
   expect(page.lines[0].release.releaseId).toBe(first.release.id);
   const view = await server.preview();

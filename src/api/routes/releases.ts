@@ -58,8 +58,17 @@ export interface ReleaseRoutesOptions {
   /** Origin of the results site, for links to released pages; null when there is none. */
   readonly resultsSiteUrl: string | null;
   readonly fetchImpl?: typeof fetch;
-  /** Told when what the public sees changes (a release or a withdrawal), so it is read afresh. */
-  readonly onPublicChange?: () => void;
+  /**
+   * Told when what the public sees changes (a release or a withdrawal), and for which repository
+   * and publisher, so it is read afresh and search engines can be told which pages changed.
+   */
+  readonly onPublicChange?: (change: PublicChange) => void;
+}
+
+/** What a release or withdrawal changed on selfbench.dev: one publisher's line of a repository. */
+export interface PublicChange {
+  fullName: string;
+  publisher: string;
 }
 
 /** A signed-in member's request, scoped to one connected repository. */
@@ -177,7 +186,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
           repositoryFlags: { private: isPrivate, archived },
         },
       });
-      options.onPublicChange?.();
+      options.onPublicChange?.({ fullName: github.fullName, publisher: scope.tenant.login });
       track(scope.user, "release published", { repo: github.fullName }, scope.tenant);
       const after = await releases.list(scope.line);
       sendJson(response, 201, { release: summaryOf(row, after) });
@@ -236,7 +245,10 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         if (!withdrawn) {
           sendJson(response, 404, { error: "Release not found or already withdrawn" });
         } else {
-          options.onPublicChange?.();
+          options.onPublicChange?.({
+            fullName: withdrawn.fullName,
+            publisher: withdrawn.publisherLogin,
+          });
           sendJson(response, 200, {
             release: summaryOf(withdrawn, await releases.list(scope.line)),
           });
