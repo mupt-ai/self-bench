@@ -200,6 +200,13 @@ test("a cancel keeps finished work, and one that lands during export wins over t
     ],
   });
 
+  // A step that fails after the cancel was marked, before the workflow saw it, still cancels.
+  const failing = await activitiesFor({});
+  await failing.store.cancel(run.runId);
+  await failing.activities.failBatch(run.runId, "GitHub unavailable");
+  expect(await failing.read()).toMatchObject({ phase: "cancelled" });
+  expect((await failing.read()).error).toBeUndefined();
+
   const exporting = await activitiesFor({
     phase: "authoring",
     candidates: [

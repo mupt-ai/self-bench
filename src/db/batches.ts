@@ -42,19 +42,24 @@ export function createBatchStore(db: Database) {
         return state;
       });
     },
-    /** Marks an unfinished batch as cancelling, so the page shows it before the workflow stops. */
-    async cancel(runId: string): Promise<void> {
-      await db.transaction(async (tx) => {
+    /**
+     * Marks an unfinished batch as cancelling, so the page shows it before the workflow stops.
+     * False when the batch already finished.
+     */
+    async cancel(runId: string): Promise<boolean> {
+      return db.transaction(async (tx) => {
         const [row] = await tx
           .select()
           .from(generationBatches)
           .where(eq(generationBatches.runId, runId))
           .for("update");
-        if (!row || isFinished(row.state.phase)) return;
+        if (row && isFinished(row.state.phase)) return false;
+        if (!row) return true;
         await tx
           .update(generationBatches)
           .set({ state: { ...row.state, phase: "cancelling" }, updatedAt: new Date() })
           .where(eq(generationBatches.runId, runId));
+        return true;
       });
     },
   };

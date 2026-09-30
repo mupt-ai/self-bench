@@ -99,7 +99,7 @@ test("start records the batch, then starts its workflow under the run ID", async
   expect((await f.store.read("retried"))?.phase).toBe("preparing");
 });
 
-test("cancel shows the cancel at once and cancels the workflow, even one that already closed", async () => {
+test("cancel shows the cancel at once and cancels the workflow, but leaves a finished batch alone", async () => {
   const f = await service();
   f.workflow.status = "RUNNING";
   await f.create("running", {});
@@ -110,6 +110,7 @@ test("cancel shows the cancel at once and cancels the workflow, even one that al
   await f.create("closed", { phase: "complete" });
   await f.batches.cancel("closed");
   expect((await f.store.read("closed"))?.phase).toBe("complete");
+  expect(f.cancelled).toEqual(["running"]);
 });
 
 test("a read settles a batch whose workflow closed or never started without recording an outcome", async () => {

@@ -26,8 +26,12 @@ export function finishCancel(batch: GenerationBatch): boolean {
   return true;
 }
 
-/** A failed batch's workflow closes, which terminates any child still running. */
+/**
+ * A failed batch's workflow closes, which terminates any child still running. A cancel the
+ * workflow had not yet seen still wins.
+ */
 export function fail(batch: GenerationBatch, error: string): boolean {
+  if (batch.phase === "cancelling") return finishCancel(batch);
   if (isFinished(batch.phase)) return false;
   batch.phase = "failed";
   batch.error = error;
@@ -143,7 +147,6 @@ export function completeExport(batch: GenerationBatch, reference: ArtifactRef): 
  * terminated or timed-out workflow skips its own failure handling.
  */
 export function abandon(batch: GenerationBatch, workflowStatus: string | undefined): boolean {
-  if (batch.phase === "cancelling") return finishCancel(batch);
   return fail(
     batch,
     workflowStatus

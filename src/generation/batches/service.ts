@@ -136,7 +136,7 @@ export function createGenerationBatches(
     },
     /** Shows the cancel at once, then cancels the workflow, which records where it stopped. */
     async cancel(runId: string) {
-      await store.cancel(runId);
+      if (!(await store.cancel(runId))) return;
       try {
         await client.workflow.getHandle(runId).cancel();
       } catch (error) {
