@@ -167,3 +167,44 @@ test("a repository's head points link previews at its release's card; others kee
   expect(plain).toContain(`<meta property="og:image" content="${origin}/icon-192.png" />`);
   expect(plain).toContain('<meta name="twitter:card" content="summary" />');
 });
+
+test("a repository page describes its place in the site and its results as a dataset", () => {
+  const settings = [setting("Claude Opus 5.5", 72.34, 1.5), setting("GPT-5.5 Mini", 51, 0.042)];
+  const lines = [
+    line("mupt-ai", "2026-09-02T00:00:00Z", settings),
+    line("acme", "2026-09-01T00:00:00Z", settings),
+  ];
+  const graph = (publisher?: string) =>
+    (repositoryHead(origin, lines, publisher)?.structuredData?.["@graph"] ?? []) as Record<
+      string,
+      unknown
+    >[];
+  const [crumbs, dataset] = graph();
+  expect(crumbs?.["@type"]).toBe("BreadcrumbList");
+  expect(crumbs?.itemListElement).toEqual([
+    { "@type": "ListItem", position: 1, name: "SelfBench", item: "https://selfbench.dev/" },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "earendil-works/pi",
+      item: "https://selfbench.dev/earendil-works/pi",
+    },
+  ]);
+  expect(dataset).toMatchObject({
+    "@type": "Dataset",
+    name: "earendil-works/pi coding agent benchmark results",
+    url: "https://selfbench.dev/earendil-works/pi",
+    datePublished: "2026-09-02T00:00:00Z",
+    distribution: { contentUrl: "https://selfbench.dev/api/public/repos/earendil-works/pi" },
+  });
+  // The whole summary, which search results would cut short.
+  expect(dataset?.description).toEndWith("from its merged pull requests.");
+  // Another publisher's line is a page of its own, one level further down.
+  const [ownCrumbs, ownDataset] = graph("acme");
+  expect((ownCrumbs?.itemListElement as unknown[] | undefined)?.at(-1)).toMatchObject({
+    position: 3,
+    name: "Run by acme",
+    item: "https://selfbench.dev/earendil-works/pi/acme",
+  });
+  expect(ownDataset?.name).toBe("earendil-works/pi coding agent benchmark results run by acme");
+});

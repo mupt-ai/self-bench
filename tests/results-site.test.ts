@@ -167,7 +167,7 @@ test("each page has its own title, description and address, in place of the buil
   expect(await (await get("/vercel/next.js/umbrella")).text()).toContain(
     '<link rel="canonical" href="https://selfbench.test/vercel/next.js/Umbrella" />',
   );
-  expect(repository).not.toContain("ld+json");
+  expect(repository).toContain('"@type":"Dataset"');
 
   const missing = await (await get("/nobody/nothing")).text();
   expect(all(missing, /<title>([^<]*)<\/title>/)).toEqual([

@@ -20,7 +20,10 @@ export interface PageHead {
   description: string;
   /** The page's one address, in its repository's own casing; none on a page that is not found. */
   canonical?: string;
-  /** Who the site is, as schema.org data: on the home page only. */
+  /**
+   * The page as schema.org data: who the site is on the home page, and on a repository page its
+   * place in the site and its results as a dataset.
+   */
   structuredData?: Record<string, unknown>;
   /**
    * The picture a shared link shows, 1200 × 630: a repository's card, drawn for its release
@@ -52,15 +55,85 @@ export function repositoryHead(
   if (!line) return undefined;
   const { fullName } = line.release.repository;
   const own = line === defaultLineOf(lines) ? undefined : line.release.publisher.login;
+  const canonical = own ? `${origin}/${fullName}/${own}` : `${origin}/${fullName}`;
   return {
     title: repositoryTitle(fullName),
     description: repositoryDescription(line),
-    canonical: own ? `${origin}/${fullName}/${own}` : `${origin}/${fullName}`,
+    canonical,
+    structuredData: repositoryStructuredData(origin, line, canonical, own),
     // The release in the address, so a new release's card is fetched afresh, not an old copy.
     image: {
       url: `${origin}${cardPath(fullName, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
       alt: `Accuracy against cost per task for each model setting on ${fullName}`,
     },
+  };
+}
+
+/**
+ * A repository page as schema.org data. Its breadcrumbs name its place in the site, so results
+ * can show "SelfBench › owner/name" rather than guess from the address. Its release is a
+ * Dataset: what was measured, by whom, when, and where the numbers can be downloaded, which is
+ * what Google Dataset Search lists.
+ */
+function repositoryStructuredData(
+  origin: string,
+  line: PublishedLine,
+  canonical: string,
+  own: string | undefined,
+): Record<string, unknown> {
+  const { release } = line;
+  const { fullName } = release.repository;
+  const { login, kind } = release.publisher;
+  const crumbs = [
+    { name: SITE_NAME, item: `${origin}/` },
+    { name: fullName, item: `${origin}/${fullName}` },
+    ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
+  ];
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: crumbs.map((crumb, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          ...crumb,
+        })),
+      },
+      {
+        "@type": "Dataset",
+        "@id": `${canonical}#results`,
+        name: `${fullName} coding agent benchmark results${own ? ` run by ${own}` : ""}`,
+        // The whole summary: a dataset's description is read in full, not cut to a snippet.
+        description: repositoryDescription(line, Number.POSITIVE_INFINITY),
+        url: canonical,
+        creator: {
+          "@type": kind === "user" ? "Person" : "Organization",
+          name: login,
+          url: `https://github.com/${login}`,
+        },
+        includedInDataCatalog: { "@type": "DataCatalog", name: SITE_NAME, url: `${origin}/` },
+        datePublished: release.releasedAt,
+        isAccessibleForFree: true,
+        keywords: ["coding agents", "AI models", "benchmark", "evals", fullName],
+        about: {
+          "@type": "SoftwareSourceCode",
+          name: fullName,
+          codeRepository: `https://github.com/${fullName}`,
+        },
+        measurementTechnique:
+          "Tasks built from the repository's merged pull requests, each scored by hidden tests",
+        variableMeasured: [
+          { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
+          { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
+        ],
+        distribution: {
+          "@type": "DataDownload",
+          encodingFormat: "application/json",
+          contentUrl: `${origin}/api/public/repos/${fullName}`,
+        },
+      },
+    ],
   };
 }
 
