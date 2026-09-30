@@ -3,10 +3,12 @@ import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
 import { workerProcessSettings } from "../contracts/config/worker.js";
+import { createBatchStore } from "../db/batches.js";
 import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
+import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { keepOpenRouterCatalogFresh } from "../lib/openrouter-catalog.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
@@ -34,19 +36,26 @@ await checkSandboxBackends(config);
 await keepOpenRouterCatalogFresh().ready;
 
 const connection = await connectTemporalWorker(config.temporal);
-// Stored credentials need both the database and the key; without them only local runs work.
-const database =
-  process.env.SELFBENCH_EVAL_CREDENTIAL_KEY && process.env.SELFBENCH_DATABASE_URL
-    ? await openDatabase(process.env.SELFBENCH_DATABASE_URL, { light: role === "harbor" })
-    : undefined;
-const vault = database
-  ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? "")
+// Batches need the database; stored credentials need it and the key, without which only
+// local runs work.
+const database = process.env.SELFBENCH_DATABASE_URL
+  ? await openDatabase(process.env.SELFBENCH_DATABASE_URL, { light: role === "harbor" })
   : undefined;
-const { verifyCompiled, ...generation } = createActivities(
-  config,
-  vault,
-  database ? createUsageStore(database.db) : undefined,
-);
+const vault =
+  database && process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
+    ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)
+    : undefined;
+const usage = vault && database ? createUsageStore(database.db) : undefined;
+const artifacts = createArtifactStore(config.artifact);
+const { verifyCompiled, ...generation } = createActivities(config, vault, usage);
+const batches = database
+  ? createBatchActivities({
+      store: createBatchStore(database.db),
+      artifacts,
+      ...(vault ? { vault } : {}),
+      ...(usage ? { usage } : {}),
+    })
+  : {};
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
 // A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once through
 // Temporal's handler, installed with the connection, and lets in-flight activities finish for
@@ -55,7 +64,7 @@ const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?
 const stopping = new AbortController();
 process.once("SIGTERM", () => stopping.abort());
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
-  createArtifactStore(config.artifact),
+  artifacts,
   vault,
   snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
   stopping.signal,
@@ -71,7 +80,7 @@ const workers = await Promise.all([
           namespace: config.temporal.namespace,
           taskQueue: config.temporal.taskQueue,
           workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
-          activities: { ...generation, ...evaluation },
+          activities: { ...generation, ...evaluation, ...batches },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
           interceptors: {
             activity: [activityEventInterceptor(), activityErrorInterceptor(), idle.interceptor],

@@ -143,7 +143,6 @@ export async function startApi(
       server.close((error) => (error ? reject(error) : resolve())),
     );
     if (site) await site.close();
-    else await batches?.close();
     await localDatabase?.close();
     await connection.close();
     await site?.database.close();

@@ -72,6 +72,15 @@ export async function saveGenerationRecords(
   githubToken: string,
 ) {
   await records.write(generationRecordPath(runId), reference, 0);
+  await saveGenerationGitHubToken(records, runId, githubToken);
+}
+
+/** Persist the submitter's GitHub token for a run's worker; the hosted worker has none. */
+export async function saveGenerationGitHubToken(
+  records: EncryptedRecordStore,
+  runId: string,
+  githubToken: string,
+) {
   await records.write(generationGitHubTokenPath(runId), { value: githubToken }, 0);
 }
 

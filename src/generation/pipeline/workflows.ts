@@ -87,7 +87,7 @@ async function whenSandboxFree<T>(start: () => Promise<T>): Promise<T> {
  * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
  * reads what it reported; Harbor checks a compiled task on the memory-sized sibling queue.
  */
-export const workflowActivities: SelfBenchActivities = {
+const workflowActivities: SelfBenchActivities = {
   discoverCandidateShard: async (input) =>
     await finish.finishDiscoveryShard({
       ...input,
@@ -112,7 +112,7 @@ export const workflowActivities: SelfBenchActivities = {
   },
 };
 
-/** Independent discovery unit. Fetching PR metadata and dispatch happen in the API. */
+/** One discovery shard of a batch; the batch workflow fetched its merged PRs. */
 export async function selfBenchDiscoveryShardWorkflow(
   input: DiscoveryShardInput,
 ): Promise<DiscoveryResult> {
@@ -130,10 +130,7 @@ export async function selfBenchAuthorWorkflow(
   });
 }
 
-/** Cancellation tombstone: reserves a never-started dispatch ID without any paid activities. */
-export async function selfBenchCancelledDispatchWorkflow(): Promise<void> {}
-
-export function initialProgress(candidate: Candidate): TaskProgress {
+function initialProgress(candidate: Candidate): TaskProgress {
   return {
     candidateId: candidate.candidateId,
     taskId: candidate.candidateId,
@@ -252,7 +249,7 @@ export async function executeCandidate(
 }
 
 /** The innermost cause's message: Temporal wraps activity failures several levels deep. */
-function rootMessage(error: unknown): string {
+export function rootMessage(error: unknown): string {
   let current = error;
   while (current instanceof Error && current.cause instanceof Error) current = current.cause;
   return current instanceof Error ? current.message : String(current);

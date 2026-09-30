@@ -23,14 +23,13 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
       changedFiles: 1,
       author: { login: "human", __typename: "User" },
     }));
-    const batch = await prepareGenerationBatch({
+    const shards = await prepareGenerationBatch({
       run: {
         ...run,
         provenance,
         candidateCounts: { easy: 0, medium: 0, hard: 300 },
       },
       token: "secret-lookup-token",
-      taskQueue: "generation",
       attempt: 1,
       artifacts,
       fetchImpl: async (_url, init) => {
@@ -53,12 +52,10 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
         });
       },
     });
-    expect(batch.shards).toHaveLength(MAX_DISCOVERY_SHARDS);
-    expect(batch.shards.every((shard) => shard.input.shardCount === MAX_DISCOVERY_SHARDS)).toBe(
-      true,
-    );
+    expect(shards).toHaveLength(MAX_DISCOVERY_SHARDS);
+    expect(shards.every((shard) => shard.input.shardCount === MAX_DISCOVERY_SHARDS)).toBe(true);
     const sourcePrs = new Set<number>();
-    for (const shard of batch.shards) {
+    for (const shard of shards) {
       const records = Buffer.from(await artifacts.get(shard.input.run.provenance))
         .toString()
         .trim()
@@ -89,10 +86,9 @@ test("server stages complete PR chunks before dispatch, without retaining the lo
       changedFiles: 1,
       author: { login: "human", __typename: "User" },
     }));
-    const batch = await prepareGenerationBatch({
+    const shards = await prepareGenerationBatch({
       run: { ...run, provenance },
       token: "secret-lookup-token",
-      taskQueue: "generation",
       attempt: 1,
       artifacts,
       fetchImpl: async () =>
@@ -104,13 +100,12 @@ test("server stages complete PR chunks before dispatch, without retaining the lo
           },
         }),
     });
-    expect(batch.shards).toHaveLength(1);
-    expect(batch.shards[0]?.input.shardCount).toBe(1);
-    expect(batch.shards[0]?.input.targetCounts).toEqual({ easy: 0, medium: 0, hard: 1 });
-    expect(batch.candidates).toEqual([]);
-    expect(JSON.stringify(batch)).not.toContain("secret-lookup-token");
+    expect(shards).toHaveLength(1);
+    expect(shards[0]?.input.shardCount).toBe(1);
+    expect(shards[0]?.input.targetCounts).toEqual({ easy: 0, medium: 0, hard: 1 });
+    expect(JSON.stringify(shards)).not.toContain("secret-lookup-token");
     const sizes = [];
-    for (const shard of batch.shards) {
+    for (const shard of shards) {
       expect(shard.input.partitioned).toBe(true);
       expect(shard.input.run.version).toEqual(run.version);
       const records = Buffer.from(await artifacts.get(shard.input.run.provenance))

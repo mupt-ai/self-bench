@@ -1,23 +1,22 @@
-import type { Client } from "@temporalio/client";
+import {
+  type Client,
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowNotFoundError,
+} from "@temporalio/client";
+import { WorkflowIdReusePolicy } from "@temporalio/common";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { BATCH_SWEEP_CONCURRENCY } from "../../contracts/config/execution-limits.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
 import { createUsageStore } from "../../db/usage.js";
-import type { Vault } from "../../db/vault.js";
-import { reportError } from "../../lib/telemetry/sentry.js";
-import { errorMessage, settleWithLimit } from "../../lib/util.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
-import { readGenerationGitHubToken } from "../settings/credentials.js";
-import { overlayCandidateActivity } from "./activity.js";
-import { advanceBatch } from "./advance.js";
-import { exportBatch } from "./export.js";
-import { prepareGenerationBatch } from "./prepare.js";
+import type { BatchStatus } from "./progress.js";
+import { abandon } from "./record.js";
 import { batchStatus } from "./status.js";
-import { batchExecutions } from "./temporal.js";
-import type { GenerationBatch } from "./types.js";
+import { batchObserver, batchWorkflowStatus } from "./temporal.js";
+import { type GenerationBatch, isFinished } from "./types.js";
+import { selfBenchBatchWorkflow } from "./workflow.js";
 
 export class RunNotFoundError extends Error {
   constructor(runId: string) {
@@ -26,184 +25,68 @@ export class RunNotFoundError extends Error {
   }
 }
 
-type PrepareOutcome = Pick<GenerationBatch, "shards"> | { error: string };
+/** A batch whose workflow is still missing this long after it was accepted never started. */
+const START_GRACE_MS = 5 * 60_000;
 
-/** A preparation claim older than this belongs to a crashed replica and may be retaken. */
-const PREPARE_STALE_MS = 10 * 60_000;
-
-/** A restartable application reconciler, not a Temporal orchestration workflow. */
+/** Starts, reads and cancels batches; each batch runs as its own selfBenchBatchWorkflow. */
 export function createGenerationBatches(
   db: Database,
   client: Client,
   artifacts: ArtifactStore,
   taskQueue: string,
-  vault?: Vault,
 ) {
   const store = createBatchStore(db);
   const usage = createUsageStore(db);
-  const executions = batchExecutions(client);
-  let stopped = false;
-  let pending: Promise<void> | undefined;
-  const exports = new Map<string, Promise<void>>();
-  // Cancels this replica is waiting to record; their batches' sweeps stop starting work.
-  const cancelling = new Set<string>();
-  // No DB transaction is held while rendering/downloading bundles, and a slow export never
-  // stalls other batches. Immutable export writes can be resumed after a crash; completion is
-  // conditional on still being exporting.
-  const startExport = (batch: GenerationBatch) => {
-    const runId = batch.run.runId;
-    if (exports.has(runId)) return;
-    exports.set(
-      runId,
-      exportBatch(batch, artifacts, vault, usage)
-        .then((reference) => store.completeExport(runId, reference))
-        .catch((error) => {
-          console.error(`Batch ${runId} export failed; it will be retried`);
-          reportError(error, { tags: { batch_step: "export" }, repeatKey: `export:${runId}` });
-        })
-        .finally(() => exports.delete(runId)),
-    );
+  const observe = batchObserver(client);
+  // A workflow that closed, or never started, without recording an outcome leaves its batch
+  // unfinished; the next read settles it.
+  const settleAbandoned = async (batch: GenerationBatch) => {
+    if (isFinished(batch.phase)) return batch;
+    const status = await batchWorkflowStatus(client, batch.run.runId).catch(() => "RUNNING");
+    if (status === "RUNNING") return batch;
+    if (!status && Date.now() - (batch.acceptedAt ?? 0) < START_GRACE_MS) return batch;
+    return store.update(batch.run.runId, (state) => abandon(state, status));
   };
-  // Submitters' GitHub tokens for batches this replica accepted; hosted generation also saves
-  // the token in the vault, so any replica can take over its preparation.
-  const tokens = new Map<string, string>();
-  const preparing = new Map<string, Promise<void>>();
-  // Outcomes whose recording failed; this replica still holds their claim, so it retries the
-  // write rather than waiting for the claim to go stale.
-  const unrecorded = new Map<string, { attempt: number; outcome: PrepareOutcome }>();
-  const record = async (runId: string, attempt: number, outcome: PrepareOutcome) => {
-    unrecorded.set(runId, { attempt, outcome });
-    await store.completePrepare(runId, attempt, outcome);
-    unrecorded.delete(runId);
-    tokens.delete(runId);
-    poll();
-  };
-  const prepare = async (runId: string) => {
-    const pending = unrecorded.get(runId);
-    if (pending) return record(runId, pending.attempt, pending.outcome);
-    const token =
-      tokens.get(runId) ??
-      (vault ? await readGenerationGitHubToken(vault.records, runId) : undefined);
-    const staleBefore = Date.now() - PREPARE_STALE_MS;
-    if (!token) {
-      await store.abandonPrepare(
-        runId,
-        staleBefore,
-        "Batch preparation was interrupted. Start another batch.",
-      );
-      return;
-    }
-    const claimed = await store.claimPrepare(runId, Date.now(), staleBefore);
-    if (!claimed) return;
-    let outcome: PrepareOutcome;
-    try {
-      const { shards } = await prepareGenerationBatch({
-        run: claimed.run,
-        token,
-        artifacts,
-        taskQueue: claimed.taskQueue,
-        attempt: claimed.prepareAttempt,
-      });
-      outcome = { shards };
-    } catch (error) {
-      outcome = { error: errorMessage(error) };
-    }
-    await record(runId, claimed.prepareAttempt, outcome);
-  };
-  // Like exports, GitHub I/O runs outside any row lock and never stalls other batches.
-  const startPrepare = (runId: string) => {
-    if (preparing.has(runId)) return;
-    preparing.set(
-      runId,
-      prepare(runId)
-        .catch((error) => {
-          console.error(`Batch ${runId} preparation failed; it will be retried`);
-          reportError(error, { tags: { batch_step: "prepare" }, repeatKey: `prepare:${runId}` });
-        })
-        .finally(() => preparing.delete(runId)),
-    );
-  };
-  const reconcile = async (runId: string) => {
-    let exporting: GenerationBatch | undefined;
-    let unprepared = false;
-    await store.reconcile(runId, async (state) => {
-      unprepared = state.phase === "preparing";
-      await advanceBatch(state, executions, Date.now(), () => cancelling.has(runId));
-      if (state.phase === "exporting") exporting = structuredClone(state);
-    });
-    if (unprepared) startPrepare(runId);
-    if (exporting) startExport(exporting);
-  };
-  const tick = async () => {
-    const runIds = await store.activeRunIds();
-    const results = await settleWithLimit(runIds, BATCH_SWEEP_CONCURRENCY, reconcile);
-    // Credentials/upstream outages leave the batch as it was; the next tick retries it.
-    results.forEach((result, index) => {
-      if (result.status === "rejected") {
-        console.error(`Batch ${runIds[index]} reconciliation failed; it will be retried`);
-        reportError(result.reason, {
-          tags: { batch_step: "reconcile" },
-          repeatKey: `reconcile:${runIds[index]}`,
-        });
-      }
-    });
-  };
-  const poll = () => {
-    if (stopped || pending) return;
-    pending = tick()
-      .catch((error) => {
-        console.error("Batch reconciliation failed; persisted batches will be retried");
-        reportError(error, { tags: { batch_step: "plan" }, repeatKey: "plan" });
-      })
-      .finally(() => {
-        pending = undefined;
-      });
-  };
-  const timer = setInterval(poll, 5_000);
-  timer.unref();
-  poll();
   return {
-    async start(run: RunRequest, token: string) {
+    async start(run: RunRequest) {
       if (await store.read(run.runId))
         throw new Error(
           "Batch ID already exists; inspect it rather than starting another execution",
         );
-      // Only record the batch here; the sweep prepares it, so the submitter never waits on
-      // the merged-PR fetch.
-      tokens.set(run.runId, token);
+      await store.create({
+        run,
+        taskQueue,
+        phase: "preparing",
+        acceptedAt: Date.now(),
+        shards: [],
+        candidates: [],
+      });
       try {
-        await store.create({
-          run,
+        await client.workflow.start(selfBenchBatchWorkflow, {
+          workflowId: run.runId,
           taskQueue,
-          phase: "preparing",
-          acceptedAt: Date.now(),
-          shards: [],
-          candidates: [],
+          args: [run.runId],
+          workflowExecutionTimeout: "15 days",
+          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
         });
       } catch (error) {
-        tokens.delete(run.runId);
-        throw error;
+        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
       }
-      startPrepare(run.runId);
     },
     list: () => store.list(),
     read: (runId: string) => store.read(runId),
-    async status(runId: string) {
-      const batch = await store.read(runId);
-      if (!batch) throw new RunNotFoundError(runId);
-      let base = await overlayCandidateActivity(client, batchStatus(batch));
+    async status(runId: string): Promise<BatchStatus> {
+      const stored = await store.read(runId);
+      if (!stored) throw new RunNotFoundError(runId);
+      const { batch, activity } = await observe(await settleAbandoned(stored));
+      let base: BatchStatus = { ...batchStatus(batch), ...(activity ? { activity } : {}) };
       if (batch.run.generation) {
         const { settings } = batch.run.generation;
         const orgId = batch.run.generation.orgId ?? batch.run.generation.ownerId;
         const provider = batch.run.version.executionBackend;
-        const live = [
-          ...batch.shards.map((item) => (!item.result ? item.cost : undefined)),
-          ...batch.candidates.map((item) =>
-            !item.result
-              ? (base.activity?.[item.candidate.candidateId]?.cost ?? item.cost)
-              : undefined,
-          ),
-        ].filter((cost) => cost !== undefined);
+        const live = [...batch.shards, ...batch.candidates]
+          .map((item) => (!item.result ? item.cost : undefined))
+          .filter((cost) => cost !== undefined);
         const [total, ...shards] = await Promise.all([
           usage.summary(runId, orgId),
           ...batch.shards.map((shard) =>
@@ -251,20 +134,14 @@ export function createGenerationBatches(
         },
       };
     },
+    /** Shows the cancel at once, then cancels the workflow, which records where it stopped. */
     async cancel(runId: string) {
-      cancelling.add(runId);
+      await store.cancel(runId);
       try {
-        if (!(await store.cancel(runId))) await client.workflow.getHandle(runId).cancel();
-        else poll();
-      } finally {
-        cancelling.delete(runId);
+        await client.workflow.getHandle(runId).cancel();
+      } catch (error) {
+        if (!(error instanceof WorkflowNotFoundError)) throw error;
       }
-    },
-    async close() {
-      stopped = true;
-      clearInterval(timer);
-      await pending;
-      await Promise.all([...preparing.values(), ...exports.values()]);
     },
   };
 }

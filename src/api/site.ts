@@ -97,12 +97,10 @@ export async function openSite(
     client,
     artifacts,
     generationQueue ?? config.temporal.taskQueue,
-    generationVault,
   );
   return {
     users,
     close: async () => {
-      await batches.close();
       await billingDispatcher?.close();
     },
     generationBatches: batches,
@@ -163,7 +161,7 @@ export async function openSite(
       runs,
       tasks,
       artifacts,
-      start: (input, token) => batches.start(input, token),
+      start: (input) => batches.start(input),
       status: (runId) => batches.status(runId),
       batch: (runId) => batches.read(runId),
       cancel: (runId) => batches.cancel(runId),

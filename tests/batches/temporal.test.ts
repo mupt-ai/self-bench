@@ -1,88 +1,124 @@
-import { expect, test } from "bun:test";
-import { type Client, WorkflowNotFoundError } from "@temporalio/client";
-import { batchExecutions } from "../../src/generation/batches/temporal.js";
-import { artifact, candidate, run } from "../support/workflow-fixture.js";
+import { expect, spyOn, test } from "bun:test";
+import { type Client, defaultPayloadConverter } from "@temporalio/client";
+import { BATCH_OBSERVE_INTERVAL_MS } from "../../src/contracts/config/execution-limits.js";
+import { batchObserver } from "../../src/generation/batches/temporal.js";
+import type { GenerationBatch } from "../../src/generation/batches/types.js";
+import { candidate, run } from "../support/workflow-fixture.js";
 
-function fixture() {
-  let exists = false;
-  let state = "RUNNING";
-  let starts = 0;
-  let ambiguous = false;
-  let seen: unknown;
-  const handle = {
-    describe: async () => {
-      if (!exists) throw new WorkflowNotFoundError("missing", "batch/discovery/0", undefined);
-      return {
-        type: "selfBenchDiscoveryShardWorkflow",
-        runId: "execution",
-        status: { name: state },
-      };
-    },
-    result: async () => ({ candidates: [candidate("one", 1)], report: artifact }),
-    cancel: async () => {
-      state = "CANCELLED";
-    },
-  };
+const cost = {
+  stage: "author-one-r1",
+  state: "estimated" as const,
+  sandboxSeconds: 12,
+  sandboxUsd: 0.01,
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+
+/** A Temporal client whose candidate workflows run, one retrying, and answer progress queries. */
+function temporal(options: { deadline?: boolean } = {}) {
+  const described: string[] = [];
+  const queried: string[] = [];
   const client = {
+    options: { namespace: "default" },
     connection: {
-      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
-    },
-    workflow: {
-      getHandle: () => handle,
-      start: async (type: string, options: unknown) => {
-        starts++;
-        exists = true;
-        seen = { type, options };
-        if (ambiguous) throw Error("response lost");
+      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => {
+        if (options.deadline) throw new Error("DEADLINE_EXCEEDED");
+        return action();
       },
     },
+    workflowService: {
+      describeWorkflowExecution: async ({ execution }: { execution: { workflowId: string } }) => {
+        described.push(execution.workflowId);
+        return {
+          workflowExecutionInfo: {},
+          pendingActivities: [
+            {
+              state: 1,
+              attempt: 3,
+              maximumAttempts: 4,
+              activityType: { name: "startAuthoringTurn" },
+              lastFailure: { message: "the model provider failed; log: gs://bucket/sandbox.log" },
+              nextAttemptScheduleTime: { seconds: 1_789_843_794, nanos: 500_000_000 },
+              heartbeatDetails: { payloads: [defaultPayloadConverter.toPayload({ cost })] },
+            },
+          ],
+        };
+      },
+    },
+    workflow: {
+      getHandle: (workflowId: string) => ({
+        query: async () => {
+          queried.push(workflowId);
+          return { candidateId: "one", taskId: "one", difficulty: "hard", status: "authoring" };
+        },
+      }),
+    },
   } as unknown as Client;
+  return { client, described, queried };
+}
+
+function authoring(): GenerationBatch {
   return {
-    client,
-    starts: () => starts,
-    seen: () => seen,
-    complete: () => {
-      state = "COMPLETED";
-    },
-    ambiguous: () => {
-      ambiguous = true;
-    },
+    run,
+    taskQueue: "generation",
+    phase: "authoring",
+    shards: [],
+    candidates: [
+      { workflowId: `${run.runId}/candidate/one`, candidate: candidate("one", 1) },
+      {
+        workflowId: `${run.runId}/candidate/done`,
+        candidate: candidate("done", 2),
+        result: {
+          progress: { candidateId: "done", taskId: "done", difficulty: "hard", status: "rejected" },
+        },
+      },
+    ],
   };
 }
-const input = {
-  run,
-  wave: 0,
-  shardIndex: 0,
-  shardCount: 1,
-  targetCounts: run.candidateCounts,
-  excludedSourcePrs: [],
-  partitioned: true,
-};
-test("top-level discovery start is restart safe after lost start response", async () => {
-  const f = fixture();
-  f.ambiguous();
-  const execution = batchExecutions(f.client);
-  await expect(execution.shard("batch/discovery/0", input, "queue")).rejects.toThrow(
-    "response lost",
-  );
-  const restarted = batchExecutions(f.client);
-  expect((await restarted.shard("batch/discovery/0", input, "queue")).state).toBe("running");
-  expect(f.starts()).toBe(1);
-  expect(f.seen()).toEqual({
-    type: "selfBenchDiscoveryShardWorkflow",
-    options: expect.objectContaining({
-      workflowId: "batch/discovery/0",
-      taskQueue: "queue",
-      workflowIdReusePolicy: "REJECT_DUPLICATE",
-    }),
+
+test("a running candidate's progress, cost and current activity come from its workflow", async () => {
+  const t = temporal();
+  const stored = authoring();
+  const { batch, activity } = await batchObserver(t.client)(stored);
+  expect(t.described).toEqual([`${run.runId}/candidate/one`]);
+  expect(batch.candidates[0]).toMatchObject({ progress: { status: "authoring" }, cost });
+  expect(stored.candidates[0]?.progress).toBeUndefined();
+  expect(activity).toEqual({
+    one: {
+      state: "queued",
+      activityType: "startAuthoringTurn",
+      attempt: 3,
+      maximumAttempts: 4,
+      lastFailure: "the model provider failed",
+      nextAttemptAt: "2026-09-19T18:49:54.500Z",
+      cost,
+    },
   });
-  f.complete();
-  expect((await restarted.shard("batch/discovery/0", input, "queue")).state).toBe("completed");
-  expect(f.starts()).toBe(1);
 });
-test("cancellation fences an undispatched ID with a no-op workflow", async () => {
-  const f = fixture();
-  expect(await batchExecutions(f.client).cancel("batch/discovery/0", "queue")).toBe(true);
-  expect(f.starts()).toBe(1);
-  expect(f.seen()).toMatchObject({ type: "selfBenchCancelledDispatchWorkflow" });
+
+test("progress is queried at most once per interval, however often the page polls", async () => {
+  const t = temporal();
+  const observe = batchObserver(t.client);
+  const now = spyOn(Date, "now").mockReturnValue(1_000_000);
+  try {
+    await observe(authoring());
+    await observe(authoring());
+    expect(t.queried).toHaveLength(1);
+    now.mockReturnValue(1_000_000 + BATCH_OBSERVE_INTERVAL_MS);
+    expect((await observe(authoring())).batch.candidates[0]?.progress?.status).toBe("authoring");
+    expect(t.queried).toHaveLength(2);
+    expect(t.described).toHaveLength(3);
+  } finally {
+    now.mockRestore();
+  }
+});
+
+test("a finished batch reads nothing, and a Temporal deadline leaves the batch as stored", async () => {
+  const t = temporal();
+  const complete = { ...authoring(), phase: "complete" as const };
+  expect(await batchObserver(t.client)(complete)).toEqual({ batch: complete });
+  expect(t.described).toEqual([]);
+  const slow = temporal({ deadline: true });
+  const { batch, activity } = await batchObserver(slow.client)(authoring());
+  expect(batch).toEqual(authoring());
+  expect(activity).toEqual({});
 });

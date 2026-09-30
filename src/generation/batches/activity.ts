@@ -1,7 +1,5 @@
-import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import { BATCH_RPC_CONCURRENCY } from "../../contracts/config/execution-limits.js";
-import { settleWithLimit } from "../../lib/util.js";
-import type { BatchStatus, TaskActivityDetail } from "./progress.js";
+import { defaultPayloadConverter } from "@temporalio/client";
+import type { TaskActivityDetail } from "./progress.js";
 
 const PENDING_ACTIVITY_SCHEDULED = 1;
 const PENDING_ACTIVITY_STARTED = 2;
@@ -20,35 +18,7 @@ interface PendingActivity {
   heartbeatDetails?: { payloads?: unknown[] | null } | null;
 }
 
-/**
- * Reads each in-flight candidate's pending activity from Temporal so the page can tell a
- * candidate that is executing from one waiting on a retry, and can show what failed last.
- */
-export async function overlayCandidateActivity(
-  client: Client,
-  status: BatchStatus,
-): Promise<BatchStatus> {
-  if (["complete", "failed", "blocked", "cancelled"].includes(status.phase)) return status;
-  const tasks = (status.tasks ?? []).filter((task) =>
-    ["authoring", "verifying", "reviewing"].includes(task.status),
-  );
-  const activity: NonNullable<BatchStatus["activity"]> = {};
-  // Same 10s budget as other batch Temporal calls so one hung describe cannot stall the poll.
-  await client.connection
-    .withDeadline(Date.now() + 10_000, () =>
-      settleWithLimit(tasks, BATCH_RPC_CONCURRENCY, async (task) => {
-        const description = await client.workflowService.describeWorkflowExecution({
-          namespace: client.options.namespace,
-          execution: { workflowId: `${status.runId}/candidate/${task.candidateId}` },
-        });
-        activity[task.candidateId] = activityDetail(description.pendingActivities ?? []);
-      }),
-    )
-    .catch(() => undefined);
-  for (const task of tasks) activity[task.candidateId] ??= { state: "unknown" };
-  return { ...status, activity };
-}
-
+/** A workflow's current pending activity attempt: executing, or waiting on a retry. */
 export function activityDetail(pending: readonly PendingActivity[]): TaskActivityDetail {
   const current =
     pending.find((entry) => entry.state === PENDING_ACTIVITY_STARTED) ??
