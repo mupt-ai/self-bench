@@ -124,6 +124,9 @@ export function RunExecution({
         >
           Run Missing Tasks
         </Button>
+        <p className="mb-3 text-xs leading-5 text-muted-foreground">
+          Skips completed results for these model and harness pairs.
+        </p>
         <Button
           type="button"
           variant="primary"
@@ -139,7 +142,7 @@ export function RunExecution({
               : "Run Full Comparison"}
         </Button>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          Run Missing Tasks skips completed results; Run Full Comparison runs all selected tasks.
+          Run Full Comparison includes every selected task.
         </p>
         {!ready && !submitted && (
           <p className="mt-3 text-xs leading-5 text-muted-foreground">

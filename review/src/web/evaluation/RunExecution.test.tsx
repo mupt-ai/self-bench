@@ -85,6 +85,6 @@ test("ready execution shows the trial total and enables the run action", () => {
   expect(fullButton(html)).toMatch(/^<button/);
   expect(fullButton(html)).not.toContain('disabled=""');
   expect(html.indexOf("Run Missing Tasks")).toBeLessThan(html.indexOf("Run Full Comparison"));
-  expect(html).toContain("Run Missing Tasks skips completed results");
+  expect(html).toContain("Skips completed results for these model and harness pairs.");
   expect(html).toContain("Model and sandbox usage is billed by your providers.");
 });

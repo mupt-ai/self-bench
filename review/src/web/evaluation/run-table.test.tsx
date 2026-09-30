@@ -57,7 +57,6 @@ test("task picker is collapsed with selected tasks in an expandable table", () =
         tasksReady
         disabled={false}
         onChange={() => {}}
-        onSkipCompleted={() => {}}
       />
     </MemoryRouter>,
   );
@@ -65,7 +64,6 @@ test("task picker is collapsed with selected tasks in an expandable table", () =
   expect(html).not.toContain("<details open");
   expect(html).toContain("2 of 2 Selected");
   expect((html.match(/checked/g) ?? []).length).toBe(2);
-  expect(html).toContain("Skip Completed Results");
   expect(html).not.toContain("Run Missing Tasks");
 });
 

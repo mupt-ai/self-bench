@@ -43,7 +43,6 @@ test("individual task deselection removes slash-containing task IDs", async () =
           tasksReady
           disabled={false}
           onChange={setTasks}
-          onSkipCompleted={() => {}}
         />
       </MemoryRouter>
     );

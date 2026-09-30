@@ -175,7 +175,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     setError("");
     const frozen = state.submitted
       ? draft
-      : { ...draft, models: selected, skipCompleted: missingOnly || draft.skipCompleted };
+      : { ...draft, models: selected, skipCompleted: missingOnly };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
     try {
@@ -233,9 +233,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         tasksReady={tasksReady}
         onChange={(tasks) =>
           setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
-        }
-        onSkipCompleted={(skipCompleted) =>
-          setState((current) => ({ ...current, draft: { ...current.draft, skipCompleted } }))
         }
         disabled={busy || state.submitted}
       />

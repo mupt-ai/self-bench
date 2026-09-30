@@ -10,7 +10,6 @@ export function RunTaskPicker({
   availableTasks,
   draft,
   onChange,
-  onSkipCompleted,
   tasksReady,
   disabled,
   readOnly = false,
@@ -19,7 +18,6 @@ export function RunTaskPicker({
   availableTasks: EvaluationOptions["tasks"];
   draft: ComparisonDraft;
   onChange: (tasks: ComparisonDraft["tasks"]) => void;
-  onSkipCompleted: (checked: boolean) => void;
   tasksReady: boolean;
   disabled: boolean;
   readOnly?: boolean;
@@ -71,12 +69,14 @@ export function RunTaskPicker({
               Clear All
             </Button>
           </div>
-          <Link
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-            to={`/repos/${repo}`}
-          >
-            Review Dataset →
-          </Link>
+          {!readOnly && (
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              to={`/repos/${repo}`}
+            >
+              Review Dataset →
+            </Link>
+          )}
         </div>
         {availableTasks.length ? (
           <div className="max-h-72 overflow-auto">
@@ -141,18 +141,6 @@ export function RunTaskPicker({
             {tasksReady ? "No approved tasks available." : "Loading approved tasks…"}
           </p>
         )}
-        <div className="border-t border-border px-4 py-3">
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              className="size-4 accent-brand"
-              checked={draft.skipCompleted ?? false}
-              disabled={disabled || readOnly}
-              onChange={(event) => onSkipCompleted(event.target.checked)}
-            />
-            Skip Completed Results
-          </label>
-        </div>
       </div>
     </details>
   );

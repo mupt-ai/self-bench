@@ -95,7 +95,6 @@ export function DemoRunPage() {
         disabled={false}
         readOnly
         onChange={(next) => setDraft({ ...draft, tasks: next })}
-        onSkipCompleted={(skipCompleted) => setDraft({ ...draft, skipCompleted })}
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <fieldset className="panel min-w-0 p-0" disabled>
