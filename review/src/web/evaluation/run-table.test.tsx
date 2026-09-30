@@ -55,11 +55,8 @@ test("task picker is collapsed with selected tasks in an expandable table", () =
           sandboxCredentialId: "",
         }}
         tasksReady
-        canRun
         disabled={false}
         onChange={() => {}}
-        onSkipCompleted={() => {}}
-        onRunMissing={() => {}}
       />
     </MemoryRouter>,
   );
@@ -67,8 +64,7 @@ test("task picker is collapsed with selected tasks in an expandable table", () =
   expect(html).not.toContain("<details open");
   expect(html).toContain("2 of 2 Selected");
   expect((html.match(/checked/g) ?? []).length).toBe(2);
-  expect(html).toContain("Skip Completed Results");
-  expect(html).toContain("Run Missing Tasks");
+  expect(html).not.toContain("Run Missing Tasks");
 });
 
 test("model cards remain usable without credentials and never embed a table or secret fields", () => {

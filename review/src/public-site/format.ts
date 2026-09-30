@@ -1,5 +1,4 @@
 import type { ParetoPlotProps, ParetoPoint } from "@mupt-ai/dari-pareto";
-import { endpointNumber } from "../../../src/public/endpoint-numbers";
 import {
   CUSTOM_VENDOR,
   type ModelSource,
@@ -30,11 +29,8 @@ export function cleanDescription(text: string): string {
 
 /**
  * The name shown for a setting. When two settings of one release share a model label, the
- * access and harness that tell them apart are appended, so points and rows stay distinct. Custom
- * models that still match (the same typed name on different endpoints, whose hosts are private)
- * are numbered "(Endpoint 1)", "(Endpoint 2)" by the `|#1`, `|#2` their ids end in, so the label
- * and the id always name the same setting; an older release's ids carry no number, and those
- * are numbered in release order.
+ * harness and reasoning that tell them apart are appended, so points and rows stay distinct.
+ * Legacy releases may still contain separate access routes or numbered custom endpoints.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
   const twins = all.filter((other) => other.model.label === setting.model.label);
@@ -48,7 +44,8 @@ export function settingLabel(setting: PublicSetting, all: readonly PublicSetting
   );
   const same = twins.filter((other) => other.custom && visible(other) === visible(setting));
   if (setting.custom && same.length > 1) {
-    extra.push(`Endpoint ${endpointNumber(setting.id) ?? same.indexOf(setting) + 1}`);
+    const number = /\|#(\d{1,3})$/.exec(setting.id)?.[1] ?? String(same.indexOf(setting) + 1);
+    extra.push(`Endpoint ${number}`);
   }
   return extra.length ? `${setting.model.label} (${extra.join(", ")})` : setting.model.label;
 }
@@ -107,7 +104,8 @@ export function harnessLabel(setting: Pick<PublicSetting, "harness">): string {
   return HARNESS_LABELS[setting.harness];
 }
 
-export function accessLabel(setting: Pick<PublicSetting, "custom" | "signIn" | "provider">) {
+function accessLabel(setting: Pick<PublicSetting, "custom" | "signIn" | "provider">) {
+  if (!setting.signIn) return "Multiple Routes";
   if (setting.custom) return "Custom Endpoint";
   if (setting.signIn === "codex-login") return "ChatGPT Sign-In";
   return setting.provider === "openrouter" ? "OpenRouter" : "API Key";

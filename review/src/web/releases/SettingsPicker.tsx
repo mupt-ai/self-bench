@@ -1,41 +1,14 @@
 import { Check, Minus } from "lucide-react";
 import React from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
-import { endpointNumber, publicIds } from "../../../../src/public/endpoint-numbers";
-import { credentialAccess, endpointLabel, providers } from "../evaluation/credential-presentation";
 import { thinkingLabel } from "../evaluation/run-presentation";
 import { SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
 import type { PreviewSetting } from "./api";
 
-/**
- * An endpoint that wraps where a URL reads best: after a colon, and before a slash or a dot, so
- * `gpu.acme.internal:8000/v1` splits as `gpu.acme.internal:` and `8000/v1`, not mid-token.
- */
-function wrappable(endpoint: string): React.ReactNode[] {
-  return (
-    endpoint
-      .split(/(?<=:)|(?=[/.])/)
-      // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed string, in order.
-      .flatMap((part, index) => (index ? [<wbr key={index} />, part] : [part]))
-  );
-}
-
-/** The columns that tell two settings of one model apart. */
-function columnsOf(setting: PreviewSetting) {
-  return {
-    harness: harnessLabels[setting.harness],
-    reasoning: thinkingLabel(setting.reasoningLevel),
-    provider: providers.find((entry) => entry.id === setting.provider)?.label ?? setting.provider,
-    host: setting.endpoint ? endpointLabel(setting.endpoint) : "",
-    access: credentialAccess({ kind: setting.provider, auth: setting.signIn }),
-  };
-}
-
-/** Model, harness, reasoning, provider, access, tasks. */
-// Every cell wraps onto as many lines as it needs, long endpoints included, so nothing is cut off.
+/** Model, harness, reasoning, tasks. Provider and sign-in can vary by task. */
 const grid =
-  "grid grid-cols-[minmax(10rem,1.6fr)_minmax(5.5rem,0.9fr)_minmax(5rem,0.8fr)_minmax(7rem,1.2fr)_minmax(7.5rem,0.9fr)_4.5rem] items-center gap-x-3";
+  "grid grid-cols-[minmax(10rem,1.6fr)_minmax(5.5rem,0.9fr)_minmax(5rem,0.8fr)_4.5rem] items-center gap-x-3";
 
 /** A square box with a blue check; `mixed` shows a dash for a partly ticked group. */
 function Tick({
@@ -109,13 +82,16 @@ export function SettingsPicker({
 }) {
   const idBase = React.useId();
   const visible = settings.filter((setting) =>
-    matchesQuery([setting.label, ...Object.values(columnsOf(setting))].join(" "), query),
+    matchesQuery(
+      [setting.label, harnessLabels[setting.harness], thinkingLabel(setting.reasoningLevel)].join(
+        " ",
+      ),
+      query,
+    ),
   );
   const groups = new Map<string, PreviewSetting[]>();
   for (const setting of visible)
     groups.set(setting.label, [...(groups.get(setting.label) ?? []), setting]);
-  // The number each ticked custom endpoint will carry publicly, when another shares its setting.
-  const released = publicIds(settings.filter((setting) => ticked.has(setting.key)));
   const position = new Map(settings.map((setting, index) => [setting.key, index]));
   const set = (keys: readonly string[], on: boolean) => {
     const next = new Set(ticked);
@@ -127,10 +103,7 @@ export function SettingsPicker({
   };
 
   const row = (setting: PreviewSetting, child: { last: boolean } | undefined) => {
-    // Custom settings on two endpoints share an id, so the row's position names its box.
     const id = `${idBase}-${position.get(setting.key)}`;
-    const columns = columnsOf(setting);
-    const number = endpointNumber(released.get(setting.key) ?? "");
     return (
       <label
         key={setting.key}
@@ -146,35 +119,13 @@ export function SettingsPicker({
             onChange={(on) => set([setting.key], on)}
           />
           {child ? (
-            <>
-              <span className="sr-only">{setting.label}</span>
-              {/* A ticked endpoint that shares its model's setting: its name on the public page. */}
-              {number ? (
-                <span className="min-w-0 break-words text-foreground">Endpoint {number}</span>
-              ) : null}
-            </>
+            <span className="sr-only">{setting.label}</span>
           ) : (
             <span className="min-w-0 break-words font-medium text-foreground">{setting.label}</span>
           )}
         </span>
-        <span className="min-w-0 break-words">{columns.harness}</span>
-        <span className="min-w-0 break-words">{columns.reasoning}</span>
-        <span className="min-w-0">
-          <span className="block break-words">{columns.provider}</span>
-          {columns.host && (
-            <span
-              className="block break-words text-xs"
-              title={
-                number
-                  ? `${setting.endpoint}, shown publicly as ${setting.label} (Endpoint ${number})`
-                  : setting.endpoint
-              }
-            >
-              {wrappable(columns.host)}
-            </span>
-          )}
-        </span>
-        <span className="min-w-0 break-words">{columns.access}</span>
+        <span className="min-w-0 break-words">{harnessLabels[setting.harness]}</span>
+        <span className="min-w-0 break-words">{thinkingLabel(setting.reasoningLevel)}</span>
         <span className="text-right">
           {setting.coverage.length} / {tasks}
         </span>
@@ -193,7 +144,7 @@ export function SettingsPicker({
       <fieldset className="panel max-h-[50dvh] min-w-0 overflow-auto font-mono">
         <legend className="sr-only">Settings to Release</legend>
         {/* Shrinks with the dialog down to this width, then scrolls sideways; rows span it all. */}
-        <div className="min-w-[47rem]">
+        <div className="min-w-[32rem]">
           <div
             className={`${grid} sticky top-0 z-10 border-b border-border bg-card py-2 pr-4 pl-4 text-xs text-muted-foreground`}
             aria-hidden="true"
@@ -201,8 +152,6 @@ export function SettingsPicker({
             <span className="pl-7">Model</span>
             <span>Harness</span>
             <span>Reasoning</span>
-            <span>Provider</span>
-            <span>Access</span>
             <span className="text-right">Tasks</span>
           </div>
           {groups.size === 0 && (

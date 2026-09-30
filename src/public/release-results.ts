@@ -1,13 +1,17 @@
-import { findModel, listedOpenRouterModels, type ThinkingLevel } from "../contracts/models.js";
+import {
+  findModel,
+  listedOpenRouterModels,
+  models,
+  type ThinkingLevel,
+} from "../contracts/models.js";
 import { eligibleTrial } from "../evaluation/eligible.js";
 import { evaluationTaskKey, type Harness } from "../evaluation/models.js";
 import type { EvaluationRun, EvaluationTrial } from "../evaluation/types.js";
 import type { ReleaseProvider, ReleaseSignIn } from "./release-types.js";
 
 /**
- * Settings and results. A setting is model, harness, provider, sign-in type, reasoning level,
- * and endpoint. A result is the latest eligible trial of a setting on a task, across every run
- * of the repository.
+ * A setting is model, harness, and reasoning level. Its result on each task is the latest
+ * eligible trial across all credential routes and custom endpoints in the repository.
  */
 
 /** The credential fields a setting needs. Deleted credentials still resolve old runs. */
@@ -20,12 +24,9 @@ export interface CredentialFacts {
 const MANAGED_MODEL = "managed-model";
 
 export interface Setting {
-  /** Private identity, including a custom endpoint. Stable and unambiguous. */
+  /** Stable identity across provider, sign-in, and endpoint changes. */
   key: string;
-  /**
-   * Public identity: the same without the endpoint, so custom settings on two endpoints share it
-   * until a release numbers them (`publicIds` in endpoint-numbers.ts).
-   */
+  /** Public identity of this model, harness, and reasoning level. */
   id: string;
   catalogId: string;
   modelName: string;
@@ -33,9 +34,7 @@ export interface Setting {
   harness: Harness;
   reasoningLevel: ThinkingLevel;
   provider: ReleaseProvider;
-  signIn: ReleaseSignIn;
   custom: boolean;
-  endpoint?: string;
 }
 
 /** The setting a run's trials on `harness` belong to, or undefined when it cannot resolve. */
@@ -46,36 +45,33 @@ function settingOf(
 ): Setting | undefined {
   if (!run.credentials) return undefined;
   const credentialId = run.credentials.modelCredentialId;
-  const credential: CredentialFacts | undefined =
-    credentialId === MANAGED_MODEL ? { auth: "api-key" } : credentials.get(credentialId);
-  if (!credential) return undefined;
-  const provider = run.credentials.provider;
-  const custom = provider === "custom";
-  // Custom models are recorded as `openai/<typed name>`; the typed name is the identity.
+  if (credentialId !== MANAGED_MODEL && !credentials.has(credentialId)) return undefined;
+  const custom = run.credentials.provider === "custom";
+  // Curated models use one id on their direct provider and another on OpenRouter.
+  const catalog =
+    findModel(run.model) ??
+    (run.credentials.provider === "openrouter"
+      ? models.find((model) => model.openRouter === run.model)
+      : undefined);
   const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
-  const catalogId = run.model;
-  const model = typed ?? catalogId;
-  const endpoint = custom ? (credential.endpoint ?? "") : "";
+  const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
   const reasoningLevel = run.thinking ?? "default";
-  const signIn = credential.auth;
-  const publicParts = [model, harness, provider, signIn, reasoningLevel];
+  const parts = [model, harness, reasoningLevel];
   return {
-    key: JSON.stringify([...publicParts, endpoint]),
-    id: publicParts.join("|"),
-    catalogId,
-    modelName: typed ?? run.modelName,
-    // The catalog's current name, so old and new runs of one model are labelled alike.
+    key: JSON.stringify(parts),
+    id: parts.join("|"),
+    catalogId: custom ? "custom" : (catalog?.id ?? run.model),
+    modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
     label:
       typed ??
-      findModel(catalogId)?.label ??
-      listedOpenRouterModels().find((listed) => listed.id === catalogId)?.label ??
+      catalog?.label ??
+      listedOpenRouterModels().find((listed) => listed.id === run.model)?.label ??
       run.modelLabel,
     harness,
     reasoningLevel,
-    provider,
-    signIn,
+    // This describes the model's vendor, not the credential route of a selected trial.
+    provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
     custom,
-    ...(custom && endpoint ? { endpoint } : {}),
   };
 }
 

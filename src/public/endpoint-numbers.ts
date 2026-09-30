@@ -22,7 +22,7 @@ export interface NumberedSetting {
  * locale, which `localeCompare` is not. Numbering and listing both use it, so a release lists
  * endpoints in the order of their numbers.
  */
-export function compareKeys(left: string, right: string): number {
+function compareKeys(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 

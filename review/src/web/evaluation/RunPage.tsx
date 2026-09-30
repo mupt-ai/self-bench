@@ -175,7 +175,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     setError("");
     const frozen = state.submitted
       ? draft
-      : { ...draft, models: selected, skipCompleted: missingOnly || draft.skipCompleted };
+      : { ...draft, models: selected, skipCompleted: missingOnly };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
     try {
@@ -234,11 +234,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         onChange={(tasks) =>
           setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
         }
-        onSkipCompleted={(skipCompleted) =>
-          setState((current) => ({ ...current, draft: { ...current.draft, skipCompleted } }))
-        }
-        onRunMissing={() => void submit(true)}
-        canRun={ready}
         disabled={busy || state.submitted}
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
@@ -292,6 +287,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           pairs={pairs}
           onChange={(value) => setState({ ...state, draft: value, sandboxDefaultPending: false })}
           onSubmit={() => void submit()}
+          onRunMissing={() => void submit(true)}
         />
       </div>
     </PageContent>

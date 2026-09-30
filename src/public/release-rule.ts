@@ -1,6 +1,6 @@
+import { findModel, models } from "../contracts/models.js";
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
-import { compareKeys, publicIds } from "./endpoint-numbers.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
 
@@ -55,11 +55,7 @@ export function candidates(
       coverage: new Set([...entry.results.keys()].filter((key) => allowed.has(key))),
     }))
     .filter((entry) => entry.coverage.size > 0)
-    .sort(
-      (left, right) =>
-        left.setting.id.localeCompare(right.setting.id) ||
-        compareKeys(left.setting.key, right.setting.key),
-    );
+    .sort((left, right) => left.setting.id.localeCompare(right.setting.id));
 }
 
 const covers = (candidate: Candidate, tasks: Iterable<string>) => {
@@ -78,10 +74,29 @@ export function defaultTicks(
   const base = (previous?.tasks ?? []).filter((task) => allowed.has(task));
   // Every setting covers the empty set, so an empty base must not pre-tick anything.
   if (base.length === 0) return [];
-  const declined = new Set(previous?.declined ?? []);
+  const declined = new Set(previous?.declined.map(currentKey) ?? []);
   return all
     .filter((entry) => covers(entry, base) && !declined.has(entry.setting.key))
     .map((entry) => entry.setting.key);
+}
+
+/** Convert a stored pre-merge setting key to its model / harness / reasoning identity. */
+function currentKey(key: string): string {
+  try {
+    const parts: unknown = JSON.parse(key);
+    if (!Array.isArray(parts) || parts.length < 5) return key;
+    const [model, harness, provider, , reasoning] = parts;
+    if (typeof model !== "string" || typeof harness !== "string" || typeof reasoning !== "string")
+      return key;
+    const catalog = findModel(model) ?? models.find((entry) => entry.openRouter === model);
+    return JSON.stringify([
+      provider === "custom" ? `custom/${model}` : (catalog?.id ?? model),
+      harness,
+      reasoning,
+    ]);
+  } catch {
+    return key;
+  }
 }
 
 /** Every approved task that all of `chosen` cover. Empty when nothing is chosen. */
@@ -122,29 +137,24 @@ export function frontierOf<T extends { id: string; accuracy: number; costPerTask
 
 function publicSetting(
   setting: Setting,
-  id: string,
 ): Omit<
   ReleaseSetting,
   "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "onFrontier"
 > {
   return {
-    id,
+    id: setting.id,
     model: { catalogId: setting.catalogId, name: setting.modelName, label: setting.label },
     harness: setting.harness,
     reasoningLevel: setting.reasoningLevel,
     provider: setting.provider,
-    signIn: setting.signIn,
     custom: setting.custom,
   };
 }
 
 /**
- * Each chosen setting's aggregates over exactly `tasks`, with the frontier marked. Custom settings
- * that differ only by endpoint are numbered among the chosen ones, in key order, which is also
- * the order they are listed in.
+ * Each chosen setting's aggregates over exactly `tasks`, with the frontier marked.
  */
 export function scores(chosen: readonly Candidate[], tasks: readonly string[]): ReleaseSetting[] {
-  const ids = publicIds(chosen.map((entry) => entry.setting));
   const scored = chosen.map((entry) => {
     const trials = tasks.map((task) => {
       const result = entry.results.get(task);
@@ -154,7 +164,7 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
     const totalCostUsd = trials.reduce((sum, trial) => sum + (trial.apiCostUsd ?? 0), 0);
     return {
-      ...publicSetting(entry.setting, ids.get(entry.setting.key) ?? entry.setting.id),
+      ...publicSetting(entry.setting),
       tasks: tasks.length,
       passed,
       accuracy: (passed / tasks.length) * 100,

@@ -10,21 +10,17 @@ export function RunTaskPicker({
   availableTasks,
   draft,
   onChange,
-  onSkipCompleted,
-  onRunMissing,
   tasksReady,
-  canRun,
   disabled,
+  readOnly = false,
 }: {
   repo: string;
   availableTasks: EvaluationOptions["tasks"];
   draft: ComparisonDraft;
   onChange: (tasks: ComparisonDraft["tasks"]) => void;
-  onSkipCompleted: (checked: boolean) => void;
-  onRunMissing: () => void;
   tasksReady: boolean;
-  canRun: boolean;
   disabled: boolean;
+  readOnly?: boolean;
 }) {
   const selected = new Set(draft.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId)));
   return (
@@ -57,23 +53,30 @@ export function RunTaskPicker({
             <Button
               type="button"
               size="small"
-              disabled={disabled}
+              disabled={disabled || readOnly}
               onClick={() =>
                 onChange(availableTasks.map(({ runId, taskId }) => ({ runId, taskId })))
               }
             >
               Select All
             </Button>
-            <Button type="button" size="small" disabled={disabled} onClick={() => onChange([])}>
+            <Button
+              type="button"
+              size="small"
+              disabled={disabled || readOnly}
+              onClick={() => onChange([])}
+            >
               Clear All
             </Button>
           </div>
-          <Link
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-            to={`/repos/${repo}`}
-          >
-            Review Dataset →
-          </Link>
+          {!readOnly && (
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              to={`/repos/${repo}`}
+            >
+              Review Dataset →
+            </Link>
+          )}
         </div>
         {availableTasks.length ? (
           <div className="max-h-72 overflow-auto">
@@ -105,7 +108,7 @@ export function RunTaskPicker({
                           type="checkbox"
                           aria-label={`Select ${task.taskId}`}
                           checked={checked}
-                          disabled={disabled}
+                          disabled={disabled || readOnly}
                           onChange={() =>
                             onChange(
                               checked
@@ -138,21 +141,6 @@ export function RunTaskPicker({
             {tasksReady ? "No approved tasks available." : "Loading approved tasks…"}
           </p>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              className="size-4 accent-brand"
-              checked={draft.skipCompleted ?? false}
-              disabled={disabled}
-              onChange={(event) => onSkipCompleted(event.target.checked)}
-            />
-            Skip Completed Results
-          </label>
-          <Button type="button" size="small" disabled={disabled || !canRun} onClick={onRunMissing}>
-            Run Missing Tasks
-          </Button>
-        </div>
       </div>
     </details>
   );
