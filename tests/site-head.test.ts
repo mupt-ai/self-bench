@@ -3,8 +3,23 @@ import { headTags, repositoryHead, sitemapOf } from "../src/api/site-head.js";
 import type { PublishedLine, ReleaseSetting } from "../src/public/release-types.js";
 import { defaultLineOf, repositoryDescription } from "../src/public/seo.js";
 
-const setting = (label: string, accuracy: number, costPerTaskUsd: number, onFrontier = true) =>
-  ({ id: label, model: { label }, accuracy, costPerTaskUsd, onFrontier }) as ReleaseSetting;
+const setting = (
+  label: string,
+  accuracy: number,
+  costPerTaskUsd: number,
+  onFrontier = true,
+  more: Partial<ReleaseSetting> = {},
+) =>
+  ({
+    id: `${label}|${more.reasoningLevel ?? "high"}`,
+    model: { label },
+    harness: "codex",
+    reasoningLevel: "high",
+    accuracy,
+    costPerTaskUsd,
+    onFrontier,
+    ...more,
+  }) as ReleaseSetting;
 
 const line = (
   publisher: string,
@@ -26,20 +41,35 @@ const line = (
 
 const origin = "https://selfbench.dev";
 
-test("a repository's description names what was measured and the settings its cards pick", () => {
-  const settings = [
-    setting("Claude Opus 5.5", 72.34, 1.5),
-    setting("GPT-5.5 Mini", 51, 0.042),
-    setting("Off Frontier", 40, 2, false),
-  ];
-  expect(repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", settings))).toBe(
-    "Which coding agent works best on earendil-works/pi? Most accurate: Claude Opus 5.5, 72.3%. Cheapest: GPT-5.5 Mini, $0.042 per task. 3 model settings scored on 47 tasks from its merged pull requests.",
-  );
-  // One setting that is both picks is named once.
+const described = (settings: ReleaseSetting[]) =>
+  repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", settings));
+
+test("a repository's description names its most accurate setting and the best one for less", () => {
   expect(
-    repositoryDescription(line("mupt-ai", "2026-09-01T00:00:00Z", [setting("Solo", 80, 1)])),
+    described([
+      setting("Claude Opus 5.5", 72.34, 1.5),
+      setting("GPT-5.5 Mini", 51, 0.042),
+      setting("Off Frontier", 40, 2, false),
+    ]),
   ).toBe(
-    "Which coding agent works best on earendil-works/pi? Most accurate: Solo, 80%. 1 model setting scored on 47 tasks from its merged pull requests.",
+    "Which coding agent works best on earendil-works/pi? Most accurate: Claude Opus 5.5, 72.3% at $1.50 per task. Best for less: GPT-5.5 Mini, 51% at $0.042. 3 model settings scored on 47 tasks from its merged pull requests.",
+  );
+  // The next setting on the frontier, not the cheapest one.
+  expect(
+    described([setting("Top", 90, 2), setting("Middle", 85, 0.5), setting("Cheap", 30, 0.001)]),
+  ).toContain("Most accurate: Top, 90% at $2.00 per task. Best for less: Middle, 85% at $0.50.");
+  // Two settings of one model are told apart by what differs, as on the site.
+  expect(
+    described([
+      setting("GPT-6 Sol", 90, 1),
+      setting("GPT-6 Sol", 85, 0.3, true, { reasoningLevel: "medium" }),
+    ]),
+  ).toContain(
+    "Most accurate: GPT-6 Sol (High), 90% at $1.00 per task. Best for less: GPT-6 Sol (Medium), 85% at $0.30.",
+  );
+  // A frontier of one names it once.
+  expect(described([setting("Solo", 80, 1)])).toBe(
+    "Which coding agent works best on earendil-works/pi? Most accurate: Solo, 80% at $1.00 per task. 1 model setting scored on 47 tasks from its merged pull requests.",
   );
 });
 

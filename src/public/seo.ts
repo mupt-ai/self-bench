@@ -1,5 +1,5 @@
-import { picks } from "./directory.js";
-import type { PublishedLine } from "./release-types.js";
+import { frontierSettings } from "./directory.js";
+import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
 /**
  * What search engines and link previews read about selfbench.dev: each page's title and
@@ -34,24 +34,35 @@ export function defaultLineOf(lines: readonly PublishedLine[]): PublishedLine | 
 
 const percent = (value: number) => `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 const dollars = (value: number) => `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
+const scored = (setting: ReleaseSetting) =>
+  `${percent(setting.accuracy)} at ${dollars(setting.costPerTaskUsd)}`;
+
+/** A setting's model, with its effort when `other` is the same model at another effort. */
+function nameBeside(setting: ReleaseSetting, other?: ReleaseSetting): string {
+  const { label } = setting.model;
+  const level = setting.reasoningLevel;
+  if (!other || other.model.label !== label || other.reasoningLevel === level) return label;
+  return `${label} (${level === "xhigh" ? "X-High" : level.charAt(0).toUpperCase() + level.slice(1)})`;
+}
 
 /**
- * A repository page's description: the two settings its cards name, then what was measured.
+ * A repository page's description: its most accurate setting and the best one for less (the next
+ * on the frontier: the most accurate of the settings that cost less), then what was measured.
  * Search results show only the first 150 or so characters, so the picks come first.
  */
 export function repositoryDescription(line: PublishedLine): string {
   const { release } = line;
-  const { fullName } = release.repository;
-  const chosen = picks(release.settings);
-  const best = chosen.find((pick) => pick.roles.includes("mostAccurate"))?.setting;
-  const cheapest = chosen.find((pick) => pick.roles.includes("cheapest"))?.setting;
+  const [best, next] = frontierSettings(release.settings).sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  );
   const settings = release.settings.length;
   return [
-    `Which coding agent works best on ${fullName}?`,
-    best ? `Most accurate: ${best.model.label}, ${percent(best.accuracy)}.` : "",
-    cheapest && cheapest !== best
-      ? `Cheapest: ${cheapest.model.label}, ${dollars(cheapest.costPerTaskUsd)} per task.`
-      : "",
+    `Which coding agent works best on ${release.repository.fullName}?`,
+    best ? `Most accurate: ${nameBeside(best, next)}, ${scored(best)} per task.` : "",
+    next ? `Best for less: ${nameBeside(next, best)}, ${scored(next)}.` : "",
     `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
   ]
     .filter(Boolean)
