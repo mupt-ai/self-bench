@@ -10,7 +10,8 @@
   --foreground: hsl(30 8% 12%);
   --card: hsl(38 21% 91.8%);
   --muted: hsl(38 18% 87.5%);
-  --muted-fg: hsl(30 6% 42%);
+  /* Dark enough for 4.5:1 on the page, a card, and a muted fill alike. */
+  --muted-fg: hsl(30 6% 38%);
   --faint: hsl(30 6% 62%);
   --border: hsl(35 16% 84%);
   --input: hsl(35 16% 84%);
