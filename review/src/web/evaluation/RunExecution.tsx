@@ -1,9 +1,43 @@
-import { Play } from "lucide-react";
+import { CircleAlert, KeyRound, Play, SkipForward } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { Button, fieldStyles, Select } from "../ui";
+import { cn } from "../primitives/cn";
+import { InfoTooltip } from "../primitives/tooltip";
+import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
+
+/** Why the comparison can't run yet, for the notice above the task picker. Nothing while
+ * the accepted tasks are still loading or once the request is submitted. */
+export function runBlocker({
+  draft,
+  ready,
+  submitted,
+  tasksReady,
+  pairs,
+}: {
+  draft: ComparisonDraft;
+  ready: boolean;
+  submitted: boolean;
+  tasksReady: boolean;
+  pairs: number;
+}): string | undefined {
+  if (ready || submitted || !tasksReady) return undefined;
+  if (!draft.tasks.length) return "Select at least one accepted task to continue.";
+  if (!pairs) return "Add a model to continue.";
+  if (!draft.sandboxCredentialId) return "Select a sandbox credential to continue.";
+  return "Check the credentials and harness for each model.";
+}
+
+export function RunBlockerNotice({ children }: { children: ReactNode }) {
+  return (
+    <Notice tone="info" className="mb-5 justify-start gap-2.5 py-2.5">
+      <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
+      {children}
+    </Notice>
+  );
+}
 
 export function RunExecution({
   repo,
@@ -13,7 +47,6 @@ export function RunExecution({
   submitted,
   busy,
   ready,
-  tasksReady,
   pairs,
   onChange,
   onSubmit,
@@ -27,7 +60,6 @@ export function RunExecution({
   submitted: boolean;
   busy: boolean;
   ready: boolean;
-  tasksReady: boolean;
   pairs: number;
   onChange(value: ComparisonDraft): void;
   onSubmit(): void;
@@ -36,13 +68,14 @@ export function RunExecution({
 }) {
   return (
     <aside className="panel min-w-0 xl:sticky xl:top-6">
-      <div className="flex items-center justify-between border-b border-border px-4 py-4">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">Execution</h2>
         {!readOnly && (
           <Link
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            className={cn(buttonStyles.secondary, "h-8 px-2.5 text-xs [&>svg]:size-3.5")}
             to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
           >
+            <KeyRound aria-hidden="true" />
             Credentials
           </Link>
         )}
@@ -52,7 +85,10 @@ export function RunExecution({
         disabled={readOnly || busy || submitted}
       >
         <label className={fieldStyles} htmlFor="runpage-field-0">
-          Sandbox
+          <span className="flex items-center gap-1.5">
+            Sandbox
+            <InfoTooltip label="Managed sandboxes run on SelfBench's platform account. Other sandboxes use your own credential. Model usage follows each model's credential." />
+          </span>
           <Select
             id="runpage-field-0"
             aria-label="Sandbox"
@@ -102,7 +138,7 @@ export function RunExecution({
         )}
       </fieldset>
       <div className="border-t border-border p-4">
-        <dl className="mb-4 space-y-2 text-sm">
+        <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
             <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
@@ -111,22 +147,32 @@ export function RunExecution({
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
             <dd className="font-mono tabular-nums">{pairs}</dd>
           </div>
-          <div className="flex justify-between gap-3 border-t border-border pt-3 text-sm">
-            <dt className="font-semibold">Total Trials</dt>
-            <dd className="font-mono font-semibold tabular-nums">{pairs * draft.tasks.length}</dd>
+          <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
+            <dt className="text-muted-foreground">Total Trials</dt>
+            <dd className="font-mono tabular-nums">{pairs * draft.tasks.length}</dd>
           </div>
         </dl>
+      </div>
+      <div className="grid gap-2 border-t border-border p-4">
+        <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
+          Run
+          <InfoTooltip
+            label={
+              submitted
+                ? "Retry Same Comparison resubmits this request with the same ID."
+                : "Run Missing Tasks skips tasks that already have completed results for these model and harness pairs. Run Full Comparison runs every selected task."
+            }
+          />
+        </h3>
         <Button
           type="button"
-          className="mb-2 w-full"
+          className="w-full"
           disabled={readOnly || busy || submitted || !ready}
           onClick={onRunMissing}
         >
+          <SkipForward className="size-4" aria-hidden="true" />
           Run Missing Tasks
         </Button>
-        <p className="mb-3 text-xs leading-5 text-muted-foreground">
-          Skips completed results for these model and harness pairs.
-        </p>
         <Button
           type="button"
           variant="primary"
@@ -141,27 +187,6 @@ export function RunExecution({
               ? "Retry Same Comparison"
               : "Run Full Comparison"}
         </Button>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          Run Full Comparison includes every selected task.
-        </p>
-        {!ready && !submitted && (
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            {!tasksReady
-              ? "Accepted tasks are required to run."
-              : !draft.tasks.length
-                ? "Select at least one accepted task to continue."
-                : !pairs
-                  ? "Add a model to continue."
-                  : !draft.sandboxCredentialId
-                    ? "Select a sandbox credential to continue."
-                    : "Check the credentials and harness for each model."}
-          </p>
-        )}
-        <p className="mt-3 text-xs leading-5 text-muted-foreground">
-          {draft.sandbox === "managed"
-            ? "Managed sandbox usage runs on SelfBench's platform account. Model usage follows the selected model credential."
-            : "Model and sandbox usage is billed by your providers."}
-        </p>
       </div>
     </aside>
   );

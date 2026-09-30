@@ -12,7 +12,7 @@ import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
 import { customModel, hasDuplicateModelSelections } from "./model-selection";
-import { RunExecution } from "./RunExecution";
+import { RunBlockerNotice, RunExecution, runBlocker } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
@@ -169,6 +169,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         (model.id !== "custom" || !!selection.customModel)
       );
     });
+  const blocker = runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
   const submit = async (missingOnly = false) => {
     if (busy || (!state.submitted && !ready)) return;
     setBusy(true);
@@ -199,11 +200,12 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   return (
     <PageContent>
       <PageHeader
+        className="mb-6"
         title="Run"
         description="Compare models and harnesses against your accepted tasks."
       />
       {state.submitted && (
-        <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm">These settings belong to a submitted request.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -225,7 +227,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           </div>
         </div>
       )}
-      {error && <Notice className="mb-4">{error}</Notice>}
+      {error && <Notice className="mb-5">{error}</Notice>}
+      {blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>}
       <RunTaskPicker
         repo={repo}
         availableTasks={availableTasks}
@@ -283,7 +286,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           submitted={state.submitted}
           busy={busy}
           ready={ready}
-          tasksReady={tasksReady}
           pairs={pairs}
           onChange={(value) => setState({ ...state, draft: value, sandboxDefaultPending: false })}
           onSubmit={() => void submit()}
