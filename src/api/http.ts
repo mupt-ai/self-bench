@@ -39,13 +39,7 @@ export function bearerMatches(request: IncomingMessage, token: string): boolean 
 }
 
 /** The site's icons, at the root where browsers and search engines look for them. */
-const ICONS = new Set([
-  "/dari-logo.svg",
-  "/favicon.ico",
-  "/favicon.svg",
-  "/icon-192.png",
-  "/apple-touch-icon.png",
-]);
+const ICONS = new Set(["/dari-logo.svg", "/favicon.ico", "/icon-192.png", "/apple-touch-icon.png"]);
 
 /** Paths of the built review app that are served without authentication. */
 export function isReviewAssetPath(pathname: string): boolean {

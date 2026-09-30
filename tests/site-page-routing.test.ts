@@ -31,7 +31,7 @@ describe("site page routing", () => {
     expect(isSitePage(pathname)).toBe(false);
   });
 
-  test.each(["/favicon.ico", "/favicon.svg", "/icon-192.png", "/apple-touch-icon.png"])(
+  test.each(["/favicon.ico", "/icon-192.png", "/apple-touch-icon.png"])(
     "serves the site icon %s from the build",
     (pathname) => {
       expect(isReviewAssetPath(pathname)).toBe(true);
