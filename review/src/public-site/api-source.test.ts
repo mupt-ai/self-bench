@@ -67,3 +67,24 @@ test("nothing released is undefined; a server error is an error", async () => {
   expect(await apiSource().getRepo("nobody", "nothing")).toBeUndefined();
   await expect(apiSource().listRepos()).rejects.toThrow("503");
 });
+
+test("the page's carried data answers its first read, and every later read asks the API", async () => {
+  const calls = serve({ "/api/public/directory": directory });
+  const source = apiSource("", new Map([["/api/public/directory", directory.body]]));
+  // The home page's two reads share the carried copy.
+  await Promise.all([source.listRepos(), source.listLines()]);
+  expect(calls).toHaveLength(0);
+  await source.listRepos();
+  expect(calls).toEqual(["/api/public/directory"]);
+});
+
+test("a repository page takes its carried lines only for its own repository", async () => {
+  const [owner, name] = acme.release.repository.fullName.split("/") as [string, string];
+  const url = `/api/public/repos/${owner}/${name}`;
+  const calls = serve({ [url]: { body: { lines: [line(acme)] } } });
+  const source = apiSource("", new Map([[url, { lines: [line(acme), line(dari)] }]]));
+  expect((await source.getRepo(owner, name))?.lines).toHaveLength(2);
+  expect(calls).toHaveLength(0);
+  expect(await source.getRepo("nobody", "nothing")).toBeUndefined();
+  expect(calls).toEqual(["/api/public/repos/nobody/nothing"]);
+});
