@@ -40,7 +40,7 @@
   /* Colors for custom models listed one by one in the results chart, after the vendors'. */
   --custom-model-1: #5a6b86;
   --custom-model-2: #0e8f9e;
-  /* The results charts, after the dari.dev benchmark charts: a mint frontier, their type. */
+  /* The results charts' frontier line and typefaces, after the dari.dev benchmark charts. */
   --chart-frontier: hsl(153 60% 34% / 0.55);
   --chart-sans: "Manrope", var(--sans);
   --chart-mono: "DM Mono", var(--mono);
