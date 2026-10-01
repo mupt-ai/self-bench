@@ -8,7 +8,8 @@ instead of building it again (and parallel trials of one task never build it sid
 - Modal: a pinned image the workspace can still use is kept; otherwise the Dockerfile image is
   built into the workspace's image cache, which the trial's identical Dockerfile then hits. A
   compose verifier runs Docker-in-Docker and is left to the trial.
-- E2B: the template Harbor names after the environment's content hash is built unless it exists.
+- E2B: the template Harbor names after the environment's content hash is built unless its last
+  build is ready (selfbench_e2b.py), as the trial's environment checks it.
 
 Prints one line per image: `<role> <pinned|built|exists|skipped> [image]`.
 """
@@ -51,9 +52,9 @@ async def _modal(context: Path, pin: str | None) -> str:
 
 
 async def _e2b(task: Task, context: Path, config, scratch: Path) -> str:
-    from harbor.environments.e2b import E2BEnvironment
+    from selfbench_e2b import SelfBenchE2BEnvironment
 
-    environment = E2BEnvironment(
+    environment = SelfBenchE2BEnvironment(
         environment_dir=context,
         environment_name=task.short_name,
         session_id="selfbench-prepare",

@@ -148,7 +148,7 @@ test("a Modal trial starts from the pinned images; other backends build the Dock
   expect(pins).toEqual(["agent_image=im-Agent1", "verifier_image=im-Verifier1"]);
   const e2b = solverArguments("/task", "/jobs", "codex", "openai/gpt-6", "e2b", "high", [], images);
   expect(e2b).not.toContain("--ek");
-  expect(e2b[e2b.indexOf("--env") + 1]).toBe("e2b");
+  expect(e2b[e2b.indexOf("--env") + 1]).toBe("selfbench_e2b:SelfBenchE2BEnvironment");
 });
 
 test("a Modal trial reads the gate task and fetches the snapshot through its verification's link", async () => {
