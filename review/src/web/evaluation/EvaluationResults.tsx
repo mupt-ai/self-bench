@@ -1,11 +1,15 @@
 import React from "react";
-import { Link } from "react-router";
+import { useSearchParams } from "react-router";
 import { harnessLabels } from "../../../../src/evaluation/models";
-import { buttonStyles, DataTable, Notice, RunStatus } from "../ui";
+import { DataTable, Notice, RunStatus } from "../ui";
 import type { EvaluationRun, EvaluationTrial } from "./api";
 import { CancelEvaluation } from "./CancelEvaluation";
+import { OutcomeFilter, resultStates, toggledOutcome } from "./ResultsFilters";
+import { OutcomeCircle } from "./ResultsMarks";
+import { type Outcome, outcomeOf } from "./results-model";
+import { findTrial, TRIAL_PARAM, trialParam } from "./results-view";
 import { thinkingLabel } from "./run-presentation";
-import { TokenCosts } from "./TokenCosts";
+import { TrialDialog } from "./TrialDialog";
 
 export function scores(trial: EvaluationTrial): string {
   const entries = Object.entries(trial.rewards);
@@ -13,15 +17,6 @@ export function scores(trial: EvaluationTrial): string {
     ? entries.map(([name, value]) => `${name}: ${Number(value.toFixed(4))}`).join(" · ")
     : "Not Scored";
 }
-const ROLE_LABELS: Record<string, string> = {
-  agent: "Agent",
-  assistant: "Assistant",
-  user: "User",
-  system: "System",
-  tool: "Tool",
-};
-const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
-
 export function EvaluationResults({
   run,
   baseUrl,
@@ -33,19 +28,42 @@ export function EvaluationResults({
   repo: string;
   onCancelled?(run: EvaluationRun): void;
 }) {
-  const [index, setIndex] = React.useState(0);
-  const trial = run.trials[index] ?? run.trials[0];
+  const [search, setSearch] = useSearchParams();
+  const opened = findTrial([run], search.get(TRIAL_PARAM));
+  // The open task is in the URL, so going back to the run reopens it.
+  const showTrial = (param: string | undefined) =>
+    setSearch(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (param) next.set(TRIAL_PARAM, param);
+        else next.delete(TRIAL_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  // The result filter is kept for the session, per run.
+  const filterKey = `selfbench-run-results:${run.id}`;
+  const [shown, setShown] = React.useState<ReadonlySet<Outcome>>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(filterKey) ?? "null");
+      return new Set(Array.isArray(saved) ? saved : resultStates);
+    } catch {
+      return new Set(resultStates);
+    }
+  });
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem(filterKey, JSON.stringify([...shown]));
+    } catch {}
+  }, [filterKey, shown]);
+  const trials = run.trials.filter((entry) => shown.has(outcomeOf(entry)));
   const done = run.trials.filter((entry) => entry.status === "completed").length;
-  const failed = run.trials.filter((entry) => entry.status === "failed").length;
+  // Errors, not failed tasks: a task the model didn't solve still completed.
+  const errors = run.trials.filter((entry) => outcomeOf(entry) === "error").length;
+  const errorCount = errors ? ` · ${errors} error${errors === 1 ? "" : "s"}` : "";
   const active = run.status === "queued" || run.status === "running";
-  const finalMessage = trial?.steps
-    .filter((step) => (step.role === "agent" || step.role === "assistant") && step.text)
-    .at(-1)?.text;
   return (
-    <section
-      className="panel p-4 sm:p-6 [&_h4]:mb-3 [&_h4]:text-sm [&_h4]:font-semibold [&_h5]:my-2 [&_h5]:text-xs [&_h5]:text-muted-foreground [&_details]:mt-3 [&_details]:border [&_details]:border-border [&_details]:bg-background [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:text-sm [&_summary]:font-medium [&_details_h5]:px-4 [&_pre]:max-h-96 [&_pre]:overflow-auto [&_pre]:bg-muted/60 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere"
-      aria-label="Evaluation Results"
-    >
+    <section className="panel p-4 sm:p-6" aria-label="Evaluation Results">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-3 text-base font-semibold">
@@ -62,7 +80,7 @@ export function EvaluationResults({
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <span className="text-xs text-muted-foreground tabular-nums" role="status">
-            {done}/{run.trials.length} completed{failed ? ` · ${failed} failed` : ""}
+            {done}/{run.trials.length} completed{errorCount}
           </span>
           {active && onCancelled && (
             <CancelEvaluation
@@ -89,12 +107,19 @@ export function EvaluationResults({
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {run.trials.filter((entry) => entry.status === "queued").length} tasks queued · {done}{" "}
-            completed{failed ? ` · ${failed} failed` : ""}
+            completed{errorCount}
           </p>
         </div>
       )}
       <div className="mt-6">
-        <DataTable className="min-w-[600px] [&_tr[data-selected=true]]:bg-foreground/[0.05] [&_button]:text-left [&_button]:font-mono [&_button]:text-foreground [&_button]:wrap-anywhere [&_button:hover]:underline [&_button:hover]:underline-offset-4 [&_button[aria-pressed=true]]:font-semibold">
+        <div className="mb-3">
+          <OutcomeFilter
+            outcomes={run.trials.map(outcomeOf)}
+            selected={shown}
+            onToggle={(outcome) => setShown((set) => toggledOutcome(set, outcome))}
+          />
+        </div>
+        <DataTable className="min-w-[600px] [&_button]:text-left [&_button]:font-mono [&_button]:text-foreground [&_button]:wrap-anywhere [&_button:hover]:underline [&_button:hover]:underline-offset-4">
           <thead>
             <tr>
               <th>Task</th>
@@ -104,23 +129,16 @@ export function EvaluationResults({
             </tr>
           </thead>
           <tbody>
-            {run.trials.map((entry, trialIndex) => (
-              <tr
-                key={`${entry.runId}/${entry.taskId}/${entry.harness}`}
-                data-selected={trialIndex === index}
-              >
+            {trials.map((entry) => (
+              <tr key={`${entry.runId}/${entry.taskId}/${entry.harness}`}>
                 <td>
-                  <button
-                    type="button"
-                    onClick={() => setIndex(trialIndex)}
-                    aria-pressed={trialIndex === index}
-                  >
+                  <button type="button" onClick={() => showTrial(trialParam(run, entry))}>
                     {entry.taskId}
                   </button>
                 </td>
                 <td>{harnessLabels[entry.harness]}</td>
                 <td>
-                  <RunStatus value={entry.status} />
+                  <OutcomeCircle outcome={outcomeOf(entry)} />
                 </td>
                 <td className="font-mono text-xs">{scores(entry)}</td>
               </tr>
@@ -128,75 +146,15 @@ export function EvaluationResults({
           </tbody>
         </DataTable>
       </div>
-      {trial && (
-        <div>
-          <div className="mt-6 mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center [&_h3]:wrap-anywhere [&_h3_span]:ml-2 [&_h3_span]:font-mono [&_h3_span]:text-sm [&_h3_span]:text-muted-foreground">
-            <h3 className="font-mono text-base font-medium">
-              {trial.taskId} <span> / {trial.harness}</span>
-            </h3>
-            <Link
-              className={buttonStyles.ghost}
-              to={`/repos/${repo}/tasks/${encodeURIComponent(trial.runId)}/${encodeURIComponent(trial.taskId)}`}
-            >
-              View Task ↗
-            </Link>
-          </div>
-          {trial.error && <p className="my-4 text-sm text-destructive">{trial.error}</p>}
-          <TokenCosts trial={trial} />
-          {!active && finalMessage && (
-            <div className="my-5 border-l-2 border-foreground/30 bg-muted/60 p-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
-              <h4>Solver’s Final Response</h4>
-              <p>{finalMessage}</p>
-            </div>
-          )}
-          <h4>Solver Transcript</h4>
-          {!trial.steps.length && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {active
-                ? "Waiting for transcript events. Available raw solver and tool output is shown below."
-                : "This harness did not produce a readable structured transcript. Inspect the raw output and artifacts below."}
-            </p>
-          )}
-          <ol className="m-0 list-none p-0 [&>li]:border-t [&>li]:border-border [&>li]:py-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
-            {trial.steps.map((step, stepIndex) => (
-              <li key={step.id}>
-                <span className="mb-2.5 block text-xs font-semibold text-muted-foreground">
-                  {stepIndex + 1} · {roleLabel(step.role)}
-                </span>
-                {step.text && <p>{step.text}</p>}
-                {step.tools.map((tool) => (
-                  <details key={tool.id}>
-                    <summary>{tool.name}</summary>
-                    <h5>Input</h5>
-                    <pre>{tool.input}</pre>
-                    <h5>Output</h5>
-                    <pre>{tool.output || "No output captured yet"}</pre>
-                  </details>
-                ))}
-              </li>
-            ))}
-          </ol>
-          <details open={!trial.steps.length}>
-            <summary>Harbor Output</summary>
-            {/* Unwrapped so Harbor's result tables keep their columns; the panel scrolls sideways. */}
-            <pre className="whitespace-pre!">{trial.log || "No output yet."}</pre>
-          </details>
-          {trial.artifacts.length > 0 && (
-            <details className="[&_p]:mt-3 [&_p]:text-sm [&_p]:text-muted-foreground [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-foreground [&_a]:underline [&_a]:decoration-foreground/25 [&_a]:underline-offset-4 [&_a]:wrap-anywhere [&_a:hover]:decoration-foreground">
-              <summary>Artifacts · {trial.artifacts.length}</summary>
-              <p>Sanitized text exports; large files may be capped at 1 MiB.</p>
-              <ul>
-                {trial.artifacts.map((name) => (
-                  <li key={name}>
-                    <a href={`${baseUrl}/${run.id}/artifacts?name=${encodeURIComponent(name)}`}>
-                      {name.split("/").slice(2).join("/")}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
+      {opened && (
+        <TrialDialog
+          run={run}
+          trial={opened.trial}
+          loaded
+          baseUrl={baseUrl}
+          repo={repo}
+          onClose={() => showTrial(undefined)}
+        />
       )}
     </section>
   );

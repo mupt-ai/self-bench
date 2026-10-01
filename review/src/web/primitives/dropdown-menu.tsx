@@ -68,3 +68,23 @@ export function DropdownMenuRadioItem({
     </Primitive.RadioItem>
   );
 }
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof Primitive.CheckboxItem>) {
+  return (
+    <Primitive.CheckboxItem
+      className={cn(
+        "relative flex cursor-default items-center gap-2 px-2 py-2 pr-8 outline-none data-[highlighted]:bg-foreground/[0.06]",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <Primitive.ItemIndicator className="absolute right-2">
+        <Check className="size-3.5 text-foreground" />
+      </Primitive.ItemIndicator>
+    </Primitive.CheckboxItem>
+  );
+}

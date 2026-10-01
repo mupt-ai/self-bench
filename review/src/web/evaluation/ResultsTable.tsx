@@ -1,150 +1,186 @@
-import { ChevronRight } from "lucide-react";
-import { Fragment } from "react";
-import { cn } from "../primitives/cn";
-import { dollars } from "./benchmark";
-import { BatchRows } from "./ResultsBatchRows";
-import { ConfigurationName, Flags, StatusPill } from "./ResultsMarks";
-import { needsAttention, type Review } from "./results-alerts";
-import type { Configuration } from "./results-model";
-import { configurationName } from "./results-presentation";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router";
+import type { CredentialInfo } from "../../../../src/db/credentials";
+import type { EvaluationRun } from "./api";
+import { ColumnHeading, ConfigurationToolbar } from "./ConfigurationFilters";
+import {
+  type ConfigurationColumn,
+  matchingFacets,
+  orderedConfigurations,
+} from "./configuration-facets";
+import type { AcceptedTask } from "./RepoRuns";
+import { ConfigurationRows } from "./ResultsConfigurationRows";
+import { runStateOf } from "./ResultsMarks";
+import { missingTasks } from "./results-coverage";
+import { configurationsOf } from "./results-model";
+import {
+  findTrial,
+  nextOrder,
+  TRIAL_PARAM,
+  trialParam,
+  useResultsView,
+  useScrollMemory,
+} from "./results-view";
+import { TrialDialog } from "./TrialDialog";
 
-export interface TableView {
-  /** Configurations whose batches are showing, by key. */
-  open: ReadonlySet<string>;
-  /** Batches showing every task, by configuration key and batch id. */
-  showAll: ReadonlySet<string>;
-  /** A task to show alone, from a task problem's Show button. */
-  focusTask?: string;
-  /** The configuration an alert's Show button pointed at. */
-  highlight?: string;
-}
+const flipped = <T,>(list: readonly T[], item: T) =>
+  list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item];
 
-/** The id of a configuration's row, for an alert's Show button to scroll to. */
-export function rowId(configurations: readonly Configuration[], key: string): string {
-  return `results-configuration-${configurations.findIndex((entry) => entry.key === key)}`;
-}
-
+/**
+ * Every configuration, each opening to its runs, each run opening to its tasks. Nothing is
+ * open at first; after that the view is kept for the session (`useResultsView`), and the open
+ * task's dialog is in the URL, so going back to the page finds it as it was.
+ */
 export function ResultsTable({
-  configurations,
-  all,
-  review,
-  view,
-  onToggle,
-  onShowAll,
-  onOpenRun,
+  runs,
+  credentials,
+  accepted,
+  baseUrl,
+  repo,
 }: {
-  configurations: readonly Configuration[];
-  /** Every configuration, for stable row ids whatever the filter. */
-  all: readonly Configuration[];
-  review: Review;
-  view: TableView;
-  onToggle(key: string): void;
-  onShowAll(key: string, show: boolean): void;
-  onOpenRun(runId: string): void;
+  runs: readonly EvaluationRun[];
+  credentials: readonly CredentialInfo[];
+  /** The repository's accepted tasks, for the cumulative results' coverage, once loaded. */
+  accepted?: readonly AcceptedTask[];
+  baseUrl: string;
+  repo: string;
 }) {
+  const [view, setView] = useResultsView(baseUrl);
+  const [search, setSearch] = useSearchParams();
+  const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
+  useScrollMemory(baseUrl, configurations.length > 0);
+  // Escape folds the table up a level at a time: open runs first, then open configurations.
+  useEffect(() => {
+    const fold = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // A dialog or a menu takes Escape for itself.
+      if (document.querySelector('dialog[open], [role="menu"]')) return;
+      setView((current) => {
+        const shownBatches = current.batches.filter((key) =>
+          current.configurations.includes(key.split("\n")[0] ?? ""),
+        );
+        if (shownBatches.length) return { ...current, batches: [] };
+        if (current.configurations.length) return { ...current, configurations: [], batches: [] };
+        return current;
+      });
+    };
+    document.addEventListener("keydown", fold);
+    return () => document.removeEventListener("keydown", fold);
+  }, [setView]);
+  if (!configurations.length) return null;
+  const opened = findTrial(runs, search.get(TRIAL_PARAM));
+  const showTrial = (param: string | undefined) =>
+    setSearch(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (param) next.set(TRIAL_PARAM, param);
+        else next.delete(TRIAL_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  // Facets narrow the table and the state counts; the state toggles then narrow it further.
+  const faceted = matchingFacets(configurations, view.facets);
+  const states = faceted.map((configuration) => runStateOf(configuration.latest));
+  const shown = orderedConfigurations(
+    faceted.filter(
+      (_, index) => !view.states.length || view.states.includes(states[index] ?? "done"),
+    ),
+    view.order,
+    (configuration) => configuration.latest.length + missingTasks(configuration, accepted).length,
+  );
+  const sortBy = (column: ConfigurationColumn) =>
+    setView((current) => {
+      const { order, ...rest } = current;
+      const next = nextOrder(order, column);
+      return next ? { ...rest, order: next } : rest;
+    });
   return (
-    <section
-      className="panel min-w-0 overflow-x-auto"
-      aria-label="Scrollable Table"
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll wide tables.
-      tabIndex={0}
-    >
-      <table className="w-full min-w-[56rem] table-fixed border-collapse text-left text-sm [&_td]:border-t [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:align-middle [&_td]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_thead]:bg-muted">
-        <colgroup>
-          <col className="w-[34%]" />
-          <col className="w-40" />
-          <col className="w-24" />
-          <col className="w-24" />
-          <col className="w-24" />
-          <col />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Configuration</th>
-            <th>Status</th>
-            <th className="text-right">Done</th>
-            <th className="text-right">Pass Rate</th>
-            <th className="text-right">$/Task</th>
-            <th className="text-right">Flags</th>
-          </tr>
-        </thead>
-        <tbody>
-          {configurations.map((configuration) => {
-            const open = view.open.has(configuration.key);
-            const name = configurationName(configuration);
-            const batches = view.focusTask
-              ? configuration.batches.filter((batch) =>
-                  batch.results.some((result) => result.task === view.focusTask),
-                )
-              : configuration.batches;
-            return (
-              <Fragment key={configuration.key}>
-                <tr
-                  id={rowId(all, configuration.key)}
-                  className={cn(
-                    "scroll-mt-4 bg-card",
-                    view.highlight === configuration.key && "bg-check/[0.12]",
-                  )}
-                >
-                  <td>
-                    <span className="flex min-w-0 items-center gap-1">
-                      <button
-                        type="button"
-                        className="-ml-1.5 grid size-7 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
-                        aria-expanded={open}
-                        aria-label={`${open ? "Hide" : "Show"} Batches for ${name}`}
-                        title={`${open ? "Hide" : "Show"} Batches`}
-                        onClick={() => onToggle(configuration.key)}
-                      >
-                        <ChevronRight
-                          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      <ConfigurationName configuration={configuration} />
-                    </span>
-                  </td>
-                  <td>
-                    <StatusPill
-                      status={configuration.status}
-                      attention={needsAttention(review, configuration)}
-                    />
-                  </td>
-                  <td className="text-right font-mono tabular-nums">
-                    {configuration.finished}/{configuration.latest.length}
-                  </td>
-                  <td className="text-right font-mono tabular-nums">
-                    {configuration.passRate === undefined
-                      ? "—"
-                      : `${configuration.passRate.toFixed(0)}%`}
-                  </td>
-                  <td className="text-right font-mono tabular-nums">
-                    {configuration.costPerTask === undefined
-                      ? "—"
-                      : dollars(configuration.costPerTask)}
-                  </td>
-                  <td className="whitespace-normal!">
-                    <Flags flags={review.flags.get(configuration.key) ?? []} />
-                  </td>
-                </tr>
-                {open &&
-                  batches.map((batch) => (
-                    <BatchRows
-                      key={batch.id}
-                      configuration={configuration}
-                      batch={batch}
-                      review={review}
-                      {...(view.focusTask ? { focusTask: view.focusTask } : {})}
-                      showAll={view.showAll.has(`${configuration.key}\n${batch.id}`)}
-                      onShowAll={(show) => onShowAll(`${configuration.key}\n${batch.id}`, show)}
-                      onOpenRun={onOpenRun}
-                    />
-                  ))}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+    <section aria-label="Configurations">
+      <h2 className="sr-only">Configurations</h2>
+      <ConfigurationToolbar
+        configurations={configurations}
+        states={states}
+        chosenStates={new Set(view.states)}
+        onToggleState={(state) =>
+          setView((current) => ({ ...current, states: flipped(current.states, state) }))
+        }
+        chosen={view.facets}
+        onToggleFacet={(facet, value) =>
+          setView((current) => ({
+            ...current,
+            facets: { ...current.facets, [facet]: flipped(current.facets[facet] ?? [], value) },
+          }))
+        }
+        onClearFacet={(facet) =>
+          setView((current) => {
+            const { [facet]: _, ...facets } = current.facets;
+            return { ...current, facets };
+          })
+        }
+      />
+      {shown.length ? (
+        <section
+          className="panel min-w-0 overflow-x-auto"
+          aria-label="Scrollable Table"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll wide tables.
+          tabIndex={0}
+        >
+          <table className="w-full min-w-[46rem] table-fixed border-collapse text-left text-sm [&_td]:border-t [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:align-middle [&_td]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_thead]:bg-muted">
+            <colgroup>
+              <col />
+              <col className="w-48" />
+              <col className="w-28" />
+              <col className="w-36" />
+              <col className="w-24" />
+              <col className="w-24" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Configuration</th>
+                <th>Status</th>
+                <th>Started By</th>
+                {/* Over the counts, not the asterisk beside them. */}
+                <ColumnHeading
+                  label="Done"
+                  column="done"
+                  order={view.order}
+                  className="pr-[34px]!"
+                  onSort={sortBy}
+                />
+                <ColumnHeading label="Pass Rate" column="pass" order={view.order} onSort={sortBy} />
+                <ColumnHeading label="$/Task" column="cost" order={view.order} onSort={sortBy} />
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((configuration) => (
+                <ConfigurationRows
+                  key={configuration.key}
+                  configuration={configuration}
+                  accepted={accepted}
+                  view={view}
+                  setView={setView}
+                  onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}
+                />
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : (
+        <p className="panel px-4 py-3 text-sm text-muted-foreground">
+          No configurations match this filter.
+        </p>
+      )}
+      {opened && (
+        <TrialDialog
+          run={opened.run}
+          trial={opened.trial}
+          showRun
+          baseUrl={baseUrl}
+          repo={repo}
+          onClose={() => showTrial(undefined)}
+        />
+      )}
     </section>
   );
 }

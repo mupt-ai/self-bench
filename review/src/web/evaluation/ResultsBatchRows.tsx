@@ -1,254 +1,152 @@
+import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { cn } from "../primitives/cn";
 import { dollars } from "./benchmark";
-import { OutcomePill, Tag } from "./ResultsMarks";
-import { isTaskProblem, type Review } from "./results-alerts";
-import type { Batch, Configuration, TaskResult } from "./results-model";
-import {
-  clockLabel,
-  errorMessage,
-  minutesLabel,
-  momentLabel,
-  outcomeLabels,
-  outcomeSummary,
-  taskParts,
-} from "./results-presentation";
+import { OutcomeFilter } from "./ResultsFilters";
+import { NoValue, ResultsStatus } from "./ResultsMarks";
+import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./ResultsTaskRows";
+import { BATCH_CHEVRON, BATCH_INDENT, Elbow, TASK_INDENT, Toggle } from "./ResultsTree";
+import { type MissingTask, withMissing } from "./results-coverage";
+import { type Batch, type Outcome, type TaskResult, tally } from "./results-model";
+import { momentLabel, outcomeSummary } from "./results-presentation";
+import type { Sort } from "./results-view";
 
-/** Tasks listed under a batch before the rest fold into one line. */
-const LISTED = 6;
-
-/** How urgently a task row needs listing, most urgent first; undefined folds it away. */
-function urgency(result: TaskResult, stalled: boolean): number | undefined {
-  if (result.outcome === "error" && !result.replacedBy) return 0;
-  if (result.outcome === "running" && stalled) return 1;
-  if (result.wontChart && !result.replacedBy) return 2;
-  if (result.replacedBy || result.replaces) return 3;
-  if (result.outcome === "running") return 4;
-  return undefined;
-}
-
-function TaskNote({
-  result,
-  review,
-  stalled,
-}: {
-  result: TaskResult;
-  review: Review;
-  stalled: boolean;
-}) {
-  const parts: ReactNode[] = [];
-  const replaces = result.replaces;
-  if (result.replacedBy) {
-    const later = result.replacedBy;
-    parts.push(
-      `Replaced by the ${momentLabel(later.run.createdAt)} batch: ${outcomeLabels[later.outcome]}`,
-    );
-  } else if (isTaskProblem(review, result)) {
-    const others = (review.taskProblems.get(result.task)?.configurations.length ?? 1) - 1;
-    parts.push(
-      <Tag key="tag" severity="task">
-        Task Problem
-      </Tag>,
-      <q key="error" className="font-mono text-xs">
-        {errorMessage(result.trial.error)}
-      </q>,
-      ` · also on ${others} other configuration${others === 1 ? "" : "s"}`,
-    );
-  } else if (result.outcome === "error") {
-    parts.push(
-      <q key="error" className="font-mono text-xs">
-        {errorMessage(result.trial.error)}
-      </q>,
-    );
-  } else if (result.wontChart) {
-    parts.push(
-      <Tag key="tag" severity="warn">
-        Won’t Chart
-      </Tag>,
-      result.wontChart,
-    );
-  } else if (result.outcome === "running" && result.trial.startedAt) {
-    if (stalled) {
-      parts.push(
-        <Tag key="tag" severity="warn">
-          Stalled
-        </Tag>,
-      );
-    }
-    parts.push(
-      <span key="since" className="text-muted-foreground">
-        Running since {clockLabel(result.trial.startedAt)}
-      </span>,
-    );
-  }
-  if (replaces && !result.replacedBy) {
-    const outcome = outcomeLabels[replaces.outcome].toLowerCase();
-    parts.push(
-      `${parts.length ? " · " : ""}Replaces the ${momentLabel(replaces.run.createdAt)} ${outcome}`,
-    );
-  }
-  return <>{parts}</>;
-}
-
-function TaskRow({
-  result,
-  review,
-  stalled,
-  focused,
-}: {
-  result: TaskResult;
-  review: Review;
-  stalled: boolean;
-  focused: boolean;
-}) {
-  const { trial } = result;
-  const current = !result.replacedBy;
-  const tone =
-    current && result.outcome === "error"
-      ? "shadow-[inset_3px_0_0_var(--bad-fg)]"
-      : current && (result.wontChart || (stalled && result.outcome === "running"))
-        ? "shadow-[inset_3px_0_0_var(--warn-fg)]"
-        : "";
-  const reward = trial.rewards.reward;
-  const task = taskParts(trial.taskId);
+/** A batch's heading: when it started, linking to its run, marked as a link out. */
+export function BatchHeading({ batch }: { batch: Batch }) {
+  const when = momentLabel(batch.createdAt);
   return (
-    <tr
-      className={cn(
-        "text-xs",
-        !current && "text-muted-foreground [&_[data-pip]]:opacity-50",
-        focused && "bg-destructive/[0.06]",
-      )}
-    >
-      <td className={cn("truncate pl-12! font-mono", tone)} title={trial.taskId}>
-        {task.name}
-        {task.title && <span className="ml-2 text-muted-foreground">{task.title}</span>}
-      </td>
-      <td>
-        <OutcomePill outcome={result.outcome} />
-      </td>
-      <td className="text-right font-mono tabular-nums">
-        {trial.status === "completed" && reward !== undefined ? reward : "—"}
-      </td>
-      <td
-        className={cn(
-          "text-right font-mono tabular-nums",
-          stalled && result.outcome === "running" && current && "font-semibold text-warning",
-        )}
-      >
-        {minutesLabel(result.minutes)}
-      </td>
-      <td className="text-right font-mono tabular-nums">
-        {trial.apiCostUsd === undefined ? "—" : dollars(trial.apiCostUsd)}
-      </td>
-      <td className="whitespace-normal! leading-5">
-        <TaskNote result={result} review={review} stalled={stalled && current} />
-      </td>
-    </tr>
+    <>
+      {batch.runIds.map((runId, index) => (
+        <Link
+          key={runId}
+          className="group/run inline-flex items-center gap-1.5 font-semibold"
+          to={`?run=${encodeURIComponent(runId)}`}
+          title="Open Run"
+        >
+          {/* Says the title opens the run's own page. */}
+          <ExternalLink
+            className="size-3 shrink-0 text-muted-foreground group-hover/run:text-foreground"
+            aria-hidden="true"
+          />
+          {index ? `Run ${index + 1}` : when}
+        </Link>
+      ))}
+    </>
   );
 }
 
-const quietButton =
-  "ml-2.5 border border-border bg-transparent px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-foreground/[0.06]";
+/** " · 36 left out · 4 added later": the accepted tasks a configuration has no result for. */
+function notRun(missing: readonly MissingTask[]): string {
+  const count = (outcome: MissingTask["outcome"]) =>
+    missing.filter((task) => task.outcome === outcome).length;
+  return [
+    count("unrun") ? ` · ${count("unrun")} left out` : "",
+    count("added") ? ` · ${count("added")} added later` : "",
+  ].join("");
+}
 
-/** A batch's row, and under it the tasks that need a look; the rest fold into one line. */
-export function BatchRows({
-  configuration,
-  batch,
-  review,
-  focusTask,
-  showAll,
-  onShowAll,
-  onOpenRun,
+/** Who started some results' runs: one name, or a few. */
+export function startersOf(results: readonly TaskResult[]): string {
+  return [...new Set(results.map((result) => result.run.startedBy))].join(", ");
+}
+
+/**
+ * A group of results under a configuration (a batch, or the cumulative results) and its tasks
+ * when it's open, which can be filtered by result and sorted. The cumulative results also list
+ * the accepted tasks the configuration hasn't run, as Left Out or Added Later, filtered out at
+ * first.
+ */
+export function ResultGroupRows({
+  name,
+  heading,
+  results,
+  cumulative = false,
+  missing = [],
+  open,
+  shown,
+  sort,
+  onToggle,
+  onToggleOutcome,
+  onSort,
+  onOpenTask,
 }: {
-  configuration: Configuration;
-  batch: Batch;
-  review: Review;
-  focusTask?: string;
-  showAll: boolean;
-  onShowAll(show: boolean): void;
-  onOpenRun(runId: string): void;
+  /** What the group is, for its toggle's label: "the Sep 29, 16:19 Run". */
+  name: string;
+  heading: ReactNode;
+  results: readonly TaskResult[];
+  /** Whether these are each task's latest results, from all the configuration's runs. */
+  cumulative?: boolean;
+  /** Accepted tasks with no result here, listed as Left Out or Added Later. */
+  missing?: readonly MissingTask[];
+  open: boolean;
+  /** The result states shown. */
+  shown: ReadonlySet<Outcome>;
+  sort: Sort | undefined;
+  onToggle(): void;
+  onToggleOutcome(outcome: Outcome): void;
+  onSort(by: Sort["by"]): void;
+  onOpenTask(result: TaskResult): void;
 }) {
-  const stalled = review.stalls.has(configuration.key);
-  const results = batch.results;
-  let shown: TaskResult[];
-  let hidden: TaskResult[] = [];
-  if (focusTask) {
-    shown = results.filter((result) => result.task === focusTask);
-  } else if (showAll) {
-    shown = results;
-  } else {
-    shown = results
-      .flatMap((result) => {
-        const rank = urgency(result, stalled);
-        return rank === undefined ? [] : [{ result, rank }];
-      })
-      .sort((a, b) => a.rank - b.rank)
-      .slice(0, LISTED)
-      .map(({ result }) => result);
-    hidden = results.filter((result) => !shown.includes(result));
-  }
-  const tasks = `${results.length} task${results.length === 1 ? "" : "s"}`;
+  const totals = tally(results);
+  const entries = taskEntries(results, missing);
+  const tasks = sortedEntries(
+    entries.filter((entry) => shown.has(entry.outcome)),
+    sort,
+  );
   return (
     <>
-      <tr className="bg-card/45 font-mono text-xs text-muted-foreground">
-        <td colSpan={6} className="pl-9! whitespace-normal!">
-          └ <b className="font-semibold text-foreground">{momentLabel(batch.createdAt)}</b> ·
-          started by {batch.startedBy} · {tasks}
-          <span className="ml-3">{outcomeSummary(results)}</span>
-          {batch.runIds.map((runId, index) => (
-            <button
-              key={runId}
-              type="button"
-              className={quietButton}
-              onClick={() => onOpenRun(runId)}
-            >
-              {batch.runIds.length > 1 ? `Open Run ${index + 1}` : "Open Run"}
-            </button>
-          ))}
+      <tr className="bg-muted/30">
+        <td className={cn("relative", BATCH_INDENT)}>
+          <Toggle
+            open={open}
+            chevron={BATCH_CHEVRON}
+            label={`${open ? "Hide" : "Show"} Tasks for ${name}`}
+            title={`${open ? "Hide" : "Show"} Tasks`}
+            onToggle={onToggle}
+          />
+          <Elbow />
+          <span className="block min-w-0">
+            <span className="flex items-center gap-2 font-mono text-xs">{heading}</span>
+            <span className="block truncate font-mono text-xs text-muted-foreground">
+              {outcomeSummary(results)}
+              {cumulative && notRun(missing)}
+            </span>
+          </span>
+        </td>
+        <td>
+          <ResultsStatus results={results} />
+        </td>
+        <td className="truncate font-mono text-xs text-muted-foreground">{startersOf(results)}</td>
+        <DoneCell
+          finished={totals.finished}
+          total={results.length + missing.length}
+          counts={withMissing(totals.counts, missing)}
+        />
+        <td className="text-right font-mono tabular-nums">
+          {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}
+        </td>
+        <td className="text-right font-mono tabular-nums">
+          {totals.costPerTask === undefined ? <NoValue width={6} /> : dollars(totals.costPerTask)}
         </td>
       </tr>
-      {shown.length > 0 && (
-        <tr className="font-mono text-[10px] font-medium tracking-wider text-muted-foreground uppercase [&_td]:border-t-0! [&_td]:pt-1.5! [&_td]:pb-1!">
-          <td className="pl-12!">Task</td>
-          <td>Result</td>
-          <td className="text-right">Reward</td>
-          <td className="text-right">Time</td>
-          <td className="text-right">Cost</td>
-          <td>Note</td>
-        </tr>
-      )}
-      {shown.map((result) => (
-        <TaskRow
-          key={`${result.run.id}/${result.task}`}
-          result={result}
-          review={review}
-          stalled={stalled}
-          focused={result.task === focusTask}
-        />
-      ))}
-      {!focusTask && hidden.length > 0 && (
-        <tr className="text-xs text-muted-foreground">
-          <td colSpan={6} className="pl-12! whitespace-normal!">
-            {shown.length ? `${hidden.length} more: ` : ""}
-            {outcomeSummary(hidden)}
-            <button type="button" className={quietButton} onClick={() => onShowAll(true)}>
-              Show All {results.length} Tasks
-            </button>
-          </td>
-        </tr>
-      )}
-      {!focusTask && showAll && results.length > LISTED && (
-        <tr className="text-xs">
-          <td colSpan={6} className="pl-12!">
-            <button
-              type="button"
-              className={cn(quietButton, "ml-0")}
-              onClick={() => onShowAll(false)}
-            >
-              Show Fewer
-            </button>
-          </td>
-        </tr>
+      {open && (
+        <>
+          <tr>
+            <td colSpan={6} className={cn("relative", TASK_INDENT)}>
+              <OutcomeFilter
+                outcomes={entries.map((entry) => entry.outcome)}
+                selected={shown}
+                coverage={cumulative}
+                onToggle={onToggleOutcome}
+              />
+            </td>
+          </tr>
+          <TaskHeadings cumulative={cumulative} sort={sort} onSort={onSort} />
+          {tasks.map((entry) => (
+            <TaskRow key={entry.key} entry={entry} cumulative={cumulative} onOpen={onOpenTask} />
+          ))}
+        </>
       )}
     </>
   );

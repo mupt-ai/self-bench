@@ -17,7 +17,13 @@ export type Outcome =
   | "error"
   | "cancelled"
   | "running"
-  | "queued";
+  | "queued"
+  /**
+   * Accepted tasks the configuration has no result for, in the coverage view only: one accepted
+   * before its last run that the run left out, or one accepted since.
+   */
+  | "unrun"
+  | "added";
 
 export interface TaskResult {
   run: EvaluationRun;
@@ -25,8 +31,6 @@ export interface TaskResult {
   /** The task's key: its source batch and task id. */
   task: string;
   outcome: Outcome;
-  /** Why a finished result stays off the chart and out of releases, if it does. */
-  wontChart?: string;
   /** Minutes the trial took, or has been running. */
   minutes?: number;
   /** The later result that counts instead of this one. */
@@ -42,11 +46,20 @@ export interface Batch {
   startedBy: string;
   runIds: string[];
   results: TaskResult[];
-  /** Who cancelled it and when, read from the run. */
-  cancelled?: { by: string; at?: string };
 }
 
-export interface Configuration {
+/** Outcome counts, and what they add up to, for a configuration's or a batch's results. */
+export interface Tally {
+  counts: Record<Outcome, number>;
+  /** Tasks that finished: not running, queued or cancelled. */
+  finished: number;
+  /** Percent of the scored results that passed. */
+  passRate?: number;
+  /** Mean model cost of the priced results. */
+  costPerTask?: number;
+}
+
+export interface Configuration extends Tally {
   /** The release's private setting identity, including a custom endpoint. */
   key: string;
   label: string;
@@ -65,15 +78,6 @@ export interface Configuration {
   batches: Batch[];
   /** The result that counts for each task, in task order. */
   latest: TaskResult[];
-  counts: Record<Outcome, number>;
-  /** Tasks whose latest result finished: not running, queued or cancelled. */
-  finished: number;
-  /** Percent of the scored latest results that passed. */
-  passRate?: number;
-  /** Mean model cost of the priced latest results. */
-  costPerTask?: number;
-  /** Model cost of every trial, replaced ones included: what was spent. */
-  spend: number;
   status: "running" | "queued" | "done" | "cancelled";
 }
 
@@ -81,7 +85,7 @@ export interface Configuration {
  * A result under way: running, or queued in a run that has started, which may still be preparing
  * its sandboxes and task images.
  */
-export function inProgress(result: TaskResult): boolean {
+function inProgress(result: TaskResult): boolean {
   return (
     result.outcome === "running" || (result.outcome === "queued" && result.run.status === "running")
   );
@@ -96,21 +100,12 @@ function minutesBetween(from: string | undefined, to: string | number | undefine
   return Number.isFinite(ms) && ms >= 0 ? ms / 60_000 : undefined;
 }
 
-function outcomeOf(trial: EvaluationTrial): Outcome {
+export function outcomeOf(trial: EvaluationTrial): Outcome {
   if (trial.status === "queued" || trial.status === "running") return trial.status;
   if (trial.status === "failed")
     return /^Cancelled\b/.test(trial.error ?? "") ? "cancelled" : "error";
   const reward = trial.rewards.reward;
   return reward === 1 ? "passed" : reward === 0 ? "failed" : "unscored";
-}
-
-/** Why a finished result can't be charted or released (`eligibleTrial`). */
-function wontChartReason(trial: EvaluationTrial): string | undefined {
-  if (trial.status !== "completed" || eligibleTrial(trial)) return undefined;
-  const reward = trial.rewards.reward;
-  if (reward !== 0 && reward !== 1) return "Not scored 0 or 1";
-  if (trial.modelVerified !== true) return "No verified model usage";
-  return "No model cost recorded";
 }
 
 /**
@@ -159,7 +154,27 @@ const noOutcomes = (): Record<Outcome, number> => ({
   cancelled: 0,
   running: 0,
   queued: 0,
+  unrun: 0,
+  added: 0,
 });
+
+/** Counts, finished tasks, pass rate and cost per task of some results. */
+export function tally(results: readonly TaskResult[]): Tally {
+  const counts = noOutcomes();
+  for (const result of results) counts[result.outcome] += 1;
+  const scored = counts.passed + counts.failed;
+  const costs = results.flatMap(({ trial }) =>
+    trial.status === "completed" && typeof trial.apiCostUsd === "number" ? [trial.apiCostUsd] : [],
+  );
+  return {
+    counts,
+    finished: results.length - counts.running - counts.queued - counts.cancelled,
+    ...(scored ? { passRate: (counts.passed / scored) * 100 } : {}),
+    ...(costs.length
+      ? { costPerTask: costs.reduce((sum, cost) => sum + cost, 0) / costs.length }
+      : {}),
+  };
+}
 
 function batchesOf(results: readonly TaskResult[]): Batch[] {
   const batches = new Map<string, Batch>();
@@ -174,11 +189,7 @@ function batchesOf(results: readonly TaskResult[]): Batch[] {
       results: [],
     };
     batches.set(id, batch);
-    if (!batch.runIds.includes(run.id)) {
-      batch.runIds.push(run.id);
-      const by = /^Cancelled by (.+?)\.?$/.exec(run.error ?? "")?.[1];
-      if (by) batch.cancelled = { by, ...(run.finishedAt ? { at: run.finishedAt } : {}) };
-    }
+    if (!batch.runIds.includes(run.id)) batch.runIds.push(run.id);
     batch.results.push(result);
   }
   return [...batches.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -198,13 +209,8 @@ function configurationOf(identity: Identity, results: TaskResult[], numbers: Map
   const latest = [...latestByTask.values()].sort(
     (a, b) => a.trial.taskId.localeCompare(b.trial.taskId) || a.task.localeCompare(b.task),
   );
-  const counts = noOutcomes();
-  for (const result of latest) counts[result.outcome] += 1;
-  const scored = counts.passed + counts.failed;
-  const costs = latest.flatMap(({ trial }) =>
-    trial.status === "completed" && typeof trial.apiCostUsd === "number" ? [trial.apiCostUsd] : [],
-  );
-  const finished = latest.length - counts.running - counts.queued - counts.cancelled;
+  const totals = tally(latest);
+  const { counts } = totals;
   const number = endpointNumber(numbers.get(identity.key) ?? "");
   const { key, label, modelName, provider, harness, signIn, thinking, endpoint } = identity;
   const configuration: Configuration = {
@@ -219,13 +225,7 @@ function configurationOf(identity: Identity, results: TaskResult[], numbers: Map
     ...(number !== undefined ? { endpointNumber: number } : {}),
     batches: batchesOf(results),
     latest,
-    counts,
-    finished,
-    ...(scored ? { passRate: (counts.passed / scored) * 100 } : {}),
-    ...(costs.length
-      ? { costPerTask: costs.reduce((sum, cost) => sum + cost, 0) / costs.length }
-      : {}),
-    spend: results.reduce((sum, { trial }) => sum + (trial.apiCostUsd ?? 0), 0),
+    ...totals,
     status: latest.some(inProgress)
       ? "running"
       : counts.queued > 0
@@ -255,7 +255,6 @@ export function configurationsOf(
       groups.set(identity.key, group);
       for (const trial of run.trials) {
         if (trial.harness !== harness) continue;
-        const reason = wontChartReason(trial);
         const end = trial.finishedAt ?? (trial.status === "running" ? now : undefined);
         const minutes = minutesBetween(trial.startedAt, end);
         group.results.push({
@@ -263,7 +262,6 @@ export function configurationsOf(
           trial,
           task: `${trial.runId}/${trial.taskId}`,
           outcome: outcomeOf(trial),
-          ...(reason ? { wontChart: reason } : {}),
           ...(minutes !== undefined ? { minutes } : {}),
         });
       }

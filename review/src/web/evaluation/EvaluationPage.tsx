@@ -1,76 +1,29 @@
 import React from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import type { CredentialInfo } from "../../../../src/db/credentials";
 import { ListSkeleton } from "../LoadingSkeleton";
-import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader, Select } from "../ui";
-import { type EvaluationRun, evaluationRequest, evaluationUrl } from "./api";
-import { benchmarkPoints, customEndpoints } from "./benchmark";
+import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
+import { type EvaluationRun, evaluationRequest } from "./api";
 import { ComparisonHistory } from "./ComparisonHistory";
 import { EvaluationResults } from "./EvaluationResults";
-import { ParetoChart } from "./ParetoChart";
-import { ResultsOverview } from "./ResultsOverview";
+import { useRepoRuns } from "./RepoRuns";
+import { ResultsTable } from "./ResultsTable";
 
 export function EvaluationPage() {
-  const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const repo = `${owner}/${name}`;
-  const url = evaluationUrl(org.login, repo);
+  const { url, runs, credentials, accepted, loading, error: listError, update } = useRepoRuns();
   const [search, setSearch] = useSearchParams();
   const selectedId = search.get("run");
-  const [runs, setRuns] = React.useState<EvaluationRun[]>([]);
   const [current, setCurrent] = React.useState<EvaluationRun>();
-  const [error, setError] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
-  const [dataset, setDataset] = React.useState("");
-  const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
+  const [runError, setRunError] = React.useState("");
+  const error = runError || listError;
   useDocumentTitle(`Results · ${repo}`);
-  // Sign-ins and custom endpoints, for configurations and the chart. The page works without them.
-  React.useEffect(() => {
-    let disposed = false;
-    evaluationRequest<{ credentials: CredentialInfo[] }>(
-      `/api/orgs/${encodeURIComponent(org.login)}/credentials`,
-    )
-      .then((result) => {
-        if (!disposed) setCredentials(result.credentials);
-      })
-      .catch(() => undefined);
-    return () => {
-      disposed = true;
-    };
-  }, [org.login]);
-  React.useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    setLoading(true);
-    setRuns([]);
-    setError("");
-    const refresh = async () => {
-      try {
-        const result = await evaluationRequest<{ runs: EvaluationRun[] }>(url);
-        if (disposed) return;
-        setRuns(result.runs);
-        setLoading(false);
-        if (result.runs.some((run) => run.status === "queued" || run.status === "running"))
-          timer = setTimeout(() => void refresh(), 3000);
-      } catch (cause) {
-        if (!disposed) {
-          setError(cause instanceof Error ? cause.message : "Could not load results");
-          setLoading(false);
-        }
-      }
-    };
-    void refresh();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-    };
-  }, [url]);
   React.useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     setCurrent(undefined);
+    setRunError("");
     if (!selectedId) return;
     const refresh = async () => {
       try {
@@ -79,13 +32,13 @@ export function EvaluationPage() {
         );
         if (disposed) return;
         setCurrent(run);
-        setError("");
-        setRuns((history) => [run, ...history.filter((entry) => entry.id !== run.id)]);
+        setRunError("");
+        update(run);
         if (run.status === "queued" || run.status === "running")
           timer = setTimeout(() => void refresh(), 3000);
       } catch (cause) {
         if (!disposed) {
-          setError(cause instanceof Error ? cause.message : "Could not refresh run");
+          setRunError(cause instanceof Error ? cause.message : "Could not refresh run");
           timer = setTimeout(() => void refresh(), 10_000);
         }
       }
@@ -95,20 +48,7 @@ export function EvaluationPage() {
       disposed = true;
       clearTimeout(timer);
     };
-  }, [url, selectedId]);
-  const points = benchmarkPoints(runs);
-  const datasets = [...new Set(points.map((point) => point.datasetKey))];
-  const selectedDataset = datasets.includes(dataset) ? dataset : datasets[0];
-  const comparable = points.filter((point) => point.datasetKey === selectedDataset);
-  // A dataset by its size and when it was first run; its key is a hash of its tasks.
-  const datasetLabel = (key: string) => {
-    const tasks = points.find((point) => point.datasetKey === key)?.tasks ?? 0;
-    const first = runs
-      .filter((run) => run.datasetKey === key)
-      .reduce((earliest, run) => (run.createdAt < earliest ? run.createdAt : earliest), "9999");
-    const since = new Date(first).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `${tasks} task${tasks === 1 ? "" : "s"} · since ${since}`;
-  };
+  }, [url, selectedId, update]);
   return (
     <PageContent>
       <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
@@ -139,38 +79,15 @@ export function EvaluationPage() {
         )
       ) : (
         <>
-          <ResultsOverview
-            // Filters, focus and open rows belong to one repository.
+          <ResultsTable
+            // Open rows and the filter belong to one repository.
             key={url}
             runs={runs}
             credentials={credentials}
-            onOpenRun={(id) => setSearch({ run: id })}
-          >
-            {datasets.length > 1 && (
-              <label
-                htmlFor="evaluationpage-field-0"
-                className="mb-4 flex flex-wrap items-center gap-3.5 text-sm font-medium text-muted-foreground"
-              >
-                Compare Dataset
-                <Select
-                  id="evaluationpage-field-0"
-                  value={selectedDataset}
-                  onChange={(event) => setDataset(event.target.value)}
-                >
-                  {datasets.map((key) => (
-                    <option key={key} value={key}>
-                      {datasetLabel(key)}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            <ParetoChart
-              points={comparable}
-              endpoints={customEndpoints(comparable, credentials)}
-              onSelect={(id) => setSearch({ run: id })}
-            />
-          </ResultsOverview>
+            {...(accepted ? { accepted } : {})}
+            baseUrl={url}
+            repo={repo}
+          />
           {loading && !runs.length && !error && (
             <div className="mt-8">
               <ListSkeleton label="Loading Runs" />

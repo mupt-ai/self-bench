@@ -5,14 +5,20 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "./cn";
 
 /** An info hint. With no children it renders an info icon carrying the hint as its accessible
- * label; wrapping an existing control (an icon button, a link) attaches the hint to it. */
+ * label; wrapping an existing control (an icon button, a link) attaches the hint to it. The card
+ * shows the label, or `content` when the hint needs more than a line of text. */
 export function InfoTooltip({
   label,
+  content,
+  side = "top",
   children,
   className,
   contentClassName,
 }: {
   label: string;
+  content?: ReactNode;
+  /** Where the card opens, when there's room: above by default. */
+  side?: "top" | "right" | "bottom" | "left";
   children?: ReactNode;
   className?: string;
   /** Classes for the hint's card, for example theme colours instead of the inverted default. */
@@ -37,8 +43,8 @@ export function InfoTooltip({
             </button>
           </Primitive.Trigger>
         )}
-        <TooltipContent side="top" className={contentClassName}>
-          {label}
+        <TooltipContent side={side} className={contentClassName}>
+          {content ?? label}
         </TooltipContent>
       </Primitive.Root>
     </Primitive.Provider>

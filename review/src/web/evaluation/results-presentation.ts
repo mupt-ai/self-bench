@@ -12,13 +12,8 @@ export const outcomeLabels: Record<Outcome, string> = {
   cancelled: "Cancelled",
   running: "Running",
   queued: "Queued",
-};
-
-export const statusLabels: Record<Configuration["status"], string> = {
-  running: "Running",
-  queued: "Queued",
-  done: "Done",
-  cancelled: "Cancelled",
+  unrun: "Left Out",
+  added: "Added Later",
 };
 
 /**
@@ -29,10 +24,6 @@ export function taskParts(taskId: string): { name: string; title?: string } {
   const match = /(?:^|-)pr-(\d+)(?:-(.+))?$/.exec(taskId);
   if (!match) return { name: taskId };
   return { name: `PR #${match[1]}`, ...(match[2] ? { title: match[2] } : {}) };
-}
-
-export function taskName(taskId: string): string {
-  return taskParts(taskId).name;
 }
 
 function harnessName(harness: string): string {
@@ -89,10 +80,6 @@ export function momentLabel(iso: string): string {
   return `${day.format(date)}, ${time.format(date)}`;
 }
 
-export function clockLabel(iso: string): string {
-  return time.format(new Date(iso));
-}
-
 export function minutesLabel(minutes: number | undefined): string {
   if (minutes === undefined) return "—";
   if (minutes < 1) return "<1 min";
@@ -115,8 +102,6 @@ export function outcomeSummary(results: readonly TaskResult[]): string {
     const count = results.filter((result) => result.outcome === outcome).length;
     return count ? [`${count} ${count === 1 ? one : many}`] : [];
   });
-  const wontChart = results.filter((result) => result.wontChart).length;
-  if (wontChart) parts.push(`${wontChart} won’t chart`);
   return parts.join(" · ");
 }
 

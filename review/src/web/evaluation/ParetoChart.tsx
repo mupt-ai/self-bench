@@ -14,11 +14,14 @@ import { endpointLabel } from "./credential-presentation";
 export function ParetoChart({
   points,
   endpoints = new Map(),
+  showTitle = true,
   onSelect,
 }: {
   points: BenchmarkPoint[];
   /** Custom points' endpoints and public numbers, by point id (`customEndpoints`). */
   endpoints?: ReadonlyMap<string, CustomEndpoint>;
+  /** Whether to draw the title, which a dialog around the chart may already show. */
+  showTitle?: boolean;
   onSelect(id: string): void;
 }) {
   const container = useRef<HTMLElement>(null);
@@ -49,6 +52,7 @@ export function ParetoChart({
           <ParetoPlot
             {...CHART_LOOK}
             title="Model Comparison"
+            showTitle={showTitle}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
             // Room for the title and the vendor chips above the plot: a row on a desktop, a few
