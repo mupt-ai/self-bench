@@ -22,7 +22,8 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         if not await super()._does_template_exist():
             return False
         name = self._template_name
-        build = next((tag.build_id for tag in await AsyncTemplate.get_tags(name) if tag.tag == TAG), None)
+        tags = await AsyncTemplate.get_tags(name)
+        build = next((tag.build_id for tag in tags if tag.tag == TAG), None)
         if build is None:
             return False
         status = await AsyncTemplate.get_build_status(
