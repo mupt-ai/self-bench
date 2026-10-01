@@ -10,6 +10,8 @@ event_path=${GITHUB_EVENT_PATH:?Provide the GitHub event payload.}
 [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || die 'Invalid workflow run identity.'
 [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || die 'Expected the exact source commit SHA.'
 [[ "$GCP_PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || die 'Invalid project ID.'
+jq -e --arg project "$GCP_PROJECT_ID" 'type == "object" and .project_id == $project' \
+  <<<"${TF_INPUTS_JSON:-}" >/dev/null || die 'TF_INPUTS_JSON must name the same project.'
 
 default_branch=$(jq -r '.repository.default_branch // ""' "$event_path")
 [[ "$GITHUB_DEFAULT_BRANCH" == "$default_branch" ]] || die 'Default branch mismatch.'

@@ -1,0 +1,58 @@
+name: Build and Push Image
+description: >-
+  Builds the SelfBench image and pushes it to the environment's Artifact Registry, under a tag
+  naming the commit and run. The job must already have authenticated the apply identity and set
+  up gcloud, and must carry GCP_PROJECT_ID and TF_INPUTS_JSON in its environment.
+
+inputs:
+  environment:
+    description: The Terraform environment, which also names the layer cache.
+    required: true
+  tag_suffix:
+    description: >-
+      Added to the tag. Tags are immutable, so a second build in the same run needs its own.
+    required: false
+    default: ""
+
+outputs:
+  image:
+    description: The pushed image, by digest.
+    value: ${{ steps.pushed.outputs.image }}
+
+runs:
+  using: composite
+  steps:
+    - name: Image Coordinates
+      id: coordinates
+      shell: bash
+      run: |
+        set -euo pipefail
+        registry="$(jq -r '.region // "us-central1"' <<<"$TF_INPUTS_JSON")-docker.pkg.dev"
+        echo "registry=$registry" >> "$GITHUB_OUTPUT"
+        echo "image_prefix=$registry/$GCP_PROJECT_ID/selfbench/selfbench" >> "$GITHUB_OUTPUT"
+    - name: Authenticate Docker to Artifact Registry
+      shell: bash
+      run: gcloud auth configure-docker "$REGISTRY" --quiet
+      env:
+        REGISTRY: ${{ steps.coordinates.outputs.registry }}
+    - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+    # GHA layer cache holds build layers only, never runtime credentials or private Terraform logs.
+    - name: Build and Push Image
+      id: image
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        platforms: linux/amd64
+        push: true
+        provenance: false
+        tags: ${{ steps.coordinates.outputs.image_prefix }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}${{ inputs.tag_suffix }}
+        build-args: SELFBENCH_BUILD_COMMIT=${{ github.sha }}
+        cache-from: type=gha,scope=${{ inputs.environment }}
+        cache-to: type=gha,scope=${{ inputs.environment }},mode=max
+    - name: Pushed Image
+      id: pushed
+      shell: bash
+      run: echo "image=$PREFIX@$DIGEST" >> "$GITHUB_OUTPUT"
+      env:
+        PREFIX: ${{ steps.coordinates.outputs.image_prefix }}
+        DIGEST: ${{ steps.image.outputs.digest }}

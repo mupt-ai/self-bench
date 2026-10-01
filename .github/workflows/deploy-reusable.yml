@@ -31,9 +31,56 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run validate
 
+  # Dev builds and pushes its image alongside the checks rather than after them. Nothing is
+  # deployed until the checks pass, and if this job fails the deploy job builds the image itself,
+  # as it always does for prod (where a second job would need a second approval).
+  image:
+    if: vars.GCP_DEPLOY_ENABLED == 'true' && inputs.target_environment == 'dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    environment:
+      name: ${{ inputs.target_environment }}
+      # Building is not deploying: the environment's deployment history is the deploy job's.
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_ENVIRONMENT: ${{ inputs.target_environment }}
+      GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
+      SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
+      SELFBENCH_RESULTS_SITE_URL: ${{ vars.SELFBENCH_RESULTS_SITE_URL }}
+      SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify Trusted Deploy Source and Runtime Settings
+        run: bash infra/ci/verify-source.sh
+      - name: Authenticate Apply Identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Build and Push Image
+        id: build
+        uses: ./.github/actions/build-image
+        with:
+          environment: ${{ inputs.target_environment }}
+
   deploy:
-    needs: validate
-    if: needs.validate.result == 'success' && vars.GCP_DEPLOY_ENABLED == 'true'
+    needs: [validate, image]
+    # Runs once the checks pass, whether the image job built the image, failed, or was skipped.
+    if: ${{ !cancelled() && needs.validate.result == 'success' && vars.GCP_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # Production approval belongs to prod; dev follows its own environment policy.
@@ -62,15 +109,6 @@ jobs:
           fetch-depth: 0
       - name: Verify Trusted Deploy Source and Runtime Settings
         run: bash infra/ci/verify-source.sh
-      - name: Image Coordinates
-        id: coordinates
-        run: |
-          set -euo pipefail
-          jq -e --arg project "$GCP_PROJECT_ID" \
-            'type == "object" and .project_id == $project' <<<"$TF_INPUTS_JSON" >/dev/null
-          registry="$(jq -r '.region // "us-central1"' <<<"$TF_INPUTS_JSON")-docker.pkg.dev"
-          echo "registry=$registry" >> "$GITHUB_OUTPUT"
-          echo "image_prefix=$registry/$GCP_PROJECT_ID/selfbench/selfbench" >> "$GITHUB_OUTPUT"
       # The apply identity pushes the image, backs up the database and applies the plan.
       - name: Authenticate Apply Identity
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
@@ -82,24 +120,26 @@ jobs:
         with:
           # Terraform's Helm provider reaches the GKE worker cluster through it.
           install_components: gke-gcloud-auth-plugin
-      - name: Authenticate Docker to Artifact Registry
-        run: gcloud auth configure-docker "$REGISTRY" --quiet
-        env:
-          REGISTRY: ${{ steps.coordinates.outputs.registry }}
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # GHA layer cache holds build layers only, never runtime credentials or private Terraform logs.
+      # On dev, only when the image job did not push one. That job may have pushed and still
+      # failed (say, saving the layer cache), so this build takes a tag of its own.
       - name: Build and Push Image
-        id: image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        if: needs.image.outputs.image == ''
+        uses: ./.github/actions/build-image
         with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          provenance: false
-          tags: ${{ steps.coordinates.outputs.image_prefix }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          build-args: SELFBENCH_BUILD_COMMIT=${{ github.sha }}
-          cache-from: type=gha,scope=${{ inputs.target_environment }}
-          cache-to: type=gha,scope=${{ inputs.target_environment }},mode=max
+          environment: ${{ inputs.target_environment }}
+          tag_suffix: ${{ inputs.target_environment == 'dev' && '-fallback' || '' }}
+      - name: Image to Release
+        id: release
+        env:
+          BUILT_EARLY: ${{ needs.image.outputs.image }}
+          BUILT_HERE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          image=${BUILT_EARLY:-$BUILT_HERE}
+          [[ "$image" =~ ^[a-z0-9-]+-docker\.pkg\.dev/$GCP_PROJECT_ID/selfbench/selfbench@sha256:[0-9a-f]{64}$ ]] \
+            || { echo "No image to release from this project's registry: '$image'" >&2; exit 1; }
+          echo "image=$image" >> "$GITHUB_OUTPUT"
       - name: Authenticate Terraform Plan
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -115,7 +155,7 @@ jobs:
       - name: Generate Terraform Plan
         id: plan
         env:
-          IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
           RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
@@ -145,13 +185,26 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+      # gcloud is already installed, and the step above points it at the apply identity
+      # (CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE), so dev skips reinstalling it. Prod keeps the
+      # reinstall until dev deploys have shown it is not needed.
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        if: inputs.target_environment == 'prod'
         with:
           # Terraform's Helm provider reaches the GKE worker cluster through it.
           install_components: gke-gcloud-auth-plugin
+      # Prod backs up before every release. Dev backs up only when the release brings migrations
+      # its database has not run; Cloud SQL's daily backups and point-in-time recovery cover the
+      # rest.
+      - name: Check for New Migrations
+        id: migrations
+        if: steps.plan.outputs.database_instance != '' && inputs.target_environment == 'dev'
+        run: bash infra/ci/new-migrations.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
       # Synchronous provider backup before the new API revision migrates the schema.
       - name: Back Up Database
-        if: steps.plan.outputs.database_instance != ''
+        if: steps.plan.outputs.database_instance != '' && steps.migrations.outputs.new != 'false'
         run: gcloud sql backups create --instance="$INSTANCE" --project="$GCP_PROJECT_ID" --quiet
         env:
           INSTANCE: ${{ steps.plan.outputs.database_instance }}
@@ -188,7 +241,7 @@ jobs:
           test "$status" = 404 || { echo "The results site exposes the app's API (HTTP $status)"; exit 1; }
       - name: Record Deployment
         env:
-          IMAGE: ${{ steps.coordinates.outputs.image_prefix }}@${{ steps.image.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
         run: |
           {
             echo "## Deployed ${TF_ENVIRONMENT}"

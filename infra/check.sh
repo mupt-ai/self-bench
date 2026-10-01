@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 export TF_IN_AUTOMATION=true
 terraform fmt -check -recursive infra/terraform
 bash -n infra/ci/verify-source.sh
+bash -n infra/ci/new-migrations.sh
 
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
