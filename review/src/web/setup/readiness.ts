@@ -55,7 +55,10 @@ export function setupPath(from?: string) {
   return from ? `/get-started?return=${encodeURIComponent(from)}` : "/get-started";
 }
 
-/** Where the setup page's finish links back to, and what it calls that page. */
+/**
+ * Where a `?return=` link on Get Started or Credentials goes back to, and what it calls that
+ * page: only a repository's Run or Batch Generation page, never an arbitrary URL.
+ */
 export function setupReturn(target: string | null): { to: string; label: string } | undefined {
   const match = target?.match(/^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/(run|batches)$/);
   if (!match || !target) return undefined;

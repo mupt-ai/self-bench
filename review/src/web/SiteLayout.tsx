@@ -67,12 +67,13 @@ export function SiteLayout({
     rememberOrg(next.login);
     setOrg(next);
     setMenuOpen(false);
-    if (
-      location.pathname !== "/" &&
-      location.pathname !== "/get-started" &&
-      !location.pathname.startsWith("/settings/")
-    )
-      void navigate("/");
+    const stays =
+      location.pathname === "/" ||
+      location.pathname === "/get-started" ||
+      location.pathname.startsWith("/settings/");
+    if (!stays) void navigate("/");
+    // A ?return= link names a repository of the org being left.
+    else if (location.search) void navigate(location.pathname, { replace: true });
   };
   return (
     <SetupStatusContext.Provider value={setup}>

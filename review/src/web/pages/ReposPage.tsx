@@ -108,8 +108,8 @@ export function ReposPage() {
               Finish Setup
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Connect a model and a sandbox before you generate tasks or run evaluations. Signing in
-              with ChatGPT or Claude takes about a minute.
+              Connect a model and a sandbox before you generate tasks or run evaluations. A ChatGPT
+              or Claude sign-in is the quickest way to connect a model.
             </p>
           </div>
           <Link className={buttonStyles.primary} to="/get-started">

@@ -7,7 +7,7 @@ import { CredentialEditor } from "../evaluation/CredentialEditor";
 import { isSandbox } from "../evaluation/credential-presentation";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
-import { useDocumentTitle } from "../session";
+import { useDocumentTitle, useSession } from "../session";
 import { Button, buttonStyles, Notice, PageFrame, PageHeader } from "../ui";
 import { covered, setupCoverage, setupReturn } from "./readiness";
 import { useSetupStatus } from "./SetupStatus";
@@ -24,6 +24,7 @@ export function SetupPage() {
   const { org } = useOrg();
   useDocumentTitle(`Get Started · ${org.login}`);
   const { credentials, canManage, error, refresh } = useSetupStatus();
+  const { session } = useSession();
   const [editing, setEditing] = React.useState<Editor>();
   const [search] = useSearchParams();
   const back = setupReturn(search.get("return"));
@@ -53,6 +54,12 @@ export function SetupPage() {
         <Notice className="mb-6">
           <p>Could not load credentials: {error}</p>
           <Button onClick={() => void refresh()}>Reload</Button>
+        </Notice>
+      )}
+      {session.status === "signed-in" && session.managedOffering && (
+        <Notice tone="info" className="mb-6">
+          This deployment also offers managed models and sandboxes, which Generate Batch and Run
+          list beside your credentials. This checklist covers your own credentials.
         </Notice>
       )}
       {!credentials && !error && <ListSkeleton label="Loading Setup" rows={3} />}
