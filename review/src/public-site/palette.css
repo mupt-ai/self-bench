@@ -40,6 +40,10 @@
   /* Colors for custom models listed one by one in the results chart, after the vendors'. */
   --custom-model-1: #5a6b86;
   --custom-model-2: #0e8f9e;
+  /* The results charts' frontier line and typefaces, after the dari.dev benchmark charts. */
+  --chart-frontier: hsl(153 60% 34% / 0.55);
+  --chart-sans: "Manrope", var(--sans);
+  --chart-mono: "DM Mono", var(--mono);
   --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -76,6 +80,7 @@
   --aura: color-mix(in srgb, rgb(var(--ripple)) 55%, var(--foreground));
   /* Dimmer than the water in dark mode: blue on near-black glares at full strength. */
   --scorch: color-mix(in srgb, rgb(var(--ripple)) 62%, var(--background));
+  --chart-frontier: rgb(142 230 189 / 0.45);
   --custom-model-1: #8d9bb3;
   --custom-model-2: #22b3c4;
 }

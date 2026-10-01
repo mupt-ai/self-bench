@@ -11,6 +11,8 @@ export interface BenchmarkPoint {
   id: string;
   runId: string;
   name: string;
+  /** The model's display name, without the reasoning level `name` adds. */
+  modelLabel: string;
   /** Who serves the model: a model provider, OpenRouter, or `custom` for a custom endpoint. */
   provider: string;
   /** The model as the run called it, "vendor/model", with no provider in front for a custom one. */
@@ -36,6 +38,7 @@ export function benchmarkPoints(runs: EvaluationRun[]): BenchmarkPoint[] {
           id: `${run.id}/${harness}`,
           runId: run.id,
           name: `${run.modelLabel} · ${run.thinking ?? "unrecorded effort"}`,
+          modelLabel: run.modelLabel,
           ...runModel(run),
           thinking: run.thinking ?? "default",
           ...(run.credentials ? { credentialId: run.credentials.modelCredentialId } : {}),

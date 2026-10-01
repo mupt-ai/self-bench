@@ -2,14 +2,15 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ParetoChart } from "./ParetoChart";
 
-test("single-harness charts label points by model name alone", () => {
+test("single-harness charts name points by model, with a recorded reasoning level as a note", () => {
   const html = renderToStaticMarkup(
     <ParetoChart
       points={[
         {
           id: "run-codex",
           runId: "run",
-          name: "Model",
+          name: "Model · high",
+          modelLabel: "Model",
           provider: "openai",
           model: "openai/gpt-5.5",
           thinking: "high",
@@ -22,7 +23,8 @@ test("single-harness charts label points by model name alone", () => {
         {
           id: "run-pi",
           runId: "run-2",
-          name: "Cheaper",
+          name: "Cheaper · unrecorded effort",
+          modelLabel: "Cheaper",
           provider: "custom",
           model: "my-llama-70b",
           thinking: "default",
@@ -37,8 +39,10 @@ test("single-harness charts label points by model name alone", () => {
     />,
   );
   expect(html).toContain(">Model Comparison</text>");
-  expect(html).toContain(">Model</text>");
-  expect(html).toContain(">Cheaper</text>");
+  expect(html).toContain('aria-label="Model (high). Cost per Task');
+  expect(html).toContain('aria-label="Cheaper. Cost per Task');
+  // Names show only for the point under the pointer.
+  expect(html).not.toContain(`class="pareto-point-label`);
 });
 
 test("runs are grouped by vendor, with custom endpoints last", () => {
@@ -49,6 +53,7 @@ test("runs are grouped by vendor, with custom endpoints last", () => {
           id: "run-custom",
           runId: "run",
           name: "my-llama-70b · high",
+          modelLabel: "my-llama-70b",
           provider: "custom",
           model: "my-llama-70b",
           thinking: "default",
@@ -62,6 +67,7 @@ test("runs are grouped by vendor, with custom endpoints last", () => {
           id: "run-glm",
           runId: "run-2",
           name: "GLM 5.3 · high",
+          modelLabel: "GLM 5.3",
           provider: "openrouter",
           model: "openrouter/z-ai/glm-5.3",
           thinking: "high",
@@ -84,6 +90,7 @@ test("a zero-cost run sits on the log axis's zero tick, and no tick reads over 1
     id,
     runId: id,
     name: id,
+    modelLabel: id,
     provider: "openai",
     model: "openai/gpt-5.5",
     thinking: "high",

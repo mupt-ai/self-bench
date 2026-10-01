@@ -3,25 +3,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PublicSetting } from "../contract";
 import {
   accuracyTick,
+  CHART_LOOK,
   dollars,
   harnessLabel,
   settingLabel,
   VENDOR_CHIPS,
   vendorPoint,
 } from "../format";
-
-/** The plot's colors and type, taken from the site theme so it follows light and dark. */
-const THEMED = [
-  "[--pareto-background:var(--card)]",
-  "[--pareto-tooltip-background:var(--background)]",
-  "[--pareto-foreground:var(--foreground)]",
-  "[--pareto-muted:var(--muted-fg)]",
-  "[--pareto-grid:var(--border)]",
-  "[--pareto-point:var(--faint)]",
-  "[--pareto-frontier:var(--foreground)]",
-  "[--pareto-frontier-line:var(--muted-fg)]",
-  "[--pareto-font-family:var(--mono)]",
-].join(" ");
 
 /**
  * Accuracy against cost per task, one point per setting, colored by model vendor. It tells the
@@ -65,7 +53,7 @@ export function ResultsChart({
   return (
     <div ref={frame}>
       <ParetoPlot
-        className={THEMED}
+        {...CHART_LOOK}
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
         showLegend={false}
@@ -80,9 +68,8 @@ export function ResultsChart({
         height={narrow ? 440 : 450}
         // Larger text on a narrow chart, which a phone shows at arm's length.
         textScale={narrow ? 1.35 : 1.25}
-        showPointLabels={narrow ? "frontier" : "all"}
+        // A highlighted vendor chip names its points, placed clear of each other.
         labelPlacement="auto"
-        showTooltip
         // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
         hoverRadius={36}
         // A chip per vendor above the plot, shared with the app's chart: hovering one fades the
@@ -93,6 +80,7 @@ export function ResultsChart({
         points={settings.map((setting) => ({
           id: setting.id,
           label: settingLabel(setting, settings),
+          ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
           x: setting.costPerTaskUsd,
           y: setting.accuracy,
           ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
