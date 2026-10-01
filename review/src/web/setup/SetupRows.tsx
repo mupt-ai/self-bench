@@ -84,10 +84,10 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
   return (
     <ul className="panel divide-y divide-border">
       {rows.map((row) => (
-        <li key={row.label} className="flex items-start gap-3 px-4 py-3.5">
+        <li key={row.label} className="flex items-center gap-3 px-4 py-3.5">
           <span
             className={cn(
-              "mt-0.5 flex size-5 shrink-0 items-center justify-center border",
+              "flex size-5 shrink-0 items-center justify-center border",
               row.ready
                 ? "border-success/40 bg-success/[0.08] text-success"
                 : "border-foreground/20",
