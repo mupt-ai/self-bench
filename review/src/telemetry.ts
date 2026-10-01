@@ -2,7 +2,8 @@
  * Sentry and PostHog in the browser, for the app and selfbench.dev. The server names them in a
  * `selfbench-telemetry` meta tag (src/api/telemetry-meta.ts); without one, as under the Vite dev
  * server or on a stack without keys, nothing loads. Each SDK is its own chunk, fetched only when
- * configured, so neither weighs on a page that does not use it.
+ * configured, so neither weighs on a page that does not use it. selfbench.dev fetches them only
+ * once the page has loaded (see startTelemetry).
  */
 interface TelemetryConfig {
   environment: string;
@@ -48,6 +49,11 @@ export function startTelemetry(site: "app" | "public-site"): void {
   if (!config) return;
   const release = config.release ? { release: config.release } : {};
   const app = site === "app";
+  // selfbench.dev is opened by visitors on phones and slow connections, and judged by search
+  // engines on how fast it draws: there, both SDKs wait until the page has loaded and the browser
+  // is free, so they never compete with drawing it. A visitor gone before then is not counted;
+  // errors are kept from the start. The app fetches them at once.
+  const fetchSdk = <T>(load: () => Promise<T>) => (app ? load() : pageSettled().then(load));
   if (config.sentryDsn) {
     const dsn = config.sentryDsn;
     sentryPending = true;
@@ -56,7 +62,7 @@ export function startTelemetry(site: "app" | "public-site"): void {
       reportError(event instanceof ErrorEvent ? (event.error ?? event.message) : event.reason);
     window.addEventListener("error", keep);
     window.addEventListener("unhandledrejection", keep);
-    void import("./sentry-browser").then((sdk) => {
+    void fetchSdk(() => import("./sentry-browser")).then((sdk) => {
       sdk.init({
         dsn,
         environment: config.environment,
@@ -76,7 +82,7 @@ export function startTelemetry(site: "app" | "public-site"): void {
   }
   if (config.posthogKey) {
     const key = config.posthogKey;
-    void import("posthog-js").then(({ default: client }) => {
+    void fetchSdk(() => import("posthog-js")).then(({ default: client }) => {
       client.init(key, {
         ...(config.posthogHost ? { api_host: config.posthogHost } : {}),
         defaults: "2026-08-30",
@@ -108,6 +114,21 @@ export function startTelemetry(site: "app" | "public-site"): void {
       applyPerson();
     });
   }
+}
+
+/** The longest the SDKs wait for the browser to be free, once the page has loaded. */
+const IDLE_WAIT_MS = 3000;
+
+/** Settles once the page has loaded and the browser has a moment free. */
+function pageSettled(): Promise<void> {
+  return new Promise((resolve) => {
+    const whenIdle = () =>
+      "requestIdleCallback" in window
+        ? requestIdleCallback(() => resolve(), { timeout: IDLE_WAIT_MS })
+        : setTimeout(resolve);
+    if (document.readyState === "complete") whenIdle();
+    else window.addEventListener("load", whenIdle, { once: true });
+  });
 }
 
 /** Reports an error a boundary caught; without Sentry, a no-op. */
