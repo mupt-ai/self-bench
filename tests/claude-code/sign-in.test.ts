@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { credentialSchema } from "../../src/db/credentials.js";
+import { credentialExecution } from "../../src/evaluation/execution.js";
 import { createClaudeLogins } from "../../src/harnesses/claude-code/login.js";
 import { evaluationServer } from "../support/evaluation-fixture.js";
 import { memoryVault } from "../support/evaluation-vault.js";
@@ -70,11 +75,13 @@ test("a pasted code is exchanged with the sealed verifier and saved once as a Cl
   await expect(expiring.complete(vault, 4, 7, expired.id, "good-code")).rejects.toThrow("expired");
 });
 
-test("HTTP Claude sign-in requires an admin and returns only saved metadata", async () => {
+test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by forced OAuth", async () => {
   const { state, logins } = anthropic();
-  const site = await evaluationServer(memoryVault(), { claudeLogins: logins });
+  const vault = memoryVault();
+  const site = await evaluationServer(vault, { claudeLogins: logins });
   const base = "/api/orgs/avyay/credentials/claude-login";
   const post = (body: object) => ({ method: "POST", body: JSON.stringify(body) });
+  const home = await mkdtemp(join(tmpdir(), "claude-auth-fixture-"));
   try {
     expect((await site.request(base, post({ name: "Claude" }), null)).status).toBe(401);
     expect((await site.request(base, post({ name: "Claude" }), 2)).status).toBe(404);
@@ -90,9 +97,50 @@ test("HTTP Claude sign-in requires an admin and returns only saved metadata", as
     expect(saved.status).toBe(200);
     expect(JSON.parse(body).status).toBe("saved");
     expect(body).not.toContain(token);
-    const list = await (await site.request("/api/orgs/avyay/credentials")).json();
-    expect(list.credentials.map((entry: { auth: string }) => entry.auth)).toEqual(["claude-login"]);
+
+    const sandbox = await (
+      await site.request(
+        "/api/orgs/avyay/credentials",
+        post({ name: "Sandbox", kind: "e2b", value: "fake-sandbox" }),
+      )
+    ).json();
+    const model = { catalogId: "claude-sonnet-5", credentialId: pending.id, harnesses: ["pi"] };
+    const draft = {
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      models: [model],
+      sandbox: "e2b",
+      sandboxCredentialId: sandbox.id,
+    };
+    const refused = await site.request(`${site.base}/comparisons`, post(draft));
+    expect(refused.status).toBe(400);
+    expect((await refused.json()).error).toContain("can only run the Claude Code harness");
+    draft.models = [{ ...model, harnesses: ["claude-code"] }];
+    expect((await site.request(`${site.base}/comparisons`, post(draft))).status).toBe(202);
+    const input = site.starts[0];
+    if (!input) throw new Error("Missing input");
+    expect(input.credentials?.auth).toBe("claude-login");
+    const execution = await credentialExecution(
+      input,
+      home,
+      { ANTHROPIC_API_KEY: "unused" },
+      vault,
+    );
+    expect(execution.child.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(execution.child.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
+    expect(execution.child.CLAUDE_FORCE_OAUTH).toBe("1");
+    expect(execution.secrets).toContain(token);
   } finally {
     await site.close();
+    await rm(home, { recursive: true, force: true });
   }
+});
+
+test("a Claude subscription token is only accepted as an Anthropic Claude sign-in", () => {
+  for (const [kind, auth, value] of [
+    ["openai", "claude-login", token],
+    ["anthropic", "api-key", token],
+    ["anthropic", "claude-login", "sk-ant-api03-key"],
+  ] as const)
+    expect(credentialSchema.safeParse({ name: "wrong", kind, auth, value }).success).toBe(false);
 });
