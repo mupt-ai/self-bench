@@ -109,6 +109,13 @@ RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh
 WORKDIR /app
 `;
 }
+/**
+ * Where image builds stage the files they copy in and remove. E2B starts each template build step
+ * in a freshly booted sandbox, which empties /tmp, so a file copied there is often gone by the
+ * step that reads it.
+ */
+export const BUILD_INPUTS = "/opt/selfbench-build";
+
 function baseDockerfile(task: TaskDefinition): string {
   const environmentVariables = Object.entries(task.environment.environmentVariables)
     .sort(([left], [right]) => left.localeCompare(right))
@@ -117,21 +124,21 @@ function baseDockerfile(task: TaskDefinition): string {
   return `FROM ${task.environment.baseImage}
 USER root
 ENTRYPOINT []
-COPY root-setup.sh /tmp/selfbench-root-setup.sh
-RUN /bin/sh /tmp/selfbench-root-setup.sh \\
+COPY root-setup.sh ${BUILD_INPUTS}/root-setup.sh
+RUN /bin/sh ${BUILD_INPUTS}/root-setup.sh \\
     && command -v bash >/dev/null \\
     && command -v git >/dev/null \\
     && command -v pkill >/dev/null \\
     && command -v runuser >/dev/null \\
     && command -v tar >/dev/null \\
     && command -v useradd >/dev/null \\
-    && rm /tmp/selfbench-root-setup.sh
+    && rm ${BUILD_INPUTS}/root-setup.sh
 ${environmentVariables}
 COPY setup.sh /opt/selfbench-environment/
-COPY repo.tar.gz /tmp/repo.tar.gz
+COPY repo.tar.gz ${BUILD_INPUTS}/repo.tar.gz
 RUN mkdir -p /app \\
-    && tar -xzf /tmp/repo.tar.gz -C /app \\
-    && rm /tmp/repo.tar.gz \\
+    && tar -xzf ${BUILD_INPUTS}/repo.tar.gz -C /app \\
+    && rm ${BUILD_INPUTS}/repo.tar.gz \\
     && git -C /app init -q \\
     && git -C /app config user.email selfbench@local \\
     && git -C /app config user.name selfbench \\
@@ -145,13 +152,13 @@ function goldDependencySetupLayer(task: TaskDefinition, dependencySetupPatch: st
   // Only the manifest paths the gold patch touched are reset to the base snapshot; setup outputs
   // that are not gitignored must survive, exactly as they do in the agent image.
   const manifestPaths = patchPaths(dependencySetupPatch).map(shellQuote).join(" ");
-  return `COPY dependency-setup.patch /tmp/selfbench-dependency-setup.patch
-RUN git -C /app apply --binary --whitespace=nowarn /tmp/selfbench-dependency-setup.patch \\
+  return `COPY dependency-setup.patch ${BUILD_INPUTS}/dependency-setup.patch
+RUN git -C /app apply --binary --whitespace=nowarn ${BUILD_INPUTS}/dependency-setup.patch \\
     && cd ${shellQuote(`/app/${task.workdir}`)} \\
     && /opt/selfbench-environment/setup.sh \\
     && git -C /app reset --hard -q HEAD \\
     && git -C /app clean -fdq -- ${manifestPaths} \\
-    && rm /tmp/selfbench-dependency-setup.patch
+    && rm ${BUILD_INPUTS}/dependency-setup.patch
 `;
 }
 export function environmentContextFiles(directory: string, task: TaskDefinition): Promise<void>[] {

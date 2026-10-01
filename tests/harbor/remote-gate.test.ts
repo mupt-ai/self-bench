@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { handleSnapshotRoute } from "../../src/api/routes/snapshots.js";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
 import { fetchSnapshotInBuild, remoteGate } from "../../src/generation/pipeline/remote-gate.js";
+import { BUILD_INPUTS } from "../../src/generation/task/render.js";
 import { runCommand } from "../../src/lib/process.js";
 import { signSandboxGrant } from "../../src/sandbox/callback-grant.js";
 import { GATE_TASK_FILE, SNAPSHOT_FILE, splitGateBundle } from "../../src/sandbox/gate-bundle.js";
@@ -111,10 +112,14 @@ test("the compiler splits the task from its repository snapshot", async () => {
 
 test("both gate images fetch the snapshot by digest instead of copying it", async () => {
   const task = await temporary();
-  const dockerfile = "FROM base\nCOPY repo.tar.gz /tmp/repo.tar.gz\nRUN tar -xzf x\n";
-  for (const context of ["environment", "tests"]) {
+  // Tasks compiled before BUILD_INPUTS staged the snapshot in /tmp; both are fetched in place.
+  const destinations = { environment: `${BUILD_INPUTS}/repo.tar.gz`, tests: "/tmp/repo.tar.gz" };
+  for (const [context, destination] of Object.entries(destinations)) {
     await mkdir(join(task, context));
-    await writeFile(join(task, context, "Dockerfile"), dockerfile);
+    await writeFile(
+      join(task, context, "Dockerfile"),
+      `FROM base\nCOPY repo.tar.gz ${destination}\nRUN tar -xzf x\n`,
+    );
   }
   const remote = {
     bundle: ref("gate"),
@@ -124,9 +129,9 @@ test("both gate images fetch the snapshot by digest instead of copying it", asyn
 
   await fetchSnapshotInBuild(task, remote);
 
-  for (const context of ["environment", "tests"]) {
+  for (const [context, destination] of Object.entries(destinations)) {
     expect(await readFile(join(task, context, "Dockerfile"), "utf8")).toBe(
-      "FROM base\nADD --checksum=sha256:f0 https://api/s/abc.def /tmp/repo.tar.gz\nRUN tar -xzf x\n",
+      `FROM base\nADD --checksum=sha256:f0 https://api/s/abc.def ${destination}\nRUN tar -xzf x\n`,
     );
   }
   await expect(fetchSnapshotInBuild(task, remote)).rejects.toThrow("snapshot");

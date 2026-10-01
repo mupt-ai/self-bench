@@ -41,7 +41,8 @@ export function remoteGate(
   };
 }
 
-const SNAPSHOT_COPY = "COPY repo.tar.gz /tmp/repo.tar.gz";
+// Tasks compiled before BUILD_INPUTS copied the snapshot into /tmp.
+const SNAPSHOT_COPY = /^COPY repo\.tar\.gz (\S+\/repo\.tar\.gz)$/;
 
 /**
  * Points both image builds (the agent's `environment/` and the separate verifier's `tests/`) at
@@ -51,13 +52,15 @@ export async function fetchSnapshotInBuild(
   taskDirectory: string,
   remote: RemoteGate,
 ): Promise<void> {
-  const fetch = `ADD --checksum=sha256:${remote.snapshotSha256} ${remote.snapshotUrl} /tmp/repo.tar.gz`;
   for (const context of ["environment", "tests"]) {
     const dockerfile = join(taskDirectory, context, "Dockerfile");
     const lines = (await readFile(dockerfile, "utf8")).split("\n");
-    const index = lines.indexOf(SNAPSHOT_COPY);
-    if (index < 0) throw new Error(`${context}/Dockerfile does not copy the repository snapshot`);
-    lines[index] = fetch;
+    const index = lines.findIndex((line) => SNAPSHOT_COPY.test(line));
+    const destination = lines[index]?.match(SNAPSHOT_COPY)?.[1];
+    if (!destination)
+      throw new Error(`${context}/Dockerfile does not copy the repository snapshot`);
+    lines[index] =
+      `ADD --checksum=sha256:${remote.snapshotSha256} ${remote.snapshotUrl} ${destination}`;
     await writeFile(dockerfile, lines.join("\n"));
   }
 }
