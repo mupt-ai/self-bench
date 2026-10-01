@@ -30,6 +30,7 @@ sys.modules[pi.__name__] = pi
 connection = types.ModuleType("harbor.agents.model_connection")
 connection.ModelConnectionSpec = lambda **kwargs: kwargs
 sys.modules[connection.__name__] = connection
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -53,6 +54,55 @@ asyncio.run(check())
 `,
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);
+  expect(result.exitCode).toBe(0);
+});
+
+test("Claude Code installs into an agent-owned cache without Node on non-Alpine images", async () => {
+  expect(
+    solverArguments("task", "jobs", "claude-code", "anthropic/claude-opus-5-5", "modal"),
+  ).toContain("harbor_gateway:SelfBenchClaudeCode");
+  const result = await runCommand("python3", [
+    "-c",
+    `import asyncio, importlib.util, sys, types
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
+sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object)
+sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=dict)
+module = types.ModuleType("harbor.agents.installed.claude_code")
+class ClaudeCode:
+    def __init__(self, manager):
+        self.manager, self.root, self.installed, self.ensured = manager, [], False, None
+    async def exec_as_root(self, environment, command):
+        self.root.append(command)
+    async def _get_system_package_manager(self, environment):
+        return self.manager
+    async def install(self, environment):
+        self.installed = True
+    async def ensure_system_dependencies(self, environment, dependencies):
+        self.ensured = dependencies
+module.ClaudeCode = ClaudeCode
+sys.modules[module.__name__] = module
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+DEPENDENCIES = ("curl", "bash", "nodejs", "npm", "procps")
+async def check():
+    agent = adapter.SelfBenchClaudeCode("apt-get")
+    await agent.install(types.SimpleNamespace(default_user="agent"))
+    assert agent.installed
+    assert agent.root == ['home="$(getent passwd agent | cut -d: -f6)"; if [ -n "$home" ]; then mkdir -p "$home/.cache" && chown agent "$home/.cache"; fi']
+    await agent.ensure_system_dependencies(None, DEPENDENCIES)
+    assert agent.ensured == ("curl", "bash", "procps")
+    for user in ("root", 0, None):
+        agent = adapter.SelfBenchClaudeCode("apk")
+        await agent.install(types.SimpleNamespace(default_user=user))
+        assert agent.installed and agent.root == []
+    await agent.ensure_system_dependencies(None, DEPENDENCIES)
+    assert agent.ensured == DEPENDENCIES
+asyncio.run(check())
+`,
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
+  ]);
+  expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
 

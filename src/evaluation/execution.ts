@@ -137,6 +137,7 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 
 /** The Harbor agent for a harness over the selected connection (`provider`, when there is one). */
 export function solverAgent(harness: Harness, provider?: string): string {
+  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
   if (harness === "pi") return isGateway(provider) ? gateways[provider].harborPi : harness;
   if (harness !== "codex") return harness;
   // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's
