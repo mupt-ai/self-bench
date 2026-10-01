@@ -21,6 +21,7 @@ import type { GenerationReference } from "../generation/settings/settings.js";
 import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
 import { projectRoot } from "../lib/project-paths.js";
 import type { AuthConfig } from "./auth/config.js";
+import { createIndexNow } from "./indexnow.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { createResultsSite, type ResultsSite } from "./results-site.js";
 import { type ApiKeyRoutes, createApiKeyRoutes } from "./routes/api-keys.js";
@@ -79,6 +80,10 @@ export async function openSite(
   const releases = createReleaseStore(database.db);
   // Unset means no public results site: no host serves it and nothing links to it.
   const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
+  // Only prod's site may be indexed; dev's, and any local run, never tells a search engine.
+  const indexable = process.env.SELFBENCH_RESULTS_SITE_INDEX === "true";
+  const indexNow =
+    resultsSiteUrl && indexable ? createIndexNow({ siteUrl: resultsSiteUrl }) : undefined;
   // Anonymous reads share this server with the app: one scraper must not slow the app down.
   const limiter = createRateLimiter({
     perMinute: 300,
@@ -135,7 +140,11 @@ export async function openSite(
       publicUrl,
       githubApiUrl: auth.githubApiUrl,
       resultsSiteUrl,
-      onPublicChange: () => publicReleases.refresh(),
+      onPublicChange: ({ fullName, publisher }) => {
+        publicReleases.refresh();
+        // The repository's page, the publisher's line, and the home page's directory.
+        void indexNow?.changed(["/", `/${fullName}`, `/${fullName}/${publisher}`]);
+      },
     }),
     publicReleases,
     ...(resultsSiteUrl
@@ -143,7 +152,7 @@ export async function openSite(
           resultsSite: createResultsSite({
             siteUrl: resultsSiteUrl,
             appUrl: publicUrl,
-            indexable: process.env.SELFBENCH_RESULTS_SITE_INDEX === "true",
+            indexable,
             root: `${projectRoot(import.meta.url)}/dist/public-site`,
             publicRoutes: publicReleases,
             limiter,
