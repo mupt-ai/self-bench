@@ -1,6 +1,7 @@
-import { type GatewayId, gatewayIds, gateways, setGatewayListing } from "./index.js";
+import { type GatewayId, gatewayIds, gateways, listedModels, setGatewayListing } from "./index.js";
 
 const REFRESH_MS = 60 * 60 * 1000;
+const RETRY_MS = 60 * 1000;
 
 /**
  * Loads a gateway's models and list prices. A failed load, or one with no prices or no models a
@@ -21,22 +22,38 @@ export async function refreshGateway(
 
 /**
  * Loads every gateway now and hourly. Each fails on its own: the failure is logged and that
- * gateway's last good listing stays in use.
+ * gateway's last good listing stays in use. A gateway that has never loaded offers no models, so
+ * it retries every minute until it loads rather than waiting for the next hourly refresh.
  */
 export function keepGatewaysFresh(): { ready: Promise<void>; stop(): void } {
+  const retries = new Map<GatewayId, ReturnType<typeof setTimeout>>();
+  let stopped = false;
+  const load = (gateway: GatewayId): Promise<void> =>
+    refreshGateway(gateway).catch((error: unknown) => {
+      console.warn(
+        `${gateways[gateway].label} catalog refresh failed; keeping the current catalog`,
+        error,
+      );
+      if (stopped || retries.has(gateway) || listedModels(gateway).length) return;
+      const retry = setTimeout(() => {
+        retries.delete(gateway);
+        void load(gateway);
+      }, RETRY_MS);
+      retry.unref();
+      retries.set(gateway, retry);
+    });
   const refresh = async () => {
-    await Promise.all(
-      gatewayIds.map((gateway) =>
-        refreshGateway(gateway).catch((error: unknown) =>
-          console.warn(
-            `${gateways[gateway].label} catalog refresh failed; keeping the current catalog`,
-            error,
-          ),
-        ),
-      ),
-    );
+    await Promise.all(gatewayIds.map(load));
   };
   const timer = setInterval(refresh, REFRESH_MS);
   timer.unref();
-  return { ready: refresh(), stop: () => clearInterval(timer) };
+  return {
+    ready: refresh(),
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+      for (const retry of retries.values()) clearTimeout(retry);
+      retries.clear();
+    },
+  };
 }

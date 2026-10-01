@@ -26,9 +26,10 @@ function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
 /** Integer rates frozen from the current policy and published catalog/E2B figures. */
 export function rateSnapshotSpec(policy: BillingPolicy): RateSnapshotSpec {
   const modelRates: Record<string, BillingModelRates> = {};
-  for (const model of evaluationCatalog()) {
+  const catalog = evaluationCatalog();
+  for (const model of catalog) {
     if (!routeFor(model, "openrouter")) continue;
-    const rates = generationModelPricing(model.id);
+    const rates = generationModelPricing(model.id, catalog);
     if (!rates) continue;
     modelRates[model.id] = {
       input: usdToUnits(rates.input, policy.unitScale, policy.markupBps),

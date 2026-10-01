@@ -32,7 +32,7 @@ export function generationCredentialSupportsModel(
   if (credential.auth === "codex-login")
     return credential.kind === "openai" && chatgptSignInModels.has(id);
   if (credential.auth !== "api-key") return false;
-  // Native provider routes are inferred from the vendor namespace; gateway routes require a listing.
+  // Native routes exist for curated vendor models only; gateway routes require a listing.
   return generationModelCredentialKinds(id, catalog).includes(credential.kind);
 }
 
@@ -70,8 +70,8 @@ export function generationModelRoute(
 }
 
 /** Reference rates for billing and cost estimates: generation runs through OpenRouter. */
-export function generationModelPricing(id: string) {
-  const info = generationModelInfo(id);
+export function generationModelPricing(id: string, catalog = evaluationCatalog()) {
+  const info = generationModelInfo(id, catalog);
   const reference = findModel(id);
   const routed = info?.gateways?.openrouter;
   return routed

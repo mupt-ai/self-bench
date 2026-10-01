@@ -71,17 +71,13 @@ export function evaluationCatalog(): CatalogModel[] {
       const id = catalogModelId(gateway, entry.id);
       const known = merged.get(id) ?? curated.get(id);
       const model: CatalogModel = {
+        // Only curated models run on a vendor's own key: a gateway's spelling is not the vendor's
+        // ("anthropic/claude-sonnet-4.5" is claude-sonnet-4-5 on Anthropic) and some of its
+        // models (gpt-oss, o3-mini-high, *-fast) exist on no vendor API at all.
         ...(known ?? {
           id,
-          provider: id.startsWith("openai/")
-            ? "openai"
-            : id.startsWith("anthropic/")
-              ? "anthropic"
-              : gateway,
-          model:
-            id.startsWith("openai/") || id.startsWith("anthropic/")
-              ? id.slice(id.indexOf("/") + 1)
-              : entry.id,
+          provider: gateway,
+          model: entry.id,
           label: entry.label,
           harnesses: ["pi"],
           source: gateways[gateway].modelPage(entry.id),

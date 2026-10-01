@@ -179,6 +179,21 @@ test("a gateway-only model has only its listed gateway route", () => {
   expect(routeFor(model, "openrouter")).toBeUndefined();
 });
 
+test("uncurated OpenAI and Anthropic listings run only through the gateways that list them", () => {
+  // Anthropic's API spells this claude-sonnet-4-5, and OpenAI serves no gpt-oss model.
+  listModels("openrouter", [
+    { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
+    { id: "openai/gpt-oss-120b", label: "gpt-oss-120b" },
+  ]);
+  for (const id of ["anthropic/claude-sonnet-4.5", "openai/gpt-oss-120b"]) {
+    const model = evaluationCatalog().find((entry) => entry.id === id);
+    if (!model) throw new Error(`Missing ${id}`);
+    expect(modelRoutes(model).map((route) => [route.provider, route.model])).toEqual([
+      ["openrouter", id],
+    ]);
+  }
+});
+
 test("credential routes preserve exact model IDs, provider pricing and harness support", () => {
   listModels("openrouter", [
     { id: "openai/gpt-6-sol", label: "GPT-6 Sol" },
