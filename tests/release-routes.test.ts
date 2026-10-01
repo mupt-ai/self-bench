@@ -54,7 +54,7 @@ test("a first release is published, and the public API serves only its payload",
     expect(text).not.toContain(hidden);
   const page = await server.request("/api/public/repos/VERCEL/Next.js", {}, null);
   expect(page.status).toBe(200);
-  expect(page.headers.get("cache-control")).toBe("public, max-age=60");
+  expect(page.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
 });
 
 test("releasing the same results again writes no row", async () => {

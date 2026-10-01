@@ -10,10 +10,13 @@ import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
 /** How long the snapshot of released lines is served before the next read of the table. */
 const SNAPSHOT_MS = 5_000;
 /**
- * The same for everyone, so the CDN and browsers may keep it a minute. Only a successful
- * read is cached: a miss must never hide a repository's first release.
+ * The same for everyone. The CDN may keep it 10 seconds, and browsers check it on every read, a
+ * bodyless 304 while it is unchanged, so a release shows within about 15 seconds wherever it is
+ * read. With `s-maxage` the CDN never hands out an expired copy, neither while it refreshes one
+ * nor while the API is down. Only a successful read is cached: a miss must never hide a
+ * repository's first release.
  */
-const CACHED = "public, max-age=60";
+const CACHED = "public, max-age=0, s-maxage=10";
 const JSON_TYPE = "application/json; charset=utf-8";
 
 /**
