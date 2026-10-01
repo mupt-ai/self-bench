@@ -10,9 +10,7 @@ export const MAX_CANDIDATES_PER_RUN = 300;
 export const MAX_DISCOVERY_SHARDS = 8;
 export const DISCOVERY_POOL_MULTIPLIER = 1.5;
 
-/** Batch reconciler: batches swept at once, each holding one pooled DB connection. */
-export const BATCH_SWEEP_CONCURRENCY = 4;
-/** Batch reconciler: Temporal RPCs one batch sweep keeps in flight. */
+/** Batch status: Temporal RPCs one read of a running batch keeps in flight. */
 export const BATCH_RPC_CONCURRENCY = 8;
-/** Batch reconciler: a running workflow is re-observed at most this often (queries are billed). */
+/** Batch status: how long a candidate's queried progress is reused; queries are billed. */
 export const BATCH_OBSERVE_INTERVAL_MS = 30_000;

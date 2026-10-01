@@ -13,9 +13,9 @@ SelfBench turns merged pull requests into Harbor tasks. This page covers the pip
 
 ## Pipeline
 
-A batch is a Postgres record that the API advances every five seconds (`src/generation/batches/`), not a Temporal parent workflow.
+A batch is one `selfBenchBatchWorkflow` (`src/generation/batches/`), with each discovery shard and each candidate as its child workflow, the same shape as an evaluation. Each step writes the batch's Postgres record, which the batch page reads; a running child's progress and cost are read from Temporal. Cancelling the batch cancels every child and waits for each to stop.
 
-1. **Provenance.** The API pins the default branch's head and lists up to 500 merged PRs with the submitter's GitHub token. Each PR from a non-bot author that clears the size gate becomes a provenance record: its exact title and body, with common credential forms redacted. No model writes request text.
+1. **Provenance.** The API pins the default branch's head; the batch workflow then lists up to 500 merged PRs with the submitter's GitHub token. Each PR from a non-bot author that clears the size gate becomes a provenance record: its exact title and body, with common credential forms redacted. No model writes request text.
 2. **Discovery.** PRs are split into shards, each one `selfBenchDiscoveryShardWorkflow`. Each shard sees a pool of about 1.5× the requested count in PRs (at least 25) and proposes up to its share of each tier's count. Candidates are deduplicated by source PR.
 3. **Authoring and review.** Every candidate runs as one `selfBenchAuthorWorkflow`. Nothing is backfilled: a rejected candidate is a rejection in the batch status, and a batch can accept more tasks than it asked for.
 4. **Export.** Once every candidate settles, accepted tasks are packed into the batch export.

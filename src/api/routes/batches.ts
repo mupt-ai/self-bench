@@ -20,6 +20,7 @@ import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
   GENERATION_REQUIRED,
+  saveGenerationGitHubToken,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
@@ -136,11 +137,14 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         });
         // Persist ownership BEFORE starting paid work. A failed/ambiguous start remains visible
         // and recoverable under this repo rather than leaving an unowned running workflow.
+        // The batch workflow's preparation reads the submitter's token from the vault.
         if (generation && options.vault)
           await saveGenerationRecords(options.vault.records, input.runId, generation, token);
+        else if (options.vault)
+          await saveGenerationGitHubToken(options.vault.records, input.runId, token);
         const run = await runs.attachRun(repo.id, input.runId, user.id);
         try {
-          await options.start(input, token);
+          await options.start(input);
         } catch {
           sendJson(response, 503, {
             runId: input.runId,

@@ -1,10 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import {
-  activityDetail,
-  heartbeatCost,
-  overlayCandidateActivity,
-} from "../../src/generation/batches/activity.js";
+import { defaultPayloadConverter } from "@temporalio/client";
+import { activityDetail, heartbeatCost } from "../../src/generation/batches/activity.js";
 
 test("heartbeat costs decode valid Temporal payloads and reject unsafe values", () => {
   const payload = defaultPayloadConverter.toPayload({
@@ -39,68 +35,6 @@ test("heartbeat costs decode valid Temporal payloads and reject unsafe values", 
   expect(heartbeatCost({ metadata: {}, data: new Uint8Array([1, 2, 3]) })).toBeUndefined();
 });
 
-test("a persisted batch status gains the same activity overlay as a live one", async () => {
-  const described: string[] = [];
-  const client = {
-    options: { namespace: "default" },
-    connection: {
-      withDeadline: async (_deadline: number, action: () => Promise<unknown>) => action(),
-    },
-    workflowService: {
-      describeWorkflowExecution: async ({ execution }: { execution: { workflowId: string } }) => {
-        described.push(execution.workflowId);
-        return {
-          pendingActivities: [
-            {
-              state: 1,
-              attempt: 3,
-              maximumAttempts: 4,
-              activityType: { name: "runAuthoringTurn" },
-              lastFailure: {
-                message:
-                  "authoring round 1: the model provider failed mid-session (Codex error: The usage limit has been reached) before a terminal tool call; log: gs://bucket/runs/batch-one/authoring/one/round-1/attempt-2/sandbox.log",
-              },
-              nextAttemptScheduleTime: { seconds: 1_789_843_794, nanos: 500_000_000 },
-            },
-          ],
-        };
-      },
-    },
-  } as unknown as Client;
-  const status = await overlayCandidateActivity(client, {
-    runId: "batch-one",
-    phase: "authoring",
-    tasks: [
-      { candidateId: "one", taskId: "one", difficulty: "easy", status: "authoring" },
-      { candidateId: "done", taskId: "done", difficulty: "easy", status: "accepted" },
-    ],
-  });
-  expect(described).toEqual(["batch-one/candidate/one"]);
-  expect(status.activity).toEqual({
-    one: {
-      state: "queued",
-      activityType: "runAuthoringTurn",
-      attempt: 3,
-      maximumAttempts: 4,
-      lastFailure:
-        "authoring round 1: the model provider failed mid-session (Codex error: The usage limit has been reached) before a terminal tool call",
-      nextAttemptAt: "2026-09-19T18:49:54.500Z",
-    },
-  });
-});
-
-test("terminal batches are returned without reading candidate workflows", async () => {
-  const client = {
-    workflowService: {
-      describeWorkflowExecution: async () => {
-        throw new Error("must not describe");
-      },
-    },
-  } as unknown as Client;
-  const status = { runId: "batch-one", phase: "complete" as const, tasks: [] };
-  expect(await overlayCandidateActivity(client, status)).toBe(status);
-});
-
 test("the started attempt wins over a scheduled one and Long timestamps convert", () => {
   const detail = activityDetail([
     { state: 1, attempt: 2 },
@@ -125,24 +59,4 @@ test("the last failure drops partial-log references and blank messages", () => {
     lastFailure: "sandbox died",
   });
   expect(failed("   ")).toEqual({ state: "running" });
-});
-
-test("a Temporal deadline returns unknown activity instead of hanging the poll", async () => {
-  const client = {
-    options: { namespace: "default" },
-    connection: {
-      withDeadline: async () => {
-        throw new Error("DEADLINE_EXCEEDED");
-      },
-    },
-    workflowService: {
-      describeWorkflowExecution: async () => await new Promise(() => undefined),
-    },
-  } as unknown as Client;
-  const status = await overlayCandidateActivity(client, {
-    runId: "batch-one",
-    phase: "authoring",
-    tasks: [{ candidateId: "one", taskId: "one", difficulty: "easy", status: "authoring" }],
-  });
-  expect(status.activity).toEqual({ one: { state: "unknown" } });
 });
