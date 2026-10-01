@@ -1,9 +1,8 @@
 import { HOSTED_EXECUTION_BACKENDS } from "../../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { hostedSandboxes } from "../../../../src/evaluation/catalog";
-import { generationModels } from "../../../../src/generation/settings/models";
+import { gatewayIds } from "../../../../src/gateways/index";
 import { isSandbox } from "../evaluation/credential-presentation";
-import { modelCredentialMatches } from "../generation-defaults";
 
 /** Whether a workflow has a model and a sandbox to run on. */
 export interface Coverage {
@@ -12,6 +11,9 @@ export interface Coverage {
 }
 
 type Credential = Pick<CredentialInfo, "kind" | "auth">;
+
+/** Keys Pi can author with: a native vendor's or a gateway's. Live model lists load on the server. */
+const generationKeyKinds: readonly string[] = ["openai", "anthropic", ...gatewayIds];
 
 /**
  * What an organization's credentials let it run, by the same rules the generation and
@@ -29,7 +31,9 @@ export function setupCoverage(
       model:
         !!managed.models ||
         has((credential) =>
-          generationModels.some((model) => modelCredentialMatches(credential, model, model)),
+          credential.auth === "codex-login"
+            ? credential.kind === "openai"
+            : credential.auth === "api-key" && generationKeyKinds.includes(credential.kind),
         ),
       sandbox:
         !!managed.sandbox ||
