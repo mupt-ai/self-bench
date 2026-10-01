@@ -264,21 +264,21 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
     const draft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
-      models: [{ catalogId: "gpt-6-sol", credentialId: model.id, harnesses: ["pi"] }],
+      models: [{ catalogId: "gpt-6.1-sol", credentialId: model.id, harnesses: ["pi"] }],
       sandbox: "e2b",
       sandboxCredentialId: sandbox.id,
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     draft.models[0] = {
       ...draft.models[0],
-      catalogId: "gpt-6-sol",
+      catalogId: "gpt-6.1-sol",
       credentialId: model.id,
       harnesses: ["codex"],
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing input");
-    expect(input.pricing).toMatchObject({ input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 });
+    expect(input.pricing).toMatchObject({ input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 });
     // The sign-in type rides with the run so its cost can account for unreported cache writes.
     expect(input.credentials?.auth).toBe("codex-login");
     const execution = await credentialExecution(

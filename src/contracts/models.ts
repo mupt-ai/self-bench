@@ -54,12 +54,21 @@ export interface Model {
   readonly generation?: boolean;
 }
 
-export const catalogVersion = "2026-09-23.2";
+export const catalogVersion = "2026-10-01.1";
 const RATES_AS_OF = "2026-09-23";
 const openAiThinking = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 const vendorThinking = ["low", "medium", "high", "xhigh", "max"] as const;
 
 export const models: readonly Model[] = [
+  {
+    id: "gpt-6.1-sol",
+    label: "GPT-6.1 Sol",
+    vendor: "openai",
+    openRouter: "openai/gpt-6.1-sol",
+    source: "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    rates: { native: [2, 10, 0.1, 2.5], gateway: [2, 10, 0.1, 2.5] },
+    thinking: vendorThinking,
+  },
   {
     id: "gpt-6-astra",
     label: "GPT-6 Astra",
@@ -108,6 +117,15 @@ export const models: readonly Model[] = [
     rates: { native: [4, 20, 0.2, 5], gateway: [4, 20, 0.2, 5] },
     thinking: vendorThinking,
     generation: true,
+  },
+  {
+    id: "claude-sonnet-5-5",
+    label: "Claude Sonnet 5.5",
+    vendor: "anthropic",
+    openRouter: "anthropic/claude-sonnet-5.5",
+    source: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
+    thinking: vendorThinking,
   },
   {
     id: "claude-sonnet-5",

@@ -186,6 +186,14 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
   ]);
   expect(thinkingOptions(sol, ["codex"])).toContain("max");
   expect(thinkingOptions(sol, ["codex", "pi"])).not.toContain("max");
+
+  const sonnet = catalog.find((model) => model.id === "claude-sonnet-5-5");
+  if (!sonnet) throw new Error("Missing Sonnet 5.5");
+  expect(modelRoutes(sonnet).map((route) => [route.provider, route.pricing?.input])).toEqual([
+    ["anthropic", 2],
+    ["openrouter", 2],
+    ["vercel-ai-gateway", 2],
+  ]);
 });
 
 test("thinking levels reach the actual Harbor harness flags without changing models", () => {
