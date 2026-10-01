@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { AGENT_MINUTES, isAgentMinutes } from "../../contracts/agent-limit.js";
-import type { ConnectedRepo, RepoSettings, RepoStore } from "../../db/repos.js";
+import { z } from "zod";
+import { AGENT_MINUTES } from "../../contracts/agent-limit.js";
+import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { User, UserStore } from "../../db/users.js";
 import { track } from "../../lib/telemetry/posthog.js";
-import { isRecord } from "../../lib/util.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -14,6 +14,12 @@ const ORG = "([A-Za-z0-9_.-]+)";
 const REPO = "([A-Za-z0-9_.-]+)";
 const listRoute = new RegExp(`^/api/orgs/${ORG}/repos$`);
 const itemRoute = new RegExp(`^/api/orgs/${ORG}/repos/${REPO}/${REPO}$`);
+const settingsSchema = z
+  .strictObject({
+    continuous: z.boolean().optional(),
+    agentMinutes: z.int().min(AGENT_MINUTES.min).max(AGENT_MINUTES.max).optional(),
+  })
+  .refine((settings) => Object.keys(settings).length > 0);
 
 export interface ConnectedRepoRoutesOptions {
   readonly config: Pick<AuthConfig, "githubApiUrl">;
@@ -113,14 +119,16 @@ export function createConnectedRepoRoutes(
         return true;
       }
       if (item?.[2] && item[3] && request.method === "PATCH") {
-        const settings = repoSettings(
+        const settings = settingsSchema.safeParse(
           JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}"),
         );
-        if (typeof settings === "string") {
-          sendJson(response, 400, { error: settings });
+        if (!settings.success) {
+          sendJson(response, 400, {
+            error: `Set continuous (true or false) or agentMinutes (${AGENT_MINUTES.min}–${AGENT_MINUTES.max})`,
+          });
           return true;
         }
-        const repo = await repos.update(tenant.id, `${item[2]}/${item[3]}`, settings);
+        const repo = await repos.update(tenant.id, `${item[2]}/${item[3]}`, settings.data);
         if (!repo) {
           sendJson(response, 404, { error: "not connected" });
           return true;
@@ -139,22 +147,6 @@ export function createConnectedRepoRoutes(
       }
       return false;
     },
-  };
-}
-
-/** The settings a PATCH changes, or why the body is refused. */
-function repoSettings(body: unknown): RepoSettings | string {
-  if (!isRecord(body)) return "body must be an object";
-  const { continuous, agentMinutes, ...rest } = body;
-  if (Object.keys(rest).length > 0) return `unknown settings: ${Object.keys(rest).join(", ")}`;
-  if (continuous === undefined && agentMinutes === undefined) return "no settings to change";
-  if (continuous !== undefined && typeof continuous !== "boolean")
-    return "continuous must be a boolean";
-  if (agentMinutes !== undefined && !isAgentMinutes(agentMinutes))
-    return `agentMinutes must be a whole number from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max}`;
-  return {
-    ...(continuous === undefined ? {} : { continuous }),
-    ...(agentMinutes === undefined ? {} : { agentMinutes }),
   };
 }
 

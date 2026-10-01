@@ -18,12 +18,6 @@ export interface ConnectedRepo {
   readonly connectedAt: string;
 }
 
-/** The settings a repo's owners change after connecting it. */
-export interface RepoSettings {
-  readonly continuous?: boolean;
-  readonly agentMinutes?: number;
-}
-
 interface ConnectRepoInput {
   readonly orgId: number;
   readonly githubId: number;
@@ -45,7 +39,7 @@ export interface RepoStore {
   update(
     orgId: number,
     fullName: string,
-    settings: RepoSettings,
+    settings: { continuous?: boolean | undefined; agentMinutes?: number | undefined },
   ): Promise<ConnectedRepo | undefined>;
 }
 

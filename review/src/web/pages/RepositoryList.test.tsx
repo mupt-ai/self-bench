@@ -8,7 +8,6 @@ const repo = {
   defaultBranch: "main",
   private: false,
   continuous: false,
-  agentMinutes: 40,
   connectedBy: "example",
   connectedAt: "2026-09-18T00:00:00.000Z",
 };

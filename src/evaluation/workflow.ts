@@ -18,12 +18,11 @@ import type { EvaluationInput } from "./types.js";
 
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
 const REFUSED = ["RepeatSpendError"];
-// One trial is one `harbor run` plus its bundle and artifact transfers, timed from the evaluation's
-// agent minutes (trialTimeouts). A retry reaches Harbor only if no earlier attempt started the
-// solver: one that never claimed the trial, returned the claim when its setup failed or its worker
-// began stopping, or was lost with its worker before the solver started (executeTrial). Once a
-// solver has started, a retry refuses with RepeatSpendError. The last attempt records its own setup
-// failure on the trial.
+// One trial is one `harbor run` (trialTimeouts) plus its bundle and artifact transfers. A retry
+// reaches Harbor only if no earlier attempt started the solver: one that never claimed the trial,
+// returned the claim when its setup failed or its worker began stopping, or was lost with its
+// worker before the solver started (executeTrial). Once a solver has started, a retry refuses with
+// RepeatSpendError. The last attempt records its own setup failure on the trial.
 const trial = (input: EvaluationInput) =>
   proxyActivities<EvaluationActivities>({
     startToCloseTimeout: trialTimeouts(input.agentMinutes).activityMs,

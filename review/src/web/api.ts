@@ -25,8 +25,6 @@ export interface ConnectedRepo {
   defaultBranch: string;
   private: boolean;
   continuous: boolean;
-  /** How long a solver's agent may work on each task in this repo's evaluations. */
-  agentMinutes: number;
   connectedBy: string;
   connectedAt: string;
 }
@@ -75,29 +73,6 @@ export async function connectRepo(org: string, fullName: string): Promise<Connec
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ fullName }),
-    },
-  );
-  return body.repo;
-}
-
-export async function fetchConnectedRepo(org: string, fullName: string): Promise<ConnectedRepo> {
-  const body = await requestJson<{ repo: ConnectedRepo }>(
-    `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`,
-  );
-  return body.repo;
-}
-
-export async function updateRepo(
-  org: string,
-  fullName: string,
-  settings: Partial<Pick<ConnectedRepo, "continuous" | "agentMinutes">>,
-): Promise<ConnectedRepo> {
-  const body = await requestJson<{ repo: ConnectedRepo }>(
-    `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(settings),
     },
   );
   return body.repo;

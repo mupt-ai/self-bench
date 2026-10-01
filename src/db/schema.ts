@@ -13,7 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { AGENT_MINUTES, type TaskImages } from "../contracts/index.js";
+import { AGENT_MINUTES } from "../contracts/agent-limit.js";
+import type { TaskImages } from "../contracts/index.js";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
