@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from "bun:test";
-import { setOpenRouterModels, setOpenRouterRates } from "../src/contracts/models.js";
 import {
   type CatalogModel,
   catalog,
@@ -14,6 +13,7 @@ import {
   thinkingArguments,
   thinkingOptions,
 } from "../src/evaluation/models.js";
+import { gatewayIds, type ListedModel, setGatewayListing } from "../src/gateways/index.js";
 import {
   generationModelLabel,
   generationModelPricing,
@@ -21,20 +21,22 @@ import {
 } from "../src/generation/settings/models.js";
 
 afterEach(() => {
-  setOpenRouterModels([]);
-  setOpenRouterRates(new Map());
+  for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
 });
+
+const listModels = (gateway: (typeof gatewayIds)[number], models: ListedModel[]) =>
+  setGatewayListing(gateway, { models, rates: new Map() });
 
 test("OpenRouter's popular models join the curated ones, which keep their routes and levels", () => {
   expect(evaluationCatalog()).toEqual(catalog);
-  setOpenRouterModels([
-    { id: "qwen/qwen4-coder", label: "Qwen: Qwen4 Coder", thinking: ["low", "high", "max"] },
-    { id: "moonshotai/kimi-k3", label: "MoonshotAI: Kimi K3", thinking: ["low", "high", "max"] },
-    { id: "openai/gpt-6-sol", label: "OpenAI: GPT-6 Sol", thinking: ["low"] },
-  ]);
-  setOpenRouterRates(
-    new Map([["qwen/qwen4-coder", { rates: [1, 4, 0.1, 1], asOf: "2026-09-29" }]]),
-  );
+  setGatewayListing("openrouter", {
+    models: [
+      { id: "qwen/qwen4-coder", label: "Qwen4 Coder", thinking: ["low", "high", "max"] },
+      { id: "moonshotai/kimi-k3", label: "Kimi K3", thinking: ["low", "high", "max"] },
+      { id: "openai/gpt-6-sol", label: "GPT-6 Sol", thinking: ["low"] },
+    ],
+    rates: new Map([["qwen/qwen4-coder", { rates: [1, 4, 0.1, 1], asOf: "2026-09-29" }]]),
+  });
   const models = evaluationCatalog();
   expect(models.slice(0, 3).map((model) => model.id)).toEqual([
     "qwen/qwen4-coder",
@@ -57,6 +59,37 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(thinkingOptions(kimi, ["pi"])).toEqual(["low", "high"]);
   expect(thinkingOptions(sol, ["codex"])).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
   expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
+});
+
+test("a model two gateways list is one entry with a route on each, under each one's id", () => {
+  listModels("openrouter", [{ id: "z-ai/glm-6", label: "GLM 6", thinking: ["low", "high"] }]);
+  listModels("vercel-ai-gateway", [
+    { id: "zai/glm-6", label: "GLM 6", thinking: ["high"] },
+    { id: "zai/glm-5.3", label: "GLM 5.3" },
+    { id: "alibaba/qwen4-max", label: "Qwen4 Max" },
+  ]);
+  const models = evaluationCatalog();
+  expect(models.slice(0, 3).map((model) => model.id)).toEqual([
+    "z-ai/glm-6",
+    "glm-5.3",
+    "qwen/qwen4-max",
+  ]);
+  const [glm6, glm, qwen] = models;
+  if (!glm6 || !glm || !qwen) throw new Error("Missing models");
+  expect(modelRoutes(glm6).map((route) => [route.provider, route.model])).toEqual([
+    ["openrouter", "z-ai/glm-6"],
+    ["vercel-ai-gateway", "zai/glm-6"],
+  ]);
+  expect(glm6.thinking).toEqual(["low", "high"]);
+  // The curated GLM keeps its short id and its levels and routes through both gateways.
+  expect(modelRoutes(glm).map((route) => [route.provider, route.model])).toEqual([
+    ["openrouter", "z-ai/glm-5.3"],
+    ["vercel-ai-gateway", "zai/glm-5.3"],
+  ]);
+  expect(modelRoutes(qwen).map((route) => [route.provider, route.model])).toEqual([
+    ["vercel-ai-gateway", "alibaba/qwen4-max"],
+  ]);
+  expect(routeFor(qwen, "openrouter")).toBeUndefined();
 });
 
 test("a row with no chosen level runs at high, or else the first level its model offers", () => {
@@ -103,17 +136,20 @@ test("generation and evaluation read the same catalog", () => {
   }
 });
 
-test("an OpenRouter-only model keeps its OpenRouter ID and every harness", () => {
+test("a gateway-only model keeps its gateway IDs and every harness", () => {
   const model = catalog.find((entry) => entry.id === "deepseek-v4-pro-0813");
   if (!model) throw new Error("Missing model");
   expect(model.provider).toBe("openrouter");
   expect(model.model).toBe("deepseek/deepseek-v4-pro-0813");
-  expect(modelRoutes(model)).toHaveLength(1);
-  expect(modelRoutes(model)[0]).toMatchObject({
-    provider: "openrouter",
-    model: "deepseek/deepseek-v4-pro-0813",
-    harnesses: [...harnessIds],
-  });
+  expect(modelRoutes(model)).toEqual(
+    gatewayIds.map((provider) =>
+      expect.objectContaining({
+        provider,
+        model: "deepseek/deepseek-v4-pro-0813",
+        harnesses: [...harnessIds],
+      }),
+    ),
+  );
 });
 
 test("credential routes preserve exact model IDs, provider pricing and harness support", () => {
@@ -123,6 +159,7 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
   expect(routes.map((route) => [route.provider, route.model, route.pricing?.input])).toEqual([
     ["openai", "gpt-6-sol", 2],
     ["openrouter", "openai/gpt-6-sol", 2],
+    ["vercel-ai-gateway", "openai/gpt-6-sol", 2],
   ]);
   expect(thinkingOptions(sol, ["codex"])).toContain("max");
   expect(thinkingOptions(sol, ["codex", "pi"])).not.toContain("max");

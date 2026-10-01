@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
+import { type GatewayId, gatewayIds, gatewayModelId, isGateway } from "../gateways/index.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
 
 export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
@@ -12,8 +13,6 @@ export const harnessLabels: Record<Harness, string> = {
   "terminus-2": "Terminus 2",
 };
 export const harnessOptions = harnessIds.map((id) => ({ id, label: harnessLabels[id] }));
-
-export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 
 export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
@@ -42,35 +41,45 @@ export function signInRefusal(
     : undefined;
 }
 
-/** Harnesses a direct provider key can drive; only OpenRouter is remapped for the rest. */
+/** Harnesses a direct provider key can drive; only gateways are remapped for the rest. */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
   openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
   anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
 };
 
-/** Every credential route for a model: its native provider (if any) and OpenRouter. */
+/** Every credential route for a model: its native provider (if any) and each gateway serving it. */
 export function modelRoutes(model: CatalogModel): CatalogModel[] {
-  const routed =
-    model.openRouter ??
-    (model.provider === "openrouter" || model.provider === "custom"
-      ? model.model
-      : `${model.provider}/${model.model}`);
   const native = providerHarnesses[model.provider] ?? providerHarnesses.openai ?? [];
   const { pricing: _pricing, ...gatewayModel } = model;
   return [
-    ...(model.provider !== "openrouter"
+    ...(!isGateway(model.provider)
       ? [withReferencePricing({ ...model, harnesses: [...native] })]
       : []),
     ...(model.provider === "custom"
       ? [{ ...gatewayModel, provider: "openai" as const, harnesses: [...native] }]
       : []),
-    withReferencePricing({
-      ...gatewayModel,
-      provider: "openrouter",
-      model: routed,
-      harnesses: [...harnessIds],
+    ...gatewayIds.flatMap((gateway) => {
+      const routed = gatewayRouteModel(model, gateway);
+      return routed
+        ? [
+            withReferencePricing({
+              ...gatewayModel,
+              provider: gateway,
+              model: routed,
+              harnesses: [...harnessIds],
+            }),
+          ]
+        : [];
     }),
   ];
+}
+
+/** The id `gateway` receives for the model: its listed id, or a typed custom model id as is. */
+function gatewayRouteModel(model: CatalogModel, gateway: GatewayId): string | undefined {
+  if (model.provider === "custom") return model.model;
+  if (model.gateways) return model.gateways[gateway];
+  if (isGateway(model.provider)) return model.provider === gateway ? model.model : undefined;
+  return gatewayModelId(gateway, `${model.provider}/${model.model}`);
 }
 
 export function routeFor(model: CatalogModel, provider: string) {

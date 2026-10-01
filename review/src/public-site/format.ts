@@ -1,4 +1,5 @@
 import type { ParetoPlotProps, ParetoPoint } from "@mupt-ai/dari-pareto";
+import { gateways, isGateway } from "../../../src/gateways/index";
 import {
   CUSTOM_VENDOR,
   type ModelSource,
@@ -109,7 +110,7 @@ function accessLabel(setting: Pick<PublicSetting, "custom" | "signIn" | "provide
   if (setting.custom) return "Custom Endpoint";
   if (setting.signIn === "codex-login") return "ChatGPT Sign-In";
   if (setting.signIn === "claude-login") return "Claude Sign-In";
-  return setting.provider === "openrouter" ? "OpenRouter" : "API Key";
+  return isGateway(setting.provider) ? gateways[setting.provider].label : "API Key";
 }
 
 export function reasoningLabel(setting: Pick<PublicSetting, "reasoningLevel">): string {

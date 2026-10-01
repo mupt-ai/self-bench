@@ -5,10 +5,10 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
-import { modelApiKeyVariable } from "../../contracts/models.js";
 import type { CredentialStore } from "../../db/credentials.js";
 import { type EncryptedRecordStore, orgRecords } from "../../db/encrypted-records.js";
 import type { Vault } from "../../db/vault.js";
+import { gateways, modelApiKeyVariable } from "../../gateways/index.js";
 import { generationSubscriptionAuth } from "../../harnesses/codex/subscription.js";
 import {
   providerCredentialEnvironment,
@@ -188,7 +188,7 @@ export async function generationEnvironment(
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;
   delete env.ANTHROPIC_API_KEY;
-  delete env.OPENROUTER_API_KEY;
+  for (const { keyVariable } of Object.values(gateways)) delete env[keyVariable];
   delete env.SELFBENCH_PI_AUTH_JSON;
   // The platform OpenRouter key is not a run credential: managed runs re-inject it under
   // its sandbox name below, and credential runs must resolve their own subscription auth.

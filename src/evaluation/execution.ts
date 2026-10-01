@@ -2,9 +2,9 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ApplicationFailure } from "@temporalio/common";
-import { modelApiKeyVariable } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
+import { gateways, isGateway, modelApiKeyVariable } from "../gateways/index.js";
 import {
   managedModalEnvironment,
   managedModelKey,
@@ -114,14 +114,6 @@ export async function credentialExecution(
   return { profile: { model: input.modelName }, child, secrets, auth: info.auth };
 }
 
-const gateways = {
-  openrouter: {
-    base: "https://openrouter.ai/api/v1",
-    messages: "https://openrouter.ai/api",
-    hosts: ["openrouter.ai", "*.openrouter.ai"],
-  },
-} as const;
-
 function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
   return ["OPENAI_BASE_URL", "OPENAI_API_BASE", "ANTHROPIC_BASE_URL"]
     .flatMap((key) => {
@@ -137,13 +129,17 @@ function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
 }
 
 function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): string[] {
-  if (provider === "openrouter") return [...gateways.openrouter.hosts];
+  if (isGateway(provider)) return [...gateways[provider].hosts];
   if (provider === "anthropic") return ["api.anthropic.com"];
   if (provider === "openai") return ["api.openai.com"];
   return hostsFromEnvironment(env);
 }
 
 export function solverAgent(harness: Harness, model: string): string {
+  if (harness === "pi") {
+    const provider = model.slice(0, model.indexOf("/"));
+    return isGateway(provider) ? gateways[provider].harborPi : harness;
+  }
   if (harness !== "codex") return harness;
   return model.startsWith("openai/") && model.slice(7).includes("/")
     ? "harbor_gateway:GatewayCodex"
@@ -156,7 +152,7 @@ export function gatewayModel(
   harness: Harness,
   model: string,
 ): string {
-  if (provider !== "openrouter" || harness === "pi") return model;
+  if (!isGateway(provider) || harness === "pi") return model;
   const modelId = model.slice(provider.length + 1);
   return harness === "claude-code" ? modelId : `openai/${modelId}`;
 }
@@ -169,28 +165,28 @@ export function gatewayTrial(
   env: NodeJS.ProcessEnv,
 ) {
   const provider = input.credentials?.provider;
-  if (provider !== "openrouter") {
+  if (!isGateway(provider)) {
     const child = { ...env };
     return { model, child, extraAllowedHosts: providerHosts(provider, child) };
   }
   const gateway = gateways[provider];
-  const key = env.OPENROUTER_API_KEY;
+  const key = env[gateway.keyVariable];
   if (!key) throw refuseTrial("Gateway credential is unavailable");
   const harborModel = gatewayModel(provider, harness, model);
   const child = { ...env };
-  delete child.OPENROUTER_API_KEY;
-  delete child.AI_GATEWAY_API_KEY;
+  for (const { keyVariable } of Object.values(gateways)) delete child[keyVariable];
+  const extraAllowedHosts = [...gateway.hosts];
   if (harness === "claude-code") {
     child.ANTHROPIC_API_KEY = key;
-    child.ANTHROPIC_BASE_URL = gateway.messages;
-    return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
+    child.ANTHROPIC_BASE_URL = gateway.anthropicBase;
+    return { model: harborModel, child, extraAllowedHosts };
   }
   if (harness === "pi") {
-    child.OPENROUTER_API_KEY = key;
-    return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
+    child[gateway.keyVariable] = key;
+    return { model: harborModel, child, extraAllowedHosts };
   }
   child.OPENAI_API_KEY = key;
-  child.OPENAI_BASE_URL = gateway.base;
-  child.OPENAI_API_BASE = gateway.base;
-  return { model: harborModel, child, extraAllowedHosts: [...gateway.hosts] };
+  child.OPENAI_BASE_URL = gateway.openAiBase;
+  child.OPENAI_API_BASE = gateway.openAiBase;
+  return { model: harborModel, child, extraAllowedHosts };
 }

@@ -15,11 +15,17 @@ describe("subscription authentication", () => {
     expect(await loadPiModelAuth()).toEqual({ provider: "openai", apiKey: "api-key" });
   });
 
-  test("uses a run's OpenRouter key when no OpenAI or Anthropic key is present", async () => {
-    await withExecutionEnvironment({ OPENROUTER_API_KEY: " router-key " }, async () =>
-      expect(await loadPiModelAuth()).toEqual({ provider: "openrouter", apiKey: "router-key" }),
-    );
-  });
+  test.each([
+    ["openrouter", "OPENROUTER_API_KEY"],
+    ["vercel-ai-gateway", "AI_GATEWAY_API_KEY"],
+  ] as const)(
+    "uses a run's %s key when no OpenAI or Anthropic key is present",
+    async (provider, key) => {
+      await withExecutionEnvironment({ [key]: " gateway-key " }, async () =>
+        expect(await loadPiModelAuth()).toEqual({ provider, apiKey: "gateway-key" }),
+      );
+    },
+  );
 
   test("falls back to the managed platform key for Compose workers without a model key", async () => {
     const ambient = {

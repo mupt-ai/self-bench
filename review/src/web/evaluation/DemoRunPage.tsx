@@ -32,7 +32,7 @@ const models: CatalogModel[] = [
     model: "gpt-6-sol",
     harnesses: ["codex", "pi"],
     source: "",
-    openRouter: "openai/gpt-6-sol",
+    gateways: { openrouter: "openai/gpt-6-sol" },
     thinking: ["low", "medium", "high", "xhigh"],
   },
   {
@@ -42,7 +42,7 @@ const models: CatalogModel[] = [
     model: "z-ai/glm-5.3",
     harnesses: ["pi", "codex", "claude-code"],
     source: "",
-    openRouter: "z-ai/glm-5.3",
+    gateways: { openrouter: "z-ai/glm-5.3" },
     thinking: ["low", "high", "max"],
   },
 ];

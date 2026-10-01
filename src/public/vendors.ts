@@ -1,3 +1,5 @@
+import { catalogModelId, isGateway } from "../gateways/index.js";
+
 /**
  * Model vendors: one color and one display name each, for every place that shows a model, the
  * public site, the app's results chart, and the link preview images the server draws.
@@ -6,12 +8,15 @@
 /** What a model's vendor is read from: a public setting, or a run in the app. */
 export type ModelSource = { provider: string; model: { name: string } };
 
-/** The model's vendor, which colors its point: OpenRouter models by the vendor they route to. */
+/** The model's vendor, which colors its point: gateway models by the vendor they route to. */
 function vendor(setting: ModelSource): string {
-  if (setting.provider !== "openrouter") return setting.provider;
-  // Catalog names put the vendor first ("z-ai/glm-5.3"); some exports prefix the gateway.
-  const [first, second] = setting.model.name.split("/");
-  return (first === "openrouter" ? second : first) ?? "openrouter";
+  if (!isGateway(setting.provider)) return setting.provider;
+  // Catalog names put the vendor first ("z-ai/glm-5.3"); run names prefix the gateway, which may
+  // spell the vendor its own way ("vercel-ai-gateway/zai/glm-5.3").
+  const [first = "", ...rest] = setting.model.name.split("/");
+  const gateway = isGateway(first) ? first : setting.provider;
+  const name = isGateway(first) ? rest.join("/") : setting.model.name;
+  return catalogModelId(gateway, name).split("/")[0] || gateway;
 }
 
 // Every vendor in the model catalog needs its own color here and a name in VENDOR_NAMES; an

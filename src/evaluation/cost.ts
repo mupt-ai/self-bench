@@ -107,7 +107,7 @@ export function trialCost(
 > {
   const pricing = run.pricing;
   const model = run.modelName.split("/").slice(1).join("/");
-  // Harbor records the model name the runner passed it, which is the gateway form over OpenRouter.
+  // Harbor records the model name the runner passed it: the gateway form on a gateway route.
   const harborModel = gatewayModel(run.credentials?.provider, harness, run.modelName);
   const matches = (value: unknown) =>
     value === model || value === run.modelName || value === harborModel;

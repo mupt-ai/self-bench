@@ -1,4 +1,5 @@
 import { harnessLabels } from "../evaluation/models.js";
+import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
@@ -73,9 +74,9 @@ const access = (setting: ReleaseSetting) =>
       ? "ChatGPT Sign-In"
       : setting.signIn === "claude-login"
         ? "Claude Sign-In"
-        : setting.provider === "openrouter"
-          ? "OpenRouter"
-          : "API Key";
+      : isGateway(setting.provider)
+        ? gateways[setting.provider].label
+        : "API Key";
 
 /** The settings table's columns, as the page's own table names them, plus the frontier it marks. */
 const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
