@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { Link, useLocation, useNavigate, useNavigationType, useParams } from "react-router";
+import { useLocation, useNavigationType, useParams } from "react-router";
 import { Avatar } from "../components/Avatar";
 import {
   LayoutToggle,
@@ -9,61 +9,90 @@ import {
   readResultsLayout,
   rememberResultsLayout,
 } from "../components/LayoutToggle";
-import { ModelTable } from "../components/ModelTable";
-import { ResultsChart } from "../components/ResultsChart";
-import type { PublicRepoPage } from "../contract";
-import { flightTo, revealFade, revealGroup, shownLine } from "../effects/marks";
-import { plainClick } from "../effects/page-reveal";
+import type { PublicPublisher, PublicRepoPage, PublicRepoSummary } from "../contract";
+import { flightTo, pageBody, revealFade, shownLine } from "../effects/marks";
+import { bodyHeld, watchBodyHold } from "../effects/transition-run";
 import { ago, cleanDescription, compactNumber, publisherName } from "../format";
-import { PANEL } from "../frame";
 import { motionOff } from "../motion";
 import { APP_URL } from "../PublicLayout";
+import { cardOf, pageKey, takeRead, visitedPages } from "../page-preload";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
-import { loadMemory, useLoad } from "../use-load";
+import { useLoad } from "../use-load";
 import { useTitle } from "../use-title";
+import { type PinnedLines, RepoBody } from "./RepoBody";
 
 /**
- * Repository pages read during the visit, so coming back to one draws it at once, from the
- * first frame, while it is checked in the background. The latest 50 are kept.
+ * What a repository page's title block shows. A page opened from a card draws it from the card
+ * at once, so the opening flight never waits for the page's data; the data takes over when in.
  */
-const visited = loadMemory<PublicRepoPage | undefined>(50);
+interface PageHead {
+  repository: Pick<PublicRepoSummary["repository"], "fullName" | "description" | "stars">;
+  ownerAvatarUrl?: string;
+  publisher: PublicPublisher;
+  releasedAt: string;
+  tasks: number;
+  settings: number;
+  endorsed: boolean;
+}
+
+const headOf = (page: PublicRepoPage): PageHead => ({
+  repository: page.release.repository,
+  ownerAvatarUrl: page.release.repository.ownerAvatarUrl,
+  publisher: page.release.publisher,
+  releasedAt: page.release.releasedAt,
+  tasks: page.release.tasks,
+  settings: page.release.settings.length,
+  endorsed: page.endorsed,
+});
+
+const headOfCard = (card: PublicRepoSummary): PageHead => ({
+  repository: card.repository,
+  ownerAvatarUrl: card.repository.ownerAvatarUrl,
+  publisher: card.publisher,
+  releasedAt: card.releasedAt,
+  tasks: card.tasks,
+  settings: card.settings,
+  endorsed: card.endorsed,
+});
 
 export function RepoPage() {
   const { owner = "", name = "", publisher } = useParams();
   const source = useSource();
   const fullName = `${owner}/${name}`;
+  const key = pageKey(fullName, publisher);
   const state = useLoad(
-    `${fullName}/${publisher ?? ""}`,
-    () => (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
+    key,
+    // A read its card started as it was pressed, if there is one (page-preload.ts).
+    () =>
+      takeRead(key) ??
+      (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
     // Runs of one repository share a group, so switching between them keeps the page up.
     fullName.toLowerCase(),
-    visited,
+    visitedPages,
   );
+  // While an opening flight is in the air, the body waits (transition-run.ts `holdBody`).
+  const held = useSyncExternalStore(watchBodyHold, bodyHeld, () => false);
   // The repository's own casing once it is known, as the server writes it.
   useTitle(
     repositoryTitle(
       (state.status === "ready" && state.value?.release.repository.fullName) || fullName,
     ),
   );
-  if (state.status === "loading") return <p className="text-muted-foreground">Loading…</p>;
-  if (state.status === "error" || !state.value) return <NoResults fullName={fullName} />;
-  return <Results page={state.value} />;
+  const page = state.status === "ready" ? state.value : undefined;
+  if (state.status === "error" || (state.status === "ready" && !page))
+    return <NoResults fullName={fullName} />;
+  const card = cardOf(key);
+  const head = page ? headOf(page) : card ? headOfCard(card) : undefined;
+  if (!head) return <p className="text-muted-foreground">Loading…</p>;
+  return <Results head={head} page={held ? undefined : page} />;
 }
 
-/**
- * Navigation state from an "Other Benchmarks" link: where that section sat on screen when it
- * was clicked, so the next page can scroll to keep it in the same place.
- */
-interface PinnedLines {
-  linesTop: number;
-}
-
-function Results({ page }: { page: PublicRepoPage }) {
-  const { release } = page;
+/** The page: its title block from `head`, and the rest once `page` is given. */
+function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
+  const release = page?.release;
   const lines = useRef<HTMLElement>(null);
-  const navigate = useNavigate();
   const state = useLocation().state as PinnedLines | null;
   // Only the click that set it: back and forward reuse the entry's state, and must not re-pin.
   const pinned = useNavigationType() === "PUSH" ? state?.linesTop : undefined;
@@ -74,8 +103,8 @@ function Results({ page }: { page: PublicRepoPage }) {
     const area = scrollArea();
     if (pinned === undefined || !section || !area) return;
     area.scrollTo(area.top() + section.getBoundingClientRect().top - pinned);
-  }, [release.releaseId]);
-  const { repository } = release;
+  }, [release?.releaseId]);
+  const { repository } = head;
   const [owner, name] = repository.fullName.split("/");
   // The chart's pointer and vendor chips mark the same settings in the table, and the table
   // row under the pointer lights up its point.
@@ -84,9 +113,9 @@ function Results({ page }: { page: PublicRepoPage }) {
   const [rowId, setRowId] = useState<string | null>(null);
   // Another line of this repository reuses the page with other settings: nothing stays marked
   // from the last one (the chart, keyed by release, starts afresh too).
-  const [markedRelease, setMarkedRelease] = useState(release.releaseId);
-  if (markedRelease !== release.releaseId) {
-    setMarkedRelease(release.releaseId);
+  const [markedRelease, setMarkedRelease] = useState(release?.releaseId);
+  if (markedRelease !== release?.releaseId) {
+    setMarkedRelease(release?.releaseId);
     setActiveId(null);
     setHighlighted(null);
     setRowId(null);
@@ -132,12 +161,12 @@ function Results({ page }: { page: PublicRepoPage }) {
           ? "min-[90rem]:mx-[calc(50%_-_min(100vw_-_2*var(--edge)_-_2*var(--gutter),110rem)/2)]"
           : ""
       }`}
-      {...shownLine(`${repository.fullName}/${release.publisher.login}`)}
+      {...shownLine(`${repository.fullName}/${head.publisher.login}`)}
     >
       <header className="flex flex-col gap-3" data-morph="title">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex shrink-0" {...flightTo("avatar")}>
-            <Avatar src={repository.ownerAvatarUrl} size={32} />
+            <Avatar src={head.ownerAvatarUrl} size={32} />
           </span>
           <a
             href={`https://github.com/${repository.fullName}`}
@@ -171,15 +200,15 @@ function Results({ page }: { page: PublicRepoPage }) {
         {/* Fades in whole when the page is revealed after a card click, rather than assembling. */}
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" {...revealFade}>
           <span className="flex items-center gap-1.5">
-            <Avatar src={release.publisher.avatarUrl} size={16} />
-            Run by <strong className="font-medium">{publisherName(release.publisher)}</strong>
+            <Avatar src={head.publisher.avatarUrl} size={16} />
+            Run by <strong className="font-medium">{publisherName(head.publisher)}</strong>
           </span>
-          <span className="text-muted-foreground">· Released {ago(release.releasedAt)}</span>
+          <span className="text-muted-foreground">· Released {ago(head.releasedAt)}</span>
           <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{release.tasks} tasks</span>
+          <span className="font-mono">{head.tasks} tasks</span>
           <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{release.settings.length} settings</span>
-          {page.endorsed && (
+          <span className="font-mono">{head.settings} settings</span>
+          {head.endorsed && (
             <span className="border border-border px-1.5 py-0.5 text-xs">
               Endorsed by Maintainers
             </span>
@@ -187,78 +216,18 @@ function Results({ page }: { page: PublicRepoPage }) {
         </p>
       </header>
 
-      {/* Side by side, the chart stays in view while the table scrolls past it. */}
-      <div
-        className={`flex flex-col gap-8 ${
-          side
-            ? "min-[90rem]:grid min-[90rem]:grid-cols-[minmax(420px,2fr)_minmax(720px,3fr)] min-[90rem]:items-start min-[90rem]:gap-6"
-            : ""
-        }`}
-      >
-        <section
-          {...revealGroup}
-          data-morph="chart"
-          // min-w-0: side by side, each column keeps to its grid track, whatever its content.
-          className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
-        >
-          <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
-          <div className={`p-2 ${PANEL}`}>
-            <ResultsChart
-              key={release.releaseId}
-              settings={release.settings}
-              onActiveChange={setActiveId}
-              onHighlightChange={setHighlighted}
-              selectedId={rowId}
-            />
-          </div>
-        </section>
-
-        <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
-          <h2 className="text-sm font-medium">All Settings</h2>
-          <ModelTable
-            settings={release.settings}
-            activeId={activeId ?? rowId}
-            highlighted={highlighted}
-            onRowHover={setRowId}
-          />
-        </section>
-      </div>
-
-      {page.lines.length > 1 && (
-        <section ref={lines} className="flex flex-col gap-3" data-morph="lines" {...revealGroup}>
-          <h2 className="text-sm font-medium">Other Benchmarks of This Repo</h2>
-          <ul className={`divide-y divide-border ${PANEL}`}>
-            {page.lines.map((line) => {
-              const current = line.releaseId === release.releaseId;
-              return (
-                <li key={line.releaseId}>
-                  <Link
-                    to={`/${repository.fullName}/${line.publisher.login}`}
-                    aria-current={current ? "page" : undefined}
-                    onClick={(event) => {
-                      const linesTop = lines.current?.getBoundingClientRect().top;
-                      if (linesTop === undefined || !plainClick(event)) return;
-                      event.preventDefault();
-                      navigate(`/${repository.fullName}/${line.publisher.login}`, {
-                        state: { linesTop } satisfies PinnedLines,
-                      });
-                    }}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted aria-[current=page]:bg-muted touch:py-3"
-                  >
-                    <Avatar src={line.publisher.avatarUrl} size={16} />
-                    <span className="font-medium">{publisherName(line.publisher)}</span>
-                    <span className="font-mono text-muted-foreground">
-                      {line.tasks} tasks · {line.settings} settings
-                    </span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {current ? "Showing" : `Released ${ago(line.releasedAt)}`}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+      {page && (
+        <RepoBody
+          page={page}
+          side={side}
+          lines={lines}
+          activeId={activeId}
+          rowId={rowId}
+          highlighted={highlighted}
+          onActiveChange={setActiveId}
+          onHighlightChange={setHighlighted}
+          onRowHover={setRowId}
+        />
       )}
     </article>
   );
@@ -266,7 +235,11 @@ function Results({ page }: { page: PublicRepoPage }) {
 
 function NoResults({ fullName }: { fullName: string }) {
   return (
-    <section className="mx-auto flex max-w-xl flex-col items-center gap-3 py-16 text-center">
+    // The whole page, with no title to fly to: an opening assembles it as it is.
+    <section
+      {...pageBody}
+      className="mx-auto flex max-w-xl flex-col items-center gap-3 py-16 text-center"
+    >
       <h1 className="font-mono text-2xl font-medium">{fullName}</h1>
       <p className="text-muted-foreground">No evals for this repo yet.</p>
       <a

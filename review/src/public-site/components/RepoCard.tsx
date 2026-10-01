@@ -1,5 +1,5 @@
 import { Star } from "lucide-react";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useRef } from "react";
 import { Link, useNavigate } from "react-router";
 import type { PublicRepoSummary } from "../contract";
 import { flightFrom, repoCard } from "../effects/marks";
@@ -14,8 +14,16 @@ import {
   publisherName,
 } from "../format";
 import { PANEL } from "../frame";
+import { preloadPage } from "../page-preload";
+import { useSource } from "../source-context";
 import { Avatar } from "./Avatar";
 import { CircledArrow } from "./card-marks";
+
+/**
+ * How long a mouse rests on a card before its page is read ahead: long enough that sweeping
+ * across the grid reads nothing, short enough to beat the click.
+ */
+const HOVER_READ_MS = 80;
 
 /** How many frontier settings the hover preview lists; more would not fit the card. */
 const PREVIEW_LINES = ["first", "second", "third", "fourth", "fifth"] as const;
@@ -37,6 +45,11 @@ export function RepoCard({
   onOpen?: (element: HTMLElement) => void;
 }) {
   const navigate = useNavigate();
+  const source = useSource();
+  // The page is read as the card is pressed (or rested on, or focused), not when it is clicked:
+  // by the time its title has flown, its data is usually in.
+  const readAhead = () => preloadPage(source, card, byLine);
+  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
   const href = byLine
     ? `/${card.repository.fullName}/${card.publisher.login}`
     : `/${card.repository.fullName}`;
@@ -46,8 +59,15 @@ export function RepoCard({
       {...repoCard(card.repository.fullName, `${card.repository.fullName}/${card.publisher.login}`)}
       onClick={(event) => {
         onOpen?.(event.currentTarget);
+        readAhead();
         revealNavigate(event, () => navigate(href));
       }}
+      onPointerDown={readAhead}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") hover.current = setTimeout(readAhead, HOVER_READ_MS);
+      }}
+      onPointerLeave={() => clearTimeout(hover.current)}
+      onFocus={readAhead}
       className={`group relative flex flex-col gap-3 px-4 pt-4 pb-2.5 transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] focus-visible:border-foreground/40 ${PANEL}`}
     >
       <div className="flex items-center gap-2.5">

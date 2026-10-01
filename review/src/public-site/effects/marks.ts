@@ -18,6 +18,7 @@ const FLIGHT = "data-flight";
 const FLIGHT_TARGET = "data-flight-target";
 const REVEAL = "data-reveal";
 const EDGE = "data-site-edge";
+const BODY = "data-page-body";
 
 /**
  * The page's content, between the pinned header and footer. The window scrolls it (see
@@ -43,6 +44,11 @@ export const flightTo = (part: FlightPart) => ({ [FLIGHT_TARGET]: part });
 /** A line that fades in whole during the page reveal instead of being assembled. */
 export const revealFade = { [REVEAL]: "fade" };
 /**
+ * A page's body, everything below its title, or the whole of a page without a title. An opening
+ * transition assembles the page only once it is there.
+ */
+export const pageBody = { [BODY]: "" };
+/**
  * A section that leaves as one when the page is taken apart: if the card a title returns to
  * touches any of it, its heading and notes go first with its panel, rather than being left
  * standing once the panel has gone.
@@ -61,6 +67,7 @@ export const select = {
   flightFrom: (part?: string) => (part ? `[${FLIGHT}="${part}"]` : `[${FLIGHT}]`),
   flightTo: (part: string) => `[${FLIGHT_TARGET}="${part}"]`,
   revealFade: `[${REVEAL}="fade"]`,
+  pageBody: `[${BODY}]`,
   revealGroup: `[${REVEAL}="group"]`,
 };
 
