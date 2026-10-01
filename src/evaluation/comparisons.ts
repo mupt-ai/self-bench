@@ -52,6 +52,7 @@ export const comparisonSchema = z
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 export interface ComparisonScope {
   repoId: number;
+  agentMinutes: number;
   orgId: number;
   tenant: string;
   login: string;
@@ -67,16 +68,17 @@ export async function createComparison(
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   const signature = JSON.stringify(selection);
-  const previous = await comparisons.find(selection.id);
-  if (previous) {
+  const owned = (record: ComparisonRecord) => {
     if (
-      previous.orgId !== scope.orgId ||
-      previous.repoId !== scope.repoId ||
-      previous.signature !== signature
+      record.orgId !== scope.orgId ||
+      record.repoId !== scope.repoId ||
+      record.signature !== signature
     )
       throw new Error("Comparison ID belongs to a different selection");
-    return previous;
-  }
+    return record;
+  };
+  const previous = await comparisons.find(selection.id);
+  if (previous) return owned(previous);
   if (
     new Set(selection.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId))).size !==
     selection.tasks.length
@@ -179,6 +181,7 @@ export async function createComparison(
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
+          agentMinutes: scope.agentMinutes,
           repoId: scope.repoId,
           tenant: scope.tenant,
           startedBy: scope.login,
@@ -197,21 +200,16 @@ export async function createComparison(
   });
   if (inputs.length === 0)
     throw new Error("Every selected configuration and task already has a completed result.");
-  const record = await comparisons.insert({
-    id: selection.id,
-    orgId: scope.orgId,
-    repoId: scope.repoId,
-    createdAt,
-    signature,
-    inputs,
-  });
-  if (
-    record.orgId !== scope.orgId ||
-    record.repoId !== scope.repoId ||
-    record.signature !== signature
-  )
-    throw new Error("Comparison ID belongs to a different selection");
-  return record;
+  return owned(
+    await comparisons.insert({
+      id: selection.id,
+      orgId: scope.orgId,
+      repoId: scope.repoId,
+      createdAt,
+      signature,
+      inputs,
+    }),
+  );
 }
 function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
   return JSON.stringify([model, thinking ?? "default", harness]);

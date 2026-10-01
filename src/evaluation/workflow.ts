@@ -9,6 +9,7 @@ import {
   proxyActivities,
   workflowInfo,
 } from "@temporalio/workflow";
+import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
@@ -17,14 +18,14 @@ import type { EvaluationInput } from "./types.js";
 
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
 const REFUSED = ["RepeatSpendError"];
-// One trial is one `harbor run` (capped at 2 hours) plus its bundle and artifact transfers. A retry
+// One trial is one `harbor run` (trialTimeouts) plus its bundle and artifact transfers. A retry
 // reaches Harbor only if no earlier attempt started the solver: one that never claimed the trial,
 // returned the claim when its setup failed or its worker began stopping, or was lost with its
 // worker before the solver started (executeTrial). Once a solver has started, a retry refuses with
 // RepeatSpendError. The last attempt records its own setup failure on the trial.
-const trial = () =>
+const trial = (input: EvaluationInput) =>
   proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: "150 minutes",
+    startToCloseTimeout: trialTimeouts(input.agentMinutes).activityMs,
     heartbeatTimeout: "2 minutes",
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
@@ -109,7 +110,7 @@ export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
   index: number,
 ): Promise<void> {
-  await runTrial(input, index, trial(), records);
+  await runTrial(input, index, trial(input), records);
 }
 
 /**

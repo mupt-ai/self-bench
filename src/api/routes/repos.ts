@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { z } from "zod";
+import { AGENT_MINUTES } from "../../contracts/agent-limit.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { User, UserStore } from "../../db/users.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -12,6 +14,12 @@ const ORG = "([A-Za-z0-9_.-]+)";
 const REPO = "([A-Za-z0-9_.-]+)";
 const listRoute = new RegExp(`^/api/orgs/${ORG}/repos$`);
 const itemRoute = new RegExp(`^/api/orgs/${ORG}/repos/${REPO}/${REPO}$`);
+const settingsSchema = z
+  .strictObject({
+    continuous: z.boolean().optional(),
+    agentMinutes: z.int().min(AGENT_MINUTES.min).max(AGENT_MINUTES.max).optional(),
+  })
+  .refine((settings) => Object.keys(settings).length > 0);
 
 export interface ConnectedRepoRoutesOptions {
   readonly config: Pick<AuthConfig, "githubApiUrl">;
@@ -111,14 +119,16 @@ export function createConnectedRepoRoutes(
         return true;
       }
       if (item?.[2] && item[3] && request.method === "PATCH") {
-        const body = JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}") as {
-          continuous?: unknown;
-        };
-        if (typeof body.continuous !== "boolean") {
-          sendJson(response, 400, { error: "continuous must be a boolean" });
+        const settings = settingsSchema.safeParse(
+          JSON.parse((await readBody(request, 64 * 1024)).toString("utf8") || "{}"),
+        );
+        if (!settings.success) {
+          sendJson(response, 400, {
+            error: `Set continuous (true or false) or agentMinutes (${AGENT_MINUTES.min}–${AGENT_MINUTES.max})`,
+          });
           return true;
         }
-        const repo = await repos.setContinuous(tenant.id, `${item[2]}/${item[3]}`, body.continuous);
+        const repo = await repos.update(tenant.id, `${item[2]}/${item[3]}`, settings.data);
         if (!repo) {
           sendJson(response, 404, { error: "not connected" });
           return true;
@@ -146,6 +156,7 @@ function publicRepo(repo: ConnectedRepo): {
   defaultBranch: string;
   private: boolean;
   continuous: boolean;
+  agentMinutes: number;
   connectedBy: string;
   connectedAt: string;
 } {
@@ -154,6 +165,7 @@ function publicRepo(repo: ConnectedRepo): {
     defaultBranch: repo.defaultBranch,
     private: repo.private,
     continuous: repo.continuous,
+    agentMinutes: repo.agentMinutes,
     connectedBy: repo.connectedBy.login,
     connectedAt: repo.connectedAt,
   };

@@ -39,6 +39,9 @@ export function RepoLayout() {
               <NavLink to={`${base}/run`}>Run</NavLink>
               <NavLink to={`${base}/results`}>Results</NavLink>
               <NavLink to={`${base}/releases`}>Releases</NavLink>
+              <NavLink to={`${base}/settings`} end>
+                Settings
+              </NavLink>
             </nav>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
+import { AGENT_MINUTES, trialTimeouts } from "../../src/contracts/agent-limit.js";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import type { AuthoredTask } from "../../src/contracts/index.js";
 import { solverArguments } from "../../src/evaluation/runner.js";
@@ -238,6 +239,8 @@ async def check():
     # A sandbox whose trial stops without cleaning up ends within hours, not Harbor's 24.
     for environment in (agent, verifier, composed):
         assert environment.kwargs == {"sandbox_timeout_secs": 10800, "sandbox_idle_timeout_secs": 1800}, environment.kwargs
+    # A solver trial at the most agent minutes still ends inside its sandbox's lifetime.
+    assert module.SANDBOX_LIFETIME_SECS * 1000 > ${trialTimeouts(AGENT_MINUTES.max).harborMs}
     tuned = module.SelfBenchModalEnvironment("/task/tests", sandbox_idle_timeout_secs=None)
     assert tuned.kwargs["sandbox_idle_timeout_secs"] is None, tuned.kwargs
 asyncio.run(check())

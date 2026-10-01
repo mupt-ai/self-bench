@@ -108,10 +108,9 @@ describe("Harbor task compiler", () => {
     expect(taskToml).toContain(
       'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
     );
-    // The agent is root, like setup.sh at build time, so it sees setup's HOME and caches.
-    expect(taskToml).toContain(
-      '[agent]\ntimeout_sec = 1.0\nuser = "root"\nnetwork_mode = "allowlist"',
-    );
+    // The agent is root, like setup.sh at build time, so it sees setup's HOME and caches. Its
+    // time comes from the repository at each run, not the task.
+    expect(taskToml).toContain('[agent]\nuser = "root"\nnetwork_mode = "allowlist"');
     const agentDockerfile = await readFile(join(output, "environment/Dockerfile"), "utf8");
     expect(agentDockerfile).not.toContain("gold.patch");
     expect(agentDockerfile).not.toMatch(/useradd --create-home|^USER (?!root)|ENV HOME/m);

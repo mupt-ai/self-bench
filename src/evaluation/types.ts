@@ -25,6 +25,11 @@ export interface EvaluationInput {
   harnesses: Harness[];
   sandbox: EvaluationSandbox;
   tasks: EvaluationTask[];
+  /**
+   * The repository's agent minutes when the evaluation started (trialTimeouts). Evaluations from
+   * before repositories set it ran with the default.
+   */
+  agentMinutes?: number;
   pricing?: ModelPricing;
   credentialOwnerId?: number;
   credentialOrgId?: number;

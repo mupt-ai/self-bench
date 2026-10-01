@@ -12,6 +12,8 @@ export interface ConnectedRepo {
   readonly private: boolean;
   /** Keep building tasks as pull requests merge; off means on demand only. */
   readonly continuous: boolean;
+  /** How long a solver's agent may work on each task (trialTimeouts). */
+  readonly agentMinutes: number;
   readonly connectedBy: { readonly id: number; readonly login: string };
   readonly connectedAt: string;
 }
@@ -34,10 +36,10 @@ export interface RepoStore {
   /** True when a row was removed. */
   disconnect(orgId: number, fullName: string): Promise<boolean>;
   /** Undefined when the repo is not connected to this tenant. */
-  setContinuous(
+  update(
     orgId: number,
     fullName: string,
-    value: boolean,
+    settings: { continuous?: boolean | undefined; agentMinutes?: number | undefined },
   ): Promise<ConnectedRepo | undefined>;
 }
 
@@ -89,10 +91,10 @@ export function createRepoStore(db: Database, options: { now?: () => Date } = {}
         .returning({ id: repos.id });
       return rows.length > 0;
     },
-    async setContinuous(orgId, fullName, value) {
+    async update(orgId, fullName, settings) {
       const [row] = await db
         .update(repos)
-        .set({ continuous: value })
+        .set(settings)
         .where(byName(orgId, fullName))
         .returning({ id: repos.id });
       return row ? one(row.id) : undefined;
@@ -109,6 +111,7 @@ function repoFrom(row: { repo: typeof repos.$inferSelect; login: string }): Conn
     defaultBranch: row.repo.defaultBranch,
     private: row.repo.private,
     continuous: row.repo.continuous,
+    agentMinutes: row.repo.agentMinutes,
     connectedBy: { id: row.repo.connectedBy, login: row.login },
     connectedAt: row.repo.connectedAt.toISOString(),
   };

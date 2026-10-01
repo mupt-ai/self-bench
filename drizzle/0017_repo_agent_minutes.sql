@@ -1,0 +1,1 @@
+ALTER TABLE "repos" ADD COLUMN "agent_minutes" integer DEFAULT 40 NOT NULL;

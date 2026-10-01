@@ -61,7 +61,7 @@ These call GitHub with the user's stored OAuth token.
 | `GET` | `/api/orgs/:org/repos` | Connected repositories (`repos`), newest first |
 | `POST` | `/api/orgs/:org/repos` | Body `{ "fullName": "owner/name" }`. Connects a repository; `201` when new, `200` when already connected. Organizations may connect any public repository but only their own private ones |
 | `GET` | `/api/orgs/:org/repos/:owner/:name` | One connected repository (`repo`) |
-| `PATCH` | `/api/orgs/:org/repos/:owner/:name` | Body `{ "continuous": true \| false }`. Toggles building tasks as pull requests merge |
+| `PATCH` | `/api/orgs/:org/repos/:owner/:name` | Body with any of `{ "continuous": true \| false, "agentMinutes": 10–90 }`. `continuous` toggles building tasks as pull requests merge; `agentMinutes` is how long a solver's agent may work on each task in evaluations started afterwards |
 | `DELETE` | `/api/orgs/:org/repos/:owner/:name` | Disconnects the repository |
 | `GET` | `/api/orgs/:org/task-counts` | Per-repository `total`, `accepted`, `needsReview`, `rejected`, and `lastPr`, keyed by full name |
 

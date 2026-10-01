@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { trialTimeouts } from "../contracts/agent-limit.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -59,7 +60,7 @@ export async function prepareTaskImages(
       ...(options.signal ? { signal: options.signal } : {}),
     });
     // The script reads task.toml, so it gets the same checked copy Harbor would.
-    await assertHostSafeTask(taskPath, child);
+    await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
     const pins = Object.entries(
       pinnedImageKwargs(input.sandbox === "modal" ? task.images : undefined),
     );

@@ -3,13 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { trialTimeouts } from "../contracts/agent-limit.js";
 import type { HarborEnvironment } from "../contracts/config/providers.js";
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
-import { HARBOR_PROCESS_TIMEOUT_MS, harborRunArguments } from "../harnesses/harbor/command.js";
+import { harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
@@ -270,7 +271,7 @@ async function runTrial(context: {
         {
           env: child,
           cwd: taskPath,
-          timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.solver,
+          timeoutMs: trialTimeouts(run.agentMinutes).harborMs,
           allowFailure: true,
           signal: context.guard.signal,
           onOutput: (_stream, chunk) => {

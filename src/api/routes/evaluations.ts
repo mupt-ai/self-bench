@@ -105,7 +105,13 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               tasks,
               artifacts,
               managedOffer(env),
-              { repoId: repo.id, orgId: tenant.id, tenant: tenant.login, login: user.login },
+              {
+                repoId: repo.id,
+                agentMinutes: repo.agentMinutes,
+                orgId: tenant.id,
+                tenant: tenant.login,
+                login: user.login,
+              },
               draft,
               env,
             );
