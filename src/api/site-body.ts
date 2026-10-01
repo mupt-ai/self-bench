@@ -154,7 +154,6 @@ export function repositoryBody(
     `<p>${escapeText(repositoryDescription(line, Number.POSITIVE_INFINITY))}</p>`,
     "<h2>All Settings</h2>",
     settingsTable(release.settings),
-    "<p>A setting is on the frontier when no other is both cheaper and more accurate.</p>",
     ...(others.length > 0
       ? ["<h2>Other Benchmarks of This Repo</h2>", `<ul>${others.join("")}</ul>`]
       : []),

@@ -115,9 +115,9 @@ test("pages get the shell, with the app's address, and a status for crawlers", a
   expect((await get(`/${"a".repeat(40)}/next.js`)).status).toBe(404);
 });
 
-test("a page that exists may be kept by the CDN a minute, and browsers check it each visit", async () => {
+test("a page that exists may be kept by the CDN 10 seconds, and browsers check it each visit", async () => {
   const home = await get("/");
-  expect(home.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+  expect(home.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
   const etag = home.headers.get("etag");
   expect(etag).toMatch(/^"[\w-]+"$/);
   const repository = await get("/vercel/next.js");
@@ -128,7 +128,7 @@ test("a page that exists may be kept by the CDN a minute, and browsers check it 
   });
   expect(unchanged.status).toBe(304);
   expect(await unchanged.text()).toBe("");
-  expect(unchanged.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+  expect(unchanged.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
 });
 
 /** The tags of `html` that match `pattern`, by their first group. */
@@ -180,7 +180,7 @@ test("the sitemap lists every page the site can show, from the released lines", 
   const sitemap = await get("/sitemap.xml");
   expect(sitemap.status).toBe(200);
   expect(sitemap.headers.get("content-type")).toContain("application/xml");
-  expect(sitemap.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60");
+  expect(sitemap.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
   expect(all(await sitemap.text(), /<loc>([^<]*)<\/loc>/)).toEqual([
     "https://selfbench.test/",
     "https://selfbench.test/vercel/next.js",

@@ -36,11 +36,9 @@ export function GenerationFields({
   options: GenerationOptions | null;
   disabled: boolean;
 }) {
-  // Each managed option is gated by its own flag; while options load, both appear offered
-  // so the summary stays stable until the deployment's keys are known.
-  const managed = options
-    ? (options.managed ?? { models: false, sandbox: false })
-    : { models: true, sandbox: true };
+  // Each managed option is gated by its own flag. Until options load nothing managed is
+  // offered, so a bring-your-own-key deployment never shows managed access.
+  const managed = options?.managed ?? { models: false, sandbox: false };
   const problem = options ? generationSelectionProblem(value, options) : undefined;
   const customized = value !== defaultGenerationSettings;
   const fields = <AdvancedFields {...{ value, onChange, options, managed }} />;

@@ -87,7 +87,13 @@ export function RunExecution({
         <label className={fieldStyles} htmlFor="runpage-field-0">
           <span className="flex items-center gap-1.5">
             Sandbox
-            <InfoTooltip label="Managed sandboxes run on SelfBench's platform account. Other sandboxes use your own credential. Model usage follows each model's credential." />
+            <InfoTooltip
+              label={
+                sandboxes.includes("managed")
+                  ? "Managed sandboxes run on SelfBench's platform account. Other sandboxes use your own credential. Model usage follows each model's credential."
+                  : "Sandboxes run on a credential you store. Model usage follows each model's credential."
+              }
+            />
           </span>
           <Select
             id="runpage-field-0"

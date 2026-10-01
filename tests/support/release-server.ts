@@ -8,7 +8,7 @@ import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.
 import { sendApiError } from "../../src/api/http.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
 import { createPublicReleaseRoutes } from "../../src/api/routes/public-releases.js";
-import { createReleaseRoutes } from "../../src/api/routes/releases.js";
+import { createReleaseRoutes, type PublicChange } from "../../src/api/routes/releases.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createApiKeyStore } from "../../src/db/api-keys.js";
 import { createReleaseStore } from "../../src/db/releases.js";
@@ -140,6 +140,8 @@ export async function releaseServer(
   if (!address || typeof address === "string") throw new Error("No port");
   publicUrl = `http://127.0.0.1:${address.port}`;
   const publicRoutes = createPublicReleaseRoutes(releases);
+  /** What each release and withdrawal reported changing, in order. */
+  const changes: PublicChange[] = [];
   const routes = createReleaseRoutes({
     db: database.db,
     artifacts,
@@ -150,7 +152,10 @@ export async function releaseServer(
     githubApiUrl: testAuthConfig.githubApiUrl,
     resultsSiteUrl,
     fetchImpl: githubFetch,
-    onPublicChange: () => publicRoutes.refresh(),
+    onPublicChange: (change) => {
+      changes.push(change);
+      publicRoutes.refresh();
+    },
   });
   const signer = createSessionSigner(testAuthConfig.sessionSecret);
   const base = "/api/orgs/acme/repos/vercel/next.js/releases";
@@ -166,6 +171,7 @@ export async function releaseServer(
     });
   return {
     db: database.db,
+    changes,
     tasks,
     releases,
     github,

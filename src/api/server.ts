@@ -20,6 +20,7 @@ import {
   sendReviewAsset,
 } from "./http.js";
 import { sendIdentityError } from "./routes/auth.js";
+import { STRIPE_WEBHOOK_PATH } from "./routes/billing.js";
 import { handleRunArtifactRoute } from "./routes/run-artifacts.js";
 import { handleRunRoute } from "./routes/runs.js";
 import { handleSandboxRoute } from "./routes/sandbox.js";
@@ -69,7 +70,13 @@ export async function startApi(
       if (site) {
         // The public results site's host is answered entirely by the public site.
         if (await site.resultsSite?.handle(request, url, response)) return;
-        if (await site.billing.webhook(request, url, response)) return;
+        if (site.billing) {
+          if (await site.billing.webhook(request, url, response)) return;
+        } else if (url.pathname === STRIPE_WEBHOOK_PATH) {
+          // Without the managed offering there is no billing; Stripe gets a plain 404.
+          sendJson(response, 404, { error: "not found" });
+          return;
+        }
         if (await site.auth.handle(request, url, response)) return;
         if (await site.publicReleases.handle(request, url, response)) return;
         if (request.method === "GET" && isSitePage(url.pathname)) {
@@ -102,7 +109,7 @@ export async function startApi(
       }
       if (site && user && url.pathname.startsWith("/api/")) {
         if (await site.apiKeys.handle(request, url, response, user)) return;
-        if (await site.billing.handle(request, url, response, user)) return;
+        if (await site.billing?.handle(request, url, response, user)) return;
         if (await site.github.handle(request, url, response, user)) return;
         if (await site.repos.handle(request, url, response, user)) return;
         if (await site.pullRequests.handle(request, url, response, user)) return;

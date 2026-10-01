@@ -171,18 +171,21 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
   return hostsFromEnvironment(env);
 }
 
-export function solverAgent(harness: Harness, model: string): string {
-  if (harness === "pi") {
-    const provider = model.slice(0, model.indexOf("/"));
-    if (provider === "openai-codex") return "harbor_subscription:SelfBenchPi";
-    return isGateway(provider) ? gateways[provider].harborPi : harness;
-  }
+/**
+ * The Harbor agent for a harness running `model` (the name Harbor receives) over the selected
+ * connection (`provider`, when there is one).
+ */
+export function solverAgent(harness: Harness, model: string, provider?: string): string {
+  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
+  if (harness === "pi" && model.startsWith("openai-codex/"))
+    return "harbor_subscription:SelfBenchPi";
+  if (harness === "pi") return isGateway(provider) ? gateways[provider].harborPi : harness;
   if (harness === "mini-swe-agent" && model.startsWith("chatgpt/"))
     return "harbor_subscription:ChatGptMiniSweAgent";
   if (harness !== "codex") return harness;
-  return model.startsWith("openai/") && model.slice(7).includes("/")
-    ? "harbor_gateway:GatewayCodex"
-    : "harbor_gateway:SelfBenchCodex";
+  // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's
+  // HTTPS-only provider.
+  return isGateway(provider) ? "harbor_gateway:GatewayCodex" : "harbor_gateway:SelfBenchCodex";
 }
 
 /** The model name Harbor receives for a harness over the selected connection. */

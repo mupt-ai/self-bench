@@ -56,42 +56,42 @@ locals {
       env     = "SELFBENCH_STRIPE_SECRET_KEY"
       api     = true
       worker  = false
-      enabled = var.stripe_price_id != null
+      enabled = var.managed_offering && var.stripe_price_id != null
     }
     stripe_webhook_secret = {
       id      = "selfbench-stripe-webhook-secret"
       env     = "SELFBENCH_STRIPE_WEBHOOK_SECRET"
       api     = true
       worker  = false
-      enabled = var.stripe_price_id != null
+      enabled = var.managed_offering && var.stripe_price_id != null
     }
     managed_openrouter_api_key = {
       id      = "selfbench-managed-openrouter-api-key"
       env     = "SELFBENCH_MANAGED_OPENROUTER_API_KEY"
       api     = true
       worker  = true
-      enabled = var.managed_openrouter
+      enabled = var.managed_offering
     }
     managed_e2b_api_key = {
       id      = "selfbench-managed-e2b-api-key"
       env     = "SELFBENCH_MANAGED_E2B_API_KEY"
       api     = true
       worker  = true
-      enabled = var.managed_e2b
+      enabled = var.managed_offering
     }
     managed_modal_token_id = {
       id      = "selfbench-managed-modal-token-id"
       env     = "SELFBENCH_MANAGED_MODAL_TOKEN_ID"
       api     = true
       worker  = true
-      enabled = var.managed_modal
+      enabled = var.managed_offering
     }
     managed_modal_token_secret = {
       id      = "selfbench-managed-modal-token-secret"
       env     = "SELFBENCH_MANAGED_MODAL_TOKEN_SECRET"
       api     = true
       worker  = true
-      enabled = var.managed_modal
+      enabled = var.managed_offering
     }
   }
   temporal_secret = {
@@ -122,18 +122,18 @@ locals {
     SELFBENCH_EXECUTION_BACKEND         = "modal"
     SELFBENCH_HARBOR_ENVIRONMENT        = "modal"
     SELFBENCH_SANDBOX_CALLBACK_URL      = var.public_url
-    SELFBENCH_MANAGED_MODAL_ENVIRONMENT = var.managed_modal ? local.name : null
+    SELFBENCH_MANAGED_OFFERING          = var.managed_offering ? "true" : null
+    SELFBENCH_MANAGED_MODAL_ENVIRONMENT = var.managed_offering ? local.name : null
     SENTRY_DSN                          = var.sentry_dsn
   } : name => value if value != null }
   api_env = merge(local.shared_env, { for name, value in {
-    GITHUB_OAUTH_CLIENT_ID                = var.github_oauth_client_id
-    SELFBENCH_PUBLIC_URL                  = var.public_url
-    SELFBENCH_RESULTS_SITE_URL            = var.results_site_url
-    SELFBENCH_RESULTS_SITE_INDEX          = var.environment == "prod" ? "true" : null
-    SELFBENCH_STRIPE_PRICE_ID             = var.stripe_price_id
-    SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID = var.billing_credit_admin_org_id == null ? null : tostring(var.billing_credit_admin_org_id)
-    SENTRY_BROWSER_DSN                    = var.sentry_browser_dsn
-    POSTHOG_API_KEY                       = var.posthog_api_key
+    GITHUB_OAUTH_CLIENT_ID       = var.github_oauth_client_id
+    SELFBENCH_PUBLIC_URL         = var.public_url
+    SELFBENCH_RESULTS_SITE_URL   = var.results_site_url
+    SELFBENCH_RESULTS_SITE_INDEX = var.environment == "prod" ? "true" : null
+    SELFBENCH_STRIPE_PRICE_ID    = var.managed_offering ? var.stripe_price_id : null
+    SENTRY_BROWSER_DSN           = var.sentry_browser_dsn
+    POSTHOG_API_KEY              = var.posthog_api_key
   } : name => value if value != null })
 }
 

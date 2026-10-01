@@ -38,6 +38,7 @@ test("managed evaluations use the platform model and sandbox credentials", async
   const records = memoryVault();
   const env = {
     ...evaluationEnv,
+    SELFBENCH_MANAGED_OFFERING: "true",
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "managed-model-secret",
     SELFBENCH_MANAGED_E2B_API_KEY: "managed-sandbox-secret",
     SELFBENCH_MANAGED_MODAL_TOKEN_ID: "managed-modal-id",
@@ -100,6 +101,7 @@ test("managed evaluation requires Modal even when managed E2B is configured", as
     {},
     {
       ...evaluationEnv,
+      SELFBENCH_MANAGED_OFFERING: "true",
       SELFBENCH_MANAGED_E2B_API_KEY: "managed-e2b",
     },
   );

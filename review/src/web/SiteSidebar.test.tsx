@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router";
 import { SiteSidebar } from "./SiteSidebar";
 import type { SiteOrg } from "./session";
 
-function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
+function renderSidebar(path: string, kind: SiteOrg["kind"] = "org", billing = true) {
   const org: SiteOrg = { login: "example-account", kind, role: "admin" };
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
@@ -14,6 +14,7 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org") {
         orgs={[org]}
         onSelect={() => {}}
         onSignOut={async () => {}}
+        billing={billing}
       />
     </MemoryRouter>,
   );
@@ -34,6 +35,12 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain("by dari.dev</span>");
 });
 
+test("sidebar leaves out Billing without the managed offering", () => {
+  const html = renderSidebar("/", "org", false);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(3);
+  expect(html).not.toContain("Billing");
+});
+
 test("sidebar supports the compact icon mode", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter initialEntries={["/"]}>
@@ -43,6 +50,7 @@ test("sidebar supports the compact icon mode", () => {
         orgs={[]}
         onSelect={() => {}}
         onSignOut={async () => {}}
+        billing
         collapsed
       />
     </MemoryRouter>,

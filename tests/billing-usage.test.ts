@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createBillingStore } from "../src/db/billing.js";
-import { billingOutbox, generationUsage } from "../src/db/schema.js";
+import { billingOutbox, billingRefunds, generationUsage } from "../src/db/schema.js";
 import { createUsageStore } from "../src/db/usage.js";
 import { createUserStore } from "../src/db/users.js";
 import { startBillingDispatcher } from "../src/generation/billing/outbox.js";
@@ -200,59 +200,27 @@ test("a started sandbox is recorded and billed once however often its stop retri
   }
 });
 
-test("a refund cancels only billed usage since the period start that no refund covered", async () => {
-  const { database, org } = await orgFixture();
-  try {
-    const billing = createBillingStore(database.db, true);
-    const usage = createUsageStore(database.db);
-    // Recorded before billing was set up, so never sent to Stripe or refunded.
-    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-unbilled" });
-    await billing.saveCustomer(org.id, "cus_test");
-    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-old" });
-    await database.db
-      .update(billingOutbox)
-      .set({ createdAt: new Date("2026-08-01T00:00:00Z") })
-      .where(eq(billingOutbox.identifier, "selfbench-usage-2"));
-    await usage.record({ ...managedRow, orgId: org.id, sandboxId: "sb-open" });
-    const refund = {
-      orgId: org.id,
-      customerId: "cus_test",
-      adminUserId: 1,
-      reason: "Goodwill",
-      since: new Date("2026-09-01T00:00:00Z"),
-      unitScale: 10_000_000,
-      eventName: "selfbench_managed_usage",
-    };
-    const first = await billing.refundSince(refund);
-    expect(first?.units).toBe(20_009_200);
-    expect(await billing.refundSince(refund)).toBeUndefined();
-    const events = await database.db.select().from(billingOutbox);
-    expect(events.find((event) => event.refundId === first?.id)?.value).toBe(-20_009_200);
-
-    const summary = await billing.usage(org.id);
-    expect(summary.modelBillableUsd + summary.sandboxBillableUsd).toBeCloseTo(6.00276, 5);
-    expect(summary.billedUsd).toBeCloseTo(4.00184, 5);
-    expect(summary.refundedUsd).toBeCloseTo(2.00092, 5);
-  } finally {
-    await database.close();
-  }
-});
-
-test("a refund's negative meter event goes through the Stripe API version that accepts it", async () => {
+test("an operator-recorded refund is sent as a negative meter event and nets out the summary", async () => {
   const { database, org } = await orgFixture();
   try {
     const billing = createBillingStore(database.db, true);
     await billing.saveCustomer(org.id, "cus_test");
     await createUsageStore(database.db).record({ ...managedRow, orgId: org.id });
-    await billing.refundSince({
+    // Refunds are recorded by an operator in the database; the app only delivers and reports them.
+    const [refund] = await database.db
+      .insert(billingRefunds)
+      .values({ orgId: org.id, reason: "Goodwill", units: 20_009_200, unitScale: 10_000_000 })
+      .returning();
+    if (!refund) throw new Error("refund missing");
+    await database.db.insert(billingOutbox).values({
+      refundId: refund.id,
       orgId: org.id,
-      customerId: "cus_test",
-      adminUserId: 1,
-      reason: "Goodwill",
-      since: new Date(0),
-      unitScale: 10_000_000,
+      identifier: `selfbench-refund-${refund.id}`,
       eventName: "selfbench_managed_usage",
+      customerId: "cus_test",
+      value: -20_009_200,
     });
+    expect((await billing.usage(org.id)).refundedUsd).toBeCloseTo(2.00092, 5);
     const sent: { url: string; value: string | null | undefined }[] = [];
     const dispatcher = startBillingDispatcher(
       billing,

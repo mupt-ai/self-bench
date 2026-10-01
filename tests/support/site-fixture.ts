@@ -163,6 +163,7 @@ export interface AuthServerOptions {
   readonly start?: WorkflowStarter;
   readonly status?: TaskStatusSource;
   readonly now?: () => Date;
+  readonly managedOffering?: boolean;
 }
 
 /** The site's routes over a fresh PGlite database on a real loopback server; other paths 404. */
@@ -180,6 +181,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
     apiKeys,
     fetchImpl,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.managedOffering ? { managedOffering: true } : {}),
   });
   let origin = "";
   const keyRoutes = createApiKeyRoutes({

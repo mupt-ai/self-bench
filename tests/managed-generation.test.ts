@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { setGatewayListing } from "../src/gateways/index.js";
-import { managedOffer } from "../src/generation/billing/managed.js";
+import {
+  managedHarborEnvironment,
+  managedModelKey,
+  managedOffer,
+  managedOfferingEnabled,
+} from "../src/generation/billing/managed.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "../src/generation/billing/pricing.js";
 import {
   checkGenerationCredentials,
@@ -121,7 +126,7 @@ test("an uncurated OpenRouter model works for generation but a made-up GPT model
     vault.credentials,
     1,
     settings,
-    managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+    managedOffer({ SELFBENCH_MANAGED_OFFERING: "true", SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
   );
   expect(generationModelRoute(id, { kind: "openrouter", auth: "api-key" })).toEqual({
     provider: "openrouter",
@@ -140,7 +145,7 @@ test("an uncurated OpenRouter model works for generation but a made-up GPT model
         verifierModel: "gpt-made-up",
         modelCredentialId: login.id,
       },
-      managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+      managedOffer({ SELFBENCH_MANAGED_OFFERING: "true", SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
     ),
   ).rejects.toThrow(/credential that can run/);
 });
@@ -167,7 +172,7 @@ test("a Vercel-only model can author with its gateway key but not managed OpenRo
       modelAccess: "credential",
       modelCredentialId: credential.id,
     },
-    managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+    managedOffer({ SELFBENCH_MANAGED_OFFERING: "true", SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
   );
   expect(generationModelRoute(model, { kind: "vercel-ai-gateway", auth: "api-key" })).toEqual({
     provider: "vercel-ai-gateway",
@@ -217,6 +222,7 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
   };
   await vault.records.write(`generations/run-managed`, managedReference, 0);
   const managedEnv = await generationEnvironment(vault, "run-managed", managedReference, {
+    SELFBENCH_MANAGED_OFFERING: "true",
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
     SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b",
   });
@@ -226,6 +232,13 @@ test("managed runs resolve platform keys and never inherit the worker's own cred
   await expect(generationEnvironment(vault, "run-managed", managedReference, {})).rejects.toThrow(
     "Managed models are not available",
   );
+  // With the offering off, platform keys are ignored: the deployment is bring-your-own-key only.
+  await expect(
+    generationEnvironment(vault, "run-managed", managedReference, {
+      SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
+      SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b",
+    }),
+  ).rejects.toThrow("Managed models are not available");
 });
 
 test("managed prices charge sandboxes per CPU-hour and GiB-hour and models per million tokens", () => {
@@ -244,13 +257,36 @@ test("managed prices charge sandboxes per CPU-hour and GiB-hour and models per m
 });
 
 test("the managed offer follows key presence so the UI can hide unavailable options", () => {
-  expect(managedOffer({ SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toEqual({
+  const on = { SELFBENCH_MANAGED_OFFERING: "true" };
+  expect(managedOffer({ ...on, SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k" })).toEqual({
     models: true,
     sandbox: false,
   });
-  expect(managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "e" })).toEqual({
+  expect(managedOffer({ ...on, SELFBENCH_MANAGED_E2B_API_KEY: "e" })).toEqual({
     models: false,
     sandbox: true,
   });
-  expect(managedOffer({})).toEqual({ models: false, sandbox: false });
+  expect(managedOffer(on)).toEqual({ models: false, sandbox: false });
+});
+
+test("the managed offering switch overrides every platform key", () => {
+  const keys = {
+    SELFBENCH_MANAGED_OPENROUTER_API_KEY: "k",
+    SELFBENCH_MANAGED_E2B_API_KEY: "e",
+    SELFBENCH_MANAGED_MODAL_TOKEN_ID: "id",
+    SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "secret",
+  };
+  for (const flag of [undefined, "", "false"]) {
+    const env = flag === undefined ? keys : { ...keys, SELFBENCH_MANAGED_OFFERING: flag };
+    expect(managedOfferingEnabled(env)).toBe(false);
+    expect(managedOffer(env)).toEqual({ models: false, sandbox: false });
+    expect(managedHarborEnvironment(env)).toBe("e2b");
+    expect(() => managedModelKey(env)).toThrow("not configured");
+  }
+  expect(managedOfferingEnabled({ SELFBENCH_MANAGED_OFFERING: "true" })).toBe(true);
+  // A typo is a configuration error, not a quiet "off".
+  for (const flag of ["True", "1", "yes"])
+    expect(() => managedOfferingEnabled({ SELFBENCH_MANAGED_OFFERING: flag })).toThrow(
+      'SELFBENCH_MANAGED_OFFERING must be "true" or "false"',
+    );
 });

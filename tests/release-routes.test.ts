@@ -54,7 +54,7 @@ test("a first release is published, and the public API serves only its payload",
     expect(text).not.toContain(hidden);
   const page = await server.request("/api/public/repos/VERCEL/Next.js", {}, null);
   expect(page.status).toBe(200);
-  expect(page.headers.get("cache-control")).toBe("public, max-age=60");
+  expect(page.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
 });
 
 test("releasing the same results again writes no row", async () => {
@@ -182,6 +182,9 @@ test("withdrawing falls back to the previous release; the next release chains to
     method: "POST",
   });
   expect(withdrawn.status).toBe(200);
+  // Each release and the withdrawal name what changed, for search engines to be told.
+  expect(server.changes.at(-1)).toEqual({ fullName: "vercel/next.js", publisher: "acme" });
+  expect(server.changes).toHaveLength(3);
   page = await (await server.request("/api/public/repos/vercel/next.js", {}, null)).json();
   expect(page.lines[0].release.releaseId).toBe(first.release.id);
   const view = await server.preview();

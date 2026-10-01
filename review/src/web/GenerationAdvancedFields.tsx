@@ -6,7 +6,6 @@ import {
   harborEnvironmentLabels,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/db/credentials";
-import { generationModelLabel } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,
   type GenerationSettings,
@@ -14,7 +13,11 @@ import {
   generationSandboxLabels,
 } from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
-import { managedModelOffered, modelCredentialMatches } from "./generation-defaults";
+import {
+  generationHints,
+  modelCredentialMatches,
+  selectableGenerationModels,
+} from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
 
@@ -34,9 +37,8 @@ export function AdvancedFields({
   managed: { models: boolean; sandbox: boolean };
 }) {
   const hosted = value.sandbox !== "managed";
-  const selectableModels = options?.models.filter(
-    (model) => value.modelAccess !== "managed" || managedModelOffered(model, options),
-  );
+  const models = options ? selectableGenerationModels(value, options) : [];
+  const hints = generationHints(managed);
   const compatible = (credential: CredentialInfo) =>
     modelCredentialMatches(
       credential,
@@ -65,10 +67,9 @@ export function AdvancedFields({
               value={value[field]}
               onChange={(event) => onChange({ ...value, [field]: event.target.value })}
             >
-              {selectableModels?.map((model) => (
-                <option key={model} value={model}>
-                  {options?.modelCatalog?.find((entry) => entry.id === model)?.label ??
-                    generationModelLabel(model)}
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label}
                 </option>
               ))}
             </Select>
@@ -99,7 +100,7 @@ export function AdvancedFields({
         <label htmlFor="generation-model-access" className={`${fieldStyles} content-start`}>
           <span className="flex items-center gap-1.5">
             Model Access
-            <InfoTooltip label="Managed runs on SelfBench's account — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store." />
+            <InfoTooltip label={hints.modelAccess} />
           </span>
           <Select
             id="generation-model-access"
@@ -145,7 +146,7 @@ export function AdvancedFields({
         <label htmlFor="generation-sandbox" className={`${fieldStyles} content-start`}>
           <span className="flex items-center gap-1.5">
             Sandbox
-            <InfoTooltip label="Managed sandboxes run on SelfBench's account — nothing to configure, usage tracked per run. The other options run on a credential you store." />
+            <InfoTooltip label={hints.sandbox} />
           </span>
           <Select
             id="generation-sandbox"
@@ -291,7 +292,7 @@ export function AdvancedFields({
           >
             Manage Credentials
           </Link>
-          <InfoTooltip label="Each PR starts a separate workflow. Managed model and sandbox usage is tracked per run; stored credentials may incur charges on your own accounts." />
+          <InfoTooltip label={hints.charges} />
         </span>
       </div>
     </div>
