@@ -168,17 +168,20 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
           <span className="flex shrink-0" {...flightTo("avatar")}>
             <Avatar src={head.ownerAvatarUrl} size={32} />
           </span>
-          <a
-            href={`https://github.com/${repository.fullName}`}
-            target="_blank"
-            rel="noreferrer"
-            className="hit relative min-w-0 font-mono text-2xl font-medium hover:underline"
-            {...flightTo("name")}
-          >
-            {/* A long name wraps after the owner, never inside a word. */}
-            {owner}/<wbr />
-            {name}
-          </a>
+          {/* The page's heading, as in the page text the server writes (src/api/site-body.ts):
+              without it, a crawler that runs the page finds no h1 once this replaces that text. */}
+          <h1 className="min-w-0 font-mono text-2xl font-medium" {...flightTo("name")}>
+            <a
+              href={`https://github.com/${repository.fullName}`}
+              target="_blank"
+              rel="noreferrer"
+              className="hit relative block hover:underline"
+            >
+              {/* A long name wraps after the owner, never inside a word. */}
+              {owner}/<wbr />
+              {name}
+            </a>
+          </h1>
           {repository.stars !== undefined && (
             <span
               className="flex items-center gap-1 font-mono text-sm text-muted-foreground"
