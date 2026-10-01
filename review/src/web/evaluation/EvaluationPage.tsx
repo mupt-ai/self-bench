@@ -18,7 +18,8 @@ export function EvaluationPage() {
   const selectedId = search.get("run");
   const [current, setCurrent] = React.useState<EvaluationRun>();
   const [runError, setRunError] = React.useState("");
-  const error = runError || listError;
+  // Each view shows its own load's error: a run that loaded isn't hidden by the list failing.
+  const error = selectedId ? runError : listError;
   useDocumentTitle(`Results · ${repo}`);
   React.useEffect(() => {
     let disposed = false;

@@ -23,7 +23,7 @@ interface RepoRuns {
   error: string;
   /** Whether the Results page is the one showing. */
   onResults: boolean;
-  /** Puts a freshly fetched run in place of its older copy. */
+  /** Puts a freshly fetched run in place of its older copy, or first if the list lacks it. */
   update(run: EvaluationRun): void;
 }
 
@@ -140,7 +140,11 @@ export function RepoRunsProvider({
   }, [onResults, url, org, repo]);
   const update = React.useCallback(
     (run: EvaluationRun) =>
-      setRuns((history) => history.map((entry) => (entry.id === run.id ? run : entry))),
+      setRuns((history) =>
+        history.some((entry) => entry.id === run.id)
+          ? history.map((entry) => (entry.id === run.id ? run : entry))
+          : [run, ...history],
+      ),
     [],
   );
   const value = React.useMemo(
