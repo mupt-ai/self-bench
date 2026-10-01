@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
-import { gatewayModel, gatewayTrial } from "../src/evaluation/execution.js";
+import { gatewayModel, gatewayTrial, solverAgent } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
@@ -74,9 +74,9 @@ for (const provider of gatewayIds) {
     expect(codex.child.ANTHROPIC_API_KEY).toBeUndefined();
     expect(codex.child.OPENAI_BASE_URL).toBe(gateways[provider].openAiBase);
     expect(codex.extraAllowedHosts).toEqual([...hosts]);
-    expect(solverArguments("task", "jobs", "codex", codex.model, "e2b")).toContain(
-      "harbor_gateway:GatewayCodex",
-    );
+    // The provider picks the adapter, so a typed id with no vendor still gets HTTPS-only Codex.
+    expect(gatewayTrial(input, "codex", `${provider}/gpt-4o`, env).model).toBe("openai/gpt-4o");
+    expect(solverAgent("codex", provider)).toBe("harbor_gateway:GatewayCodex");
     for (const harness of ["mini-swe-agent", "terminus-2"] as const) {
       const result = gatewayTrial(input, harness, name, env);
       expect(result.model).toBe(codex.model);
@@ -86,7 +86,7 @@ for (const provider of gatewayIds) {
     expect(pi.model).toBe(name);
     expect(Object.keys(pi.child).filter((key) => key.endsWith("_API_KEY"))).toEqual([keyVariable]);
     // Harbor's own Pi adapter does not pass Vercel's key to Pi.
-    expect(solverArguments("task", "jobs", "pi", pi.model, "e2b")).toContain(
+    expect(solverAgent("pi", provider)).toBe(
       provider === "vercel-ai-gateway" ? "harbor_gateway:GatewayPi" : "pi",
     );
     expect(env).toEqual(original);
