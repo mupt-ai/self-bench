@@ -24,10 +24,10 @@ const HARBOR_KILL_GRACE_MS = 3 * 60 * 1000;
 
 /**
  * One `harbor run` (`args` from harborRunArguments) that leaves no sandbox running: every sandbox
- * it starts carries `sandboxes.environmentKwargs`. A stopped run (abort, timeout or output guard) gets
- * HARBOR_KILL_GRACE_MS to clean up after itself, and however it exits, `sandboxes` then sweeps
- * whatever it left. A worker shutting down is killed soon after it cancels its activities (Cloud
- * Run allows 10 seconds), long before Harbor would finish, so then the sweep starts at once.
+ * it starts carries `sandboxes.environmentKwargs`. A stopped run (abort, timeout or output guard)
+ * gets HARBOR_KILL_GRACE_MS to clean up after itself, and however it exits, `sandboxes` then
+ * sweeps whatever it left. A worker shutting down is killed soon after it cancels its activities
+ * (Cloud Run allows 10 seconds), long before Harbor would finish, so then the sweep starts at once.
  */
 export async function runHarbor(
   sandboxes: HarborSandboxes,

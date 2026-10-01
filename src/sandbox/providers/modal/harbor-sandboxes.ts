@@ -40,12 +40,6 @@ export function modalHarborSandboxes(env: NodeJS.ProcessEnv): HarborSandboxes {
  * `timeoutMs` and reports failures in the log rather than throwing, so a trial never fails or
  * hangs on it.
  */
-async function collect(sandboxes: AsyncGenerator<Sandbox>): Promise<Sandbox[]> {
-  const collected: Sandbox[] = [];
-  for await (const sandbox of sandboxes) collected.push(sandbox);
-  return collected;
-}
-
 export async function terminateTaggedSandboxes(
   client: Pick<ModalClient, "apps" | "sandboxes">,
   tags: Readonly<Record<string, string>>,
@@ -89,4 +83,10 @@ export async function terminateTaggedSandboxes(
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function collect(sandboxes: AsyncGenerator<Sandbox>): Promise<Sandbox[]> {
+  const collected: Sandbox[] = [];
+  for await (const sandbox of sandboxes) collected.push(sandbox);
+  return collected;
 }
