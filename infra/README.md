@@ -21,7 +21,7 @@ infra/
 │   └── modules/selfbench-environment/
 ├── runtime/
 │   └── *.env.example
-├── ci/verify-source.sh
+├── ci/{verify-source,new-migrations}.sh
 └── check.sh
 ```
 
@@ -132,9 +132,9 @@ The workflow:
 
 1. validates the repository and application;
 2. verifies the source event before cloud authentication;
-3. builds and pushes a digest-pinned image;
+3. builds and pushes a digest-pinned image (on dev, alongside step 1 rather than after it);
 4. creates a saved Terraform plan with the planner identity, with that digest, the public origins, run ID and activity concurrency as inputs;
-5. creates a Cloud SQL backup;
+5. creates a Cloud SQL backup: before every prod release, and before a dev release only when it brings migrations the dev database has not run (`infra/ci/new-migrations.sh`), since Cloud SQL's daily backups and point-in-time recovery cover the rest;
 6. applies that same local plan with the apply identity. The new API revision migrates the database as it starts, then the worker pool rolls;
 7. checks the public API and results site.
 
