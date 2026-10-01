@@ -46,11 +46,14 @@ function sameHost(protocol: string): (value: string | undefined) => string | und
 }
 
 /**
- * A page that exists is the same for everyone: the CDN may keep it a minute, and is cleared on
- * every deploy, because the page names that build's scripts. Browsers check it on every visit,
- * a bodyless 304 while it is unchanged, so none keeps a page from before a deploy.
+ * A page that exists is the same for everyone. The CDN may keep it 10 seconds, so a release
+ * shows within about 15 (the API servers re-read releases every 5), and it is cleared on every
+ * deploy, because the page names that build's scripts. Browsers check it on every visit, a
+ * bodyless 304 while it is unchanged. With `s-maxage` the CDN never hands out an expired copy,
+ * neither while it refreshes one nor while the API is down, so no page is ever older than that;
+ * a `stale-while-revalidate` would change nothing.
  */
-const PAGE_CACHE = "public, max-age=0, s-maxage=60";
+const PAGE_CACHE = "public, max-age=0, s-maxage=10";
 /**
  * A link preview image stays the same for its release (its address carries the release id), so
  * the CDN may keep it a day; browsers an hour, in case one is fetched without the id.
@@ -211,7 +214,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
         return true;
       }
       // Every page the site can show, read from the released lines like the pages themselves, so
-      // it lists a release as soon as its page shows it. Kept a minute by the CDN, as pages are.
+      // it lists a release as soon as its page shows it. Kept by the CDN as briefly as pages are.
       if (url.pathname === "/sitemap.xml" && options.indexable) {
         const repositories = await options.publicRoutes.repositories().catch(() => undefined);
         if (!repositories) {

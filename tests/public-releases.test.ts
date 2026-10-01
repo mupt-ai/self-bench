@@ -102,7 +102,7 @@ test("the directory is one card per line, holding only what a card and search sh
   const { get } = await serve(async () => lines);
   const response = await get("/api/public/directory");
   expect(response.status).toBe(200);
-  expect(response.headers.get("cache-control")).toBe("public, max-age=60");
+  expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
   const { cards } = await response.json();
   // Newest release first; each repository's newest line is its default.
   expect(cards.map((card: { publisher: { login: string } }) => card.publisher.login)).toEqual([
@@ -173,7 +173,7 @@ test("every public response is tagged; a client holding it gets a bodyless 304",
     expect(again.status).toBe(304);
     expect(await again.text()).toBe("");
     expect(again.headers.get("etag")).toBe(etag);
-    expect(again.headers.get("cache-control")).toBe("public, max-age=60");
+    expect(again.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
   }
 });
 
