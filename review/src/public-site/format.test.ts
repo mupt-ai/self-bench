@@ -29,6 +29,13 @@ test("twin model labels are told apart by what differs between them", () => {
   expect(settingLabel(other, all)).toBe("Luna");
 });
 
+test("twins that differ only in reasoning keep the model's name, which has its own column", () => {
+  const high = setting({ id: "sol-high", reasoningLevel: "high" });
+  const low = setting({ id: "sol-low", reasoningLevel: "low" });
+  expect(settingLabel(high, [high, low])).toBe(high.model.label);
+  expect(settingLabel(low, [high, low])).toBe(low.model.label);
+});
+
 test("OpenRouter models take their vendor's colour, with or without a gateway prefix", () => {
   const routed = (name: string) =>
     vendorColor(

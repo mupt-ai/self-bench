@@ -3,25 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import {
   accuracyTick,
+  CHART_LOOK,
   dollars as tickDollars,
   VENDOR_CHIPS,
   vendorPoint,
 } from "../../public-site/format";
 import { type BenchmarkPoint, type CustomEndpoint, dollars } from "./benchmark";
 import { endpointLabel } from "./credential-presentation";
-
-/** The plot's colors and type, taken from the app theme so it follows light and dark. */
-const THEMED = [
-  "[--pareto-background:var(--card)]",
-  "[--pareto-tooltip-background:var(--background)]",
-  "[--pareto-foreground:var(--foreground)]",
-  "[--pareto-muted:var(--muted-fg)]",
-  "[--pareto-grid:var(--border)]",
-  "[--pareto-point:var(--faint)]",
-  "[--pareto-frontier:var(--foreground)]",
-  "[--pareto-frontier-line:var(--muted-fg)]",
-  "[--pareto-font-family:var(--mono)]",
-].join(" ");
 
 export function ParetoChart({
   points,
@@ -59,7 +47,7 @@ export function ParetoChart({
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ParetoPlot
-            className={THEMED}
+            {...CHART_LOOK}
             title="Model Comparison"
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
@@ -68,9 +56,8 @@ export function ParetoChart({
             height={narrow ? 440 : Math.round(Math.min(560, Math.max(440, width * 0.55)))}
             textScale={narrow ? 1.3 : 1.2}
             showLegend={!narrow}
-            showPointLabels="frontier"
+            // A highlighted vendor chip names its points, placed clear of each other.
             labelPlacement="auto"
-            showTooltip
             // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
             hoverRadius={36}
             // The public repository page's vendor chips: hovering one fades the rest.
@@ -80,13 +67,14 @@ export function ParetoChart({
               const source = { provider: point.provider, model: { name: point.model } };
               const customModel = point.provider === "custom" ? point.model : undefined;
               const label = oneHarness
-                ? point.name
-                : `${point.name} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`;
+                ? point.modelLabel
+                : `${point.modelLabel} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`;
               // A custom endpoint shows its host, and the number the public page would give it.
               const custom = endpoints.get(point.id);
               return {
                 id: point.id,
                 label: custom?.number ? `${label} (Endpoint ${custom.number})` : label,
+                ...(point.thinking === "default" ? {} : { note: point.thinking }),
                 x: point.cost,
                 y: point.accuracy,
                 ...vendorPoint(source, customModel),

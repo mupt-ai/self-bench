@@ -58,6 +58,7 @@ test("custom endpoints are numbered as a release would number them, lone ones no
     id,
     runId: id,
     name: model,
+    modelLabel: model,
     provider: "custom",
     model,
     thinking: "default",

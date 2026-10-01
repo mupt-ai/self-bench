@@ -30,8 +30,9 @@ export function cleanDescription(text: string): string {
 
 /**
  * The name shown for a setting. When two settings of one release share a model label, the
- * harness and reasoning that tell them apart are appended, so points and rows stay distinct.
- * Legacy releases may still contain separate access routes or numbered custom endpoints.
+ * harness that tells them apart is appended. Reasoning never is: the table has its own column
+ * for it and the chart shows it after the name. Legacy releases may still contain separate
+ * access routes or numbered custom endpoints.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
   const twins = all.filter((other) => other.model.label === setting.model.label);
@@ -40,9 +41,7 @@ export function settingLabel(setting: PublicSetting, all: readonly PublicSetting
     [accessLabel(entry), harnessLabel(entry), reasoningLabel(entry)].join("|");
   const differs = (pick: (entry: PublicSetting) => string) =>
     new Set(twins.map(pick)).size > 1 ? pick(setting) : undefined;
-  const extra = [differs(accessLabel), differs(harnessLabel), differs(reasoningLabel)].filter(
-    Boolean,
-  );
+  const extra = [differs(accessLabel), differs(harnessLabel)].filter(Boolean);
   const same = twins.filter((other) => other.custom && visible(other) === visible(setting));
   if (setting.custom && same.length > 1) {
     const number = /\|#(\d{1,3})$/.exec(setting.id)?.[1] ?? String(same.indexOf(setting) + 1);
@@ -117,6 +116,33 @@ export function reasoningLabel(setting: Pick<PublicSetting, "reasoningLevel">): 
   const level = setting.reasoningLevel;
   return level === "xhigh" ? "X-High" : level.charAt(0).toUpperCase() + level.slice(1);
 }
+
+/**
+ * The look of both results charts, the repository page's and the app's, after the dari.dev
+ * benchmark charts: the frontier a solid line named along its length, Manrope names and DM Mono
+ * numbers, and a point's name and values shown only while it is pointed at, beside it. Points
+ * keep their vendor colors. Colors come from the theme, so they follow light and dark.
+ */
+export const CHART_LOOK = {
+  className: [
+    "[--pareto-background:var(--card)]",
+    "[--pareto-tooltip-background:var(--card)]",
+    "[--pareto-foreground:var(--foreground)]",
+    "[--pareto-muted:var(--muted-fg)]",
+    "[--pareto-grid:var(--border)]",
+    "[--pareto-point:var(--faint)]",
+    "[--pareto-frontier:var(--foreground)]",
+    "[--pareto-frontier-line:var(--chart-frontier)]",
+    "[--pareto-frontier-dash:none]",
+    "[--pareto-frontier-width:2px]",
+    "[--pareto-font-family:var(--chart-mono)]",
+    "[--pareto-label-font-family:var(--chart-sans)]",
+  ].join(" "),
+  showPointLabels: "none",
+  showTooltip: true,
+  tooltipStyle: "label",
+  frontierLabel: "PARETO FRONTIER",
+} satisfies Partial<ParetoPlotProps>;
 
 /**
  * The vendor chips of both results charts, the repository page's and the app's, so the two
