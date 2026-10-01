@@ -16,6 +16,8 @@ export interface CommandOptions {
   readonly allowFailure?: boolean;
   readonly signal?: AbortSignal;
   readonly onOutput?: CommandOutputHandler;
+  /** How long a stopped command (abort or timeout) has between SIGTERM and SIGKILL; 5s by default. */
+  readonly killGraceMs?: number;
 }
 
 export class CommandTimeoutError extends Error {
@@ -49,9 +51,12 @@ export async function runCommand(
     let forceKillTimer: NodeJS.Timeout | undefined;
     let timeoutError: CommandTimeoutError | undefined;
     let cancellationError: unknown;
+    // One SIGTERM only: a second one (a timeout during an abort's grace) would interrupt the
+    // cleanup the first one started.
     const terminate = (): void => {
+      if (forceKillTimer) return;
       child.kill("SIGTERM");
-      forceKillTimer ??= setTimeout(() => child.kill("SIGKILL"), 5_000);
+      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), options.killGraceMs ?? 5_000);
       forceKillTimer.unref();
     };
     const capture = (stream: "stdout" | "stderr", output: RollingOutput, chunk: Buffer): void => {

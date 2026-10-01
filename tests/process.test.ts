@@ -16,6 +16,27 @@ describe("runCommand", () => {
     expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 
+  test("lets a stopped child finish its cleanup within killGraceMs before SIGKILL", async () => {
+    // Cleans up for ~1s after SIGTERM, then reports it finished; SIGKILL cuts that short.
+    const script = "trap 'sleep 1; echo cleaned; exit 0' TERM; while true; do sleep 0.05; done";
+    const stopped = async (killGraceMs: number) => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 100);
+      let output = "";
+      await runCommand("bash", ["-c", script], {
+        signal: controller.signal,
+        killGraceMs,
+        onOutput: (_stream, chunk) => {
+          output += Buffer.from(chunk).toString("utf8");
+        },
+      }).catch(() => undefined);
+      return output;
+    };
+
+    expect(await stopped(5_000)).toContain("cleaned");
+    expect(await stopped(200)).not.toContain("cleaned");
+  });
+
   test("returns exit 124 or throws when the overall timeout expires", async () => {
     const request = [process.execPath, ["-e", "setInterval(() => undefined, 1_000)"]] as const;
 

@@ -7,7 +7,7 @@ import { LocalArtifactStore } from "../../src/artifacts/local.js";
 import { AGENT_MINUTES, trialTimeouts } from "../../src/contracts/agent-limit.js";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import type { AuthoredTask } from "../../src/contracts/index.js";
-import { solverArguments } from "../../src/evaluation/runner.js";
+import { solverArguments } from "../../src/evaluation/execution.js";
 import { unpackTrialTask } from "../../src/evaluation/task-bundle.js";
 import { runHarborGates } from "../../src/generation/pipeline/harbor-gates.js";
 import { runCommand } from "../../src/lib/process.js";
@@ -122,7 +122,12 @@ for (const environment of ["modal", "e2b"] as const) {
     if (environment === "modal") {
       expect(result.images).toEqual(images);
       // Only the oracle, which runs the task's real test.sh, records what trials will start from.
-      expect(calls.map((args) => args.includes("--ek"))).toEqual([false, true]);
+      expect(calls.map((args) => args.some((arg) => arg.startsWith("image_record_dir=")))).toEqual([
+        false,
+        true,
+      ]);
+      // Both runs tag their sandboxes, so the worker can sweep any they leave running.
+      expect(calls.every((args) => args.some((arg) => arg.startsWith("labels=")))).toBe(true);
       expect(calls[1]?.[calls[1].indexOf("--env") + 1]).toBe(
         "selfbench_modal:SelfBenchModalEnvironment",
       );

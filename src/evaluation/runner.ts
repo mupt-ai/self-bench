@@ -4,20 +4,17 @@ import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
-import type { HarborEnvironment } from "../contracts/config/providers.js";
-import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
-import { harborRunArguments } from "../harnesses/harbor/command.js";
+import { runHarbor } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
-import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
+import { harborSandboxes } from "../sandbox/harbor-sandboxes.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
-import { solverAgent } from "./execution.js";
-import { thinkingArguments } from "./models.js";
+import { solverArguments } from "./execution.js";
 import {
   boundedSteps,
   collectOutput,
@@ -32,31 +29,8 @@ import {
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { setUpTrial } from "./trial-setup.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
+import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
-export function solverArguments(
-  taskPath: string,
-  jobs: string,
-  harness: Harness,
-  model: string,
-  sandbox: HarborEnvironment,
-  thinking?: ThinkingLevel,
-  extraAllowedHosts: readonly string[] = [],
-  images?: TaskImages,
-  provider?: string,
-): string[] {
-  return harborRunArguments({
-    taskPath,
-    jobsPath: jobs,
-    jobName: "solver",
-    agent: solverAgent(harness, provider),
-    environment: sandbox,
-    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
-    extraAllowedHosts,
-    // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
-    ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
-  });
-}
 export interface RunnerOptions {
   command?: typeof runCommand;
   env?: NodeJS.ProcessEnv;
@@ -257,8 +231,8 @@ async function runTrial(context: {
   }, options.pollMs ?? 3000);
   try {
     const result = await context.guard.watch(
-      command(
-        "harbor",
+      runHarbor(
+        harborSandboxes(run.sandbox, child),
         solverArguments(
           taskPath,
           jobs,
@@ -280,6 +254,7 @@ async function runTrial(context: {
             stdout = `${stdout}${Buffer.from(chunk).toString("utf8")}`.slice(-200_000);
           },
         },
+        command,
       ),
     );
     clearInterval(timer);

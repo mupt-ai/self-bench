@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { credentialExecution } from "../src/evaluation/execution.js";
+import { credentialExecution, solverArguments } from "../src/evaluation/execution.js";
 import {
   collectOutput,
   completeLines,
@@ -9,7 +9,6 @@ import {
   redactOutput,
   trajectorySteps,
 } from "../src/evaluation/output.js";
-import { solverArguments } from "../src/evaluation/runner.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
 import {
   assertEvaluationBundleSize,

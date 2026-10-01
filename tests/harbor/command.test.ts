@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
+import { CancelledFailure } from "@temporalio/common";
 import { HARBOR_ENVIRONMENTS } from "../../src/contracts/config/providers.js";
 import {
   harborProcessEnvironment,
   harborRunArguments,
+  runHarbor,
 } from "../../src/harnesses/harbor/command.js";
+import { runCommand } from "../../src/lib/process.js";
 
 test("all Harbor providers share invocation policy without acquiring solver retry semantics in gates", () => {
   for (const environment of HARBOR_ENVIRONMENTS) {
@@ -64,4 +67,47 @@ test("Docker packaging and the process policy pin the same Harbor version", asyn
   const { HARBOR_VERSION } = await import("../../src/harnesses/harbor/command.js");
   const dockerfile = await Bun.file(new URL("../../Dockerfile", import.meta.url)).text();
   expect(dockerfile.match(/^ARG HARBOR_VERSION=(.+)$/m)?.[1]).toBe(HARBOR_VERSION);
+});
+
+/**
+ * Stands in for `harbor run`: on SIGTERM it cleans up for a moment, as Harbor's cancel path does,
+ * and every sweep records whether that cleanup had finished.
+ */
+function stoppableHarbor() {
+  const events: string[] = [];
+  const sandboxes = {
+    environmentKwargs: {},
+    sweep: async () => {
+      events.push("sweep");
+    },
+  };
+  const command: typeof runCommand = (_command, _args, options) =>
+    runCommand(
+      "bash",
+      ["-c", "trap 'sleep 0.5; exit 0' TERM; while true; do sleep 0.05; done"],
+      options,
+    ).finally(() => events.push("exited"));
+  return { events, sandboxes, command };
+}
+
+test("a Harbor run sweeps its sandboxes once Harbor has exited, however it was stopped", async () => {
+  for (const reason of [undefined, new CancelledFailure("CANCELLED")]) {
+    const { events, sandboxes, command } = stoppableHarbor();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(reason), 100);
+    await runHarbor(sandboxes, ["run"], { signal: controller.signal }, command).catch(
+      () => undefined,
+    );
+    expect(events).toEqual(["exited", "sweep"]);
+  }
+});
+
+test("a Harbor run sweeps its sandboxes at once when the worker shuts down", async () => {
+  const { events, sandboxes, command } = stoppableHarbor();
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(new CancelledFailure("WORKER_SHUTDOWN")), 100);
+  await runHarbor(sandboxes, ["run"], { signal: controller.signal }, command).catch(
+    () => undefined,
+  );
+  expect(events).toEqual(["sweep", "exited", "sweep"]);
 });

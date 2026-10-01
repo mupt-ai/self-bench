@@ -15,6 +15,7 @@ import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
   harborRunArguments,
+  runHarbor,
 } from "../../harnesses/harbor/command.js";
 import { authoredImageBuildFailure } from "../../harnesses/harbor/image-build.js";
 import { recordedImages } from "../../harnesses/harbor/pinned-images.js";
@@ -26,6 +27,7 @@ import {
 import { prepareHarborRun, refuseWithoutRetry } from "../../harnesses/harbor/task-safety.js";
 import { runCommand } from "../../lib/process.js";
 import { isRecord, tail } from "../../lib/util.js";
+import { harborSandboxes } from "../../sandbox/harbor-sandboxes.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
 import { activityAttempt } from "./helpers.js";
@@ -179,8 +181,8 @@ export async function harborRun(
       attempt: activityAttempt(),
       secrets: providerSecrets(env),
     });
-  const trial = runCommand(
-    "harbor",
+  const trial = runHarbor(
+    harborSandboxes(environment, harbor.env),
     harborRunArguments({
       taskPath: taskDirectory,
       jobsPath: jobsDirectory,

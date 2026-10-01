@@ -7,7 +7,9 @@ environment kwargs and starts from ``Image.from_id``, so it neither resolves nor
 Dockerfile. A pin Modal no longer knows (another workspace, or an image Modal dropped) falls
 back to the Dockerfile build Harbor would have done. Compose tasks (Harbor's Docker-in-Docker
 strategy) never pin: their sandbox image is the DinD host, not the task. Every sandbox also
-gets a lifetime and an idle limit, so one whose trial stopped without cleaning up ends itself.
+gets a lifetime and an idle limit, so one whose trial stopped without cleaning up ends itself,
+though the worker first terminates any its run left (``labels`` tags them with the run; see
+src/sandbox/harbor-sandboxes.ts).
 """
 
 from __future__ import annotations

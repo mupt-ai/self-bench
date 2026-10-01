@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { delimiter, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CancelledFailure } from "@temporalio/common";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
+import { type CommandOptions, type CommandResult, runCommand } from "../../lib/process.js";
+import type { HarborSandboxes } from "../../sandbox/harbor-sandboxes.js";
 
 /** Process policy for generation gates, not provider lifetimes; solver trials use trialTimeouts. */
 export const HARBOR_VERSION = "0.23.0";
@@ -12,6 +15,43 @@ export const HARBOR_PROCESS_TIMEOUT_MS = {
   // from source; ten at once on a new 2-vCPU worker took longer than 15 seconds.
   version: 60 * 1000,
 } as const;
+
+/**
+ * Harbor turns SIGTERM into its cancel path: the collect hook, artifact downloads, then stopping
+ * the sandboxes. That takes far longer than the 5 seconds other commands get before SIGKILL.
+ */
+const HARBOR_KILL_GRACE_MS = 3 * 60 * 1000;
+
+/**
+ * One `harbor run` (`args` from harborRunArguments) that leaves no sandbox running: every sandbox
+ * it starts carries `sandboxes.environmentKwargs`. A stopped run (abort, timeout or output guard) gets
+ * HARBOR_KILL_GRACE_MS to clean up after itself, and however it exits, `sandboxes` then sweeps
+ * whatever it left. A worker shutting down is killed soon after it cancels its activities (Cloud
+ * Run allows 10 seconds), long before Harbor would finish, so then the sweep starts at once.
+ */
+export async function runHarbor(
+  sandboxes: HarborSandboxes,
+  args: readonly string[],
+  options: CommandOptions & { readonly signal: AbortSignal },
+  command: typeof runCommand = runCommand,
+): Promise<CommandResult> {
+  const { signal } = options;
+  const shutdown = () => {
+    if (signal.reason instanceof CancelledFailure && signal.reason.message === "WORKER_SHUTDOWN")
+      void sandboxes.sweep();
+  };
+  signal.addEventListener("abort", shutdown, { once: true });
+  if (signal.aborted) shutdown();
+  try {
+    return await command("harbor", [...args, ...kwargArguments(sandboxes.environmentKwargs)], {
+      ...options,
+      killGraceMs: HARBOR_KILL_GRACE_MS,
+    });
+  } finally {
+    signal.removeEventListener("abort", shutdown);
+    await sandboxes.sweep();
+  }
+}
 
 export interface HarborRunCommand {
   taskPath: string;
@@ -52,12 +92,13 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
-    ...Object.entries(input.environmentKwargs ?? {}).flatMap(([key, value]) => [
-      "--ek",
-      `${key}=${value}`,
-    ]),
+    ...kwargArguments(input.environmentKwargs ?? {}),
     ...(input.solver?.agentArguments ?? []),
   ];
+}
+
+function kwargArguments(kwargs: Readonly<Record<string, string>>): string[] {
+  return Object.entries(kwargs).flatMap(([key, value]) => ["--ek", `${key}=${value}`]);
 }
 
 /**

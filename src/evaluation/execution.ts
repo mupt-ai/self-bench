@@ -2,6 +2,9 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ApplicationFailure } from "@temporalio/common";
+import type { HarborEnvironment } from "../contracts/config/providers.js";
+import type { ThinkingLevel } from "../contracts/models.js";
+import type { TaskImages } from "../contracts/task.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { gateways, isGateway, modelApiKeyVariable } from "../gateways/index.js";
@@ -10,8 +13,10 @@ import {
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
+import { harborRunArguments } from "../harnesses/harbor/command.js";
+import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
-import { signInRefusal } from "./models.js";
+import { signInRefusal, thinkingArguments } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /**
@@ -143,6 +148,31 @@ export function solverAgent(harness: Harness, provider?: string): string {
   // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's
   // HTTPS-only provider.
   return isGateway(provider) ? "harbor_gateway:GatewayCodex" : "harbor_gateway:SelfBenchCodex";
+}
+
+/** The `harbor run` arguments for one solver trial. */
+export function solverArguments(
+  taskPath: string,
+  jobs: string,
+  harness: Harness,
+  model: string,
+  sandbox: HarborEnvironment,
+  thinking?: ThinkingLevel,
+  extraAllowedHosts: readonly string[] = [],
+  images?: TaskImages,
+  provider?: string,
+): string[] {
+  return harborRunArguments({
+    taskPath,
+    jobsPath: jobs,
+    jobName: "solver",
+    agent: solverAgent(harness, provider),
+    environment: sandbox,
+    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    extraAllowedHosts,
+    // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
+    ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
+  });
 }
 
 /** The model name Harbor receives for a harness over the selected connection. */
