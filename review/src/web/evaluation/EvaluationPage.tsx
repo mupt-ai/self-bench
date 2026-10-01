@@ -4,6 +4,7 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationRun, evaluationRequest } from "./api";
+import { ChartPreview } from "./ChartPreview";
 import { ComparisonHistory } from "./ComparisonHistory";
 import { EvaluationResults } from "./EvaluationResults";
 import { useRepoRuns } from "./RepoRuns";
@@ -52,6 +53,10 @@ export function EvaluationPage() {
   return (
     <PageContent>
       <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
+        {/* The header's chart preview has no room on a phone; this opens the same chart. */}
+        <span className="md:hidden">
+          <ChartPreview repo={repo} variant="button" />
+        </span>
         <Link className={buttonStyles.secondary} to={`/repos/${repo}/releases?release=1`}>
           Release Results
         </Link>

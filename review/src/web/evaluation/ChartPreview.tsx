@@ -1,10 +1,10 @@
 import { paretoFrontier } from "@mupt-ai/dari-pareto";
-import { Maximize2 } from "lucide-react";
+import { ChartScatter, Maximize2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { vendorColor } from "../../public-site/format";
 import { Dialog, DialogHeader } from "../Dialog";
-import { Select } from "../ui";
+import { buttonStyles, Select } from "../ui";
 import { type BenchmarkPoint, benchmarkPoints, customEndpoints } from "./benchmark";
 import { ParetoChart } from "./ParetoChart";
 import { useRepoRuns } from "./RepoRuns";
@@ -65,10 +65,18 @@ function MiniChart({ points }: { points: readonly BenchmarkPoint[] }) {
 }
 
 /**
- * The model comparison chart, in the repository header on the Results page: a small preview that
- * opens the full chart in a dialog. Hidden until some run can be charted.
+ * The model comparison chart, on the Results page: a small preview in the repository header that
+ * opens the full chart in a dialog, or on a phone a Chart button in the page's actions. Hidden
+ * until some run can be charted.
  */
-export function ChartPreview({ repo }: { repo: string }) {
+export function ChartPreview({
+  repo,
+  variant = "card",
+}: {
+  repo: string;
+  /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
+  variant?: "card" | "button";
+}) {
   const { runs, credentials, onResults } = useRepoRuns();
   const navigate = useNavigate();
   const close = useRef<HTMLButtonElement>(null);
@@ -90,27 +98,41 @@ export function ChartPreview({ repo }: { repo: string }) {
   };
   return (
     <>
-      <button
-        type="button"
-        className="group flex items-center gap-3 border border-border bg-card px-2.5 py-2 text-left text-muted-foreground hover:border-foreground/35 hover:text-foreground"
-        aria-label="Open Model Comparison"
-        title="Open Model Comparison"
-        onClick={() => setOpen(true)}
-      >
-        <MiniChart points={comparable} />
-        {/* Centered against the chart, so the space above and below the text is the same. */}
-        <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
-          <span className="text-xs leading-4 font-semibold text-foreground">Model Comparison</span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] leading-4">
-            <Maximize2
-              className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
-              aria-hidden="true"
-            />
-            {comparable.length.toLocaleString()} point{comparable.length === 1 ? "" : "s"} ·{" "}
-            {datasetLabel(selected).split(" · ")[0]}
+      {variant === "button" ? (
+        <button
+          type="button"
+          className={buttonStyles.secondary}
+          aria-label="Open Model Comparison"
+          onClick={() => setOpen(true)}
+        >
+          <ChartScatter aria-hidden="true" />
+          Chart
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="group flex items-center gap-3 border border-border bg-card px-2.5 py-2 text-left text-muted-foreground hover:border-foreground/35 hover:text-foreground"
+          aria-label="Open Model Comparison"
+          title="Open Model Comparison"
+          onClick={() => setOpen(true)}
+        >
+          <MiniChart points={comparable} />
+          {/* Centered against the chart, so the space above and below the text is the same. */}
+          <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
+            <span className="text-xs leading-4 font-semibold text-foreground">
+              Model Comparison
+            </span>
+            <span className="flex items-center gap-1.5 font-mono text-[11px] leading-4">
+              <Maximize2
+                className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
+                aria-hidden="true"
+              />
+              {comparable.length.toLocaleString()} point{comparable.length === 1 ? "" : "s"} ·{" "}
+              {datasetLabel(selected).split(" · ")[0]}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+      )}
       {open && (
         <Dialog
           initialFocus={close}
