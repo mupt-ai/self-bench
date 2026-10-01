@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ApplicationFailure } from "@temporalio/common";
@@ -10,7 +10,10 @@ import {
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
-import { generationSubscriptionAuth } from "../harnesses/codex/subscription.js";
+import {
+  generationSubscriptionAuth,
+  litellmSubscriptionAuth,
+} from "../harnesses/codex/subscription.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import { signInRefusal } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
@@ -103,6 +106,20 @@ export async function credentialExecution(
       child.SELFBENCH_PI_AUTH_JSON_PATH = authPath;
       secrets.push(piAuth);
     }
+    if (
+      input.harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2")
+    ) {
+      // LiteLLM's chatgpt provider reads this file: Terminus 2 in this trial's Harbor process,
+      // mini-swe-agent from the copy harbor_subscription.py places in the sandbox.
+      const tokenDir = join(home, "chatgpt");
+      const authPath = join(tokenDir, "auth.json");
+      const litellmAuth = litellmSubscriptionAuth(modelSecret);
+      await mkdir(tokenDir, { mode: 0o700 });
+      await writeFile(authPath, litellmAuth, { mode: 0o600 });
+      child.CHATGPT_TOKEN_DIR = tokenDir;
+      child.SELFBENCH_CHATGPT_AUTH_JSON_PATH = authPath;
+      secrets.push(litellmAuth);
+    }
     const auth = JSON.parse(modelSecret);
     secrets.push(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
@@ -148,9 +165,11 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 export function solverAgent(harness: Harness, model: string): string {
   if (harness === "pi") {
     const provider = model.slice(0, model.indexOf("/"));
-    if (provider === "openai-codex") return "harbor_pi:SelfBenchPi";
+    if (provider === "openai-codex") return "harbor_subscription:SelfBenchPi";
     return isGateway(provider) ? gateways[provider].harborPi : harness;
   }
+  if (harness === "mini-swe-agent" && model.startsWith("chatgpt/"))
+    return "harbor_subscription:ChatGptMiniSweAgent";
   if (harness !== "codex") return harness;
   return model.startsWith("openai/") && model.slice(7).includes("/")
     ? "harbor_gateway:GatewayCodex"
@@ -164,8 +183,12 @@ export function gatewayModel(
   model: string,
   auth?: "api-key" | "codex-login" | "claude-login",
 ): string {
-  if (provider === "openai" && harness === "pi" && auth === "codex-login")
-    return `openai-codex/${model.slice("openai/".length)}`;
+  if (provider === "openai" && auth === "codex-login") {
+    const modelId = model.slice("openai/".length);
+    // Pi and LiteLLM (mini-swe-agent, Terminus 2) each name the ChatGPT backend as a provider.
+    if (harness === "pi") return `openai-codex/${modelId}`;
+    if (harness === "mini-swe-agent" || harness === "terminus-2") return `chatgpt/${modelId}`;
+  }
   if (!isGateway(provider) || harness === "pi") return model;
   const modelId = model.slice(provider.length + 1);
   return harness === "claude-code" ? modelId : `openai/${modelId}`;
