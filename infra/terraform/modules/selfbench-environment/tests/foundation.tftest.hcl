@@ -105,6 +105,10 @@ run "results_site_cdn" {
     error_message = "Query strings never split the cache, and the last good copy is served through a day of errors."
   }
   assert {
+    condition     = google_compute_backend_service.results_site[0].cdn_policy[0].request_coalescing
+    error_message = "Concurrent requests for an expired copy share one request to the API."
+  }
+  assert {
     condition     = google_compute_backend_service.results_site[0].log_config[0].enable && google_compute_backend_service.results_site[0].log_config[0].sample_rate == 1
     error_message = "Every request to the results site is logged, cache hits included."
   }

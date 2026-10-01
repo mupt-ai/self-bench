@@ -154,10 +154,14 @@ resource "google_compute_backend_service" "results_site" {
   }
   cdn_policy {
     cache_mode = "USE_ORIGIN_HEADERS"
-    # While the API errors, or a stale copy is being refreshed, the last good copy is served
-    # for up to a day, so the cached parts of the site stay readable through an outage.
+    # The last good copy is served for up to a day while the CDN refreshes it or the API errors,
+    # but only for responses without s-maxage: scripts, styles, icons. Pages and the public API
+    # send s-maxage, which forbids it, so they are never older than their lifetime, and fail
+    # with the API once it runs out.
     serve_while_stale = 86400
     negative_caching  = false
+    # Concurrent requests for the same expired copy at one location share one request to the API.
+    request_coalescing = true
     # No public response depends on a query string, so none may split the cache or bypass it.
     cache_key_policy {
       include_host         = true
