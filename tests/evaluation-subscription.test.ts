@@ -100,6 +100,28 @@ test("ChatGPT sign-in supplies each harness its own isolated auth for GPT-6.1 So
       harnesses: ["claude-code"],
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    // A sign-in Pi or LiteLLM cannot read fails the trial at once instead of retrying.
+    const opaque = await (
+      await fixture.request(
+        credentialsUrl,
+        post({
+          name: "Opaque",
+          kind: "openai",
+          auth: "codex-login",
+          value: JSON.stringify({ tokens: { access_token: "opaque", refresh_token: "refresh" } }),
+        }),
+      )
+    ).json();
+    draft.id = crypto.randomUUID();
+    draft.models[0] = { catalogId: "gpt-6.1-sol", credentialId: opaque.id, harnesses: ["pi"] };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    const unreadable = fixture.starts[3];
+    if (!unreadable) throw new Error("Missing unreadable input");
+    await expect(credentialExecution(unreadable, home, {}, records)).rejects.toMatchObject({
+      type: "TrialRefused",
+      nonRetryable: true,
+      message: "ChatGPT sign-in is invalid. Reconnect it in Credentials.",
+    });
   } finally {
     await fixture.close();
     await rm(home, { recursive: true, force: true });

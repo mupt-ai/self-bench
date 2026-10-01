@@ -101,7 +101,7 @@ export async function credentialExecution(
     }
     if (input.harnesses.includes("pi")) {
       const authPath = join(home, "pi-auth.json");
-      const piAuth = generationSubscriptionAuth(modelSecret);
+      const piAuth = subscriptionAuth(generationSubscriptionAuth, modelSecret);
       await writeFile(authPath, piAuth, { mode: 0o600 });
       child.SELFBENCH_PI_AUTH_JSON_PATH = authPath;
       secrets.push(piAuth);
@@ -113,7 +113,7 @@ export async function credentialExecution(
       // mini-swe-agent from the copy harbor_subscription.py places in the sandbox.
       const tokenDir = join(home, "chatgpt");
       const authPath = join(tokenDir, "auth.json");
-      const litellmAuth = litellmSubscriptionAuth(modelSecret);
+      const litellmAuth = subscriptionAuth(litellmSubscriptionAuth, modelSecret);
       await mkdir(tokenDir, { mode: 0o700 });
       await writeFile(authPath, litellmAuth, { mode: 0o600 });
       child.CHATGPT_TOKEN_DIR = tokenDir;
@@ -139,6 +139,15 @@ export async function credentialExecution(
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
   return { profile: { model: input.modelName }, child, secrets, auth: info.auth };
+}
+
+/** A saved sign-in a harness cannot read fails the trial now: retrying cannot repair it. */
+function subscriptionAuth(adapt: (raw: string) => string, raw: string): string {
+  try {
+    return adapt(raw);
+  } catch (error) {
+    throw refuseTrial(error instanceof Error ? error.message : String(error));
+  }
 }
 
 function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
