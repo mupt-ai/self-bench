@@ -61,6 +61,7 @@ export function ResultGroupRows({
   name,
   heading,
   results,
+  statusOf,
   cumulative = false,
   missing = [],
   open,
@@ -75,6 +76,8 @@ export function ResultGroupRows({
   name: string;
   heading: ReactNode;
   results: readonly TaskResult[];
+  /** What the status circle reads, when more than the results: tasks being run again, say. */
+  statusOf?: readonly TaskResult[];
   /** Whether these are each task's latest results, from all the configuration's runs. */
   cumulative?: boolean;
   /** Accepted tasks with no result here, listed as Left Out or Added Later. */
@@ -115,7 +118,7 @@ export function ResultGroupRows({
           </span>
         </td>
         <td>
-          <ResultsStatus results={results} />
+          <ResultsStatus results={statusOf ?? results} />
         </td>
         <td className="truncate font-mono text-xs text-muted-foreground">{startersOf(results)}</td>
         <DoneCell

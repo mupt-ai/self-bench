@@ -163,7 +163,10 @@ export function TaskRow({
   const { result } = entry;
   const taskPage = `/repos/${owner}/${name}/tasks/${encodeURIComponent(entry.runId)}/${encodeURIComponent(entry.taskId)}`;
   const task = taskParts(entry.taskId);
-  const later = result?.replacedBy;
+  // A result that doesn't count is greyed: replaced by a later one, or, when it came after a
+  // usable result that still counts, not counted.
+  const counted = result?.replacedBy;
+  const after = !!result && !!counted && result.run.createdAt > counted.run.createdAt;
   const title = (
     <>
       {task.name}
@@ -175,7 +178,7 @@ export function TaskRow({
     <tr
       className={cn(
         "cursor-pointer text-xs hover:bg-foreground/[0.04]",
-        (later || !result) && "text-muted-foreground [&_[data-circle]]:opacity-50",
+        (counted || !result) && "text-muted-foreground [&_[data-circle]]:opacity-50",
       )}
       // Anywhere on the row opens the task: its dialog, or for a task not run, its page. Links
       // and buttons inside it (the run's date) keep their own.
@@ -184,10 +187,11 @@ export function TaskRow({
         if (result) onOpen(result);
         else navigate(taskPage);
       }}
-      // A replaced result is greyed; the later one counts.
       title={
-        later
-          ? `Replaced by the ${momentLabel(later.run.createdAt)} run: ${outcomeLabels[later.outcome]}`
+        counted
+          ? after
+            ? `Not counted: the ${momentLabel(counted.run.createdAt)} run's ${outcomeLabels[counted.outcome]} still counts`
+            : `Replaced by the ${momentLabel(counted.run.createdAt)} run: ${outcomeLabels[counted.outcome]}`
           : undefined
       }
     >
@@ -195,7 +199,7 @@ export function TaskRow({
         colSpan={2}
         className={cn("relative truncate font-mono", TASK_INDENT)}
         title={
-          later
+          counted
             ? undefined
             : result?.outcome === "error"
               ? `Error: ${errorMessage(result.trial.error)}`
@@ -230,9 +234,9 @@ export function TaskRow({
             {title}
           </Link>
         )}
-        {later && (
+        {counted && (
           <span className="ml-2 border border-current px-1 py-px text-[10px] leading-none">
-            Replaced
+            {after ? "Not Counted" : "Replaced"}
           </span>
         )}
       </td>

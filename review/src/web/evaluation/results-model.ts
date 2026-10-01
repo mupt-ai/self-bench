@@ -33,10 +33,8 @@ export interface TaskResult {
   outcome: Outcome;
   /** Minutes the trial took, or has been running. */
   minutes?: number;
-  /** The later result that counts instead of this one. */
+  /** The task's result that counts instead of this one: a later one, or an earlier usable one. */
   replacedBy?: TaskResult;
-  /** The earlier result this one replaced. */
-  replaces?: TaskResult;
 }
 
 export interface Batch {
@@ -76,8 +74,13 @@ export interface Configuration extends Tally {
   endpointNumber?: number;
   /** Oldest first. */
   batches: Batch[];
-  /** The result that counts for each task, in task order. */
+  /**
+   * The result that counts for each task, in task order: its latest usable one, as a release takes
+   * it, or while it has none, its latest of any kind.
+   */
   latest: TaskResult[];
+  /** Tasks being run again whose result that counts is an earlier one: still under way. */
+  underway: TaskResult[];
   status: "running" | "queued" | "done" | "cancelled";
 }
 
@@ -196,17 +199,19 @@ function batchesOf(results: readonly TaskResult[]): Batch[] {
 }
 
 function configurationOf(identity: Identity, results: TaskResult[], numbers: Map<string, string>) {
-  // Results arrive oldest first, so each task's last one counts.
-  const latestByTask = new Map<string, TaskResult>();
+  // Results arrive oldest first. Each task's latest usable result counts, as a release takes it;
+  // while it has none, its latest of any kind, so errors and running tasks still show.
+  const byTask = new Map<string, TaskResult[]>();
   for (const result of results) {
-    const earlier = latestByTask.get(result.task);
-    if (earlier) {
-      earlier.replacedBy = result;
-      result.replaces = earlier;
-    }
-    latestByTask.set(result.task, result);
+    byTask.set(result.task, [...(byTask.get(result.task) ?? []), result]);
   }
-  const latest = [...latestByTask.values()].sort(
+  const counted = [...byTask.values()].flatMap((tried) => {
+    const counts = tried.findLast((result) => eligibleTrial(result.trial)) ?? tried.at(-1);
+    if (!counts) return [];
+    for (const result of tried) if (result !== counts) result.replacedBy = counts;
+    return [counts];
+  });
+  const latest = counted.sort(
     (a, b) => a.trial.taskId.localeCompare(b.trial.taskId) || a.task.localeCompare(b.task),
   );
   const totals = tally(latest);
@@ -226,7 +231,8 @@ function configurationOf(identity: Identity, results: TaskResult[], numbers: Map
     batches: batchesOf(results),
     latest,
     ...totals,
-    status: latest.some(inProgress)
+    underway: results.filter((result) => result.replacedBy && inProgress(result)),
+    status: results.some(inProgress)
       ? "running"
       : counts.queued > 0
         ? "queued"

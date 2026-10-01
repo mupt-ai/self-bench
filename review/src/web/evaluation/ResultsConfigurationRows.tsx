@@ -79,7 +79,7 @@ export function ConfigurationRows({
           <ConfigurationName configuration={configuration} />
         </td>
         <td>
-          <ResultsStatus results={configuration.latest} />
+          <ResultsStatus results={[...configuration.latest, ...configuration.underway]} />
         </td>
         <td className="truncate font-mono text-xs text-muted-foreground">
           {startersOf(configuration.latest)}
@@ -110,6 +110,7 @@ export function ConfigurationRows({
           name="the Cumulative Results"
           heading={<b className="font-semibold">Cumulative Results</b>}
           results={configuration.latest}
+          statusOf={[...configuration.latest, ...configuration.underway]}
           cumulative
           missing={missing}
           {...group(`${configuration.key}\nlatest`)}

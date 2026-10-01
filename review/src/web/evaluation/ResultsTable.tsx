@@ -81,7 +81,9 @@ export function ResultsTable({
     );
   // Facets narrow the table and the state counts; the state toggles then narrow it further.
   const faceted = matchingFacets(configurations, view.facets);
-  const states = faceted.map((configuration) => runStateOf(configuration.latest));
+  const states = faceted.map((configuration) =>
+    runStateOf([...configuration.latest, ...configuration.underway]),
+  );
   const shown = orderedConfigurations(
     faceted.filter(
       (_, index) => !view.states.length || view.states.includes(states[index] ?? "done"),
