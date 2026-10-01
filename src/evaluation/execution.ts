@@ -144,6 +144,7 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 }
 
 export function solverAgent(harness: Harness, model: string): string {
+  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
   if (harness !== "codex") return harness;
   return model.startsWith("openai/") && model.slice(7).includes("/")
     ? "harbor_gateway:GatewayCodex"
