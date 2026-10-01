@@ -48,6 +48,11 @@ test("Claude Code trials are priced at list rates, hour-long cache writes includ
     costSource: "reference-rates",
   });
   expect(cost.apiCostUsd).toBeCloseTo(0.0458814, 10);
+  // Claude Code records an API error as a usage-free "<synthetic>" message.
+  const synthetic = { ...step(0, 0, 0, 0), model_name: "<synthetic>" };
+  expect(
+    trialCost(run, "claude-code", files({ steps: [...steps, synthetic] }), result).apiCostUsd,
+  ).toBeCloseTo(0.0458814, 10);
 });
 
 test("a Claude Code trial whose requests do not add up to Harbor's totals gets no cost", () => {

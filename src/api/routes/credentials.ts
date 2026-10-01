@@ -46,19 +46,19 @@ export async function credentialRoutes(
     const vault = options.vault;
     const { credentials, comparisons } = vault;
     if (login) {
-      const logins =
-        login === "codex-login"
-          ? (options.codexLogins ?? codexLogins)
-          : (options.claudeLogins ?? claudeLogins);
+      const codex = options.codexLogins ?? codexLogins;
+      const claude = options.claudeLogins ?? claudeLogins;
+      const logins = login === "codex-login" ? codex : claude;
       const body = async (limit: number) => JSON.parse((await readBody(request, limit)).toString());
-      if (!mutation && loginId && !loginAction && "status" in logins)
-        sendJson(response, 200, await logins.status(vault, org.id, user.id, loginId));
-      else if (mutation && !loginId) {
+      // Codex polls OpenAI for the approval; Claude is completed with the code Anthropic shows.
+      if (login === "codex-login" && !mutation && loginId && !loginAction)
+        sendJson(response, 200, await codex.status(vault, org.id, user.id, loginId));
+      else if (login === "claude-login" && mutation && loginId && loginAction === "complete") {
+        const { code } = claudeCompleteSchema.parse(await body(8192));
+        sendJson(response, 200, await claude.complete(vault, org.id, user.id, loginId, code));
+      } else if (mutation && !loginId) {
         const { name } = loginStartSchema.parse(await body(1024));
         sendJson(response, 202, await logins.start(vault, org.id, user.id, name));
-      } else if (mutation && loginId && loginAction === "complete" && "complete" in logins) {
-        const { code } = claudeCompleteSchema.parse(await body(8192));
-        sendJson(response, 200, await logins.complete(vault, org.id, user.id, loginId, code));
       } else if (mutation && loginId && loginAction === "cancel") {
         await logins.cancel(vault, org.id, user.id, loginId);
         sendJson(response, 200, { cancelled: true });

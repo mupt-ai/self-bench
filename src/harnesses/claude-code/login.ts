@@ -43,7 +43,7 @@ function authorizeUrl(login: PendingLogin): string {
   })}`;
 }
 
-/** Anthropic's page shows `code#state`; a pasted callback URL or bare code is accepted too. */
+/** Anthropic's page shows `code#state`; a pasted callback URL is accepted too. */
 function parseCode(input: string): { code: string; state: string } {
   const value = input.trim();
   try {
@@ -117,7 +117,7 @@ export function createClaudeLogins(request: typeof fetch = fetch, lifetimeMs = 1
         };
       const login = await pending(vault, orgId, userId, id);
       const { code, state } = parseCode(input);
-      if (!code || (state && state !== login.state))
+      if (!code || state !== login.state)
         throw new RecordStoreError(
           400,
           "That code is not from this sign-in. Copy the whole code Anthropic shows and try again.",
@@ -151,17 +151,24 @@ export function createClaudeLogins(request: typeof fetch = fetch, lifetimeMs = 1
           400,
           "Anthropic did not accept this code. Open the sign-in link again for a new code.",
         );
+      // A sign-in cancelled while Anthropic answered must not save.
+      await pending(vault, orgId, userId, id);
+      let saved: CredentialInfo;
       try {
         // The attempt ID doubles as the credential ID, so a repeated submit never duplicates it.
-        const saved = await vault.credentials.create(orgId, parsed.data, {}, id);
-        await discard(vault, orgId, id);
-        return { id, status: "saved", expiresAt: login.expiresAt, credential: saved };
-      } catch {
+        saved = await vault.credentials.create(orgId, parsed.data, {}, id);
+      } catch (error) {
+        const limit = error instanceof Error && error.message === "Credential limit reached";
         throw new RecordStoreError(
-          500,
-          "Sign-in completed, but saving failed. Start a new sign-in.",
+          limit ? 409 : 500,
+          limit
+            ? "Signed in, but this organization has reached its credential limit. Delete a credential and sign in again."
+            : "Sign-in completed, but saving failed. Start a new sign-in.",
         );
       }
+      // The credential exists now; a leftover record only expires.
+      await discard(vault, orgId, id).catch(() => undefined);
+      return { id, status: "saved", expiresAt: login.expiresAt, credential: saved };
     },
 
     async cancel(vault: Vault, orgId: number, userId: number, id: string): Promise<void> {

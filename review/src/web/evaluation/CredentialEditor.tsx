@@ -28,11 +28,7 @@ export function CredentialEditor({
   const [draft, setDraft] = React.useState<CredentialDraft>({
     name: previous
       ? `${previous.name} replacement`.slice(0, 80)
-      : auth === "codex-login"
-        ? "Codex"
-        : auth === "claude-login"
-          ? "Claude"
-          : "",
+      : (signIns.find((entry) => entry.id === auth)?.name ?? ""),
     kind: previous?.kind ?? kind,
     auth: previous?.auth ?? auth,
     value: "",
@@ -43,7 +39,7 @@ export function CredentialEditor({
   const [importing, setImporting] = React.useState(false);
   const [error, setError] = React.useState("");
   const name = React.useRef<HTMLInputElement>(null);
-  const signIn = signIns[draft.kind];
+  const signIn = signIns.find((entry) => entry.kind === draft.kind);
   const isLogin = draft.auth !== "api-key" && !importing;
   const sandbox = isSandbox(previous?.kind ?? kind);
   const choices = sandbox ? sandboxes : providers;
@@ -154,13 +150,7 @@ export function CredentialEditor({
                 id="credential-name"
                 required
                 maxLength={80}
-                placeholder={
-                  draft.auth === "codex-login"
-                    ? "e.g. Team Codex"
-                    : draft.auth === "claude-login"
-                      ? "e.g. Team Claude"
-                      : "e.g. Team account"
-                }
+                placeholder={`e.g. Team ${draft.auth === "api-key" ? "account" : signIn?.name}`}
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               />
@@ -260,11 +250,7 @@ export function CredentialEditor({
                 setError("");
               }}
             >
-              {importing
-                ? "Use Browser Sign-In"
-                : draft.auth === "claude-login"
-                  ? "Paste a Setup Token"
-                  : "Import auth.json"}
+              {importing ? "Use Browser Sign-In" : signIn?.importLabel}
             </button>
           )}
           {error && (

@@ -42,10 +42,10 @@ export function RunModelRow({
     const harnesses = selected.harnesses.filter(
       (harness) =>
         nextRoute?.harnesses.includes(harness) &&
-        credentialRunsHarness(nextCredential?.auth ?? "", harness),
+        credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
     );
     const available = nextRoute?.harnesses.filter((harness) =>
-      credentialRunsHarness(nextCredential?.auth ?? "", harness),
+      credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
     );
     onChange({
       ...selected,
@@ -55,7 +55,7 @@ export function RunModelRow({
   };
   const supportsHarness = (harness: Harness) =>
     (route ?? model).harnesses.includes(harness) &&
-    credentialRunsHarness(credential?.auth ?? "", harness);
+    credentialRunsHarness(credential?.auth ?? "api-key", harness);
 
   return (
     <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">

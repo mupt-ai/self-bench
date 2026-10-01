@@ -33,6 +33,9 @@ export function ClaudeSignIn({
     };
   }, [url]);
   const start = async () => {
+    if (attempt.current)
+      void evaluationRequest(`${url}/${attempt.current}/cancel`, {}).catch(() => undefined);
+    attempt.current = undefined;
     setSession(undefined);
     setStarting(true);
     setCode("");

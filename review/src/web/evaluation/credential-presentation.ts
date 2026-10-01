@@ -6,13 +6,26 @@ export const providers = [
   { id: "openrouter", label: "OpenRouter" },
   { id: "custom", label: "Custom Endpoint" },
 ] as const;
-/** The subscription sign-in each model provider offers beside its API key. */
-export const signIns: Partial<
-  Record<CredentialInfo["kind"], { id: CredentialInfo["auth"]; label: string }>
-> = {
-  openai: { id: "codex-login", label: "ChatGPT Sign-In" },
-  anthropic: { id: "claude-login", label: "Claude Sign-In" },
-};
+/** The subscription sign-in a model provider offers beside its API key, and the CLI it runs. */
+export const signIns = [
+  {
+    id: "codex-login",
+    kind: "openai",
+    label: "ChatGPT Sign-In",
+    harness: "Codex",
+    name: "Codex",
+    importLabel: "Import auth.json",
+  },
+  {
+    id: "claude-login",
+    kind: "anthropic",
+    label: "Claude Sign-In",
+    harness: "Claude Code",
+    name: "Claude",
+    importLabel: "Paste a Setup Token",
+  },
+] as const;
+const signInOf = (auth: CredentialInfo["auth"]) => signIns.find((entry) => entry.id === auth);
 export const sandboxes = [
   { id: "e2b", label: "E2B" },
   { id: "modal", label: "Modal" },
@@ -23,12 +36,11 @@ export function isSandbox(kind: CredentialInfo["kind"]) {
   return sandboxes.some((entry) => entry.id === kind);
 }
 export function credentialProvider(credential: Pick<CredentialInfo, "kind" | "auth">) {
-  return credential.auth === "codex-login"
-    ? "Codex"
-    : credential.auth === "claude-login"
-      ? "Claude Code"
-      : ([...providers, ...sandboxes].find((entry) => entry.id === credential.kind)?.label ??
-        credential.kind);
+  return (
+    signInOf(credential.auth)?.harness ??
+    [...providers, ...sandboxes].find((entry) => entry.id === credential.kind)?.label ??
+    credential.kind
+  );
 }
 /**
  * A custom endpoint as a maintainer tells two apart: host, port and path, without the scheme or a
@@ -43,11 +55,7 @@ export function endpointLabel(endpoint: string): string {
   }
 }
 export function credentialAccess(credential: Pick<CredentialInfo, "kind" | "auth">) {
-  return credential.auth === "codex-login"
-    ? "ChatGPT Sign-In"
-    : credential.auth === "claude-login"
-      ? "Claude Sign-In"
-      : credential.kind === "modal"
-        ? "Token Pair"
-        : "API Key";
+  return (
+    signInOf(credential.auth)?.label ?? (credential.kind === "modal" ? "Token Pair" : "API Key")
+  );
 }

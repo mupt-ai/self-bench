@@ -13,11 +13,18 @@ const token = "sk-ant-oat01-test-token-never-return";
 
 /** Anthropic's token endpoint: accepts the code only with the verifier its challenge came from. */
 function anthropic(lifetimeMs?: number) {
-  const state = { status: 200, exchanges: [] as Record<string, unknown>[], challenge: "" };
+  const state = {
+    status: 200,
+    exchanges: [] as Record<string, unknown>[],
+    challenge: "",
+    /** Runs while Anthropic is answering, as a browser's cancel could. */
+    during: async () => {},
+  };
   const request = (async (input: string | URL | Request, init?: RequestInit) => {
     expect(String(input)).toBe("https://platform.claude.com/v1/oauth/token");
     const body = JSON.parse(String(init?.body));
     state.exchanges.push(body);
+    await state.during();
     const verified =
       createHash("sha256").update(body.code_verifier).digest("base64url") === state.challenge;
     if (state.status !== 200) return new Response(null, { status: state.status });
@@ -40,9 +47,10 @@ test("a pasted code is exchanged with the sealed verifier and saved once as a Cl
   await expect(logins.complete(vault, 4, 8, pending.id, `good-code#${sent}`)).rejects.toThrow(
     "expired",
   );
-  await expect(logins.complete(vault, 4, 7, pending.id, "good-code#other")).rejects.toThrow(
-    "not from this sign-in",
-  );
+  for (const pasted of ["good-code#other", "good-code"])
+    await expect(logins.complete(vault, 4, 7, pending.id, pasted)).rejects.toThrow(
+      "not from this sign-in",
+    );
   // Anthropic outages and rejected codes keep the sign-in open for another try.
   state.status = 503;
   await expect(logins.complete(vault, 4, 7, pending.id, `good-code#${sent}`)).rejects.toThrow(
@@ -67,9 +75,21 @@ test("a pasted code is exchanged with the sealed verifier and saved once as a Cl
   expect((await logins.complete(vault, 4, 7, pending.id, "anything")).status).toBe("saved");
   expect(await vault.credentials.list(4)).toHaveLength(1);
 
+  // Cancelled while Anthropic exchanged the code: nothing is saved.
   const cancelled = await logins.start(vault, 4, 7, "Claude");
-  await logins.cancel(vault, 4, 7, cancelled.id);
-  await expect(logins.complete(vault, 4, 7, cancelled.id, "good-code")).rejects.toThrow("expired");
+  const cancelledUrl = new URL(cancelled.authorizeUrl ?? "");
+  state.challenge = cancelledUrl.searchParams.get("code_challenge") ?? "";
+  state.during = () => logins.cancel(vault, 4, 7, cancelled.id);
+  await expect(
+    logins.complete(
+      vault,
+      4,
+      7,
+      cancelled.id,
+      `good-code#${cancelledUrl.searchParams.get("state")}`,
+    ),
+  ).rejects.toThrow("expired");
+  expect(await vault.credentials.list(4)).toHaveLength(1);
   const expiring = anthropic(0).logins;
   const expired = await expiring.start(vault, 4, 7, "Claude");
   await expect(expiring.complete(vault, 4, 7, expired.id, "good-code")).rejects.toThrow("expired");

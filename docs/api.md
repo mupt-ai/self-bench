@@ -152,7 +152,7 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 | `GET` | `/api/orgs/:org/credentials/codex-login/:id` | Sign-in status; stores the credential once OpenAI reports the code approved |
 | `POST` | `/api/orgs/:org/credentials/codex-login/:id/cancel` | Abandons the sign-in |
 | `POST` | `/api/orgs/:org/credentials/claude-login` | Body `{ "name": "Claude" }`. Starts a Claude subscription sign-in for Claude Code; `202` with the session id and the Anthropic `authorizeUrl` |
-| `POST` | `/api/orgs/:org/credentials/claude-login/:id/complete` | Body `{ "code": "…" }`, the code Anthropic shows after approval. Stores the credential; `200` with it |
+| `POST` | `/api/orgs/:org/credentials/claude-login/:id/complete` | Body `{ "code": "…" }`, the code Anthropic shows after approval. Stores the credential; `200` with the session id, `status: "saved"` and the stored `credential` |
 | `POST` | `/api/orgs/:org/credentials/claude-login/:id/cancel` | Abandons the sign-in |
 
 ## Billing
