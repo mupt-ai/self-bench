@@ -60,13 +60,19 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
   ];
 }
 
+const SELFBENCH_ENVIRONMENTS: Partial<Record<HarborEnvironment, string>> = {
+  modal: "selfbench_modal:SelfBenchModalEnvironment",
+  e2b: "selfbench_e2b:SelfBenchE2BEnvironment",
+};
+
 /**
  * Modal runs through SelfBench's subclass of Harbor's Modal environment (runtime/selfbench_modal.py),
  * which records the images a run built and starts trials from a task's pinned images. With no
- * pins it behaves exactly like `--env modal`; every other provider is Harbor's own.
+ * pins it behaves exactly like `--env modal`. E2B's subclass (runtime/selfbench_e2b.py) rebuilds a
+ * template whose last build failed instead of starting from it. Every other provider is Harbor's own.
  */
 function harborEnvironmentArgument(environment: HarborEnvironment): string {
-  return environment === "modal" ? "selfbench_modal:SelfBenchModalEnvironment" : environment;
+  return SELFBENCH_ENVIRONMENTS[environment] ?? environment;
 }
 
 /** Callers must first resolve their distinct generation/solver credential boundaries. */
