@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Database } from "../db/client.js";
+import { credentialAuths } from "../db/credentials.js";
 import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
 import { credentials } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
@@ -49,7 +50,7 @@ export async function releaseCredentials(
     rows.map((row) => [
       row.id,
       {
-        auth: row.auth === "codex-login" ? "codex-login" : "api-key",
+        auth: credentialAuths.find((auth) => auth === row.auth) ?? "api-key",
         ...(row.endpoint ? { endpoint: row.endpoint } : {}),
       },
     ]),

@@ -1,5 +1,6 @@
 import type { ModelPricing, ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import type { Harness } from "./models.js";
 
 export type { Harness } from "./models.js";
@@ -32,7 +33,7 @@ export interface EvaluationInput {
     modelCredentialId: string;
     sandboxCredentialId: string;
     provider: "openai" | "anthropic" | "openrouter" | "custom";
-    auth?: "api-key" | "codex-login";
+    auth?: CredentialInfo["auth"];
   };
 }
 export interface SolverStep {

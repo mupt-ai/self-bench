@@ -18,6 +18,25 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
 }
 
+/** A subscription sign-in drives only its own vendor's CLI; API keys drive any harness. */
+const signInHarnesses: Partial<Record<string, Harness>> = {
+  "codex-login": "codex",
+  "claude-login": "claude-code",
+};
+
+export function credentialRunsHarness(auth: string, harness: Harness): boolean {
+  const only = signInHarnesses[auth];
+  return !only || only === harness;
+}
+
+/** Why a credential's sign-in cannot run these harnesses, if it cannot. */
+export function signInRefusal(auth: string, harnesses: readonly Harness[]): string | undefined {
+  const only = signInHarnesses[auth];
+  return only && harnesses.some((harness) => harness !== only)
+    ? `A ${harnessLabels[only]} sign-in can only run the ${harnessLabels[only]} harness`
+    : undefined;
+}
+
 /** Harnesses a direct provider key can drive; only OpenRouter is remapped for the rest. */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
   openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],

@@ -25,6 +25,7 @@ let root: Root;
 let container: HTMLDivElement;
 let restoreGlobals: () => void;
 let requests: string[];
+let bodies: unknown[];
 let respond: (path: string, method: string) => Response | Promise<Response>;
 let restoreFetch: () => void;
 const onSaved = mock(async () => {});
@@ -50,11 +51,13 @@ beforeEach(async () => {
     }
   };
   requests = [];
+  bodies = [];
   respond = () => Response.json({});
   const fetch = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
     const path = String(input);
     const method = init?.method ?? "GET";
     requests.push(`${method} ${path}`);
+    if (init?.body) bodies.push(JSON.parse(String(init.body)));
     return respond(path, method);
   }) as typeof globalThis.fetch);
   restoreFetch = () => fetch.mockRestore();
@@ -135,4 +138,71 @@ test("the server saves the approved credential; the browser only polls", async (
   await waitFor(() => onSaved.mock.calls.length === 1);
   expect(container.textContent).toContain("Codex Connected");
   expect(requests).toEqual([`POST ${base}`, `GET ${base}/approved`]);
+});
+
+const claudeBase = "/api/orgs/test/credentials/claude-login";
+async function renderClaude(onSave = async (_draft: unknown) => {}) {
+  await act(async () =>
+    root.render(
+      <CredentialEditor
+        key="claude"
+        org="test"
+        kind="anthropic"
+        auth="claude-login"
+        onSave={onSave}
+        onSaved={onSaved}
+        onCancel={onCancel}
+      />,
+    ),
+  );
+}
+async function type(id: string, value: string) {
+  const input = container.querySelector<HTMLInputElement>(`#${id}`);
+  if (!input) throw new Error(`Missing field: ${id}`);
+  // React's legacy change detection here: it watches the focused element and compares on keyup.
+  Object.assign(input, { attachEvent() {}, detachEvent() {} });
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+  const event = (name: string) => new browser.Event(name, { bubbles: true }) as unknown as Event;
+  await act(async () => input.dispatchEvent(event("focusin")));
+  await act(async () => {
+    setter?.call(input, value);
+    input.dispatchEvent(event("keyup"));
+  });
+}
+
+test("Claude sign-in warns it is Claude Code only and hands the pasted code to the server", async () => {
+  const authorizeUrl = "https://claude.com/cai/oauth/authorize?state=s";
+  respond = (path) =>
+    path === claudeBase
+      ? Response.json({ id: "attempt", status: "waiting", expiresAt: "", authorizeUrl })
+      : Response.json({
+          id: "attempt",
+          status: "saved",
+          expiresAt: "",
+          credential: { ...saved, kind: "anthropic", auth: "claude-login" },
+        });
+  await renderClaude();
+  expect(container.textContent).toContain("only works with the Claude Code harness");
+  await click("Sign In with Claude");
+  await waitFor(() => !!container.querySelector("#claude-code"));
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(authorizeUrl);
+  await type("claude-code", "the-code#s");
+  await click("Connect");
+  await waitFor(() => onSaved.mock.calls.length === 1);
+  expect(container.textContent).toContain("Claude Connected");
+  expect(requests).toEqual([`POST ${claudeBase}`, `POST ${claudeBase}/attempt/complete`]);
+  expect(bodies.at(-1)).toEqual({ code: "the-code#s" });
+});
+
+test("a pasted setup token is saved without the line breaks a terminal adds", async () => {
+  const onSave = mock(async (_draft: unknown) => {});
+  await renderClaude(onSave);
+  await click("Paste a Setup Token");
+  await type("credential-secret", "sk-ant-oat01-abc\n  def");
+  await act(async () => button("Save").click());
+  expect(onSave.mock.calls[0]?.[0]).toMatchObject({
+    kind: "anthropic",
+    auth: "claude-login",
+    value: "sk-ant-oat01-abcdef",
+  });
 });

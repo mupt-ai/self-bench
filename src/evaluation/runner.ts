@@ -6,6 +6,7 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { HarborEnvironment } from "../contracts/config/providers.js";
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { HARBOR_PROCESS_TIMEOUT_MS, harborRunArguments } from "../harnesses/harbor/command.js";
@@ -161,7 +162,7 @@ async function runTrial(context: {
   jobs: string;
   guard: HarborOutputGuard;
   model: string;
-  modelAuth: "api-key" | "codex-login";
+  modelAuth: CredentialInfo["auth"];
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   images?: TaskImages;

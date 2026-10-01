@@ -1,7 +1,12 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { defaultThinking, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import {
+  credentialRunsHarness,
+  defaultThinking,
+  routeFor,
+  thinkingOptions,
+} from "../../../../src/evaluation/models";
 import { matchesQuery } from "../word-search";
 import type { Harness } from "./api";
 
@@ -28,11 +33,27 @@ export function nextModelSelection(
     const harness = routeFor(model, credential.kind)?.harnesses.find(
       (candidate) =>
         (!requestedHarness || requestedHarness === candidate) &&
-        (credential.auth !== "codex-login" || candidate === "codex"),
+        credentialRunsHarness(credential.auth, candidate),
     );
     if (harness) return { catalogId: model.id, credentialId: credential.id, harnesses: [harness] };
   }
   return undefined;
+}
+
+/** Whether the credential's route for the model, and its sign-in if any, runs every harness. */
+export function credentialRunsAll(
+  model: CatalogModel,
+  credential: CredentialInfo,
+  harnesses: Harness[],
+): boolean {
+  const route = routeFor(model, credential.kind);
+  return (
+    !!route &&
+    harnesses.every(
+      (harness) =>
+        route.harnesses.includes(harness) && credentialRunsHarness(credential.auth, harness),
+    )
+  );
 }
 
 export function hasModelSelection(

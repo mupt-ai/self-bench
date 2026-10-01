@@ -14,6 +14,7 @@ import {
   harnessIds,
   modelIdPattern,
   routeFor,
+  signInRefusal,
   thinkingOptions,
 } from "./models.js";
 import { getEvaluation, listEvaluations } from "./store.js";
@@ -137,11 +138,8 @@ export async function createComparison(
     if (managedModel && !managed.models)
       throw new Error("Managed models are not available on this deployment.");
     if (!credential || !route) throw new Error("Select your matching provider credential");
-    if (
-      credential.auth === "codex-login" &&
-      selected.harnesses.some((harness) => harness !== "codex")
-    )
-      throw new Error("Codex sign-in can only be used with the Codex harness");
+    const refusal = signInRefusal(credential.auth, selected.harnesses);
+    if (refusal) throw new Error(refusal);
     if (
       selected.harnesses.some((harness) => !route.harnesses.includes(harness)) ||
       new Set(selected.harnesses).size !== selected.harnesses.length

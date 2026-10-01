@@ -6,6 +6,13 @@ export const providers = [
   { id: "openrouter", label: "OpenRouter" },
   { id: "custom", label: "Custom Endpoint" },
 ] as const;
+/** The subscription sign-in each model provider offers beside its API key. */
+export const signIns: Partial<
+  Record<CredentialInfo["kind"], { id: CredentialInfo["auth"]; label: string }>
+> = {
+  openai: { id: "codex-login", label: "ChatGPT Sign-In" },
+  anthropic: { id: "claude-login", label: "Claude Sign-In" },
+};
 export const sandboxes = [
   { id: "e2b", label: "E2B" },
   { id: "modal", label: "Modal" },
@@ -18,7 +25,9 @@ export function isSandbox(kind: CredentialInfo["kind"]) {
 export function credentialProvider(credential: Pick<CredentialInfo, "kind" | "auth">) {
   return credential.auth === "codex-login"
     ? "Codex"
-    : ([...providers, ...sandboxes].find((entry) => entry.id === credential.kind)?.label ??
+    : credential.auth === "claude-login"
+      ? "Claude Code"
+      : ([...providers, ...sandboxes].find((entry) => entry.id === credential.kind)?.label ??
         credential.kind);
 }
 /**
@@ -36,7 +45,9 @@ export function endpointLabel(endpoint: string): string {
 export function credentialAccess(credential: Pick<CredentialInfo, "kind" | "auth">) {
   return credential.auth === "codex-login"
     ? "ChatGPT Sign-In"
-    : credential.kind === "modal"
-      ? "Token Pair"
-      : "API Key";
+    : credential.auth === "claude-login"
+      ? "Claude Sign-In"
+      : credential.kind === "modal"
+        ? "Token Pair"
+        : "API Key";
 }

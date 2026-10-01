@@ -41,7 +41,7 @@ test("managed evaluations use the platform model and sandbox credentials", async
     SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "managed-modal-secret",
     SELFBENCH_MANAGED_MODAL_ENVIRONMENT: "selfbench-test",
   };
-  const fixture = await evaluationServer(records, undefined, env);
+  const fixture = await evaluationServer(records, {}, env);
   const home = await mkdtemp(join(tmpdir(), "managed-evaluation-"));
   try {
     const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
@@ -92,10 +92,14 @@ test("managed evaluations use the platform model and sandbox credentials", async
 });
 
 test("managed evaluation requires Modal even when managed E2B is configured", async () => {
-  const fixture = await evaluationServer(memoryVault(), undefined, {
-    ...evaluationEnv,
-    SELFBENCH_MANAGED_E2B_API_KEY: "managed-e2b",
-  });
+  const fixture = await evaluationServer(
+    memoryVault(),
+    {},
+    {
+      ...evaluationEnv,
+      SELFBENCH_MANAGED_E2B_API_KEY: "managed-e2b",
+    },
+  );
   try {
     const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
     expect(catalog.managed.sandbox).toBe(false);

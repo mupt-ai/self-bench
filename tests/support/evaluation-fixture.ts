@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
-import { createEvaluationRoutes } from "../../src/api/routes/evaluations.js";
+import {
+  createEvaluationRoutes,
+  type EvaluationRoutesOptions,
+} from "../../src/api/routes/evaluations.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
 import { createRepoStore } from "../../src/db/repos.js";
@@ -12,7 +15,6 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
-import type { CodexLogins } from "../../src/harnesses/codex/login.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {
@@ -74,7 +76,7 @@ export function evaluationInput(): EvaluationInput {
 }
 export async function evaluationServer(
   vault?: Vault,
-  codexLogins?: CodexLogins,
+  logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins"> = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
 ) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
@@ -178,7 +180,7 @@ export async function evaluationServer(
         tasks,
         artifacts,
         publicUrl,
-        ...(codexLogins ? { codexLogins } : {}),
+        ...logins,
         env,
         vault:
           vault ??

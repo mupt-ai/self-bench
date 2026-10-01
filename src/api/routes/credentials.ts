@@ -4,14 +4,16 @@ import { credentialSchema } from "../../db/credentials.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
 import { assertCredentialUnused } from "../../evaluation/comparisons.js";
+import { claudeLogins } from "../../harnesses/claude-code/login.js";
 import { codexLogins } from "../../harnesses/codex/login.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/codex-login(?:\/([a-f0-9-]{36})(?:\/(cancel))?)?|\/([a-f0-9-]{36})\/delete)?$/;
-const codexStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/delete)?$/;
+const loginStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
+const claudeCompleteSchema = z.object({ code: z.string().trim().min(1).max(4096) }).strict();
 
 /** Organization credentials: anyone in the org lists them; only admins add or delete them. */
 export async function credentialRoutes(
@@ -29,29 +31,34 @@ export async function credentialRoutes(
     sendJson(response, 404, { error: "Organization not found" });
     return true;
   }
-  const codex = url.pathname.includes("/credentials/codex-login");
+  const login = match[2];
   const mutation = request.method !== "GET";
   if (
-    ((mutation || codex) && org.role !== "admin") ||
+    ((mutation || login) && org.role !== "admin") ||
     (mutation && (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user)))
   ) {
     sendJson(response, 403, { error: "Organization admin and same-origin JSON request required" });
     return true;
   }
-  const [loginId, loginAction, deleteId] = [match[2], match[3], match[4]];
+  const [loginId, loginAction, deleteId] = [match[3], match[4], match[5]];
   try {
     if (!options.vault) throw new RecordStoreError(503);
     const vault = options.vault;
     const { credentials, comparisons } = vault;
-    if (codex) {
-      const logins = options.codexLogins ?? codexLogins;
-      if (!mutation && loginId && !loginAction)
+    if (login) {
+      const logins =
+        login === "codex-login"
+          ? (options.codexLogins ?? codexLogins)
+          : (options.claudeLogins ?? claudeLogins);
+      const body = async (limit: number) => JSON.parse((await readBody(request, limit)).toString());
+      if (!mutation && loginId && !loginAction && "status" in logins)
         sendJson(response, 200, await logins.status(vault, org.id, user.id, loginId));
       else if (mutation && !loginId) {
-        const { name } = codexStartSchema.parse(
-          JSON.parse((await readBody(request, 1024)).toString()),
-        );
+        const { name } = loginStartSchema.parse(await body(1024));
         sendJson(response, 202, await logins.start(vault, org.id, user.id, name));
+      } else if (mutation && loginId && loginAction === "complete" && "complete" in logins) {
+        const { code } = claudeCompleteSchema.parse(await body(8192));
+        sendJson(response, 200, await logins.complete(vault, org.id, user.id, loginId, code));
       } else if (mutation && loginId && loginAction === "cancel") {
         await logins.cancel(vault, org.id, user.id, loginId);
         sendJson(response, 200, { cancelled: true });
@@ -74,7 +81,7 @@ export async function credentialRoutes(
     } else sendJson(response, 405, { error: "Method not allowed" });
   } catch (error) {
     sendJson(response, error instanceof RecordStoreError ? error.status : 400, {
-      error: codex
+      error: login
         ? error instanceof RecordStoreError
           ? error.message
           : "Invalid sign-in request"

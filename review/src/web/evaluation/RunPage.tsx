@@ -4,14 +4,14 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { evaluationTaskKey, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { evaluationTaskKey, thinkingOptions } from "../../../../src/evaluation/models";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
-import { customModel, hasDuplicateModelSelections } from "./model-selection";
+import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
 import { RunBlockerNotice, RunExecution, runBlocker } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
@@ -158,13 +158,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = availableCredentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
-      const route = routeFor(model, credential.kind);
       const levels = thinkingOptions(model, selection.harnesses);
       return (
-        !!route &&
-        selection.harnesses.every((harness) => route.harnesses.includes(harness)) &&
-        (credential.auth !== "codex-login" ||
-          selection.harnesses.every((harness) => harness === "codex")) &&
+        credentialRunsAll(model, credential, selection.harnesses) &&
         (!selection.thinking || levels.includes(selection.thinking)) &&
         (model.id !== "custom" || !!selection.customModel)
       );

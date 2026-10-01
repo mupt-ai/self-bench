@@ -1,3 +1,4 @@
+import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
 import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
 import { record, TRUNCATED_OUTPUT } from "./output.js";
@@ -115,6 +116,7 @@ export function trialCost(
   let reportedCost: number | undefined;
   let cacheWritesInferred = false;
   let largestPrompt: number | undefined;
+  let hourCacheWrite = 0;
   if (harness === "pi") {
     const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
     if (!text) return {};
@@ -185,6 +187,20 @@ export function trialCost(
         cacheWritesInferred = true;
       }
     }
+  } else if (harness === "claude-code") {
+    const text = [...files].find(([name]) => name.endsWith("/trajectory.json"))?.[1];
+    if (!text) return {};
+    let measured: ReturnType<typeof claudeCodeUsage>;
+    try {
+      measured = claudeCodeUsage(record(JSON.parse(text)), record(record(result).agent_result));
+    } catch {
+      return {};
+    }
+    if (!measured) return {};
+    verified = measured.models.every(matches);
+    usage = measured.usage;
+    largestPrompt = measured.largestPrompt;
+    hourCacheWrite = measured.hourCacheWrite;
   }
   const measured = {
     modelVerified: verified,
@@ -206,7 +222,8 @@ export function trialCost(
     (usage.input * pricing.input +
       usage.output * pricing.output +
       usage.cacheRead * pricing.cacheRead +
-      usage.cacheWrite * pricing.cacheWrite) /
+      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
+      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
     1_000_000;
   return Number.isFinite(apiCostUsd)
     ? { ...measured, apiCostUsd, costSource: "reference-rates" }
