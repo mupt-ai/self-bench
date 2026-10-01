@@ -11,13 +11,22 @@ interface SetupStatus {
   /** Loaded, and the organization cannot yet both generate and evaluate on its own credentials. */
   incomplete: boolean;
   refresh(): Promise<void>;
+  /** The setup popup: opened on an admin's first visit to an org that is not set up, or on request. */
+  dialogOpen: boolean;
+  openDialog(): void;
+  closeDialog(): void;
 }
 
 export const SetupStatusContext = React.createContext<SetupStatus>({
   canManage: false,
   incomplete: false,
   refresh: async () => undefined,
+  dialogOpen: false,
+  openDialog: () => undefined,
+  closeDialog: () => undefined,
 });
+
+const seenKey = (org: string) => `selfbench.setup.seen:${org}`;
 
 export function useSetupStatus(): SetupStatus {
   return React.useContext(SetupStatusContext);
@@ -65,17 +74,32 @@ export function useSetupStatusSource(org: string, managedOffering: boolean): Set
   const current = loaded?.url === url ? loaded : undefined;
   const data = current?.data;
   const error = current?.error;
-  return React.useMemo<SetupStatus>(() => {
-    const coverage = data && setupCoverage(data.credentials);
-    return {
+  const coverage = data && setupCoverage(data.credentials);
+  const incomplete =
+    !managedOffering && !!coverage && !(covered(coverage.generate) && covered(coverage.evaluate));
+  const [dialogOrg, setDialogOrg] = React.useState<string>();
+  // The popup opens by itself once per org in this browser, for someone who can finish setup.
+  React.useEffect(() => {
+    if (!incomplete || !data?.canManage) return;
+    try {
+      if (window.localStorage.getItem(seenKey(org))) return;
+      window.localStorage.setItem(seenKey(org), "true");
+    } catch {
+      // Without storage the popup still opens; it may open again on the next visit.
+    }
+    setDialogOrg(org);
+  }, [incomplete, data?.canManage, org]);
+  return React.useMemo<SetupStatus>(
+    () => ({
       credentials: data?.credentials,
       canManage: data?.canManage ?? false,
       error,
-      incomplete:
-        !managedOffering &&
-        !!coverage &&
-        !(covered(coverage.generate) && covered(coverage.evaluate)),
+      incomplete,
       refresh: load,
-    };
-  }, [data, error, managedOffering, load]);
+      dialogOpen: dialogOrg === org,
+      openDialog: () => setDialogOrg(org),
+      closeDialog: () => setDialogOrg(undefined),
+    }),
+    [data, error, incomplete, load, dialogOrg, org],
+  );
 }

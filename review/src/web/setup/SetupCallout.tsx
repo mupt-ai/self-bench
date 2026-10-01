@@ -1,24 +1,25 @@
-import { ArrowRight } from "lucide-react";
-import { Link } from "react-router";
 import { cn } from "../primitives/cn";
-import { buttonStyles } from "../ui";
-import { type Coverage, setupPath } from "./readiness";
+import { Button } from "../ui";
+import type { Coverage } from "./readiness";
+import { useSetupStatus } from "./SetupStatus";
 
-/** A blocked form's pointer to Get Started: what is missing, and a way back here afterwards. */
+/** A blocked form's pointer to the setup popup: what is missing, and a button to fix it. */
 export function SetupCallout({
   coverage,
   action,
   hint,
-  from,
+  onOpen,
   className,
 }: {
   coverage: Coverage;
   /** What the missing credentials block, as in "Connect a sandbox to {action}." */
   action: string;
   hint: string;
-  from: string;
+  /** Runs before the popup opens, as when the blocked form is itself a dialog to close. */
+  onOpen?: () => void;
   className?: string;
 }) {
+  const setup = useSetupStatus();
   const missing =
     !coverage.model && !coverage.sandbox
       ? "a model and a sandbox"
@@ -40,10 +41,15 @@ export function SetupCallout({
         </p>
         <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
       </div>
-      <Link className={buttonStyles.primary} to={setupPath(from)}>
-        Get Started
-        <ArrowRight aria-hidden="true" />
-      </Link>
+      <Button
+        variant="primary"
+        onClick={() => {
+          onOpen?.();
+          setup.openDialog();
+        }}
+      >
+        Finish Setup
+      </Button>
     </section>
   );
 }

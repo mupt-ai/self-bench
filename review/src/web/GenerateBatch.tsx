@@ -171,7 +171,7 @@ export function GenerateBatch({
                     coverage={coverage}
                     action="generate tasks"
                     hint="A ChatGPT sign-in or a model API key runs generation. A Claude sign-in only runs evaluations."
-                    from={batchPath(fullName)}
+                    onOpen={() => setOpen(false)}
                   />
                 ) : (
                   <GenerationFields

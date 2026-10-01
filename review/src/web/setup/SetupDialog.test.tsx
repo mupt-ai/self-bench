@@ -2,10 +2,9 @@ import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Outlet, Route, Routes } from "react-router";
+import { MemoryRouter } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import { SetupPage } from "./SetupPage";
-import { SetupStatusContext } from "./SetupStatus";
+import { SetupDialog } from "./SetupDialog";
 
 const claude: CredentialInfo = {
   id: "claude",
@@ -21,6 +20,7 @@ let root: Root;
 let restore: () => void;
 let posts: { url: string; body: unknown }[];
 const refresh = mock(async () => {});
+const onClose = mock(() => {});
 
 beforeEach(() => {
   browser = new Window({ url: "https://selfbench.test" });
@@ -38,6 +38,8 @@ beforeEach(() => {
   posts = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
     posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? "null")) });
+    // A sign-in start that never resolves keeps the flow on its preparing state.
+    if (String(input).endsWith("/codex-login")) return new Promise<Response>(() => {});
     return Response.json({});
   }) as typeof globalThis.fetch);
   restore = () => {
@@ -48,6 +50,7 @@ beforeEach(() => {
     }
   };
   refresh.mockClear();
+  onClose.mockClear();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -59,24 +62,27 @@ afterEach(async () => {
   await browser.happyDOM.close();
 });
 
-async function render(path: string, credentials: CredentialInfo[], canManage: boolean) {
+async function render(credentials: CredentialInfo[], canManage = true) {
   await act(async () => {
     root.render(
-      <SetupStatusContext.Provider value={{ credentials, canManage, incomplete: true, refresh }}>
-        <MemoryRouter initialEntries={[path]}>
-          <Routes>
-            <Route element={<Outlet context={{ org: { login: "team" }, orgs: [] }} />}>
-              <Route path="/get-started" element={<SetupPage />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </SetupStatusContext.Provider>,
+      <MemoryRouter>
+        <SetupDialog
+          org="team"
+          credentials={credentials}
+          canManage={canManage}
+          refresh={refresh}
+          onClose={onClose}
+        />
+      </MemoryRouter>,
     );
   });
 }
 
+const heading = () => container.querySelector("#setup-title")?.textContent;
 const button = (label: string) =>
-  [...container.querySelectorAll("button")].find((item) => item.textContent?.trim() === label);
+  [...container.querySelectorAll("button")].find(
+    (item) => (item.getAttribute("aria-label") ?? item.textContent?.trim()) === label,
+  );
 
 async function click(label: string) {
   const found = button(label);
@@ -98,24 +104,22 @@ async function type(id: string, value: string) {
   });
 }
 
-test("a Claude sign-in alone evaluates but cannot generate, and each step opens its own flow", async () => {
-  await render("/get-started", [claude], true);
-  const generate = [...container.querySelectorAll("dt")].find((item) =>
-    item.textContent?.startsWith("Generate Tasks"),
-  )?.parentElement?.textContent;
-  expect(generate).toContain("Not Ready");
-  expect(generate).toContain("Needs a ChatGPT sign-in or a model API key.");
-  expect(button("Sign In with Claude")).toBeUndefined();
+test("a new org starts at the coding plan, and Connect begins that plan's sign-in", async () => {
+  await render([]);
+  expect(heading()).toBe("Connect a Coding Plan");
+  expect(button("Skip for Now")).toBeDefined();
+  await click("Connect ChatGPT");
+  expect(posts).toEqual([
+    { url: "/api/orgs/team/credentials/codex-login", body: { name: "Codex" } },
+  ]);
+});
 
-  await click("Sign In with ChatGPT");
-  expect(container.querySelector("dialog")?.open).toBe(true);
-  expect(button("ChatGPT Sign-In")?.getAttribute("aria-pressed")).toBe("true");
-  await click("Cancel");
-
-  await click("Add E2B");
-  expect(container.querySelector<HTMLSelectElement>("#credential-provider")?.value).toBe("e2b");
-  await type("credential-name", "Team E2B");
-  await type("credential-secret", "e2b_key");
+test("after a Claude sign-in, a sandbox finishes evaluation but generation still needs ChatGPT", async () => {
+  await render([claude]);
+  expect(heading()).toBe("Choose Where Tasks Run");
+  await click("Connect Modal");
+  await type("setup-token-id", "ak-1");
+  await type("setup-secret", "as-1");
   await act(async () => {
     container
       .querySelector("form")
@@ -126,21 +130,18 @@ test("a Claude sign-in alone evaluates but cannot generate, and each step opens 
   expect(posts).toEqual([
     {
       url: "/api/orgs/team/credentials",
-      body: { name: "Team E2B", kind: "e2b", auth: "api-key", value: "e2b_key" },
+      body: { name: "Modal", kind: "modal", auth: "api-key", value: "as-1", tokenId: "ak-1" },
     },
   ]);
   expect(refresh).toHaveBeenCalledTimes(1);
-  expect(container.querySelector("dialog")).toBeNull();
+  expect(heading()).toBe("Almost There");
+  expect(container.textContent).toContain("Needs a ChatGPT sign-in or a model API key.");
 });
 
-test("members see the checklist without actions, and the finish links back to the blocked page", async () => {
-  await render("/get-started?return=%2Frepos%2Fowner%2Frepo%2Frun", [], false);
-  expect(container.textContent).toContain("Only admins can connect credentials.");
-  expect(button("Sign In with ChatGPT")).toBeUndefined();
-  expect(button("Add Modal")).toBeUndefined();
-  const back = [...container.querySelectorAll("a")].filter(
-    (link) => link.textContent === "Back to Run",
-  );
-  expect(back.length).toBeGreaterThan(0);
-  expect(back.every((link) => link.getAttribute("href") === "/repos/owner/repo/run")).toBe(true);
+test("members see what is missing and who can connect it, without connect actions", async () => {
+  await render([], false);
+  expect(heading()).toBe("Setup Needs an Admin");
+  expect(button("Connect ChatGPT")).toBeUndefined();
+  await click("Done");
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

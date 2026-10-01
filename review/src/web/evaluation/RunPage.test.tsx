@@ -88,11 +88,11 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
     await mount(false);
     expect(sandbox()?.value).toBe("e2b");
     expect(sandbox()?.querySelector('option[value="managed"]')).toBeNull();
-    // With no credentials and nothing managed, Run points to Get Started and back.
+    // With no credentials and nothing managed, Run points to the setup popup.
     expect(container.textContent).toContain("Connect a model and a sandbox to run evaluations.");
-    expect(
-      container.querySelector('section[aria-label="Setup Needed"] a')?.getAttribute("href"),
-    ).toBe("/get-started?return=%2Frepos%2Fowner%2Frepo%2Frun");
+    expect(container.querySelector('section[aria-label="Setup Needed"] button')?.textContent).toBe(
+      "Finish Setup",
+    );
 
     await reset();
     browser.sessionStorage.removeItem(key);

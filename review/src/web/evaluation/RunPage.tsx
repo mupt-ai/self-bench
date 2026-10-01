@@ -228,7 +228,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       )}
       {error && <Notice className="mb-5">{error}</Notice>}
       {coverage && !covered(coverage) ? (
-        <RunSetupCallout repo={repo} coverage={coverage} />
+        <RunSetupCallout coverage={coverage} />
       ) : (
         blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>
       )}

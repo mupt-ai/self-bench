@@ -7,6 +7,7 @@ import { cn } from "./primitives/cn";
 import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
+import { SetupDialog } from "./setup/SetupDialog";
 import { SetupStatusContext, useSetupStatusSource } from "./setup/SetupStatus";
 import { UserMenu } from "./UserMenu";
 import { Button } from "./ui";
@@ -67,13 +68,8 @@ export function SiteLayout({
     rememberOrg(next.login);
     setOrg(next);
     setMenuOpen(false);
-    const stays =
-      location.pathname === "/" ||
-      location.pathname === "/get-started" ||
-      location.pathname.startsWith("/settings/");
-    if (!stays) void navigate("/");
-    // A ?return= link names a repository of the org being left.
-    else if (location.search) void navigate(location.pathname, { replace: true });
+    if (location.pathname !== "/" && !location.pathname.startsWith("/settings/"))
+      void navigate("/");
   };
   return (
     <SetupStatusContext.Provider value={setup}>
@@ -100,7 +96,7 @@ export function SiteLayout({
             onSelect={choose}
             onSignOut={signOut}
             billing={managedOffering}
-            getStarted={setup.incomplete}
+            onSetup={setup.incomplete ? setup.openDialog : undefined}
             collapsed={sidebarCollapsed}
           />
         </div>
@@ -157,8 +153,18 @@ export function SiteLayout({
             onSelect={choose}
             onSignOut={signOut}
             billing={managedOffering}
-            getStarted={setup.incomplete}
+            onSetup={setup.incomplete ? setup.openDialog : undefined}
             onClose={() => setMenuOpen(false)}
+          />
+        )}
+        {setup.dialogOpen && setup.credentials && (
+          <SetupDialog
+            key={org.login}
+            org={org.login}
+            credentials={setup.credentials}
+            canManage={setup.canManage}
+            refresh={setup.refresh}
+            onClose={setup.closeDialog}
           />
         )}
       </div>

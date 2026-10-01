@@ -28,7 +28,6 @@ import {
 } from "./session";
 import { ApiKeysPage } from "./settings/ApiKeysPage";
 import { BillingPage } from "./settings/BillingPage";
-import { SetupPage } from "./setup/SetupPage";
 
 /**
  * selfbench.dev. One session probe on boot decides between the login page and the shell;
@@ -78,7 +77,6 @@ export function WebApp() {
                 <Route path="/demo/run" element={<DemoRunPage />} />
                 <Route element={<RequireUser />}>
                   <Route index element={<ReposPage />} />
-                  <Route path="get-started" element={<SetupPage />} />
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
                   {session.status === "signed-in" && session.managedOffering && (

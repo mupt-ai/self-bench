@@ -41,15 +41,14 @@ export function RunBlockerNotice({ children }: { children: ReactNode }) {
   );
 }
 
-/** Run with no model or sandbox to run on: what is missing, and Get Started back to here. */
-export function RunSetupCallout({ repo, coverage }: { repo: string; coverage: Coverage }) {
+/** Run with no model or sandbox to run on: what is missing, and the setup popup. */
+export function RunSetupCallout({ coverage }: { coverage: Coverage }) {
   return (
     <SetupCallout
       className="mb-5"
       coverage={coverage}
       action="run evaluations"
       hint="A ChatGPT or Claude sign-in, or any model API key, can run evaluations. Modal, E2B, or Daytona runs the tasks."
-      from={`/repos/${repo}/run`}
     />
   );
 }

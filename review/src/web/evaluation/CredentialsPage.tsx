@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { setupPath, setupReturn } from "../setup/readiness";
 import { useSetupStatus } from "../setup/SetupStatus";
 import { Button, buttonStyles, Notice, PageFrame, PageHeader } from "../ui";
 import { evaluationRequest } from "./api";
@@ -33,7 +32,9 @@ function CredentialsContent({ org }: { org: string }) {
   const [notice, setNotice] = React.useState("");
   const [search] = useSearchParams();
   const setup = useSetupStatus();
-  const back = setupReturn(search.get("return"));
+  const target = search.get("return");
+  const returnTo =
+    target && /^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/run$/.test(target) ? target : undefined;
   React.useEffect(() => {
     let disposed = false;
     setError("");
@@ -78,12 +79,9 @@ function CredentialsContent({ org }: { org: string }) {
   return (
     <PageFrame>
       <PageHeader title="Credentials" description={`Shared with ${org}.`}>
-        <Link className={buttonStyles.secondary} to={setupPath(back?.to)}>
-          Setup Guide
-        </Link>
-        {back && (
-          <Link className={buttonStyles.secondary} to={back.to}>
-            {back.label}
+        {returnTo && (
+          <Link className={buttonStyles.secondary} to={returnTo}>
+            Back to Run
           </Link>
         )}
       </PageHeader>

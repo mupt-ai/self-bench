@@ -8,7 +8,7 @@ function renderSidebar(
   path: string,
   kind: SiteOrg["kind"] = "org",
   billing = true,
-  getStarted = false,
+  onSetup?: () => void,
 ) {
   const org: SiteOrg = { login: "example-account", kind, role: "admin" };
   return renderToStaticMarkup(
@@ -20,7 +20,7 @@ function renderSidebar(
         onSelect={() => {}}
         onSignOut={async () => {}}
         billing={billing}
-        getStarted={getStarted}
+        onSetup={onSetup}
       />
     </MemoryRouter>,
   );
@@ -47,12 +47,9 @@ test("sidebar leaves out Billing without the managed offering", () => {
   expect(html).not.toContain("Billing");
 });
 
-test("sidebar offers Get Started until the org can generate and evaluate", () => {
-  expect(renderSidebar("/", "org", false, true)).toContain('href="/get-started"');
-  expect(renderSidebar("/", "org", false, false)).not.toContain("Get Started");
-  // Finishing setup on the page itself keeps the entry for the page being viewed.
-  const html = renderSidebar("/get-started", "org", false, false);
-  expect(html.match(/<a[^>]*data-active="true"[^>]*>/g)?.[0]).toContain('href="/get-started"');
+test("sidebar offers Finish Setup while the org still needs setup", () => {
+  expect(renderSidebar("/", "org", false, () => {})).toContain('aria-label="Finish Setup"');
+  expect(renderSidebar("/", "org", false)).not.toContain("Finish Setup");
 });
 
 test("sidebar supports the compact icon mode", () => {
@@ -65,7 +62,6 @@ test("sidebar supports the compact icon mode", () => {
         onSelect={() => {}}
         onSignOut={async () => {}}
         billing
-        getStarted={false}
         collapsed
       />
     </MemoryRouter>,

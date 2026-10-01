@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import { setupCoverage, setupReturn } from "./readiness";
+import { setupCoverage } from "./readiness";
 
 const credential = (kind: CredentialInfo["kind"], auth: CredentialInfo["auth"] = "api-key") => ({
   kind,
@@ -44,19 +44,4 @@ test("setup coverage follows what generation and evaluation each accept", () => 
       `${coverage.model ? "m" : "-"}${coverage.sandbox ? "s" : "-"}`;
     expect(`generate ${mark(generate)} evaluate ${mark(evaluate)}`, name).toBe(expected);
   }
-});
-
-test("setup only links back to the pages that send people there", () => {
-  expect(setupReturn("/repos/owner/repo/run")).toEqual({
-    to: "/repos/owner/repo/run",
-    label: "Back to Run",
-  });
-  expect(setupReturn("/repos/owner/repo/batches")?.label).toBe("Back to Batch Generation");
-  for (const target of [
-    null,
-    "https://example.com",
-    "//example.com/repos/a/b/run",
-    "/settings/billing",
-  ])
-    expect(setupReturn(target)).toBeUndefined();
 });
