@@ -80,16 +80,34 @@ test("a model two gateways list is one entry with a route on each, under each on
     ["openrouter", "z-ai/glm-6"],
     ["vercel-ai-gateway", "zai/glm-6"],
   ]);
-  expect(glm6.thinking).toEqual(["low", "high"]);
-  // The curated GLM keeps its short id and its levels and routes through both gateways.
-  expect(modelRoutes(glm).map((route) => [route.provider, route.model])).toEqual([
-    ["openrouter", "z-ai/glm-5.3"],
-    ["vercel-ai-gateway", "zai/glm-5.3"],
+  // Each route offers the levels its gateway accepts; the curated GLM keeps its own on both.
+  expect(thinkingOptions(glm6, ["codex"])).toEqual(["low", "high"]);
+  expect(thinkingOptions(routeFor(glm6, "vercel-ai-gateway") ?? glm6, ["codex"])).toEqual(["high"]);
+  expect(modelRoutes(glm).map((route) => [route.provider, route.model, route.thinking])).toEqual([
+    ["openrouter", "z-ai/glm-5.3", ["low", "high", "max"]],
+    ["vercel-ai-gateway", "zai/glm-5.3", ["low", "high", "max"]],
   ]);
   expect(modelRoutes(qwen).map((route) => [route.provider, route.model])).toEqual([
     ["vercel-ai-gateway", "alibaba/qwen4-max"],
   ]);
   expect(routeFor(qwen, "openrouter")).toBeUndefined();
+});
+
+test("a curated model loses its route on a gateway whose prices loaded without it", () => {
+  setGatewayListing("vercel-ai-gateway", {
+    models: [{ id: "zai/glm-5.3", label: "GLM 5.3" }],
+    rates: new Map([["zai/glm-5.3", { rates: [1, 4, 0.1, 1], asOf: "2026-09-30" }]]),
+  });
+  const models = evaluationCatalog();
+  const route = (id: string) => {
+    const model = models.find((entry) => entry.id === id);
+    if (!model) throw new Error(`Missing ${id}`);
+    return routeFor(model, "vercel-ai-gateway");
+  };
+  expect(route("glm-5.3")?.model).toBe("zai/glm-5.3");
+  expect(route("kimi-k3")).toBeUndefined();
+  // OpenRouter's prices have not loaded, so it still serves every curated model.
+  expect(models.every((model) => routeFor(model, "openrouter"))).toBe(true);
 });
 
 test("a row with no chosen level runs at high, or else the first level its model offers", () => {

@@ -60,6 +60,7 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
       : []),
     ...gatewayIds.flatMap((gateway) => {
       const routed = gatewayRouteModel(model, gateway);
+      const thinking = model.gatewayThinking?.[gateway];
       return routed
         ? [
             withReferencePricing({
@@ -67,6 +68,7 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
               provider: gateway,
               model: routed,
               harnesses: [...harnessIds],
+              ...(thinking ? { thinking } : {}),
             }),
           ]
         : [];
@@ -86,6 +88,7 @@ export function routeFor(model: CatalogModel, provider: string) {
   return modelRoutes(model).find((route) => route.provider === provider);
 }
 
+/** The levels a route offers its harnesses; a model's own levels until a credential is chosen. */
 export function thinkingOptions(model: CatalogModel, harnesses: Harness[]): ThinkingLevel[] {
   if (harnesses.some((harness) => harness === "mini-swe-agent" || harness === "terminus-2"))
     return ["default"];

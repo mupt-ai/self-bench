@@ -158,7 +158,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = availableCredentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
-      const levels = thinkingOptions(model, selection.harnesses);
+      const route = routeFor(model, credential.kind);
+      const levels = thinkingOptions(route ?? model, selection.harnesses);
       return (
         credentialRunsAll(model, credential, selection.harnesses) &&
         (!selection.thinking || levels.includes(selection.thinking)) &&

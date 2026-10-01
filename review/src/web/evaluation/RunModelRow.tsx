@@ -34,7 +34,7 @@ export function RunModelRow({
   const selected = selection ?? { catalogId: model.id, credentialId: "", harnesses: [] };
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
   const route = credential ? routeFor(model, credential.kind) : undefined;
-  const levels = thinkingOptions(model, selected.harnesses);
+  const levels = thinkingOptions(route ?? model, selected.harnesses);
   const thinking = selected.thinking ?? defaultThinking(levels);
   const selectCredential = (credentialId: string) => {
     const nextCredential = credentials.find((entry) => entry.id === credentialId);
@@ -71,9 +71,11 @@ export function RunModelRow({
                 credentialId: "",
                 harnesses: [],
               };
+            const nextKind = credentials.find((entry) => entry.id === next.credentialId)?.kind;
+            const nextRoute = nextKind ? routeFor(nextModel, nextKind) : undefined;
             if (
               selected.thinking &&
-              thinkingOptions(nextModel, next.harnesses).includes(selected.thinking)
+              thinkingOptions(nextRoute ?? nextModel, next.harnesses).includes(selected.thinking)
             )
               next.thinking = selected.thinking;
             onChange(next);

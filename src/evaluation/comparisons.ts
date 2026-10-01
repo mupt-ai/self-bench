@@ -146,7 +146,7 @@ export async function createComparison(
       new Set(selected.harnesses).size !== selected.harnesses.length
     )
       throw new Error("Unsupported or repeated harness");
-    const levels = thinkingOptions(model, selected.harnesses);
+    const levels = thinkingOptions(route, selected.harnesses);
     const thinking = selected.thinking ?? defaultThinking(levels);
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");

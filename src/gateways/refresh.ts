@@ -2,7 +2,10 @@ import { type GatewayId, gatewayIds, gateways, setGatewayListing } from "./index
 
 const REFRESH_MS = 60 * 60 * 1000;
 
-/** Loads a gateway's models and list prices; a failed or empty load keeps the last good one. */
+/**
+ * Loads a gateway's models and list prices. A failed load, or one with no prices or no models a
+ * harness can drive (as after a change to the response's shape), keeps the last good one.
+ */
 export async function refreshGateway(
   gateway: GatewayId,
   fetcher: typeof fetch = fetch,
@@ -12,6 +15,7 @@ export async function refreshGateway(
   if (!response.ok) throw new Error(`${label} models returned ${response.status}`);
   const listing = parse(await response.json(), new Date().toISOString().slice(0, 10));
   if (!listing.rates.size) throw new Error(`${label} returned no prices`);
+  if (!listing.models.length) throw new Error(`${label} returned no models agents can drive`);
   setGatewayListing(gateway, listing);
 }
 

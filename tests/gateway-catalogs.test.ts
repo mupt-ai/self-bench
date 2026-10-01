@@ -15,6 +15,14 @@ afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
 });
 
+/** An OpenRouter model a harness can drive, at `pricing`. */
+const routed = (id: string, pricing: object) => ({
+  id,
+  pricing,
+  architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+  supported_parameters: ["tools"],
+});
+
 const respond = (data: unknown[], status = 200) =>
   (async () => Response.json({ data }, { status })) as unknown as typeof fetch;
 
@@ -32,15 +40,12 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
   await refreshGateway(
     "openrouter",
     respond([
-      {
-        id: "openai/gpt-6-sol",
-        pricing: {
-          prompt: "0.000003",
-          completion: "0.000015",
-          input_cache_read: "0.0000003",
-          input_cache_write: "0.00000375",
-        },
-      },
+      routed("openai/gpt-6-sol", {
+        prompt: "0.000003",
+        completion: "0.000015",
+        input_cache_read: "0.0000003",
+        input_cache_write: "0.00000375",
+      }),
       { id: "moonshotai/kimi-k3", pricing: { prompt: "0.000003", completion: "0.000015" } },
       { id: "not/in-catalog", pricing: { prompt: "1", completion: "1" } },
     ]),
@@ -67,7 +72,7 @@ test("models a gateway does not price keep the catalog's reference rates", async
     "openrouter",
     respond([
       { id: "openai/gpt-6-sol", pricing: { prompt: "-1", completion: "0.00001" } },
-      { id: "openai/gpt-6-luna", pricing: { prompt: "0.0000001", completion: "0.0000005" } },
+      routed("openai/gpt-6-luna", { prompt: "0.0000001", completion: "0.0000005" }),
     ]),
   );
   expect(solPricing("openrouter")).toMatchObject({ input: 2, asOf: "2026-09-23" });
@@ -78,6 +83,11 @@ test("a failed or empty refresh keeps the last good rates", async () => {
   await expect(refreshGateway("vercel-ai-gateway", respond([]))).rejects.toThrow(
     /Vercel AI Gateway returned no prices/,
   );
+  // Prices but no model a harness can drive, as after a change to the response's shape.
+  const priced = { pricing: { prompt: "0.000001", completion: "0.000002" } };
+  await expect(
+    refreshGateway("openrouter", respond([{ id: "openai/gpt-6-sol", ...priced }])),
+  ).rejects.toThrow(/no models/);
   expect(solPricing("openrouter")).toMatchObject({ input: 2, output: 10 });
 });
 

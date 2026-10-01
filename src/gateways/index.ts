@@ -23,14 +23,20 @@ export function isGateway(provider: string | undefined): provider is GatewayId {
   return provider !== undefined && Object.hasOwn(gateways, provider);
 }
 
-const EMPTY: GatewayListing = { models: [], rates: new Map() };
-const listings = new Map<GatewayId, GatewayListing>();
-
-export function setGatewayListing(gateway: GatewayId, listing: GatewayListing): void {
-  listings.set(gateway, listing);
+/** A loaded listing, with its models also keyed by catalog id. */
+interface Loaded extends GatewayListing {
+  readonly byCatalogId: ReadonlyMap<string, ListedModel>;
 }
 
-function listing(gateway: GatewayId): GatewayListing {
+const EMPTY: Loaded = { models: [], rates: new Map(), byCatalogId: new Map() };
+const listings = new Map<GatewayId, Loaded>();
+
+export function setGatewayListing(gateway: GatewayId, { models, rates }: GatewayListing): void {
+  const byCatalogId = new Map(models.map((model) => [catalogModelId(gateway, model.id), model]));
+  listings.set(gateway, { models, rates, byCatalogId });
+}
+
+function listing(gateway: GatewayId): Loaded {
   return listings.get(gateway) ?? EMPTY;
 }
 
@@ -42,10 +48,19 @@ export function listedModels(gateway: GatewayId): readonly ListedModel[] {
 /** A listed model by its catalog id, from the first gateway that lists it. */
 export function findListedModel(id: string): ListedModel | undefined {
   for (const gateway of gatewayIds) {
-    const listed = listedModels(gateway).find((model) => catalogModelId(gateway, model.id) === id);
+    const listed = listing(gateway).byCatalogId.get(id);
     if (listed) return listed;
   }
   return undefined;
+}
+
+/**
+ * Whether the gateway serves its model `id`: it prices it, or its prices have not loaded yet (and
+ * in the browser), when a curated model is assumed to be on every gateway.
+ */
+export function gatewayServes(gateway: GatewayId, id: string): boolean {
+  const { rates } = listing(gateway);
+  return rates.size === 0 || rates.has(id);
 }
 
 /** The catalog's id for the model a gateway names `id`. */

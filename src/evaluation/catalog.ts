@@ -11,6 +11,7 @@ import {
   gatewayIds,
   gatewayModelId,
   gatewayPricing,
+  gatewayServes,
   gateways,
   isGateway,
   listedModels,
@@ -34,6 +35,11 @@ export interface CatalogModel {
   gateways?: Partial<Record<GatewayId, string>>;
   /** Selectable reasoning levels; absent means the provider default only. */
   thinking?: ThinkingLevel[];
+  /**
+   * For a model the catalog gives no levels, the levels each gateway accepts; its route there
+   * offers those, and `thinking` shows the first gateway's.
+   */
+  gatewayThinking?: Partial<Record<GatewayId, ThinkingLevel[]>>;
   pricing?: ModelPricing;
 }
 
@@ -65,22 +71,22 @@ export const catalog: CatalogModel[] = models.map((model) => {
 /**
  * Every model the gateways list for agents: each gateway's in its order, frontier first, the
  * earlier gateways' first. A model two gateways list is one entry with a route on each. A curated
- * model takes its place in that order and keeps its own levels, falling back to the first
- * gateway's; curated models no gateway lists follow at the end. Before the first load it is the
- * curated catalog alone.
+ * model takes its place in that order and keeps its own levels, or else takes each gateway's;
+ * curated models no gateway lists follow at the end. A curated model loses its route on a
+ * gateway whose prices have loaded without it. Before the first load it is the curated catalog.
  */
 export function evaluationCatalog(): CatalogModel[] {
   const curated = new Map(
-    catalog.map((model) => [findModel(model.id)?.openRouter ?? model.id, model]),
+    catalog.map((model) => [findModel(model.id)?.openRouter ?? model.id, served(model)]),
   );
+  const ownLevels = new Set(catalog.filter((model) => model.thinking).map((model) => model.id));
   const merged = new Map<string, CatalogModel>();
   for (const gateway of gatewayIds) {
     for (const entry of listedModels(gateway)) {
       const id = catalogModelId(gateway, entry.id);
       const known = merged.get(id) ?? curated.get(id);
       curated.delete(id);
-      const thinking = known?.thinking ?? (entry.thinking && [...entry.thinking]);
-      merged.set(id, {
+      const model: CatalogModel = {
         ...(known ?? {
           id,
           provider: gateway,
@@ -90,11 +96,26 @@ export function evaluationCatalog(): CatalogModel[] {
           source: gateways[gateway].modelPage(entry.id),
         }),
         gateways: { ...known?.gateways, [gateway]: entry.id },
-        ...(thinking ? { thinking } : {}),
-      });
+      };
+      if (!ownLevels.has(model.id)) {
+        const levels = entry.thinking ? [...entry.thinking] : [];
+        model.gatewayThinking = { ...known?.gatewayThinking, [gateway]: levels };
+        const shown = known?.thinking ?? (levels.length ? levels : undefined);
+        if (shown) model.thinking = shown;
+      }
+      merged.set(id, model);
     }
   }
   return [...merged.values(), ...curated.values()];
+}
+
+/** A curated model with routes only on the gateways that serve it. */
+function served(model: CatalogModel): CatalogModel {
+  const routes = gatewayIds.flatMap((gateway) => {
+    const id = model.gateways?.[gateway];
+    return id && gatewayServes(gateway, id) ? [[gateway, id] as const] : [];
+  });
+  return { ...model, gateways: Object.fromEntries(routes) };
 }
 
 /** The model with its reference pricing on its own provider, when the catalog has rates. */
