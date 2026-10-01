@@ -1,13 +1,13 @@
 import type { MouseEvent } from "react";
 import { canHover } from "../mobile/device";
 import { motionOff } from "../motion";
-import { scrollArea } from "../scroll-area";
+import { type ScrollArea, scrollArea } from "../scroll-area";
 import { assembleForReveal } from "./assemble-reveal";
 import { burn } from "./burn";
 import { type Box, flightPath, paceFlight, settleTime } from "./flight-path";
 import { flightPartOf, holdHover, select } from "./marks";
 import { beginWithSheet, fly, inside, measure, union, whenFound } from "./transition-parts";
-import { currentTransition, stillRunning } from "./transition-run";
+import { currentTransition, holdBody, stillRunning } from "./transition-run";
 
 const FLIGHT_MS = 620;
 /**
@@ -18,6 +18,20 @@ const FLIGHT_MS = 620;
 const NEAR_REST_PX = 6;
 /** Parts hidden on a hovered card, which fade in as they fly. */
 const FADE_IN = new Set(["description", "stars"]);
+/** How long an opening waits for the page's body (its data) before assembling what is there. */
+const BODY_WAIT_MS = 20_000;
+
+/** Calls `then` once the page has drawn its body, or after BODY_WAIT_MS, unless `run` ends. */
+function whenPageBody(area: ScrollArea, run: number, then: () => void): void {
+  const start = performance.now();
+  const wait = () => {
+    if (!stillRunning(run)) return;
+    if (area.content.querySelector(select.pageBody) || performance.now() - start > BODY_WAIT_MS)
+      then();
+    else requestAnimationFrame(wait);
+  };
+  wait();
+}
 
 /** Whether page transitions should play at all. */
 export function transitionsOn(): boolean {
@@ -53,8 +67,11 @@ export function revealNavigate(event: MouseEvent<HTMLElement>, go: () => void): 
  *    grow into them (parts marked `flightFrom` land on the matching `flightTo`; see marks.ts).
  *    They fly beneath the burning sheet, paced so they only ever cross burned-through paper.
  *    Each flying piece is a copy of its landing spot, so the hand-over at the end is exact.
- * 3. As they come to rest (within a few pixels), the rest of the page is assembled below the
- *    title: a ragged frontier creeps down and each block of the page clicks into place.
+ * 3. As they come to rest (within a few pixels), the page draws the rest of itself, once its
+ *    data is in (marks.ts `pageBody`), and that is assembled below the title: a ragged frontier
+ *    creeps down and each block of the page clicks into place. Until then the page holds its
+ *    body back (transition-run.ts `holdBody`), so drawing it, the heaviest thing it does,
+ *    never lands mid-flight. The title needs no data: the page draws it from the card.
  *
  * `go` performs the navigation; for history navigation it is already under way and `go`
  * does nothing.
@@ -80,6 +97,7 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
   if (card && shown) holdHover(card, true);
   const sheet = beginWithSheet(area, layout);
   const run = currentTransition();
+  const letGo = holdBody();
   if (card && shown) holdHover(card, false);
   const frame = area.view();
   // The title lands near the top left of the content column; the fire leans that way.
@@ -145,15 +163,19 @@ export function openFromCard(card: HTMLElement | null, go: () => void): void {
       setTimeout(
         () => {
           if (!stillRunning(run)) return;
-          // Assembly starts under the title block, which is already in place, and under any
-          // lines marked to fade in rather than assemble.
-          const faded = [...area.content.querySelectorAll(select.revealFade)];
-          const below = Math.max(
-            frame.top,
-            ...[...targets.values(), ...faded].map((part) => part.getBoundingClientRect().bottom),
-          );
-          hidden?.reveal(below + 4);
-          started();
+          // The title is at rest: the page may draw its body now, and is assembled once it has.
+          letGo();
+          whenPageBody(area, run, () => {
+            // Assembly starts under the title block, which is already in place, and under any
+            // lines marked to fade in rather than assemble.
+            const faded = [...area.content.querySelectorAll(select.revealFade)];
+            const below = Math.max(
+              frame.top,
+              ...[...targets.values(), ...faded].map((part) => part.getBoundingClientRect().bottom),
+            );
+            hidden?.reveal(below + 4);
+            started();
+          });
         },
         targets.size ? Math.max(rests, clears) : 0,
       );
