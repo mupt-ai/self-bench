@@ -122,7 +122,9 @@ export function useOrgCredentials(org: string): [CredentialInfo[] | undefined, s
       `/api/orgs/${encodeURIComponent(org)}/credentials`,
     ).then(
       (result) => {
-        if (!disposed) setCredentials(result.credentials);
+        if (disposed) return;
+        setCredentials(result.credentials);
+        setError("");
       },
       (cause: Error) => {
         if (!disposed) setError(cause.message);
