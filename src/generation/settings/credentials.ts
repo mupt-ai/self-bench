@@ -24,7 +24,7 @@ import {
   managedOffer,
   managedSandboxCredentials,
 } from "../billing/managed.js";
-import { generationModelCredentialKinds, generationModelRoute } from "./models.js";
+import { generationCredentialSupportsModel, generationModelRoute } from "./models.js";
 import type { GenerationReference, GenerationSettings } from "./settings.js";
 
 type ProviderCredential =
@@ -122,6 +122,8 @@ export async function checkGenerationCredentials(
 ) {
   if (settings.modelAccess === "managed") {
     if (!offer.models) throw new Error("Managed models are not available on this deployment.");
+    generationModelRoute(settings.authorModel, undefined);
+    generationModelRoute(settings.verifierModel, undefined);
   } else {
     const model = await credentials.find(orgId, settings.modelCredentialId ?? "");
     const compatible =
@@ -129,8 +131,8 @@ export async function checkGenerationCredentials(
       (model.kind === "openai"
         ? ["api-key", "codex-login"].includes(model.auth)
         : model.kind !== "custom" && model.auth === "api-key") &&
-      generationModelCredentialKinds(settings.authorModel).includes(model.kind) &&
-      generationModelCredentialKinds(settings.verifierModel).includes(model.kind);
+      generationCredentialSupportsModel(settings.authorModel, model) &&
+      generationCredentialSupportsModel(settings.verifierModel, model);
     if (!compatible)
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",

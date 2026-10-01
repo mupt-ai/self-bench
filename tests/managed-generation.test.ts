@@ -1,11 +1,20 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { setGatewayListing } from "../src/gateways/index.js";
 import { managedOffer } from "../src/generation/billing/managed.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "../src/generation/billing/pricing.js";
-import { generationEnvironment } from "../src/generation/settings/credentials.js";
+import {
+  checkGenerationCredentials,
+  generationEnvironment,
+} from "../src/generation/settings/credentials.js";
 import { generationModelRoute } from "../src/generation/settings/models.js";
 import type { GenerationReference } from "../src/generation/settings/settings.js";
 import { generationSettingsSchema } from "../src/generation/settings/settings.js";
+import { codexAuth } from "./support/codex-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 const managedSettings = {
   authorModel: "gpt-6-sol",
@@ -59,9 +68,9 @@ test("model routes resolve per credential kind", () => {
     provider: "openrouter",
     model: "openai/gpt-6-sol",
   });
-  expect(generationModelRoute("claude-fable-5-1", { kind: "openai", auth: "codex-login" })).toEqual(
-    { provider: "openai-codex", model: "anthropic/claude-fable-5.1" },
-  );
+  expect(() =>
+    generationModelRoute("claude-fable-5-1", { kind: "openai", auth: "codex-login" }),
+  ).toThrow(/Credential cannot run/);
   expect(generationModelRoute("claude-opus-5-5", { kind: "anthropic", auth: "api-key" })).toEqual({
     provider: "anthropic",
     model: "claude-opus-5-5",
@@ -71,10 +80,100 @@ test("model routes resolve per credential kind", () => {
     model: "z-ai/glm-5.3",
   });
   // Pi names Vercel's provider as the credential kind; Vercel spells Z.ai "zai".
+  setGatewayListing("vercel-ai-gateway", {
+    models: [{ id: "zai/glm-5.3", label: "GLM 5.3" }],
+    rates: new Map(),
+  });
   expect(generationModelRoute("glm-5.3", { kind: "vercel-ai-gateway", auth: "api-key" })).toEqual({
     provider: "vercel-ai-gateway",
     model: "zai/glm-5.3",
   });
+});
+
+test("an uncurated OpenRouter model works for generation but a made-up GPT model cannot use sign-in", async () => {
+  const id = "example/new-agent-model";
+  setGatewayListing("openrouter", {
+    models: [
+      { id, label: "New Agent Model" },
+      { id: "openai/gpt-made-up", label: "Unverified GPT" },
+    ],
+    rates: new Map([[id, { rates: [1, 3, 1, 1], asOf: "2026-09-30" }]]),
+  });
+  const vault = memoryVault();
+  const router = await vault.credentials.create(
+    1,
+    { name: "OpenRouter", kind: "openrouter", auth: "api-key", value: "fake" },
+    {},
+  );
+  const login = await vault.credentials.create(
+    1,
+    { name: "ChatGPT", kind: "openai", auth: "codex-login", value: codexAuth },
+    {},
+  );
+  const settings = {
+    ...managedSettings,
+    authorModel: id,
+    verifierModel: id,
+    modelAccess: "credential" as const,
+    modelCredentialId: router.id,
+  };
+  await checkGenerationCredentials(
+    vault.credentials,
+    1,
+    settings,
+    managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+  );
+  expect(generationModelRoute(id, { kind: "openrouter", auth: "api-key" })).toEqual({
+    provider: "openrouter",
+    model: id,
+  });
+  expect(
+    managedModelCostUsd(id, { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 }),
+  ).toBe(1);
+  await expect(
+    checkGenerationCredentials(
+      vault.credentials,
+      1,
+      {
+        ...settings,
+        authorModel: "gpt-made-up",
+        verifierModel: "gpt-made-up",
+        modelCredentialId: login.id,
+      },
+      managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+    ),
+  ).rejects.toThrow(/credential that can run/);
+});
+
+test("a Vercel-only model can author with its gateway key but not managed OpenRouter", async () => {
+  setGatewayListing("vercel-ai-gateway", {
+    models: [{ id: "alibaba/qwen4-coder", label: "Qwen4 Coder" }],
+    rates: new Map(),
+  });
+  const model = "qwen/qwen4-coder";
+  const vault = memoryVault();
+  const credential = await vault.credentials.create(
+    1,
+    { name: "AI Gateway", kind: "vercel-ai-gateway", auth: "api-key", value: "fake" },
+    {},
+  );
+  await checkGenerationCredentials(
+    vault.credentials,
+    1,
+    {
+      ...managedSettings,
+      authorModel: model,
+      verifierModel: model,
+      modelAccess: "credential",
+      modelCredentialId: credential.id,
+    },
+    managedOffer({ SELFBENCH_MANAGED_E2B_API_KEY: "fake" }),
+  );
+  expect(generationModelRoute(model, { kind: "vercel-ai-gateway", auth: "api-key" })).toEqual({
+    provider: "vercel-ai-gateway",
+    model: "alibaba/qwen4-coder",
+  });
+  expect(() => generationModelRoute(model, undefined)).toThrow("OpenRouter does not offer");
 });
 
 test("managed runs resolve platform keys and never inherit the worker's own credentials", async () => {

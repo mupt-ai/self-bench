@@ -7,7 +7,6 @@ import {
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
 import { sandboxImageIssue } from "../../sandbox/runtime-image-rules.js";
-import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
 const generationSandboxes = ["managed", ...HOSTED_EXECUTION_BACKENDS] as const;
@@ -39,8 +38,8 @@ export function generationHarborEnvironment(
 
 export const generationSettingsSchema = z
   .object({
-    authorModel: z.enum(generationModels),
-    verifierModel: z.enum(generationModels),
+    authorModel: z.string().min(1).max(200),
+    verifierModel: z.string().min(1).max(200),
     reasoning: z.enum(["low", "medium", "high"]),
     /**
      * "managed" routes model calls through OpenRouter behind a platform key the server

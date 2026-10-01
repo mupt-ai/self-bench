@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
-import { catalog } from "../src/evaluation/catalog.js";
+import { catalog, evaluationCatalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { gatewayIds, gateways, isGateway } from "../src/gateways/index.js";
+import { gatewayIds, gateways, isGateway, setGatewayListing } from "../src/gateways/index.js";
+import { PI_VERSION } from "../src/harnesses/pi/version.js";
 import { runCommand } from "../src/lib/process.js";
 
 test("native Codex uses an isolated installer without inheriting the image's NVM directory", async () => {
@@ -56,6 +57,62 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
+test("Pi with ChatGPT sign-in uses its OAuth model and pinned installer", () => {
+  const input = { credentials: { provider: "openai", auth: "codex-login" } } as EvaluationInput;
+  const trial = gatewayTrial(input, "pi", "openai/gpt-6.1-sol", {});
+  expect(trial.model).toBe("openai-codex/gpt-6.1-sol");
+  expect(trial.extraAllowedHosts).toContain("chatgpt.com");
+  expect(trial.child.OPENAI_API_KEY).toBeUndefined();
+  const args = solverArguments("task", "jobs", "pi", trial.model, "e2b", "high");
+  expect(args).toContain("harbor_pi:SelfBenchPi");
+  expect(args).toContain(`version=${PI_VERSION}`);
+  expect(args).toContain("thinking=high");
+});
+
+test("Harbor Pi places only the selected subscription in the sandbox before invocation", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `import asyncio, importlib.util, pathlib, sys, types
+module = types.ModuleType("harbor.agents.installed.pi")
+class Pi:
+    def _get_env(self, key):
+        assert key == "SELFBENCH_PI_AUTH_JSON_PATH"
+        return "/worker/trial-auth.json"
+    async def exec_as_agent(self, environment, command, **kwargs):
+        environment.calls.append(("agent", command, kwargs))
+        return "result"
+    async def exec_as_root(self, environment, command):
+        environment.calls.append(("root", command))
+module.Pi = Pi
+sys.modules[module.__name__] = module
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+class Environment:
+    default_user = "agent"
+    def __init__(self): self.calls = []
+    async def upload_file(self, source, target):
+        assert source == pathlib.Path("/worker/trial-auth.json")
+        self.calls.append(("upload", target))
+async def check():
+    env = Environment()
+    agent = adapter.SelfBenchPi()
+    await agent.exec_as_agent(env, "pi --version")
+    assert len(env.calls) == 1 and env.calls[0][0] == "agent"
+    await agent.exec_as_agent(env, ". ~/.nvm/nvm.sh; pi --print --provider openai-codex --model gpt-6.1-sol", timeout_sec=30)
+    assert [call[0] for call in env.calls[1:]] == ["upload", "root", "agent", "agent"]
+    assert env.calls[1][1] == "/tmp/harbor-pi-auth.json"
+    assert "chown agent" in env.calls[2][1] and "chmod 600" in env.calls[2][1]
+    assert 'install -m 600 /tmp/harbor-pi-auth.json "$HOME/.pi/agent/auth.json"' in env.calls[3][1]
+    assert "rm /tmp/harbor-pi-auth.json" in env.calls[3][1]
+    assert env.calls[4][2] == {"timeout_sec": 30}
+asyncio.run(check())
+`,
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_pi.py", import.meta.url)),
+  ]);
+  expect(result.exitCode).toBe(0);
+});
+
 for (const provider of gatewayIds) {
   test(`${provider} uses each harness protocol and preserves gateway model IDs`, () => {
     const input = { credentials: { provider } } as EvaluationInput;
@@ -99,7 +156,9 @@ for (const provider of gatewayIds) {
   });
 }
 
-test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
+test("only listed gateway routes offer every harness; direct keys keep native harnesses", () => {
+  const listed = { models: [{ id: "openai/gpt-6-sol", label: "GPT-6 Sol" }], rates: new Map() };
+  for (const gateway of gatewayIds) setGatewayListing(gateway, listed);
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
       if (isGateway(route.provider)) expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
@@ -109,7 +168,7 @@ test("only gateway routes offer every harness; direct keys keep their native har
         );
     }
   }
-  const model = catalog.find((entry) => entry.id === "gpt-6-sol");
+  const model = evaluationCatalog().find((entry) => entry.id === "gpt-6-sol");
   if (!model) throw new Error("Missing model fixture");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("claude-code");
   expect(routeFor(model, "openrouter")?.harnesses).toContain("mini-swe-agent");

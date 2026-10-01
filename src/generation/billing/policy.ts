@@ -1,6 +1,8 @@
 import type { BillingModelRates } from "../../db/schema.js";
+import { evaluationCatalog } from "../../evaluation/catalog.js";
+import { routeFor } from "../../evaluation/models.js";
 import { sha256 } from "../../lib/hash.js";
-import { generationModelPricing, generationModels } from "../settings/models.js";
+import { generationModelPricing } from "../settings/models.js";
 import type { BillingPolicy } from "./config.js";
 import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "./pricing.js";
 import type { TokenUsage } from "./usage.js";
@@ -24,10 +26,11 @@ function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
 /** Integer rates frozen from the current policy and published catalog/E2B figures. */
 export function rateSnapshotSpec(policy: BillingPolicy): RateSnapshotSpec {
   const modelRates: Record<string, BillingModelRates> = {};
-  for (const model of generationModels) {
-    const rates = generationModelPricing(model);
+  for (const model of evaluationCatalog()) {
+    if (!routeFor(model, "openrouter")) continue;
+    const rates = generationModelPricing(model.id);
     if (!rates) continue;
-    modelRates[model] = {
+    modelRates[model.id] = {
       input: usdToUnits(rates.input, policy.unitScale, policy.markupBps),
       output: usdToUnits(rates.output, policy.unitScale, policy.markupBps),
       cacheRead: usdToUnits(rates.cacheRead, policy.unitScale, policy.markupBps),

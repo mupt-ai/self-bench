@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { chatgptSignInModels } from "../src/contracts/models.js";
 import {
   type CatalogModel,
   catalog,
@@ -33,7 +34,7 @@ const listModels = (gateway: GatewayId, models: ListedModel[]) =>
   setGatewayListing(gateway, { models, rates: new Map() });
 
 test("OpenRouter's popular models join the curated ones, which keep their routes and levels", () => {
-  expect(evaluationCatalog()).toEqual(catalog);
+  expect(evaluationCatalog().map((model) => model.id)).toEqual([...chatgptSignInModels]);
   setGatewayListing("openrouter", {
     models: [
       { id: "qwen/qwen4-coder", label: "Qwen4 Coder", thinking: ["low", "high", "max"] },
@@ -48,7 +49,7 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
     "kimi-k3",
     "gpt-6-sol",
   ]);
-  expect(models).toHaveLength(catalog.length + 1);
+  expect(models).toHaveLength(6);
   const [qwen, kimi, sol] = models;
   if (!qwen || !kimi || !sol) throw new Error("Missing models");
   expect(modelRoutes(qwen)).toEqual([
@@ -64,6 +65,18 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(thinkingOptions(kimi, ["pi"])).toEqual(["low", "high"]);
   expect(thinkingOptions(sol, ["codex"])).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
   expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
+});
+
+test("listed Sonnet 5.5 has an Anthropic native-key route and only the gateways listing it", () => {
+  listModels("openrouter", [{ id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5" }]);
+  const sonnet = evaluationCatalog().find((entry) => entry.id === "claude-sonnet-5-5");
+  if (!sonnet) throw new Error("Missing Sonnet 5.5");
+  expect(modelRoutes(sonnet).map((route) => [route.provider, route.model])).toEqual([
+    ["anthropic", "claude-sonnet-5-5"],
+    ["openrouter", "anthropic/claude-sonnet-5.5"],
+  ]);
+  expect(routeFor(sonnet, "anthropic")?.pricing).toMatchObject({ input: 2, output: 10 });
+  expect(routeFor(sonnet, "vercel-ai-gateway")).toBeUndefined();
 });
 
 test("a model two gateways list is one entry with a route on each, under each one's id", () => {
@@ -89,7 +102,6 @@ test("a model two gateways list is one entry with a route on each, under each on
   expect(thinkingOptions(glm6, ["codex"])).toEqual(["low", "high"]);
   expect(thinkingOptions(routeFor(glm6, "vercel-ai-gateway") ?? glm6, ["codex"])).toEqual(["high"]);
   expect(modelRoutes(glm).map((route) => [route.provider, route.model, route.thinking])).toEqual([
-    ["openrouter", "z-ai/glm-5.3", ["low", "high", "max"]],
     ["vercel-ai-gateway", "zai/glm-5.3", ["low", "high", "max"]],
   ]);
   expect(modelRoutes(qwen).map((route) => [route.provider, route.model])).toEqual([
@@ -106,13 +118,11 @@ test("a curated model loses its route on a gateway whose prices loaded without i
   const models = evaluationCatalog();
   const route = (id: string) => {
     const model = models.find((entry) => entry.id === id);
-    if (!model) throw new Error(`Missing ${id}`);
-    return routeFor(model, "vercel-ai-gateway");
+    return model && routeFor(model, "vercel-ai-gateway");
   };
   expect(route("glm-5.3")?.model).toBe("zai/glm-5.3");
   expect(route("kimi-k3")).toBeUndefined();
-  // OpenRouter's prices have not loaded, so it still serves every curated model.
-  expect(models.every((model) => routeFor(model, "openrouter"))).toBe(true);
+  expect(models.every((model) => !routeFor(model, "openrouter"))).toBe(true);
 });
 
 test("a row with no chosen level runs at high, or else the first level its model offers", () => {
@@ -152,31 +162,31 @@ test("current catalog exposes explicit model IDs and dated provider pricing", ()
 });
 
 test("generation and evaluation read the same catalog", () => {
-  for (const id of generationModels) {
-    const entry = catalog.find((model) => model.id === id);
+  listModels("openrouter", [{ id: "z-ai/new-coder", label: "New Coder" }]);
+  for (const id of generationModels()) {
+    const entry = evaluationCatalog().find((model) => model.id === id);
     expect(entry?.label).toBe(generationModelLabel(id));
-    expect(generationModelPricing(id)).toEqual(entry && routeFor(entry, "openrouter")?.pricing);
+    if (entry && routeFor(entry, "openrouter"))
+      expect(generationModelPricing(id)).toEqual(routeFor(entry, "openrouter")?.pricing);
   }
 });
 
-test("a gateway-only model keeps its gateway IDs and every harness", () => {
-  const model = catalog.find((entry) => entry.id === "deepseek-v4-pro-0813");
-  if (!model) throw new Error("Missing model");
-  expect(model.provider).toBe("openrouter");
-  expect(model.model).toBe("deepseek/deepseek-v4-pro-0813");
-  expect(modelRoutes(model)).toEqual(
-    gatewayIds.map((provider) =>
-      expect.objectContaining({
-        provider,
-        model: "deepseek/deepseek-v4-pro-0813",
-        harnesses: [...harnessIds],
-      }),
-    ),
-  );
+test("a gateway-only model has only its listed gateway route", () => {
+  listModels("vercel-ai-gateway", [{ id: "deepseek/deepseek-v4-pro-0813", label: "DeepSeek V4" }]);
+  const model = evaluationCatalog().find((entry) => entry.id === "deepseek-v4-pro-0813");
+  if (!model) throw new Error("Missing listed model");
+  expect(modelRoutes(model).map((route) => route.provider)).toEqual(["vercel-ai-gateway"]);
+  expect(routeFor(model, "openrouter")).toBeUndefined();
 });
 
 test("credential routes preserve exact model IDs, provider pricing and harness support", () => {
-  const sol = catalog.find((model) => model.id === "gpt-6-sol");
+  listModels("openrouter", [
+    { id: "openai/gpt-6-sol", label: "GPT-6 Sol" },
+    { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol" },
+  ]);
+  listModels("vercel-ai-gateway", [{ id: "openai/gpt-6-sol", label: "GPT-6 Sol" }]);
+  const available = evaluationCatalog();
+  const sol = available.find((model) => model.id === "gpt-6-sol");
   if (!sol) throw new Error("Missing Sol");
   const routes = modelRoutes(sol);
   expect(routes.map((route) => [route.provider, route.model, route.pricing?.input])).toEqual([
@@ -186,6 +196,14 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
   ]);
   expect(thinkingOptions(sol, ["codex"])).toContain("max");
   expect(thinkingOptions(sol, ["codex", "pi"])).not.toContain("max");
+  const newSol = available.find((model) => model.id === "gpt-6.1-sol");
+  if (!newSol) throw new Error("Missing GPT-6.1 Sol");
+  expect(
+    modelRoutes(newSol).map((route) => [route.provider, route.model, route.pricing?.cacheRead]),
+  ).toEqual([
+    ["openai", "gpt-6.1-sol", 0.1],
+    ["openrouter", "openai/gpt-6.1-sol", 0.1],
+  ]);
 });
 
 test("thinking levels reach the actual Harbor harness flags without changing models", () => {

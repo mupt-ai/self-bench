@@ -13,6 +13,7 @@ const model: CatalogModel = {
   label: "Test Model",
   harnesses: ["claude-code"],
   source: "",
+  gateways: { openrouter: "anthropic/test" },
 };
 const credential: CredentialInfo = {
   id: "connection",
@@ -22,13 +23,17 @@ const credential: CredentialInfo = {
   createdAt: "2026-09-11T00:00:00Z",
 };
 
-test("requested harness chooses a compatible credential and respects login restrictions", () => {
-  const openai: CatalogModel = { ...model, provider: "openai" };
+test("requested harness keeps Pi available with ChatGPT sign-in", () => {
+  const openai: CatalogModel = { ...model, id: "gpt-6.1-sol", provider: "openai" };
   const login: CredentialInfo = { ...credential, kind: "openai", auth: "codex-login" };
-  expect(nextModelSelection(openai, [login], "pi")).toBeUndefined();
+  expect(nextModelSelection(openai, [login], "pi")).toEqual({
+    catalogId: openai.id,
+    credentialId: login.id,
+    harnesses: ["pi"],
+  });
   expect(
     nextModelSelection(openai, [login, { ...login, id: "api-key", auth: "api-key" }], "pi"),
-  ).toEqual({ catalogId: model.id, credentialId: "api-key", harnesses: ["pi"] });
+  ).toEqual({ catalogId: openai.id, credentialId: login.id, harnesses: ["pi"] });
 });
 
 test("duplicates match model, effective thinking level, and harness, not credential", () => {
@@ -139,10 +144,10 @@ test("selection skips incompatible credentials and fills the first compatible ro
 
 test("selection uses Codex for a compatible login credential", () => {
   expect(
-    nextModelSelection({ ...model, provider: "openai" }, [
+    nextModelSelection({ ...model, id: "gpt-6.1-sol", provider: "openai" }, [
       { ...credential, kind: "openai", auth: "codex-login" },
     ]),
-  ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
+  ).toEqual({ catalogId: "gpt-6.1-sol", credentialId: credential.id, harnesses: ["codex"] });
 });
 
 test("an empty inline row offers the model picker and disables dependent controls", () => {

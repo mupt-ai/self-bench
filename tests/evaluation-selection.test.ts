@@ -1,8 +1,12 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { setGatewayListing } from "../src/gateways/index.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 test("one model row resolves its saved route and rejects unsupported thinking before dispatch", async () => {
   const fixture = await evaluationServer();
@@ -225,3 +229,45 @@ test.each([
     }
   },
 );
+
+test("an uncurated listed model can be submitted with every gateway harness", async () => {
+  const id = "example/new-agent-model";
+  setGatewayListing("openrouter", { models: [{ id, label: "New Agent Model" }], rates: new Map() });
+  const fixture = await evaluationServer();
+  const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+  try {
+    const save = async (kind: string) => {
+      const response = await fixture.request(
+        "/api/orgs/avyay/credentials",
+        post({ kind, name: kind, value: `fake-${kind}` }),
+      );
+      expect(response.status).toBe(201);
+      return (await response.json()).id as string;
+    };
+    const response = await fixture.request(
+      `${fixture.base}/comparisons`,
+      post({
+        id: crypto.randomUUID(),
+        tasks: [{ runId: "run-one", taskId: "task-one" }],
+        models: [
+          {
+            catalogId: id,
+            credentialId: await save("openrouter"),
+            harnesses: ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"],
+          },
+        ],
+        sandbox: "e2b",
+        sandboxCredentialId: await save("e2b"),
+      }),
+    );
+    expect(response.status).toBe(202);
+    expect(fixture.starts).toHaveLength(1);
+    expect(fixture.starts[0]).toMatchObject({
+      model: id,
+      modelName: `openrouter/${id}`,
+      harnesses: ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"],
+    });
+  } finally {
+    await fixture.close();
+  }
+});

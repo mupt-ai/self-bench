@@ -108,7 +108,7 @@ export function trialCost(
   const pricing = run.pricing;
   const model = run.modelName.split("/").slice(1).join("/");
   // Harbor records the model name the runner passed it: the gateway form on a gateway route.
-  const harborModel = gatewayModel(run.credentials?.provider, harness, run.modelName);
+  const harborModel = gatewayModel(run.credentials?.provider, harness, run.modelName, auth);
   const matches = (value: unknown) =>
     value === model || value === run.modelName || value === harborModel;
   let usage: TokenUsage | undefined;
@@ -124,7 +124,7 @@ export function trialCost(
     if (!messages) return {};
     verified =
       messages.length > 0 &&
-      messages.every((message) => `${message.provider}/${message.model}` === run.modelName);
+      messages.every((message) => `${message.provider}/${message.model}` === harborModel);
     const totals: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     largestPrompt = 0;
     for (const message of messages) {

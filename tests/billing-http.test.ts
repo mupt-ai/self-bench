@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { sendApiError } from "../src/api/http.js";
@@ -7,7 +7,11 @@ import { createBillingStore } from "../src/db/billing.js";
 import { createUserStore } from "../src/db/users.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 const stripe = {
   secretKey: "sk_test",

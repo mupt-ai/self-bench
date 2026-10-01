@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   billingCreditAdminOrgId,
   loadBillingPolicy,
@@ -10,6 +10,10 @@ import {
   rateSnapshotSpec,
   sandboxBillableUnits,
 } from "../src/generation/billing/policy.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 test("credit grants require an explicit valid immutable GitHub organization ID", () => {
   expect(billingCreditAdminOrgId({})).toBeUndefined();

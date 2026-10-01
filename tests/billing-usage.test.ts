@@ -1,11 +1,15 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createBillingStore } from "../src/db/billing.js";
 import { billingOutbox, generationUsage } from "../src/db/schema.js";
 import { createUsageStore } from "../src/db/usage.js";
 import { createUserStore } from "../src/db/users.js";
 import { startBillingDispatcher } from "../src/generation/billing/outbox.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 async function orgFixture() {
   const database = await testDatabase();

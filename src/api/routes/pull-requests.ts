@@ -7,6 +7,7 @@ import type { RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
+import { evaluationCatalog } from "../../evaluation/catalog.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
@@ -94,7 +95,8 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
           ? await options.billing.status(tenant.id)
           : { configured: false, eligible: true, status: "disabled", cancelAtPeriodEnd: false };
         sendJson(response, 200, {
-          models: generationModels,
+          models: generationModels(),
+          modelCatalog: evaluationCatalog(),
           sandboxes: HOSTED_EXECUTION_BACKENDS,
           credentials: options.vault ? await options.vault.credentials.list(tenant.id) : [],
           available: !!options.vault,

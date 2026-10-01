@@ -3,8 +3,9 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import {
-  credentialRunsHarness,
+  credentialHarnesses,
   defaultThinking,
+  harnessIds,
   harnessOptions,
   routeFor,
   thinkingOptions,
@@ -38,24 +39,16 @@ export function RunModelRow({
   const thinking = selected.thinking ?? defaultThinking(levels);
   const selectCredential = (credentialId: string) => {
     const nextCredential = credentials.find((entry) => entry.id === credentialId);
-    const nextRoute = nextCredential ? routeFor(model, nextCredential.kind) : undefined;
-    const harnesses = selected.harnesses.filter(
-      (harness) =>
-        nextRoute?.harnesses.includes(harness) &&
-        credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
-    );
-    const available = nextRoute?.harnesses.filter((harness) =>
-      credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
-    );
+    const available = nextCredential ? credentialHarnesses(model, nextCredential) : [];
+    const harnesses = selected.harnesses.filter((harness) => available.includes(harness));
     onChange({
       ...selected,
       credentialId,
-      harnesses: harnesses.length ? harnesses : (available?.slice(0, 1) ?? []),
+      harnesses: harnesses.length ? harnesses : available.slice(0, 1),
     });
   };
   const supportsHarness = (harness: Harness) =>
-    (route ?? model).harnesses.includes(harness) &&
-    credentialRunsHarness(credential?.auth ?? "api-key", harness);
+    (credential ? credentialHarnesses(model, credential) : harnessIds).includes(harness);
 
   return (
     <div className="grid grid-cols-1 items-center gap-3 px-4 py-3 pr-10 sm:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
@@ -103,7 +96,7 @@ export function RunModelRow({
             Select Credential
           </option>
           {credentials
-            .filter((entry) => routeFor(model, entry.kind))
+            .filter((entry) => credentialHarnesses(model, entry).length > 0)
             .map((entry) => (
               <option key={entry.id} value={entry.id}>
                 {entry.name}

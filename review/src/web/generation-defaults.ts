@@ -1,6 +1,6 @@
 import type { CredentialInfo } from "../../../src/db/credentials";
 import {
-  generationModelCredentialKinds,
+  generationCredentialSupportsModel,
   generationModelLabel,
 } from "../../../src/generation/settings/models";
 import {
@@ -43,11 +43,12 @@ export function rememberGenerationSettings(key: string, value: GenerationSetting
 /** Whether one stored credential can run both of the run's models. */
 export function modelCredentialMatches(
   credential: Pick<CredentialInfo, "kind" | "auth">,
-  ...models: readonly string[]
+  models: readonly string[],
+  options?: GenerationOptions,
 ): boolean {
-  if (credential.auth === "codex-login") return models.every((model) => model.startsWith("gpt-"));
-  if (credential.auth !== "api-key" || credential.kind === "custom") return false;
-  return models.every((model) => generationModelCredentialKinds(model).includes(credential.kind));
+  return models.every((model) =>
+    generationCredentialSupportsModel(model, credential, options?.modelCatalog),
+  );
 }
 
 /** Coerces the settings onto what this deployment actually offers, filling empty defaults. */
@@ -57,14 +58,26 @@ export function withDefaultCredentials(
 ): GenerationSettings {
   const managedModels = options.managed?.models === true;
   const managedSandbox = options.managed?.sandbox === true;
+  const fallback =
+    options.models.find((model) =>
+      options.modelCatalog?.some((entry) => entry.id === model && !!entry.gateways?.openrouter),
+    ) ?? options.models[0];
   let next: GenerationSettings = {
     ...value,
     modelAccess: managedModels ? value.modelAccess : "credential",
     sandbox: managedSandbox || options.sandboxes.includes(value.sandbox) ? value.sandbox : "modal",
   };
+  for (const field of ["authorModel", "verifierModel"] as const)
+    if (
+      !options.models.includes(next[field]) ||
+      (next.modelAccess === "managed" &&
+        options.modelCatalog?.find((entry) => entry.id === next[field])?.gateways?.openrouter ===
+          undefined)
+    )
+      next = { ...next, [field]: fallback ?? next[field] };
   if (next.modelAccess === "credential" && !next.modelCredentialId) {
     const compatible = options.credentials.filter((item) =>
-      modelCredentialMatches(item, next.authorModel, next.verifierModel),
+      modelCredentialMatches(item, [next.authorModel, next.verifierModel], options),
     );
     next = {
       ...next,
@@ -115,15 +128,29 @@ export function generationSelectionProblem(
 ): string | undefined {
   if (!options.available) return "Generation is not available.";
   if (!generationSettingsSchema.safeParse(value).success) return "Settings are incomplete.";
-  if (!options.models.includes(value.authorModel)) return "Choose an author model.";
-  if (!options.models.includes(value.verifierModel)) return "Choose a verifier model.";
+  if (
+    !options.models.includes(value.authorModel) ||
+    (value.modelAccess === "managed" &&
+      options.modelCatalog?.some(
+        (entry) => entry.id === value.authorModel && !!entry.gateways?.openrouter,
+      ) === false)
+  )
+    return "Choose an author model.";
+  if (
+    !options.models.includes(value.verifierModel) ||
+    (value.modelAccess === "managed" &&
+      options.modelCatalog?.some(
+        (entry) => entry.id === value.verifierModel && !!entry.gateways?.openrouter,
+      ) === false)
+  )
+    return "Choose a verifier model.";
   if (value.modelAccess === "managed") {
     if (options.managed?.models !== true) return "Choose a model credential.";
   } else if (
     !options.credentials.some(
       (item) =>
         item.id === value.modelCredentialId &&
-        modelCredentialMatches(item, value.authorModel, value.verifierModel),
+        modelCredentialMatches(item, [value.authorModel, value.verifierModel], options),
     )
   )
     return "Choose a model credential.";

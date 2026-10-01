@@ -1,6 +1,7 @@
-import type { ThinkingLevel } from "../contracts/models.js";
+import { chatgptSignInModels, type ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
-import { type GatewayId, gatewayIds, gatewayModelId, isGateway } from "../gateways/index.js";
+import { type GatewayId, gatewayIds, isGateway } from "../gateways/index.js";
+import { PI_VERSION } from "../harnesses/pi/version.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
 
 export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
@@ -18,27 +19,41 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
 }
 
-/** A subscription sign-in drives only its own vendor's CLI; API keys drive any harness. */
-const signInHarnesses: Record<CredentialInfo["auth"], Harness | undefined> = {
-  "api-key": undefined,
-  "codex-login": "codex",
-  "claude-login": "claude-code",
-};
-
-export function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): boolean {
-  const only = signInHarnesses[auth];
-  return !only || only === harness;
+/** Subscription authentication is a transport choice, not a model-to-harness mapping. */
+function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): boolean {
+  return (
+    auth === "api-key" ||
+    (auth === "codex-login" && (harness === "codex" || harness === "pi")) ||
+    (auth === "claude-login" && harness === "claude-code")
+  );
 }
 
-/** Why a credential's sign-in cannot run these harnesses, if it cannot. */
 export function signInRefusal(
   auth: CredentialInfo["auth"],
   harnesses: readonly Harness[],
 ): string | undefined {
-  const only = signInHarnesses[auth];
-  return only && harnesses.some((harness) => harness !== only)
-    ? `A ${harnessLabels[only]} sign-in can only run the ${harnessLabels[only]} harness`
+  return harnesses.some((harness) => !credentialRunsHarness(auth, harness))
+    ? auth === "codex-login"
+      ? "ChatGPT sign-in requires Codex or Pi harness"
+      : "A Claude sign-in can only run the Claude Code harness"
     : undefined;
+}
+
+export function credentialHarnesses(
+  model: CatalogModel,
+  credential: { kind: string; auth?: CredentialInfo["auth"] },
+): Harness[] {
+  const route = routeFor(model, credential.kind);
+  if (
+    credential.auth === "codex-login" &&
+    (credential.kind !== "openai" || !chatgptSignInModels.has(model.id))
+  )
+    return [];
+  return (
+    route?.harnesses.filter((harness) =>
+      credentialRunsHarness(credential.auth ?? "api-key", harness),
+    ) ?? []
+  );
 }
 
 /** Harnesses a direct provider key can drive; only gateways are remapped for the rest. */
@@ -80,8 +95,7 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
 function gatewayRouteModel(model: CatalogModel, gateway: GatewayId): string | undefined {
   if (model.provider === "custom") return model.model;
   if (model.gateways) return model.gateways[gateway];
-  if (isGateway(model.provider)) return model.provider === gateway ? model.model : undefined;
-  return gatewayModelId(gateway, `${model.provider}/${model.model}`);
+  return undefined;
 }
 
 export function routeFor(model: CatalogModel, provider: string) {
@@ -109,4 +123,11 @@ export function thinkingArguments(harness: Harness, level?: ThinkingLevel): stri
   const name = harness === "pi" ? "thinking" : "reasoning_effort";
   const value = harness === "codex" && level === "off" ? "none" : level;
   return ["--agent-kwarg", `${name}=${value}`];
+}
+
+export function solverAgentArguments(harness: Harness, level?: ThinkingLevel): string[] {
+  return [
+    ...thinkingArguments(harness, level),
+    ...(harness === "pi" ? ["--agent-kwarg", `version=${PI_VERSION}`] : []),
+  ];
 }

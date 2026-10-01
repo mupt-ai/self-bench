@@ -9,6 +9,7 @@ import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
 import {
+  credentialHarnesses,
   defaultThinking,
   evaluationTaskKey,
   harnessIds,
@@ -139,6 +140,8 @@ export async function createComparison(
     if (managedModel && !managed.models)
       throw new Error("Managed models are not available on this deployment.");
     if (!credential || !route) throw new Error("Select your matching provider credential");
+    if (credential.auth === "codex-login" && !credentialHarnesses(model, credential).length)
+      throw new Error("ChatGPT sign-in does not offer this model");
     const refusal = signInRefusal(credential.auth, selected.harnesses);
     if (refusal) throw new Error(refusal);
     if (

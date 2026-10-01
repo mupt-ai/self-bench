@@ -1,8 +1,8 @@
 /**
  * Model gateways: one key that reaches every vendor's models. Each serves the catalog's models
  * under its own ids, which the catalog spells as OpenRouter does (catalogModelId, gatewayModelId).
- * Server processes load each gateway's live models and list prices (refresh.ts); until then,
- * and in the browser, only curated models route through them, at reference rates.
+ * Server processes load each gateway's live models and list prices (refresh.ts).
+ * Until a listing loads, it offers no models; a reference price alone is not a route.
  */
 import { type ModelPricing, type Rates, ratesPricing } from "../contracts/models.js";
 import type { Gateway, GatewayListing, ListedModel } from "./gateway.js";
@@ -52,15 +52,6 @@ export function findListedModel(id: string): ListedModel | undefined {
     if (listed) return listed;
   }
   return undefined;
-}
-
-/**
- * Whether the gateway serves its model `id`: it prices it, or its prices have not loaded yet (and
- * in the browser), when a curated model is assumed to be on every gateway.
- */
-export function gatewayServes(gateway: GatewayId, id: string): boolean {
-  const { rates } = listing(gateway);
-  return rates.size === 0 || rates.has(id);
 }
 
 /** The catalog's id for the model a gateway names `id`. */

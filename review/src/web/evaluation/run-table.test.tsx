@@ -198,6 +198,7 @@ test("harness dropdown follows the selected credential's route", () => {
     model: "gpt-6-astra",
     harnesses: ["codex", "pi"],
     source: "",
+    gateways: { openrouter: "openai/gpt-6-astra" },
   };
   const credentials = [
     { id: "login", name: "ChatGPT", kind: "openai", auth: "codex-login" },
@@ -217,7 +218,7 @@ test("harness dropdown follows the selected credential's route", () => {
         .split('aria-label="GPT-6 Astra Harness"')[1]
         ?.matchAll(/value="([^"]+)"/g) ?? []),
     ].map((match) => match[1]);
-  expect(harnesses("login")).toEqual(["codex"]);
+  expect(harnesses("login")).toEqual(["codex", "pi"]);
   expect(harnesses("key")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
   expect(harnesses("gateway")).toEqual([
     "codex",

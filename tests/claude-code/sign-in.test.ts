@@ -1,4 +1,9 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { clearMockModels, mockReferenceModelsAsListed } from "../support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
+
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

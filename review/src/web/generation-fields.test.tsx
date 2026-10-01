@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import {
@@ -7,10 +7,14 @@ import {
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/db/credentials";
 import type { GenerationSettings } from "../../../src/generation/settings/settings";
+import { clearMockModels, mockReferenceModelsAsListed } from "../../../tests/support/model-catalog";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
 import { GenerationFields } from "./GenerationFields";
 import { generationSelectionProblem, generationSettingsSummary } from "./generation-defaults";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 const credentials: CredentialInfo[] = ["openai", "modal", "e2b", "vercel", "daytona"].map(
   (kind) => ({

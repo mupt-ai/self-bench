@@ -1,0 +1,79 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { credentialExecution } from "../src/evaluation/execution.js";
+import { codexAccess, codexAuth } from "./support/codex-auth.js";
+import { evaluationServer } from "./support/evaluation-fixture.js";
+import { memoryVault } from "./support/evaluation-vault.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
+const credentialsUrl = "/api/orgs/avyay/credentials";
+const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
+
+test("ChatGPT sign-in supplies isolated Codex and Pi auth for GPT-6.1 Sol", async () => {
+  const records = memoryVault();
+  const fixture = await evaluationServer(records);
+  const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
+  try {
+    const model = await (
+      await fixture.request(
+        credentialsUrl,
+        post({ name: "Codex", kind: "openai", auth: "codex-login", value: codexAuth }),
+      )
+    ).json();
+    const sandbox = await (
+      await fixture.request(
+        credentialsUrl,
+        post({ name: "Sandbox", kind: "e2b", value: "fake-sandbox" }),
+      )
+    ).json();
+    const draft = {
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      models: [{ catalogId: "gpt-6.1-sol", credentialId: model.id, harnesses: ["pi"] }],
+      sandbox: "e2b",
+      sandboxCredentialId: sandbox.id,
+    };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    const input = fixture.starts[0];
+    if (!input) throw new Error("Missing input");
+    expect(input.pricing).toMatchObject({ input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 });
+    // The sign-in type rides with the run so its cost can account for unreported cache writes.
+    expect(input.credentials?.auth).toBe("codex-login");
+    const execution = await credentialExecution(
+      input,
+      home,
+      { OPENAI_API_KEY: "do-not-use" },
+      records,
+    );
+    expect(execution.child.OPENAI_API_KEY).toBeUndefined();
+    expect(execution.child.CODEX_AUTH_JSON_PATH).toBeUndefined();
+    expect(
+      JSON.parse(await readFile(execution.child.SELFBENCH_PI_AUTH_JSON_PATH ?? "", "utf8")),
+    ).toEqual({
+      "openai-codex": {
+        type: "oauth",
+        access: codexAccess,
+        refresh: "test-refresh",
+        expires: 2000000000000,
+        accountId: "test-account",
+      },
+    });
+    expect(execution.secrets).toContain("test-refresh");
+    expect(execution.auth).toBe("codex-login");
+    draft.id = crypto.randomUUID();
+    draft.models[0] = { catalogId: "gpt-6.1-sol", credentialId: model.id, harnesses: ["codex"] };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    const codexInput = fixture.starts[1];
+    if (!codexInput) throw new Error("Missing Codex input");
+    const codex = await credentialExecution(codexInput, home, {}, records);
+    expect(await readFile(codex.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(codexAuth);
+    expect(codex.child.SELFBENCH_PI_AUTH_JSON_PATH).toBeUndefined();
+  } finally {
+    await fixture.close();
+    await rm(home, { recursive: true, force: true });
+  }
+});

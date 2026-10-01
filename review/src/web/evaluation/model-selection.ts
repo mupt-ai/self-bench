@@ -2,7 +2,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import {
-  credentialRunsHarness,
+  credentialHarnesses,
   defaultThinking,
   routeFor,
   thinkingOptions,
@@ -30,10 +30,8 @@ export function nextModelSelection(
   requestedHarness?: Harness,
 ): ComparisonDraft["models"][number] | undefined {
   for (const credential of credentials) {
-    const harness = routeFor(model, credential.kind)?.harnesses.find(
-      (candidate) =>
-        (!requestedHarness || requestedHarness === candidate) &&
-        credentialRunsHarness(credential.auth, candidate),
+    const harness = credentialHarnesses(model, credential).find(
+      (candidate) => !requestedHarness || requestedHarness === candidate,
     );
     if (harness) return { catalogId: model.id, credentialId: credential.id, harnesses: [harness] };
   }
@@ -47,13 +45,8 @@ export function credentialRunsAll(
   harnesses: Harness[],
 ): boolean {
   const route = routeFor(model, credential.kind);
-  return (
-    !!route &&
-    harnesses.every(
-      (harness) =>
-        route.harnesses.includes(harness) && credentialRunsHarness(credential.auth, harness),
-    )
-  );
+  const available = credentialHarnesses(model, credential);
+  return !!route && harnesses.every((harness) => available.includes(harness));
 }
 
 /**

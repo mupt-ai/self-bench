@@ -10,6 +10,7 @@ import {
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
+import { generationSubscriptionAuth } from "../harnesses/codex/subscription.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import { signInRefusal } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
@@ -90,9 +91,18 @@ export async function credentialExecution(
   const refusal = signInRefusal(info.auth, input.harnesses);
   if (refusal) throw refuseTrial(refusal);
   if (info.auth === "codex-login") {
-    const authPath = join(home, "codex-auth.json");
-    await writeFile(authPath, modelSecret, { mode: 0o600 });
-    child.CODEX_AUTH_JSON_PATH = authPath;
+    if (input.harnesses.includes("codex")) {
+      const authPath = join(home, "codex-auth.json");
+      await writeFile(authPath, modelSecret, { mode: 0o600 });
+      child.CODEX_AUTH_JSON_PATH = authPath;
+    }
+    if (input.harnesses.includes("pi")) {
+      const authPath = join(home, "pi-auth.json");
+      const piAuth = generationSubscriptionAuth(modelSecret);
+      await writeFile(authPath, piAuth, { mode: 0o600 });
+      child.SELFBENCH_PI_AUTH_JSON_PATH = authPath;
+      secrets.push(piAuth);
+    }
     const auth = JSON.parse(modelSecret);
     secrets.push(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
@@ -138,6 +148,7 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 export function solverAgent(harness: Harness, model: string): string {
   if (harness === "pi") {
     const provider = model.slice(0, model.indexOf("/"));
+    if (provider === "openai-codex") return "harbor_pi:SelfBenchPi";
     return isGateway(provider) ? gateways[provider].harborPi : harness;
   }
   if (harness !== "codex") return harness;
@@ -151,7 +162,10 @@ export function gatewayModel(
   provider: NonNullable<EvaluationInput["credentials"]>["provider"] | undefined,
   harness: Harness,
   model: string,
+  auth?: "api-key" | "codex-login" | "claude-login",
 ): string {
+  if (provider === "openai" && harness === "pi" && auth === "codex-login")
+    return `openai-codex/${model.slice("openai/".length)}`;
   if (!isGateway(provider) || harness === "pi") return model;
   const modelId = model.slice(provider.length + 1);
   return harness === "claude-code" ? modelId : `openai/${modelId}`;
@@ -167,7 +181,15 @@ export function gatewayTrial(
   const provider = input.credentials?.provider;
   if (!isGateway(provider)) {
     const child = { ...env };
-    return { model, child, extraAllowedHosts: providerHosts(provider, child) };
+    const harborModel = gatewayModel(provider, harness, model, input.credentials?.auth);
+    return {
+      model: harborModel,
+      child,
+      extraAllowedHosts:
+        provider === "openai" && input.credentials?.auth === "codex-login"
+          ? ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"]
+          : providerHosts(provider, child),
+    };
   }
   const gateway = gateways[provider];
   const key = env[gateway.keyVariable];

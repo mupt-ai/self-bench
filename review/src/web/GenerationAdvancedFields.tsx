@@ -19,7 +19,6 @@ import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
 
 const pairRow = "grid min-w-0 gap-6 sm:grid-cols-2";
-
 /** The advanced panel: every model, sandbox, and credential selection for a generation run. */
 export function AdvancedFields({
   value,
@@ -34,8 +33,17 @@ export function AdvancedFields({
   managed: { models: boolean; sandbox: boolean };
 }) {
   const hosted = value.sandbox !== "managed";
+  const selectableModels = options?.models.filter(
+    (model) =>
+      value.modelAccess !== "managed" ||
+      options.modelCatalog?.find((entry) => entry.id === model)?.gateways?.openrouter !== undefined,
+  );
   const compatible = (credential: CredentialInfo) =>
-    modelCredentialMatches(credential, value.authorModel, value.verifierModel);
+    modelCredentialMatches(
+      credential,
+      [value.authorModel, value.verifierModel],
+      options ?? undefined,
+    );
   return (
     <div className="grid min-w-0 gap-6">
       {!options?.available && (
@@ -58,9 +66,10 @@ export function AdvancedFields({
               value={value[field]}
               onChange={(event) => onChange({ ...value, [field]: event.target.value })}
             >
-              {options?.models.map((model) => (
+              {selectableModels?.map((model) => (
                 <option key={model} value={model}>
-                  {generationModelLabel(model)}
+                  {options?.modelCatalog?.find((entry) => entry.id === model)?.label ??
+                    generationModelLabel(model)}
                 </option>
               ))}
             </Select>

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   managedHarborEnvironment,
   stampedManagedHarbor,
@@ -8,6 +8,10 @@ import { generationConfigEnvironment } from "../src/generation/settings/run.js";
 import type { GenerationReference } from "../src/generation/settings/settings.js";
 import { providerEnvironment } from "../src/sandbox/provider-environment.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { clearMockModels, mockReferenceModelsAsListed } from "./support/model-catalog.js";
+
+beforeEach(mockReferenceModelsAsListed);
+afterEach(clearMockModels);
 
 const managedSettings = {
   authorModel: "gpt-6-sol",

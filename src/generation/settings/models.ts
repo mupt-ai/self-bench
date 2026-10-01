@@ -1,34 +1,39 @@
-import { type Model, models } from "../../contracts/models.js";
-import {
-  type GatewayId,
-  gatewayIds,
-  gatewayModelId,
-  gatewayPricing,
-  isGateway,
-} from "../../gateways/index.js";
+import { chatgptSignInModels, findModel, nativePricing } from "../../contracts/models.js";
+import { evaluationCatalog } from "../../evaluation/catalog.js";
+import { routeFor } from "../../evaluation/models.js";
+import { type GatewayId, gatewayIds, gatewayPricing, isGateway } from "../../gateways/index.js";
 
-/**
- * The catalog models the hosted site offers for authoring and verification. A model is
- * invocable by its native provider's credential (OpenAI API key, ChatGPT sign-in, or
- * Anthropic) and by any gateway credential; models without a native provider are
- * gateway-only. Managed access is OpenRouter behind a platform key.
- */
-const generationCatalog = models.filter((model) => model.generation);
-
-export const generationModels = generationCatalog.map((model) => model.id) as [string, ...string[]];
-
-function generationModelInfo(id: string): Model | undefined {
-  return generationCatalog.find((model) => model.id === id);
+/** Generation uses the same live routes as evaluation. */
+export function generationModels(): string[] {
+  return evaluationCatalog().map((model) => model.id);
 }
-
+function generationModelInfo(id: string, catalog = evaluationCatalog()) {
+  return catalog.find((model) => model.id === id);
+}
 export function generationModelLabel(id: string): string {
-  return generationModelInfo(id)?.label ?? id;
+  return generationModelInfo(id)?.label ?? findModel(id)?.label ?? id;
 }
-
-/** Credential kinds that can invoke this model; gateway credentials serve every model. */
-export function generationModelCredentialKinds(id: string): readonly string[] {
-  const vendor = generationModelInfo(id)?.vendor;
-  return vendor ? [vendor, ...gatewayIds] : gatewayIds;
+function generationModelCredentialKinds(
+  id: string,
+  catalog = evaluationCatalog(),
+): readonly string[] {
+  const model = generationModelInfo(id, catalog);
+  return model
+    ? ["openai", "anthropic", ...gatewayIds].filter((kind) => routeFor(model, kind))
+    : [];
+}
+export function generationCredentialSupportsModel(
+  id: string,
+  credential: { readonly kind: string; readonly auth: string },
+  catalog = evaluationCatalog(),
+): boolean {
+  const model = generationModelInfo(id, catalog);
+  if (!model) return false;
+  if (credential.auth === "codex-login")
+    return credential.kind === "openai" && chatgptSignInModels.has(id);
+  if (credential.auth !== "api-key") return false;
+  // Native provider routes are inferred from the vendor namespace; gateway routes require a listing.
+  return generationModelCredentialKinds(id, catalog).includes(credential.kind);
 }
 
 /**
@@ -43,23 +48,33 @@ export function generationModelRoute(
 ): { provider: "openai" | "openai-codex" | "anthropic" | GatewayId; model: string } {
   const info = generationModelInfo(id);
   if (!info) throw new Error(`Unknown generation model ${id}`);
+  if (credential && !generationCredentialSupportsModel(id, credential))
+    throw new Error(`Credential cannot run generation model ${id}`);
+  if (!credential && !routeFor(info, "openrouter"))
+    throw new Error(`OpenRouter does not offer generation model ${id}`);
   if (credential?.kind === "openai")
     return {
       provider: credential.auth === "codex-login" ? "openai-codex" : "openai",
-      model: info.vendor === "openai" ? info.id : info.openRouter,
+      model: info.model,
     };
   if (credential?.kind === "anthropic")
     return {
       provider: "anthropic",
-      model: info.vendor === "anthropic" ? info.id : info.openRouter,
+      model: info.model,
     };
   const kind = credential?.kind;
   const gateway = isGateway(kind) ? kind : "openrouter";
-  return { provider: gateway, model: gatewayModelId(gateway, info.openRouter) };
+  const route = routeFor(info, gateway);
+  if (!route) throw new Error(`Gateway does not offer generation model ${id}`);
+  return { provider: gateway, model: route.model };
 }
 
 /** Reference rates for billing and cost estimates: generation runs through OpenRouter. */
 export function generationModelPricing(id: string) {
   const info = generationModelInfo(id);
-  return info ? gatewayPricing("openrouter", info.openRouter, info.rates?.gateway) : undefined;
+  const reference = findModel(id);
+  const routed = info?.gateways?.openrouter;
+  return routed
+    ? gatewayPricing("openrouter", routed, reference?.rates?.gateway)
+    : reference && nativePricing(reference);
 }

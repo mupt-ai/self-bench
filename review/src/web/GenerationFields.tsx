@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import type { CredentialInfo } from "../../../src/db/credentials";
+import type { CatalogModel } from "../../../src/evaluation/catalog";
 import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { AdvancedFields } from "./GenerationAdvancedFields";
 import {
@@ -10,6 +11,7 @@ import {
 
 export interface GenerationOptions {
   models: string[];
+  modelCatalog?: CatalogModel[];
   sandboxes: string[];
   credentials: CredentialInfo[];
   available: boolean;

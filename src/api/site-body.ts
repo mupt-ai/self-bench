@@ -74,9 +74,9 @@ const access = (setting: ReleaseSetting) =>
       ? "ChatGPT Sign-In"
       : setting.signIn === "claude-login"
         ? "Claude Sign-In"
-      : isGateway(setting.provider)
-        ? gateways[setting.provider].label
-        : "API Key";
+        : isGateway(setting.provider)
+          ? gateways[setting.provider].label
+          : "API Key";
 
 /** The settings table's columns, as the page's own table names them, plus the frontier it marks. */
 const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [

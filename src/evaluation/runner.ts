@@ -17,7 +17,7 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent } from "./execution.js";
-import { thinkingArguments } from "./models.js";
+import { solverAgentArguments } from "./models.js";
 import {
   boundedSteps,
   collectOutput,
@@ -50,7 +50,7 @@ export function solverArguments(
     jobName: "solver",
     agent: solverAgent(harness, model),
     environment: sandbox,
-    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    solver: { model, agentArguments: solverAgentArguments(harness, thinking) },
     extraAllowedHosts,
     // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
     ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
