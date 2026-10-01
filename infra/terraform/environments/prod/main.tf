@@ -63,10 +63,7 @@ module "selfbench" {
   results_site_url            = var.results_site_url
   github_oauth_client_id      = var.github_oauth_client_id
   stripe_price_id             = var.stripe_price_id
-  billing_credit_admin_org_id = var.billing_credit_admin_org_id
-  managed_openrouter          = var.managed_openrouter
-  managed_e2b                 = var.managed_e2b
-  managed_modal               = var.managed_modal
+  managed_offering            = var.managed_offering
   sentry_dsn                  = var.sentry_dsn
   sentry_browser_dsn          = var.sentry_browser_dsn
   posthog_api_key             = var.posthog_api_key

@@ -166,11 +166,8 @@ run "worker_pool" {
 run "optional_secret_values" {
   command = plan
   variables {
-    stripe_price_id             = "price_test"
-    billing_credit_admin_org_id = 154857038
-    managed_openrouter          = true
-    managed_e2b                 = true
-    managed_modal               = true
+    managed_offering = true
+    stripe_price_id  = "price_test"
   }
   assert {
     condition = toset(keys(google_secret_manager_secret_iam_member.api_reader)) == toset([
@@ -186,8 +183,22 @@ run "optional_secret_values" {
     error_message = "Workers get managed provider values but never Stripe."
   }
   assert {
-    condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID"]) == "154857038"
-    error_message = "The billing admin org is plain deploy config."
+    condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_MANAGED_OFFERING"]) == "true"
+    error_message = "The managed offering switch reaches the app."
+  }
+}
+run "byok_only_ignores_billing_inputs" {
+  command = plan
+  variables {
+    stripe_price_id = "price_test"
+  }
+  assert {
+    condition     = length([for key in keys(google_secret_manager_secret_iam_member.api_reader) : key if startswith(key, "managed_") || startswith(key, "stripe_")]) == 0
+    error_message = "Without the managed offering, no managed or Stripe secret is readable."
+  }
+  assert {
+    condition     = length([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.name if contains(["SELFBENCH_MANAGED_OFFERING", "SELFBENCH_STRIPE_PRICE_ID"], env.name)]) == 0
+    error_message = "Without the managed offering, the app gets neither the switch nor a Stripe price."
   }
 }
 run "prod_foundation" {

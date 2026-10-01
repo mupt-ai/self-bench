@@ -1,4 +1,5 @@
 import type { BillingEligibility } from "../../../../src/generation/billing/eligibility";
+import { requestJson } from "../api";
 
 export interface BillingUsageSummary {
   modelTokens: {
@@ -15,12 +16,8 @@ export interface BillingUsageSummary {
   refundedUsd: number;
 }
 
-import { checkSessionExpired } from "../../session-expired";
-import { requestJson } from "../api";
-
 export interface BillingStatus extends BillingEligibility {
   canManage: boolean;
-  canGrantCredits?: boolean;
   usage: BillingUsageSummary;
 }
 
@@ -35,59 +32,6 @@ export function formatBillingDollars(value: number): string {
 
 export function fetchBilling(org: string): Promise<BillingStatus> {
   return requestJson<BillingStatus>(`/api/orgs/${encodeURIComponent(org)}/billing`);
-}
-
-export interface CreditGrantRequest {
-  targetOrg: string;
-  amountCents: number;
-  reason: string;
-  requestId: string;
-}
-
-export type CreditGrantResult =
-  | { id: string; pending?: false }
-  | { pending: true; requestId: string };
-
-export class CreditGrantRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-export async function grantBillingCredit(
-  org: string,
-  input: CreditGrantRequest,
-): Promise<CreditGrantResult> {
-  const response = await fetch(`/api/orgs/${encodeURIComponent(org)}/billing/credits`, {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  checkSessionExpired(response);
-  const result = (await response.json()) as CreditGrantResult & { error?: string };
-  if (!response.ok)
-    throw new CreditGrantRequestError(result.error ?? String(response.status), response.status);
-  if (result.pending === true && result.requestId === input.requestId) return result;
-  if ("id" in result && typeof result.id === "string" && result.id.startsWith("cbtxn_"))
-    return result;
-  throw new Error("Stripe credit response was not confirmed. Reconcile before granting again.");
-}
-
-export function refundBillingUsage(
-  org: string,
-  input: { targetOrg: string; reason: string },
-): Promise<{ refundedUsd: number }> {
-  return requestJson<{ refundedUsd: number }>(
-    `/api/orgs/${encodeURIComponent(org)}/billing/refunds`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    },
-  );
 }
 
 export async function startBillingSession(

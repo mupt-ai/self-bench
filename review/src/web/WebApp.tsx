@@ -79,7 +79,9 @@ export function WebApp() {
                   <Route index element={<ReposPage />} />
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
-                  <Route path="settings/billing" element={<BillingPage />} />
+                  {session.status === "signed-in" && session.managedOffering && (
+                    <Route path="settings/billing" element={<BillingPage />} />
+                  )}
                   <Route path="repos/:owner/:name" element={<RepoLayout />}>
                     <Route index element={<RepoPage />} />
                     <Route path="batches" element={<BatchesPage />} />
@@ -111,5 +113,7 @@ export function WebApp() {
 function RequireUser() {
   const { session } = useSession();
   if (session.status !== "signed-in") return <Navigate to="/login" replace />;
-  return <SiteLayout user={session.user} orgs={session.orgs} />;
+  return (
+    <SiteLayout user={session.user} orgs={session.orgs} managedOffering={session.managedOffering} />
+  );
 }

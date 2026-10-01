@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { managedOfferingEnabled } from "./managed.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -34,21 +35,6 @@ export interface BillingPolicy {
   readonly meterEventName: string;
 }
 
-/** Credit grants are disabled unless an immutable GitHub organization id is explicitly trusted. */
-export function billingCreditAdminOrgId(
-  environment: NodeJS.ProcessEnv = process.env,
-): number | undefined {
-  const raw = emptyStringAsUndefined(environment.SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID);
-  if (raw === undefined) return undefined;
-  const id = Number(raw);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error(
-      "SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID must be a positive GitHub organization ID",
-    );
-  }
-  return id;
-}
-
 export function loadBillingPolicy(environment: NodeJS.ProcessEnv = process.env): BillingPolicy {
   const value = policySchema.parse(environment);
   return {
@@ -81,12 +67,14 @@ export interface StripeConfig {
 }
 
 /**
- * Stripe billing is all-or-nothing. Missing every variable leaves billing disabled (managed
- * runs stay available). Setting only some of them is a configuration error.
+ * Stripe billing is all-or-nothing, and only exists with the managed offering. Missing every
+ * variable leaves billing disabled (managed runs stay available). Setting only some of them is
+ * a configuration error.
  */
 export function loadStripeConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): StripeConfig | undefined {
+  if (!managedOfferingEnabled(environment)) return undefined;
   const value = stripeSchema.parse(environment);
   const secretKey = value.SELFBENCH_STRIPE_SECRET_KEY;
   const webhookSecret = value.SELFBENCH_STRIPE_WEBHOOK_SECRET;

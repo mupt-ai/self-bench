@@ -18,6 +18,7 @@ const managedSettings = {
 } as const;
 
 const platform = {
+  SELFBENCH_MANAGED_OFFERING: "true",
   SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
   SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b",
 };

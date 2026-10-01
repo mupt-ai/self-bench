@@ -2,14 +2,15 @@ import type { HarborEnvironment } from "../../contracts/config/providers.js";
 
 /**
  * Managed generation runs model calls and sandboxes on SelfBench's own provider accounts
- * instead of an organization's credentials. What the deployment offers follows directly
- * from which platform keys are set; there is no separate flag to keep in sync.
+ * instead of an organization's credentials. Within an enabled offering, what the deployment
+ * offers follows from which platform keys are set.
  */
 export interface ManagedOffer {
   readonly models: boolean;
   readonly sandbox: boolean;
 }
 
+const MANAGED_OFFERING_FLAG = "SELFBENCH_MANAGED_OFFERING";
 const MANAGED_MODEL_KEY = "SELFBENCH_MANAGED_OPENROUTER_API_KEY";
 const MANAGED_SANDBOX_KEY = "SELFBENCH_MANAGED_E2B_API_KEY";
 const MANAGED_SANDBOX_DOMAIN = "SELFBENCH_MANAGED_E2B_DOMAIN";
@@ -17,16 +18,32 @@ const MANAGED_MODAL_TOKEN_ID = "SELFBENCH_MANAGED_MODAL_TOKEN_ID";
 const MANAGED_MODAL_TOKEN_SECRET = "SELFBENCH_MANAGED_MODAL_TOKEN_SECRET";
 const MANAGED_MODAL_ENVIRONMENT = "SELFBENCH_MANAGED_MODAL_ENVIRONMENT";
 
-/** Managed access is supported exactly when the matching platform key is configured. */
+/**
+ * The one switch for SelfBench's managed offering: managed models and sandboxes on the
+ * platform's accounts, and the Stripe billing that charges for them. Off (the default), the
+ * deployment is bring-your-own-key only: platform keys and Stripe settings are ignored, the
+ * billing routes do not exist, and the app hides its Billing page.
+ */
+export function managedOfferingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[MANAGED_OFFERING_FLAG]?.trim() === "true";
+}
+
+/** A platform account value, read only while the managed offering is on. */
+function platformValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  if (!managedOfferingEnabled(env)) return undefined;
+  return env[name]?.trim() || undefined;
+}
+
+/** Managed access is supported exactly when the offering is on and the platform key is set. */
 export function managedOffer(env: NodeJS.ProcessEnv = process.env): ManagedOffer {
   return {
-    models: !!env[MANAGED_MODEL_KEY]?.trim(),
-    sandbox: !!env[MANAGED_SANDBOX_KEY]?.trim(),
+    models: !!platformValue(env, MANAGED_MODEL_KEY),
+    sandbox: !!platformValue(env, MANAGED_SANDBOX_KEY),
   };
 }
 
 export function managedModelKey(env: NodeJS.ProcessEnv): string {
-  const key = env[MANAGED_MODEL_KEY]?.trim();
+  const key = platformValue(env, MANAGED_MODEL_KEY);
   if (!key)
     throw new Error("Managed model access is not configured on this worker (no platform key).");
   return key;
@@ -36,10 +53,10 @@ export function managedSandboxCredentials(env: NodeJS.ProcessEnv): {
   apiKey: string;
   domain?: string;
 } {
-  const apiKey = env[MANAGED_SANDBOX_KEY]?.trim();
+  const apiKey = platformValue(env, MANAGED_SANDBOX_KEY);
   if (!apiKey)
     throw new Error("Managed sandboxes are not configured on this worker (no platform key).");
-  const domain = env[MANAGED_SANDBOX_DOMAIN]?.trim();
+  const domain = platformValue(env, MANAGED_SANDBOX_DOMAIN);
   return { apiKey, ...(domain ? { domain } : {}) };
 }
 
@@ -49,7 +66,8 @@ export function managedSandboxCredentials(env: NodeJS.ProcessEnv): {
  * the fallback for deployments without a platform Modal token.
  */
 export function managedHarborEnvironment(env: NodeJS.ProcessEnv): "modal" | "e2b" {
-  return env[MANAGED_MODAL_TOKEN_ID]?.trim() && env[MANAGED_MODAL_TOKEN_SECRET]?.trim()
+  return platformValue(env, MANAGED_MODAL_TOKEN_ID) &&
+    platformValue(env, MANAGED_MODAL_TOKEN_SECRET)
     ? "modal"
     : "e2b";
 }
@@ -68,11 +86,11 @@ export function managedModalEnvironment(env: NodeJS.ProcessEnv): {
   MODAL_TOKEN_SECRET: string;
   MODAL_ENVIRONMENT?: string;
 } {
-  const tokenId = env[MANAGED_MODAL_TOKEN_ID]?.trim();
-  const tokenSecret = env[MANAGED_MODAL_TOKEN_SECRET]?.trim();
+  const tokenId = platformValue(env, MANAGED_MODAL_TOKEN_ID);
+  const tokenSecret = platformValue(env, MANAGED_MODAL_TOKEN_SECRET);
   if (!tokenId || !tokenSecret)
     throw new Error("Managed Modal verification is not configured on this worker (no token).");
-  const environment = env[MANAGED_MODAL_ENVIRONMENT]?.trim();
+  const environment = platformValue(env, MANAGED_MODAL_ENVIRONMENT);
   return {
     MODAL_TOKEN_ID: tokenId,
     MODAL_TOKEN_SECRET: tokenSecret,

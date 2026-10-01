@@ -199,6 +199,7 @@ describe("/api/me and logout", () => {
     expect(me.status).toBe(200);
     expect(await me.json()).toEqual({
       auth: "session",
+      managedOffering: false,
       user: { githubId: 42, login: "avyay", name: "Avyay", avatarUrl: "https://a/x.png" },
       orgs: [
         {
@@ -215,6 +216,16 @@ describe("/api/me and logout", () => {
       headers: { cookie: `${SESSION_COOKIE}=${session.slice(0, -2)}xx` },
     });
     expect(tampered.status).toBe(401);
+  });
+
+  test("/api/me reports the managed offering so the app can show its Billing page", async () => {
+    const hub = fakeGitHub();
+    server = await startAuthServer({ fetchImpl: hub.fetch, managedOffering: true });
+    const session = cookieValue(await signIn(server), SESSION_COOKIE) ?? "";
+    const me = await server.request("/api/me", {
+      headers: { cookie: `${SESSION_COOKIE}=${session}` },
+    });
+    expect(await me.json()).toMatchObject({ managedOffering: true });
   });
 
   test("logout clears the cookie and refuses non-POST", async () => {

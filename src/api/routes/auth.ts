@@ -34,6 +34,8 @@ export interface SiteAuthOptions {
   readonly users: UserStore;
   /** When present, `Authorization: Bearer sbk_…` and `X-API-Key` resolve to their owner. */
   readonly apiKeys?: ApiKeyStore;
+  /** Whether the app shows the managed offering's Billing page; reported on /api/me. */
+  readonly managedOffering?: boolean;
   readonly fetchImpl?: typeof fetch;
   readonly now?: () => Date;
 }
@@ -178,6 +180,7 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
           user: publicUser(user),
           orgs: orgs.map(publicOrg),
           auth: user.apiKey ? "api-key" : "session",
+          managedOffering: options.managedOffering === true,
           ...(user.apiKey ? { apiKey: { name: user.apiKey.name, scope: user.apiKey.scope } } : {}),
         });
         return true;

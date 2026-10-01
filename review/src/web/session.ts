@@ -19,7 +19,13 @@ export interface SiteOrg {
 export type SessionState =
   | { status: "loading" }
   | { status: "anonymous" }
-  | { status: "signed-in"; user: SiteUser; orgs: SiteOrg[] };
+  | {
+      status: "signed-in";
+      user: SiteUser;
+      orgs: SiteOrg[];
+      /** The deployment offers managed models and sandboxes, billed on the Billing page. */
+      managedOffering: boolean;
+    };
 
 export interface SessionContextValue {
   session: SessionState;
@@ -40,8 +46,17 @@ export async function fetchSession(): Promise<SessionState> {
   try {
     const response = await fetch("/api/me", { headers: { accept: "application/json" } });
     if (!response.ok) return { status: "anonymous" };
-    const body = (await response.json()) as { user: SiteUser; orgs?: SiteOrg[] };
-    return { status: "signed-in", user: body.user, orgs: body.orgs ?? [] };
+    const body = (await response.json()) as {
+      user: SiteUser;
+      orgs?: SiteOrg[];
+      managedOffering?: boolean;
+    };
+    return {
+      status: "signed-in",
+      user: body.user,
+      orgs: body.orgs ?? [],
+      managedOffering: body.managedOffering === true,
+    };
   } catch {
     return { status: "anonymous" };
   }

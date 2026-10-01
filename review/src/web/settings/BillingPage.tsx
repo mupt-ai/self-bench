@@ -11,8 +11,6 @@ import {
   formatBillingDollars,
   startBillingSession,
 } from "./billing";
-import { CreditGrant } from "./CreditGrant";
-import { UsageRefund } from "./UsageRefund";
 
 const statusLabels: Record<string, string> = {
   disabled: "Not Configured",
@@ -113,8 +111,6 @@ function BillingContent({ org }: { org: string }) {
         <div className="grid gap-8">
           <BillingSummary data={data} />
           <BillingStatusCard data={data} />
-          {data.canGrantCredits && <CreditGrant org={org} />}
-          {data.canGrantCredits && <UsageRefund org={org} onRefunded={() => void load()} />}
           <BillingUsage usage={data.usage} />
         </div>
       )}

@@ -229,9 +229,11 @@ test("signed webhooks update subscription state and ignore duplicates", async ()
 
 test("managed generation is gated when Stripe is configured and unblocked for credentials", async () => {
   const previous = {
+    offering: process.env.SELFBENCH_MANAGED_OFFERING,
     models: process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY,
     sandbox: process.env.SELFBENCH_MANAGED_E2B_API_KEY,
   };
+  process.env.SELFBENCH_MANAGED_OFFERING = "true";
   process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY = "platform-openrouter";
   process.env.SELFBENCH_MANAGED_E2B_API_KEY = "platform-e2b";
   try {
@@ -281,6 +283,8 @@ test("managed generation is gated when Stripe is configured and unblocked for cr
     });
     expect(allowed.status).toBe(202);
   } finally {
+    if (previous.offering === undefined) delete process.env.SELFBENCH_MANAGED_OFFERING;
+    else process.env.SELFBENCH_MANAGED_OFFERING = previous.offering;
     if (previous.models === undefined) delete process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
     else process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY = previous.models;
     if (previous.sandbox === undefined) delete process.env.SELFBENCH_MANAGED_E2B_API_KEY;

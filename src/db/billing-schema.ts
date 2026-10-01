@@ -144,7 +144,11 @@ export const billingOutbox = pgTable(
   ],
 );
 
-/** Durable idempotency and audit log for privileged invoice-credit grants. */
+/**
+ * Audit log of past invoice-credit grants. The app no longer grants credits; the definition stays
+ * so migrations keep the table and its history.
+ * @public
+ */
 export const billingCreditGrants = pgTable("billing_credit_grants", {
   requestId: text("request_id").primaryKey(),
   adminUserId: bigint("admin_user_id", { mode: "number" }).notNull(),
