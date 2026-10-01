@@ -124,7 +124,7 @@ export const models: readonly Model[] = [
     vendor: "anthropic",
     openRouter: "anthropic/claude-sonnet-5.5",
     source: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
-    rates: { native: [2, 10, 0.2, 2.5] },
+    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
     thinking: vendorThinking,
   },
   {
