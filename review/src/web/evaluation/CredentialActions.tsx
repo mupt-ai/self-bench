@@ -26,13 +26,19 @@ export function CredentialActions({
         if (open) pending.current = null;
       }}
     >
-      <DropdownMenuTrigger asChild>
-        <InfoTooltip label={`Actions for ${name}`} className="shrink-0">
-          <Button ref={trigger} variant="ghost" size="icon" aria-label={`Actions for ${name}`}>
+      <InfoTooltip label={`Actions for ${name}`}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            ref={trigger}
+            variant="ghost"
+            size="icon"
+            aria-label={`Actions for ${name}`}
+            className="shrink-0"
+          >
             <Ellipsis aria-hidden="true" />
           </Button>
-        </InfoTooltip>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
+      </InfoTooltip>
       <DropdownMenuContent
         align="end"
         onCloseAutoFocus={(event) => {
