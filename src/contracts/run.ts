@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { gatewayIds } from "../gateways/index.js";
 import { generationReferenceSchema } from "../generation/settings/settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
 import { MAX_CANDIDATES_PER_RUN } from "./config/execution-limits.js";
@@ -42,7 +43,7 @@ const runVersionSchema = z
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 
 const authoringSchema = z.object({
-  provider: z.enum(["openai-codex", "openai", "anthropic", "openrouter"]),
+  provider: z.enum(["openai-codex", "openai", "anthropic", ...gatewayIds]),
   model: z.string().min(1),
   reasoningEffort: z.enum(["low", "medium", "high"]),
 });

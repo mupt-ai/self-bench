@@ -1,9 +1,10 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { gatewayIds, gateways } from "../../../../src/gateways/index";
 
 export const providers = [
   { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
-  { id: "openrouter", label: "OpenRouter" },
+  ...gatewayIds.map((id) => ({ id, label: gateways[id].label })),
   { id: "custom", label: "Custom Endpoint" },
 ] as const;
 /** The subscription sign-in a model provider offers beside its API key, and the CLI it runs. */

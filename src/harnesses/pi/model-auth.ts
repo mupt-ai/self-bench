@@ -2,11 +2,11 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { executionEnvironment } from "../../contracts/config/execution-environment.js";
-import { modelApiKeyVariable } from "../../contracts/models.js";
+import { type GatewayId, gatewayIds, gateways, modelApiKeyVariable } from "../../gateways/index.js";
 import { platformModelKey } from "../../generation/billing/managed.js";
 import { isRecord } from "../../lib/util.js";
 
-type PiModelAuthProvider = "openai" | "openai-codex" | "anthropic" | "openrouter";
+type PiModelAuthProvider = "openai" | "openai-codex" | "anthropic" | GatewayId;
 
 export interface PiModelAuth {
   readonly provider: PiModelAuthProvider;
@@ -36,8 +36,10 @@ export async function loadPiModelAuth(): Promise<PiModelAuth> {
   if (openAi) return { provider: "openai", apiKey: openAi };
   const anthropic = env.ANTHROPIC_API_KEY?.trim();
   if (anthropic) return { provider: "anthropic", apiKey: anthropic };
-  const openRouter = env.OPENROUTER_API_KEY?.trim();
-  if (openRouter) return { provider: "openrouter", apiKey: openRouter };
+  for (const gateway of gatewayIds) {
+    const key = env[gateways[gateway].keyVariable]?.trim();
+    if (key) return { provider: gateway, apiKey: key };
+  }
   const managed = platformModelKey(env);
   if (managed) return { provider: "openrouter", apiKey: managed };
   return { provider: "openai-codex", authJson: await loadPiSubscriptionAuth() };

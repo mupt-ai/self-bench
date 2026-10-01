@@ -8,9 +8,9 @@ import { openDatabase } from "../db/client.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
+import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
-import { keepOpenRouterCatalogFresh } from "../lib/openrouter-catalog.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -32,8 +32,8 @@ removeEmptyModalCredentialOverrides();
 const config = loadWorkerConfig();
 const { role, shutdownGraceMs, idleExitMs } = workerProcessSettings(process.env);
 await checkSandboxBackends(config);
-// Managed usage is billed at OpenRouter's live list prices; see openrouter-catalog.ts.
-await keepOpenRouterCatalogFresh().ready;
+// Managed usage is billed at OpenRouter's live list prices; see gateways/refresh.ts.
+await keepGatewaysFresh().ready;
 
 const connection = await connectTemporalWorker(config.temporal);
 // Batches need the database; stored credentials need it and the key, without which only

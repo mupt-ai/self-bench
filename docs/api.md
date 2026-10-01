@@ -146,7 +146,7 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/orgs/:org/credentials` | Stored credentials without their secrets (`credentials`) and whether the caller `canManage` them |
-| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/db/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `auth` (`api-key`, or a subscription sign-in: `codex-login` with a Codex `auth.json`, `claude-login` with a `claude setup-token` token), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
+| `POST` | `/api/orgs/:org/credentials` | Body per `credentialSchema` in `src/db/credentials.ts`: `name`, `kind` (`openai`, `anthropic`, `openrouter`, `vercel-ai-gateway`, `custom`, `e2b`, `modal`, `daytona`, `vercel`), `auth` (`api-key`, or a subscription sign-in: `codex-login` with a Codex `auth.json`, `claude-login` with a `claude setup-token` token), `value`, and kind-specific fields such as `endpoint`, `tokenId`, or `teamId`. `201` with the stored credential |
 | `POST` | `/api/orgs/:org/credentials/:id/delete` | Deletes a credential; `400` while a comparison still references it |
 | `POST` | `/api/orgs/:org/credentials/codex-login` | Body `{ "name": "Codex" }`. Starts a ChatGPT device sign-in for Codex; `202` with the session id and instructions |
 | `GET` | `/api/orgs/:org/credentials/codex-login/:id` | Sign-in status; stores the credential once OpenAI reports the code approved |

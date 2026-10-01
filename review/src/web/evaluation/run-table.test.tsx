@@ -135,7 +135,13 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(html).toContain("Add Provider");
   expect(html).toContain("Save");
   expect(html).toContain('type="password"');
-  expect(options(html)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
+  expect(options(html)).toEqual([
+    "openai",
+    "anthropic",
+    "openrouter",
+    "vercel-ai-gateway",
+    "custom",
+  ]);
 });
 
 test.each([false, true])("credential add action names its group (sandbox: %s)", (sandbox) => {
@@ -175,7 +181,13 @@ test("replacement keeps the original credential category regardless of the defau
   expect(sandbox).toContain("Replace Credential");
   expect(options(sandbox)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   const provider = credentialEditor("modal", { ...previous, kind: "anthropic" });
-  expect(options(provider)).toEqual(["openai", "anthropic", "openrouter", "custom"]);
+  expect(options(provider)).toEqual([
+    "openai",
+    "anthropic",
+    "openrouter",
+    "vercel-ai-gateway",
+    "custom",
+  ]);
 });
 
 test("harness dropdown follows the selected credential's route", () => {

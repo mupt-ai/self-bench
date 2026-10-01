@@ -1,12 +1,8 @@
-import {
-  findModel,
-  listedOpenRouterModels,
-  models,
-  type ThinkingLevel,
-} from "../contracts/models.js";
+import { findModel, models, type ThinkingLevel } from "../contracts/models.js";
 import { eligibleTrial } from "../evaluation/eligible.js";
 import { evaluationTaskKey, type Harness } from "../evaluation/models.js";
 import type { EvaluationRun, EvaluationTrial } from "../evaluation/types.js";
+import { findListedModel, isGateway } from "../gateways/index.js";
 import type { ReleaseProvider, ReleaseSignIn } from "./release-types.js";
 
 /**
@@ -47,10 +43,10 @@ function settingOf(
   const credentialId = run.credentials.modelCredentialId;
   if (credentialId !== MANAGED_MODEL && !credentials.has(credentialId)) return undefined;
   const custom = run.credentials.provider === "custom";
-  // Curated models use one id on their direct provider and another on OpenRouter.
+  // Curated models use one id on their direct provider and another on the gateways.
   const catalog =
     findModel(run.model) ??
-    (run.credentials.provider === "openrouter"
+    (isGateway(run.credentials.provider)
       ? models.find((model) => model.openRouter === run.model)
       : undefined);
   const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
@@ -62,11 +58,7 @@ function settingOf(
     id: parts.join("|"),
     catalogId: custom ? "custom" : (catalog?.id ?? run.model),
     modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
-    label:
-      typed ??
-      catalog?.label ??
-      listedOpenRouterModels().find((listed) => listed.id === run.model)?.label ??
-      run.modelLabel,
+    label: typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel,
     harness,
     reasoningLevel,
     // This describes the model's vendor, not the credential route of a selected trial.

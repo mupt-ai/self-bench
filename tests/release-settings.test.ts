@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { paretoFrontier } from "@mupt-ai/dari-pareto";
-import { setOpenRouterModels } from "../src/contracts/models.js";
+import { setGatewayListing } from "../src/gateways/index.js";
 import { previewRelease } from "../src/public/release-build.js";
 import { frontierOf } from "../src/public/release-rule.js";
 import { approvedTasks, full, inputs, names, run } from "./support/release-fixture.js";
@@ -14,14 +14,18 @@ test("a model no longer in the catalog keeps the name its runs recorded", () => 
   expect(preview.settings[0]?.label).toBe(retired.modelLabel);
 });
 
-test("a model only OpenRouter lists is named as OpenRouter lists it", () => {
+test("a model only a gateway lists is named as the gateway lists it", () => {
   const listed = run({ model: "qwen/qwen4-coder", provider: "openrouter", results: { t1: 1 } });
-  setOpenRouterModels([{ id: "qwen/qwen4-coder", label: "Qwen: Qwen4 Coder" }]);
+  const listing = {
+    models: [{ id: "alibaba/qwen4-coder", label: "Qwen4 Coder" }],
+    rates: new Map(),
+  };
+  setGatewayListing("vercel-ai-gateway", listing);
   try {
     const preview = previewRelease(inputs({ runs: [listed], tasks: approvedTasks(["t1"]) }));
-    expect(preview.settings[0]?.label).toBe("Qwen: Qwen4 Coder");
+    expect(preview.settings[0]?.label).toBe("Qwen4 Coder");
   } finally {
-    setOpenRouterModels([]);
+    setGatewayListing("vercel-ai-gateway", { models: [], rates: new Map() });
   }
 });
 

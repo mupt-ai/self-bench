@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
+import { gatewayIds } from "../gateways/index.js";
 import type { Database } from "./client.js";
 import { RecordStoreError } from "./encrypted-records.js";
 import { credentials } from "./schema.js";
@@ -9,7 +10,7 @@ import { credentials } from "./schema.js";
 const credentialKinds = [
   "openai",
   "anthropic",
-  "openrouter",
+  ...gatewayIds,
   "custom",
   "e2b",
   "modal",

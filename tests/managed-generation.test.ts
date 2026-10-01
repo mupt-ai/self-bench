@@ -75,6 +75,11 @@ test("model routes resolve per credential kind", () => {
     provider: "openrouter",
     model: "z-ai/glm-5.3",
   });
+  // Pi names Vercel's provider as the credential kind; Vercel spells Z.ai "zai".
+  expect(generationModelRoute("glm-5.3", { kind: "vercel-ai-gateway", auth: "api-key" })).toEqual({
+    provider: "vercel-ai-gateway",
+    model: "zai/glm-5.3",
+  });
 });
 
 test("managed runs resolve platform keys and never inherit the worker's own credentials", async () => {

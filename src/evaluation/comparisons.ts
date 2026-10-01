@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { thinkingLevels } from "../contracts/models.js";
+import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
@@ -12,7 +12,6 @@ import {
   defaultThinking,
   evaluationTaskKey,
   harnessIds,
-  modelIdPattern,
   routeFor,
   signInRefusal,
   thinkingOptions,
@@ -147,7 +146,7 @@ export async function createComparison(
       new Set(selected.harnesses).size !== selected.harnesses.length
     )
       throw new Error("Unsupported or repeated harness");
-    const levels = thinkingOptions(model, selected.harnesses);
+    const levels = thinkingOptions(route, selected.harnesses);
     const thinking = selected.thinking ?? defaultThinking(levels);
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");

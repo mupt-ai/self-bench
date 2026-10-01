@@ -43,19 +43,58 @@ test("duplicates match model, effective thinking level, and harness, not credent
     credentialId: "first",
     harnesses: ["codex"],
   };
+  const keys = [
+    { id: "first", kind: "openai" },
+    { id: "second", kind: "openai" },
+  ] as const;
   expect(
-    hasModelSelection(astra, [selection], {
-      ...selection,
-      credentialId: "second",
-      thinking: "high",
-    }),
+    hasModelSelection(
+      astra,
+      [selection],
+      { ...selection, credentialId: "second", thinking: "high" },
+      keys,
+    ),
   ).toBe(true);
-  expect(hasModelSelection(astra, [selection], { ...selection, thinking: "low" })).toBe(false);
-  expect(hasModelSelection(astra, [selection], { ...selection, harnesses: ["pi"] })).toBe(false);
-  expect(hasModelSelection(astra, [selection], { ...selection, catalogId: "other" })).toBe(false);
-  expect(hasModelSelection(astra, [{ ...selection, harnesses: ["codex", "pi"] }], selection)).toBe(
-    true,
+  expect(hasModelSelection(astra, [selection], { ...selection, thinking: "low" }, keys)).toBe(
+    false,
   );
+  expect(hasModelSelection(astra, [selection], { ...selection, harnesses: ["pi"] }, keys)).toBe(
+    false,
+  );
+  expect(hasModelSelection(astra, [selection], { ...selection, catalogId: "other" }, keys)).toBe(
+    false,
+  );
+  expect(
+    hasModelSelection(astra, [{ ...selection, harnesses: ["codex", "pi"] }], selection, keys),
+  ).toBe(true);
+});
+
+test("a row without a chosen level runs at its gateway route's default", () => {
+  const listed: CatalogModel = {
+    ...model,
+    id: "vendor/listed",
+    provider: "openrouter",
+    gateways: { openrouter: "vendor/listed", "vercel-ai-gateway": "vendor/listed" },
+    thinking: ["low", "high"],
+    gatewayThinking: { openrouter: ["low", "high"], "vercel-ai-gateway": ["low"] },
+  };
+  const keys = [
+    { id: "router", kind: "openrouter" },
+    { id: "vercel", kind: "vercel-ai-gateway" },
+  ] as const;
+  const row = (credentialId: string) => ({
+    catalogId: listed.id,
+    credentialId,
+    harnesses: ["pi" as const],
+  });
+  // Unchosen, the OpenRouter row runs at high and the Vercel row at low: two configurations.
+  expect(hasModelSelection(listed, [row("router")], row("vercel"), keys)).toBe(false);
+  expect(
+    hasModelSelection(listed, [row("router")], { ...row("vercel"), thinking: "high" }, keys),
+  ).toBe(true);
+  expect(
+    hasModelSelection(listed, [row("vercel")], { ...row("router"), thinking: "low" }, keys),
+  ).toBe(true);
 });
 
 test("selection fails without credentials", () => {

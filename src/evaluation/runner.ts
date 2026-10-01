@@ -43,12 +43,13 @@ export function solverArguments(
   thinking?: ThinkingLevel,
   extraAllowedHosts: readonly string[] = [],
   images?: TaskImages,
+  provider?: string,
 ): string[] {
   return harborRunArguments({
     taskPath,
     jobsPath: jobs,
     jobName: "solver",
-    agent: solverAgent(harness, model),
+    agent: solverAgent(harness, provider),
     environment: sandbox,
     solver: { model, agentArguments: thinkingArguments(harness, thinking) },
     extraAllowedHosts,
@@ -267,6 +268,7 @@ async function runTrial(context: {
           run.thinking,
           context.extraAllowedHosts,
           context.images,
+          run.credentials?.provider,
         ),
         {
           env: child,

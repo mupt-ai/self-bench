@@ -4,9 +4,10 @@
  * per-credential Harbor routes. Browser-safe: the site imports it too.
  *
  * A model with a `vendor` runs on that vendor's own key under its `id`; every model also runs
- * through OpenRouter as `openRouter`. Rates are reference $/M tokens as of RATES_AS_OF; server
- * processes replace the OpenRouter rates with OpenRouter's live list prices, and evaluation adds
- * every other model OpenRouter lists (openrouter-catalog.ts).
+ * through each gateway (src/gateways), under the id OpenRouter gives it, `openRouter`, respelled
+ * for the gateway. Rates are reference $/M tokens as of RATES_AS_OF; server processes replace the
+ * gateway rates with each gateway's live list prices, and evaluation adds every other model the
+ * gateways list.
  */
 
 export const thinkingLevels = [
@@ -20,6 +21,9 @@ export const thinkingLevels = [
   "max",
 ] as const;
 export type ThinkingLevel = (typeof thinkingLevels)[number];
+
+/** A model id as a provider or gateway spells it, or as someone types one in. */
+export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 
 /** [input, output, cache read, cache write] in $ per million tokens. */
 export type Rates = readonly [number, number, number, number];
@@ -35,13 +39,15 @@ export interface ModelPricing {
 }
 
 export interface Model {
-  /** The vendor's model id, or a short slug for OpenRouter-only models. */
+  /** The vendor's model id, or a short slug for gateway-only models. */
   readonly id: string;
   readonly label: string;
   readonly vendor?: "openai" | "anthropic";
+  /** OpenRouter's id, which names the model on every gateway. */
   readonly openRouter: string;
   readonly source: string;
-  readonly rates?: { readonly native?: Rates; readonly openRouter?: Rates };
+  /** Reference rates on the vendor's own key and through a gateway. */
+  readonly rates?: { readonly native?: Rates; readonly gateway?: Rates };
   /** Selectable reasoning levels, in display order; absent means the provider default only. */
   readonly thinking?: readonly ThinkingLevel[];
   /** Offered for task authoring and verification. */
@@ -60,7 +66,7 @@ export const models: readonly Model[] = [
     vendor: "openai",
     openRouter: "openai/gpt-6-astra",
     source: "https://developers.openai.com/api/docs/models/gpt-6-astra",
-    rates: { native: [10, 50, 1, 12.5], openRouter: [10, 50, 1, 12.5] },
+    rates: { native: [10, 50, 1, 12.5], gateway: [10, 50, 1, 12.5] },
     thinking: vendorThinking,
     generation: true,
   },
@@ -70,7 +76,7 @@ export const models: readonly Model[] = [
     vendor: "openai",
     openRouter: "openai/gpt-6-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6-sol",
-    rates: { native: [2, 10, 0.2, 2.5], openRouter: [2, 10, 0.2, 2.5] },
+    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
     thinking: openAiThinking,
     generation: true,
   },
@@ -80,7 +86,7 @@ export const models: readonly Model[] = [
     vendor: "openai",
     openRouter: "openai/gpt-6-luna",
     source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
-    rates: { native: [0.1, 0.5, 0.01, 0.125], openRouter: [0.1, 0.5, 0.01, 0.125] },
+    rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
     thinking: openAiThinking,
   },
   {
@@ -89,7 +95,7 @@ export const models: readonly Model[] = [
     vendor: "anthropic",
     openRouter: "anthropic/claude-fable-5.1",
     source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [10, 50, 0.25, 12.5], openRouter: [10, 50, 0.25, 12.5] },
+    rates: { native: [10, 50, 0.25, 12.5], gateway: [10, 50, 0.25, 12.5] },
     thinking: vendorThinking,
     generation: true,
   },
@@ -99,7 +105,7 @@ export const models: readonly Model[] = [
     vendor: "anthropic",
     openRouter: "anthropic/claude-opus-5.5",
     source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [4, 20, 0.2, 5], openRouter: [4, 20, 0.2, 5] },
+    rates: { native: [4, 20, 0.2, 5], gateway: [4, 20, 0.2, 5] },
     thinking: vendorThinking,
     generation: true,
   },
@@ -109,7 +115,7 @@ export const models: readonly Model[] = [
     vendor: "anthropic",
     openRouter: "anthropic/claude-sonnet-5",
     source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [2, 10, 0.2, 2.5], openRouter: [2, 10, 0.2, 2.5] },
+    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
     thinking: vendorThinking,
   },
   {
@@ -117,7 +123,7 @@ export const models: readonly Model[] = [
     label: "GLM 5.3",
     openRouter: "z-ai/glm-5.3",
     source: "https://openrouter.ai/z-ai/glm-5.3",
-    rates: { openRouter: [0.84, 2.64, 0.156, 0.84] },
+    rates: { gateway: [0.84, 2.64, 0.156, 0.84] },
     thinking: ["low", "high", "max"],
     generation: true,
   },
@@ -126,7 +132,7 @@ export const models: readonly Model[] = [
     label: "Kimi K3",
     openRouter: "moonshotai/kimi-k3",
     source: "https://openrouter.ai/moonshotai/kimi-k3",
-    rates: { openRouter: [3, 15, 0.3, 3] },
+    rates: { gateway: [3, 15, 0.3, 3] },
     generation: true,
   },
   {
@@ -144,75 +150,26 @@ export const models: readonly Model[] = [
   },
 ];
 
-/** OpenRouter's live list prices by OpenRouter id; empty until a server process loads them. */
-let openRouterRates: ReadonlyMap<string, { readonly rates: Rates; readonly asOf: string }> =
-  new Map();
-
-export function setOpenRouterRates(rates: typeof openRouterRates): void {
-  openRouterRates = rates;
-}
-
-/** A model OpenRouter lists that a coding agent can drive. */
-export interface ListedModel {
-  /** The OpenRouter id. */
-  readonly id: string;
-  readonly label: string;
-  /** The reasoning efforts OpenRouter says it accepts, in display order. */
-  readonly thinking?: readonly ThinkingLevel[];
-}
-
-/** OpenRouter's agent-capable models, frontier first; empty until a server process loads them. */
-let openRouterModels: readonly ListedModel[] = [];
-
-export function setOpenRouterModels(listed: readonly ListedModel[]): void {
-  openRouterModels = listed;
-}
-
-export function listedOpenRouterModels(): readonly ListedModel[] {
-  return openRouterModels;
-}
-
 export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);
 }
 
-/** Reference pricing for running `model` on its vendor's key or through OpenRouter. */
-export function modelPricing(model: Model, via: "native" | "openRouter"): ModelPricing | undefined {
-  if (via === "openRouter") return openRouterPricing(model.openRouter, model.rates?.openRouter);
+/** Reference pricing for running `model` on its vendor's own key. */
+export function nativePricing(model: Model): ModelPricing | undefined {
   const rates = model.rates?.native;
   if (!rates) return undefined;
   const source =
     model.vendor === "anthropic"
       ? "https://platform.claude.com/docs/en/about-claude/pricing"
       : model.source;
-  return pricing(rates, source, RATES_AS_OF);
+  return ratesPricing(rates, source);
 }
 
-/** OpenRouter's live list price for `id`, else the `reference` rates the catalog records. */
-export function openRouterPricing(id: string, reference?: Rates): ModelPricing | undefined {
-  const live = openRouterRates.get(id);
-  const rates = live?.rates ?? reference;
-  return rates && pricing(rates, `https://openrouter.ai/${id}`, live?.asOf ?? RATES_AS_OF);
-}
-
-function pricing(
+/** Pricing from `rates`, dated `asOf` or else as of the catalog's reference rates. */
+export function ratesPricing(
   [input, output, cacheRead, cacheWrite]: Rates,
   source: string,
-  asOf: string,
+  asOf = RATES_AS_OF,
 ): ModelPricing {
   return { input, output, cacheRead, cacheWrite, source, asOf, maxInputTokens: 200_000 };
-}
-
-/**
- * The variable a model provider's API key travels under, for Pi and every Harbor harness.
- * OpenAI-compatible providers (OpenAI, Codex, custom endpoints) share OPENAI_API_KEY.
- */
-export function modelApiKeyVariable(
-  provider: string,
-): "ANTHROPIC_API_KEY" | "OPENROUTER_API_KEY" | "OPENAI_API_KEY" {
-  return provider === "anthropic"
-    ? "ANTHROPIC_API_KEY"
-    : provider === "openrouter"
-      ? "OPENROUTER_API_KEY"
-      : "OPENAI_API_KEY";
 }

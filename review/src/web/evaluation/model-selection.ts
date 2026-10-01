@@ -56,13 +56,23 @@ export function credentialRunsAll(
   );
 }
 
+/**
+ * Whether `candidate` repeats a selection: the same model, harness and effective thinking level.
+ * A row without a chosen level runs at its route's default, which depends on its credential.
+ */
 export function hasModelSelection(
   model: CatalogModel,
   selections: ComparisonDraft["models"],
   candidate: ComparisonDraft["models"][number],
+  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
 ): boolean {
-  const effectiveThinking = (selection: ComparisonDraft["models"][number]) =>
-    selection.thinking ?? defaultThinking(thinkingOptions(model, selection.harnesses));
+  const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
+    const kind = credentials.find((entry) => entry.id === selection.credentialId)?.kind;
+    const route = kind ? routeFor(model, kind) : undefined;
+    return (
+      selection.thinking ?? defaultThinking(thinkingOptions(route ?? model, selection.harnesses))
+    );
+  };
   return selections.some(
     (selection) =>
       selection.catalogId === candidate.catalogId &&
@@ -75,9 +85,10 @@ export function hasModelSelection(
 export function hasDuplicateModelSelections(
   models: CatalogModel[],
   selections: ComparisonDraft["models"],
+  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
 ): boolean {
   return selections.some((selection, index) => {
     const model = models.find((entry) => entry.id === selection.catalogId);
-    return !!model && hasModelSelection(model, selections.slice(0, index), selection);
+    return !!model && hasModelSelection(model, selections.slice(0, index), selection, credentials);
   });
 }

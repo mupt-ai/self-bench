@@ -22,7 +22,7 @@ export function RunModelTable({
   const [rowKeys] = useState(() => new WeakMap<ComparisonDraft["models"][number], string>());
   return (
     <div className="divide-y divide-border">
-      {hasDuplicateModelSelections(models, draft.models) && (
+      {hasDuplicateModelSelections(models, draft.models, credentials) && (
         <Notice>
           Duplicate configurations cannot run. Choose a different model, thinking level, or harness.
         </Notice>

@@ -14,7 +14,7 @@
 ## Model Vendors
 
 - Every model vendor has one color and one display name, in `VENDOR_COLORS` and `VENDOR_NAMES` in `src/public/vendors.ts`. Both results charts (the selfbench.dev repository page and the app's Results page), the public tables, and the link preview images the server draws use them, so a vendor looks the same everywhere.
-- When a new vendor becomes available, whether through a new direct provider or through OpenRouter (whose model names start with the vendor, as in `z-ai/glm-5.3`), add it to both. An unlisted vendor falls back to the grey that Custom uses and to its raw id. Pick a hue that stays distinct from the other vendors in both light and dark mode.
+- When a new vendor becomes available, whether through a new direct provider or through a gateway in `src/gateways/` (whose model names start with the vendor, as in `z-ai/glm-5.3`), add it to both. Vendors are keyed as OpenRouter spells them; a gateway that spells one differently maps it in its `vendorAliases`. An unlisted vendor falls back to the grey that Custom uses and to its raw id. Pick a hue that stays distinct from the other vendors in both light and dark mode.
 
 ## Public Site
 
@@ -78,3 +78,7 @@ All of it is built from the released lines on every request, so a release or wit
   - `apple-touch-icon.png`: the ringed mark on a black square, 180px, for phone home screens.
 - Keep `favicon.ico` and `apple-touch-icon.png` at the root under those names: browsers and crawlers request those paths without reading the page.
 - Both `index.html` files link the same icons, and the app serves each one without sign-in (`ICONS` in `src/api/http.ts`). `tests/site-icons.test.ts` checks both, so a new icon needs all three.
+
+## Model Gateways
+
+- Gateways (one key for every vendor's models: OpenRouter, Vercel AI Gateway) live in `src/gateways/`, one file each, registered in `gateways` in `src/gateways/index.ts`. A gateway's id is its credential kind and Pi's provider name for it. Evaluation routes, Harbor trials, generation, the credential editor, and access labels all read that registry, so a new gateway is a new file plus a registry entry (and a `harbor_gateway.py` Pi adapter when Harbor does not pass Pi the gateway's key variable, as for Vercel).

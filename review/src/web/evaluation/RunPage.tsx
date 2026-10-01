@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { evaluationTaskKey, thinkingOptions } from "../../../../src/evaluation/models";
+import { evaluationTaskKey, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -143,7 +143,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     draft.tasks.length > 0 &&
     selected.length > 0 &&
     selected.length === draft.models.length &&
-    !hasDuplicateModelSelections([...models, customModel], draft.models) &&
+    !hasDuplicateModelSelections([...models, customModel], draft.models, availableCredentials) &&
     selected.length <= 12 &&
     (draft.sandbox === "managed"
       ? managed.sandbox && draft.sandboxCredentialId === "managed-sandbox"
@@ -158,7 +158,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = availableCredentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
-      const levels = thinkingOptions(model, selection.harnesses);
+      const route = routeFor(model, credential.kind);
+      const levels = thinkingOptions(route ?? model, selection.harnesses);
       return (
         credentialRunsAll(model, credential, selection.harnesses) &&
         (!selection.thinking || levels.includes(selection.thinking)) &&
