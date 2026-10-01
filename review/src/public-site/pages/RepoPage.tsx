@@ -211,10 +211,6 @@ function Results({ page }: { page: PublicRepoPage }) {
               selectedId={rowId}
             />
           </div>
-          {/* Under the chart, as the table's note is under it, so the two start level. */}
-          <p className="text-xs text-muted-foreground">
-            Filled points are on the frontier: nothing is both cheaper and more accurate.
-          </p>
         </section>
 
         <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
@@ -225,10 +221,6 @@ function Results({ page }: { page: PublicRepoPage }) {
             highlighted={highlighted}
             onRowHover={setRowId}
           />
-          <p className="text-xs text-muted-foreground">
-            Every setting ran every one of the {release.tasks} tasks. Tasks come from merged pull
-            requests in this repository; their tests and reference solutions stay private.
-          </p>
         </section>
       </div>
 
