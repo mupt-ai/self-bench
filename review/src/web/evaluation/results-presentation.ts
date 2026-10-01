@@ -1,6 +1,9 @@
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { harnessLabels } from "../../../../src/evaluation/models";
+import { isGateway } from "../../../../src/gateways";
 import { vendorColor } from "../../public-site/format";
-import { endpointLabel } from "./credential-presentation";
+import type { EvaluationRun } from "./api";
+import { endpointLabel, providers, signIns } from "./credential-presentation";
 import type { Configuration, Outcome, TaskResult } from "./results-model";
 import { thinkingLabel } from "./run-presentation";
 
@@ -30,33 +33,37 @@ function harnessName(harness: string): string {
   return harnessLabels[harness as keyof typeof harnessLabels] ?? harness;
 }
 
-/** The model, and a custom endpoint's number when another endpoint serves the same model. */
-export function configurationLabel(configuration: Configuration): string {
-  const number = configuration.endpointNumber;
-  return number ? `${configuration.label} (Endpoint ${number})` : configuration.label;
-}
-
 /** The configuration's model and harness, for sentences about it. */
 export function configurationName(configuration: Configuration): string {
-  return `${configurationLabel(configuration)} · ${harnessName(configuration.harness)}`;
+  return `${configuration.label} · ${harnessName(configuration.harness)}`;
 }
 
-/** How the model is reached: a custom endpoint's host, OpenRouter, a ChatGPT sign-in or an API key. */
-function routeLabel(configuration: Configuration): string {
-  if (configuration.provider === "custom") {
-    return configuration.endpoint ? endpointLabel(configuration.endpoint) : "Deleted Endpoint";
+/**
+ * How a run reached its model: a custom endpoint's host, a sign-in, a gateway, or the provider's
+ * API key. Its model credential, while it exists, gives the endpoint, and the sign-in for runs
+ * from before runs recorded it; a run whose sign-in is unknown shows its provider.
+ */
+export function routeLabel(
+  run: EvaluationRun,
+  credential?: Pick<CredentialInfo, "auth" | "endpoint">,
+): string {
+  const provider = run.credentials?.provider ?? "";
+  if (provider === "custom") {
+    return credential?.endpoint ? endpointLabel(credential.endpoint) : "Custom Endpoint";
   }
-  if (configuration.signIn === "codex-login") return "ChatGPT Sign-In";
-  if (configuration.provider === "openrouter") return "OpenRouter";
-  return "API Key";
+  const auth = run.credentials?.auth ?? credential?.auth;
+  const signIn = signIns.find((entry) => entry.id === auth);
+  if (signIn) return signIn.label;
+  const name = providers.find((entry) => entry.id === provider)?.label ?? provider;
+  return auth === "api-key" && !isGateway(provider) ? `${name} API Key` : name;
 }
 
-/** Reasoning, harness and route, under the model's name. */
+/** Reasoning, harness and the routes its runs took, under the model's name. */
 export function configurationDetail(configuration: Configuration): string {
   return [
     thinkingLabel(configuration.thinking),
     harnessName(configuration.harness),
-    routeLabel(configuration),
+    configuration.routes.join(", "),
   ].join(" · ");
 }
 

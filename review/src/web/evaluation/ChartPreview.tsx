@@ -9,7 +9,7 @@ import { buttonStyles, Select } from "../ui";
 import type { BenchmarkPoint } from "./benchmark";
 import { ParetoChart } from "./ParetoChart";
 import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
-import { configurationPoint, pointEndpoints, taskSets } from "./results-chart";
+import { configurationPoint, taskSets } from "./results-chart";
 import { type Configuration, configurationsOf } from "./results-model";
 
 /**
@@ -206,7 +206,6 @@ export function ChartPreview({
             )}
             <ParetoChart
               points={points}
-              endpoints={pointEndpoints(set.configurations)}
               showTitle={false}
               onSelect={(runId) => {
                 setOpen(false);

@@ -1,5 +1,5 @@
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
-import type { BenchmarkPoint, CustomEndpoint } from "./benchmark";
+import type { BenchmarkPoint } from "./benchmark";
 import type { AcceptedTask } from "./RepoRuns";
 import type { Configuration, TaskResult } from "./results-model";
 
@@ -80,7 +80,7 @@ export function configurationPoint(configuration: Configuration, set: TaskSet): 
   return {
     id: configuration.key,
     // Selecting the point opens the configuration's most recent run.
-    runId: configuration.batches.at(-1)?.runIds[0] ?? "",
+    runId: configuration.batches.at(-1)?.id ?? "",
     name: `${configuration.label} · ${configuration.thinking ?? "unrecorded effort"}`,
     modelLabel: configuration.label,
     provider: configuration.provider,
@@ -92,25 +92,4 @@ export function configurationPoint(configuration: Configuration, set: TaskSet): 
     tasks: results.length,
     datasetKey: String(set.tasks.length),
   };
-}
-
-/** Custom endpoints' hosts and public numbers, by point id, for the chart's labels. */
-export function pointEndpoints(
-  configurations: readonly Configuration[],
-): Map<string, CustomEndpoint> {
-  return new Map(
-    configurations.flatMap((configuration) =>
-      configuration.endpoint
-        ? [
-            [
-              configuration.key,
-              {
-                endpoint: configuration.endpoint,
-                ...(configuration.endpointNumber ? { number: configuration.endpointNumber } : {}),
-              },
-            ] as const,
-          ]
-        : [],
-    ),
-  );
 }

@@ -12,26 +12,23 @@ import { type Batch, type Outcome, type TaskResult, tally } from "./results-mode
 import { momentLabel, outcomeSummary } from "./results-presentation";
 import type { Sort } from "./results-view";
 
-/** A batch's heading: when it started, linking to its run, marked as a link out. */
+/** A run's heading: when it started, linking to it, marked as a link out, and its route. */
 export function BatchHeading({ batch }: { batch: Batch }) {
-  const when = momentLabel(batch.createdAt);
   return (
     <>
-      {batch.runIds.map((runId, index) => (
-        <Link
-          key={runId}
-          className="group/run inline-flex items-center gap-1.5 font-semibold"
-          to={`?run=${encodeURIComponent(runId)}`}
-          title="Open Run"
-        >
-          {/* Says the title opens the run's own page. */}
-          <ExternalLink
-            className="size-3 shrink-0 text-muted-foreground group-hover/run:text-foreground"
-            aria-hidden="true"
-          />
-          {index ? `Run ${index + 1}` : when}
-        </Link>
-      ))}
+      <Link
+        className="group/run inline-flex shrink-0 items-center gap-1.5 font-semibold"
+        to={`?run=${encodeURIComponent(batch.id)}`}
+        title="Open Run"
+      >
+        {/* Says the title opens the run's own page. */}
+        <ExternalLink
+          className="size-3 shrink-0 text-muted-foreground group-hover/run:text-foreground"
+          aria-hidden="true"
+        />
+        {momentLabel(batch.createdAt)}
+      </Link>
+      <span className="truncate text-muted-foreground">{batch.route}</span>
     </>
   );
 }

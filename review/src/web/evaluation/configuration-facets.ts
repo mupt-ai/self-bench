@@ -1,20 +1,20 @@
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { vendorName } from "../../public-site/format";
-import { providers } from "./credential-presentation";
 import type { Configuration } from "./results-model";
 import type { Order } from "./results-view";
 
 /**
- * Narrowing and ordering the Results table's configurations: by vendor, provider, reasoning and
+ * Narrowing and ordering the Results table's configurations: by vendor, route, reasoning and
  * harness, and by how much is done, the pass rate, or the cost per task.
  */
 
 export interface Facet {
-  key: "vendor" | "provider" | "reasoning" | "harness";
+  key: "vendor" | "route" | "reasoning" | "harness";
   label: string;
   /** What the filter reads when nothing is chosen. */
   all: string;
-  value(configuration: Configuration): string;
+  /** A configuration's values: one, or for its routes, every one its runs took. */
+  values(configuration: Configuration): string[];
 }
 
 const reasoningNames: Record<string, string> = { default: "Model Default", xhigh: "X-High" };
@@ -24,32 +24,35 @@ export const facets: Facet[] = [
     key: "vendor",
     label: "Vendor",
     all: "All Vendors",
-    value: (configuration) =>
+    values: (configuration) => [
       vendorName({ provider: configuration.provider, model: { name: configuration.modelName } }),
+    ],
   },
   {
-    key: "provider",
-    label: "Provider",
-    all: "All Providers",
-    value: (configuration) =>
-      providers.find((entry) => entry.id === configuration.provider)?.label ??
-      configuration.provider,
+    key: "route",
+    label: "Route",
+    all: "All Routes",
+    // Custom endpoints go by their hosts elsewhere; here they're one choice.
+    values: (configuration) =>
+      configuration.provider === "custom" ? ["Custom Endpoint"] : configuration.routes,
   },
   {
     key: "reasoning",
     label: "Reasoning",
     all: "All Reasoning Levels",
-    value: ({ thinking }) =>
+    values: ({ thinking }) => [
       !thinking
         ? "Not Recorded"
         : (reasoningNames[thinking] ?? thinking.charAt(0).toUpperCase() + thinking.slice(1)),
+    ],
   },
   {
     key: "harness",
     label: "Harness",
     all: "All Harnesses",
-    value: (configuration) =>
+    values: (configuration) => [
       harnessLabels[configuration.harness as keyof typeof harnessLabels] ?? configuration.harness,
+    ],
   },
 ];
 
@@ -59,14 +62,15 @@ export const facets: Facet[] = [
  */
 export function facetValues(facet: Facet, configurations: readonly Configuration[]): string[] {
   const custom = (value: string) => (value.startsWith("Custom") ? 1 : 0);
-  return [...new Set(configurations.map(facet.value))].sort(
+  return [...new Set(configurations.flatMap(facet.values))].sort(
     (a, b) => custom(a) - custom(b) || a.localeCompare(b),
   );
 }
 
 /**
  * The configurations every facet allows: a facet allows any of its chosen values (Anthropic or
- * OpenAI), all facets must allow it (and High), and a facet with none chosen allows everything.
+ * OpenAI; for routes, a configuration with a run on either), all facets must allow it (and High),
+ * and a facet with none chosen allows everything.
  */
 export function matchingFacets(
   configurations: readonly Configuration[],
@@ -75,7 +79,7 @@ export function matchingFacets(
   return configurations.filter((configuration) =>
     facets.every((facet) => {
       const values = chosen[facet.key] ?? [];
-      return !values.length || values.includes(facet.value(configuration));
+      return !values.length || facet.values(configuration).some((value) => values.includes(value));
     }),
   );
 }

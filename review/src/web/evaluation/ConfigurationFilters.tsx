@@ -44,9 +44,9 @@ function FacetMenu({
   const candidates = matchingFacets(configurations, others);
   const values = [...new Set([...facetValues(facet, configurations), ...picked])];
   const count = (entry: string) =>
-    candidates.filter((configuration) => facet.value(configuration) === entry).length;
+    candidates.filter((configuration) => facet.values(configuration).includes(entry)).length;
   const color = (entry: string) => {
-    const configuration = configurations.find((item) => facet.value(item) === entry);
+    const configuration = configurations.find((item) => facet.values(item).includes(entry));
     return facet.key === "vendor" && configuration ? configurationColor(configuration) : undefined;
   };
   const [first] = picked;

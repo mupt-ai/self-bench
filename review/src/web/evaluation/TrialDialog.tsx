@@ -7,10 +7,9 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { buttonStyles, Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
 import { dollars } from "./benchmark";
-import { providers } from "./credential-presentation";
 import { OutcomeCircle } from "./ResultsMarks";
 import { outcomeOf } from "./results-model";
-import { taskParts } from "./results-presentation";
+import { routeLabel, taskParts } from "./results-presentation";
 import { thinkingLabel } from "./run-presentation";
 import { TrialDetails } from "./TrialDetails";
 
@@ -21,13 +20,6 @@ const sameTrial = (a: EvaluationTrial, b: EvaluationTrial) =>
 function modelName(run: EvaluationRun): string {
   if (run.model === "custom") return run.modelName.replace(/^openai\//, "");
   return findModel(run.model)?.label ?? run.modelLabel;
-}
-
-/** How the run reached its model: a ChatGPT sign-in, or the provider's name. */
-function routeLabel(run: EvaluationRun): string {
-  if (run.credentials?.auth === "codex-login") return "ChatGPT Sign-In";
-  const provider = run.credentials?.provider ?? run.modelName.split("/")[0] ?? "";
-  return providers.find((entry) => entry.id === provider)?.label ?? provider;
 }
 
 /**

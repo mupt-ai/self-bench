@@ -3,7 +3,7 @@ import { facets, facetValues, matchingFacets, orderedConfigurations } from "./co
 import { at, credentials, errored, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 
-test("groups runs by release setting, then by comparison, and counts each task's latest result", () => {
+test("groups runs by release setting, then by run, and counts each task's latest result", () => {
   const first = run("first", { comparisonId: "c1", createdAt: at(300) }, [
     passed("task-1"),
     errored("task-2", "Harbor exited with code 137"),
@@ -16,8 +16,8 @@ test("groups runs by release setting, then by comparison, and counts each task's
   expect(rest).toEqual([]);
   expect(low?.thinking).toBe("low");
   expect(configuration?.batches.map((batch) => [batch.id, batch.startedBy])).toEqual([
-    ["c1", "priya"],
-    ["c2", "sam"],
+    ["first", "priya"],
+    ["rerun", "sam"],
   ]);
   expect(configuration?.latest.map((result) => [result.trial.taskId, result.outcome])).toEqual([
     ["task-1", "passed"],
@@ -32,26 +32,6 @@ test("groups runs by release setting, then by comparison, and counts each task's
     costPerTask: 0.5,
     status: "done",
   });
-});
-
-test("custom endpoints serving one model are separate configurations, numbered as a release would", () => {
-  const configurations = configurationsOf(
-    [
-      run("a", { credential: "gpu-a" }, [passed("task-1")]),
-      run("b", { credential: "gpu-b" }, [passed("task-1")]),
-    ],
-    credentials,
-    NOW,
-  );
-  expect(
-    configurations
-      .map((configuration) => [configuration.endpoint, configuration.endpointNumber])
-      .sort(),
-  ).toEqual([
-    ["https://gpu.example.test/a/v1", 1],
-    ["https://gpu.example.test/b/v1", 2],
-  ]);
-  expect(configurations[0]?.label).toBe("llama-70b");
 });
 
 test("running, queued and cancelled configurations", () => {
@@ -104,13 +84,16 @@ test("configurations narrow by facet and sort by any column", () => {
   expect(
     matchingFacets(configurations, { vendor: ["Custom"] }).map((entry) => entry.label),
   ).toEqual(["llama-70b"]);
-  expect(matchingFacets(configurations, { provider: ["OpenAI"], reasoning: ["Low"] })).toHaveLength(
-    1,
-  );
-  // Any of a facet's values, and every facet: (Low or High) and OpenAI.
   expect(
-    matchingFacets(configurations, { reasoning: ["Low", "High"], provider: ["OpenAI"] }),
+    matchingFacets(configurations, { route: ["OpenAI API Key"], reasoning: ["Low"] }),
+  ).toHaveLength(1);
+  // Any of a facet's values, and every facet: (Low or High) and an OpenAI API key.
+  expect(
+    matchingFacets(configurations, { reasoning: ["Low", "High"], route: ["OpenAI API Key"] }),
   ).toHaveLength(2);
+  const route = facets.find((facet) => facet.key === "route");
+  if (!route) throw new Error("No route facet");
+  expect(facetValues(route, configurations)).toEqual(["OpenAI API Key", "Custom Endpoint"]);
   const passRates = (descending: boolean) =>
     orderedConfigurations(configurations, { by: "pass", descending }).map(
       (entry) => entry.passRate,

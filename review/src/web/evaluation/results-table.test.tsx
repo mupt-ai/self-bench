@@ -53,7 +53,7 @@ test("the table starts closed, opening to batches and then to tasks", () => {
   for (const text of [
     ">Configurations<",
     ">GPT-6<",
-    "high · Codex · API Key",
+    "high · Codex · OpenAI API Key",
     ">Done<",
     ">1/1<",
     ">100%<",

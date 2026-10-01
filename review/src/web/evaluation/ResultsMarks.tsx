@@ -2,12 +2,7 @@ import { Asterisk, ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import type { Configuration, Outcome, TaskResult } from "./results-model";
-import {
-  configurationColor,
-  configurationDetail,
-  configurationLabel,
-  outcomeLabels,
-} from "./results-presentation";
+import { configurationColor, configurationDetail, outcomeLabels } from "./results-presentation";
 
 /** How a glyph is drawn: filled, a ring, half filled, or a ring around a dot. */
 type Fill = "full" | "none" | "half" | "dot";
@@ -195,7 +190,7 @@ export function SortIcon({ order }: { order: "ascending" | "descending" | undefi
   );
 }
 
-/** The vendor's color, the model, and its reasoning, harness and route. */
+/** The vendor's color, the model, and its reasoning, harness and the routes its runs took. */
 export function ConfigurationName({ configuration }: { configuration: Configuration }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
@@ -205,7 +200,7 @@ export function ConfigurationName({ configuration }: { configuration: Configurat
         aria-hidden="true"
       />
       <span className="min-w-0">
-        <span className="block truncate font-semibold">{configurationLabel(configuration)}</span>
+        <span className="block truncate font-semibold">{configuration.label}</span>
         <span
           className="block truncate font-mono text-xs font-normal text-muted-foreground"
           title={configurationDetail(configuration)}
