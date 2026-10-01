@@ -47,6 +47,31 @@ test("a change tells the engines which of the site's pages changed, with the sit
   expect(logged).toEqual([]);
 });
 
+test("changes during the wait share one notification, each page once", async () => {
+  const { sent, fetchImpl } = endpoint(() => new Response(null, { status: 200 }));
+  const indexNow = createIndexNow({ siteUrl: "https://selfbench.test", fetchImpl, delayMs: 20 });
+  const releases = ["acme/one", "acme/two", "acme/three"].map((fullName) =>
+    indexNow.changed(["/", `/${fullName}`, `/${fullName}/acme`]),
+  );
+  await Promise.all(releases);
+  expect(sent).toHaveLength(1);
+  const urls = (sent[0]?.body as { urlList: string[] } | undefined)?.urlList ?? [];
+  expect(urls.filter((url) => url === "https://selfbench.test/")).toHaveLength(1);
+  expect(urls).toHaveLength(7);
+  // The next change after a notification starts a notification of its own.
+  await indexNow.changed(["/acme/four"]);
+  expect(sent).toHaveLength(2);
+});
+
+test("more pages than one notification takes are sent in several", async () => {
+  const { sent, fetchImpl } = endpoint(() => new Response(null, { status: 200 }));
+  const indexNow = createIndexNow({ siteUrl: "https://selfbench.test", fetchImpl, delayMs: 0 });
+  await indexNow.changed(Array.from({ length: 10_001 }, (_, index) => `/owner/repo-${index}`));
+  expect(sent.map((each) => (each.body as { urlList: string[] }).urlList.length)).toEqual([
+    10_000, 1,
+  ]);
+});
+
 test("a notification that fails is logged and dropped, never thrown", async () => {
   const logged: string[] = [];
   const log = (message: string) => logged.push(message);

@@ -28,6 +28,9 @@ const ENDPOINT = "https://api.indexnow.org/indexnow";
  */
 const DELAY_MS = 30_000;
 
+/** The most URLs one notification may carry. */
+const MAX_URLS = 10_000;
+
 export interface IndexNowOptions {
   /** The site the pages are on, whose host the key is served from. */
   siteUrl: string;
@@ -60,13 +63,33 @@ export function createIndexNow(options: IndexNowOptions) {
       log(`IndexNow notification failed: ${error instanceof Error ? error.message : error}`);
     }
   };
+  /** Every page, in notifications of at most MAX_URLS each, one after another. */
+  const sendAll = async (paths: readonly string[]) => {
+    for (let start = 0; start < paths.length; start += MAX_URLS)
+      await send(paths.slice(start, start + MAX_URLS));
+  };
+  /** The pages waiting to be notified, each once, and when they will have been. */
+  let batch: { pages: Set<string>; sent: Promise<void> } | undefined;
   return {
-    /** Tells the engines that `paths` on the site changed, once the CDN's copies have expired. */
+    /**
+     * Tells the engines that `paths` on the site changed, once the CDN's copies have expired.
+     * Changes during that wait join the same notification, each page once, so a burst of
+     * releases sends one notification rather than one each, and the home page appears once.
+     */
     changed(paths: readonly string[]): Promise<void> {
-      return new Promise((resolve) => {
-        const timer = setTimeout(() => send(paths).then(resolve), options.delayMs ?? DELAY_MS);
-        timer.unref?.();
-      });
+      if (!batch) {
+        const pages = new Set<string>();
+        const sent = new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            batch = undefined;
+            sendAll([...pages]).then(resolve);
+          }, options.delayMs ?? DELAY_MS);
+          timer.unref?.();
+        });
+        batch = { pages, sent };
+      }
+      for (const path of paths) batch.pages.add(path);
+      return batch.sent;
     },
   };
 }
