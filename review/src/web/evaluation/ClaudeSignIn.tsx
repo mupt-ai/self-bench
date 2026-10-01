@@ -10,15 +10,18 @@ export function ClaudeSignIn({
   name,
   onActiveChange,
   onDone,
+  autoStart = false,
 }: {
   org: string;
   name: string;
   onActiveChange(active: boolean): void;
   onDone(): Promise<void>;
+  /** Begin the sign-in on mount, for a caller whose own button already asked for it. */
+  autoStart?: boolean;
 }) {
   const url = `/api/orgs/${encodeURIComponent(org)}/credentials/claude-login`;
   const [session, setSession] = React.useState<ClaudeLoginStatus>();
-  const [starting, setStarting] = React.useState(false);
+  const [starting, setStarting] = React.useState(autoStart);
   const [connecting, setConnecting] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState("");
@@ -78,6 +81,13 @@ export function ClaudeSignIn({
       if (alive.current) setConnecting(false);
     }
   };
+  // A ref survives StrictMode's remount, so one request starts one sign-in.
+  const autoStarted = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  });
   if (session?.status === "saved")
     return (
       <div

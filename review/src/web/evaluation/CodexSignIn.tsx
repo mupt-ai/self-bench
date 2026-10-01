@@ -10,15 +10,18 @@ export function CodexSignIn({
   name,
   onActiveChange,
   onDone,
+  autoStart = false,
 }: {
   org: string;
   name: string;
   onActiveChange(active: boolean): void;
   onDone(): Promise<void>;
+  /** Begin the sign-in on mount, for a caller whose own button already asked for it. */
+  autoStart?: boolean;
 }) {
   const url = `/api/orgs/${encodeURIComponent(org)}/credentials/codex-login`;
   const [session, setSession] = React.useState<CodexLoginStatus>();
-  const [starting, setStarting] = React.useState(false);
+  const [starting, setStarting] = React.useState(autoStart);
   const [error, setError] = React.useState("");
   const [copied, setCopied] = React.useState(false);
   const [copyHint, setCopyHint] = React.useState("");
@@ -93,6 +96,13 @@ export function CodexSignIn({
       if (alive.current) setStarting(false);
     }
   };
+  // A ref survives StrictMode's remount, so one request starts one sign-in.
+  const autoStarted = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  });
   if (session?.status === "saved")
     return (
       <div

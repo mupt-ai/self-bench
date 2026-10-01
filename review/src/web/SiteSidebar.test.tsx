@@ -4,7 +4,12 @@ import { MemoryRouter } from "react-router";
 import { SiteSidebar } from "./SiteSidebar";
 import type { SiteOrg } from "./session";
 
-function renderSidebar(path: string, kind: SiteOrg["kind"] = "org", billing = true) {
+function renderSidebar(
+  path: string,
+  kind: SiteOrg["kind"] = "org",
+  billing = true,
+  onSetup?: () => void,
+) {
   const org: SiteOrg = { login: "example-account", kind, role: "admin" };
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
@@ -15,6 +20,7 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org", billing = tr
         onSelect={() => {}}
         onSignOut={async () => {}}
         billing={billing}
+        onSetup={onSetup}
       />
     </MemoryRouter>,
   );
@@ -39,6 +45,11 @@ test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
   expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(3);
   expect(html).not.toContain("Billing");
+});
+
+test("sidebar offers Finish Setup while the org still needs setup", () => {
+  expect(renderSidebar("/", "org", false, () => {})).toContain('aria-label="Finish Setup"');
+  expect(renderSidebar("/", "org", false)).not.toContain("Finish Setup");
 });
 
 test("sidebar supports the compact icon mode", () => {

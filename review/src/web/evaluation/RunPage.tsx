@@ -8,11 +8,13 @@ import { evaluationTaskKey, routeFor, thinkingOptions } from "../../../../src/ev
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { covered, setupCoverage } from "../setup/readiness";
+import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
 import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
-import { RunBlockerNotice, RunExecution, runBlocker } from "./RunExecution";
+import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
@@ -38,8 +40,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   });
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [sandboxes, setSandboxes] = React.useState<HostedSandbox[]>([]);
-  const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
-  const [managed, setManaged] = React.useState({ models: false, sandbox: false });
+  const [credentials, credentialsError] = useOrgCredentials(org.login);
+  const [managed, setManaged] = React.useState<{ models: boolean; sandbox: boolean }>();
   const [availableTasks, setAvailableTasks] = React.useState<EvaluationOptions["tasks"]>([]);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -80,16 +82,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         if (!disposed) setError(cause.message);
       },
     );
-    evaluationRequest<{ credentials: CredentialInfo[] }>(
-      `/api/orgs/${encodeURIComponent(org.login)}/credentials`,
-    ).then(
-      (result) => {
-        if (!disposed) setCredentials(result.credentials);
-      },
-      (cause) => {
-        if (!disposed) setError(cause.message);
-      },
-    );
     evaluationRequest<EvaluationOptions>(`${url}/options`).then(
       (result) => {
         if (!disposed) {
@@ -121,9 +113,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     return () => {
       disposed = true;
     };
-  }, [url, org.login]);
+  }, [url]);
   const availableCredentials: CredentialInfo[] = [
-    ...(managed.models
+    ...(managed?.models
       ? [
           {
             id: "managed-model",
@@ -134,7 +126,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           },
         ]
       : []),
-    ...credentials,
+    ...(credentials ?? []),
   ];
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
@@ -146,7 +138,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     !hasDuplicateModelSelections([...models, customModel], draft.models, availableCredentials) &&
     selected.length <= 12 &&
     (draft.sandbox === "managed"
-      ? managed.sandbox && draft.sandboxCredentialId === "managed-sandbox"
+      ? !!managed?.sandbox && draft.sandboxCredentialId === "managed-sandbox"
       : availableCredentials.some(
           (credential) =>
             credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
@@ -166,6 +158,8 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         (model.id !== "custom" || !!selection.customModel)
       );
     });
+  const coverage =
+    credentials && managed && !state.submitted && setupCoverage(credentials, managed).evaluate;
   const blocker = runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
   const submit = async (missingOnly = false) => {
     if (busy || (!state.submitted && !ready)) return;
@@ -224,8 +218,12 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           </div>
         </div>
       )}
-      {error && <Notice className="mb-5">{error}</Notice>}
-      {blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>}
+      {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
+      {coverage && !covered(coverage) ? (
+        <RunSetupCallout coverage={coverage} />
+      ) : (
+        blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>
+      )}
       <RunTaskPicker
         repo={repo}
         availableTasks={availableTasks}
@@ -279,7 +277,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           repo={repo}
           draft={draft}
           credentials={availableCredentials}
-          sandboxes={managed.sandbox ? ["managed", ...sandboxes] : sandboxes}
+          sandboxes={managed?.sandbox ? ["managed", ...sandboxes] : sandboxes}
           submitted={state.submitted}
           busy={busy}
           ready={ready}
