@@ -11,6 +11,7 @@ import {
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
+import { signInRefusal } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /**
@@ -86,9 +87,9 @@ export async function credentialExecution(
     PYTHONUNBUFFERED: "1",
   };
   const secrets = [modelSecret, sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(Boolean);
+  const refusal = signInRefusal(info.auth, input.harnesses);
+  if (refusal) throw refuseTrial(refusal);
   if (info.auth === "codex-login") {
-    if (input.harnesses.some((harness) => harness !== "codex"))
-      throw refuseTrial("Codex login requires Codex harness");
     const authPath = join(home, "codex-auth.json");
     await writeFile(authPath, modelSecret, { mode: 0o600 });
     child.CODEX_AUTH_JSON_PATH = authPath;
@@ -96,6 +97,10 @@ export async function credentialExecution(
     secrets.push(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
     );
+  } else if (info.auth === "claude-login") {
+    // Harbor's Claude Code passes the token through and drops any API key once forced.
+    child.CLAUDE_CODE_OAUTH_TOKEN = modelSecret;
+    child.CLAUDE_FORCE_OAUTH = "1";
   } else {
     child[modelApiKeyVariable(info.kind)] = modelSecret;
   }

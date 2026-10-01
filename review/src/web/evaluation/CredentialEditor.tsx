@@ -1,10 +1,12 @@
+import { CircleAlert } from "lucide-react";
 import React from "react";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
+import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CodexSignIn } from "./CodexSignIn";
 import { CredentialSecret } from "./CredentialSecret";
-import { isSandbox, providers, sandboxes } from "./credential-presentation";
+import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
 
 export function CredentialEditor({
   previous,
@@ -26,9 +28,7 @@ export function CredentialEditor({
   const [draft, setDraft] = React.useState<CredentialDraft>({
     name: previous
       ? `${previous.name} replacement`.slice(0, 80)
-      : auth === "codex-login"
-        ? "Codex"
-        : "",
+      : (signIns.find((entry) => entry.id === auth)?.name ?? ""),
     kind: previous?.kind ?? kind,
     auth: previous?.auth ?? auth,
     value: "",
@@ -39,15 +39,18 @@ export function CredentialEditor({
   const [importing, setImporting] = React.useState(false);
   const [error, setError] = React.useState("");
   const name = React.useRef<HTMLInputElement>(null);
-  const isLogin = draft.auth === "codex-login" && !importing;
+  const signIn = signIns.find((entry) => entry.kind === draft.kind);
+  const isLogin = draft.auth !== "api-key" && !importing;
   const sandbox = isSandbox(previous?.kind ?? kind);
   const choices = sandbox ? sandboxes : providers;
   const keyLabel =
-    draft.kind === "modal"
-      ? "Modal Token Secret"
-      : draft.kind === "vercel"
-        ? "Vercel Token"
-        : "API Key";
+    draft.auth === "claude-login"
+      ? "Claude Code Token"
+      : draft.kind === "modal"
+        ? "Modal Token Secret"
+        : draft.kind === "vercel"
+          ? "Vercel Token"
+          : "API Key";
   return (
     <Dialog
       initialFocus={name}
@@ -71,7 +74,12 @@ export function CredentialEditor({
           setBusy(true);
           setError("");
           try {
-            await onSave(draft);
+            // A token copied from a terminal can wrap across lines.
+            await onSave(
+              draft.auth === "claude-login"
+                ? { ...draft, value: draft.value.replace(/\s+/g, "") }
+                : draft,
+            );
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Could not save credential");
           } finally {
@@ -109,14 +117,11 @@ export function CredentialEditor({
                 ))}
               </Select>
             </label>
-            {draft.kind === "openai" && (
+            {signIn && (
               <fieldset>
                 <legend className="sr-only">Authentication</legend>
                 <div className="grid grid-cols-2 gap-1 border border-input bg-muted p-1">
-                  {[
-                    { id: "api-key", label: "API Key" },
-                    { id: "codex-login", label: "ChatGPT Sign-In" },
-                  ].map((option) => (
+                  {[{ id: "api-key", label: "API Key" }, signIn].map((option) => (
                     <button
                       key={option.id}
                       type="button"
@@ -145,13 +150,32 @@ export function CredentialEditor({
                 id="credential-name"
                 required
                 maxLength={80}
-                placeholder={draft.auth === "codex-login" ? "e.g. Team Codex" : "e.g. Team account"}
+                placeholder={`e.g. Team ${draft.auth === "api-key" ? "account" : signIn?.name}`}
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               />
             </label>
           </fieldset>
-          {isLogin ? (
+          {draft.auth === "claude-login" && (
+            <p
+              role="note"
+              className="flex items-start gap-2 border-l-2 border-warning pl-3 text-xs leading-5 text-muted-foreground"
+            >
+              <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-warning" />
+              <span>
+                A Claude plan only works with the Claude Code harness; other harnesses need an API
+                key. Runs count against your plan's usage limits.
+              </span>
+            </p>
+          )}
+          {isLogin && draft.auth === "claude-login" ? (
+            <ClaudeSignIn
+              org={org}
+              name={draft.name}
+              onActiveChange={setSigningIn}
+              onDone={onSaved}
+            />
+          ) : isLogin ? (
             <CodexSignIn
               org={org}
               name={draft.name}
@@ -206,14 +230,17 @@ export function CredentialEditor({
               <CredentialSecret
                 draft={draft}
                 setDraft={setDraft}
-                importing={importing}
+                importing={importing && draft.auth === "codex-login"}
                 setError={setError}
                 keyLabel={keyLabel}
+                {...(draft.auth === "claude-login"
+                  ? { hint: "Run claude setup-token and paste the token it prints." }
+                  : {})}
                 key={`${draft.kind}-${draft.auth}`}
               />
             </fieldset>
           )}
-          {draft.auth === "codex-login" && !signingIn && (
+          {draft.auth !== "api-key" && !signingIn && (
             <button
               type="button"
               className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
@@ -223,7 +250,7 @@ export function CredentialEditor({
                 setError("");
               }}
             >
-              {importing ? "Use Browser Sign-In" : "Import auth.json"}
+              {importing ? "Use Browser Sign-In" : signIn?.importLabel}
             </button>
           )}
           {error && (

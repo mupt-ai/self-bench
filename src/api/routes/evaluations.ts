@@ -27,6 +27,7 @@ import {
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
+import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -47,6 +48,7 @@ export interface EvaluationRoutesOptions {
   env?: NodeJS.ProcessEnv;
   vault?: Vault;
   codexLogins?: CodexLogins;
+  claudeLogins?: ClaudeLogins;
 }
 
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {

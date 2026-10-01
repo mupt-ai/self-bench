@@ -9,12 +9,14 @@ export function CredentialSecret({
   importing,
   setError,
   keyLabel,
+  hint,
 }: {
   draft: CredentialDraft;
   setDraft: React.Dispatch<React.SetStateAction<CredentialDraft>>;
   importing: boolean;
   setError(error: string): void;
   keyLabel: string;
+  hint?: string;
 }) {
   const [visible, setVisible] = React.useState(false);
   const fileVersion = React.useRef(0);
@@ -92,6 +94,9 @@ export function CredentialSecret({
               )}
             </button>
           </div>
+          {hint && (
+            <span className="text-xs font-normal leading-5 text-muted-foreground">{hint}</span>
+          )}
         </div>
       )}
     </>

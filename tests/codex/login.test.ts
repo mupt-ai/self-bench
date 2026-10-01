@@ -114,7 +114,7 @@ test("cancellation, expiry and a rejected exchange end the sign-in", async () =>
 
 test("HTTP sign-in requires admin, same origin and current user; status exposes only saved metadata", async () => {
   const { state, logins } = openAI();
-  const site = await evaluationServer(memoryVault(), logins);
+  const site = await evaluationServer(memoryVault(), { codexLogins: logins });
   const base = "/api/orgs/avyay/credentials/codex-login";
   const post = (body: object) => ({ method: "POST", body: JSON.stringify(body) });
   try {
@@ -155,7 +155,7 @@ test("HTTP sign-in requires admin, same origin and current user; status exposes 
     const list = await (await site.request("/api/orgs/avyay/credentials")).json();
     expect(list.credentials).toHaveLength(1);
     expect(list.credentials[0].auth).toBe("codex-login");
-    expect((await site.request(`${base}/${pending.id}/complete`, post({}))).status).toBe(404);
+    expect((await site.request(`${base}/${pending.id}/complete`, post({}))).status).toBe(405);
   } finally {
     await site.close();
   }

@@ -71,9 +71,11 @@ const access = (setting: ReleaseSetting) =>
     ? "Custom Endpoint"
     : setting.signIn === "codex-login"
       ? "ChatGPT Sign-In"
-      : setting.provider === "openrouter"
-        ? "OpenRouter"
-        : "API Key";
+      : setting.signIn === "claude-login"
+        ? "Claude Sign-In"
+        : setting.provider === "openrouter"
+          ? "OpenRouter"
+          : "API Key";
 
 /** The settings table's columns, as the page's own table names them, plus the frontier it marks. */
 const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [

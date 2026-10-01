@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from "../contracts/models.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
 
 export const harnessIds = ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"] as const;
@@ -16,6 +17,29 @@ export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 
 export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
+}
+
+/** A subscription sign-in drives only its own vendor's CLI; API keys drive any harness. */
+const signInHarnesses: Record<CredentialInfo["auth"], Harness | undefined> = {
+  "api-key": undefined,
+  "codex-login": "codex",
+  "claude-login": "claude-code",
+};
+
+export function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): boolean {
+  const only = signInHarnesses[auth];
+  return !only || only === harness;
+}
+
+/** Why a credential's sign-in cannot run these harnesses, if it cannot. */
+export function signInRefusal(
+  auth: CredentialInfo["auth"],
+  harnesses: readonly Harness[],
+): string | undefined {
+  const only = signInHarnesses[auth];
+  return only && harnesses.some((harness) => harness !== only)
+    ? `A ${harnessLabels[only]} sign-in can only run the ${harnessLabels[only]} harness`
+    : undefined;
 }
 
 /** Harnesses a direct provider key can drive; only OpenRouter is remapped for the rest. */

@@ -22,12 +22,16 @@ const providerId = z
   .min(1)
   .max(256)
   .regex(/^[a-zA-Z0-9_-]+$/);
+/** API keys, and the subscription sign-ins of Codex (ChatGPT) and Claude Code (Claude). */
+export const credentialAuths = ["api-key", "codex-login", "claude-login"] as const;
+/** Claude Code's subscription token, as `claude setup-token` prints it. */
+const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
 
 export const credentialSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     kind: z.enum(credentialKinds),
-    auth: z.enum(["api-key", "codex-login"]).default("api-key"),
+    auth: z.enum(credentialAuths).default("api-key"),
     value: z.string().min(1).max(24_000),
     tokenId: z.string().max(4096).optional(),
     teamId: providerId.optional(),
@@ -50,7 +54,12 @@ export const credentialSchema = z
       } catch {
         issue("Provide a Codex ChatGPT auth.json, not an API key");
       }
+    } else if (value.auth === "claude-login") {
+      if (value.kind !== "anthropic" || !claudeToken.test(value.value))
+        issue("Provide a Claude Code token from claude setup-token, not an API key");
     } else if (/[\r\n\0]/.test(value.value)) issue("API keys must be a single line");
+    else if (value.kind === "anthropic" && value.value.startsWith("sk-ant-oat"))
+      issue("This is a Claude subscription token; add it as a Claude sign-in instead");
     if ((value.kind === "modal") !== !!value.tokenId) issue("Modal requires a token ID and secret");
     if (
       value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
@@ -67,7 +76,7 @@ export interface CredentialInfo {
   id: string;
   name: string;
   kind: CredentialKind;
-  auth: "api-key" | "codex-login";
+  auth: (typeof credentialAuths)[number];
   createdAt: string;
   endpoint?: string;
 }
