@@ -1,129 +1,88 @@
+import { type Client, WorkflowNotFoundError } from "@temporalio/client";
 import {
-  type Client,
-  WorkflowExecutionAlreadyStartedError,
-  WorkflowNotFoundError,
-} from "@temporalio/client";
-import { WorkflowIdReusePolicy } from "@temporalio/common";
-import type {
-  CandidateWorkflowInput,
-  CandidateWorkflowResult,
-  DiscoveryResult,
-  TaskProgress,
-} from "../../contracts/index.js";
-import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
-import type { DiscoveryShardInput } from "../pipeline/activities.js";
-import { heartbeatCost } from "./activity.js";
+  BATCH_OBSERVE_INTERVAL_MS,
+  BATCH_RPC_CONCURRENCY,
+} from "../../contracts/config/execution-limits.js";
+import type { TaskProgress } from "../../contracts/index.js";
+import { settleWithLimit } from "../../lib/util.js";
+import { candidateStatusQuery } from "../pipeline/workflows.js";
+import { activityDetail } from "./activity.js";
+import type { TaskActivityDetail } from "./progress.js";
+import { type GenerationBatch, isFinished, settled } from "./types.js";
 
-type ExecutionSnapshot<T> =
-  | { state: "running"; progress?: TaskProgress; cost?: SandboxCostSnapshot }
-  | { state: "completed"; result: T }
-  | { state: "cancelled" }
-  | { state: "failed"; error: string };
-export interface BatchExecutions {
-  shard(
-    id: string,
-    input: DiscoveryShardInput,
-    queue: string,
-  ): Promise<ExecutionSnapshot<DiscoveryResult>>;
-  candidate(
-    id: string,
-    input: CandidateWorkflowInput,
-    queue: string,
-  ): Promise<ExecutionSnapshot<CandidateWorkflowResult>>;
-  cancel(id: string, queue: string): Promise<boolean>;
+const ACTIVE = ["authoring", "verifying", "reviewing"];
+
+export interface ObservedBatch {
+  /** The batch with each running child's live cost, and each running candidate's progress. */
+  batch: GenerationBatch;
+  /** Each active candidate's current activity attempt; absent once the batch has finished. */
+  activity?: Record<string, TaskActivityDetail>;
 }
 
-/** Ordinary client starts: no Temporal parent/child relationship or waiting activity slot. */
-export function batchExecutions(client: Client): BatchExecutions {
-  async function observe<T>(
-    id: string,
-    type: string,
-    input: unknown,
-    queue: string,
-    candidate: boolean,
-  ): Promise<ExecutionSnapshot<T>> {
-    return client.connection.withDeadline(Date.now() + 10_000, async () => {
-      let handle = client.workflow.getHandle(id);
-      let description: Awaited<ReturnType<typeof handle.describe>>;
-      try {
-        description = await handle.describe();
-      } catch (error) {
-        if (!(error instanceof WorkflowNotFoundError)) throw error;
-        try {
-          await client.workflow.start(type, {
-            workflowId: id,
-            taskQueue: queue,
-            args: [input],
-            workflowExecutionTimeout: "14 days",
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-          });
-        } catch (startError) {
-          if (!(startError instanceof WorkflowExecutionAlreadyStartedError)) throw startError;
-        }
-        // An ambiguous start is safely retried using the same workflow ID.
-        description = await handle.describe();
-      }
-      if (description.type !== type) throw new Error(`Unexpected workflow type for ${id}`);
-      handle = client.workflow.getHandle(id, description.runId);
-      if (description.status.name === "COMPLETED")
-        return { state: "completed", result: (await handle.result()) as T };
-      if (description.status.name === "CANCELLED") return { state: "cancelled" };
-      if (description.status.name !== "RUNNING")
-        return { state: "failed", error: `Workflow ${description.status.name.toLowerCase()}` };
-      const pending = client.workflowService
-        ? await client.workflowService
-            .describeWorkflowExecution({
-              namespace: client.options.namespace,
-              execution: { workflowId: id, runId: description.runId },
-            })
-            .then((value) => value.pendingActivities ?? [])
-            .catch(() => [])
-        : [];
-      const cost = pending
-        .map((activity) => heartbeatCost(activity.heartbeatDetails?.payloads?.[0]))
-        .find((value) => value !== undefined);
-      if (!candidate) return { state: "running", ...(cost ? { cost } : {}) };
-      const progress = await handle.query<TaskProgress>("candidateStatus").catch(() => undefined);
-      return {
-        state: "running",
-        ...(progress ? { progress } : {}),
-        ...(cost ? { cost } : {}),
-      };
-    });
-  }
-  return {
-    shard: (id, input, queue) =>
-      observe(id, "selfBenchDiscoveryShardWorkflow", input, queue, false),
-    candidate: (id, input, queue) => observe(id, "selfBenchAuthorWorkflow", input, queue, true),
-    async cancel(id, queue) {
-      return client.connection.withDeadline(Date.now() + 10_000, async () => {
-        const handle = client.workflow.getHandle(id);
-        try {
-          if ((await handle.describe()).status.name !== "RUNNING") return true;
-          await handle.cancel();
-          return (await handle.describe()).status.name !== "RUNNING";
-        } catch (error) {
-          if (error instanceof WorkflowNotFoundError) {
-            // Reserve the ID with a no-op tombstone. Whichever start wins is then
-            // cancelled; REJECT_DUPLICATE prevents a late paid start after the fence.
-            try {
-              await client.workflow.start("selfBenchCancelledDispatchWorkflow", {
-                workflowId: id,
-                taskQueue: queue,
-                args: [],
-                workflowExecutionTimeout: "1 minute",
-                workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-              });
-            } catch (startError) {
-              if (!(startError instanceof WorkflowExecutionAlreadyStartedError)) throw startError;
-            }
-            const reserved = client.workflow.getHandle(id);
-            if ((await reserved.describe()).status.name === "RUNNING") await reserved.cancel();
-            return (await reserved.describe()).status.name !== "RUNNING";
-          }
-          throw error;
-        }
-      });
-    },
+/**
+ * Reads a running batch's children from Temporal: the batch record holds only settled results.
+ * Progress comes from a query, which is billed, so each candidate's is re-read at most once per
+ * BATCH_OBSERVE_INTERVAL_MS however often the page polls.
+ */
+export function batchObserver(client: Client) {
+  const queried = new Map<string, { at: number; progress: TaskProgress | undefined }>();
+  const progress = async (workflowId: string) => {
+    const cached = queried.get(workflowId);
+    if (cached && Date.now() - cached.at < BATCH_OBSERVE_INTERVAL_MS) return cached.progress;
+    const value = await client.workflow
+      .getHandle(workflowId)
+      .query(candidateStatusQuery)
+      .catch(() => cached?.progress);
+    queried.set(workflowId, { at: Date.now(), progress: value });
+    return value;
   };
+  return async (batch: GenerationBatch): Promise<ObservedBatch> => {
+    if (isFinished(batch.phase)) return { batch };
+    for (const [workflowId, { at }] of queried)
+      if (Date.now() - at >= 2 * BATCH_OBSERVE_INTERVAL_MS) queried.delete(workflowId);
+    const live = structuredClone(batch);
+    const details = new Map<string, TaskActivityDetail>();
+    const shards = live.shards.filter((item) => !settled(item));
+    const candidates = live.candidates.filter((item) => !settled(item));
+    // One hung call must not stall the page's poll.
+    await client.connection
+      .withDeadline(Date.now() + 10_000, () =>
+        settleWithLimit([...shards, ...candidates], BATCH_RPC_CONCURRENCY, async (item) => {
+          const description = await client.workflowService.describeWorkflowExecution({
+            namespace: client.options.namespace,
+            execution: { workflowId: item.workflowId },
+          });
+          const detail = activityDetail(description.pendingActivities ?? []);
+          if (detail.cost) item.cost = detail.cost;
+          if (!("candidate" in item) || description.workflowExecutionInfo?.closeTime) return;
+          details.set(item.workflowId, detail);
+          const current = await progress(item.workflowId);
+          if (current) item.progress = current;
+        }),
+      )
+      .catch(() => undefined);
+    const activity: Record<string, TaskActivityDetail> = {};
+    for (const item of candidates)
+      if (item.progress && ACTIVE.includes(item.progress.status))
+        activity[item.candidate.candidateId] = details.get(item.workflowId) ?? {
+          state: "unknown",
+        };
+    return { batch: live, activity };
+  };
+}
+
+/** The batch workflow's status name, or undefined when it was never started. */
+export async function batchWorkflowStatus(
+  client: Client,
+  runId: string,
+): Promise<string | undefined> {
+  try {
+    const description = await client.connection.withDeadline(Date.now() + 10_000, () =>
+      client.workflow.getHandle(runId).describe(),
+    );
+    return description.status.name;
+  } catch (error) {
+    if (error instanceof WorkflowNotFoundError) return undefined;
+    throw error;
+  }
 }

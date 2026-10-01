@@ -217,7 +217,7 @@ export const apiKeys = pgTable(
   (table) => [index("api_keys_user_id").on(table.userId)],
 );
 
-/** Application-owned batch bookkeeping, not a Temporal parent execution. */
+/** Each batch's record, which its selfBenchBatchWorkflow writes and the batch page reads. */
 export const generationBatches = pgTable("generation_batches", {
   runId: text("run_id").primaryKey(),
   state: jsonb("state").$type<import("../generation/batches/types.js").GenerationBatch>().notNull(),

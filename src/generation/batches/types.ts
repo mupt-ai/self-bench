@@ -11,9 +11,9 @@ import type { DiscoveryShardInput } from "../pipeline/activities.js";
 
 export interface BatchItem {
   workflowId: string;
+  /** Batches the retired reconciler cancelled carry this instead of an error. */
   cancelled?: boolean;
-  /** Epoch ms of the last successful observation; throttles polling of running executions. */
-  observedAt?: number;
+  /** The running workflow's live sandbox cost; read from Temporal, never stored. */
   cost?: SandboxCostSnapshot;
   result?: unknown;
   error?: string;
@@ -24,11 +24,12 @@ interface BatchShard extends BatchItem {
 }
 interface BatchCandidate extends BatchItem {
   candidate: Candidate;
+  /** The running workflow's live progress; read from Temporal, never stored. */
   progress?: TaskProgress;
   result?: CandidateWorkflowResult;
 }
-/** Phases after which a batch is never reconciled again. */
-export const FINISHED_PHASES = ["complete", "failed", "cancelled"] as const;
+/** Phases after which a batch never changes again. */
+const FINISHED_PHASES = ["complete", "failed", "cancelled"] as const;
 type BatchPhase =
   | "preparing"
   | "discovering"
@@ -43,18 +44,16 @@ export function isFinished(phase: BatchPhase): boolean {
 
 export const settled = (item: BatchItem) => item.result !== undefined || item.error !== undefined;
 
-/** Immutable inputs are recorded before dispatch; only the application advances this record. */
+/**
+ * A batch's record. Its workflow (selfBenchBatchWorkflow) is the only writer, apart from the
+ * API marking a cancel; the record carries the plan and settled results, not live progress.
+ */
 export interface GenerationBatch {
   run: RunRequest;
   taskQueue: string;
   phase: BatchPhase;
-  /**
-   * Preparation (the merged-PR fetch and shard staging) runs after the start request returns.
-   * `acceptedAt` is when the batch was accepted and `prepareAttempt` when a replica last claimed
-   * preparation (epoch ms); a stale claim lets another replica take over a crashed one.
-   */
+  /** When the batch was accepted (epoch ms); a workflow still missing well after it never started. */
   acceptedAt?: number;
-  prepareAttempt?: number;
   shards: BatchShard[];
   candidates: BatchCandidate[];
   export?: ArtifactRef;

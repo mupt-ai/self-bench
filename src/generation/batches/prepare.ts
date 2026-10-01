@@ -5,16 +5,23 @@ import { fetchBatchPullRequests } from "../../third_party/github/batch-pull-requ
 import { discoveryPrsPerShard, partitionPullRequests, takeNewestShards } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 
-/** All ordinary GitHub I/O finishes here, before any Temporal execution is started. */
+/** Final: retrying the fetch finds the same PRs. */
+export class NoEligiblePullRequestsError extends Error {
+  constructor() {
+    super("No eligible merged PRs found");
+    this.name = "NoEligiblePullRequestsError";
+  }
+}
+
+/** The merged-PR fetch and shard staging, before any discovery workflow starts. */
 export async function prepareGenerationBatch(options: {
   run: RunRequest;
   token: string;
   artifacts: ArtifactStore;
-  taskQueue: string;
-  /** Artifacts are write-once, so each preparation attempt stages its own shard inputs. */
+  /** Artifacts are write-once, so each attempt (epoch ms) stages its own shard inputs. */
   attempt: number;
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
-}): Promise<GenerationBatch> {
+}): Promise<GenerationBatch["shards"]> {
   const { run, artifacts } = options;
   const github = await fetchBatchPullRequests({
     repositoryUrl: run.repository.url,
@@ -22,7 +29,7 @@ export async function prepareGenerationBatch(options: {
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });
   const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
-  if (!chunks.length) throw new Error("No eligible merged PRs found");
+  if (!chunks.length) throw new NoEligiblePullRequestsError();
   // One discovery agent can fill a small request from a single PR window. Larger
   // requests widen each window rather than exceeding the workflow shard bound.
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
@@ -34,7 +41,7 @@ export async function prepareGenerationBatch(options: {
     discoveryPrsPerShard(requested, shardCount),
   );
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
-  const shards: GenerationBatch["shards"] = await Promise.all(
+  return await Promise.all(
     selected.map(async (chunk, index) => {
       const provenance = await artifacts.put(
         `${input}/shard-${index}.jsonl`,
@@ -60,5 +67,4 @@ export async function prepareGenerationBatch(options: {
       };
     }),
   );
-  return { run, taskQueue: options.taskQueue, phase: "discovering", shards, candidates: [] };
 }
