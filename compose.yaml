@@ -27,9 +27,11 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
   SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
   SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
-  # Managed generation: offering model access and sandboxes on SelfBench's own accounts
-  # follows from which keys are set. The OpenRouter key is worker-only; the E2B key is
-  # shared because the API runs managed export sandboxes.
+  # Managed generation: one switch turns on model access and sandboxes on SelfBench's own
+  # accounts and the Billing page; with it on, each managed option follows from its key.
+  # The OpenRouter key is worker-only; the E2B key is shared because the API runs managed
+  # export sandboxes.
+  SELFBENCH_MANAGED_OFFERING: ${SELFBENCH_MANAGED_OFFERING:-false}
   SELFBENCH_MANAGED_OPENROUTER_API_KEY: ${SELFBENCH_MANAGED_OPENROUTER_API_KEY:-}
   SELFBENCH_MANAGED_E2B_API_KEY: ${SELFBENCH_MANAGED_E2B_API_KEY:-}
   SELFBENCH_MANAGED_E2B_DOMAIN: ${SELFBENCH_MANAGED_E2B_DOMAIN:-}

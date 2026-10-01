@@ -13,8 +13,9 @@ import { createUserStore } from "../db/users.js";
 import { createVault } from "../db/vault.js";
 import { evaluationStarter, evaluationStopper } from "../evaluation/start.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
-import { billingCreditAdminOrgId, loadStripeConfig } from "../generation/billing/config.js";
+import { loadStripeConfig } from "../generation/billing/config.js";
 import { generationCost } from "../generation/billing/cost-status.js";
+import { managedOfferingEnabled } from "../generation/billing/managed.js";
 import { startBillingDispatcher } from "../generation/billing/outbox.js";
 import { generationRecordPath } from "../generation/settings/credentials.js";
 import type { GenerationReference } from "../generation/settings/settings.js";
@@ -46,7 +47,8 @@ interface Site {
   readonly batches: BatchRoutes;
   readonly pullRequests: PullRequestRoutes;
   readonly evaluations: ReturnType<typeof createEvaluationRoutes>;
-  readonly billing: BillingRoutes;
+  /** Present only with the managed offering; a BYOK-only deployment has no billing routes. */
+  readonly billing?: BillingRoutes;
   readonly releases: ReleaseRoutes;
   /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
   readonly publicReleases: PublicReleaseRoutes;
@@ -68,8 +70,8 @@ export async function openSite(
   const database = await openDatabase(auth.databaseUrl);
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
+  const managedOffering = managedOfferingEnabled();
   const stripe = loadStripeConfig();
-  const creditAdminOrgId = billingCreditAdminOrgId();
   const billingStore = createBillingStore(database.db, !!stripe);
   const billingDispatcher = stripe ? startBillingDispatcher(billingStore, stripe) : undefined;
   const publicUrl = auth.publicUrl;
@@ -109,16 +111,17 @@ export async function openSite(
       await billingDispatcher?.close();
     },
     generationBatches: batches,
-    billing: createBillingRoutes({
-      users,
-      store: billingStore,
-      ...(stripe ? { config: stripe } : {}),
-      publicUrl,
-      ...(creditAdminOrgId ? { creditAdminOrgId } : {}),
-      githubApiUrl: auth.githubApiUrl,
-      githubToken: (githubId) => users.gitHubToken(githubId),
-    }),
-    auth: createSiteAuth({ config: auth, users, apiKeys }),
+    ...(managedOffering
+      ? {
+          billing: createBillingRoutes({
+            users,
+            store: billingStore,
+            ...(stripe ? { config: stripe } : {}),
+            publicUrl,
+          }),
+        }
+      : {}),
+    auth: createSiteAuth({ config: auth, users, apiKeys, managedOffering }),
     apiKeys: createApiKeyRoutes({ keys: apiKeys, publicUrl }),
     evaluations: createEvaluationRoutes({
       users,

@@ -30,7 +30,11 @@ const base: GenerationSettings = {
   modelCredentialId: credentials[0]?.id ?? "",
   sandboxCredentialId: credentials[1]?.id,
 };
-function render(value: GenerationSettings, sandboxes = [...HOSTED_EXECUTION_BACKENDS]) {
+function render(
+  value: GenerationSettings,
+  sandboxes = [...HOSTED_EXECUTION_BACKENDS],
+  managed = { models: false, sandbox: false },
+) {
   return renderToStaticMarkup(
     <MemoryRouter>
       <GenerationFields
@@ -40,6 +44,7 @@ function render(value: GenerationSettings, sandboxes = [...HOSTED_EXECUTION_BACK
           sandboxes,
           models: [base.authorModel, base.verifierModel],
           credentials,
+          managed,
         }}
         disabled={false}
         onChange={() => {}}
@@ -161,7 +166,10 @@ test.each(["modal", "e2b", "vercel"] as const)(
 );
 
 test("generation popup keeps helper descriptions in tooltips", () => {
-  const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });
+  const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined }, undefined, {
+    models: true,
+    sandbox: true,
+  });
   // Tooltips are Radix (shadcn) triggers; the hint is the trigger's accessible label.
   expect(html).toContain('aria-label="Managed runs on SelfBench');
   expect(html).toContain('aria-label="Managed sandboxes run on SelfBench');
@@ -171,6 +179,13 @@ test("generation popup keeps helper descriptions in tooltips", () => {
   expect(html).toContain(
     'aria-label="Generation runs in E2B; Harbor verification runs in your Modal, Vercel, E2B, Daytona account."',
   );
+});
+
+test("a bring-your-own-key deployment never mentions managed access", () => {
+  const html = render({ ...base, sandbox: "e2b", sandboxCredentialId: undefined });
+  expect(html).not.toContain("Managed");
+  expect(html).toContain('aria-label="The models run on a credential you store."');
+  expect(html).toContain('aria-label="Sandboxes run on a credential you store."');
 });
 
 test("Vercel credential editor exposes token, team and project fields", () => {

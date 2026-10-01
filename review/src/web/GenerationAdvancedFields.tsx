@@ -14,7 +14,7 @@ import {
   generationSandboxLabels,
 } from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
-import { modelCredentialMatches } from "./generation-defaults";
+import { generationHints, modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
 
@@ -34,6 +34,7 @@ export function AdvancedFields({
   managed: { models: boolean; sandbox: boolean };
 }) {
   const hosted = value.sandbox !== "managed";
+  const hints = generationHints(managed);
   const compatible = (credential: CredentialInfo) =>
     modelCredentialMatches(credential, value.authorModel, value.verifierModel);
   return (
@@ -91,7 +92,7 @@ export function AdvancedFields({
         <label htmlFor="generation-model-access" className={`${fieldStyles} content-start`}>
           <span className="flex items-center gap-1.5">
             Model Access
-            <InfoTooltip label="Managed runs on SelfBench's account — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store." />
+            <InfoTooltip label={hints.modelAccess} />
           </span>
           <Select
             id="generation-model-access"
@@ -137,7 +138,7 @@ export function AdvancedFields({
         <label htmlFor="generation-sandbox" className={`${fieldStyles} content-start`}>
           <span className="flex items-center gap-1.5">
             Sandbox
-            <InfoTooltip label="Managed sandboxes run on SelfBench's account — nothing to configure, usage tracked per run. The other options run on a credential you store." />
+            <InfoTooltip label={hints.sandbox} />
           </span>
           <Select
             id="generation-sandbox"
@@ -283,7 +284,7 @@ export function AdvancedFields({
           >
             Manage Credentials
           </Link>
-          <InfoTooltip label="Each PR starts a separate workflow. Managed model and sandbox usage is tracked per run; stored credentials may incur charges on your own accounts." />
+          <InfoTooltip label={hints.charges} />
         </span>
       </div>
     </div>

@@ -108,31 +108,12 @@ variable "github_oauth_client_id" {
   }
 }
 variable "stripe_price_id" {
-  description = "Stripe metered price ID. Setting it turns on billing and requires the Stripe key and webhook secrets."
+  description = "Stripe metered price ID. With managed_offering, setting it turns on billing and requires the Stripe key and webhook secrets."
   type        = string
   default     = null
 }
-variable "billing_credit_admin_org_id" {
-  description = "Numeric GitHub organization ID whose admins may grant credits and refunds. Null disables them."
-  type        = number
-  default     = null
-  validation {
-    condition     = var.billing_credit_admin_org_id == null || (var.billing_credit_admin_org_id > 0 && floor(var.billing_credit_admin_org_id) == var.billing_credit_admin_org_id)
-    error_message = "Use a positive numeric GitHub organization ID."
-  }
-}
-variable "managed_openrouter" {
-  description = "Offer managed models through the platform OpenRouter key in selfbench-managed-openrouter-api-key."
-  type        = bool
-  default     = false
-}
-variable "managed_e2b" {
-  description = "Offer managed sandboxes through the platform E2B key in selfbench-managed-e2b-api-key."
-  type        = bool
-  default     = false
-}
-variable "managed_modal" {
-  description = "Verify managed runs through the platform Modal token secrets."
+variable "managed_offering" {
+  description = "Offer managed models and sandboxes on the platform's OpenRouter, E2B and Modal accounts (the selfbench-managed-* secrets), billed through Stripe when stripe_price_id is set. False keeps the deployment bring-your-own-key only: no managed secrets are read and the Stripe inputs are ignored."
   type        = bool
   default     = false
 }

@@ -157,3 +157,19 @@ export function generationSelectionProblem(
     return "Set up billing to use managed models or sandboxes.";
   return undefined;
 }
+
+/** Field hints, which mention managed access only where the deployment offers it. */
+export function generationHints(managed: { models: boolean; sandbox: boolean }) {
+  return {
+    modelAccess: managed.models
+      ? "Managed runs on SelfBench's account — no credential needed, and usage is tracked per run. With My Credentials, the models run on a credential you store."
+      : "The models run on a credential you store.",
+    sandbox: managed.sandbox
+      ? "Managed sandboxes run on SelfBench's account — nothing to configure, usage tracked per run. The other options run on a credential you store."
+      : "Sandboxes run on a credential you store.",
+    charges:
+      managed.models || managed.sandbox
+        ? "Each PR starts a separate workflow. Managed model and sandbox usage is tracked per run; stored credentials may incur charges on your own accounts."
+        : "Each PR starts a separate workflow. Stored credentials may incur charges on your own accounts.",
+  };
+}

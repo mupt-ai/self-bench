@@ -117,6 +117,7 @@ test("the build runs on Harbor's own Python with the evaluation's sandbox and th
     vault,
     env: {
       PATH: bin,
+      SELFBENCH_MANAGED_OFFERING: "true",
       SELFBENCH_MANAGED_MODAL_TOKEN_ID: "modal-id",
       SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "modal-secret",
     },
