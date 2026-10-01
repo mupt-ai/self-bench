@@ -28,6 +28,7 @@ function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): 
   );
 }
 
+/** Why a credential's sign-in cannot run these harnesses, if it cannot. */
 export function signInRefusal(
   auth: CredentialInfo["auth"],
   harnesses: readonly Harness[],
@@ -39,6 +40,7 @@ export function signInRefusal(
     : undefined;
 }
 
+/** The harnesses this credential can run the model on; ChatGPT sign-in serves only its own list. */
 export function credentialHarnesses(
   model: CatalogModel,
   credential: { kind: string; auth?: CredentialInfo["auth"] },

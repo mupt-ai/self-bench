@@ -7,21 +7,18 @@ import { type GatewayId, gatewayIds, gatewayPricing, isGateway } from "../../gat
 export function generationModels(): string[] {
   return evaluationCatalog().map((model) => model.id);
 }
+
 function generationModelInfo(id: string, catalog = evaluationCatalog()) {
   return catalog.find((model) => model.id === id);
 }
+
 export function generationModelLabel(id: string): string {
   return generationModelInfo(id)?.label ?? findModel(id)?.label ?? id;
 }
-function generationModelCredentialKinds(
-  id: string,
-  catalog = evaluationCatalog(),
-): readonly string[] {
-  const model = generationModelInfo(id, catalog);
-  return model
-    ? ["openai", "anthropic", ...gatewayIds].filter((kind) => routeFor(model, kind))
-    : [];
-}
+
+/** Credential kinds Pi can run a generation model on: the native vendors and each gateway. */
+const generationCredentialKinds: readonly string[] = ["openai", "anthropic", ...gatewayIds];
+
 export function generationCredentialSupportsModel(
   id: string,
   credential: { readonly kind: string; readonly auth: string },
@@ -33,7 +30,7 @@ export function generationCredentialSupportsModel(
     return credential.kind === "openai" && chatgptSignInModels.has(id);
   if (credential.auth !== "api-key") return false;
   // Native routes exist for curated vendor models only; gateway routes require a listing.
-  return generationModelCredentialKinds(id, catalog).includes(credential.kind);
+  return generationCredentialKinds.includes(credential.kind) && !!routeFor(model, credential.kind);
 }
 
 /**
@@ -57,11 +54,7 @@ export function generationModelRoute(
       provider: credential.auth === "codex-login" ? "openai-codex" : "openai",
       model: info.model,
     };
-  if (credential?.kind === "anthropic")
-    return {
-      provider: "anthropic",
-      model: info.model,
-    };
+  if (credential?.kind === "anthropic") return { provider: "anthropic", model: info.model };
   const kind = credential?.kind;
   const gateway = isGateway(kind) ? kind : "openrouter";
   const route = routeFor(info, gateway);

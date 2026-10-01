@@ -51,6 +51,22 @@ export function modelCredentialMatches(
   );
 }
 
+/** Whether managed access, OpenRouter behind a platform key, can run the model. */
+export function managedModelOffered(model: string, options?: GenerationOptions): boolean {
+  return (
+    options?.modelCatalog?.some((entry) => entry.id === model && !!entry.gateways?.openrouter) ??
+    true
+  );
+}
+
+/** Whether the run's model access can use this model. */
+function modelOffered(model: string, value: GenerationSettings, options: GenerationOptions) {
+  return (
+    options.models.includes(model) &&
+    (value.modelAccess !== "managed" || managedModelOffered(model, options))
+  );
+}
+
 /** Coerces the settings onto what this deployment actually offers, filling empty defaults. */
 export function withDefaultCredentials(
   value: GenerationSettings,
@@ -59,21 +75,14 @@ export function withDefaultCredentials(
   const managedModels = options.managed?.models === true;
   const managedSandbox = options.managed?.sandbox === true;
   const fallback =
-    options.models.find((model) =>
-      options.modelCatalog?.some((entry) => entry.id === model && !!entry.gateways?.openrouter),
-    ) ?? options.models[0];
+    options.models.find((model) => managedModelOffered(model, options)) ?? options.models[0];
   let next: GenerationSettings = {
     ...value,
     modelAccess: managedModels ? value.modelAccess : "credential",
     sandbox: managedSandbox || options.sandboxes.includes(value.sandbox) ? value.sandbox : "modal",
   };
   for (const field of ["authorModel", "verifierModel"] as const)
-    if (
-      !options.models.includes(next[field]) ||
-      (next.modelAccess === "managed" &&
-        options.modelCatalog?.find((entry) => entry.id === next[field])?.gateways?.openrouter ===
-          undefined)
-    )
+    if (!modelOffered(next[field], next, options))
       next = { ...next, [field]: fallback ?? next[field] };
   if (next.modelAccess === "credential" && !next.modelCredentialId) {
     const compatible = options.credentials.filter((item) =>
@@ -128,22 +137,8 @@ export function generationSelectionProblem(
 ): string | undefined {
   if (!options.available) return "Generation is not available.";
   if (!generationSettingsSchema.safeParse(value).success) return "Settings are incomplete.";
-  if (
-    !options.models.includes(value.authorModel) ||
-    (value.modelAccess === "managed" &&
-      options.modelCatalog?.some(
-        (entry) => entry.id === value.authorModel && !!entry.gateways?.openrouter,
-      ) === false)
-  )
-    return "Choose an author model.";
-  if (
-    !options.models.includes(value.verifierModel) ||
-    (value.modelAccess === "managed" &&
-      options.modelCatalog?.some(
-        (entry) => entry.id === value.verifierModel && !!entry.gateways?.openrouter,
-      ) === false)
-  )
-    return "Choose a verifier model.";
+  if (!modelOffered(value.authorModel, value, options)) return "Choose an author model.";
+  if (!modelOffered(value.verifierModel, value, options)) return "Choose a verifier model.";
   if (value.modelAccess === "managed") {
     if (options.managed?.models !== true) return "Choose a model credential.";
   } else if (

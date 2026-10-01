@@ -14,11 +14,12 @@ import {
   generationSandboxLabels,
 } from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
-import { modelCredentialMatches } from "./generation-defaults";
+import { managedModelOffered, modelCredentialMatches } from "./generation-defaults";
 import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
 
 const pairRow = "grid min-w-0 gap-6 sm:grid-cols-2";
+
 /** The advanced panel: every model, sandbox, and credential selection for a generation run. */
 export function AdvancedFields({
   value,
@@ -34,9 +35,7 @@ export function AdvancedFields({
 }) {
   const hosted = value.sandbox !== "managed";
   const selectableModels = options?.models.filter(
-    (model) =>
-      value.modelAccess !== "managed" ||
-      options.modelCatalog?.find((entry) => entry.id === model)?.gateways?.openrouter !== undefined,
+    (model) => value.modelAccess !== "managed" || managedModelOffered(model, options),
   );
   const compatible = (credential: CredentialInfo) =>
     modelCredentialMatches(
