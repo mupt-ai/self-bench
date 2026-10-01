@@ -12,8 +12,12 @@ export const SITE_NAME = "SelfBench";
 
 export const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Repository";
 
+/**
+ * Written with a typographic apostrophe (’): some search engines show an ASCII one in a
+ * description as the entity &#39;.
+ */
 export const HOME_DESCRIPTION =
-  "SelfBench measures AI coding agents and models on tasks from a repository's own merged pull requests, to show which works best on your code. By dari.dev.";
+  "SelfBench measures AI coding agents and models on tasks from a repository’s own merged pull requests, to show which works best on your code. By dari.dev.";
 
 /** The home page's heading, which the server also writes for readers that run no scripts. */
 export const HOME_HEADING = "Find the best models for your repo";
