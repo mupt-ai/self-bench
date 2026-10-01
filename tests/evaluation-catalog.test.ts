@@ -13,7 +13,12 @@ import {
   thinkingArguments,
   thinkingOptions,
 } from "../src/evaluation/models.js";
-import { gatewayIds, type ListedModel, setGatewayListing } from "../src/gateways/index.js";
+import {
+  type GatewayId,
+  gatewayIds,
+  type ListedModel,
+  setGatewayListing,
+} from "../src/gateways/index.js";
 import {
   generationModelLabel,
   generationModelPricing,
@@ -24,7 +29,7 @@ afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
 });
 
-const listModels = (gateway: (typeof gatewayIds)[number], models: ListedModel[]) =>
+const listModels = (gateway: GatewayId, models: ListedModel[]) =>
   setGatewayListing(gateway, { models, rates: new Map() });
 
 test("OpenRouter's popular models join the curated ones, which keep their routes and levels", () => {

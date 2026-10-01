@@ -9,7 +9,7 @@ import type { Gateway, GatewayListing, ListedModel } from "./gateway.js";
 import { openRouter } from "./openrouter.js";
 import { vercelAiGateway } from "./vercel-ai-gateway.js";
 
-export type { Gateway, GatewayListing, ListedModel } from "./gateway.js";
+export type { ListedModel } from "./gateway.js";
 
 /** Gateways in the order the model picker merges their models. */
 export const gateways = {
