@@ -5,9 +5,29 @@ import { useNavigate } from "react-router";
 import { vendorColor } from "../../public-site/format";
 import { Dialog, DialogHeader } from "../Dialog";
 import { buttonStyles, Select } from "../ui";
-import { type BenchmarkPoint, benchmarkPoints, customEndpoints } from "./benchmark";
+import type { BenchmarkPoint } from "./benchmark";
 import { ParetoChart } from "./ParetoChart";
-import { useRepoRuns } from "./RepoRuns";
+import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
+import { configurationPoint, pointEndpoints, taskSets } from "./results-chart";
+import { type Configuration, configurationsOf } from "./results-model";
+
+/** Until the accepted tasks load, every task any configuration ran, with no acceptance times. */
+function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
+  const seen = new Map<string, AcceptedTask>();
+  for (const configuration of configurations) {
+    for (const { trial } of configuration.latest) {
+      seen.set(`${trial.runId}/${trial.taskId}`, {
+        runId: trial.runId,
+        taskId: trial.taskId,
+        difficulty: "",
+      });
+    }
+  }
+  return [...seen.values()];
+}
+
+const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const dayLabel = (iso: string) => day.format(new Date(iso));
 
 const WIDTH = 132;
 const HEIGHT = 44;
@@ -77,25 +97,30 @@ export function ChartPreview({
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
-  const { runs, credentials, onResults } = useRepoRuns();
+  const { runs, credentials, accepted, onResults } = useRepoRuns();
   const navigate = useNavigate();
   const close = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [dataset, setDataset] = useState("");
-  const points = useMemo(() => benchmarkPoints(runs), [runs]);
-  if (!onResults || !points.length) return null;
-  const datasets = [...new Set(points.map((point) => point.datasetKey))];
-  const selected = datasets.includes(dataset) ? dataset : (datasets[0] ?? "");
-  const comparable = points.filter((point) => point.datasetKey === selected);
-  // A dataset by its size and when it was first run; its key is a hash of its tasks.
-  const datasetLabel = (key: string) => {
-    const tasks = points.find((point) => point.datasetKey === key)?.tasks ?? 0;
-    const first = runs
-      .filter((run) => run.datasetKey === key)
-      .reduce((earliest, run) => (run.createdAt < earliest ? run.createdAt : earliest), "9999");
-    const since = new Date(first).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `${tasks.toLocaleString()} task${tasks === 1 ? "" : "s"} · since ${since}`;
-  };
+  const [chosen, setChosen] = useState<number>();
+  const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
+  const sets = useMemo(
+    () => taskSets(configurations, accepted ?? tasksRun(configurations)),
+    [configurations, accepted],
+  );
+  if (!onResults || !sets.length) return null;
+  // The newest set unless another was picked; a pick that no longer exists falls back to it.
+  const set = sets.find((entry) => entry.tasks.length === chosen) ?? sets[0];
+  if (!set) return null;
+  const points = set.configurations.map((configuration) => configurationPoint(configuration, set));
+  const left = configurations.length - points.length;
+  const plural = (count: number, word: string) =>
+    `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
+  const setLabel = (entry: (typeof sets)[number]) =>
+    [
+      plural(entry.tasks.length, "task"),
+      ...(entry.acceptedBy ? [`accepted by ${dayLabel(entry.acceptedBy)}`] : []),
+      plural(entry.configurations.length, "configuration"),
+    ].join(" · ");
   return (
     <>
       {variant === "button" ? (
@@ -116,7 +141,7 @@ export function ChartPreview({
           title="Open Model Comparison"
           onClick={() => setOpen(true)}
         >
-          <MiniChart points={comparable} />
+          <MiniChart points={points} />
           {/* Centered against the chart, so the space above and below the text is the same. */}
           <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
             <span className="text-xs leading-4 font-semibold text-foreground">
@@ -127,8 +152,7 @@ export function ChartPreview({
                 className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
                 aria-hidden="true"
               />
-              {comparable.length.toLocaleString()} point{comparable.length === 1 ? "" : "s"} ·{" "}
-              {datasetLabel(selected).split(" · ")[0]}
+              {plural(points.length, "point")} · {plural(set.tasks.length, "task")}
             </span>
           </span>
         </button>
@@ -150,39 +174,45 @@ export function ChartPreview({
           <DialogHeader
             title="Model Comparison"
             titleId="model-comparison-title"
-            description="Higher accuracy and lower model cost are better. Select a point to open its run."
+            description="Each configuration's latest usable result on every task in the set; a configuration missing any is left out. Select a point to open its latest run."
             onClose={() => setOpen(false)}
             closeRef={close}
           />
           <div className="p-4 sm:p-6">
-            {datasets.length > 1 && (
+            {sets.length > 1 && (
               <label
-                htmlFor="model-comparison-dataset"
+                htmlFor="model-comparison-tasks"
                 className="mb-4 flex flex-wrap items-center gap-3.5 text-sm font-medium text-muted-foreground"
               >
-                Compare Dataset
+                Tasks
                 <Select
-                  id="model-comparison-dataset"
-                  value={selected}
-                  onChange={(event) => setDataset(event.target.value)}
+                  id="model-comparison-tasks"
+                  value={set.tasks.length}
+                  onChange={(event) => setChosen(Number(event.target.value))}
                 >
-                  {datasets.map((key) => (
-                    <option key={key} value={key}>
-                      {datasetLabel(key)}
+                  {sets.map((entry) => (
+                    <option key={entry.tasks.length} value={entry.tasks.length}>
+                      {setLabel(entry)}
                     </option>
                   ))}
                 </Select>
               </label>
             )}
             <ParetoChart
-              points={comparable}
-              endpoints={customEndpoints(comparable, credentials)}
+              points={points}
+              endpoints={pointEndpoints(set.configurations)}
               showTitle={false}
               onSelect={(runId) => {
                 setOpen(false);
                 navigate(`/repos/${repo}/results?run=${encodeURIComponent(runId)}`);
               }}
             />
+            {left > 0 && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {plural(left, "configuration")} not charted: missing a usable result on some of
+                these tasks.
+              </p>
+            )}
           </div>
         </Dialog>
       )}

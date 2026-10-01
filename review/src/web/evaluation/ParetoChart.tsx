@@ -18,7 +18,7 @@ export function ParetoChart({
   onSelect,
 }: {
   points: BenchmarkPoint[];
-  /** Custom points' endpoints and public numbers, by point id (`customEndpoints`). */
+  /** Custom points' endpoints and public numbers, by point id (`pointEndpoints`). */
   endpoints?: ReadonlyMap<string, CustomEndpoint>;
   /** Whether to draw the title, which a dialog around the chart may already show. */
   showTitle?: boolean;
