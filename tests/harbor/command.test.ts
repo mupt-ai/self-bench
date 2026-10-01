@@ -6,6 +6,7 @@ import {
   harborRunArguments,
   runHarbor,
 } from "../../src/harnesses/harbor/command.js";
+import { HarborOutputLimitError } from "../../src/harnesses/harbor/output-guard.js";
 import { runCommand } from "../../src/lib/process.js";
 
 test("all Harbor providers share invocation policy without acquiring solver retry semantics in gates", () => {
@@ -102,12 +103,14 @@ test("a Harbor run sweeps its sandboxes once Harbor has exited, however it was s
   }
 });
 
-test("a Harbor run sweeps its sandboxes at once when the worker shuts down", async () => {
-  const { events, sandboxes, command } = stoppableHarbor();
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(new CancelledFailure("WORKER_SHUTDOWN")), 100);
-  await runHarbor(sandboxes, ["run"], { signal: controller.signal }, command).catch(
-    () => undefined,
-  );
-  expect(events).toEqual(["sweep", "exited", "sweep"]);
+test("a Harbor run sweeps its sandboxes at once when the worker shuts down or output overflows", async () => {
+  for (const reason of [new CancelledFailure("WORKER_SHUTDOWN"), new HarborOutputLimitError()]) {
+    const { events, sandboxes, command } = stoppableHarbor();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(reason), 100);
+    await runHarbor(sandboxes, ["run"], { signal: controller.signal }, command).catch(
+      () => undefined,
+    );
+    expect(events).toEqual(["sweep", "exited", "sweep"]);
+  }
 });

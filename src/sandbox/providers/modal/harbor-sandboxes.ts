@@ -50,11 +50,12 @@ export async function terminateTaggedSandboxes(
     timer = setTimeout(() => resolve("timeout"), timeoutMs);
   });
   const sweep = (async () => {
-    const app = await client.apps
-      .fromName(HARBOR_APP)
-      .catch((error: unknown) =>
-        error instanceof NotFoundError ? undefined : Promise.reject(error),
-      );
+    // Missing when the run started no sandbox in a new workspace, or when this client resolves a
+    // different environment than Harbor did (Harbor sees only its own MODAL_* variables).
+    const app = await client.apps.fromName(HARBOR_APP).catch((error: unknown) => {
+      if (!(error instanceof NotFoundError)) throw error;
+      console.warn(`No ${HARBOR_APP} Modal app to sweep for ${JSON.stringify(tags)}`);
+    });
     if (!app) return [];
     // Harbor's Modal (1.6 and later) starts V2 sandboxes, which `list` leaves out.
     const filter = { appId: app.appId, tags: { ...tags } };
@@ -66,10 +67,11 @@ export async function terminateTaggedSandboxes(
     await Promise.allSettled(left.map((sandbox) => sandbox.terminate()));
     return left.map((sandbox) => sandbox.sandboxId);
   })();
+  // A sweep that outlives the timeout may still fail; the race below reports it only in time.
+  sweep.catch(() => undefined);
   try {
     const outcome = await Promise.race([sweep, timeout]);
     if (outcome === "timeout") {
-      sweep.catch(() => undefined);
       console.warn(
         `Gave up sweeping Modal sandboxes tagged ${JSON.stringify(tags)} after ${timeoutMs}ms`,
       );

@@ -5,6 +5,7 @@ import { CancelledFailure } from "@temporalio/common";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { type CommandOptions, type CommandResult, runCommand } from "../../lib/process.js";
 import type { HarborSandboxes } from "../../sandbox/harbor-sandboxes.js";
+import { HarborOutputLimitError } from "./output-guard.js";
 
 /** Process policy for generation gates, not provider lifetimes; solver trials use trialTimeouts. */
 export const HARBOR_VERSION = "0.23.0";
@@ -26,8 +27,9 @@ const HARBOR_KILL_GRACE_MS = 3 * 60 * 1000;
  * One `harbor run` (`args` from harborRunArguments) that leaves no sandbox running: every sandbox
  * it starts carries `sandboxes.environmentKwargs`. A stopped run (abort, timeout or output guard)
  * gets HARBOR_KILL_GRACE_MS to clean up after itself, and however it exits, `sandboxes` then
- * sweeps whatever it left. A worker shutting down is killed soon after it cancels its activities
- * (Cloud Run allows 10 seconds), long before Harbor would finish, so then the sweep starts at once.
+ * sweeps whatever it left. Two stops sweep at once instead: a worker shutting down is killed soon
+ * after it cancels its activities (Cloud Run allows 10 seconds), long before Harbor would finish,
+ * and a run past the output limit must stop downloading, which Harbor's cleanup would keep doing.
  */
 export async function runHarbor(
   sandboxes: HarborSandboxes,
@@ -36,19 +38,23 @@ export async function runHarbor(
   command: typeof runCommand = runCommand,
 ): Promise<CommandResult> {
   const { signal } = options;
-  const shutdown = () => {
-    if (signal.reason instanceof CancelledFailure && signal.reason.message === "WORKER_SHUTDOWN")
+  const sweepNow = () => {
+    const { reason } = signal;
+    if (
+      (reason instanceof CancelledFailure && reason.message === "WORKER_SHUTDOWN") ||
+      reason instanceof HarborOutputLimitError
+    )
       void sandboxes.sweep();
   };
-  signal.addEventListener("abort", shutdown, { once: true });
-  if (signal.aborted) shutdown();
+  signal.addEventListener("abort", sweepNow, { once: true });
+  if (signal.aborted) sweepNow();
   try {
     return await command("harbor", [...args, ...kwargArguments(sandboxes.environmentKwargs)], {
       ...options,
       killGraceMs: HARBOR_KILL_GRACE_MS,
     });
   } finally {
-    signal.removeEventListener("abort", shutdown);
+    signal.removeEventListener("abort", sweepNow);
     await sandboxes.sweep();
   }
 }
