@@ -19,6 +19,55 @@
 ## Public Site
 
 - Work under `review/src/public-site/` (selfbench.dev) also follows `review/src/public-site/AGENTS.md`: how pages adapt to phones, and when and how to run the phone checks.
+- Any change to what a selfbench.dev page shows, or a new page, also follows "selfbench.dev for Search Engines" below.
+
+## selfbench.dev for Search Engines
+
+**The approach.**
+- selfbench.dev is a Vite React app rendered in the browser. The API server hands out its build, behind a CDN, as it does for the app.
+- The server doesn't render React. It writes only the cheap parts that search engines, AI crawlers and link previews read before any script runs: each page's head, its text, and the API response its first render needs.
+- The browser draws the page itself. The script replaces the server's text the moment it mounts, with no transition, so the finished page shows as soon as possible.
+- This is deliberate instead of a server-rendering framework (Next.js, Astro, and the like):
+  - it stays one service to run, with no React renderer on the server
+  - pages change whenever someone releases, which rules out a static build
+  - the site's browser-only effects (the water background, page transitions) need no server-side guards and cause no hydration mismatches
+- Keep to it. Only revisit it if selfbench.dev grows into a content-heavy site: docs, a blog, many explainer pages.
+
+All of it is built from the released lines on every request, so a release or withdrawal needs no step of its own. What does need keeping up is the server's copy of the site itself.
+
+- **What is automatic.** The server builds each of these from the released lines:
+  - the head: title, description, canonical address, Open Graph and X tags, and the link preview image (`src/api/site-head.ts`, `src/api/link-card.ts`)
+  - the page's text (`src/api/site-body.ts`) and the API response its first render reads (`pageData`)
+  - schema.org data: WebSite on the home page; breadcrumbs and a Dataset on a repository page
+  - `/sitemap.xml` and `robots.txt`
+  - IndexNow notifications on every release and withdrawal (`src/api/indexnow.ts`)
+
+  `src/api/site-pages.ts` puts a page together, and the shared strings are in `src/public/seo.ts`.
+- **Keep the server's text in step with the page.** `site-body.ts` repeats what the page shows: its headings ("All Settings", "Other Benchmarks of This Repo") and the settings table's column names (`ModelTable.tsx`). When you rename, add or remove one on the page, make the same change there. The home heading is `HOME_HEADING` in `seo.ts`, which both use. Keep exactly one `<h1>` per page, with the page's own heading.
+- **Titles live in one place.** The site sets the same titles as the server (`useTitle` with `HOME_TITLE` or `repositoryTitle`), so change them in `seo.ts` only.
+- **A new page needs all of these,** or search engines get a 404, a generic head or an empty page:
+  1. its status in `site-pages.ts`
+  2. its own title, description and canonical address in `site-head.ts`
+  3. its text in `site-body.ts`
+  4. an entry in the sitemap (`sitemapOf`)
+  5. `useTitle` with the same title
+
+  If its first render reads the public API, carry that response with `pageData`, as the home and repository pages do.
+- **Caching keeps every page within about 15 seconds of a release.**
+  - Pages, the sitemap and the public API send `public, max-age=0, s-maxage=10`: `PAGE_CACHE` in `results-site.ts`, `CACHED` in `routes/public-releases.ts`.
+  - The CDN keeps them 10 seconds and, because of `s-maxage`, never hands out an expired copy. Browsers check every time, which is a bodyless `304` while the `ETag` matches.
+  - Don't drop `s-maxage` or add `stale-while-revalidate`. Without `s-maxage`, Cloud CDN hands an expired copy, possibly hours old, to the first request after its lifetime. `stale-while-revalidate` caps outage serving too.
+  - Don't lengthen these lifetimes unless releases also clear the CDN.
+  - Files whose address changes with their content may be cached long: hashed scripts, and link preview images, which carry the release id.
+  - IndexNow waits past the page lifetime before notifying.
+- **Descriptions aim for 160 characters or fewer,** the most search results show and the most Bing accepts without a warning.
+  - A generated one (`repositoryDescription`) drops whole sentences past 160 but always keeps its opening question. In an edge case, such as a very long repository name, it may run over. That's fine: search results just cut it off.
+  - A hand-written one should fit.
+- **Some copy states how SelfBench works:** `HOME_TITLE`, `HOME_DESCRIPTION`, `HOME_HEADING`, and the Dataset's `measurementTechnique` in `site-head.ts`. Update them if the product changes, such as how tasks are built or scored.
+- **Addresses are what search engines know a page by.** Don't change a page's address, or the canonical rules (a repository's own casing; a publisher's default line shares the repository's address), without a redirect from the old one.
+- **Only prod is indexed.** Only where `SELFBENCH_RESULTS_SITE_INDEX` is `true`, as in prod, does the site serve a sitemap and the IndexNow key, and send notifications. Everywhere else it answers `noindex`. Keep new search features behind the same switch.
+- **The IndexNow key is public by design.** `INDEXNOW_KEY` is served at `/<key>.txt` for engines to check, so it lives in the code. Leave it unchanged, since engines re-verify a new one.
+- **Tests cover each piece:** `tests/results-site*.test.ts`, `site-head`, `site-body`, `page-data`, `indexnow` and `site-icons`. Update them with the change.
 
 ## Site Icons
 
