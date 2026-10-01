@@ -124,7 +124,11 @@ test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by
         post({ name: "Sandbox", kind: "e2b", value: "fake-sandbox" }),
       )
     ).json();
-    const model = { catalogId: "claude-sonnet-5", credentialId: pending.id, harnesses: ["pi"] };
+    const model = {
+      catalogId: "claude-sonnet-5-5",
+      credentialId: pending.id,
+      harnesses: ["pi"],
+    };
     const draft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
@@ -140,6 +144,7 @@ test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by
     const input = site.starts[0];
     if (!input) throw new Error("Missing input");
     expect(input.credentials?.auth).toBe("claude-login");
+    expect(input.modelName).toBe("anthropic/claude-sonnet-5-5");
     const execution = await credentialExecution(
       input,
       home,
