@@ -68,7 +68,7 @@ async function withEditor(
         <button
           type="button"
           aria-label="Run"
-          disabled={hasDuplicateModelSelections([astra, custom], draft.models)}
+          disabled={hasDuplicateModelSelections([astra, custom], draft.models, credentials)}
         >
           Run
         </button>
