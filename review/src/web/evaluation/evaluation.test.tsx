@@ -5,6 +5,7 @@ import { initialEvaluation } from "../../../../src/evaluation/store";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
 import { evaluationRequestId, evaluationUrl } from "./api";
 import { EvaluationResults, scores } from "./EvaluationResults";
+import { TrialDetails } from "./TrialDetails";
 
 test("request IDs work without secure-context randomUUID and URL scopes are encoded", () => {
   expect(evaluationRequestId()).toMatch(
@@ -28,9 +29,7 @@ test("results distinguish zero rewards from missing scores and show the last sol
   ];
   run.status = "completed";
   const html = renderToStaticMarkup(
-    <MemoryRouter>
-      <EvaluationResults run={run} baseUrl="/api/evaluations" repo="owner/repo" />
-    </MemoryRouter>,
+    <TrialDetails run={run} trial={trial} baseUrl="/api/evaluations" />,
   );
   expect(html).toContain("Solver’s Final Response</h4><p>Patched the parser.</p>");
 });

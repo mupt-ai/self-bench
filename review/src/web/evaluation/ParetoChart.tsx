@@ -8,17 +8,16 @@ import {
   VENDOR_CHIPS,
   vendorPoint,
 } from "../../public-site/format";
-import { type BenchmarkPoint, type CustomEndpoint, dollars } from "./benchmark";
-import { endpointLabel } from "./credential-presentation";
+import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({
   points,
-  endpoints = new Map(),
+  showTitle = true,
   onSelect,
 }: {
   points: BenchmarkPoint[];
-  /** Custom points' endpoints and public numbers, by point id (`customEndpoints`). */
-  endpoints?: ReadonlyMap<string, CustomEndpoint>;
+  /** Whether to draw the title, which a dialog around the chart may already show. */
+  showTitle?: boolean;
   onSelect(id: string): void;
 }) {
   const container = useRef<HTMLElement>(null);
@@ -49,6 +48,7 @@ export function ParetoChart({
           <ParetoPlot
             {...CHART_LOOK}
             title="Model Comparison"
+            showTitle={showTitle}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
             // Room for the title and the vendor chips above the plot: a row on a desktop, a few
@@ -69,19 +69,14 @@ export function ParetoChart({
               const label = oneHarness
                 ? point.modelLabel
                 : `${point.modelLabel} · ${harnessLabels[point.harness as keyof typeof harnessLabels] ?? point.harness}`;
-              // A custom endpoint shows its host, and the number the public page would give it.
-              const custom = endpoints.get(point.id);
               return {
                 id: point.id,
-                label: custom?.number ? `${label} (Endpoint ${custom.number})` : label,
+                label,
                 ...(point.thinking === "default" ? {} : { note: point.thinking }),
                 x: point.cost,
                 y: point.accuracy,
                 ...vendorPoint(source, customModel),
-                description: [
-                  `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
-                  ...(custom ? [endpointLabel(custom.endpoint)] : []),
-                ].join(" · "),
+                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
               };
             })}
             xAxis={{
