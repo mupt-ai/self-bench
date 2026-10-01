@@ -88,10 +88,10 @@ Required secrets:
 
 Optional secrets must have a version before their feature is enabled:
 
-- `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `stripe_price_id` is set
-- `selfbench-managed-openrouter-api-key` when `managed_openrouter` is true
-- `selfbench-managed-e2b-api-key` when `managed_e2b` is true
-- `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_modal` is true
+- `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
+- `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
+
+`managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, reads none of the secrets above, ignores `stripe_price_id`, and the app has no Billing page.
 
 Cloud Run and GKE read `latest` when new instances start. Add a secret version, then deploy; the deploy labels new Cloud Run revisions with its run ID, so every release starts instances with the latest values. Running instances keep the values they started with until they are replaced.
 

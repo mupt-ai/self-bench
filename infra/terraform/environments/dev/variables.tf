@@ -59,19 +59,7 @@ variable "stripe_price_id" {
   type    = string
   default = null
 }
-variable "billing_credit_admin_org_id" {
-  type    = number
-  default = null
-}
-variable "managed_openrouter" {
-  type    = bool
-  default = false
-}
-variable "managed_e2b" {
-  type    = bool
-  default = false
-}
-variable "managed_modal" {
+variable "managed_offering" {
   type    = bool
   default = false
 }

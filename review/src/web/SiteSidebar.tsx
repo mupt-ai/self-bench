@@ -27,9 +27,18 @@ interface SidebarProps {
   onSignOut: () => Promise<void>;
   onNavigate?: () => void;
   collapsed?: boolean;
+  /** Show the Billing page, which only exists with the managed offering. */
+  billing: boolean;
 }
 
-export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false }: SidebarProps) {
+export function SiteSidebar({
+  org,
+  orgs,
+  onSelect,
+  onNavigate,
+  collapsed = false,
+  billing,
+}: SidebarProps) {
   const { pathname } = useLocation();
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
@@ -82,16 +91,21 @@ export function SiteSidebar({ org, orgs, onSelect, onNavigate, collapsed = false
                     </SidebarMenuButton>
                   </NavTooltip>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <NavTooltip collapsed={collapsed} label="Billing">
-                    <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/billing")}>
-                      <Link to="/settings/billing" onClick={onNavigate} aria-label="Billing">
-                        <CreditCard />
-                        {!collapsed && <span>Billing</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </NavTooltip>
-                </SidebarMenuItem>
+                {billing && (
+                  <SidebarMenuItem>
+                    <NavTooltip collapsed={collapsed} label="Billing">
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname.startsWith("/settings/billing")}
+                      >
+                        <Link to="/settings/billing" onClick={onNavigate} aria-label="Billing">
+                          <CreditCard />
+                          {!collapsed && <span>Billing</span>}
+                        </Link>
+                      </SidebarMenuButton>
+                    </NavTooltip>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

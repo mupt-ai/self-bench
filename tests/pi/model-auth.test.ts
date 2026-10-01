@@ -6,6 +6,7 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.SELFBENCH_PI_AUTH_JSON;
   delete process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
+  delete process.env.SELFBENCH_MANAGED_OFFERING;
 });
 
 describe("subscription authentication", () => {
@@ -36,7 +37,14 @@ describe("subscription authentication", () => {
     delete process.env.OPENROUTER_API_KEY;
     try {
       process.env.SELFBENCH_MANAGED_OPENROUTER_API_KEY = "managed-key";
+      process.env.SELFBENCH_MANAGED_OFFERING = "true";
       expect(await loadPiModelAuth()).toEqual({ provider: "openrouter", apiKey: "managed-key" });
+      // Without the managed offering the platform key is never used.
+      process.env.SELFBENCH_MANAGED_OFFERING = "false";
+      process.env.SELFBENCH_PI_AUTH_JSON = JSON.stringify({
+        "openai-codex": { type: "oauth", access: "access", refresh: "refresh" },
+      });
+      expect((await loadPiModelAuth()).provider).toBe("openai-codex");
     } finally {
       for (const [key, value] of Object.entries(ambient))
         if (value === undefined) delete process.env[key];

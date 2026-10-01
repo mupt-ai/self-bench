@@ -6,7 +6,7 @@ All responses are JSON unless noted. Errors carry `{ "error": "message" }` and s
 
 ## Authentication
 
-There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open.
+There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open (the webhook answers `404` without the managed offering).
 
 | Method | Header | Reaches |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ curl -H "X-API-Key: $SELFBENCH_API_KEY" \
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/me` | The caller: `user`, `orgs` (with `kind` and `role`), `auth` (`session` or `api-key`), and `apiKey` (`name`, `scope`) when a key was used |
+| `GET` | `/api/me` | The caller: `user`, `orgs` (with `kind` and `role`), `auth` (`session` or `api-key`), `managedOffering` (whether the deployment offers managed models and sandboxes, and with them the Billing page), and `apiKey` (`name`, `scope`) when a key was used |
 | `GET` | `/api/api-keys` | Active keys of the caller: `id`, `name`, `prefix`, `scope`, `createdAt`, `lastUsedAt` |
 | `POST` | `/api/api-keys` | Body `{ "name": "CI", "scope": "read" \| "write" }`. Answers `201 { key, secret }`; the secret is never returned again. Browser session only |
 | `DELETE` | `/api/api-keys/:id` | Revokes a key. Browser session only |
@@ -157,18 +157,16 @@ Credentials are shared by everyone in the organization and encrypted at rest. Re
 
 ## Billing
 
-Metered Stripe billing applies only to managed model and sandbox usage. Organization credentials are never invoiced by SelfBench. When the three Stripe env vars are unset, billing is disabled and managed runs stay available. Reads need membership; Checkout and the Customer Portal need the `admin` role and a browser session. Invoice credit grants are disabled by default; enabling them requires an operator to set `SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID` to the numeric GitHub organization ID of the trusted billing-admin organization (never a login name). Each grant re-checks current GitHub organization admin membership.
+These routes exist only when the deployment runs the managed offering (`SELFBENCH_MANAGED_OFFERING=true`); otherwise the deployment is bring-your-own-key only, offers no managed models or sandboxes, and answers `404` here. Metered Stripe billing applies only to managed model and sandbox usage. Organization credentials are never invoiced by SelfBench. When the three Stripe env vars are unset, billing is disabled and managed runs stay available. Reads need membership; Checkout and the Customer Portal need the `admin` role and a browser session.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/orgs/:org/billing` | Subscription status: `configured`, `eligible`, `status`, `canManage`, and optional customer/period fields |
 | `POST` | `/api/orgs/:org/billing/checkout` | Creates a Stripe Checkout session; `200 { url }`. Browser session, admin only |
 | `POST` | `/api/orgs/:org/billing/portal` | Creates a Stripe Customer Portal session; `200 { url }`. Browser session, admin only |
-| `POST` | `/api/orgs/:creditAdminOrg/billing/credits` | Grants a future-invoice Stripe customer balance credit to a registered organization with a Stripe customer. Requires explicit `SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID`, browser session of a current GitHub org admin, same-origin JSON, and an amount of 1–10,000 USD cents. JSON `{ targetOrg, amountCents, reason, requestId }`; retries with identical request ID and details do not grant twice. Does not change recorded usage or past invoices. Disabled unless a deployment explicitly configures a trusted organization ID. |
-| `POST` | `/api/orgs/:creditAdminOrg/billing/refunds` | Refunds a registered organization's managed usage in its open Stripe billing period: sends one negative meter event for everything billed since the period started that no earlier refund covered, so the invoice line nets to zero. Same authorization as credit grants. JSON `{ targetOrg, reason }`; `200 { refundedUsd }`, `0` when nothing is left, so a retry cannot refund twice. Paid invoices from earlier periods are refunded in Stripe. |
 | `POST` | `/api/stripe/webhook` | Stripe webhook (unauthenticated, `Stripe-Signature` verified) |
 
-Credit grants have a $100 per-request and $100 global daily cap. A durable audit/idempotency record is reserved before the Stripe request. Identical retries use the same Stripe idempotency key for up to 23 hours; afterward an unresolved grant returns pending for manual Stripe reconciliation. Checkout validates that the configured Stripe metered USD price has a per-unit amount of `100 / SELFBENCH_BILLING_UNIT_SCALE` cents (default `0.00001` cents per event unit), and that its active meter matches the emitted event name, customer/value payload keys, and sum aggregation. Fix a mismatched price before starting new subscriptions. Existing subscriptions and past invoices must be inspected and corrected in Stripe separately. The billing summary shows usage billed through Stripe less refunds, and the recorded all-time usage separately; invoice credits reduce neither.
+Checkout validates that the configured Stripe metered USD price has a per-unit amount of `100 / SELFBENCH_BILLING_UNIT_SCALE` cents (default `0.00001` cents per event unit), and that its active meter matches the emitted event name, customer/value payload keys, and sum aggregation. Fix a mismatched price before starting new subscriptions. Existing subscriptions and past invoices must be inspected and corrected in Stripe separately. The billing summary shows usage billed through Stripe less refunds an operator recorded, and the recorded all-time usage separately; invoice credits reduce neither. The app grants no credits or refunds itself: issue them in Stripe.
 
 `GET …/generation-options` also includes `billing` (`configured`, `eligible`, `status`, `canManage`). Starting a managed batch or PR task without an eligible subscription answers `403 {"error":"Set up billing to use managed models or sandboxes.","code":"billing_required"}`.
 

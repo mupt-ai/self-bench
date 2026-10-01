@@ -21,7 +21,15 @@ export function useOrg(): OrgContext {
 }
 
 /** Navigation plus the current org; every signed-in page renders inside it. */
-export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) {
+export function SiteLayout({
+  user,
+  orgs,
+  managedOffering,
+}: {
+  user: SiteUser;
+  orgs: SiteOrg[];
+  managedOffering: boolean;
+}) {
   const { signOut } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,6 +91,7 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
           orgs={orgs}
           onSelect={choose}
           onSignOut={signOut}
+          billing={managedOffering}
           collapsed={sidebarCollapsed}
         />
       </div>
@@ -138,6 +147,7 @@ export function SiteLayout({ user, orgs }: { user: SiteUser; orgs: SiteOrg[] }) 
           orgs={orgs}
           onSelect={choose}
           onSignOut={signOut}
+          billing={managedOffering}
           onClose={() => setMenuOpen(false)}
         />
       )}

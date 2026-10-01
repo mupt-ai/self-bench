@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  billingCreditAdminOrgId,
-  loadBillingPolicy,
-  loadStripeConfig,
-} from "../src/generation/billing/config.js";
+import { loadBillingPolicy, loadStripeConfig } from "../src/generation/billing/config.js";
 import { eligibilityFrom, managedBillingRefusal } from "../src/generation/billing/eligibility.js";
 import {
   modelBillableUnits,
@@ -11,39 +7,37 @@ import {
   sandboxBillableUnits,
 } from "../src/generation/billing/policy.js";
 
-test("credit grants require an explicit valid immutable GitHub organization ID", () => {
-  expect(billingCreditAdminOrgId({})).toBeUndefined();
-  expect(billingCreditAdminOrgId({ SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID: "12345" })).toBe(12345);
-  expect(() =>
-    billingCreditAdminOrgId({ SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID: "mupt-ai" }),
-  ).toThrow(/positive GitHub organization ID/);
-  expect(() => billingCreditAdminOrgId({ SELFBENCH_BILLING_CREDIT_ADMIN_ORG_ID: "0" })).toThrow(
-    /positive GitHub organization ID/,
-  );
-});
-
-test("Stripe config is all-or-nothing and policy defaults are pass-through", () => {
-  expect(loadStripeConfig({})).toBeUndefined();
+test("Stripe config is all-or-nothing, only with the managed offering", () => {
+  const on = { SELFBENCH_MANAGED_OFFERING: "true" };
+  const complete = {
+    SELFBENCH_STRIPE_SECRET_KEY: "sk_test",
+    SELFBENCH_STRIPE_WEBHOOK_SECRET: "whsec",
+    SELFBENCH_STRIPE_PRICE_ID: "price_1",
+  };
+  expect(loadStripeConfig(on)).toBeUndefined();
   expect(
     loadStripeConfig({
+      ...on,
       SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/stripe/webhook-secret",
     }),
   ).toBeUndefined();
-  expect(() => loadStripeConfig({ SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toThrow(
+  expect(() => loadStripeConfig({ ...on, SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toThrow(
     /requires SELFBENCH_STRIPE_SECRET_KEY/,
   );
   const fileStripe = loadStripeConfig({
+    ...on,
     SELFBENCH_STRIPE_SECRET_KEY: "sk_test",
     SELFBENCH_STRIPE_WEBHOOK_SECRET_FILE: "/run/stripe/webhook-secret",
     SELFBENCH_STRIPE_PRICE_ID: "price_1",
   });
   expect(fileStripe?.webhookSecretFile).toBe("/run/stripe/webhook-secret");
-  const stripe = loadStripeConfig({
-    SELFBENCH_STRIPE_SECRET_KEY: "sk_test",
-    SELFBENCH_STRIPE_WEBHOOK_SECRET: "whsec",
-    SELFBENCH_STRIPE_PRICE_ID: "price_1",
-  });
-  expect(stripe?.priceId).toBe("price_1");
+  expect(loadStripeConfig({ ...on, ...complete })?.priceId).toBe("price_1");
+  // Without the offering, complete Stripe settings are ignored and partial ones are not errors.
+  expect(loadStripeConfig(complete)).toBeUndefined();
+  expect(loadStripeConfig({ SELFBENCH_STRIPE_SECRET_KEY: "sk_test" })).toBeUndefined();
+});
+
+test("billing policy defaults are pass-through", () => {
   const policy = loadBillingPolicy({});
   expect(policy).toEqual({
     version: "v1",
