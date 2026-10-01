@@ -2,6 +2,7 @@ import { paretoFrontier } from "@mupt-ai/dari-pareto";
 import { ChartScatter, Maximize2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import { vendorColor } from "../../public-site/format";
 import { Dialog, DialogHeader } from "../Dialog";
 import { buttonStyles, Select } from "../ui";
@@ -11,11 +12,16 @@ import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
 import { configurationPoint, pointEndpoints, taskSets } from "./results-chart";
 import { type Configuration, configurationsOf } from "./results-model";
 
-/** Until the accepted tasks load, every task any configuration ran, with no acceptance times. */
+/**
+ * Until the accepted tasks load, or if they can't, the tasks some configuration has a usable
+ * result for, with no acceptance times. A task nobody has one for (one that errored everywhere,
+ * say) is left out, or no configuration could cover the set and the chart would never show.
+ */
 function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
   const seen = new Map<string, AcceptedTask>();
   for (const configuration of configurations) {
     for (const { trial } of configuration.latest) {
+      if (!eligibleTrial(trial)) continue;
       seen.set(`${trial.runId}/${trial.taskId}`, {
         runId: trial.runId,
         taskId: trial.taskId,
