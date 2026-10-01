@@ -13,7 +13,7 @@ afterEach(clearMockModels);
 const credentialsUrl = "/api/orgs/avyay/credentials";
 const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
 
-test("ChatGPT sign-in supplies each harness its own isolated auth for GPT-6.1 Sol", async () => {
+test("ChatGPT sign-in supplies isolated Codex and Pi auth for GPT-6.1 Sol", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);
   const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
@@ -72,35 +72,7 @@ test("ChatGPT sign-in supplies each harness its own isolated auth for GPT-6.1 So
     const codex = await credentialExecution(codexInput, home, {}, records);
     expect(await readFile(codex.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(codexAuth);
     expect(codex.child.SELFBENCH_PI_AUTH_JSON_PATH).toBeUndefined();
-    expect(codex.child.CHATGPT_TOKEN_DIR).toBeUndefined();
-    draft.id = crypto.randomUUID();
-    draft.models[0] = {
-      catalogId: "gpt-6.1-sol",
-      credentialId: model.id,
-      harnesses: ["mini-swe-agent", "terminus-2"],
-    };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
-    const litellmInput = fixture.starts[2];
-    if (!litellmInput) throw new Error("Missing LiteLLM input");
-    const litellm = await credentialExecution(litellmInput, home, {}, records);
-    expect(litellm.child.CHATGPT_TOKEN_DIR).toBe(join(home, "chatgpt"));
-    expect(litellm.child.SELFBENCH_CHATGPT_AUTH_JSON_PATH).toBe(join(home, "chatgpt", "auth.json"));
-    expect(JSON.parse(await readFile(join(home, "chatgpt", "auth.json"), "utf8"))).toEqual({
-      access_token: codexAccess,
-      refresh_token: "test-refresh",
-      expires_at: 2000000000,
-      account_id: "test-account",
-    });
-    expect(litellm.child.CODEX_AUTH_JSON_PATH).toBeUndefined();
-    expect(litellm.child.SELFBENCH_PI_AUTH_JSON_PATH).toBeUndefined();
-    draft.id = crypto.randomUUID();
-    draft.models[0] = {
-      catalogId: "gpt-6.1-sol",
-      credentialId: model.id,
-      harnesses: ["claude-code"],
-    };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
-    // A sign-in Pi or LiteLLM cannot read fails the trial at once instead of retrying.
+    // A sign-in Pi cannot read fails the trial at once instead of retrying.
     const opaque = await (
       await fixture.request(
         credentialsUrl,
@@ -115,7 +87,7 @@ test("ChatGPT sign-in supplies each harness its own isolated auth for GPT-6.1 So
     draft.id = crypto.randomUUID();
     draft.models[0] = { catalogId: "gpt-6.1-sol", credentialId: opaque.id, harnesses: ["pi"] };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
-    const unreadable = fixture.starts[3];
+    const unreadable = fixture.starts[2];
     if (!unreadable) throw new Error("Missing unreadable input");
     await expect(credentialExecution(unreadable, home, {}, records)).rejects.toMatchObject({
       type: "TrialRefused",

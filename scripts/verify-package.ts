@@ -69,8 +69,8 @@ try {
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
+    "dist/harnesses/harbor/runtime/harbor_pi.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
-    "dist/harnesses/harbor/runtime/harbor_subscription.py",
     "dist/harnesses/harbor/runtime/selfbench_modal.py",
     "dist/harnesses/harbor/runtime/selfbench_prepare.py",
     "dist/extension-authoring.bundle.js",
@@ -88,8 +88,8 @@ try {
   }
   for (const asset of [
     "harbor_gateway.py",
+    "harbor_pi.py",
     "harbor_smoke.py",
-    "harbor_subscription.py",
     "selfbench_modal.py",
     "selfbench_prepare.py",
   ]) {

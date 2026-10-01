@@ -218,7 +218,7 @@ test("harness dropdown follows the selected credential's route", () => {
         .split('aria-label="GPT-6 Astra Harness"')[1]
         ?.matchAll(/value="([^"]+)"/g) ?? []),
     ].map((match) => match[1]);
-  expect(harnesses("login")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
+  expect(harnesses("login")).toEqual(["codex", "pi"]);
   expect(harnesses("key")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
   expect(harnesses("gateway")).toEqual([
     "codex",

@@ -19,14 +19,11 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
 }
 
-/**
- * Subscription authentication is a transport choice, not a model-to-harness mapping: a ChatGPT
- * sign-in drives every harness that runs OpenAI models, a Claude sign-in only Claude Code.
- */
+/** Subscription authentication is a transport choice, not a model-to-harness mapping. */
 function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): boolean {
   return (
     auth === "api-key" ||
-    (auth === "codex-login" && harness !== "claude-code") ||
+    (auth === "codex-login" && (harness === "codex" || harness === "pi")) ||
     (auth === "claude-login" && harness === "claude-code")
   );
 }
@@ -38,7 +35,7 @@ export function signInRefusal(
 ): string | undefined {
   return harnesses.some((harness) => !credentialRunsHarness(auth, harness))
     ? auth === "codex-login"
-      ? "A ChatGPT sign-in cannot run the Claude Code harness"
+      ? "ChatGPT sign-in requires Codex or Pi harness"
       : "A Claude sign-in can only run the Claude Code harness"
     : undefined;
 }

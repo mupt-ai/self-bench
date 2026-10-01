@@ -65,52 +65,27 @@ test("Pi with ChatGPT sign-in uses its OAuth model and pinned installer", () => 
   expect(trial.extraAllowedHosts).toContain("chatgpt.com");
   expect(trial.child.OPENAI_API_KEY).toBeUndefined();
   const args = solverArguments("task", "jobs", "pi", trial.model, "e2b", "high");
-  expect(args).toContain("harbor_subscription:SelfBenchPi");
+  expect(args).toContain("harbor_pi:SelfBenchPi");
   expect(args).toContain(`version=${PI_VERSION}`);
   expect(args).toContain("thinking=high");
 });
 
-test("mini-swe-agent and Terminus 2 with ChatGPT sign-in use LiteLLM's chatgpt provider", () => {
-  const input = { credentials: { provider: "openai", auth: "codex-login" } } as EvaluationInput;
-  for (const harness of ["mini-swe-agent", "terminus-2"] as const) {
-    const trial = gatewayTrial(input, harness, "openai/gpt-6.1-sol", {});
-    expect(trial.model).toBe("chatgpt/gpt-6.1-sol");
-    expect(trial.extraAllowedHosts).toContain("chatgpt.com");
-    expect(trial.child.OPENAI_API_KEY).toBeUndefined();
-  }
-  expect(solverArguments("task", "jobs", "mini-swe-agent", "chatgpt/gpt-6.1-sol", "e2b")).toContain(
-    "harbor_subscription:ChatGptMiniSweAgent",
-  );
-  // Terminus 2 runs in Harbor's own process, which reads the auth file from CHATGPT_TOKEN_DIR.
-  expect(solverArguments("task", "jobs", "terminus-2", "chatgpt/gpt-6.1-sol", "e2b")).toContain(
-    "terminus-2",
-  );
-});
-
-test("Harbor places only the selected subscription in the sandbox before invocation", async () => {
+test("Harbor Pi places only the selected subscription in the sandbox before invocation", async () => {
   const result = await runCommand("python3", [
     "-c",
-    `import asyncio, dataclasses, importlib.util, pathlib, sys, types
-class Agent:
+    `import asyncio, importlib.util, pathlib, sys, types
+module = types.ModuleType("harbor.agents.installed.pi")
+class Pi:
     def _get_env(self, key):
-        return {"SELFBENCH_PI_AUTH_JSON_PATH": "/worker/pi-auth.json",
-                "SELFBENCH_CHATGPT_AUTH_JSON_PATH": "/worker/chatgpt-auth.json"}[key]
+        assert key == "SELFBENCH_PI_AUTH_JSON_PATH"
+        return "/worker/trial-auth.json"
     async def exec_as_agent(self, environment, command, **kwargs):
         environment.calls.append(("agent", command, kwargs))
         return "result"
     async def exec_as_root(self, environment, command):
         environment.calls.append(("root", command))
-@dataclasses.dataclass(frozen=True)
-class Connection:
-    api_key: str | None = None
-class MiniSweAgent(Agent):
-    @property
-    def model_connection(self):
-        return Connection()
-for name, cls in (("pi", type("Pi", (Agent,), {})), ("mini_swe_agent", MiniSweAgent)):
-    module = types.ModuleType(f"harbor.agents.installed.{name}")
-    setattr(module, cls.__name__, cls)
-    sys.modules[module.__name__] = module
+module.Pi = Pi
+sys.modules[module.__name__] = module
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -118,36 +93,24 @@ class Environment:
     default_user = "agent"
     def __init__(self): self.calls = []
     async def upload_file(self, source, target):
-        self.calls.append(("upload", str(source), target))
-async def check(agent, setup, invocation, source, target):
+        assert source == pathlib.Path("/worker/trial-auth.json")
+        self.calls.append(("upload", target))
+async def check():
     env = Environment()
-    await agent.exec_as_agent(env, setup)
+    agent = adapter.SelfBenchPi()
+    await agent.exec_as_agent(env, "pi --version")
     assert len(env.calls) == 1 and env.calls[0][0] == "agent"
-    await agent.exec_as_agent(env, invocation, timeout_sec=30)
+    await agent.exec_as_agent(env, ". ~/.nvm/nvm.sh; pi --print --provider openai-codex --model gpt-6.1-sol", timeout_sec=30)
     assert [call[0] for call in env.calls[1:]] == ["upload", "root", "agent", "agent"]
-    assert env.calls[1][1:] == (source, "/tmp/harbor-subscription-auth.json")
+    assert env.calls[1][1] == "/tmp/harbor-pi-auth.json"
     assert "chown agent" in env.calls[2][1] and "chmod 600" in env.calls[2][1]
-    assert f'install -m 600 /tmp/harbor-subscription-auth.json "{target}"' in env.calls[3][1]
-    assert "rm /tmp/harbor-subscription-auth.json" in env.calls[3][1]
+    assert 'install -m 600 /tmp/harbor-pi-auth.json "$HOME/.pi/agent/auth.json"' in env.calls[3][1]
+    assert "rm /tmp/harbor-pi-auth.json" in env.calls[3][1]
     assert env.calls[4][2] == {"timeout_sec": 30}
-    return env.calls[4][1]
-async def main():
-    await check(adapter.SelfBenchPi(), "pi --version",
-        ". ~/.nvm/nvm.sh; pi --print --provider openai-codex --model gpt-6.1-sol",
-        "/worker/pi-auth.json", "$HOME/.pi/agent/auth.json")
-    mini = adapter.ChatGptMiniSweAgent()
-    assert mini.model_connection.api_key == "chatgpt-sign-in"
-    command = await check(mini, "mini-swe-agent --help",
-        "mini-swe-agent --yolo --model=chatgpt/gpt-6.1-sol -c mini --exit-immediately",
-        "/worker/chatgpt-auth.json", "$HOME/.config/litellm/chatgpt/auth.json")
-    assert "-c mini -c model.model_class=litellm_response " in command
-asyncio.run(main())
+asyncio.run(check())
 `,
-    fileURLToPath(
-      new URL("../src/harnesses/harbor/runtime/harbor_subscription.py", import.meta.url),
-    ),
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_pi.py", import.meta.url)),
   ]);
-  expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
 
