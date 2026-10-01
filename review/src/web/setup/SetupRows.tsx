@@ -1,6 +1,7 @@
-import { Check } from "lucide-react";
-import type React from "react";
+import { Check, X } from "lucide-react";
+import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { Dialog } from "../Dialog";
 import { cn } from "../primitives/cn";
 import { Button } from "../ui";
 import { covered, type setupCoverage } from "./readiness";
@@ -101,5 +102,37 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The setup popup before the org's credentials have loaded, or after loading them failed. */
+export function SetupUnavailable({
+  error,
+  onRetry,
+  onClose,
+}: {
+  error?: string;
+  onRetry(): void;
+  onClose(): void;
+}) {
+  const close = React.useRef<HTMLButtonElement>(null);
+  return (
+    <Dialog initialFocus={close} onDismiss={onClose} size="large" aria-label="Finish Setup">
+      <div className="flex items-start gap-4 p-5 sm:p-7">
+        <div className="min-w-0 flex-1" role={error ? "alert" : "status"}>
+          <p className="text-sm text-muted-foreground">
+            {error ? `Could not load credentials: ${error}` : "Loading credentials…"}
+          </p>
+          {error && (
+            <Button className="mt-4" onClick={onRetry}>
+              Try Again
+            </Button>
+          )}
+        </div>
+        <Button ref={close} size="icon" variant="ghost" aria-label="Close" onClick={onClose}>
+          <X aria-hidden="true" />
+        </Button>
+      </div>
+    </Dialog>
   );
 }

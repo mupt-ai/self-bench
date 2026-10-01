@@ -9,6 +9,7 @@ import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { covered, setupCoverage } from "../setup/readiness";
+import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
@@ -39,7 +40,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   });
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [sandboxes, setSandboxes] = React.useState<HostedSandbox[]>([]);
-  const [credentials, setCredentials] = React.useState<CredentialInfo[]>();
+  const [credentials, credentialsError] = useOrgCredentials(org.login);
   const [managed, setManaged] = React.useState<{ models: boolean; sandbox: boolean }>();
   const [availableTasks, setAvailableTasks] = React.useState<EvaluationOptions["tasks"]>([]);
   const [error, setError] = React.useState("");
@@ -81,16 +82,6 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         if (!disposed) setError(cause.message);
       },
     );
-    evaluationRequest<{ credentials: CredentialInfo[] }>(
-      `/api/orgs/${encodeURIComponent(org.login)}/credentials`,
-    ).then(
-      (result) => {
-        if (!disposed) setCredentials(result.credentials);
-      },
-      (cause) => {
-        if (!disposed) setError(cause.message);
-      },
-    );
     evaluationRequest<EvaluationOptions>(`${url}/options`).then(
       (result) => {
         if (!disposed) {
@@ -122,7 +113,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     return () => {
       disposed = true;
     };
-  }, [url, org.login]);
+  }, [url]);
   const availableCredentials: CredentialInfo[] = [
     ...(managed?.models
       ? [
@@ -226,7 +217,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           </div>
         </div>
       )}
-      {error && <Notice className="mb-5">{error}</Notice>}
+      {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
       {coverage && !covered(coverage) ? (
         <RunSetupCallout coverage={coverage} />
       ) : (

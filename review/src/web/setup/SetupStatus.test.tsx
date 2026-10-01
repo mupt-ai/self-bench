@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { useSetupStatusSource } from "./SetupStatus";
+import { SetupStatusContext, useOrgCredentials, useSetupStatusSource } from "./SetupStatus";
 
 let browser: Window;
 let container: HTMLDivElement;
@@ -76,4 +76,32 @@ test("the setup popup stays closed for members, set-up orgs, and the managed off
     { id: "b", name: "Modal", kind: "modal", auth: "api-key" },
   ];
   expect(await visit("ready")).toBe("closed");
+});
+
+function Form() {
+  const [list] = useOrgCredentials("team");
+  return <p>{list?.map((entry) => entry.name).join() ?? "loading"}</p>;
+}
+
+test("a form's credential list reloads when setup changes the org's credentials", async () => {
+  const shared = (value: { name: string }[]) => (
+    <SetupStatusContext.Provider
+      value={{
+        credentials: value as never,
+        canManage: true,
+        incomplete: true,
+        refresh: async () => undefined,
+        dialogOpen: false,
+        openDialog: () => undefined,
+        closeDialog: () => undefined,
+      }}
+    >
+      <Form />
+    </SetupStatusContext.Provider>
+  );
+  await act(async () => root.render(shared([])));
+  expect(container.textContent).toBe("");
+  credentials = [{ id: "b", name: "Modal", kind: "modal", auth: "api-key" }];
+  await act(async () => root.render(shared(credentials)));
+  expect(container.textContent).toBe("Modal");
 });

@@ -97,9 +97,40 @@ export function useSetupStatusSource(org: string, managedOffering: boolean): Set
       incomplete,
       refresh: load,
       dialogOpen: dialogOrg === org,
-      openDialog: () => setDialogOrg(org),
+      openDialog: () => {
+        if (error) void load();
+        setDialogOrg(org);
+      },
       closeDialog: () => setDialogOrg(undefined),
     }),
     [data, error, incomplete, load, dialogOrg, org],
   );
+}
+
+/**
+ * The org's credential list for a form that offers them, fetched on its own and again whenever
+ * the shared setup status changes, so finishing setup in the popup unblocks the form.
+ */
+export function useOrgCredentials(org: string): [CredentialInfo[] | undefined, string] {
+  const changed = useSetupStatus().credentials;
+  const [credentials, setCredentials] = React.useState<CredentialInfo[]>();
+  const [error, setError] = React.useState("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new shared list means a refetch.
+  React.useEffect(() => {
+    let disposed = false;
+    evaluationRequest<{ credentials: CredentialInfo[] }>(
+      `/api/orgs/${encodeURIComponent(org)}/credentials`,
+    ).then(
+      (result) => {
+        if (!disposed) setCredentials(result.credentials);
+      },
+      (cause: Error) => {
+        if (!disposed) setError(cause.message);
+      },
+    );
+    return () => {
+      disposed = true;
+    };
+  }, [org, changed]);
+  return [credentials, error];
 }

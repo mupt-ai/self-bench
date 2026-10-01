@@ -8,6 +8,7 @@ import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
 import { SetupDialog } from "./setup/SetupDialog";
+import { SetupUnavailable } from "./setup/SetupRows";
 import { SetupStatusContext, useSetupStatusSource } from "./setup/SetupStatus";
 import { UserMenu } from "./UserMenu";
 import { Button } from "./ui";
@@ -157,16 +158,23 @@ export function SiteLayout({
             onClose={() => setMenuOpen(false)}
           />
         )}
-        {setup.dialogOpen && setup.credentials && (
-          <SetupDialog
-            key={org.login}
-            org={org.login}
-            credentials={setup.credentials}
-            canManage={setup.canManage}
-            refresh={setup.refresh}
-            onClose={setup.closeDialog}
-          />
-        )}
+        {setup.dialogOpen &&
+          (setup.credentials ? (
+            <SetupDialog
+              key={org.login}
+              org={org.login}
+              credentials={setup.credentials}
+              canManage={setup.canManage}
+              refresh={setup.refresh}
+              onClose={setup.closeDialog}
+            />
+          ) : (
+            <SetupUnavailable
+              error={setup.error}
+              onRetry={() => void setup.refresh()}
+              onClose={setup.closeDialog}
+            />
+          ))}
       </div>
     </SetupStatusContext.Provider>
   );
