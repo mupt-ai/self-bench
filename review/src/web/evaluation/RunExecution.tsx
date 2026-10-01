@@ -91,7 +91,7 @@ export function RunExecution({
               label={
                 sandboxes.includes("managed")
                   ? "Managed sandboxes run on SelfBench's platform account. Other sandboxes use your own credential. Model usage follows each model's credential."
-                  : "Sandboxes use your own credential. Model usage follows each model's credential."
+                  : "Sandboxes run on a credential you store. Model usage follows each model's credential."
               }
             />
           </span>

@@ -25,7 +25,11 @@ const MANAGED_MODAL_ENVIRONMENT = "SELFBENCH_MANAGED_MODAL_ENVIRONMENT";
  * billing routes do not exist, and the app hides its Billing page.
  */
 export function managedOfferingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[MANAGED_OFFERING_FLAG]?.trim() === "true";
+  const value = env[MANAGED_OFFERING_FLAG]?.trim() ?? "";
+  if (value === "true") return true;
+  if (value === "false" || value === "") return false;
+  // A typo must not quietly turn billing or managed access off.
+  throw new Error(`${MANAGED_OFFERING_FLAG} must be "true" or "false"`);
 }
 
 /** A platform account value, read only while the managed offering is on. */
@@ -42,8 +46,13 @@ export function managedOffer(env: NodeJS.ProcessEnv = process.env): ManagedOffer
   };
 }
 
+/** The platform OpenRouter key, when the offering is on and it is set. */
+export function platformModelKey(env: NodeJS.ProcessEnv): string | undefined {
+  return platformValue(env, MANAGED_MODEL_KEY);
+}
+
 export function managedModelKey(env: NodeJS.ProcessEnv): string {
-  const key = platformValue(env, MANAGED_MODEL_KEY);
+  const key = platformModelKey(env);
   if (!key)
     throw new Error("Managed model access is not configured on this worker (no platform key).");
   return key;

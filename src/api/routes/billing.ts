@@ -24,6 +24,8 @@ export interface BillingRoutesOptions {
   readonly unitScale?: number;
 }
 
+export const STRIPE_WEBHOOK_PATH = "/api/stripe/webhook";
+
 export function createBillingRoutes(options: BillingRoutesOptions) {
   const requestOptions = options.fetchImpl ? { fetchImpl: options.fetchImpl } : undefined;
   return {
@@ -111,7 +113,7 @@ export function createBillingRoutes(options: BillingRoutesOptions) {
       return true;
     },
     async webhook(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean> {
-      if (url.pathname !== "/api/stripe/webhook") return false;
+      if (url.pathname !== STRIPE_WEBHOOK_PATH) return false;
       if (request.method !== "POST") return false;
       if (!options.config) {
         sendJson(response, 404, { error: "not found" });

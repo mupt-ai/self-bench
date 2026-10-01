@@ -6,7 +6,7 @@ All responses are JSON unless noted. Errors carry `{ "error": "message" }` and s
 
 ## Authentication
 
-There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open.
+There are three ways to authenticate. Every `/api` and `/v1` route requires one of them; only `/healthz` and `POST /api/stripe/webhook` are open (the webhook answers `404` without the managed offering).
 
 | Method | Header | Reaches |
 | --- | --- | --- |

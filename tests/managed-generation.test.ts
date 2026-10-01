@@ -172,7 +172,7 @@ test("the managed offering switch overrides every platform key", () => {
     SELFBENCH_MANAGED_MODAL_TOKEN_ID: "id",
     SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "secret",
   };
-  for (const flag of [undefined, "", "false", "1"]) {
+  for (const flag of [undefined, "", "false"]) {
     const env = flag === undefined ? keys : { ...keys, SELFBENCH_MANAGED_OFFERING: flag };
     expect(managedOfferingEnabled(env)).toBe(false);
     expect(managedOffer(env)).toEqual({ models: false, sandbox: false });
@@ -180,4 +180,9 @@ test("the managed offering switch overrides every platform key", () => {
     expect(() => managedModelKey(env)).toThrow("not configured");
   }
   expect(managedOfferingEnabled({ SELFBENCH_MANAGED_OFFERING: "true" })).toBe(true);
+  // A typo is a configuration error, not a quiet "off".
+  for (const flag of ["True", "1", "yes"])
+    expect(() => managedOfferingEnabled({ SELFBENCH_MANAGED_OFFERING: flag })).toThrow(
+      'SELFBENCH_MANAGED_OFFERING must be "true" or "false"',
+    );
 });

@@ -28,7 +28,7 @@ interface SidebarProps {
   onNavigate?: () => void;
   collapsed?: boolean;
   /** Show the Billing page, which only exists with the managed offering. */
-  billing?: boolean;
+  billing: boolean;
 }
 
 export function SiteSidebar({
@@ -37,7 +37,7 @@ export function SiteSidebar({
   onSelect,
   onNavigate,
   collapsed = false,
-  billing = false,
+  billing,
 }: SidebarProps) {
   const { pathname } = useLocation();
   return (

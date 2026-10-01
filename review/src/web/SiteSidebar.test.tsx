@@ -50,6 +50,7 @@ test("sidebar supports the compact icon mode", () => {
         orgs={[]}
         onSelect={() => {}}
         onSignOut={async () => {}}
+        billing
         collapsed
       />
     </MemoryRouter>,
