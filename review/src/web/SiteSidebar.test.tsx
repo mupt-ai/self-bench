@@ -4,7 +4,12 @@ import { MemoryRouter } from "react-router";
 import { SiteSidebar } from "./SiteSidebar";
 import type { SiteOrg } from "./session";
 
-function renderSidebar(path: string, kind: SiteOrg["kind"] = "org", billing = true) {
+function renderSidebar(
+  path: string,
+  kind: SiteOrg["kind"] = "org",
+  billing = true,
+  getStarted = false,
+) {
   const org: SiteOrg = { login: "example-account", kind, role: "admin" };
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
@@ -15,6 +20,7 @@ function renderSidebar(path: string, kind: SiteOrg["kind"] = "org", billing = tr
         onSelect={() => {}}
         onSignOut={async () => {}}
         billing={billing}
+        getStarted={getStarted}
       />
     </MemoryRouter>,
   );
@@ -41,6 +47,14 @@ test("sidebar leaves out Billing without the managed offering", () => {
   expect(html).not.toContain("Billing");
 });
 
+test("sidebar offers Get Started until the org can generate and evaluate", () => {
+  expect(renderSidebar("/", "org", false, true)).toContain('href="/get-started"');
+  expect(renderSidebar("/", "org", false, false)).not.toContain("Get Started");
+  // Finishing setup on the page itself keeps the entry for the page being viewed.
+  const html = renderSidebar("/get-started", "org", false, false);
+  expect(html.match(/<a[^>]*data-active="true"[^>]*>/g)?.[0]).toContain('href="/get-started"');
+});
+
 test("sidebar supports the compact icon mode", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter initialEntries={["/"]}>
@@ -51,6 +65,7 @@ test("sidebar supports the compact icon mode", () => {
         onSelect={() => {}}
         onSignOut={async () => {}}
         billing
+        getStarted={false}
         collapsed
       />
     </MemoryRouter>,

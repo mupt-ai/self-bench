@@ -1,4 +1,4 @@
-import { CreditCard, FolderGit2, KeyRound, LockKeyhole, X } from "lucide-react";
+import { CreditCard, FolderGit2, KeyRound, LockKeyhole, Rocket, X } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
@@ -29,6 +29,8 @@ interface SidebarProps {
   collapsed?: boolean;
   /** Show the Billing page, which only exists with the managed offering. */
   billing: boolean;
+  /** Show the Get Started checklist, until the org can generate and evaluate. */
+  getStarted: boolean;
 }
 
 export function SiteSidebar({
@@ -38,6 +40,7 @@ export function SiteSidebar({
   onNavigate,
   collapsed = false,
   billing,
+  getStarted,
 }: SidebarProps) {
   const { pathname } = useLocation();
   return (
@@ -51,6 +54,24 @@ export function SiteSidebar({
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                {(getStarted || pathname === "/get-started") && (
+                  <SidebarMenuItem>
+                    <NavTooltip collapsed={collapsed} label="Get Started">
+                      <SidebarMenuButton asChild isActive={pathname === "/get-started"}>
+                        <Link to="/get-started" onClick={onNavigate} aria-label="Get Started">
+                          <Rocket />
+                          {!collapsed && <span className="flex-1">Get Started</span>}
+                          {getStarted && (
+                            <span
+                              aria-hidden="true"
+                              className="size-2 shrink-0 bg-brand group-data-[collapsible=icon]/sidebar:absolute group-data-[collapsible=icon]/sidebar:top-1.5 group-data-[collapsible=icon]/sidebar:right-1.5"
+                            />
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </NavTooltip>
+                  </SidebarMenuItem>
+                )}
                 <SidebarMenuItem>
                   <NavTooltip collapsed={collapsed} label="Repositories">
                     <SidebarMenuButton

@@ -6,6 +6,8 @@ import type { HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
+import type { Coverage } from "../setup/readiness";
+import { SetupCallout } from "../setup/SetupCallout";
 import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
 
 /** Why the comparison can't run yet, for the notice above the task picker. Nothing while
@@ -36,6 +38,19 @@ export function RunBlockerNotice({ children }: { children: ReactNode }) {
       <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
       {children}
     </Notice>
+  );
+}
+
+/** Run with no model or sandbox to run on: what is missing, and Get Started back to here. */
+export function RunSetupCallout({ repo, coverage }: { repo: string; coverage: Coverage }) {
+  return (
+    <SetupCallout
+      className="mb-5"
+      coverage={coverage}
+      action="run evaluations"
+      hint="A ChatGPT or Claude sign-in, or any model API key, can run evaluations. Modal, E2B, or Daytona runs the tasks."
+      from={`/repos/${repo}/run`}
+    />
   );
 }
 

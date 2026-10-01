@@ -1,5 +1,6 @@
-import { Plus } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import React from "react";
+import { Link } from "react-router";
 import {
   type ConnectedRepo,
   disconnectRepo,
@@ -11,7 +12,8 @@ import { ConnectRepoSheet } from "../ConnectRepoSheet";
 import { CardGridSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, Notice, PageFrame, PageHeader } from "../ui";
+import { useSetupStatus } from "../setup/SetupStatus";
+import { Button, buttonStyles, Notice, PageFrame, PageHeader } from "../ui";
 import { type RepoStats, RepositoryList } from "./RepositoryList";
 
 type Repos = { status: "loading" } | { status: "ok"; repos: ConnectedRepo[] };
@@ -27,6 +29,7 @@ function statsOf(counts: RepoTaskCounts | undefined): RepoStats {
 
 export function ReposPage() {
   const { org } = useOrg();
+  const setup = useSetupStatus();
   useDocumentTitle(`${org.login} · SelfBench`);
   const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
   const [error, setError] = React.useState<string | null>(null);
@@ -94,6 +97,27 @@ export function ReposPage() {
           Connect My Repo
         </Button>
       </PageHeader>
+      {setup.incomplete && (
+        <section
+          aria-label="Finish Setup"
+          className="panel mb-6 flex flex-wrap items-center justify-between gap-4 p-5"
+        >
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-base font-semibold">
+              <span aria-hidden="true" className="size-2 shrink-0 bg-brand" />
+              Finish Setup
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Connect a model and a sandbox before you generate tasks or run evaluations. Signing in
+              with ChatGPT or Claude takes about a minute.
+            </p>
+          </div>
+          <Link className={buttonStyles.primary} to="/get-started">
+            Get Started
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </section>
+      )}
       {error && <Notice className="mb-4">{error}</Notice>}
       {repos.status === "loading" && !error && <CardGridSkeleton label="Loading Repositories" />}
       {repos.status === "ok" && (

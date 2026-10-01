@@ -7,6 +7,7 @@ import { cn } from "./primitives/cn";
 import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
 import { MobileSidebar, SiteSidebar } from "./SiteSidebar";
 import { defaultOrg, rememberOrg, type SiteOrg, type SiteUser, useSession } from "./session";
+import { SetupStatusContext, useSetupStatusSource } from "./setup/SetupStatus";
 import { UserMenu } from "./UserMenu";
 import { Button } from "./ui";
 
@@ -34,6 +35,7 @@ export function SiteLayout({
   const navigate = useNavigate();
   const location = useLocation();
   const [org, setOrg] = React.useState(() => defaultOrg(orgs));
+  const setup = useSetupStatusSource(org.login, managedOffering);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
     try {
@@ -65,92 +67,100 @@ export function SiteLayout({
     rememberOrg(next.login);
     setOrg(next);
     setMenuOpen(false);
-    if (location.pathname !== "/" && !location.pathname.startsWith("/settings/"))
+    if (
+      location.pathname !== "/" &&
+      location.pathname !== "/get-started" &&
+      !location.pathname.startsWith("/settings/")
+    )
       void navigate("/");
   };
   return (
-    <div
-      className={cn(
-        "flex h-svh overflow-hidden transition-[padding] duration-200 ease-linear",
-        sidebarCollapsed ? "md:pl-12" : "md:pl-64",
-      )}
-    >
+    <SetupStatusContext.Provider value={setup}>
       <div
         className={cn(
-          "group/sidebar fixed inset-y-0 left-0 z-20 hidden border-r border-border bg-background text-sidebar-foreground transition-[width] duration-200 ease-linear md:block",
-          sidebarCollapsed ? "w-12" : "w-64",
+          "flex h-svh overflow-hidden transition-[padding] duration-200 ease-linear",
+          sidebarCollapsed ? "md:pl-12" : "md:pl-64",
         )}
-        data-state={sidebarCollapsed ? "collapsed" : "expanded"}
-        data-collapsible={sidebarCollapsed ? "icon" : ""}
-        data-variant="sidebar"
-        data-side="left"
       >
-        <SiteSidebar
-          user={user}
-          org={org}
-          orgs={orgs}
-          onSelect={choose}
-          onSignOut={signOut}
-          billing={managedOffering}
-          collapsed={sidebarCollapsed}
-        />
-      </div>
-      <SidebarInset>
-        <header
-          className={cn("z-10 h-16 shrink-0 border-b border-border bg-background", pageGutter)}
+        <div
+          className={cn(
+            "group/sidebar fixed inset-y-0 left-0 z-20 hidden border-r border-border bg-background text-sidebar-foreground transition-[width] duration-200 ease-linear md:block",
+            sidebarCollapsed ? "w-12" : "w-64",
+          )}
+          data-state={sidebarCollapsed ? "collapsed" : "expanded"}
+          data-collapsible={sidebarCollapsed ? "icon" : ""}
+          data-variant="sidebar"
+          data-side="left"
         >
-          <div className="flex h-full w-full min-w-0 items-center justify-between">
-            <SidebarTrigger
-              type="button"
-              aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              onClick={toggleSidebar}
-              className="-ml-2 hidden md:inline-flex"
-            />
-            <div className="md:hidden">
-              <Lockup compact />
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <UserMenu user={user} onSignOut={signOut} />
-              <ThemeToggle />
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Open Navigation"
-                aria-haspopup="dialog"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen(true)}
-                className="md:hidden"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M3 5h14M3 10h14M3 15h14" />
-                </svg>
-              </Button>
-            </div>
-          </div>
-        </header>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-          <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
+          <SiteSidebar
+            user={user}
+            org={org}
+            orgs={orgs}
+            onSelect={choose}
+            onSignOut={signOut}
+            billing={managedOffering}
+            getStarted={setup.incomplete}
+            collapsed={sidebarCollapsed}
+          />
         </div>
-      </SidebarInset>
-      {menuOpen && (
-        <MobileSidebar
-          user={user}
-          org={org}
-          orgs={orgs}
-          onSelect={choose}
-          onSignOut={signOut}
-          billing={managedOffering}
-          onClose={() => setMenuOpen(false)}
-        />
-      )}
-    </div>
+        <SidebarInset>
+          <header
+            className={cn("z-10 h-16 shrink-0 border-b border-border bg-background", pageGutter)}
+          >
+            <div className="flex h-full w-full min-w-0 items-center justify-between">
+              <SidebarTrigger
+                type="button"
+                aria-label={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                onClick={toggleSidebar}
+                className="-ml-2 hidden md:inline-flex"
+              />
+              <div className="md:hidden">
+                <Lockup compact />
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <UserMenu user={user} onSignOut={signOut} />
+                <ThemeToggle />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Open Navigation"
+                  aria-haspopup="dialog"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen(true)}
+                  className="md:hidden"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 5h14M3 10h14M3 15h14" />
+                  </svg>
+                </Button>
+              </div>
+            </div>
+          </header>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+            <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
+          </div>
+        </SidebarInset>
+        {menuOpen && (
+          <MobileSidebar
+            user={user}
+            org={org}
+            orgs={orgs}
+            onSelect={choose}
+            onSignOut={signOut}
+            billing={managedOffering}
+            getStarted={setup.incomplete}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
+      </div>
+    </SetupStatusContext.Provider>
   );
 }
