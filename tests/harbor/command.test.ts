@@ -16,9 +16,12 @@ test("all Harbor providers share invocation policy without acquiring solver retr
         agent,
         quiet: true,
       });
-      // Modal runs through SelfBench's subclass, which pins and records task images.
+      // Modal and E2B run through SelfBench's subclasses of Harbor's environments.
       expect(args[args.indexOf("--env") + 1]).toBe(
-        environment === "modal" ? "selfbench_modal:SelfBenchModalEnvironment" : environment,
+        {
+          modal: "selfbench_modal:SelfBenchModalEnvironment",
+          e2b: "selfbench_e2b:SelfBenchE2BEnvironment",
+        }[environment as string] ?? environment,
       );
       expect(args[args.indexOf("--path") + 1]).toBe("/task with spaces");
       expect(args).not.toContain("--model");

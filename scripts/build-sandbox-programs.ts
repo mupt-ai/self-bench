@@ -14,6 +14,7 @@ for (const asset of [
   "harbor_gateway.py",
   "harbor_pi.py",
   "harbor_smoke.py",
+  "selfbench_e2b.py",
   "selfbench_modal.py",
   "selfbench_prepare.py",
 ]) {

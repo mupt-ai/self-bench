@@ -71,6 +71,7 @@ try {
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_pi.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
+    "dist/harnesses/harbor/runtime/selfbench_e2b.py",
     "dist/harnesses/harbor/runtime/selfbench_modal.py",
     "dist/harnesses/harbor/runtime/selfbench_prepare.py",
     "dist/extension-authoring.bundle.js",
@@ -90,6 +91,7 @@ try {
     "harbor_gateway.py",
     "harbor_pi.py",
     "harbor_smoke.py",
+    "selfbench_e2b.py",
     "selfbench_modal.py",
     "selfbench_prepare.py",
   ]) {

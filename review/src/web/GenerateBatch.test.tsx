@@ -152,10 +152,13 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Author Model"]')?.value,
     ).toBe("gpt-6-astra");
+    // Without a sandbox to run on, the settings give way to the setup popup's callout.
     hasSandbox = false;
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));
     expect(button("Generate").disabled).toBe(true);
-    expect(container.textContent).toContain("Unavailable Credential");
+    expect(container.textContent).toContain("Connect a sandbox to generate tasks.");
+    expect(container.querySelector("select[aria-label='Author Model']")).toBeNull();
+    expect(button("Finish Setup")).toBeDefined();
     hasSandbox = true;
     optionsAvailable = false;
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));

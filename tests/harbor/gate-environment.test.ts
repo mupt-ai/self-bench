@@ -40,7 +40,9 @@ fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_resu
         () => harborRun(root, root, "task", run, "e2b", new AbortController().signal),
       );
       const recorded = JSON.parse(await readFile(capture, "utf8"));
-      expect(recorded.args[recorded.args.indexOf("--env") + 1]).toBe("e2b");
+      expect(recorded.args[recorded.args.indexOf("--env") + 1]).toBe(
+        "selfbench_e2b:SelfBenchE2BEnvironment",
+      );
       expect(recorded.args[recorded.args.indexOf("--agent") + 1]).toBe(agent);
       expect(recorded.pythonPath).toBe(harborPythonPath());
       expect(recorded.key).toBe("test-key");

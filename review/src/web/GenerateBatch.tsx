@@ -12,6 +12,8 @@ import {
 import { batchPath } from "./batches/presentation";
 import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
+import { covered, setupCoverage } from "./setup/readiness";
+import { SetupCallout } from "./setup/SetupCallout";
 import { Button, fieldStyles, Input } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 
@@ -46,6 +48,10 @@ export function GenerateBatch({
     valid,
     reload,
   } = useGenerationSettings(org, fullName, open);
+  // Without a model or sandbox it can run on, the settings would be empty selects.
+  const coverage = options?.available
+    ? setupCoverage(options.credentials, options.managed).generate
+    : undefined;
   const submit = async () => {
     if (submitting.current || unconfirmed || !valid || !validCandidateCounts(counts)) return;
     submitting.current = true;
@@ -160,6 +166,13 @@ export function GenerateBatch({
                   <p role="status" className="text-sm text-muted-foreground">
                     Loading generation settings…
                   </p>
+                ) : coverage && !covered(coverage) ? (
+                  <SetupCallout
+                    coverage={coverage}
+                    action="generate tasks"
+                    hint="A ChatGPT sign-in or a model API key runs generation. A Claude sign-in only runs evaluations."
+                    onOpen={() => setOpen(false)}
+                  />
                 ) : (
                   <GenerationFields
                     value={settings}
