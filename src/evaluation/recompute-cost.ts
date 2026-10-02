@@ -26,6 +26,7 @@ import { loadConfig } from "../contracts/config/index.js";
 import { openDatabase } from "../db/client.js";
 import { gatewayIds, isGateway } from "../gateways/index.js";
 import { refreshGateway } from "../gateways/refresh.js";
+import { HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
 import { releaseCredentials } from "../public/release-sources.js";
 import { withReferencePricing } from "./catalog.js";
 import { referenceCost, trialCost } from "./cost.js";
@@ -121,8 +122,9 @@ function currentBound(run: EvaluationRun): EvaluationRun["pricing"] {
 /**
  * Cost fields for a trial priced from its recorded token usage, when that is a whole price: the
  * pricing bounds no request, and the usage splits into the buckets the rates price. Claude Code
- * records no split of its cache writes by lifetime, so its trial is priced only when one lifetime
- * for all of them gives the cost Claude Code itself reported (`reported`, in Harbor's result).
+ * records no split of its cache writes by lifetime, but it reports its own cost (`reported`, in
+ * Harbor's result), which fixes the split: the trial is priced only when that cost leaves a whole
+ * number of hour-long writes and is reproduced at the recorded rates.
  */
 function recordedUsageCost(
   run: EvaluationRun,
@@ -135,16 +137,20 @@ function recordedUsageCost(
   if (!pricing || pricing.maxInputTokens || !usage || !trial.modelVerified) return undefined;
   if (trial.apiCostUsd !== undefined || trial.cacheWritesInferred) return undefined;
   if (trial.harness === "codex" && auth !== "api-key") return undefined;
-  const splits = trial.harness === "claude-code" ? [usage.cacheWrite, 0] : [0];
-  const apiCostUsd = splits
-    .map((hourCacheWrite) => referenceCost(pricing, usage, hourCacheWrite))
-    .find(
-      (cost) =>
-        Number.isFinite(cost) &&
-        (trial.harness !== "claude-code" ||
-          (typeof reported === "number" && Math.abs(cost - reported) <= 1e-6 * Math.max(1, cost))),
-    );
-  if (apiCostUsd === undefined) return undefined;
+  let hourCacheWrite = 0;
+  if (trial.harness === "claude-code") {
+    if (typeof reported !== "number") return undefined;
+    // Each hour-long write costs this much more than a five-minute one.
+    const premium = (pricing.input * HOUR_CACHE_WRITE_MULTIPLIER - pricing.cacheWrite) / 1_000_000;
+    const hours = premium ? (reported - referenceCost(pricing, usage)) / premium : 0;
+    hourCacheWrite = Math.round(hours);
+    if (Math.abs(hours - hourCacheWrite) > 0.01 || hourCacheWrite < 0) return undefined;
+    if (hourCacheWrite > usage.cacheWrite) return undefined;
+  }
+  const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
+  if (!Number.isFinite(apiCostUsd)) return undefined;
+  if (trial.harness === "claude-code" && Math.abs(apiCostUsd - Number(reported)) > 1e-6)
+    return undefined;
   return { modelVerified: true, tokenUsage: usage, apiCostUsd, costSource: "reference-rates" };
 }
 

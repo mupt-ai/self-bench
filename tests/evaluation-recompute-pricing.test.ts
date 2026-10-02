@@ -86,7 +86,7 @@ test("recompute prices requests past a flat 200k bound the model's pricing never
   expect(saved?.trials[0]?.apiCostUsd).toBeCloseTo(cost, 12);
 });
 
-test("recompute prices a cut Claude Code trial only at the cost Claude Code reported", async () => {
+test("recompute prices a cut Claude Code trial by the cache lifetimes Claude Code's own cost implies", async () => {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
   directories.push(directory);
   const store = new LocalArtifactStore(directory);
@@ -138,6 +138,9 @@ test("recompute prices a cut Claude Code trial only at the cost Claude Code repo
     return (await recomputeEvaluationCost(store, run.repoId, run.id, false)).trials[0];
   };
   expect((await recompute(hourly))?.after?.apiCostUsd).toBeCloseTo(hourly, 9);
-  // No single cache lifetime explains the reported cost, so the trial stays unpriced.
+  // 100,000 of the writes kept for five minutes, at $5 rather than $8 per million.
+  const mixed = hourly - 0.3;
+  expect((await recompute(mixed))?.after?.apiCostUsd).toBeCloseTo(mixed, 9);
+  // No whole number of hour-long writes explains this cost, so the trial stays unpriced.
   expect((await recompute(hourly - 0.5))?.changed).toBe(false);
 });
