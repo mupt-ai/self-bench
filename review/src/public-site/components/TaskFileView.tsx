@@ -77,7 +77,7 @@ export function FilePane({
       {canary && (
         <p
           title={canary}
-          className="shrink-0 truncate border-t border-border px-4 py-1.5 font-mono text-xs text-muted-foreground"
+          className="shrink-0 truncate border-t border-border px-4 py-1.5 font-mono text-[11px] text-(--faint)"
         >
           {canary}
         </p>
