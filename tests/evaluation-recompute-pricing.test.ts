@@ -125,7 +125,7 @@ test("recompute prices a cut Claude Code trial by the cache lifetimes Claude Cod
     run.status = "completed";
     Object.assign(trial, { status: "completed", modelVerified: true, tokenUsage: usage });
     // Claude Code ends its stream with the cost it computed; Harbor copies it into its result.
-    const result = JSON.stringify({ type: "result", total_cost_usd: reported });
+    const result = JSON.stringify({ duration_ms: 1, total_cost_usd: reported, type: "result" });
     for (const [name, body] of [
       // Stored from its head and cut, so it no longer parses.
       ["0/solver/task__1/agent/trajectory.json", '{"steps":[{"source":"agent","metrics":{'],

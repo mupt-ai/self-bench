@@ -13,10 +13,9 @@
  * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
  * Only the cost fields and the pricing's long-context bound change: runs recorded before the bound
  * came from the vendor's or gateway's pricing carried a flat 200k one, so it is re-derived from the
- * catalog and each gateway's current listing (loaded first), while the recorded rates stay. A
- * trial that bound left unpriced, and whose stored transcript is cut too far to count again, is
- * priced from its recorded token usage once its pricing has no bound (recordedUsageCost). It refuses runs that are
- * still queued or running.
+ * catalog and the run's gateway listing, while the recorded rates stay. A trial that bound left
+ * unpriced, and whose stored transcript is cut too far to count again, is priced from its recorded
+ * token usage (recordedUsageCost). It refuses runs that are still queued or running.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,14 +125,19 @@ async function claudeCodeCost(
   const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
   const lines = Buffer.from(bytes ?? [])
     .toString("utf8")
-    .split("\n");
-  const last = lines.reverse().find((line) => line.startsWith('{"type":"result"'));
-  try {
-    const cost = last && record(JSON.parse(last)).total_cost_usd;
-    return typeof cost === "number" && Number.isFinite(cost) ? cost : undefined;
-  } catch {
-    return undefined;
+    .split("\n")
+    .filter((line) => line.includes('"type":"result"'));
+  for (const line of lines.reverse()) {
+    try {
+      const event = record(JSON.parse(line));
+      const cost = event.total_cost_usd;
+      if (event.type === "result")
+        return typeof cost === "number" && Number.isFinite(cost) ? cost : undefined;
+    } catch {
+      // A line cut by the stored tail, or a quoted result inside another event.
+    }
   }
+  return undefined;
 }
 
 /**
