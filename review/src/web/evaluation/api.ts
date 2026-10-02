@@ -1,3 +1,5 @@
+import type { EvaluationRun } from "../../../../src/evaluation/types";
+
 export type { EvaluationRun, EvaluationTrial, Harness } from "../../../../src/evaluation/types";
 export interface EvaluationOptions {
   tasks: { runId: string; taskId: string; difficulty: string }[];
@@ -31,6 +33,23 @@ export async function evaluationRequest<Result>(url: string, selection?: object)
         }
       : undefined,
   );
+  return (await succeeded(response)).json() as Promise<Result>;
+}
+/**
+ * A repository's runs and the tag that names this list of them. Sending that tag back asks only
+ * whether the list changed: undefined means it did not, and nothing was downloaded.
+ */
+export async function runsRequest(
+  url: string,
+  tag?: string,
+): Promise<{ runs: EvaluationRun[]; tag?: string } | undefined> {
+  const response = await fetch(url, tag ? { headers: { "if-none-match": tag } } : undefined);
+  if (response.status === 304) return undefined;
+  const { runs } = (await (await succeeded(response)).json()) as { runs: EvaluationRun[] };
+  const next = response.headers.get("etag");
+  return next ? { runs, tag: next } : { runs };
+}
+async function succeeded(response: Response): Promise<Response> {
   if (response.status === 401) {
     window.location.assign("/login");
     throw new Error("Session expired. Please sign in again.");
@@ -43,5 +62,5 @@ export async function evaluationRequest<Result>(url: string, selection?: object)
       response.status,
     );
   }
-  return response.json() as Promise<Result>;
+  return response;
 }

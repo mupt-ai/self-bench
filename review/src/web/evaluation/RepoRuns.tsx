@@ -6,6 +6,7 @@ import {
   type EvaluationRun,
   evaluationRequest,
   evaluationUrl,
+  runsRequest,
 } from "./api";
 
 /**
@@ -76,6 +77,9 @@ export function RepoRunsProvider({
     let timer: ReturnType<typeof setTimeout>;
     // Only the latest request counts, so an early refresh never leaves two polls going.
     let latest = 0;
+    // The list last received and its tag: a poll sends the tag, and an unchanged list is not
+    // downloaded again.
+    let listed: { runs: EvaluationRun[]; tag?: string } = { runs: [] };
     setLoading(true);
     setRuns([]);
     setError("");
@@ -83,12 +87,15 @@ export function RepoRunsProvider({
       clearTimeout(timer);
       const request = ++latest;
       try {
-        const result = await evaluationRequest<{ runs: EvaluationRun[] }>(url);
+        const result = await runsRequest(url, listed.tag);
         if (disposed || request !== latest) return;
-        setRuns(result.runs);
+        if (result) {
+          listed = result;
+          setRuns(result.runs);
+        }
         setError("");
         setLoading(false);
-        if (result.runs.some((run) => run.status === "queued" || run.status === "running"))
+        if (listed.runs.some((run) => run.status === "queued" || run.status === "running"))
           timer = setTimeout(() => {
             if (showing.current) void refresh();
           }, 3000);

@@ -104,7 +104,8 @@ export function EvaluationPage() {
               Choose models and a sandbox on the Run page to compare them against your dataset.
             </EmptyState>
           )}
-          <ComparisonHistory key={url} repo={repo} url={url} />
+          {/* Below the table once it has its rows, so it can tell whether it is in view. */}
+          {!loading && <ComparisonHistory key={url} repo={repo} url={url} />}
         </>
       )}
     </PageContent>
