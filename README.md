@@ -36,20 +36,16 @@ Public benchmarks tell you how a model does on someone else's code. SelfBench te
 
 Every open-source repository released on **[selfbench.dev](https://selfbench.dev)** gets a live leaderboard: each model, harness, and reasoning setting placed by accuracy and cost per task, with the Pareto frontier drawn through the settings nothing else beats on both.
 
-<p align="center">
-  <a href="https://selfbench.dev/earendil-works/pi">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/media/results-chart-dark.png">
-      <img src="docs/media/results-chart-light.png" alt="Accuracy vs cost per task for earendil-works/pi on selfbench.dev: 10 settings across OpenAI, Anthropic, Z.ai, and Moonshot AI models on 45 tasks" width="100%">
-    </picture>
-  </a>
-  <br>
-  <sub><a href="https://selfbench.dev/earendil-works/pi">earendil-works/pi</a> on selfbench.dev, October 2026. The live page has the current numbers.</sub>
-</p>
-
 **Browse the leaderboards:** [vercel/next.js](https://selfbench.dev/vercel/next.js) · [supabase/supabase](https://selfbench.dev/supabase/supabase) · [earendil-works/pi](https://selfbench.dev/earendil-works/pi) · [getsentry/sentry](https://selfbench.dev/getsentry/sentry) · [PostHog/posthog](https://selfbench.dev/PostHog/posthog) · [pingdotgg/t3code](https://selfbench.dev/pingdotgg/t3code) · [vercel/vercel](https://selfbench.dev/vercel/vercel) · **[all repositories →](https://selfbench.dev)**
 
 ## How it works
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/how-it-works-dark.gif">
+    <img src="docs/media/how-it-works-light.gif" alt="How SelfBench works: a merged PR is rebuilt from the commit before the change into an instruction, hidden tests, and a reference solution; Harbor's smoke, nop, oracle, and determinism gates and an independent review accept it; agents and models attempt every task; and accuracy is plotted against cost with the Pareto frontier" width="100%">
+  </picture>
+</p>
 
 For each merged PR, SelfBench rebuilds the task from the commit before the change: the PR's own request becomes the instruction, and an authoring agent writes hidden tests and a reference solution. A task is accepted only if the tests fail without a solution, pass with the original implementation, pass again on a rerun, and survive an independent review. Every accepted task is a native [Harbor](https://harborframework.com/) task.
 
@@ -64,7 +60,7 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. A deployment can also turn on the managed offering (`SELFBENCH_MANAGED_OFFERING`), which adds model and sandbox access on SelfBench's accounts, billed under **Billing**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
+Models and sandboxes run on your organization's own keys under **Credentials**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
 
 ## Self-hosting
 
