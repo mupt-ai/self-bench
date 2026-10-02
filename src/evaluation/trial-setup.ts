@@ -7,6 +7,7 @@ import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
 } from "../harnesses/harbor/command.js";
+import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
 import { prepareHarborRun, refuseWithoutRetry } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
 import { credentialExecution, gatewayTrial, refuseTrial } from "./execution.js";
@@ -68,13 +69,22 @@ export async function setUpTrial(
     options.signal,
     trialTimeouts(run.agentMinutes).agentSeconds,
   ).catch(refuseWithoutRetry);
+  // E2B and Docker start from the images verification ran on, when the task has them exported.
+  const pull = await startFromExportedImages(
+    taskPath,
+    task.images,
+    run.sandbox,
+    { env: options.env, ...(options.snapshotLink ? { callback: options.snapshotLink } : {}) },
+    trialRoot,
+  );
+  if (pull.SELFBENCH_REGISTRY_PASSWORD) secrets.push(pull.SELFBENCH_REGISTRY_PASSWORD);
   return {
     taskPath,
     jobs: join(trialRoot, "jobs"),
     ...(task.images ? { images: task.images } : {}),
     ...gateway,
     modelAuth: execution.auth,
-    child: prepared.env,
+    child: { ...prepared.env, ...pull },
     guard: prepared.guard,
   };
 }

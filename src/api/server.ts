@@ -5,6 +5,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
+import { googleAccessToken } from "../lib/google-access-token.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { connectTemporalClient } from "../temporal/connection.js";
 import type { AuthConfig } from "./auth/config.js";
@@ -21,6 +22,7 @@ import {
 } from "./http.js";
 import { sendIdentityError } from "./routes/auth.js";
 import { STRIPE_WEBHOOK_PATH } from "./routes/billing.js";
+import { taskImageRegistry } from "./routes/registry.js";
 import { handleRunArtifactRoute } from "./routes/run-artifacts.js";
 import { handleRunRoute } from "./routes/runs.js";
 import { handleSandboxRoute } from "./routes/sandbox.js";
@@ -56,6 +58,9 @@ export async function startApi(
     (localDatabase
       ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
       : undefined);
+  const registry =
+    config.taskImages &&
+    taskImageRegistry({ repository: config.taskImages.repository, token: googleAccessToken });
   const runStatus = async (runId: string) => {
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
@@ -67,6 +72,9 @@ export async function startApi(
         sendJson(response, 200, { ok: true });
         return;
       }
+      // Sandbox providers pull task images with a pull grant (see registry-grant.ts); the site
+      // would otherwise answer these GETs with its page.
+      if (registry && (await registry(request, url, response, secret))) return;
       if (site) {
         // The public results site's host is answered entirely by the public site.
         if (await site.resultsSite?.handle(request, url, response)) return;

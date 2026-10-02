@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { fail } from "../../lib/util.js";
-import {
-  normalizeE2BDomain,
-  normalizeE2BTemplateReference,
-} from "../../sandbox/providers/e2b/template.js";
+import { normalizeE2BTemplateReference } from "../../sandbox/providers/e2b/template.js";
 import { e2bTimeoutCap } from "../../sandbox/providers/e2b/timeout-cap.js";
 import { vercelTimeoutCap } from "../../sandbox/providers/vercel/timeout-cap.js";
 import { sandboxDockerfileReference } from "../../sandbox/runtime-dockerfile.js";
+import {
+  type E2BCredentials,
+  e2bCredentials,
+  type VercelCredentials,
+  vercelCredentials,
+} from "./credentials.js";
 import { MAX_HARBOR_CONCURRENCY } from "./execution-limits.js";
 import {
   EXECUTION_BACKENDS,
@@ -15,11 +18,16 @@ import {
   isDigestPinnedOciImage,
   matchingHarborEnvironment,
 } from "./providers.js";
+import {
+  type TaskImageConfig,
+  taskImageConfig,
+  taskImageEnvironmentSchema,
+} from "./task-images.js";
 import { defaultActivityConcurrency } from "./worker-capacity.js";
 
 const emptyStringAsUndefined = (value: unknown): unknown =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
-const environmentSchema = z.object({
+const environmentSchema = taskImageEnvironmentSchema.extend({
   SELFBENCH_API_HOST: z.string().default("127.0.0.1"),
   SELFBENCH_API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   SELFBENCH_API_TOKEN: z.string().min(1).optional(),
@@ -73,16 +81,7 @@ const environmentSchema = z.object({
     .default(false),
 });
 
-export interface VercelCredentials {
-  readonly token: string;
-  readonly teamId: string;
-  readonly projectId: string;
-}
-
-export interface E2BCredentials {
-  readonly apiKey: string;
-  readonly domain?: string;
-}
+export type { E2BCredentials, VercelCredentials } from "./credentials.js";
 
 type ExecutionConfig =
   | { readonly kind: "docker"; readonly image: string; readonly network?: string }
@@ -127,6 +126,7 @@ export interface SelfBenchConfig {
     | { readonly kind: "gcs"; readonly bucket: string; readonly prefix: string };
   readonly execution: ExecutionConfig;
   readonly harborEnvironment: HarborEnvironment;
+  readonly taskImages?: TaskImageConfig;
   readonly temporal: {
     readonly address: string;
     readonly namespace: string;
@@ -159,6 +159,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
         }
       : { kind: "local" as const, directory: value.SELFBENCH_ARTIFACT_DIR };
 
+  const taskImages = taskImageConfig(value);
   const harborEnvironment =
     value.SELFBENCH_HARBOR_ENVIRONMENT ??
     matchingHarborEnvironment(value.SELFBENCH_EXECUTION_BACKEND) ??
@@ -242,6 +243,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       : {}),
     artifact,
     harborEnvironment,
+    ...(taskImages ? { taskImages } : {}),
     execution,
     temporal: {
       address: value.SELFBENCH_TEMPORAL_ADDRESS,
@@ -278,23 +280,4 @@ export function loadWorkerConfig(
     default:
       return { ...config, execution: config.execution };
   }
-}
-
-function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
-  const token = environment.VERCEL_TOKEN?.trim();
-  const teamId = environment.VERCEL_TEAM_ID?.trim();
-  const projectId = environment.VERCEL_PROJECT_ID?.trim();
-  if (!token || !teamId || !projectId) {
-    fail("VERCEL_TOKEN, VERCEL_TEAM_ID, and VERCEL_PROJECT_ID are required for Vercel execution");
-  }
-  return { token, teamId, projectId };
-}
-
-function e2bCredentials(environment: NodeJS.ProcessEnv): E2BCredentials {
-  const apiKey = environment.E2B_API_KEY?.trim();
-  if (!apiKey) {
-    fail("E2B_API_KEY is required for E2B execution");
-  }
-  const domain = normalizeE2BDomain(environment.E2B_DOMAIN);
-  return { apiKey, ...(domain ? { domain } : {}) };
 }

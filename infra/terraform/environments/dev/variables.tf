@@ -105,3 +105,7 @@ variable "worker_pool_polls_harbor" {
   type    = bool
   default = true
 }
+variable "task_images" {
+  type    = bool
+  default = false
+}

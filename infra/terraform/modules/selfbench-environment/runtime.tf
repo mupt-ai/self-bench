@@ -116,7 +116,7 @@ locals {
     { for secret in values(local.runtime_secrets) : secret.env => secret.id if secret.enabled && secret.worker },
   )
 
-  shared_env = { for name, value in {
+  shared_env = merge(local.task_image_env, { for name, value in {
     SELFBENCH_API_HOST                  = "0.0.0.0"
     SELFBENCH_API_PORT                  = "8080"
     SELFBENCH_ARTIFACT_BACKEND          = "gcs"
@@ -134,7 +134,7 @@ locals {
     SELFBENCH_MANAGED_OFFERING          = var.managed_offering ? "true" : null
     SELFBENCH_MANAGED_MODAL_ENVIRONMENT = var.managed_offering ? local.name : null
     SENTRY_DSN                          = var.sentry_dsn
-  } : name => value if value != null }
+  } : name => value if value != null })
   api_env = merge(local.shared_env, { for name, value in {
     GITHUB_OAUTH_CLIENT_ID       = var.github_oauth_client_id
     SELFBENCH_PUBLIC_URL         = var.public_url
