@@ -141,8 +141,9 @@ export async function executeTrial(
         () => false,
       ));
     if (retrying) throw failure;
-    trial.status = "failed";
-    trial.error = failure.message;
+    // A timed-out agent's trial can still fail after its scores were read (Harbor's exit status).
+    Object.assign(trial, { status: "failed", error: failure.message });
+    delete trial.agentTimedOut;
   } finally {
     try {
       if (!retrying) {
@@ -219,8 +220,7 @@ async function runTrial(context: {
       const records = await wholeTranscripts(jobs, files);
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
       trial.rewards = verifierRewards(parsed);
-      // The time limit is part of the task, so an agent stopped at it is scored on what it left.
-      // Without scores, it fails on the timeout.
+      // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
       const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
       if (timedOut) trial.agentTimedOut = true;
       else if (parsed.exception_info)

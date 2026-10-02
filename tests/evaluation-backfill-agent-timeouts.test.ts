@@ -40,6 +40,7 @@ test("timed-out trials recorded as failures are scored from their stored artifac
       tasks: [
         { runId: "run-one", taskId: "scored", bundleKey: "tasks/scored.tar.gz" },
         { runId: "run-one", taskId: "unscored", bundleKey: "tasks/unscored.tar.gz" },
+        { runId: "run-one", taskId: "measured", bundleKey: "tasks/measured.tar.gz" },
       ],
     },
     "Test",
@@ -54,7 +55,7 @@ test("timed-out trials recorded as failures are scored from their stored artifac
       usage: { input: 10, output: 10, cacheRead: 10, cacheWrite: 0 },
     },
   });
-  for (const [index, rewards] of [{ reward: 1 }, {}].entries()) {
+  for (const [index, rewards] of [{ reward: 1 }, {}, { reward: 0 }].entries()) {
     const trial = run.trials[index];
     if (!trial) throw new Error("Missing trial");
     Object.assign(trial, {
@@ -78,15 +79,23 @@ test("timed-out trials recorded as failures are scored from their stored artifac
         "text/plain",
       );
   }
+  // The runner measured this one's whole transcript before the timeout failed it.
+  const measured = {
+    modelVerified: true,
+    apiCostUsd: 0.42,
+    tokenUsage: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 },
+    costSource: "reference-rates" as const,
+  };
+  Object.assign(run.trials[2] ?? {}, measured);
   await saveEvaluation(store, run);
 
   const dry = await backfillAgentTimeouts(store, run.repoId, false);
-  expect(dry).toMatchObject({ scored: 1, eligible: 1, skipped: 1, applied: false });
+  expect(dry).toMatchObject({ scored: 2, eligible: 2, skipped: 1, applied: false });
   expect((await getEvaluation(store, run.repoId, run.id))?.revision).toBe(run.revision);
 
   expect(await backfillAgentTimeouts(store, run.repoId, true)).toMatchObject({ applied: true });
   const saved = await getEvaluation(store, run.repoId, run.id);
-  const [scored, unscored] = saved?.trials ?? [];
+  const [scored, unscored, kept] = saved?.trials ?? [];
   expect(scored).toMatchObject({
     status: "completed",
     agentTimedOut: true,
@@ -94,6 +103,8 @@ test("timed-out trials recorded as failures are scored from their stored artifac
   });
   expect(scored?.error).toBeUndefined();
   expect(scored && eligibleTrial(scored)).toBe(true);
+  // A stored transcript is never more than the runner measured, so its cost stands.
+  expect(kept).toMatchObject({ status: "completed", rewards: { reward: 0 }, ...measured });
   // Never an invented zero: a trial Harbor did not score stays failed, and so does its run.
   expect(unscored?.status).toBe("failed");
   expect(saved?.status).toBe("failed");

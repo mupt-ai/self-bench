@@ -21,24 +21,22 @@ import { releaseCredentials } from "../public/release-sources.js";
 import { trialCost } from "./cost.js";
 import { eligibleTrial } from "./eligible.js";
 import { agentTimedOut, piFailure, record, verifierRewards } from "./output.js";
-import { type ModelAuth, type ModelAuthLookup, modelAuth } from "./recompute-cost.js";
-import { evaluationPrefix, listEvaluations, updateEvaluation } from "./store.js";
+import {
+  type CostFields,
+  costFields,
+  costKeys,
+  type ModelAuth,
+  type ModelAuthLookup,
+  modelAuth,
+  storedHarborFiles,
+} from "./recompute-cost.js";
+import { listEvaluations, updateEvaluation } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
 /** The error the runner recorded for a trial whose agent Harbor stopped at its time limit. */
 const TIMED_OUT = /^Agent execution timed out after /;
 
-type Scored = Pick<
-  EvaluationTrial,
-  "rewards" | "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
->;
-const costKeys = [
-  "modelVerified",
-  "apiCostUsd",
-  "tokenUsage",
-  "costSource",
-  "cacheWritesInferred",
-] as const;
+type Scored = Pick<EvaluationTrial, "rewards"> & CostFields;
 
 interface BackfillReport {
   repoId: number;
@@ -59,23 +57,33 @@ async function scoreTrial(
   trial: EvaluationTrial,
   auth: ModelAuth | undefined,
 ): Promise<Scored | string> {
-  const files = new Map<string, string>();
-  for (const name of trial.artifacts.filter((name) =>
-    /\/(trajectory\.json|pi\.txt|result\.json)$/.test(name),
-  )) {
-    const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
-    if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
+  const { files, result } = await storedHarborFiles(store, run, trial);
+  if (result === undefined) return "no Harbor result";
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = record(JSON.parse(result));
+  } catch {
+    return "unreadable Harbor result";
   }
-  const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
-  if (!result) return "no Harbor result";
-  const parsed = record(JSON.parse(result[1]));
   if (!agentTimedOut(parsed)) return "Harbor did not stop the agent at its time limit";
   const rewards = verifierRewards(parsed);
   if (Object.keys(rewards).length === 0) return "no verifier scores";
   const pi = [...files].find(([name]) => name.endsWith("/pi.txt"));
   const failure = pi && piFailure(pi[1]);
   if (failure) return `Pi stopped on a model error: ${failure}`;
-  return { rewards, ...trialCost(run, trial.harness, files, parsed, auth) };
+  // The runner measured the whole transcript before the timeout failed the trial; a stored one
+  // can be cut too far to measure again. Only the trials it could not measure are priced here.
+  const cost = trial.tokenUsage
+    ? costFields(trial)
+    : trialCost(run, trial.harness, files, parsed, auth);
+  return { rewards, ...cost };
+}
+
+/** Completes a timed-out trial on its scores, replacing whatever cost it had. */
+function complete(trial: EvaluationTrial, scored: Scored): void {
+  for (const key of costKeys) delete trial[key];
+  delete trial.error;
+  Object.assign(trial, scored, { status: "completed", agentTimedOut: true });
 }
 
 export async function backfillAgentTimeouts(
@@ -109,21 +117,22 @@ export async function backfillAgentTimeouts(
         continue;
       }
       scored.set(index, outcome);
-      const eligible = eligibleTrial({ ...trial, ...outcome, status: "completed" });
+      const preview = structuredClone(trial);
+      complete(preview, outcome);
+      const eligible = eligibleTrial(preview);
       entry.trials.push({ index, scored: outcome, eligible });
       report.scored += 1;
       if (eligible) report.eligible += 1;
     }
     report.runs.push(entry);
     if (!apply || scored.size === 0) continue;
+    let changed = false;
     await updateEvaluation(store, repoId, run.id, (latest) => {
-      let changed = false;
+      changed = false;
       for (const [index, outcome] of scored) {
         const trial = latest.trials[index];
         if (trial?.status !== "failed" || !TIMED_OUT.test(trial.error ?? "")) continue;
-        for (const key of costKeys) delete trial[key];
-        delete trial.error;
-        Object.assign(trial, outcome, { status: "completed", agentTimedOut: true });
+        complete(trial, outcome);
         changed = true;
       }
       if (!changed) return false;
@@ -135,7 +144,7 @@ export async function backfillAgentTimeouts(
       )
         latest.status = "completed";
     });
-    report.applied = true;
+    if (changed) report.applied = true;
   }
   return report;
 }
