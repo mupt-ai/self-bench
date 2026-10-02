@@ -1,5 +1,6 @@
+import type { ModelPricing } from "../contracts/models.js";
 import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
-import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
+import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
 import { agentTimedOut, record, TRUNCATED_OUTPUT } from "./output.js";
 import type { EvaluationRun, EvaluationTrial, Harness, TokenUsage } from "./types.js";
@@ -22,7 +23,7 @@ function inferSubscriptionWrites(
   const pricing = run.pricing;
   // Without a write premium the buckets price identically.
   if (!pricing || pricing.cacheWrite <= pricing.input) return "unchanged";
-  const calls = harborCallUsage(trajectory);
+  const calls = codexCallUsage(trajectory);
   if (!calls) return null;
   const original: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const inferred: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -102,6 +103,18 @@ function piAssistantMessages(
   const messages = end.messages.map(record);
   if (messages.find((message) => message.role !== "system")?.role !== "user") return undefined;
   return messages.filter((message) => message.role === "assistant");
+}
+
+/** `usage` at the reference rates, with `hourCacheWrite` of its cache writes kept for an hour. */
+export function referenceCost(pricing: ModelPricing, usage: TokenUsage, hourCacheWrite = 0) {
+  return (
+    (usage.input * pricing.input +
+      usage.output * pricing.output +
+      usage.cacheRead * pricing.cacheRead +
+      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
+      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
+    1_000_000
+  );
 }
 
 export function trialCost(
@@ -194,7 +207,7 @@ export function trialCost(
       count(cacheWrite) &&
       tokens.n_cache_tokens + cacheWrite <= tokens.n_input_tokens
     ) {
-      const calls = harborCallUsage(trajectory);
+      const calls = codexCallUsage(trajectory);
       if (calls)
         largestPrompt = Math.max(
           0,
@@ -247,13 +260,7 @@ export function trialCost(
   // The bound is per request; without per-request records the trial's total stands in for one.
   const prompt = largestPrompt ?? usage.input + usage.cacheRead + usage.cacheWrite;
   if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return measured;
-  const apiCostUsd =
-    (usage.input * pricing.input +
-      usage.output * pricing.output +
-      usage.cacheRead * pricing.cacheRead +
-      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
-      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
-    1_000_000;
+  const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
   return Number.isFinite(apiCostUsd)
     ? { ...measured, apiCostUsd, costSource: "reference-rates" }
     : measured;

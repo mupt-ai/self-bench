@@ -81,15 +81,20 @@ function respell(id: string, alias: (vendor: string) => string | undefined): str
   return vendor ? `${vendor}${id.slice(slash)}` : id;
 }
 
-/** The gateway's live list price for its model `id`, else the `reference` rates. */
+/**
+ * The gateway's live list price for its model `id`, else the `reference` rates, which cover
+ * prompts below `referenceLongContextFrom`.
+ */
 export function gatewayPricing(
   gateway: GatewayId,
   id: string,
   reference?: Rates,
+  referenceLongContextFrom?: number,
 ): ModelPricing | undefined {
+  const page = gateways[gateway].modelPage(id);
   const live = listing(gateway).rates.get(id);
-  const rates = live?.rates ?? reference;
-  return rates && ratesPricing(rates, gateways[gateway].modelPage(id), live?.asOf);
+  if (live) return ratesPricing(live.rates, page, live.asOf, live.longContextFrom);
+  return reference && ratesPricing(reference, page, undefined, referenceLongContextFrom);
 }
 
 /**
