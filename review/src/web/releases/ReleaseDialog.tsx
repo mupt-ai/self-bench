@@ -10,6 +10,9 @@ import { SettingsPicker, Tick } from "./SettingsPicker";
 import { selectionOf } from "./selection";
 
 /** What becomes public and what stays private, shown on the info icon beside the summary. */
+/** A release publishes its tasks unless the releaser unticks Publish Tasks. */
+const PUBLISH_TASKS = true;
+
 function privacyNote(workspace: { login: string; kind: "org" | "user" }, tasks: boolean): string {
   const publisher =
     workspace.kind === "user"
@@ -40,15 +43,13 @@ export function ReleaseDialog({
   const cancel = React.useRef<HTMLButtonElement>(null);
   const [view, setView] = React.useState<ReleaseView>();
   const [ticked, setTicked] = React.useState<Set<string>>(new Set());
-  const [publishTasks, setPublishTasks] = React.useState(false);
+  const [publishTasks, setPublishTasks] = React.useState(PUBLISH_TASKS);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
   const [query, setQuery] = React.useState("");
   const show = React.useCallback((next: ReleaseView, keep?: ReadonlySet<string>) => {
     setView(next);
-    // A fresh dialog starts from the current release's choice; a refreshed one keeps the person's.
-    if (!keep) setPublishTasks(next.current?.tasksPublished ?? false);
     const available = new Set(next.preview.settings.map((setting) => setting.key));
     setTicked(
       keep
@@ -76,10 +77,9 @@ export function ReleaseDialog({
       ),
     [view],
   );
-  const publishDefault = view?.current?.tasksPublished ?? false;
   const unchanged =
     query === "" &&
-    publishTasks === publishDefault &&
+    publishTasks === PUBLISH_TASKS &&
     ticked.size === defaults.size &&
     [...ticked].every((key) => defaults.has(key));
   const blocked = !selection || selection.settings === 0 || selection.tasks.length === 0;
@@ -162,7 +162,13 @@ export function ReleaseDialog({
               onChange={setTicked}
             />
             {selection && <Notes view={view} selection={selection} />}
-            <label htmlFor="release-publish-tasks" className="flex items-start gap-2.5 text-sm">
+            {/* Boxed, and tinted while on, so a release that publishes its tasks is plain to see. */}
+            <label
+              htmlFor="release-publish-tasks"
+              className={`flex cursor-pointer items-start gap-2.5 border p-3 text-sm transition-colors ${
+                publishTasks ? "border-check/50 bg-check/[0.07]" : "border-border"
+              }`}
+            >
               <span className="mt-0.5 flex">
                 <Tick
                   id="release-publish-tasks"
@@ -192,7 +198,7 @@ export function ReleaseDialog({
                 onClick={() => {
                   setQuery("");
                   setTicked(new Set(defaults));
-                  setPublishTasks(publishDefault);
+                  setPublishTasks(PUBLISH_TASKS);
                 }}
               >
                 Reset
