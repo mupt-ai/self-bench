@@ -20,7 +20,7 @@ import type { Harness } from "./models.js";
 
 export { catalogVersion } from "../contracts/models.js";
 
-type CatalogProvider = "openai" | "anthropic" | GatewayId | "custom";
+export type CatalogProvider = "openai" | "anthropic" | GatewayId | "custom";
 
 /** Evaluation's view of a catalog model: the credential it runs on and its native harnesses. */
 export interface CatalogModel {
@@ -118,12 +118,21 @@ function served(model: CatalogModel): CatalogModel {
   return { ...model, gateways: Object.fromEntries(routes) };
 }
 
+/** Reference pricing for catalog model `id` on `provider`, which names it `model`. */
+export function referencePricing(
+  id: string,
+  provider: CatalogProvider,
+  model: string,
+): ModelPricing | undefined {
+  const entry = findModel(id);
+  return isGateway(provider)
+    ? gatewayPricing(provider, model, entry?.rates?.gateway, entry?.longContextFrom)
+    : entry && nativePricing(entry);
+}
+
 /** The model with its reference pricing on its own provider, when the catalog has rates. */
 export function withReferencePricing(model: CatalogModel): CatalogModel {
-  const entry = findModel(model.id);
-  const pricing = isGateway(model.provider)
-    ? gatewayPricing(model.provider, model.model, entry?.rates?.gateway, entry?.longContextFrom)
-    : entry && nativePricing(entry);
+  const pricing = referencePricing(model.id, model.provider, model.model);
   return pricing ? { ...model, pricing } : model;
 }
 

@@ -15,12 +15,7 @@ export interface HarborCallUsage {
   cost?: number;
 }
 
-/**
- * Per-agent-request token buckets from Harbor's trajectory, or undefined if incomplete. Codex can
- * report one request's usage twice, and Harbor then records it on two steps; the repeat is not a
- * request of its own (Codex's totals count it once), so a step whose usage matches the previous
- * step's exactly is skipped.
- */
+/** Per-agent-request token buckets from Harbor's trajectory, or undefined if incomplete. */
 export function harborCallUsage(
   trajectory: Record<string, unknown>,
 ): HarborCallUsage[] | undefined {
@@ -49,16 +44,6 @@ export function harborCallUsage(
       cached + written > prompt
     )
       return undefined;
-    const previous = usage.at(-1);
-    if (
-      previous &&
-      previous.input === prompt - cached - written &&
-      previous.output === output &&
-      previous.cacheRead === cached &&
-      previous.cacheWrite === written &&
-      previous.hourCacheWrite === hour
-    )
-      continue;
     usage.push({
       input: prompt - cached - written,
       output,
@@ -72,9 +57,27 @@ export function harborCallUsage(
   return usage;
 }
 
+/**
+ * Harbor's Codex requests. Codex can report one request's usage twice, and Harbor then records it
+ * on two steps; the repeat is not a request of its own (Codex's totals count it once), so a step
+ * whose usage matches the previous one's exactly is dropped.
+ */
+export function codexCallUsage(trajectory: Record<string, unknown>): HarborCallUsage[] | undefined {
+  return harborCallUsage(trajectory)?.filter(
+    (call, index, calls) =>
+      !(
+        index > 0 &&
+        call.input === calls[index - 1]?.input &&
+        call.output === calls[index - 1]?.output &&
+        call.cacheRead === calls[index - 1]?.cacheRead &&
+        call.cacheWrite === calls[index - 1]?.cacheWrite
+      ),
+  );
+}
+
 export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsage, total: unknown) {
   if (typeof total !== "number" || !Number.isFinite(total) || total < 0) return undefined;
-  const calls = harborCallUsage(trajectory);
+  const calls = codexCallUsage(trajectory);
   if (!calls || calls.some((call) => call.cost === undefined)) return undefined;
   const sums = calls.reduce(
     (sum, call) => ({

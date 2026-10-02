@@ -1,6 +1,6 @@
 import type { ModelPricing } from "../contracts/models.js";
 import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
-import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
+import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
 import { agentTimedOut, record, TRUNCATED_OUTPUT } from "./output.js";
 import type { EvaluationRun, EvaluationTrial, Harness, TokenUsage } from "./types.js";
@@ -23,7 +23,7 @@ function inferSubscriptionWrites(
   const pricing = run.pricing;
   // Without a write premium the buckets price identically.
   if (!pricing || pricing.cacheWrite <= pricing.input) return "unchanged";
-  const calls = harborCallUsage(trajectory);
+  const calls = codexCallUsage(trajectory);
   if (!calls) return null;
   const original: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const inferred: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -207,7 +207,7 @@ export function trialCost(
       count(cacheWrite) &&
       tokens.n_cache_tokens + cacheWrite <= tokens.n_input_tokens
     ) {
-      const calls = harborCallUsage(trajectory);
+      const calls = codexCallUsage(trajectory);
       if (calls)
         largestPrompt = Math.max(
           0,

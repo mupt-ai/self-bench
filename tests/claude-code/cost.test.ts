@@ -60,3 +60,12 @@ test("a Claude Code trial whose requests do not add up to Harbor's totals gets n
   const other = steps.map((entry) => ({ ...entry, model_name: "claude-haiku-4-5" }));
   expect(trialCost(run, "claude-code", files({ steps: other }), result).apiCostUsd).toBeUndefined();
 });
+
+test("two Claude Code requests with the same usage both count", () => {
+  // Harbor merges each Claude Code request into one step, so a repeat is a request of its own.
+  const twice = { n_input_tokens: 82_329, n_cache_tokens: 73_244, n_output_tokens: 121 };
+  const cost = trialCost(run, "claude-code", files({ steps: [...steps, steps[1]] }), {
+    agent_result: twice,
+  });
+  expect(cost.tokenUsage).toMatchObject({ cacheRead: 73_244, cacheWrite: 9_079 });
+});
