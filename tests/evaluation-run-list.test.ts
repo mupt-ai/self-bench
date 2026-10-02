@@ -173,6 +173,8 @@ test("a poll that sends the list's tag is told when nothing changed, without the
   const unchanged = await server.request(server.base, { headers: { "if-none-match": tag } });
   expect(unchanged.status).toBe(304);
   expect(unchanged.headers.get("etag")).toBe(tag);
+  // Neither answer may be stored: the page keeps its last list in memory only.
+  expect(unchanged.headers.get("cache-control")).toBe("no-store");
   expect(await unchanged.text()).toBe("");
   // An unchanged poll reads no summary bodies: only the tag is worked out.
   expect((await listRuns(server.artifacts, server.repo.id, tag.slice(1, -1))).runs).toBeUndefined();

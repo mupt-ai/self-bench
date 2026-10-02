@@ -49,7 +49,9 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
       disposed = true;
     };
   }, [url, near]);
-  if (!comparisons.length && !error) return <div ref={anchor} aria-hidden="true" />;
+  // A pixel tall: some browsers never report a marker with no area as in view.
+  if (!comparisons.length && !error)
+    return <div ref={anchor} className="h-px" aria-hidden="true" />;
   return (
     <section className="mt-6">
       <SectionHeader title="Saved Comparisons" />
