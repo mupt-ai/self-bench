@@ -149,6 +149,12 @@ test("Codex sign-in bills eligible unreported fresh input as cache writes, like 
     (5800 * 0.1 + 346 * 0.5 + 31_008 * 0.01 + 16_972 * 0.125) / 1_000_000,
     12,
   );
+  // Codex can report a request's usage twice; Harbor's repeated step is the same request.
+  const [, , last] = trajectory.steps;
+  if (!last) throw new Error("Missing step");
+  trajectory.steps.push({ ...last, metrics: { ...last.metrics } });
+  expect(trialCost(signIn, "codex", files(), result)).toEqual(inferred);
+  trajectory.steps.pop();
   // An API key reports its own writes, so Harbor's per-request cost stands.
   expect(trialCost(signIn, "codex", files(), result, "api-key")).toEqual({
     modelVerified: true,

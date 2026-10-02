@@ -15,7 +15,12 @@ export interface HarborCallUsage {
   cost?: number;
 }
 
-/** Per-agent-request token buckets from Harbor's trajectory, or undefined if incomplete. */
+/**
+ * Per-agent-request token buckets from Harbor's trajectory, or undefined if incomplete. Codex can
+ * report one request's usage twice, and Harbor then records it on two steps; the repeat is not a
+ * request of its own (Codex's totals count it once), so a step whose usage matches the previous
+ * step's exactly is skipped.
+ */
 export function harborCallUsage(
   trajectory: Record<string, unknown>,
 ): HarborCallUsage[] | undefined {
@@ -44,6 +49,16 @@ export function harborCallUsage(
       cached + written > prompt
     )
       return undefined;
+    const previous = usage.at(-1);
+    if (
+      previous &&
+      previous.input === prompt - cached - written &&
+      previous.output === output &&
+      previous.cacheRead === cached &&
+      previous.cacheWrite === written &&
+      previous.hourCacheWrite === hour
+    )
+      continue;
     usage.push({
       input: prompt - cached - written,
       output,
