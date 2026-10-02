@@ -45,6 +45,11 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
         completion: "0.000015",
         input_cache_read: "0.0000003",
         input_cache_write: "0.00000375",
+        overrides: [
+          { utc_days: ["saturday"], prompt: "0.0000015", completion: "0.0000075" },
+          { min_prompt_tokens: 300_000, prompt: "0.000008", completion: "0.00003" },
+          { min_prompt_tokens: 272_000, prompt: "0.000006", completion: "0.00002" },
+        ],
       }),
       { id: "moonshotai/kimi-k3", pricing: { prompt: "0.000003", completion: "0.000015" } },
       { id: "not/in-catalog", pricing: { prompt: "1", completion: "1" } },
@@ -57,12 +62,14 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
     cacheWrite: 3.75,
     source: "https://openrouter.ai/openai/gpt-6-sol",
     asOf: new Date().toISOString().slice(0, 10),
+    // The listed rates stop at the first prompt size an override reprices.
+    maxInputTokens: 271_999,
   });
-  expect(nativePricing(sol())).toMatchObject({ input: 2, output: 10 });
-  expect(gatewayPricing("openrouter", "moonshotai/kimi-k3")).toMatchObject({
-    cacheRead: 3,
-    cacheWrite: 3,
-  });
+  expect(nativePricing(sol())).toMatchObject({ input: 2, output: 10, maxInputTokens: 271_999 });
+  const kimi = gatewayPricing("openrouter", "moonshotai/kimi-k3");
+  expect(kimi).toMatchObject({ cacheRead: 3, cacheWrite: 3 });
+  // One rate covers its whole context window, so no prompt is too long to price.
+  expect(kimi?.maxInputTokens).toBeUndefined();
   // Each gateway keeps its own prices: Vercel's are still the catalog's reference rates.
   expect(solPricing("vercel-ai-gateway")).toMatchObject({ input: 2, asOf: "2026-09-23" });
 });
@@ -171,6 +178,17 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
         language("vendor/embedding", 5, { type: "embedding" }),
         language("vendor/image-out", 5, { modalities: { input: ["text"], output: ["image"] } }),
         language("vendor/unpriced", 5, { pricing: {} }),
+        language("vendor/tiered", 1, {
+          pricing: {
+            input: "0.000001",
+            output: "0.000002",
+            input_tiers: [
+              { cost: "0.000001", min: 0, max: 128001 },
+              { cost: "0.000002", min: 128001 },
+            ],
+            output_tiers: [{ cost: "0.000002", min: 0 }],
+          },
+        }),
       ],
     });
   }) as unknown as typeof fetch);
@@ -183,7 +201,12 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
     },
     { id: "vendor/toggle-only", label: "Name of vendor/toggle-only" },
     { id: "zai/glm-5.3", label: "Name of zai/glm-5.3", thinking: ["low", "high", "max"] },
+    { id: "vendor/tiered", label: "Name of vendor/tiered" },
   ]);
+  expect(gatewayPricing("vercel-ai-gateway", "vendor/tiered")).toMatchObject({
+    input: 1,
+    maxInputTokens: 128_000,
+  });
   // Cache writes fall back to the input price; the curated GLM takes Vercel's spelling and price.
   const glm = findModel("glm-5.3");
   if (!glm) throw new Error("Missing GLM");
@@ -196,6 +219,10 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
     cacheWrite: 1.4,
     source: "https://vercel.com/ai-gateway/models/glm-5.3",
   });
+  expect(
+    gatewayPricing("vercel-ai-gateway", gatewayModelId("vercel-ai-gateway", glm.openRouter))
+      ?.maxInputTokens,
+  ).toBeUndefined();
 });
 
 test("gateways spell some vendors their own way; the catalog spells them as OpenRouter does", () => {

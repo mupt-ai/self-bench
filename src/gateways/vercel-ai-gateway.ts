@@ -1,8 +1,10 @@
-import { modelIdPattern, type Rates } from "../contracts/models.js";
+import { modelIdPattern } from "../contracts/models.js";
 import {
   type Gateway,
   type ListedModel,
+  type ListedRates,
   listRates,
+  longContextFrom,
   readsAndWritesText,
   reasoningLevels,
 } from "./gateway.js";
@@ -46,7 +48,7 @@ export const vercelAiGateway: Gateway = {
 
 /** Its list prices and its models, newest first: it reports no benchmark or popularity. */
 function parse(body: unknown, asOf: string) {
-  const rates = new Map<string, { rates: Rates; asOf: string }>();
+  const rates = new Map<string, ListedRates>();
   const listed: (ListedModel & { released: number })[] = [];
   for (const entry of (body as { data?: VercelEntry[] }).data ?? []) {
     if (typeof entry.id !== "string") continue;
@@ -58,7 +60,21 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_write,
     );
     if (!entryRates) continue;
-    rates.set(entry.id, { rates: entryRates, asOf });
+    // Tiered models price prompts by size; the first tier is the listed rates.
+    const tiers = [
+      "input_tiers",
+      "output_tiers",
+      "input_cache_read_tiers",
+      "input_cache_write_tiers",
+    ]
+      .flatMap((key) => (Array.isArray(pricing[key]) ? pricing[key] : []))
+      .map((tier) => tier?.min);
+    const longContext = longContextFrom(tiers);
+    rates.set(entry.id, {
+      rates: entryRates,
+      asOf,
+      ...(longContext ? { longContextFrom: longContext } : {}),
+    });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning_options);
       listed.push({

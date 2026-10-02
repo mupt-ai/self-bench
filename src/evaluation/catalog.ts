@@ -122,7 +122,7 @@ function served(model: CatalogModel): CatalogModel {
 export function withReferencePricing(model: CatalogModel): CatalogModel {
   const entry = findModel(model.id);
   const pricing = isGateway(model.provider)
-    ? gatewayPricing(model.provider, model.model, entry?.rates?.gateway)
+    ? gatewayPricing(model.provider, model.model, entry?.rates?.gateway, entry?.longContextFrom)
     : entry && nativePricing(entry);
   return pricing ? { ...model, pricing } : model;
 }

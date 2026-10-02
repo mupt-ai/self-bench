@@ -61,5 +61,7 @@ export function generationModelRoute(
 /** Reference rates for billing and cost estimates: generation runs through OpenRouter. */
 export function generationModelPricing(id: string) {
   const info = generationModelInfo(id);
-  return info ? gatewayPricing("openrouter", info.openRouter, info.rates?.gateway) : undefined;
+  return info
+    ? gatewayPricing("openrouter", info.openRouter, info.rates?.gateway, info.longContextFrom)
+    : undefined;
 }

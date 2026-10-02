@@ -1,3 +1,4 @@
+import type { ModelPricing } from "../contracts/models.js";
 import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
 import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
@@ -102,6 +103,18 @@ function piAssistantMessages(
   const messages = end.messages.map(record);
   if (messages.find((message) => message.role !== "system")?.role !== "user") return undefined;
   return messages.filter((message) => message.role === "assistant");
+}
+
+/** `usage` at the reference rates, with `hourCacheWrite` of its cache writes kept for an hour. */
+export function referenceCost(pricing: ModelPricing, usage: TokenUsage, hourCacheWrite = 0) {
+  return (
+    (usage.input * pricing.input +
+      usage.output * pricing.output +
+      usage.cacheRead * pricing.cacheRead +
+      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
+      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
+    1_000_000
+  );
 }
 
 export function trialCost(
@@ -247,13 +260,7 @@ export function trialCost(
   // The bound is per request; without per-request records the trial's total stands in for one.
   const prompt = largestPrompt ?? usage.input + usage.cacheRead + usage.cacheWrite;
   if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return measured;
-  const apiCostUsd =
-    (usage.input * pricing.input +
-      usage.output * pricing.output +
-      usage.cacheRead * pricing.cacheRead +
-      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
-      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
-    1_000_000;
+  const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
   return Number.isFinite(apiCostUsd)
     ? { ...measured, apiCostUsd, costSource: "reference-rates" }
     : measured;
