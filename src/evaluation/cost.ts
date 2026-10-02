@@ -73,7 +73,7 @@ function inferSubscriptionWrites(
  *
  * A Pi stopped at its time limit never writes its agent_end, and its last line is usually cut
  * where its output stopped, so every whole message_end of its stream counts. A stored tail's
- * then only vouch for the model; trialCost takes the totals from Harbor.
+ * replies then only vouch for the model; trialCost takes the totals from Harbor.
  */
 function piAssistantMessages(
   text: string,
