@@ -10,7 +10,7 @@ is built again under the same name, which moves the tag to the new build.
 
 from __future__ import annotations
 
-from e2b import AsyncTemplate, BuildInfo, TemplateBuildStatus
+from e2b import AsyncTemplate, BuildException, BuildInfo, TemplateBuildStatus
 
 from harbor.environments.e2b import E2BEnvironment
 
@@ -26,10 +26,17 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         build = next((tag.build_id for tag in tags if tag.tag == TAG), None)
         if build is None:
             return False
-        status = await AsyncTemplate.get_build_status(
-            BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
-        )
-        if status.status == TemplateBuildStatus.READY:
+        try:
+            status = (
+                await AsyncTemplate.get_build_status(
+                    BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
+                )
+            ).status.value
+        except BuildException as error:
+            # Looked up by name, E2B answers "400: Build '…' not found" for a build that is still
+            # waiting or building, which a build whose upload was cut off stays forever.
+            status = f"unfinished ({error})"
+        if status == TemplateBuildStatus.READY.value:
             return True
-        self.logger.warning(f"Template {name} build {build} is {status.status.value}; building it again")
+        self.logger.warning(f"Template {name} build {build} is {status}; building it again")
         return False
