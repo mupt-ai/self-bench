@@ -50,9 +50,15 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_write,
     );
     if (!entryRates) continue;
-    // Overrides reprice prompts from a size on (and some, times of day, which no bound covers).
+    // An override reprices prompts over its min_prompt_tokens (time-of-day ones set none).
     const overrides = Array.isArray(pricing.overrides) ? pricing.overrides : [];
-    const longContext = longContextFrom(overrides.map((override) => override?.min_prompt_tokens));
+    const longContext = longContextFrom(
+      overrides.map((override) =>
+        typeof override?.min_prompt_tokens === "number"
+          ? override.min_prompt_tokens + 1
+          : undefined,
+      ),
+    );
     rates.set(entry.id, {
       rates: entryRates,
       asOf,

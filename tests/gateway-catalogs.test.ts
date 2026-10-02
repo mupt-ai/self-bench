@@ -62,10 +62,10 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
     cacheWrite: 3.75,
     source: "https://openrouter.ai/openai/gpt-6-sol",
     asOf: new Date().toISOString().slice(0, 10),
-    // The listed rates stop at the first prompt size an override reprices.
-    maxInputTokens: 271_999,
+    // An override reprices prompts over its threshold, so the listed rates cover 272,000.
+    maxInputTokens: 272_000,
   });
-  expect(nativePricing(sol())).toMatchObject({ input: 2, output: 10, maxInputTokens: 271_999 });
+  expect(nativePricing(sol())).toMatchObject({ input: 2, output: 10, maxInputTokens: 272_000 });
   const kimi = gatewayPricing("openrouter", "moonshotai/kimi-k3");
   expect(kimi).toMatchObject({ cacheRead: 3, cacheWrite: 3 });
   // One rate covers its whole context window, so no prompt is too long to price.

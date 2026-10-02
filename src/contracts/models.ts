@@ -49,7 +49,10 @@ export interface Model {
   readonly source: string;
   /** Reference rates on the vendor's own key and through a gateway. */
   readonly rates?: { readonly native?: Rates; readonly gateway?: Rates };
-  /** The prompt size at which the vendor's long-context rates begin; absent when it has none. */
+  /**
+   * The smallest prompt the vendor's long-context rates apply to (OpenAI's apply over 272k);
+   * absent when it has none.
+   */
   readonly longContextFrom?: number;
   /** Selectable reasoning levels, in display order; absent means the provider default only. */
   readonly thinking?: readonly ThinkingLevel[];
@@ -70,7 +73,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6.1-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
     rates: { native: [2, 10, 0.1, 2.5], gateway: [2, 10, 0.1, 2.5] },
-    longContextFrom: 272_000,
+    longContextFrom: 272_001,
     thinking: vendorThinking,
   },
   {
@@ -80,7 +83,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-astra",
     source: "https://developers.openai.com/api/docs/models/gpt-6-astra",
     rates: { native: [10, 50, 1, 12.5], gateway: [10, 50, 1, 12.5] },
-    longContextFrom: 272_000,
+    longContextFrom: 272_001,
     thinking: vendorThinking,
     generation: true,
   },
@@ -91,7 +94,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6-sol",
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
-    longContextFrom: 272_000,
+    longContextFrom: 272_001,
     thinking: openAiThinking,
     generation: true,
   },
@@ -102,7 +105,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-luna",
     source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
     rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
-    longContextFrom: 272_000,
+    longContextFrom: 272_001,
     thinking: openAiThinking,
   },
   {
