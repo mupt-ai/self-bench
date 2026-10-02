@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FileButton, FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
 import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
@@ -10,7 +10,8 @@ import "./task-viewer.css";
 /**
  * One published task, over the page: its files down the side and the chosen one beside them,
  * with the task's download. Opened by the page's address (`?task=<id>`), so a link opens it, and
- * Back or Escape closes it. Previous and Next step through the release's tasks in place.
+ * Back, Escape, or a click on the page around it closes it. Previous and Next step through the
+ * release's tasks in place.
  */
 export default function TaskViewer({
   release,
@@ -27,6 +28,8 @@ export default function TaskViewer({
   const source = useSource();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef<HTMLButtonElement>(null);
+  // Whether the press now under way began on the page around the viewer.
+  const pressedOutside = useRef(false);
   const [tasks, setTasks] = useState<PublicTask[]>();
   const [read, setRead] = useState<{ taskId: string; files?: PublicTaskFiles; failed?: boolean }>();
   const [attempt, setAttempt] = useState(0);
@@ -77,6 +80,18 @@ export default function TaskViewer({
   const path = chosen?.taskId === taskId ? chosen.path : (firstFile(files)?.path ?? files[0]?.path);
   const file = files.find((entry) => entry.path === path);
   const repository = release.repository.fullName;
+  // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
+  // the viewer lands on what it is over, or on the dialog within its box.
+  const outside = (event: MouseEvent<HTMLDialogElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return (
+      event.target === event.currentTarget &&
+      (event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom)
+    );
+  };
   const prUrl =
     task?.sourceUrl ??
     (task?.sourcePr !== undefined
@@ -84,6 +99,7 @@ export default function TaskViewer({
       : undefined);
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard's way to close it (onCancel)
     <dialog
       ref={dialog}
       aria-labelledby="task-title"
@@ -91,6 +107,15 @@ export default function TaskViewer({
       onCancel={(event) => {
         event.preventDefault();
         onClose();
+      }}
+      // A click around it closes it too, when it also began there: letting go out there after
+      // selecting text in a file leaves the viewer open.
+      onPointerDown={(event) => {
+        pressedOutside.current = outside(event);
+      }}
+      onClick={(event) => {
+        if (pressedOutside.current && outside(event)) onClose();
+        pressedOutside.current = false;
       }}
       className="task-viewer m-auto flex h-[min(100dvh-4rem,60rem)] max-h-none w-[min(100vw-4rem,90rem)] max-w-none flex-col border-[1.5px] border-(--panel-border) bg-background p-0 text-sm text-foreground backdrop:bg-black/40 compact:h-dvh compact:w-full compact:border-0"
     >
