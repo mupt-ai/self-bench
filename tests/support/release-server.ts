@@ -20,6 +20,7 @@ import { saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
 import { full, names } from "./release-fixture.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
+import { taskBundle } from "./tar.js";
 
 /** What the fake GitHub reports for the connected repository; tests change it. */
 interface FakeRepository {
@@ -139,7 +140,7 @@ export async function releaseServer(
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No port");
   publicUrl = `http://127.0.0.1:${address.port}`;
-  const publicRoutes = createPublicReleaseRoutes(releases);
+  const publicRoutes = createPublicReleaseRoutes(releases, { artifacts });
   /** What each release and withdrawal reported changing, in order. */
   const changes: PublicChange[] = [];
   const routes = createReleaseRoutes({
@@ -197,6 +198,9 @@ export async function releaseServer(
           bundleKey: `tasks/${name}.tar.gz`,
         })),
       );
+      // Each task's compiled bundle, which a release that publishes its tasks serves.
+      for (const name of names)
+        await artifacts.put(`tasks/${name}.tar.gz`, await taskBundle(name), "application/gzip");
       for (const name of names) {
         const task = await tasks.find(repo.id, "gen", name);
         if (task) await tasks.review(task.id, { decision: "approve", note: "", userId: priya.id });

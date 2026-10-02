@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNull, or, type SQL, sql } from "drizzle-orm";
+import type { ReleaseTask } from "../public/release-rule.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
 import type { Database } from "./client.js";
 import { releases } from "./schema.js";
@@ -177,6 +178,19 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         .where(and(ofLine(line), eq(releases.id, id), isNull(releases.withdrawnAt)))
         .returning();
       return row ? rowFrom(row) : undefined;
+    },
+    /**
+     * The tasks a release was built on, as its row records them (`detail.releasedTasks`), in key
+     * order; undefined when there is no such row. Reads that one field, not the whole detail.
+     * Private: callers serve only what a release that published its tasks allows.
+     */
+    async releasedTasks(id: string): Promise<ReleaseTask[] | undefined> {
+      const [row] = await db
+        .select({ tasks: sql<unknown>`${releases.detail} -> 'releasedTasks'` })
+        .from(releases)
+        .where(eq(releases.id, id));
+      if (!row) return undefined;
+      return Array.isArray(row.tasks) ? (row.tasks as ReleaseTask[]) : [];
     },
     /** Every line's current release, newest first. */
     async currentLines(): Promise<PublishedLine[]> {

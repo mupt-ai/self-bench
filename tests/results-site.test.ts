@@ -223,7 +223,7 @@ test("the app's surface does not exist on the public host", async () => {
 
 test("robots.txt allows indexing only where the site is indexable", async () => {
   expect(await (await get("/robots.txt")).text()).toBe(
-    "User-agent: *\nAllow: /\n\nSitemap: https://selfbench.test/sitemap.xml\n",
+    "User-agent: *\nDisallow: /api/public/releases/\nAllow: /\n\nSitemap: https://selfbench.test/sitemap.xml\n",
   );
   const dev = await start(false);
   try {

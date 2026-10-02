@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Avatar } from "../components/Avatar";
 import { ModelTable } from "../components/ModelTable";
 import { ResultsChart } from "../components/ResultsChart";
+import { TaskList } from "../components/TaskList";
 import type { PublicRepoPage } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
@@ -86,6 +87,8 @@ export function RepoBody({
           />
         </section>
       </div>
+
+      {release.tasksPublished && <TaskList release={release} />}
 
       {page.lines.length > 1 && (
         <section ref={lines} className="flex flex-col gap-3" data-morph="lines" {...revealGroup}>

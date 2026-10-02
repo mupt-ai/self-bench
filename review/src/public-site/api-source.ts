@@ -1,5 +1,5 @@
 import type { PublishedLine } from "../../../src/public/release-types";
-import type { PublicRepoPage, PublicRepoSummary } from "./contract";
+import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
 import { memorySource, type PublicSource } from "./source";
 
 /** The server answered with an error; pages show their error state. */
@@ -77,11 +77,37 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
         answer(`${base}/api/public/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
       ),
     );
+  const tasksOf = (releaseId: string) =>
+    `${base}/api/public/releases/${encodeURIComponent(releaseId)}/tasks`;
   return {
     listRepos: async () => (await everything()).filter((card) => card.defaultLine),
     listLines: async () => everything(),
     getRepo: async (owner, name) => (await repository(owner, name)).getRepo(owner, name),
     getLine: async (owner, name, publisher) =>
       (await repository(owner, name)).getLine(owner, name, publisher),
+    // A release's tasks never change, so each answer is kept for the visit.
+    getTasks: (releaseId) =>
+      kept(
+        tasksOf(releaseId),
+        async () => (await read<{ tasks: PublicTask[] }>(tasksOf(releaseId)))?.tasks,
+      ),
+    getTaskFiles: (releaseId, taskId) => {
+      const url = `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}`;
+      return kept(url, () => read<PublicTaskFiles>(url));
+    },
+    taskDownloadUrl: (releaseId, taskId) =>
+      `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}/${encodeURIComponent(taskId)}.tar.gz`,
   };
+}
+
+/** Answers kept by address for the visit; a request that fails is forgotten and asked again. */
+const answers = new Map<string, Promise<unknown>>();
+
+function kept<T>(url: string, load: () => Promise<T>): Promise<T> {
+  const found = answers.get(url);
+  if (found) return found as Promise<T>;
+  const loading = load();
+  answers.set(url, loading);
+  loading.catch(() => answers.delete(url));
+  return loading;
 }

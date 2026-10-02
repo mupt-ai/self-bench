@@ -11,7 +11,7 @@ const grid =
   "grid grid-cols-[minmax(10rem,1.6fr)_minmax(5.5rem,0.9fr)_minmax(5rem,0.8fr)_4.5rem] items-center gap-x-3";
 
 /** A square box with a blue check; `mixed` shows a dash for a partly ticked group. */
-function Tick({
+export function Tick({
   id,
   checked,
   mixed = false,

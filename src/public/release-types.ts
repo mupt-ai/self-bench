@@ -1,12 +1,14 @@
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
+import type { TaskRecord } from "../db/tasks.js";
 import type { Harness } from "../evaluation/models.js";
 import type { EvaluationInput } from "../evaluation/types.js";
 
 /**
  * What selfbench.dev reads, as the server writes it: the one definition of the public shapes,
- * which the site's `contract.ts` names for its pages. Aggregates only: nothing per task, no
- * credentials, no endpoint hosts, no people.
+ * which the site's `contract.ts` names for its pages. Aggregates, plus each task's files when
+ * the publisher chose to publish them; never per-task results, credentials, endpoint hosts, or
+ * people.
  */
 export const RELEASE_SCHEMA_VERSION = 1;
 
@@ -69,12 +71,32 @@ export interface ReleasePayload {
   settings: ReleaseSetting[];
   /** Setting ids on the accuracy-versus-cost Pareto frontier. */
   frontier: string[];
+  /** Set when the publisher chose to publish the tasks, for anyone to browse and download. */
+  tasksPublished?: true;
 }
 
 /** One release of one repository by one publisher, as served: the payload plus id and time. */
 export interface PublishedRelease extends ReleasePayload {
   releaseId: string;
   releasedAt: string;
+}
+
+/** One task of a release that published its tasks, as selfbench.dev lists it. */
+export interface PublishedTask {
+  /** The task's id, unique within the release and safe in an address (numbered if two match). */
+  id: string;
+  difficulty: TaskRecord["difficulty"];
+  /** The merged pull request the task was built from. */
+  sourcePr?: number;
+  sourceUrl?: string;
+}
+
+/** A published task's files: small text files with their contents, the rest by size alone. */
+export interface PublishedTaskFiles {
+  taskId: string;
+  files: { path: string; sizeBytes: number; text?: string }[];
+  /** The line asking for the task never to be trained on, which its files carry too. */
+  canary?: string;
 }
 
 /** One release line's current release, as the public API lists it. */

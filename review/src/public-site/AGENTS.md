@@ -26,6 +26,9 @@ The layer (`mobile/mobile.css`, `mobile/device.ts`, `mobile/AdaptiveTable.tsx`):
 - Tables: `AdaptiveTable`, with each column's role (title, detail, metric). It is a table where
   there is room and cards where there is not. Do not write a `<table>` directly.
 - Scripts: `touchInput()` and `canHover()` in `device.ts`, with the same media queries.
+- Overlays are a native `<dialog>` opened with `showModal()`, as the task viewer is: the browser
+  traps focus, Escape closes it, and it sits above the pinned bars. On a phone it fills the
+  screen (`compact:`), and a list inside it scrolls in a short box so what it opens stays in view.
 
 What keeps a new feature phone-ready with no extra work:
 
@@ -95,7 +98,8 @@ WebKit here does not, so for effects also look on a real iPhone:
 ## Keeping the Checks Current
 
 - New kinds of content go into `synthetic.ts` (a repository, a setting, a route), so the checks
-  see them. It is built with the unit tests' builders (`test-fixture.ts`), so contract changes
+  see them. Published tasks and their files are in `synthetic-tasks.ts`, with a route that opens
+  one in the viewer. It is built with the unit tests' builders (`test-fixture.ts`), so contract changes
   surface there as type errors.
 - A deliberate exception is marked on the element, with a comment saying why:
   `data-phone-ok="tap"` (or `overflow`, `text`, `field`, `hover`). Keep these rare.

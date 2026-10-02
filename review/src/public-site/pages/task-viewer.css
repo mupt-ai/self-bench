@@ -1,0 +1,56 @@
+/* The task viewer (TaskViewer.tsx), loaded with it. */
+
+/* The page stays put behind the open viewer; the viewer scrolls its own panes. */
+html:has(dialog.task-viewer[open]) {
+  overflow: hidden;
+}
+
+/* A closed dialog is hidden by the browser; this only lays out an open one. */
+dialog.task-viewer:not([open]) {
+  display: none;
+}
+
+/* Each line numbered in a gutter that stays put while long lines scroll. */
+.task-lines {
+  counter-reset: line;
+  min-width: max-content;
+}
+.task-lines > span {
+  display: block;
+  padding-inline: 0.75rem 1rem;
+  white-space: pre;
+}
+.task-lines > span::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3rem;
+  margin-right: 1rem;
+  text-align: right;
+  color: var(--faint);
+  user-select: none;
+}
+/* Prose (the instruction) wraps instead, its wrapped lines indented past the numbers. */
+.task-lines-wrap {
+  min-width: 0;
+}
+.task-lines-wrap > span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 4.75rem;
+  text-indent: -4rem;
+}
+
+.task-diff-added {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.task-diff-removed {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+.task-diff-hunk {
+  color: var(--muted-fg);
+  background: var(--muted);
+}
+.task-diff-meta {
+  font-weight: 600;
+}

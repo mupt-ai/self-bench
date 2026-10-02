@@ -13,7 +13,7 @@ import type { ReleaseSetting } from "./release-types.js";
 export interface ReleaseTask
   extends Pick<
     TaskRecord,
-    "runId" | "taskId" | "difficulty" | "sourcePr" | "sourceUrl" | "reason" | "review"
+    "runId" | "taskId" | "difficulty" | "sourcePr" | "sourceUrl" | "reason" | "review" | "bundleKey"
   > {
   /** `evaluationTaskKey(runId, taskId)`. */
   key: string;

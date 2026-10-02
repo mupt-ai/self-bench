@@ -171,11 +171,19 @@ export interface BuiltRelease {
   detail: Record<string, unknown> & PreviousRelease;
 }
 
-/** Builds the release for the ticked settings. */
+/**
+ * Builds the release for the ticked settings. With `publishTasks`, the payload says the tasks
+ * are public, and selfbench.dev serves the compiled task each one's evaluations ran (recorded
+ * per task in `detail.releasedTasks`).
+ */
 export function buildRelease(
   inputs: ReleaseInputs,
   chosenKeys: readonly string[],
-  context: { repository: Pick<ReleaseRepository, "id" | "fullName">; publisher: ReleasePublisher },
+  context: {
+    repository: Pick<ReleaseRepository, "id" | "fullName">;
+    publisher: ReleasePublisher;
+    publishTasks?: boolean;
+  },
 ): BuiltRelease {
   const { approved, all } = evaluate(inputs);
   const wanted = new Set(chosenKeys);
@@ -187,6 +195,11 @@ export function buildRelease(
   if (tasks.length === 0)
     throw new ReleaseRefused("The selected settings have no approved task in common.");
   const settings = scores(chosen, tasks);
+  if (context.publishTasks) {
+    const byKey = new Map(inputs.tasks.map((task) => [task.key, task]));
+    if (tasks.some((key) => !byKey.get(key)?.bundleKey))
+      throw new ReleaseRefused("A task has no compiled files to publish; refresh and try again.");
+  }
   const payload: ReleasePayload = {
     schemaVersion: RELEASE_SCHEMA_VERSION,
     repository: { id: context.repository.id, fullName: context.repository.fullName },
@@ -194,6 +207,7 @@ export function buildRelease(
     tasks: tasks.length,
     settings,
     frontier: settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
+    ...(context.publishTasks ? { tasksPublished: true as const } : {}),
   };
   const results = Object.fromEntries(
     chosen.map((entry) => [

@@ -12,6 +12,8 @@ export interface ReleaseSummary {
   publisher: string;
   tasks: number;
   settings: number;
+  /** Whether the tasks were published with it; the release dialog starts from the current one's. */
+  tasksPublished: boolean;
   current: boolean;
   head: boolean;
 }
@@ -40,6 +42,7 @@ export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): Release
     publisher: row.publisherLogin,
     tasks: row.payload.tasks,
     settings: row.payload.settings.length,
+    tasksPublished: row.payload.tasksPublished === true,
     current: currentOf(rows)?.id === row.id,
     head: headOf(rows)?.id === row.id,
   };

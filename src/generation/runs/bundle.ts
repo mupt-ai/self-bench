@@ -7,6 +7,9 @@ import { GATE_TASK_FILE, SNAPSHOT_FILE, SNAPSHOT_PATHS } from "../../sandbox/gat
 import { type BundleFile, isInlineCandidate, taskFilesFromBundle } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
 
+/** All a bundle is read with. */
+type BundleStore = Pick<ArtifactStore, "stat" | "openReadByKey">;
+
 const MAX_BUNDLE_ENTRIES = 20_000;
 const MAX_CACHED_BYTES = 64 * 1024 * 1024;
 
@@ -22,7 +25,7 @@ let expandedBytes = 0;
  * whole. Results are kept in memory by content digest: a task page that re-reads the same bundle
  * costs one metadata lookup instead of a full pass.
  */
-export async function expandBundle(store: ArtifactStore, key: string): Promise<TaskFiles> {
+export async function expandBundle(store: BundleStore, key: string): Promise<TaskFiles> {
   const object = await store.stat(key);
   // Objects written without a recorded digest are expanded every time rather than cached.
   const identity = object ? `${key}@${object.sha256}` : undefined;
@@ -60,7 +63,7 @@ function remember(identity: string, files: TaskFiles): void {
   }
 }
 
-async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
+async function expand(store: BundleStore, key: string): Promise<TaskFiles> {
   const light = await withoutSnapshots(store, key);
   if (light) {
     const files = await readArchive(store, light.key);
@@ -76,7 +79,7 @@ async function expand(store: ArtifactStore, key: string): Promise<TaskFiles> {
  * Tasks with services, and bundles compiled before the split existed, have no gate task.
  */
 async function withoutSnapshots(
-  store: ArtifactStore,
+  store: BundleStore,
   key: string,
 ): Promise<{ key: string; snapshots: BundleFile[] } | undefined> {
   const suffix = "/harbor-task.tar.gz";
@@ -99,7 +102,7 @@ async function withoutSnapshots(
  * viewer shows; undefined when there is no object at `key`. Nothing touches disk: large entries
  * are skipped as they stream past, where a persistent unpacked cache once filled the API's disk.
  */
-async function readArchive(store: ArtifactStore, key: string): Promise<BundleFile[] | undefined> {
+async function readArchive(store: BundleStore, key: string): Promise<BundleFile[] | undefined> {
   const body = await store.openReadByKey(key);
   if (!body) return undefined;
   const archive = extract();

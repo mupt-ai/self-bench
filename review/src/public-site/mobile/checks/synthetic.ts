@@ -1,6 +1,7 @@
 import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
+import { OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
 
 type Model = PublicSetting["model"];
 
@@ -69,6 +70,7 @@ function syntheticPages(): PublicRepoPage[] {
     // long name, every provider.
     page({
       releaseId: "synthetic-crowded",
+      tasksPublished: true,
       repository: {
         id: 1001,
         fullName: "example-org/widgets",
@@ -252,12 +254,13 @@ function syntheticPages(): PublicRepoPage[] {
 }
 
 export function syntheticSource(): PublicSource {
-  return memorySource(syntheticPages());
+  return memorySource(syntheticPages(), syntheticTasks());
 }
 
 /**
  * A path to every kind of page, over the synthetic data: home, a search, each repository's
- * default line, each other publisher's line, and a repository with nothing released.
+ * default line, each other publisher's line, a task open in the viewer, and a repository with
+ * nothing released.
  */
 export function syntheticRoutes(): string[] {
   const pages = syntheticPages();
@@ -276,6 +279,7 @@ export function syntheticRoutes(): string[] {
     "/?q=widgets",
     ...repositories.map((name) => `/${name}`),
     ...otherLines.map((line) => `/${line}`),
+    `/example-org/widgets?task=${OPENED_TASK}`,
     "/nobody/nothing-released",
   ];
 }

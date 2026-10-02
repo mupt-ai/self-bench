@@ -67,6 +67,7 @@ module "selfbench" {
   sentry_dsn                  = var.sentry_dsn
   sentry_browser_dsn          = var.sentry_browser_dsn
   posthog_api_key             = var.posthog_api_key
+  task_canary                 = var.task_canary
   activity_concurrency        = var.activity_concurrency
   worker_instances            = var.worker_instances
   gke_workers                 = var.gke_workers

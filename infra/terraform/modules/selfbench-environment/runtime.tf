@@ -93,6 +93,15 @@ locals {
       worker  = true
       enabled = var.managed_offering
     }
+    # Not secret in what it marks, but kept out of the repository and the deploy logs, so a model
+    # can only learn it from the published tasks themselves (src/public/task-canary.ts).
+    task_canary = {
+      id      = "selfbench-task-canary"
+      env     = "SELFBENCH_TASK_CANARY"
+      api     = true
+      worker  = false
+      enabled = var.task_canary
+    }
   }
   temporal_secret = {
     id  = "selfbench-temporal-api-key"
