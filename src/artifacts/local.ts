@@ -190,6 +190,20 @@ export class LocalArtifactStore implements ArtifactStore {
     return entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 
+  async folders(prefix: string): Promise<string[]> {
+    let names: Dirent[];
+    try {
+      names = await readdir(this.#pathFor(prefix), { withFileTypes: true });
+    } catch (error) {
+      if (isNotFound(error)) return [];
+      throw error;
+    }
+    return names
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+  }
+
   #pathForReference(reference: ArtifactRef): string {
     const url = new URL(reference.uri);
     if (url.protocol !== "file:") {

@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
+import type { RunSummaryStore } from "../db/evaluation-summaries.js";
+import { reportError } from "../lib/telemetry/sentry.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 export function evaluationPrefix(repoId: number, id = ""): string {
@@ -40,6 +42,72 @@ export function initialEvaluation(input: EvaluationInput, modelLabel: string): E
 export async function saveEvaluation(store: ArtifactStore, run: EvaluationRun): Promise<void> {
   run.revision += 1;
   await store.put(snapshotKey(run), Buffer.from(JSON.stringify(run)), "application/json");
+  await saveSummary(store, run);
+}
+
+/** A run without its trials' logs, transcripts and artifact lists: what lists of runs show. */
+export function runSummary(run: EvaluationRun): EvaluationRun {
+  return {
+    ...run,
+    trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
+  };
+}
+
+/**
+ * Where each artifact store's run summaries are kept, in processes that have the database. Kept
+ * beside the store rather than passed to every function that saves a run, so no path that saves
+ * one can leave its summary behind.
+ */
+const summaryStores = new WeakMap<ArtifactStore, RunSummaryStore>();
+/** Has every run saved to `store` also save its summary to `summaries`, and run lists read them. */
+export function keepRunSummaries(store: ArtifactStore, summaries: RunSummaryStore): void {
+  summaryStores.set(store, summaries);
+}
+export function runSummariesOf(store: ArtifactStore): RunSummaryStore | undefined {
+  return summaryStores.get(store);
+}
+
+/** A summary is a copy: a slow database must not hold a trial up for longer than this. */
+const SUMMARY_SAVE_MS = 2_000;
+/** After a save fails, how long summaries wait: a database that is down costs a run one wait. */
+const SUMMARY_PAUSE_MS = 30_000;
+const pausedUntil = new WeakMap<RunSummaryStore, number>();
+
+/**
+ * Saves a saved run's summary. The snapshot is the record, so this never fails or long delays the
+ * save it follows: a summary that was not saved is found behind its run and rebuilt by the next
+ * list of runs (run-list.ts).
+ */
+export async function saveSummary(store: ArtifactStore, run: EvaluationRun): Promise<void> {
+  const summaries = summaryStores.get(store);
+  if (!summaries || Date.now() < (pausedUntil.get(summaries) ?? 0)) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const { id, revision } = run;
+    const saved = summaries.save(run.repoId, {
+      id,
+      revision,
+      body: JSON.stringify(runSummary(run)),
+    });
+    // Should it lose the race below, its own failure is nobody's to handle.
+    saved.catch(() => undefined);
+    await Promise.race([
+      saved,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timed out")), SUMMARY_SAVE_MS);
+      }),
+    ]);
+  } catch (error) {
+    pausedUntil.set(summaries, Date.now() + SUMMARY_PAUSE_MS);
+    // A query's own message repeats the whole summary; its cause says what went wrong.
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+    const reason = (cause instanceof Error ? cause.message : String(cause)).slice(0, 200);
+    const message = `evaluation ${run.id}: summary of revision ${run.revision} not saved: ${reason}`;
+    console.warn(message);
+    reportError(new Error(message), { repeatKey: "evaluation-summary-save" });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 /** Thrown instead of starting work that may already have spent model money; never retried. */
 export class RepeatSpendError extends Error {
@@ -77,8 +145,16 @@ export async function updateEvaluation(
     );
   }
 }
-function snapshotKey(run: EvaluationRun): string {
+type Revision = Pick<EvaluationRun, "repoId" | "id" | "revision">;
+function snapshotKey(run: Revision): string {
   return `${evaluationPrefix(run.repoId, run.id)}snapshots/${String(run.revision).padStart(10, "0")}.json`;
+}
+/**
+ * Whether a run has been saved since `run`'s revision. Revisions count up by one, so the next
+ * one's snapshot is there exactly when it has.
+ */
+export async function savedSince(store: ArtifactStore, run: Revision): Promise<boolean> {
+  return !!(await store.stat(snapshotKey({ ...run, revision: run.revision + 1 })));
 }
 export async function getEvaluation(
   store: ArtifactStore,

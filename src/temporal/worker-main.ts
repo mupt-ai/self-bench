@@ -5,9 +5,11 @@ import { loadWorkerConfig } from "../contracts/config/index.js";
 import { workerProcessSettings } from "../contracts/config/worker.js";
 import { createBatchStore } from "../db/batches.js";
 import { openDatabase } from "../db/client.js";
+import { createRunSummaryStore } from "../db/evaluation-summaries.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
+import { keepRunSummaries } from "../evaluation/store.js";
 import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
@@ -47,6 +49,7 @@ const vault =
     : undefined;
 const usage = vault && database ? createUsageStore(database.db) : undefined;
 const artifacts = createArtifactStore(config.artifact);
+if (database) keepRunSummaries(artifacts, createRunSummaryStore(database.db));
 const { verifyCompiled, ...generation } = createActivities(config, vault, usage);
 const batches = database
   ? createBatchActivities({

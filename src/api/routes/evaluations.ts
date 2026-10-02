@@ -18,13 +18,15 @@ import {
   hostedSandboxes,
   withReferencePricing,
 } from "../../evaluation/catalog.js";
+import { comparisonProgress } from "../../evaluation/comparison-progress.js";
 import {
   comparisonSchema,
   comparisonStatus,
   createComparison,
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
-import { evaluationPrefix, getEvaluation, listEvaluations } from "../../evaluation/store.js";
+import { listRuns } from "../../evaluation/run-list.js";
+import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
@@ -134,10 +136,11 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
             );
           } else if (request.method === "GET" && !id) {
             const records = await vault.comparisons.listForRepo(repo.id);
+            // One read of the repository's run summaries serves every comparison.
+            const { runs = [] } = records.length ? await listRuns(artifacts, repo.id) : {};
+            const byId = new Map(runs.map((run) => [run.id, run]));
             sendJson(response, 200, {
-              comparisons: await Promise.all(
-                records.map((record) => comparisonStatus(artifacts, record)),
-              ),
+              comparisons: records.map((record) => comparisonProgress(record, byId)),
             });
           } else {
             const record = id ? await vault.comparisons.find(id) : undefined;
@@ -209,12 +212,13 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         else if (!id) sendJson(response, 200, run);
         else sendJson(response, 404, { error: "Not found" });
       } else {
-        sendJson(response, 200, {
-          runs: (await listEvaluations(artifacts, repo.id)).map((run) => ({
-            ...run,
-            trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
-          })),
-        });
+        // A page polling this list sends back the tag of the one it has, and is told when that
+        // list still stands without being sent it again.
+        const have = /^(?:W\/)?"([^"]+)"$/.exec(request.headers["if-none-match"] ?? "")?.[1];
+        const { tag, runs } = await listRuns(artifacts, repo.id, have);
+        response.setHeader("etag", `"${tag}"`);
+        if (runs) sendJson(response, 200, { runs });
+        else response.writeHead(304).end();
       }
       return true;
     },

@@ -127,6 +127,13 @@
       "when": 1790805948005,
       "tag": "0017_repo_agent_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790908141487,
+      "tag": "0018_evaluation_summaries",
+      "breakpoints": true
     }
   ]
 }

@@ -204,6 +204,25 @@ export class GcsArtifactStore implements ArtifactStore {
     return entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 
+  async folders(prefix: string): Promise<string[]> {
+    const object = `${this.#objectFor(prefix)}/`;
+    const names: string[] = [];
+    // With a delimiter the bucket answers with the folder names alone, a page at a time.
+    let pageToken: string | undefined;
+    do {
+      const [, next, response] = await this.#storage.bucket(this.#bucket).getFiles({
+        prefix: object,
+        delimiter: "/",
+        autoPaginate: false,
+        ...(pageToken ? { pageToken } : {}),
+      });
+      const { prefixes = [] } = (response ?? {}) as { prefixes?: string[] };
+      for (const folder of prefixes) names.push(folder.slice(object.length, -1));
+      pageToken = (next as { pageToken?: string } | null)?.pageToken;
+    } while (pageToken);
+    return names.sort((left, right) => left.localeCompare(right));
+  }
+
   #fileForReference(reference: ArtifactRef) {
     const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(reference.uri);
     if (!match) {

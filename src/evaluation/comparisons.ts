@@ -8,6 +8,7 @@ import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
+import { comparisonProgress } from "./comparison-progress.js";
 import {
   defaultThinking,
   evaluationTaskKey,
@@ -245,22 +246,12 @@ function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluat
 
 export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
   const runs = await Promise.all(
-    record.inputs.map(async (input) => {
-      const run = await getEvaluation(store, record.repoId, input.id);
-      return {
-        id: input.id,
-        model: input.modelName,
-        thinking: input.thinking,
-        harnesses: input.harnesses,
-        status: run?.status ?? "pending",
-        completed:
-          run?.trials.filter((trial) => trial.status === "completed" || trial.status === "failed")
-            .length ?? 0,
-        trials: input.tasks.length * input.harnesses.length,
-      };
-    }),
+    record.inputs.map((input) => getEvaluation(store, record.repoId, input.id)),
   );
-  return { id: record.id, createdAt: record.createdAt, runs };
+  return comparisonProgress(
+    record,
+    new Map(runs.flatMap((run) => (run ? [[run.id, run] as const] : []))),
+  );
 }
 export async function dispatchComparison(
   store: ArtifactStore,
