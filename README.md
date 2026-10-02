@@ -60,7 +60,7 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. A deployment can also turn on the managed offering (`SELFBENCH_MANAGED_OFFERING`), which adds model and sandbox access on SelfBench's accounts, billed under **Billing**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
+Models and sandboxes run on your organization's own keys under **Credentials**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
 
 ## Self-hosting
 
