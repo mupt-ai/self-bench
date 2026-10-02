@@ -26,18 +26,18 @@ import { record } from "./output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
-type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
+export type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
 /** The sign-in type of a saved model credential, deleted ones included. */
 export type ModelAuthLookup = (
   orgId: number,
   credentialId: string,
 ) => Promise<ModelAuth | undefined>;
 
-type CostFields = Pick<
+export type CostFields = Pick<
   EvaluationTrial,
   "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
 >;
-const costKeys = [
+export const costKeys = [
   "modelVerified",
   "apiCostUsd",
   "tokenUsage",
@@ -52,12 +52,29 @@ interface RecomputeReport {
   applied: boolean;
 }
 
-const costFields = (trial: CostFields): CostFields =>
+export const costFields = (trial: CostFields): CostFields =>
   Object.fromEntries(
     costKeys.flatMap((key) => (trial[key] === undefined ? [] : [[key, trial[key]]])),
   );
 
-async function modelAuth(
+/** A trial's stored transcripts and Harbor result, named as the runner collected them. */
+export async function storedHarborFiles(
+  store: ArtifactStore,
+  run: EvaluationRun,
+  trial: EvaluationTrial,
+): Promise<{ files: Map<string, string>; result: string | undefined }> {
+  const files = new Map<string, string>();
+  for (const name of trial.artifacts) {
+    if (!/\/(trajectory\.json|pi\.txt|result\.json)$/.test(name)) continue;
+    const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
+    if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
+  }
+  const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name))?.[1];
+  return { files, result };
+}
+
+/** The sign-in type a run's model credential used: recorded, saved, or else `fallback`. */
+export async function modelAuth(
   run: EvaluationRun,
   lookup: ModelAuthLookup | undefined,
   fallback: ModelAuth | undefined,
@@ -93,21 +110,13 @@ export async function recomputeEvaluationCost(
   };
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
-    const names = trial.artifacts.filter((name) =>
-      /\/(trajectory\.json|pi\.txt|result\.json)$/.test(name),
-    );
-    const files = new Map<string, string>();
-    for (const name of names) {
-      const bytes = await store.getByKey(`${evaluationPrefix(repoId, id)}artifacts/${name}`);
-      if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
-    }
-    const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
+    const { files, result } = await storedHarborFiles(store, run, trial);
     // Without the sign-in type, an earlier recompute's inferred cache writes cannot be rederived.
     if (!result || (!auth && trial.cacheWritesInferred)) {
       report.trials.push({ index, before, changed: false });
       continue;
     }
-    const after = trialCost(run, trial.harness, files, record(JSON.parse(result[1])), auth);
+    const after = trialCost(run, trial.harness, files, record(JSON.parse(result)), auth);
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
       report.trials.push({ index, before, changed: false });

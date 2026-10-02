@@ -107,3 +107,37 @@ test("Pi trials are bounded per request and priced from a stored tail's final ag
     trialCost(run, "pi", tail({ type: "message_end", message: replies[1] }), {}).apiCostUsd,
   ).toBeUndefined();
 });
+
+test("a Pi stopped at its time limit takes a stored tail's totals from Harbor, unless it wrote caches", () => {
+  const run = initialEvaluation({ ...evaluationInput(), pricing }, "Test");
+  const reply = (cacheWrite: number) =>
+    JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        provider: "openai",
+        model: "test-model",
+        usage: { input: 10, output: 10, cacheRead: 10, cacheWrite },
+      },
+    });
+  // The tail lost its early replies and, stopped mid-write, ends on a cut line with no agent_end.
+  const tail = (cacheWrite: number) =>
+    new Map([
+      [
+        "solver/trial/agent/pi.txt",
+        `[Earlier output truncated]\n"usage":{"inp\n${reply(cacheWrite)}\n{"type":"turn_end","me`,
+      ],
+    ]);
+  const stopped = {
+    exception_info: { exception_type: "AgentTimeoutError" },
+    agent_result: { n_input_tokens: 1000, n_cache_tokens: 600, n_output_tokens: 100 },
+  };
+  expect(trialCost(run, "pi", tail(0), stopped)).toEqual({
+    modelVerified: true,
+    apiCostUsd: (400 * 2 + 100 * 8 + 600 * 0.5) / 1_000_000,
+    tokenUsage: { input: 400, output: 100, cacheRead: 600, cacheWrite: 0 },
+    costSource: "reference-rates",
+  });
+  // Harbor's totals leave cache writes out.
+  expect(trialCost(run, "pi", tail(5), stopped).apiCostUsd).toBeUndefined();
+});

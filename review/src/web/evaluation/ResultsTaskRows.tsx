@@ -239,6 +239,14 @@ export function TaskRow({
             {after ? "Not Counted" : "Replaced"}
           </span>
         )}
+        {result?.trial.agentTimedOut && (
+          <span
+            className="ml-2 border border-current px-1 py-px text-[10px] leading-none"
+            title="The agent reached its time limit and was scored on the work it had done"
+          >
+            Timed Out
+          </span>
+        )}
       </td>
       <td className="truncate font-mono text-muted-foreground">
         {cumulative && result ? result.run.startedBy : ""}
