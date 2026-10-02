@@ -4,6 +4,7 @@ import {
   ApplicationFailure,
   defineQuery,
   isCancellation,
+  patched,
   proxyActivities,
   setHandler,
   sleep,
@@ -63,6 +64,16 @@ const harbor = () =>
     taskQueue: harborTaskQueue(workflowInfo().taskQueue),
   });
 
+// Exporting a large task's images streams its whole filesystem out of Modal.
+const exporter = () =>
+  proxyActivities<Pick<WorkerActivities, "exportTaskImages">>({
+    startToCloseTimeout: "3 hours",
+    heartbeatTimeout: "10 minutes",
+    cancellationType: "WAIT_CANCELLATION_COMPLETED",
+    retry: { ...retry, maximumAttempts: 3 },
+    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+  });
+
 /**
  * Starts a sandbox, waiting while the provider account is at its concurrent-sandbox quota. A
  * waiting workflow holds no worker slot and spends no activity retry. Waits double from one
@@ -103,6 +114,9 @@ const workflowActivities: SelfBenchActivities = {
       ...input,
       outcome: await whenSandboxFree(() => agents.startReviewRound(input)),
     }),
+  // Workflows that accepted a task before exports existed replay without one.
+  exportTaskImages: async (input) =>
+    patched("export-task-images") ? await exporter().exportTaskImages(input) : input.task,
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
     return await harbor().verifyCompiled({
@@ -235,7 +249,12 @@ export async function executeCandidate(
         round: reviews,
       });
       if (verdict.kind === "accepted") {
-        return { progress: update({ status: "accepted" }), task, report: verified.reportRef };
+        // A failed export only means other providers build the task's Dockerfiles, as before.
+        const kept = await activities.exportTaskImages({ run, task }).catch((error: unknown) => {
+          if (isCancellation(error)) throw error;
+          return task;
+        });
+        return { progress: update({ status: "accepted" }), task: kept, report: verified.reportRef };
       }
       if (verdict.kind === "rejected") return finish("rejected", verdict.reason);
       feedback = `${verdict.summary}\n\n${verdict.suggestions}`;

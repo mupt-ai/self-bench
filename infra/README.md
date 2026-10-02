@@ -161,6 +161,15 @@ To turn it on:
 2. Add the Temporal API key as a version of `selfbench-temporal-api-key`.
 3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` to `TF_INPUTS_JSON`, and release.
 
+## Task Images
+
+With `"task_images": true`, the worker exports each accepted task's verified images, the Modal images its oracle passed on, into the `selfbench-tasks` Artifact Registry repository, and E2B and Docker trials start from them by digest instead of building the task's Dockerfiles. Only accepted tasks are exported, once each. The runtime account writes the repository and the API account reads it. Sandbox providers never get a credential for the repository: they pull through the API's `/v2/` registry endpoint with a grant for one task's images, and image layers are redirected to Artifact Registry's own download URLs.
+
+To turn it on:
+
+1. Grant the apply role `artifactregistry.repositories.create` (already needed for `selfbench`) and `artifactregistry.repositories.setIamPolicy`.
+2. Add `"task_images": true` to `TF_INPUTS_JSON`, and release.
+
 ## Operational Notes
 
 - Dev and prod must not share projects, buckets, databases, Temporal namespaces, OAuth apps, or secrets.

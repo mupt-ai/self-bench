@@ -155,6 +155,11 @@ variable "api_max_instances" {
   type        = number
   default     = 3
 }
+variable "task_images" {
+  description = "Export each accepted task's verified images into the selfbench-tasks repository, so E2B and Docker trials start from them by digest."
+  type        = bool
+  default     = false
+}
 variable "gke_workers" {
   description = "Run Harbor work on GKE Autopilot, scaled by KEDA on the Harbor queue backlog."
   type        = bool

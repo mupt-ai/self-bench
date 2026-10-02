@@ -150,6 +150,7 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       session: ref(`file:///${value.candidateId}/authoring/session/round-${round}.jsonl`),
     }),
     compileAndVerify: async ({ task, stage, round }) => greenOutcome(task, stage, round),
+    exportTaskImages: async ({ task }) => task,
     runReviewRound: async ({ candidate: value, round }) => ({
       kind: "accepted",
       session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),

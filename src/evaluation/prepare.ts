@@ -11,6 +11,7 @@ import {
   harborPythonPath,
 } from "../harnesses/harbor/command.js";
 import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
+import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
 import { assertHostSafeTask } from "../harnesses/harbor/task-safety.js";
 import { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
@@ -61,6 +62,17 @@ export async function prepareTaskImages(
     });
     // The script reads task.toml, so it gets the same checked copy Harbor would.
     await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
+    // An E2B template is then made from the task's exported image instead of its Dockerfile.
+    const pull = await startFromExportedImages(
+      taskPath,
+      task.images,
+      input.sandbox,
+      {
+        env: options.env ?? process.env,
+        ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+      },
+      root,
+    );
     const pins = Object.entries(
       pinnedImageKwargs(input.sandbox === "modal" ? task.images : undefined),
     );
@@ -73,7 +85,7 @@ export async function prepareTaskImages(
         ...pins.map(([key, value]) => `${key}=${value}`),
       ],
       {
-        env: child,
+        env: { ...child, ...pull },
         timeoutMs: PREPARE_TIMEOUT_MS,
         ...(options.signal ? { signal: options.signal } : {}),
       },
