@@ -6,6 +6,7 @@ import {
   fileSize,
   isSnapshot,
   laidOut,
+  shownText,
   snapshotCommands,
   type TaskFile,
 } from "../task-files";
@@ -49,8 +50,9 @@ export function FileButton({
 
 /**
  * The chosen file: named in a bar above it, and the task's canary in a matching bar below, so
- * every file shown has it beside it, the instruction and patches included, which do not carry
- * it themselves. The canary keeps to one line; its full text is still in the page.
+ * every file shown has it beside it: the patches and JSON, which do not carry it, and the
+ * instruction, shown without the copy it opens with. The canary keeps to one line; its full
+ * text is still in the page.
  */
 export function FilePane({
   file,
@@ -72,7 +74,13 @@ export function FilePane({
         <span className="shrink-0 text-muted-foreground">{fileSize(file.sizeBytes)}</span>
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
-        <FileView file={file} files={files} repository={repository} taskId={taskId} />
+        <FileView
+          file={file}
+          files={files}
+          repository={repository}
+          taskId={taskId}
+          canary={canary}
+        />
       </div>
       {canary && (
         <p
@@ -92,11 +100,13 @@ function FileView({
   files,
   repository,
   taskId,
+  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
+  canary: string | undefined;
 }) {
   const kind = fileKind(file);
   if (kind === "none") {
@@ -116,7 +126,7 @@ function FileView({
       </p>
     );
   }
-  const text = kind === "json" ? laidOut(file.text ?? "") : (file.text ?? "");
+  const text = kind === "json" ? laidOut(file.text ?? "") : shownText(file, canary);
   const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
   return (
     <pre

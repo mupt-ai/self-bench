@@ -231,8 +231,8 @@ test("with a canary, the files SelfBench writes carry it, downloaded and shown a
   expect(text("task.toml")).toBe(`name = "selfbench/next-pr-1"\n# ${canary}\n`);
   expect(text("solution/solve.sh")).toBe(`#!/bin/sh\ngit apply gold.patch\n# ${canary}\n`);
   expect(text("environment/Dockerfile")).toEndWith(`# ${canary}\n`);
-  // The agent's prompt and the patches stay exactly as benchmarked.
-  expect(text("instruction.md")).toBe("Order the chunks by path.\n");
+  // The instruction opens with it, for Harbor to remove; the patches are left exactly as they are.
+  expect(text("instruction.md")).toBe(`<!-- ${canary} -->\n\nOrder the chunks by path.\n`);
   expect(text("solution/gold.patch")).not.toContain(canary);
   expect(found.find((entry) => entry.path.endsWith("solve.sh"))?.mode).toBe(0o755);
 
@@ -244,7 +244,7 @@ test("with a canary, the files SelfBench writes carry it, downloaded and shown a
   expect(toml?.text).toBe(text("task.toml"));
   expect(toml?.sizeBytes).toBe(Buffer.byteLength(toml?.text ?? ""));
   expect(files.files.find((file) => file.path === "instruction.md")?.text).toBe(
-    "Order the chunks by path.\n",
+    text("instruction.md"),
   );
 });
 

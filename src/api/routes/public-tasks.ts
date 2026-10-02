@@ -145,7 +145,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
           taskId: id,
           files: expanded.files.map((file) => {
             if (!canary || file.text === undefined || !takesCanary(file.path)) return file;
-            const text = withCanary(file.text, canary);
+            const text = withCanary(file.path, file.text, canary);
             return { ...file, text, sizeBytes: Buffer.byteLength(text) };
           }),
           ...(canary ? { canary } : {}),
