@@ -62,7 +62,7 @@ export async function storedHarborFiles(
   store: ArtifactStore,
   run: EvaluationRun,
   trial: EvaluationTrial,
-): Promise<{ files: Map<string, string>; result?: string }> {
+): Promise<{ files: Map<string, string>; result: string | undefined }> {
   const files = new Map<string, string>();
   for (const name of trial.artifacts) {
     if (!/\/(trajectory\.json|pi\.txt|result\.json)$/.test(name)) continue;
@@ -70,7 +70,7 @@ export async function storedHarborFiles(
     if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
   }
   const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name))?.[1];
-  return { files, ...(result === undefined ? {} : { result }) };
+  return { files, result };
 }
 
 /** The sign-in type a run's model credential used: recorded, saved, or else `fallback`. */
