@@ -17,8 +17,9 @@ import {
   signInRefusal,
   thinkingOptions,
 } from "./models.js";
-import { getEvaluation, listEvaluations } from "./store.js";
-import type { EvaluationInput } from "./types.js";
+import { listRuns } from "./run-list.js";
+import { getEvaluation } from "./store.js";
+import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 export const comparisonSchema = z
   .object({
@@ -96,7 +97,7 @@ export async function createComparison(
     return { runId, taskId, bundleKey, ...(images ? { images } : {}) };
   });
   const completed = selection.skipCompleted
-    ? completedConfigurationTasks(await listEvaluations(store, scope.repoId))
+    ? completedConfigurationTasks((await listRuns(store, scope.repoId)).runs ?? [])
     : new Set<string>();
   if ((await comparisons.countForOrg(scope.orgId)) >= 500)
     throw new Error("Comparison retention limit reached; contact an operator");
@@ -233,7 +234,8 @@ function configurationTaskKey(
   return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
 }
 
-function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
+/** Each configuration's completed tasks, from the runs list: only trial statuses are read. */
+function completedConfigurationTasks(runs: readonly EvaluationRun[]) {
   const completed = new Set<string>();
   for (const run of runs) {
     for (const trial of run.trials) {
