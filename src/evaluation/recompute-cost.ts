@@ -26,7 +26,7 @@ import { record } from "./output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
-type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
+export type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
 /** The sign-in type of a saved model credential, deleted ones included. */
 export type ModelAuthLookup = (
   orgId: number,
@@ -57,7 +57,8 @@ const costFields = (trial: CostFields): CostFields =>
     costKeys.flatMap((key) => (trial[key] === undefined ? [] : [[key, trial[key]]])),
   );
 
-async function modelAuth(
+/** The sign-in type a run's model credential used: recorded, saved, or else `fallback`. */
+export async function modelAuth(
   run: EvaluationRun,
   lookup: ModelAuthLookup | undefined,
   fallback: ModelAuth | undefined,
