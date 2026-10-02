@@ -126,14 +126,19 @@ async function claudeCodeCost(
   const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
   const lines = Buffer.from(bytes ?? [])
     .toString("utf8")
-    .split("\n");
-  const last = lines.reverse().find((line) => line.startsWith('{"type":"result"'));
-  try {
-    const cost = last && record(JSON.parse(last)).total_cost_usd;
-    return typeof cost === "number" && Number.isFinite(cost) ? cost : undefined;
-  } catch {
-    return undefined;
+    .split("\n")
+    .filter((line) => line.includes('"type":"result"'));
+  for (const line of lines.reverse()) {
+    try {
+      const event = record(JSON.parse(line));
+      const cost = event.total_cost_usd;
+      if (event.type === "result")
+        return typeof cost === "number" && Number.isFinite(cost) ? cost : undefined;
+    } catch {
+      // A line cut by the stored tail, or a quoted result inside another event.
+    }
   }
+  return undefined;
 }
 
 /**
