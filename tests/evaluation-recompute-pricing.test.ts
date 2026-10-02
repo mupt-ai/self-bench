@@ -85,3 +85,59 @@ test("recompute prices requests past a flat 200k bound the model's pricing never
   expect(saved?.trials[0]).toMatchObject({ costSource: "reference-rates", tokenUsage: usage });
   expect(saved?.trials[0]?.apiCostUsd).toBeCloseTo(cost, 12);
 });
+
+test("recompute prices a cut Claude Code trial only at the cost Claude Code reported", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
+  directories.push(directory);
+  const store = new LocalArtifactStore(directory);
+  const usage = { input: 200, output: 100_000, cacheRead: 20_000_000, cacheWrite: 300_000 };
+  // At Opus 5.5's rates with every cache write kept for an hour (twice the input rate).
+  const hourly = (200 * 4 + 100_000 * 20 + 20_000_000 * 0.2 + 300_000 * 8) / 1e6;
+  const recompute = async (reported: number) => {
+    const run = initialEvaluation(
+      {
+        ...evaluationInput(),
+        model: "claude-opus-5-5",
+        modelName: "anthropic/claude-opus-5-5",
+        harnesses: ["claude-code"],
+        pricing: {
+          input: 4,
+          output: 20,
+          cacheRead: 0.2,
+          cacheWrite: 5,
+          source: "https://platform.claude.com/docs/en/about-claude/pricing",
+          asOf: "2026-09-23",
+          maxInputTokens: 200_000,
+        },
+        credentials: {
+          modelCredentialId: "model",
+          sandboxCredentialId: "sandbox",
+          provider: "anthropic",
+          auth: "claude-login",
+        },
+      },
+      "Test",
+    );
+    const trial = run.trials[0];
+    if (!trial) throw new Error("Missing trial");
+    run.status = "completed";
+    Object.assign(trial, { status: "completed", modelVerified: true, tokenUsage: usage });
+    for (const [name, body] of [
+      // Stored from its head and cut, so it no longer parses.
+      ["0/solver/task__1/agent/trajectory.json", '{"steps":[{"source":"agent","metrics":{'],
+      ["0/solver/task__1/result.json", JSON.stringify({ agent_result: { cost_usd: reported } })],
+    ] as const) {
+      trial.artifacts.push(name);
+      await store.put(
+        `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+        Buffer.from(body),
+        "text/plain",
+      );
+    }
+    await saveEvaluation(store, run);
+    return (await recomputeEvaluationCost(store, run.repoId, run.id, false)).trials[0];
+  };
+  expect((await recompute(hourly))?.after?.apiCostUsd).toBeCloseTo(hourly, 9);
+  // No single cache lifetime explains the reported cost, so the trial stays unpriced.
+  expect((await recompute(hourly - 0.5))?.changed).toBe(false);
+});

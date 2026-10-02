@@ -15,7 +15,7 @@
  * came from the vendor's or gateway's pricing carried a flat 200k one, so it is re-derived from the
  * catalog and each gateway's current listing (loaded first), while the recorded rates stay. A
  * trial that bound left unpriced, and whose stored transcript is cut too far to count again, is
- * priced from its recorded token usage once its pricing has no bound. It refuses runs that are
+ * priced from its recorded token usage once its pricing has no bound (recordedUsageCost). It refuses runs that are
  * still queued or running.
  */
 import { resolve } from "node:path";
@@ -121,22 +121,30 @@ function currentBound(run: EvaluationRun): EvaluationRun["pricing"] {
 /**
  * Cost fields for a trial priced from its recorded token usage, when that is a whole price: the
  * pricing bounds no request, and the usage splits into the buckets the rates price. Claude Code
- * records no split of its cache writes by lifetime, but a Claude sign-in caches for an hour.
+ * records no split of its cache writes by lifetime, so its trial is priced only when one lifetime
+ * for all of them gives the cost Claude Code itself reported (`reported`, in Harbor's result).
  */
 function recordedUsageCost(
   run: EvaluationRun,
   trial: EvaluationTrial,
   auth: ModelAuth | undefined,
+  reported: unknown,
 ): CostFields | undefined {
   const { pricing } = run;
   const usage = trial.tokenUsage;
   if (!pricing || pricing.maxInputTokens || !usage || !trial.modelVerified) return undefined;
   if (trial.apiCostUsd !== undefined || trial.cacheWritesInferred) return undefined;
   if (trial.harness === "codex" && auth !== "api-key") return undefined;
-  if (trial.harness === "claude-code" && auth !== "claude-login") return undefined;
-  const hourCacheWrite = trial.harness === "claude-code" ? usage.cacheWrite : 0;
-  const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
-  if (!Number.isFinite(apiCostUsd)) return undefined;
+  const splits = trial.harness === "claude-code" ? [usage.cacheWrite, 0] : [0];
+  const apiCostUsd = splits
+    .map((hourCacheWrite) => referenceCost(pricing, usage, hourCacheWrite))
+    .find(
+      (cost) =>
+        Number.isFinite(cost) &&
+        (trial.harness !== "claude-code" ||
+          (typeof reported === "number" && Math.abs(cost - reported) <= 1e-6 * Math.max(1, cost))),
+    );
+  if (apiCostUsd === undefined) return undefined;
   return { modelVerified: true, tokenUsage: usage, apiCostUsd, costSource: "reference-rates" };
 }
 
@@ -172,10 +180,12 @@ export async function recomputeEvaluationCost(
       report.trials.push({ index, before, changed: false });
       continue;
     }
-    const after = trialCost(run, trial.harness, files, record(JSON.parse(result)), auth);
+    const parsed = record(JSON.parse(result));
+    const after = trialCost(run, trial.harness, files, parsed, auth);
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
-      const recorded = recordedUsageCost(run, trial, auth);
+      const reported = record(parsed.agent_result).cost_usd;
+      const recorded = recordedUsageCost(run, trial, auth, reported);
       if (recorded) {
         report.trials.push({ index, before, after: recorded, changed: true });
         Object.assign(trial, recorded);
