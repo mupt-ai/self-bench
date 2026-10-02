@@ -121,7 +121,7 @@ export default function TaskViewer({
           <a
             href={source.taskDownloadUrl(release.releaseId, taskId)}
             download={`${taskId}.tar.gz`}
-            className="hit relative ml-2 inline-flex items-center gap-1.5 border border-foreground px-3 py-1.5 text-sm hover:bg-foreground hover:text-background"
+            className="hit relative ml-1 inline-flex items-center gap-1.5 px-2 py-1.5 text-sm hover:bg-muted"
           >
             <Download className="size-4" aria-hidden="true" />
             Download

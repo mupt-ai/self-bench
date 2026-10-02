@@ -88,12 +88,7 @@ export function TaskList({ release }: { release: PublicRelease }) {
   };
   return (
     <section ref={section} className="flex flex-col gap-3" data-morph="tasks" {...revealGroup}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-sm font-medium">Tasks</h2>
-        <p className="text-xs text-muted-foreground">
-          Each with its instruction, tests, and solution, from a merged pull request.
-        </p>
-      </div>
+      <h2 className="text-sm font-medium">Tasks</h2>
       {current?.failed ? (
         <p className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${PANEL}`}>
           <span className="text-muted-foreground">The tasks didn't load.</span>
