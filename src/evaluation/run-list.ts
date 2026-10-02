@@ -3,11 +3,11 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import {
   evaluationPrefix,
   getEvaluation,
+  keepSummary,
   listEvaluations,
   runSummariesOf,
   runSummary,
   savedSince,
-  saveSummary,
 } from "./store.js";
 import type { EvaluationRun } from "./types.js";
 
@@ -15,7 +15,7 @@ import type { EvaluationRun } from "./types.js";
  * A repository's runs as lists show them: each run's summary (runSummary), newest first.
  *
  * A run's record is megabytes of transcripts, and a list needs none of them, so each save also
- * writes the summary to the database (saveSummary) and a list reads those. The bucket stays the
+ * writes the summary to the database (saveSummary in store.ts) and a list reads those. The bucket stays the
  * truth: it names the runs, and a summary counts only while its run has not been saved since. One
  * that is missing or behind (a run from before summaries, a worker on older code, a write that
  * failed) is rebuilt from the run's record, and saved for the next read. A summary is trusted to
@@ -52,7 +52,8 @@ function rebuild(
   const read = (async () => {
     const run = await getEvaluation(store, repoId, id);
     if (!run) return undefined;
-    await saveSummary(store, run);
+    // Saved while the list is answered: the list need not wait for the database.
+    void keepSummary(store, run);
     return runSummary(run);
   })().finally(() => rebuilding.delete(key));
   rebuilding.set(key, read);
