@@ -13,10 +13,9 @@
  * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
  * Only the cost fields and the pricing's long-context bound change: runs recorded before the bound
  * came from the vendor's or gateway's pricing carried a flat 200k one, so it is re-derived from the
- * catalog and each gateway's current listing (loaded first), while the recorded rates stay. A
- * trial that bound left unpriced, and whose stored transcript is cut too far to count again, is
- * priced from its recorded token usage once its pricing has no bound (recordedUsageCost). It refuses runs that are
- * still queued or running.
+ * catalog and the run's gateway listing, while the recorded rates stay. A trial that bound left
+ * unpriced, and whose stored transcript is cut too far to count again, is priced from its recorded
+ * token usage (recordedUsageCost). It refuses runs that are still queued or running.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
