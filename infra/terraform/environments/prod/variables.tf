@@ -75,6 +75,10 @@ variable "posthog_api_key" {
   type    = string
   default = null
 }
+variable "task_canary" {
+  type    = bool
+  default = false
+}
 variable "activity_concurrency" {
   type = number
 }

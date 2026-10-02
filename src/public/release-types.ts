@@ -95,6 +95,8 @@ export interface PublishedTask {
 export interface PublishedTaskFiles {
   taskId: string;
   files: { path: string; sizeBytes: number; text?: string }[];
+  /** The line asking for the task never to be trained on, which its files carry too. */
+  canary?: string;
 }
 
 /** One release line's current release, as the public API lists it. */

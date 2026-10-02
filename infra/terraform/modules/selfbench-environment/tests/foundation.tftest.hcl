@@ -33,7 +33,7 @@ run "dev_foundation" {
     error_message = "Release tags must not be overwritten."
   }
   assert {
-    condition     = length(google_secret_manager_secret.value) == 13 && output.deployment.task_queue == "selfbench-dev"
+    condition     = length(google_secret_manager_secret.value) == 14 && output.deployment.task_queue == "selfbench-dev"
     error_message = "Each sensitive value has its own secret, and dev uses the matching queue."
   }
   assert {
@@ -189,6 +189,20 @@ run "optional_secret_values" {
   assert {
     condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_MANAGED_OFFERING"]) == "true"
     error_message = "The managed offering switch reaches the app."
+  }
+}
+run "task_canary" {
+  command = plan
+  variables {
+    task_canary = true
+  }
+  assert {
+    condition     = contains(keys(google_secret_manager_secret_iam_member.api_reader), "task_canary") && !contains(keys(google_secret_manager_secret_iam_member.runtime_reader), "task_canary")
+    error_message = "Only the API, which serves published tasks, reads the canary."
+  }
+  assert {
+    condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value_source[0].secret_key_ref[0].secret if env.name == "SELFBENCH_TASK_CANARY"]) == "selfbench-task-canary"
+    error_message = "The API reads the canary from its secret, never from a plain value."
   }
 }
 run "byok_only_ignores_billing_inputs" {

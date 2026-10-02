@@ -4,16 +4,18 @@ import { BundleNotFoundError, expandBundle } from "../../generation/runs/bundle.
 import type { ReleaseTask } from "../../public/release-rule.js";
 import type { PublishedTask, PublishedTaskFiles } from "../../public/release-types.js";
 import { TaskArchiveTooLarge, taskArchive } from "../../public/task-archive.js";
+import { takesCanary, withCanary } from "../../public/task-canary.js";
 import { sendJson } from "../http.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
 
 /**
- * A task's files and download never change for a release (each release pins the compiled task
- * its evaluations ran, and artifacts are written once), but they must go when the release is
- * withdrawn or replaced, within the minute the release dialog promises. So the CDN and browsers
- * keep them a minute, then ask again, and a copy that is still current costs a bodyless 304.
+ * A release's tasks, their files and their downloads never change (each release pins the
+ * compiled task its evaluations ran, and artifacts are written once), but they must go when the
+ * release is withdrawn or replaced, within the minute the release dialog promises. So the CDN and
+ * browsers keep them a minute, then ask again, and a copy that is still current costs a bodyless
+ * 304. A new release has new addresses, so none of this delays one.
  */
-const TASK_FILES = "public, max-age=60, s-maxage=60";
+const TASK_DATA = "public, max-age=60, s-maxage=60";
 const JSON_TYPE = "application/json; charset=utf-8";
 /** A task id in an address: the agent's names are letters, digits, `.`, `_` and `-`. */
 const TASK_ID = /^[A-Za-z0-9._~-]{1,160}$/;
@@ -56,6 +58,8 @@ export interface PublicTaskRoutesOptions {
   /** A release's tasks as its row records them (`ReleaseStore.releasedTasks`). */
   releasedTasks(id: string): Promise<ReleaseTask[] | undefined>;
   artifacts: Pick<ArtifactStore, "stat" | "openReadByKey">;
+  /** The canary line each served task carries (task-canary.ts); none without one configured. */
+  canary?: string;
 }
 
 /**
@@ -111,7 +115,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
       if (!index) return missing(response);
       if (rest.length === 0) {
         sendTagged(request, response, index.list, {
-          "cache-control": "public, max-age=0, s-maxage=10",
+          "cache-control": TASK_DATA,
           "content-type": JSON_TYPE,
         });
         return;
@@ -121,7 +125,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
       const id = download ? name.slice(0, -ARCHIVE.length) : name;
       const bundleKey = rest.length === 1 && TASK_ID.test(id) ? index.bundles.get(id) : undefined;
       if (!bundleKey) return missing(response, "No such task in this release");
-      if (download) return sendArchive(request, response, options.artifacts, bundleKey, id);
+      if (download) return sendArchive(request, response, options, bundleKey, id);
       const key = `${releaseId}/${id}`;
       let body = files.get(key);
       if (!body) {
@@ -133,7 +137,17 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
             return missing(response, "Task files not found");
           throw error;
         }
-        const answer: PublishedTaskFiles = { taskId: id, files: [...expanded.files] };
+        const { canary } = options;
+        // The same files as the download, so what is shown is what is downloaded.
+        const answer: PublishedTaskFiles = {
+          taskId: id,
+          files: expanded.files.map((file) => {
+            if (!canary || file.text === undefined || !takesCanary(file.path)) return file;
+            const text = withCanary(file.text, canary);
+            return { ...file, text, sizeBytes: Buffer.byteLength(text) };
+          }),
+          ...(canary ? { canary } : {}),
+        };
         body = tagged(JSON.stringify(answer));
         files.set(key, body);
         for (const oldest of files.keys()) {
@@ -142,7 +156,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
         }
       }
       sendTagged(request, response, body, {
-        "cache-control": TASK_FILES,
+        "cache-control": TASK_DATA,
         "content-type": JSON_TYPE,
       });
     },
@@ -153,13 +167,13 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
 async function sendArchive(
   request: IncomingMessage,
   response: ServerResponse,
-  artifacts: PublicTaskRoutesOptions["artifacts"],
+  options: Pick<PublicTaskRoutesOptions, "artifacts" | "canary">,
   bundleKey: string,
   id: string,
 ): Promise<void> {
   let archive: Awaited<ReturnType<typeof taskArchive>>;
   try {
-    archive = await taskArchive(artifacts, bundleKey, id);
+    archive = await taskArchive(options.artifacts, bundleKey, id, options.canary);
   } catch (error) {
     if (!(error instanceof TaskArchiveTooLarge)) throw error;
     response.setHeader("cache-control", "no-store");
@@ -172,7 +186,7 @@ async function sendArchive(
     return;
   }
   response.setHeader("etag", archive.etag);
-  response.setHeader("cache-control", TASK_FILES);
+  response.setHeader("cache-control", TASK_DATA);
   const held = request.headers["if-none-match"]
     ?.split(",")
     .some((tag) => tag.trim().replace(/^W\//, "") === archive.etag);

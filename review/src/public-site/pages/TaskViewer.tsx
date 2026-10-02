@@ -180,6 +180,12 @@ export default function TaskViewer({
           </section>
         </div>
       )}
+      {/* The canary the task's files carry, beside them for anything that copies the page. */}
+      {current?.files?.canary && (
+        <p className="border-t border-border px-4 py-1.5 font-mono text-[11px] text-muted-foreground wrap-anywhere">
+          {current.files.canary}
+        </p>
+      )}
     </dialog>
   );
 }

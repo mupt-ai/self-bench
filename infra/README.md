@@ -90,6 +90,7 @@ Optional secrets must have a version before their feature is enabled:
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
+- `selfbench-task-canary` when `task_canary` is true: SelfBench's canary GUID (one `uuidgen`, lowercase), which the tasks selfbench.dev publishes carry. It is no secret in what it marks, but it stays out of the repository and the deploy logs so a model can only learn it from the tasks. Set it once and never change it: a canary only works while it stays the same.
 
 `managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, reads none of the secrets above, ignores `stripe_price_id`, and the app has no Billing page.
 
