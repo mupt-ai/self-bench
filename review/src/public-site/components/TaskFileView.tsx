@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   baseCommit,
   diffLine,
@@ -21,8 +21,14 @@ export function FileButton({
   onChoose(): void;
 }) {
   const slash = file.path.lastIndexOf("/");
+  const button = useRef<HTMLButtonElement>(null);
+  // In a list too short to show every file, the chosen one scrolls into view.
+  useEffect(() => {
+    if (chosen) button.current?.scrollIntoView({ block: "nearest" });
+  }, [chosen]);
   return (
     <button
+      ref={button}
       type="button"
       aria-current={chosen ? "true" : undefined}
       onClick={onChoose}
@@ -41,8 +47,44 @@ export function FileButton({
   );
 }
 
-/** The chosen file: its lines numbered, a diff in colour, or why it is not shown. */
-export function FileView({
+/**
+ * The chosen file, named above it, then its contents, then the task's canary: after the last line
+ * and set apart from it, so it takes no room from the code but every file shown ends with it,
+ * the instruction and patches included, which do not carry it themselves.
+ */
+export function FilePane({
+  file,
+  files,
+  repository,
+  taskId,
+  canary,
+}: {
+  file: TaskFile;
+  files: readonly TaskFile[];
+  repository: string;
+  taskId: string;
+  canary?: string | undefined;
+}) {
+  return (
+    <>
+      <p className="flex shrink-0 items-baseline gap-2 border-b border-border px-4 py-1.5 font-mono text-xs">
+        <span className="min-w-0 wrap-anywhere">{file.path}</span>
+        <span className="shrink-0 text-muted-foreground">{fileSize(file.sizeBytes)}</span>
+      </p>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <FileView file={file} files={files} repository={repository} taskId={taskId} />
+        {canary && (
+          <p className="sticky left-0 mt-2 border-t border-dashed border-border px-4 py-2 font-mono text-[11px] text-muted-foreground wrap-anywhere">
+            {canary}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** A file's contents: its lines numbered, a diff in colour, or why it is not shown. */
+function FileView({
   file,
   files,
   repository,

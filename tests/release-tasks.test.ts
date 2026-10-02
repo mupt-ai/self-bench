@@ -52,7 +52,7 @@ test("a release that publishes its tasks serves them; one that does not takes th
     "Do t2.\n",
   );
   const download = await server.request(
-    `/api/public/releases/${release.id}/tasks/t2.tar.gz`,
+    `/api/public/releases/${release.id}/tasks/t2/t2.tar.gz`,
     {},
     null,
   );

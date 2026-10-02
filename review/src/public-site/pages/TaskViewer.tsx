@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { FileButton, FileView } from "../components/TaskFileView";
+import { FileButton, FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
 import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
 import { useSource } from "../source-context";
@@ -154,10 +154,12 @@ export default function TaskViewer({
           )}
         </p>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[minmax(12rem,18rem)_minmax(0,1fr)] md:grid-rows-1">
+        // Side by side wherever there is room for the code beside the list; narrower, the list is
+        // a short box above the code, which keeps most of the height.
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(11rem,16rem)_minmax(0,1fr)] sm:grid-rows-1">
           <nav
             aria-label="Files"
-            className="min-h-0 overflow-y-auto border-b border-border py-1 md:border-r md:border-b-0 compact:max-h-44"
+            className="max-h-40 min-h-0 overflow-y-auto border-b border-border py-1 sm:max-h-none sm:border-r sm:border-b-0"
           >
             {current ? (
               <ul>
@@ -175,16 +177,18 @@ export default function TaskViewer({
               <p className="px-4 py-2 text-muted-foreground">Loading…</p>
             )}
           </nav>
-          <section aria-label={file?.path ?? "File"} className="min-h-0 min-w-0 overflow-auto">
-            {file && <FileView file={file} files={files} repository={repository} taskId={taskId} />}
+          <section aria-label={file?.path ?? "File"} className="flex min-h-0 min-w-0 flex-col">
+            {file && (
+              <FilePane
+                file={file}
+                files={files}
+                repository={repository}
+                taskId={taskId}
+                canary={current?.files?.canary}
+              />
+            )}
           </section>
         </div>
-      )}
-      {/* The canary the task's files carry, beside them for anything that copies the page. */}
-      {current?.files?.canary && (
-        <p className="border-t border-border px-4 py-1.5 font-mono text-[11px] text-muted-foreground wrap-anywhere">
-          {current.files.canary}
-        </p>
       )}
     </dialog>
   );

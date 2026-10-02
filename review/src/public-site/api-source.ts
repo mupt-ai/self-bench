@@ -96,7 +96,7 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
       return kept(url, () => read<PublicTaskFiles>(url));
     },
     taskDownloadUrl: (releaseId, taskId) =>
-      `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}.tar.gz`,
+      `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}/${encodeURIComponent(taskId)}.tar.gz`,
   };
 }
 

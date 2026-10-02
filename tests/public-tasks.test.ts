@@ -97,7 +97,12 @@ async function serve(taskCanary?: string) {
     [withoutGate, await gzippedTar({ ...TASK, ...SNAPSHOTS })],
   ]);
   const released: Record<string, ReleaseTask[]> = {
-    "published-release": [task("next-pr-1", withGate), task("next-pr-2", withoutGate)],
+    "published-release": [
+      task("next-pr-1", withGate),
+      task("next-pr-2", withoutGate),
+      // An agent may name a task anything its characters allow, a download's suffix included.
+      task("odd.tar.gz", withGate),
+    ],
     "private-release": [task("next-pr-1", withGate)],
   };
   const routes = createPublicReleaseRoutes(
@@ -157,6 +162,7 @@ test("only a current release that published its tasks serves them, never to sear
   expect(JSON.parse(body).tasks.map((entry: { id: string }) => entry.id)).toEqual([
     "next-pr-1",
     "next-pr-2",
+    "odd.tar.gz",
   ]);
   // The row's private fields stay on the server.
   expect(body).not.toContain("bundleKey");
@@ -191,7 +197,7 @@ test("a download is the task without its snapshots, in a folder named after it",
   const get = await serve();
   // From the gate task beside the bundle, and from a bundle with none: the same task.
   for (const id of ["next-pr-1", "next-pr-2"]) {
-    const response = await get(`/api/public/releases/published-release/tasks/${id}.tar.gz`);
+    const response = await get(`/api/public/releases/published-release/tasks/${id}/${id}.tar.gz`);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/gzip");
     expect(response.headers.get("content-disposition")).toBe(`attachment; filename="${id}.tar.gz"`);
@@ -207,7 +213,7 @@ test("a download is the task without its snapshots, in a folder named after it",
       ].map((path) => `${id}/${path}`),
     );
     expect(found.find((entry) => entry.path.endsWith("solve.sh"))?.mode).toBe(0o755);
-    const again = await get(`/api/public/releases/published-release/tasks/${id}.tar.gz`, {
+    const again = await get(`/api/public/releases/published-release/tasks/${id}/${id}.tar.gz`, {
       headers: { "if-none-match": response.headers.get("etag") ?? "" },
     });
     expect(again.status).toBe(304);
@@ -217,7 +223,9 @@ test("a download is the task without its snapshots, in a folder named after it",
 test("with a canary, the files SelfBench writes carry it, downloaded and shown alike", async () => {
   const canary = taskCanary("0f8fad5b-d9cb-469f-a165-70867728950e") ?? "";
   const get = await serve(canary);
-  const response = await get("/api/public/releases/published-release/tasks/next-pr-1.tar.gz");
+  const response = await get(
+    "/api/public/releases/published-release/tasks/next-pr-1/next-pr-1.tar.gz",
+  );
   const found = await tarEntries(Buffer.from(await response.arrayBuffer()));
   const text = (path: string) => found.find((entry) => entry.path === `next-pr-1/${path}`)?.text;
   expect(text("task.toml")).toBe(`name = "selfbench/next-pr-1"\n# ${canary}\n`);
@@ -238,4 +246,22 @@ test("with a canary, the files SelfBench writes carry it, downloaded and shown a
   expect(files.files.find((file) => file.path === "instruction.md")?.text).toBe(
     "Order the chunks by path.\n",
   );
+});
+
+test("a task's files and its download never share an address, whatever the task is called", async () => {
+  const get = await serve();
+  const files = await get("/api/public/releases/published-release/tasks/odd.tar.gz");
+  expect(files.headers.get("content-type")).toContain("application/json");
+  expect((await files.json()).taskId).toBe("odd.tar.gz");
+  const download = await get(
+    "/api/public/releases/published-release/tasks/odd.tar.gz/odd.tar.gz.tar.gz",
+  );
+  expect(download.headers.get("content-type")).toBe("application/gzip");
+  // The old shape names no task, and a download must name its own task.
+  expect((await get("/api/public/releases/published-release/tasks/next-pr-1.tar.gz")).status).toBe(
+    404,
+  );
+  expect(
+    (await get("/api/public/releases/published-release/tasks/next-pr-1/next-pr-2.tar.gz")).status,
+  ).toBe(404);
 });

@@ -120,10 +120,12 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
         });
         return;
       }
-      const [name = ""] = rest;
-      const download = name.endsWith(ARCHIVE);
-      const id = download ? name.slice(0, -ARCHIVE.length) : name;
-      const bundleKey = rest.length === 1 && TASK_ID.test(id) ? index.bundles.get(id) : undefined;
+      // `<task>` is its files; `<task>/<task>.tar.gz` its download, named so `curl -O` keeps the
+      // name. A task's own id may end in `.tar.gz`, so the two never share a shape.
+      const [id = "", file] = rest;
+      const download = rest.length === 2 && file === `${id}${ARCHIVE}`;
+      const bundleKey =
+        (rest.length === 1 || download) && TASK_ID.test(id) ? index.bundles.get(id) : undefined;
       if (!bundleKey) return missing(response, "No such task in this release");
       if (download) return sendArchive(request, response, options, bundleKey, id);
       const key = `${releaseId}/${id}`;
