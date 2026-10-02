@@ -7,7 +7,33 @@ import type { ComparisonStatus } from "./ComparisonPage";
 export function ComparisonHistory({ repo, url }: { repo: string; url: string }) {
   const [comparisons, setComparisons] = React.useState<ComparisonStatus[]>([]);
   const [error, setError] = React.useState("");
+  // The comparisons sit below the results table, so they load once the page is scrolled near
+  // them: opening the page does not wait on, or pay for, a list nobody may look at.
+  const anchor = React.useRef<HTMLDivElement>(null);
+  const [near, setNear] = React.useState(false);
   React.useEffect(() => {
+    const element = anchor.current;
+    if (near || !element) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
+      },
+      // The repository page scrolls inside its own pane; the margin starts the load a little
+      // before the section is reached.
+      {
+        root: element.closest<HTMLElement>('[data-slot="repository-content"]'),
+        rootMargin: "300px",
+      },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [near]);
+  React.useEffect(() => {
+    if (!near) return;
     let disposed = false;
     evaluationRequest<{ comparisons: ComparisonStatus[] }>(`${url}/comparisons`).then(
       (result) => {
@@ -22,8 +48,10 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
     return () => {
       disposed = true;
     };
-  }, [url]);
-  if (!comparisons.length && !error) return null;
+  }, [url, near]);
+  // A pixel tall: some browsers never report a marker with no area as in view.
+  if (!comparisons.length && !error)
+    return <div ref={anchor} className="h-px" aria-hidden="true" />;
   return (
     <section className="mt-6">
       <SectionHeader title="Saved Comparisons" />

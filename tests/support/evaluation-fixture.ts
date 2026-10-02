@@ -10,10 +10,12 @@ import {
 } from "../../src/api/routes/evaluations.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
+import { createRunSummaryStore } from "../../src/db/evaluation-summaries.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
+import { keepRunSummaries } from "../../src/evaluation/store.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
@@ -82,6 +84,9 @@ export async function evaluationServer(
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
   const artifacts = new LocalArtifactStore(directory);
   const database = await testDatabase();
+  // As the API and worker run: runs saved to the store also save their summaries.
+  const summaries = createRunSummaryStore(database.db);
+  keepRunSummaries(artifacts, summaries);
   const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
   const user = await users.upsert({
     githubId: 1,
@@ -216,6 +221,9 @@ export async function evaluationServer(
     user,
     apiKeys,
     artifacts,
+    /** The store's directory, for a second store over it that keeps no summaries. */
+    directory,
+    summaries,
     tasks,
     repos,
     repo,

@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -265,3 +266,22 @@ export const releases = pgTable(
 );
 
 export * from "./billing-schema.js";
+
+/**
+ * Each evaluation's record without its trials' logs, transcripts and artifact lists: what lists
+ * of runs show. A copy of the snapshot at `revision`, which stays in the bucket and stays the
+ * truth; reads rebuild a copy that is missing or behind.
+ */
+export const evaluationSummaries = pgTable(
+  "evaluation_summaries",
+  {
+    repoId: bigint("repo_id", { mode: "number" })
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    id: uuid("id").notNull(),
+    revision: integer("revision").notNull(),
+    /** The summary as JSON text, kept as written: jsonb would reorder keys and refuse NULs. */
+    body: text("body").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.repoId, table.id] })],
+);

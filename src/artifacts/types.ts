@@ -21,6 +21,11 @@ export interface ArtifactStore {
   stat(key: string): Promise<Omit<ArtifactRef, "contentType"> | undefined>;
   openReadByKey(key: string, options?: { readonly start?: number }): Promise<Readable | undefined>;
   list(prefix: string): Promise<ArtifactEntry[]>;
+  /**
+   * The names of the folders directly under `prefix`, without what they hold: far less to read
+   * than `list` when only the names matter.
+   */
+  folders(prefix: string): Promise<string[]>;
 }
 
 export interface ArtifactUpload {

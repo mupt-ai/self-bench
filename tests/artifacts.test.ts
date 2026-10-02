@@ -66,6 +66,18 @@ describe("LocalArtifactStore", () => {
     );
   });
 
+  test("names the folders under a prefix without reading what they hold", async () => {
+    const root = await mkdtemp(join(tmpdir(), "selfbench-artifacts-"));
+    roots.push(root);
+    const store = new LocalArtifactStore(root);
+    for (const key of ["runs/b/snapshots/1.json", "runs/a/artifacts/log.txt", "runs/note.txt"])
+      await store.put(key, Buffer.from("x"), "text/plain");
+    expect(await store.folders("runs")).toEqual(["a", "b"]);
+    expect(await store.folders("runs/a")).toEqual(["artifacts"]);
+    expect(await store.folders("missing")).toEqual([]);
+    await expect(store.folders("../outside")).rejects.toThrow();
+  });
+
   test("rejects keys and symbolic links that escape the artifact root", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-artifacts-"));
     const outside = await mkdtemp(join(tmpdir(), "selfbench-artifacts-outside-"));

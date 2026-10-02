@@ -4,6 +4,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { createApiKeyStore } from "../db/api-keys.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
+import { createRunSummaryStore } from "../db/evaluation-summaries.js";
 import { createReleaseStore } from "../db/releases.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
@@ -12,6 +13,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
 import { createVault } from "../db/vault.js";
 import { evaluationStarter, evaluationStopper } from "../evaluation/start.js";
+import { keepRunSummaries } from "../evaluation/store.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
 import { loadStripeConfig } from "../generation/billing/config.js";
 import { generationCost } from "../generation/billing/cost-status.js";
@@ -68,6 +70,7 @@ export async function openSite(
   head: string,
 ): Promise<Site> {
   const database = await openDatabase(auth.databaseUrl);
+  keepRunSummaries(artifacts, createRunSummaryStore(database.db));
   const users = createUserStore(database.db, { secret: auth.sessionSecret });
   const apiKeys = createApiKeyStore(database.db);
   const managedOffering = managedOfferingEnabled();
