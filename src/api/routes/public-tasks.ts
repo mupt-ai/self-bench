@@ -8,11 +8,12 @@ import { sendJson } from "../http.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
 
 /**
- * A task's files and download never change for a release: each release pins the compiled task
- * its evaluations ran, and artifacts are written once. So the CDN keeps them a day and browsers
- * an hour. A withdrawn release's task files can outlive it at the CDN by that much.
+ * A task's files and download never change for a release (each release pins the compiled task
+ * its evaluations ran, and artifacts are written once), but they must go when the release is
+ * withdrawn or replaced, within the minute the release dialog promises. So the CDN and browsers
+ * keep them a minute, then ask again, and a copy that is still current costs a bodyless 304.
  */
-const TASK_FILES = "public, max-age=3600, s-maxage=86400";
+const TASK_FILES = "public, max-age=60, s-maxage=60";
 const JSON_TYPE = "application/json; charset=utf-8";
 /** A task id in an address: the agent's names are letters, digits, `.`, `_` and `-`. */
 const TASK_ID = /^[A-Za-z0-9._~-]{1,160}$/;

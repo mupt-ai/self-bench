@@ -167,7 +167,7 @@ test("a task's files are its text files and, by size alone, its repository snaps
   const get = await serve();
   const response = await get("/api/public/releases/published-release/tasks/next-pr-1");
   expect(response.status).toBe(200);
-  expect(response.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=86400");
+  expect(response.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
   const files = (await response.json()) as {
     taskId: string;
@@ -194,7 +194,7 @@ test("a download is the task without its snapshots, in a folder named after it",
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/gzip");
     expect(response.headers.get("content-disposition")).toBe(`attachment; filename="${id}.tar.gz"`);
-    expect(response.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=86400");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
     const found = await tarEntries(Buffer.from(await response.arrayBuffer()));
     expect(found.map((entry) => entry.path).sort()).toEqual(
       [
