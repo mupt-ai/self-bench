@@ -1,5 +1,5 @@
 import { directoryOf } from "../../../src/public/directory";
-import type { PublicRepoPage, PublicRepoSummary } from "./contract";
+import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
 
 /**
  * Where public pages get their data. Pages call only this. Fixtures implement it during
@@ -14,7 +14,19 @@ export interface PublicSource {
   getRepo(owner: string, name: string): Promise<PublicRepoPage | undefined>;
   /** One publisher's line of a repository. */
   getLine(owner: string, name: string, publisher: string): Promise<PublicRepoPage | undefined>;
+  /** A release's tasks, or undefined when its publisher did not publish them. */
+  getTasks(releaseId: string): Promise<PublicTask[] | undefined>;
+  /** One published task's files, or undefined when the release has no such task. */
+  getTaskFiles(releaseId: string, taskId: string): Promise<PublicTaskFiles | undefined>;
+  /** Where a published task downloads from, as a `.tar.gz` named after it. */
+  taskDownloadUrl(releaseId: string, taskId: string): string;
 }
+
+/** Published tasks held in memory, by release id: each task's files by its id. */
+export type MemoryTasks = Record<
+  string,
+  { tasks: PublicTask[]; files: Record<string, PublicTaskFiles> }
+>;
 
 const sameName = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 
@@ -24,7 +36,10 @@ const sameName = (left: string, right: string) => left.toLowerCase() === right.t
  * repository page alike. The directory's cards are built exactly as the server builds them.
  * Used by tests and the local fixture loader.
  */
-export function memorySource(pages: readonly PublicRepoPage[]): PublicSource {
+export function memorySource(
+  pages: readonly PublicRepoPage[],
+  published: MemoryTasks = {},
+): PublicSource {
   const newestFirst = (candidates: readonly PublicRepoPage[]) =>
     [...candidates].sort((left, right) =>
       right.release.releasedAt.localeCompare(left.release.releasedAt),
@@ -65,5 +80,13 @@ export function memorySource(pages: readonly PublicRepoPage[]): PublicSource {
       const page = lines.find((line) => sameName(line.release.publisher.login, publisher));
       return page ? withLines(page, lines) : undefined;
     },
+    async getTasks(releaseId) {
+      return published[releaseId]?.tasks;
+    },
+    async getTaskFiles(releaseId, taskId) {
+      return published[releaseId]?.files[taskId];
+    },
+    // Held in memory, there is no archive: the link names one the way the API would.
+    taskDownloadUrl: (releaseId, taskId) => `#download/${releaseId}/${taskId}.tar.gz`,
   };
 }

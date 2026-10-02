@@ -99,3 +99,11 @@ test("a page that is not found still has one heading", () => {
   expect(count(notFoundBody("nobody/nothing"), "h1")).toBe(1);
   expect(notFoundBody()).toContain("<h1>Page Not Found</h1>");
 });
+
+test("a release that published its tasks says so under its own heading, without listing them", () => {
+  const published = { ...acme, release: { ...acme.release, tasksPublished: true as const } };
+  const html = repositoryBody([published]) ?? "";
+  expect(html).toContain("<h2>Tasks</h2>");
+  expect(html).toContain("All 13 tasks, each with its instruction, tests, and solution");
+  expect(repositoryBody([acme]) ?? "").not.toContain("<h2>Tasks</h2>");
+});

@@ -95,7 +95,7 @@ export async function openSite(
     burst: 60,
     onLimit: (client) => console.warn(`public site rate limit refused requests from ${client}`),
   });
-  const publicReleases = createPublicReleaseRoutes(releases, { limiter });
+  const publicReleases = createPublicReleaseRoutes(releases, { limiter, artifacts });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
     ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)

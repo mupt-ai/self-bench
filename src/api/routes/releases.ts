@@ -43,6 +43,8 @@ const releaseRequest = z
     head: z.uuid().nullable(),
     /** The fingerprint of the preview the releaser confirmed. */
     fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    /** Publish the tasks too, for anyone to browse and download on selfbench.dev. */
+    publishTasks: z.boolean().optional(),
   })
   .strict();
 type ReleaseRequest = z.infer<typeof releaseRequest>;
@@ -149,6 +151,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
       built = buildRelease(inputs, body.settings, {
         repository: { id: github.id, fullName: github.fullName },
         publisher: { login: scope.tenant.login, kind: scope.tenant.kind },
+        publishTasks: body.publishTasks === true,
       });
     } catch (error) {
       if (!(error instanceof ReleaseRefused)) throw error;

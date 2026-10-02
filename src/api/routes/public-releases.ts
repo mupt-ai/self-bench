@@ -1,11 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ReleaseStore } from "../../db/releases.js";
 import { directoryOf } from "../../public/directory.js";
 import { repositoryPath, segmentsOf } from "../../public/paths.js";
-import type { PublishedLine } from "../../public/release-types.js";
+import type { PublishedLine, PublishedRelease } from "../../public/release-types.js";
 import { sendJson } from "../http.js";
 import { clientIp, type RateLimiter } from "../rate-limit.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
+import { createPublicTaskRoutes } from "./public-tasks.js";
 
 /** How long the snapshot of released lines is served before the next read of the table. */
 const SNAPSHOT_MS = 5_000;
@@ -28,6 +30,8 @@ const JSON_TYPE = "application/json; charset=utf-8";
 interface Snapshot {
   /** Current lines by lower-case repository name, newest first. */
   byRepository: Map<string, PublishedLine[]>;
+  /** Current releases by id. */
+  byRelease: Map<string, PublishedRelease>;
   releases: () => TaggedBody;
   directory: () => TaggedBody;
   /** One repository's response, or undefined when nothing is released for it. */
@@ -52,6 +56,7 @@ function snapshotOf(lines: PublishedLine[]): Snapshot {
   const repositories = new Map<string, TaggedBody>();
   return {
     byRepository,
+    byRelease: new Map(lines.map((line) => [line.release.releaseId, line.release])),
     releases: once(() => tagged(JSON.stringify({ lines }))),
     directory: once(() => tagged(JSON.stringify({ cards: directoryOf(lines) }))),
     repository(fullName) {
@@ -72,6 +77,8 @@ export interface PublicReleaseRoutesOptions {
   /** Refuses callers over their share; the routes are anonymous. */
   limiter?: RateLimiter;
   now?: () => number;
+  /** Where published tasks' files are read from; without it, no release's tasks are served. */
+  artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
 }
 
 /**
@@ -80,10 +87,17 @@ export interface PublicReleaseRoutesOptions {
  * however many visitors arrive, so public traffic never reaches the database per request.
  */
 export function createPublicReleaseRoutes(
-  releases: Pick<ReleaseStore, "currentLines">,
+  releases: Pick<ReleaseStore, "currentLines"> & Partial<Pick<ReleaseStore, "releasedTasks">>,
   options: PublicReleaseRoutesOptions = {},
 ) {
   const now = options.now ?? Date.now;
+  const tasks =
+    releases.releasedTasks && options.artifacts
+      ? createPublicTaskRoutes({
+          releasedTasks: releases.releasedTasks.bind(releases),
+          artifacts: options.artifacts,
+        })
+      : undefined;
   let reading: { snapshot: Promise<Snapshot>; at: number } | undefined;
   /** The newest successful read, by when it started: an older read finishing later never wins. */
   let lastGood: { snapshot: Snapshot; read: number } | undefined;
@@ -161,6 +175,18 @@ export function createPublicReleaseRoutes(
         return true;
       }
       const [, , route, ...rest] = segmentsOf(url.pathname);
+      // A release's tasks, served only while it is a current release that published them.
+      if (route === "releases" && rest[1] === "tasks") {
+        const release = (await snapshot()).byRelease.get(rest[0] ?? "");
+        if (tasks && release?.tasksPublished) {
+          await tasks.handle(request, response, release.releaseId, rest.slice(2));
+        } else {
+          uncached();
+          response.setHeader("x-robots-tag", "noindex");
+          sendJson(response, 404, { error: "This release has no published tasks" });
+        }
+        return true;
+      }
       if (route === "releases" && rest.length === 0) {
         sendTagged(request, response, (await snapshot()).releases(), {
           "cache-control": CACHED,

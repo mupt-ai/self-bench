@@ -1,6 +1,8 @@
 import type { DirectoryCard } from "../../../src/public/directory";
 import type {
   PublishedRelease,
+  PublishedTask,
+  PublishedTaskFiles,
   ReleasePublisher,
   ReleaseSetting,
 } from "../../../src/public/release-types";
@@ -16,6 +18,10 @@ export type PublicPublisher = ReleasePublisher;
 export type PublicSetting = ReleaseSetting;
 /** One release of one repository by one publisher: the unit a repository page shows. */
 export type PublicRelease = PublishedRelease;
+/** A task of a release whose publisher published the tasks. */
+export type PublicTask = PublishedTask;
+/** A published task's files: small text files with their contents, the rest by size. */
+export type PublicTaskFiles = PublishedTaskFiles;
 
 /** One release line of a repository, for the switcher and search results. */
 interface PublicLineSummary {

@@ -151,8 +151,9 @@ export function createResultsSite(options: ResultsSiteOptions) {
         return true;
       }
       if (url.pathname === "/robots.txt") {
+        // Published tasks are a benchmark: browsable, but kept out of search and training crawls.
         const body = options.indexable
-          ? `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`
+          ? `User-agent: *\nAllow: /\nDisallow: /api/public/releases/\n\nSitemap: ${origin}/sitemap.xml\n`
           : "User-agent: *\nDisallow: /\n";
         response.writeHead(200, {
           "content-type": "text/plain; charset=utf-8",

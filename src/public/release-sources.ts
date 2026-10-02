@@ -32,6 +32,8 @@ async function releaseTasks(db: Database, repoId: number): Promise<ReleaseTask[]
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
     ...(task.reason ? { reason: task.reason } : {}),
     ...(task.review ? { review: task.review } : {}),
+    // The compiled task its evaluations ran, so a release that publishes its tasks shows those.
+    ...(task.bundleKey ? { bundleKey: task.bundleKey } : {}),
     state: task.deleted ? "deleted" : taskState(task),
     runnable: !task.deleted && runnable(task),
   }));

@@ -43,7 +43,7 @@ All of it is built from the released lines on every request, so a release or wit
   - IndexNow notifications on every release and withdrawal (`src/api/indexnow.ts`)
 
   `src/api/site-pages.ts` puts a page together, and the shared strings are in `src/public/seo.ts`.
-- **Keep the server's text in step with the page.** `site-body.ts` repeats what the page shows: its headings ("All Settings", "Other Benchmarks of This Repo") and the settings table's column names (`ModelTable.tsx`). When you rename, add or remove one on the page, make the same change there. The home heading is `HOME_HEADING` in `seo.ts`, which both use. Keep exactly one `<h1>` per page, with the page's own heading.
+- **Keep the server's text in step with the page.** `site-body.ts` repeats what the page shows: its headings ("All Settings", "Tasks", "Other Benchmarks of This Repo") and the settings table's column names (`ModelTable.tsx`). When you rename, add or remove one on the page, make the same change there. The home heading is `HOME_HEADING` in `seo.ts`, which both use. Keep exactly one `<h1>` per page, with the page's own heading.
 - **Titles live in one place.** The site sets the same titles as the server (`useTitle` with `HOME_TITLE` or `repositoryTitle`), so change them in `seo.ts` only.
 - **A new page needs all of these,** or search engines get a 404, a generic head or an empty page:
   1. its status in `site-pages.ts`
@@ -59,12 +59,14 @@ All of it is built from the released lines on every request, so a release or wit
   - Don't drop `s-maxage` or add `stale-while-revalidate`. Without `s-maxage`, Cloud CDN hands an expired copy, possibly hours old, to the first request after its lifetime. `stale-while-revalidate` caps outage serving too.
   - Don't lengthen these lifetimes unless releases also clear the CDN.
   - Files whose address changes with their content may be cached long: hashed scripts, and link preview images, which carry the release id.
+  - So may a published task's files and download (`TASK_FILES` in `routes/public-tasks.ts`): each release pins the compiled task its evaluations ran, and artifacts are written once. A withdrawn release's task files can outlive it at the CDN by a day.
   - IndexNow waits past the page lifetime before notifying.
 - **Descriptions aim for 160 characters or fewer,** the most search results show and the most Bing accepts without a warning.
   - A generated one (`repositoryDescription`) drops whole sentences past 160 but always keeps its opening question. In an edge case, such as a very long repository name, it may run over. That's fine: search results just cut it off.
   - A hand-written one should fit.
 - **Some copy states how SelfBench works:** `HOME_TITLE`, `HOME_DESCRIPTION`, `HOME_HEADING`, and the Dataset's `measurementTechnique` in `site-head.ts`. Update them if the product changes, such as how tasks are built or scored.
 - **Addresses are what search engines know a page by.** Don't change a page's address, or the canonical rules (a repository's own casing; a publisher's default line shares the repository's address), without a redirect from the old one.
+- **Published tasks stay out of search and training crawls.** A publisher can publish a release's tasks (the release dialog's Publish Tasks; `tasksPublished` in the payload). The site lists them and opens each in a viewer (`?task=` on the repository page, which keeps the page's canonical address), and anyone can download them. But the tasks are a benchmark: their data, all under `/api/public/releases/<id>/tasks`, answers `noindex`, and robots.txt disallows that path. The page text only says the tasks are there. Keep it that way.
 - **Only prod is indexed.** Only where `SELFBENCH_RESULTS_SITE_INDEX` is `true`, as in prod, does the site serve a sitemap and the IndexNow key, and send notifications. Everywhere else it answers `noindex`. Keep new search features behind the same switch.
 - **The IndexNow key is public by design.** `INDEXNOW_KEY` is served at `/<key>.txt` for engines to check, so it lives in the code. Leave it unchanged, since engines re-verify a new one.
 - **Tests cover each piece:** `tests/results-site*.test.ts`, `site-head`, `site-body`, `page-data`, `indexnow` and `site-icons`. Update them with the change.
