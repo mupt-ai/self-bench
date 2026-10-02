@@ -1,7 +1,4 @@
 import { createServer, type Server } from "node:http";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import type { AuthConfig } from "../../src/api/auth/config.js";
 import { sendExpiredSession } from "../../src/api/auth/session-expired.js";
 import { sendApiError } from "../../src/api/http.js";
@@ -14,27 +11,16 @@ import { createTaskRoutes } from "../../src/api/routes/tasks.js";
 import type { ArtifactStore } from "../../src/artifacts/index.js";
 import { loadConfig } from "../../src/contracts/config/index.js";
 import { type ApiKeyStore, apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
-import { type Database, migrationsFolder } from "../../src/db/client.js";
+import type { Database } from "../../src/db/client.js";
 import { createRepoStore } from "../../src/db/repos.js";
-import * as schema from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore, type UserStore } from "../../src/db/users.js";
 import type { WorkflowStarter } from "../../src/generation/tasks/start.js";
 import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
 
-export interface TestDatabase {
-  readonly db: Database;
-  close(): Promise<void>;
-}
+import { testDatabase } from "./test-database.js";
 
-/** The site's schema over an in-process PGlite database, so the real SQL runs in tests. */
-export async function testDatabase(): Promise<TestDatabase> {
-  const client = new PGlite();
-  await client.waitReady;
-  const db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: migrationsFolder() });
-  return { db, close: () => client.close() };
-}
+export { type TestDatabase, testDatabase } from "./test-database.js";
 
 export const testAuthConfig: AuthConfig = {
   clientId: "client-id",
