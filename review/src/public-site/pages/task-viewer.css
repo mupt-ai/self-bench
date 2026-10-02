@@ -41,25 +41,6 @@ dialog.task-viewer:not([open]) {
   text-indent: -4rem;
 }
 
-/* The canary: a blank line below the last one, aligned with the code but unnumbered and faint. */
-.task-lines > .task-canary {
-  margin-top: 1lh;
-  padding-left: 4.75rem;
-  text-indent: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--faint);
-}
-.task-lines > .task-canary::before {
-  content: none;
-}
-.task-canary-note {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-  color: var(--faint);
-}
-
 .task-diff-added {
   background: color-mix(in srgb, var(--ok) 14%, transparent);
 }

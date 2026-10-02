@@ -48,8 +48,9 @@ export function FileButton({
 }
 
 /**
- * The chosen file, named above it, then its contents, ending with the task's canary: so every
- * file shown ends with it, the instruction and patches included, which do not carry it themselves.
+ * The chosen file: named in a bar above it, and the task's canary in a matching bar below, so
+ * every file shown has it beside it, the instruction and patches included, which do not carry
+ * it themselves. The canary keeps to one line; its full text is still in the page.
  */
 export function FilePane({
   file,
@@ -71,34 +72,31 @@ export function FilePane({
         <span className="shrink-0 text-muted-foreground">{fileSize(file.sizeBytes)}</span>
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
-        <FileView
-          file={file}
-          files={files}
-          repository={repository}
-          taskId={taskId}
-          canary={canary}
-        />
+        <FileView file={file} files={files} repository={repository} taskId={taskId} />
       </div>
+      {canary && (
+        <p
+          title={canary}
+          className="shrink-0 truncate border-t border-border px-4 py-1.5 font-mono text-xs text-muted-foreground"
+        >
+          {canary}
+        </p>
+      )}
     </>
   );
 }
 
-/**
- * A file's contents, its lines numbered and a diff in colour, or why it is not shown; then the
- * canary, a blank line below the last one, unnumbered and as faint as the line numbers.
- */
+/** A file's contents: its lines numbered, a diff in colour, or why it is not shown. */
 function FileView({
   file,
   files,
   repository,
   taskId,
-  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
-  canary?: string | undefined;
 }) {
   const kind = fileKind(file);
   if (kind === "none") {
@@ -111,16 +109,11 @@ function FileView({
           unpacked it, recreate it exactly.
         </p>
         {commit && <Commands text={snapshotCommands(repository, commit, taskId)} />}
-        {canary && <p className="task-canary-note">{canary}</p>}
       </div>
     ) : (
-      <div className="flex flex-col gap-3 p-4">
-        <p className="text-muted-foreground">
-          Not shown here: a binary or large file ({fileSize(file.sizeBytes)}). It is in the
-          download.
-        </p>
-        {canary && <p className="task-canary-note">{canary}</p>}
-      </div>
+      <p className="p-4 text-muted-foreground">
+        Not shown here: a binary or large file ({fileSize(file.sizeBytes)}). It is in the download.
+      </p>
     );
   }
   const text = kind === "json" ? laidOut(file.text ?? "") : (file.text ?? "");
@@ -139,7 +132,6 @@ function FileView({
           {"\n"}
         </span>
       ))}
-      {canary && <span className="task-canary">{canary}</span>}
     </pre>
   );
 }
