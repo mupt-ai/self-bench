@@ -72,6 +72,9 @@ export async function startApi(
         sendJson(response, 200, { ok: true });
         return;
       }
+      // Sandbox providers pull task images with a pull grant (see registry-grant.ts); the site
+      // would otherwise answer these GETs with its page.
+      if (registry && (await registry(request, url, response, secret))) return;
       if (site) {
         // The public results site's host is answered entirely by the public site.
         if (await site.resultsSite?.handle(request, url, response)) return;
@@ -97,8 +100,6 @@ export async function startApi(
       if (await handleSandboxRoute(request, url, response, { secret, store: artifacts, client }))
         return;
       if (await handleSnapshotRoute(request, url, response, { secret, store: artifacts })) return;
-      // Sandbox providers pull task images with a pull grant (see registry-grant.ts).
-      if (registry && (await registry(request, url, response, secret))) return;
       // With sign-in enabled the CLI's bearer token still works, but nothing is open by default.
       const user = site ? await site.auth.authenticate(request, config.apiToken) : undefined;
       const allowed = site

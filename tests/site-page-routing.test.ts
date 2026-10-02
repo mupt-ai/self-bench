@@ -22,6 +22,8 @@ describe("site page routing", () => {
     "/api/github-repos/vercel/next.js",
     "/auth/github/callback",
     "/v1/runs",
+    "/v2/",
+    `/v2/task-1/manifests/sha256:${"a".repeat(64)}`,
     "/assets/app.js",
     "/assets/missing",
     "/dari-logo.svg",

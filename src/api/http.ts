@@ -163,10 +163,10 @@ export function trustedMutation(
 
 /**
  * Repository paths belong to the SPA even when names or IDs contain dots.
- * API/auth routes and static assets keep their own handlers.
+ * API/auth routes, the task image registry (`/v2`), and static assets keep their own handlers.
  */
 export function isSitePage(pathname: string): boolean {
-  if (/^\/(v1|api|auth|assets)(\/|$)/.test(pathname)) return false;
+  if (/^\/(v1|v2|api|auth|assets)(\/|$)/.test(pathname)) return false;
   if (/^\/repos\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
   const last = pathname.split("/").pop() ?? "";
   return !last.includes(".");

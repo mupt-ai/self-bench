@@ -134,38 +134,58 @@ export async function dockerfileImageConfig(
   baseConfig: (image: string) => Promise<ImageConfig>,
 ): Promise<{ Env: string[]; User?: string; WorkingDir?: string }> {
   const lines = dockerfile.replace(/\\\r?\n/g, " ").split(/\r?\n/);
-  const from = lines.map((line) => /^\s*FROM\s+(\S+)/i.exec(line)?.[1]).find(Boolean);
-  if (!from) throw new Error("the Dockerfile names no base image");
-  const base = await baseConfig(from);
-  const env = new Map(
-    (base.Env ?? []).map((entry) => [
-      entry.slice(0, entry.indexOf("=")),
-      entry.slice(entry.indexOf("=") + 1),
-    ]),
-  );
-  let user = base.User;
-  let workdir = base.WorkingDir;
+  // Each FROM starts a stage, from a registry image or an earlier stage; the last one is the image.
+  const stages = new Map<string, Stage>();
+  let stage: Stage | undefined;
   for (const line of lines) {
+    const from = /^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(line);
+    if (from?.[1]) {
+      const earlier = stages.get(from[1].toLowerCase());
+      stage = earlier ? copyStage(earlier) : stageFrom(await baseConfig(from[1]));
+      if (from[2]) stages.set(from[2].toLowerCase(), stage);
+      continue;
+    }
     const match = /^\s*(ENV|USER|WORKDIR)\s+(.+?)\s*$/i.exec(line);
-    if (!match?.[1] || !match[2]) continue;
+    if (!stage || !match?.[1] || !match[2]) continue;
     const [instruction, rest] = [match[1].toUpperCase(), match[2]];
-    if (instruction === "USER") user = rest;
-    else if (instruction === "WORKDIR") workdir = rest;
+    if (instruction === "USER") stage.user = rest;
+    else if (instruction === "WORKDIR") stage.workdir = rest;
     else if (!/^\S+=/.test(rest)) {
       const [key, ...value] = rest.split(/\s+/);
-      if (key) env.set(key, expand(value.join(" "), env));
+      if (key) stage.env.set(key, expand(value.join(" "), stage.env));
     } else {
       for (const pair of rest.matchAll(/([^\s=]+)=("(?:[^"\\]|\\.)*"|'[^']*'|\S*)/g)) {
         const [, key, raw = ""] = pair;
-        if (key) env.set(key, unquote(raw, env));
+        if (key) stage.env.set(key, unquote(raw, stage.env));
       }
     }
   }
+  if (!stage) throw new Error("the Dockerfile names no base image");
   return {
-    Env: [...env].map(([key, value]) => `${key}=${value}`),
-    ...(user ? { User: user } : {}),
-    ...(workdir ? { WorkingDir: workdir } : {}),
+    Env: [...stage.env].map(([key, value]) => `${key}=${value}`),
+    ...(stage.user ? { User: stage.user } : {}),
+    ...(stage.workdir ? { WorkingDir: stage.workdir } : {}),
   };
+}
+
+interface Stage {
+  env: Map<string, string>;
+  user?: string | undefined;
+  workdir?: string | undefined;
+}
+
+function stageFrom(base: ImageConfig): Stage {
+  const env = new Map(
+    (base.Env ?? []).map((entry) => {
+      const split = entry.indexOf("=");
+      return [entry.slice(0, split), entry.slice(split + 1)] as const;
+    }),
+  );
+  return { env, user: base.User, workdir: base.WorkingDir };
+}
+
+function copyStage(stage: Stage): Stage {
+  return { env: new Map(stage.env), user: stage.user, workdir: stage.workdir };
 }
 
 function unquote(raw: string, env: ReadonlyMap<string, string>): string {
