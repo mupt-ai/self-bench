@@ -23,6 +23,10 @@ import { taskTitle } from "../task/task-title";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
+/** Whether two reads of a task are the same, apart from when the server last synced it. */
+export function sameTask(a: TaskItem, b: TaskItem): boolean {
+  return JSON.stringify({ ...a, syncedAt: "" }) === JSON.stringify({ ...b, syncedAt: "" });
+}
 export function TaskPage() {
   const { org } = useOrg();
   const { owner = "", name = "", runId = "", taskId = "" } = useParams();
@@ -41,7 +45,8 @@ function TaskPageContent() {
   const refresh = React.useCallback(async () => {
     try {
       const found = await fetchTask(org.login, fullName, runId, taskId);
-      setTask(found);
+      // The same task again keeps the one shown, so the view does not reload its artifacts.
+      setTask((current) => (current && sameTask(current, found) ? current : found));
       setError(null);
       return found;
     } catch (cause) {

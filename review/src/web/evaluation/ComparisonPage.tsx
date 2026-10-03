@@ -14,6 +14,10 @@ import { useEvaluationScope } from "./useEvaluationScope";
 export type ComparisonStatus = Awaited<ReturnType<typeof comparisonStatus>> & {
   submissionError?: string;
 };
+/** Whether any run of the comparison has yet to finish, so its page keeps polling. */
+export function comparisonActive(status: Pick<ComparisonStatus, "runs">): boolean {
+  return status.runs.some((run) => ["pending", "queued", "running"].includes(run.status));
+}
 export function ComparisonPage() {
   const { repo, url } = useEvaluationScope();
   useDocumentTitle(`Comparison · ${repo}`);
@@ -22,13 +26,23 @@ export function ComparisonPage() {
   const [error, setError] = React.useState("");
   const [missing, setMissing] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: shows nothing of the last comparison when another is opened.
   React.useEffect(() => {
+    setStatus(undefined);
+    setMissing(false);
+    setError("");
+  }, [url, comparisonId]);
+  // Read, then polled every three seconds while a run has yet to finish or the read fails. A
+  // finished comparison is read once; Resume can set it running again, which starts this over.
+  const active = status === undefined || comparisonActive(status);
+  React.useEffect(() => {
+    if (!active) return;
     let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
+      let result: ComparisonStatus | undefined;
       try {
-        const result = await evaluationRequest<ComparisonStatus>(
-          `${url}/comparisons/${comparisonId}`,
-        );
+        result = await evaluationRequest<ComparisonStatus>(`${url}/comparisons/${comparisonId}`);
         if (!disposed) {
           setMissing(false);
           setStatus(result);
@@ -47,17 +61,15 @@ export function ComparisonPage() {
         if (!disposed)
           setError(cause instanceof Error ? cause.message : "Could not load comparison");
       }
+      if (!disposed && (!result || comparisonActive(result)))
+        timer = setTimeout(() => void refresh(), 3000);
     };
-    setStatus(undefined);
-    setMissing(false);
-    setError("");
     void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
     return () => {
       disposed = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [url, comparisonId]);
+  }, [url, comparisonId, active]);
   const resume = async () => {
     setBusy(true);
     try {
