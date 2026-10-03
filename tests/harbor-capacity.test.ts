@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import { workerProcessSettings } from "../src/contracts/config/worker.js";
 import { harborSlotsForMemory } from "../src/contracts/config/worker-capacity.js";
-import { harborTaskQueue } from "../src/temporal/task-queues.js";
 
 const GiB = 1024 ** 3;
 
@@ -25,10 +24,6 @@ test("an explicit Harbor concurrency is validated and otherwise left to the work
   expect(loadWorkerConfig(base).harborConcurrency).toBeUndefined();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "0" })).toThrow();
   expect(() => loadWorkerConfig({ ...base, SELFBENCH_HARBOR_CONCURRENCY: "11" })).toThrow();
-});
-
-test("the Harbor queue is derived from the worker queue", () => {
-  expect(harborTaskQueue("selfbench-prod")).toBe("selfbench-prod-harbor");
 });
 
 test("a worker polls both queues and stops at once unless its role and grace are set", () => {

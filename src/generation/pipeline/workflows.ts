@@ -22,7 +22,6 @@ import {
   type TaskProgress,
 } from "../../contracts/index.js";
 import { SandboxCapacityError } from "../../sandbox/contracts.js";
-import { harborTaskQueue } from "../../temporal/task-queues.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
@@ -60,7 +59,7 @@ const harbor = () =>
     heartbeatTimeout: "10 minutes",
     cancellationType: "WAIT_CANCELLATION_COMPLETED",
     retry: { ...retry, maximumAttempts: 4 },
-    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+    taskQueue: `${workflowInfo().taskQueue}-harbor`,
   });
 
 /**

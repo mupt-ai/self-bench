@@ -20,7 +20,6 @@ import { activityErrorInterceptor } from "./activity-errors.js";
 import { activityEventInterceptor } from "./activity-events.js";
 import { connectTemporalWorker } from "./connection.js";
 import { idleTracker } from "./idle-exit.js";
-import { harborTaskQueue } from "./task-queues.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
 
 /**
@@ -97,7 +96,7 @@ const workers = await Promise.all([
         Worker.create({
           connection,
           namespace: config.temporal.namespace,
-          taskQueue: harborTaskQueue(config.temporal.taskQueue),
+          taskQueue: `${config.temporal.taskQueue}-harbor`,
           activities: { verifyCompiled, runSolverTrial, prepareTaskImages },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
