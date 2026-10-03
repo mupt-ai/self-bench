@@ -15,7 +15,7 @@ import {
   type TaskRef,
   taskPath,
 } from "../task/review-queue";
-import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
+import { prefetchTaskFiles, rowFor, siteTaskSource, taskSourceKey } from "../task/site-source";
 import { TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
@@ -65,9 +65,11 @@ function TaskPageContent() {
     };
   }, [refresh]);
 
+  const sourceKey = task ? taskSourceKey(task) : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on what the source is made of (taskSourceKey), not on each poll's fresh task object.
   const source = React.useMemo(
     () => (task ? siteTaskSource(org.login, fullName, task) : null),
-    [org.login, fullName, task],
+    [org.login, fullName, sourceKey],
   );
   const technicalDetails = task ? taskTechnicalDetails(task.reason, task.reasonSummary) : undefined;
 
