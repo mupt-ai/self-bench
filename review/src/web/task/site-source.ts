@@ -68,6 +68,15 @@ export function siteTaskSource(org: string, fullName: string, task: TaskItem): T
   };
 }
 
+/**
+ * What a task's source is made of: its identity and progress. A poll brings a task's cost and
+ * sync time afresh; a source keyed on this stays, and the view re-lists artifacts only when the
+ * task moved on, which is when a new bundle can have appeared.
+ */
+export function taskSourceKey(task: TaskItem): string {
+  return JSON.stringify([task.runId, task.taskId, rowFor(task)]);
+}
+
 export function rowFor(task: TaskItem): TaskRow {
   return {
     id: task.taskId,
