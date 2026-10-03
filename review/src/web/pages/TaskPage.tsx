@@ -15,7 +15,7 @@ import {
   type TaskRef,
   taskPath,
 } from "../task/review-queue";
-import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
+import { prefetchTaskFiles, rowFor, siteTaskSource, taskSourceKey } from "../task/site-source";
 import { TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
@@ -23,10 +23,6 @@ import { taskTitle } from "../task/task-title";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
-/** Whether two reads of a task are the same, apart from when the server last synced it. */
-export function sameTask(a: TaskItem, b: TaskItem): boolean {
-  return JSON.stringify({ ...a, syncedAt: "" }) === JSON.stringify({ ...b, syncedAt: "" });
-}
 export function TaskPage() {
   const { org } = useOrg();
   const { owner = "", name = "", runId = "", taskId = "" } = useParams();
@@ -45,8 +41,7 @@ function TaskPageContent() {
   const refresh = React.useCallback(async () => {
     try {
       const found = await fetchTask(org.login, fullName, runId, taskId);
-      // The same task again keeps the one shown, so the view does not reload its artifacts.
-      setTask((current) => (current && sameTask(current, found) ? current : found));
+      setTask(found);
       setError(null);
       return found;
     } catch (cause) {
@@ -70,9 +65,11 @@ function TaskPageContent() {
     };
   }, [refresh]);
 
+  const sourceKey = task ? taskSourceKey(task) : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on what the source is made of (taskSourceKey), not on each poll's fresh task object.
   const source = React.useMemo(
     () => (task ? siteTaskSource(org.login, fullName, task) : null),
-    [org.login, fullName, task],
+    [org.login, fullName, sourceKey],
   );
   const technicalDetails = task ? taskTechnicalDetails(task.reason, task.reasonSummary) : undefined;
 
