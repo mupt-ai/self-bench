@@ -1,0 +1,58 @@
+# The workflow worker: workflow tasks and the short or hand-off activities on the main queue. A
+# sandbox activity returns once its sandbox starts and completes through the callback API, so a
+# restart (a release, a node change) loses no work; workflows replay on the next pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selfbench-workflow-worker
+spec:
+  replicas: {{ .Values.workflowReplicas }}
+  selector:
+    matchLabels:
+      app: selfbench-workflow-worker
+  template:
+    metadata:
+      labels:
+        app: selfbench-workflow-worker
+    spec:
+      # As for Harbor pods: a SIGTERM before the worker installs its handlers ends node at once.
+      shareProcessNamespace: true
+      serviceAccountName: selfbench-worker
+      {{- include "selfbench-workers.separation" . | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ .Values.image | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              for file in /secrets/*; do
+                name=${file##*/}
+                export "$name=$(cat "$file")"
+              done
+              exec node dist/temporal/worker-main.js
+          env:
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name | quote }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: SELFBENCH_WORKER_ROLE
+              value: workflows
+            - name: SELFBENCH_ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: SELFBENCH_ACTIVITY_CONCURRENCY
+              value: {{ .Values.activityConcurrency | quote }}
+          resources:
+            requests: { cpu: "1", memory: 4Gi, ephemeral-storage: 10Gi }
+            limits: { cpu: "1", memory: 4Gi, ephemeral-storage: 10Gi }
+          volumeMounts:
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: selfbench-worker-secrets

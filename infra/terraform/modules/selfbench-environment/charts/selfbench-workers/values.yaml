@@ -13,3 +13,5 @@ temporal:
   namespace: ""
   queue: ""
 maxReplicas: 20
+workflowReplicas: 1
+activityConcurrency: 8

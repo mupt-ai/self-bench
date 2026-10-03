@@ -1,6 +1,6 @@
-# Harbor work on GKE Autopilot, when gke_workers is on: one Deployment polls the Harbor queue and
-# KEDA sets its pod count from that queue's Temporal backlog. The Cloud Run worker pool keeps
-# polling both queues.
+# The Temporal workers on GKE Autopilot, when gke_workers is on: a Deployment polls the workflow
+# queue, and KEDA starts Harbor job pods from the Harbor queue's Temporal backlog. Cloud Run keeps
+# only the API.
 locals {
   gke              = var.gke_workers ? 1 : 0
   worker_namespace = "selfbench"
@@ -137,7 +137,9 @@ resource "helm_release" "workers" {
       namespace = var.temporal_namespace
       queue     = "${local.name}-harbor"
     }
-    maxReplicas = var.harbor_worker_max_replicas
+    maxReplicas         = var.harbor_worker_max_replicas
+    workflowReplicas    = var.worker_instances
+    activityConcurrency = var.activity_concurrency
   })]
   depends_on = [
     helm_release.keda,

@@ -87,7 +87,7 @@ variable "worker_instances" {
   default = 1
 }
 variable "gke_workers" {
-  description = "Run Harbor work on GKE Autopilot, scaled by KEDA."
+  description = "Run the Temporal workers on GKE Autopilot, Harbor work scaled by KEDA."
   type        = bool
   default     = false
 }
@@ -100,8 +100,4 @@ variable "temporal_namespace" {
 variable "harbor_worker_max_replicas" {
   type    = number
   default = 20
-}
-variable "worker_pool_polls_harbor" {
-  type    = bool
-  default = true
 }

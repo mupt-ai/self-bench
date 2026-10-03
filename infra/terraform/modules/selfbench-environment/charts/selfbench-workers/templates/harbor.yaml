@@ -2,8 +2,9 @@
 # runs up to 10 Harbor checks or solver trials and exits once it has been idle for 5 minutes.
 # Nothing removes a busy pod: Autopilot caps a pod's termination grace at 10 minutes, far short of
 # a solver evaluation (one unretried activity of up to 72 hours), so pods only ever end themselves.
-# The exception is GKE's own system pods, which preempt a worker when a new node fills up before
-# they land; a trial lost that way before its solver started runs again (executeTrial).
+# GKE's own system pods (konnectivity-agent, which grows with the node count) preempt whatever
+# lower-priority pod holds the room they need, so workers keep to nodes of their own, tainted to
+# keep those pods off (_helpers.tpl).
 apiVersion: keda.sh/v1alpha1
 kind: ScaledJob
 metadata:
@@ -44,6 +45,7 @@ spec:
         # the grace period's SIGKILL lost them.
         shareProcessNamespace: true
         serviceAccountName: selfbench-worker
+        {{- include "selfbench-workers.separation" . | nindent 8 }}
         securityContext:
           # The image runs as node (1000); the scratch disk must be writable by it.
           fsGroup: 1000

@@ -138,20 +138,20 @@ run "results_site_must_be_served" {
 run "worker_pool" {
   command = plan
   assert {
-    condition     = google_cloud_run_v2_worker_pool.worker.scaling[0].manual_instance_count == 1 && google_cloud_run_v2_worker_pool.worker.template[0].containers[0].image == var.image
+    condition     = google_cloud_run_v2_worker_pool.worker[0].scaling[0].manual_instance_count == 1 && google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].image == var.image
     error_message = "The worker runs the same release image as a fixed pool."
   }
   assert {
-    condition     = google_cloud_run_v2_worker_pool.worker.template[0].containers[0].command == tolist(["node", "dist/temporal/worker-main.js"]) && length(google_cloud_run_v2_worker_pool.worker.template[0].volumes) == 0
+    condition     = google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].command == tolist(["node", "dist/temporal/worker-main.js"]) && length(google_cloud_run_v2_worker_pool.worker[0].template[0].volumes) == 0
     error_message = "The worker reads env values directly, with no env-file bundle mounts."
   }
   assert {
-    condition     = one([for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value if env.name == "SELFBENCH_ACTIVITY_CONCURRENCY"]) == "8"
+    condition     = one([for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.value if env.name == "SELFBENCH_ACTIVITY_CONCURRENCY"]) == "8"
     error_message = "The worker polls with the configured activity concurrency."
   }
   assert {
     condition = {
-      for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.name => env.value_source[0].secret_key_ref[0].secret
+      for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.name => env.value_source[0].secret_key_ref[0].secret
       if length(env.value_source) > 0
       } == {
       SELFBENCH_API_TOKEN           = "selfbench-worker-api-token"
@@ -229,7 +229,7 @@ run "prod_foundation" {
     cloud_sql_availability_type = "ZONAL"
   }
   assert {
-    condition     = google_cloud_run_v2_service.api.deletion_protection && google_cloud_run_v2_worker_pool.worker.deletion_protection && google_sql_database_instance.app[0].deletion_protection && google_sql_database_instance.app[0].settings[0].deletion_protection_enabled
+    condition     = google_cloud_run_v2_service.api.deletion_protection && google_cloud_run_v2_worker_pool.worker[0].deletion_protection && google_sql_database_instance.app[0].deletion_protection && google_sql_database_instance.app[0].settings[0].deletion_protection_enabled
     error_message = "Production services and database must be deletion-protected."
   }
   assert {
@@ -330,22 +330,14 @@ run "gke_workers" {
     condition     = yamldecode(helm_release.workers[0].values[0]).temporal.queue == "selfbench-dev-harbor" && yamldecode(helm_release.workers[0].values[0]).maxReplicas == 20
     error_message = "KEDA scales on the Harbor queue, up to 20 pods by default."
   }
-}
-run "worker_pool_leaves_harbor_to_gke" {
-  command = plan
-  variables {
-    gke_workers              = true
-    worker_pool_polls_harbor = false
+  assert {
+    condition     = yamldecode(helm_release.workers[0].values[0]).workflowReplicas == 1 && yamldecode(helm_release.workers[0].values[0]).activityConcurrency == 8
+    error_message = "The cluster runs the workflow worker with the pool's instance count and activity slots."
   }
   assert {
-    condition     = one([for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.value if env.name == "SELFBENCH_WORKER_ROLE"]) == "workflows"
-    error_message = "The pool polls only the workflow queue once Harbor work is on GKE."
+    condition     = length(google_cloud_run_v2_worker_pool.worker) == 0
+    error_message = "With GKE workers, Cloud Run runs only the API."
   }
-}
-run "harbor_queue_always_polled" {
-  command = plan
-  variables { worker_pool_polls_harbor = false }
-  expect_failures = [var.worker_pool_polls_harbor]
 }
 run "temporal_settings_required" {
   command = plan
