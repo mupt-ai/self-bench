@@ -48,12 +48,13 @@ async function fromRecords() {
     trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
   }));
 }
-/** Counts the records read while `work` runs. */
-async function recordsRead(work: () => Promise<unknown>): Promise<number> {
+/** Counts the records read while `work` runs, each read `slowMs` slower than it would be. */
+async function recordsRead(work: () => Promise<unknown>, slowMs = 0): Promise<number> {
   const read = server.artifacts.getByKey.bind(server.artifacts);
   let count = 0;
-  server.artifacts.getByKey = (key) => {
+  server.artifacts.getByKey = async (key) => {
     count += 1;
+    if (slowMs > 0) await new Promise((resolve) => setTimeout(resolve, slowMs));
     return read(key);
   };
   try {
@@ -244,7 +245,10 @@ test("a poll that sends the list's tag is told when nothing changed, without the
 
 test("overlapping lists share one read of a record that needs rebuilding", async () => {
   await savedRun(older);
-  expect(await recordsRead(() => Promise.all([listed(), listed(), listed()]))).toBe(1);
+  // A record read takes milliseconds here, and a busy test machine can start the third list only
+  // after the first has read the record. A slow read keeps all three inside it.
+  const reads = recordsRead(() => Promise.all([listed(), listed(), listed()]), 500);
+  expect(await reads).toBe(1);
 });
 
 test("a store that keeps no summaries lists from the records, as before", async () => {
