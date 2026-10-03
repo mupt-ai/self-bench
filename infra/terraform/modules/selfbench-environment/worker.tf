@@ -1,6 +1,8 @@
-# The Temporal worker as a Cloud Run worker pool: pollers with no HTTP surface, a fixed
-# instance count, and a fresh filesystem on every release, apart from the API.
+# Without GKE, the Temporal worker is a Cloud Run worker pool polling both queues: pollers with
+# no HTTP surface, a fixed instance count, and a fresh filesystem on every release, apart from the
+# API. With gke_workers on, every worker runs on the cluster instead (gke.tf).
 resource "google_cloud_run_v2_worker_pool" "worker" {
+  count               = 1 - local.gke
   project             = var.project_id
   location            = var.region
   name                = "${local.name}-worker"
@@ -48,14 +50,6 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
               version = "latest"
             }
           }
-        }
-      }
-      # Once the GKE Harbor workers are proven, this pool leaves the Harbor queue to them.
-      dynamic "env" {
-        for_each = var.worker_pool_polls_harbor ? [] : ["workflows"]
-        content {
-          name  = "SELFBENCH_WORKER_ROLE"
-          value = env.value
         }
       }
       # Files the worker writes (Harbor checks, task bundles) count against memory, and the

@@ -1,6 +1,7 @@
 # Every value is set by Terraform (gke.tf, helm_release.workers).
 image: ""
 environment: ""
+release: ""
 runtimeAccount: ""
 env: {}
 secrets:
@@ -13,3 +14,5 @@ temporal:
   namespace: ""
   queue: ""
 maxReplicas: 20
+workflowReplicas: 1
+activityConcurrency: 8

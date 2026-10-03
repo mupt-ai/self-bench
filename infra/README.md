@@ -4,7 +4,7 @@ SelfBench runs on a small GCP stack managed with Terraform:
 
 - one isolated project per environment
 - the API on Cloud Run behind a global HTTPS load balancer
-- the Temporal worker as a Cloud Run worker pool, with Harbor work optionally on GKE Autopilot (`gke_workers`)
+- the Temporal workers on GKE Autopilot (`gke_workers`), or else as a Cloud Run worker pool
 - a private Cloud SQL PostgreSQL instance
 - private GCS artifact storage
 - Artifact Registry and Secret Manager
@@ -143,7 +143,7 @@ GitHub environment protection is the approval boundary. Terraform provides state
 
 ## Cloud Run
 
-The API is a Cloud Run service reachable only through the load balancer, with its own service account. It can scale out: nothing about a request or a Codex sign-in lives in process memory. It reads the client IP from the address the load balancer appends to `X-Forwarded-For`. The worker is a worker pool of `worker_instances` instances under the runtime service account. Both reach private Cloud SQL through the VPC.
+The API is a Cloud Run service reachable only through the load balancer, with its own service account. It can scale out: nothing about a request or a Codex sign-in lives in process memory. It reads the client IP from the address the load balancer appends to `X-Forwarded-For`. Without `gke_workers`, the worker is a worker pool of `worker_instances` instances under the runtime service account, polling both queues. Both reach private Cloud SQL through the VPC.
 
 Before the first release to a new environment:
 
@@ -153,7 +153,7 @@ Before the first release to a new environment:
 
 ## GKE Workers
 
-With `"gke_workers": true`, Harbor work (the `<task queue>-harbor` queue: Harbor checks and solver trials) runs on a GKE Autopilot cluster in the app VPC, from `modules/selfbench-environment/charts/selfbench-workers`. KEDA starts a job pod per 10 waiting tasks, up to `harbor_worker_max_replicas` at once; each runs up to 10 and exits after 5 idle minutes (or stops taking work after a day), so no busy pod is ever removed. Autopilot caps termination grace at 10 minutes, which is why these are jobs rather than a Deployment. The Cloud Run pool keeps polling both queues, so Harbor work never goes unpolled while the cluster comes up; set `"worker_pool_polls_harbor": false` once the GKE workers are proven. Harbor nodes run as their own `selfbench-<env>-gke-nodes` account (image pulls, logs, metrics); the apply role also needs `iam.serviceAccounts.actAs` on it.
+With `"gke_workers": true`, every Temporal worker runs on a GKE Autopilot cluster in the app VPC, from `modules/selfbench-environment/charts/selfbench-workers`, and Cloud Run runs only the API. The workflow worker is a Deployment of `worker_instances` pods; a restart loses no work, since workflows replay and sandbox activities complete through the callback API. Harbor work (the `<task queue>-harbor` queue: Harbor checks and solver trials) runs as jobs: KEDA starts a job pod per 10 waiting tasks, up to `harbor_worker_max_replicas` at once; each runs up to 10 and exits after 5 idle minutes (or stops taking work after a day), so no busy pod is ever removed. Autopilot caps termination grace at 10 minutes, which is why these are jobs rather than a Deployment. Worker pods keep to nodes of their own (Autopilot workload separation), where GKE's system Deployments cannot preempt them; billing stays per pod request. Harbor nodes run as their own `selfbench-<env>-gke-nodes` account (image pulls, logs, metrics); the apply role also needs `iam.serviceAccounts.actAs` on it.
 
 To turn it on:
 
