@@ -245,10 +245,8 @@ test("a poll that sends the list's tag is told when nothing changed, without the
 
 test("overlapping lists share one read of a record that needs rebuilding", async () => {
   await savedRun(older);
-  // A record read takes milliseconds here, and a busy test machine can start the third list only
-  // after the first has read the record. A slow read keeps all three inside it.
-  const reads = recordsRead(() => Promise.all([listed(), listed(), listed()]), 500);
-  expect(await reads).toBe(1);
+  // Slow reads, so all three lists arrive while the first is still reading, however busy CI is.
+  expect(await recordsRead(() => Promise.all([listed(), listed(), listed()]), 500)).toBe(1);
 });
 
 test("a store that keeps no summaries lists from the records, as before", async () => {
