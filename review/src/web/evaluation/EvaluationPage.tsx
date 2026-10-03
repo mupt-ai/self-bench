@@ -29,8 +29,9 @@ export function EvaluationPage() {
     if (!selectedId) return;
     const refresh = async () => {
       try {
+        // The page shows each trial's state and score; a task's dialog fetches its transcript.
         const run = await evaluationRequest<EvaluationRun>(
-          `${url}/${encodeURIComponent(selectedId)}`,
+          `${url}/${encodeURIComponent(selectedId)}?trial=none`,
         );
         if (disposed) return;
         setCurrent(run);
