@@ -26,7 +26,12 @@ import {
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
-import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
+import {
+  evaluationPrefix,
+  getEvaluation,
+  runSummary,
+  runWithTrial,
+} from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
@@ -212,8 +217,21 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         const run = await getEvaluation(artifacts, repo.id, section);
         if (!run) sendJson(response, 404, { error: "Evaluation not found" });
         else if (id === "artifacts") await sendArtifact(artifacts, repo.id, run, url, response);
-        else if (!id) sendJson(response, 200, run);
-        else sendJson(response, 404, { error: "Not found" });
+        else if (!id) {
+          // Whole by default. `trial=<index>` carries that trial's transcript, log and artifact
+          // list alone, for its dialog; `trial=none` carries none, for the run's page.
+          const wanted = url.searchParams.get("trial");
+          const sent =
+            wanted === null
+              ? run
+              : wanted === "none"
+                ? runSummary(run)
+                : /^\d{1,6}$/.test(wanted)
+                  ? runWithTrial(run, Number(wanted))
+                  : undefined;
+          if (sent) sendJson(response, 200, sent);
+          else sendJson(response, 404, { error: "Trial not found" });
+        } else sendJson(response, 404, { error: "Not found" });
       } else {
         // A page polling this list sends back the tag of the one it has, and is told when that
         // list still stands without being sent it again.
