@@ -12,7 +12,7 @@ test("a comparison page polls while any run has yet to finish", () => {
     expect(comparisonActive({ runs: [run("completed"), run(status)] })).toBe(true);
 });
 
-test("a task's source changes with its progress, not with a poll's fresh cost or sync time", () => {
+test("a task's source changes with any progress, not with a poll's fresh cost or sync time", () => {
   const task = {
     runId: "batch-1",
     taskId: "t",
@@ -30,4 +30,7 @@ test("a task's source changes with its progress, not with a poll's fresh cost or
   expect(taskSourceKey(spent)).toBe(key);
   expect(taskSourceKey({ ...task, stage: "review" })).not.toBe(key);
   expect(taskSourceKey({ ...task, pipelineStatus: "accepted" })).not.toBe(key);
+  // A new authoring round writes a new bundle while the stage stays put.
+  expect(taskSourceKey({ ...task, round: 2 })).not.toBe(key);
+  expect(taskSourceKey({ ...task, state: "accepted" } as TaskItem)).not.toBe(key);
 });
