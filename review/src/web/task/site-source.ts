@@ -69,12 +69,14 @@ export function siteTaskSource(org: string, fullName: string, task: TaskItem): T
 }
 
 /**
- * What a task's source is made of: its identity and progress. A poll brings a task's cost and
- * sync time afresh; a source keyed on this stays, and the view re-lists artifacts only when the
- * task moved on, which is when a new bundle can have appeared.
+ * What a task's source is made of: the task, less what a poll brings afresh without the task
+ * moving on: its sync time and, for a hosted task, its running cost. A source keyed on this
+ * stays put through those, and the view re-lists artifacts only when the task moved on (a new
+ * round, stage or state), which is when a new bundle can have appeared.
  */
 export function taskSourceKey(task: TaskItem): string {
-  return JSON.stringify([task.runId, task.taskId, rowFor(task)]);
+  const { syncedAt: _synced, cost: _cost, ...progress } = task;
+  return JSON.stringify(progress);
 }
 
 export function rowFor(task: TaskItem): TaskRow {
