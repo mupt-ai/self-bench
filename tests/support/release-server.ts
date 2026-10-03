@@ -11,12 +11,13 @@ import { createPublicReleaseRoutes } from "../../src/api/routes/public-releases.
 import { createReleaseRoutes, type PublicChange } from "../../src/api/routes/releases.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createApiKeyStore } from "../../src/db/api-keys.js";
+import { createRunSummaryStore } from "../../src/db/evaluation-summaries.js";
 import { createReleaseStore } from "../../src/db/releases.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { credentials } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
-import { saveEvaluation } from "../../src/evaluation/store.js";
+import { keepRunSummaries, saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
 import { full, names } from "./release-fixture.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
@@ -37,8 +38,7 @@ interface FakeRepository {
 /**
  * The release routes and the public routes over PGlite, a local artifact store, and a fake
  * GitHub. Two members of workspace `acme` (priya, marco) and one outsider. A `shared`
- * database is emptied and reused: each PGlite instance keeps its memory, so one per test
- * file, not one per test.
+ * database is emptied and reused, which is faster than migrating one for every test.
  */
 export async function releaseServer(
   shared?: TestDatabase,
@@ -47,6 +47,7 @@ export async function releaseServer(
   const directory = await mkdtemp(join(tmpdir(), "release-routes-"));
   const artifacts = new LocalArtifactStore(directory);
   const database = shared ?? (await testDatabase());
+  keepRunSummaries(artifacts, createRunSummaryStore(database.db)); // As the API keeps them.
   if (shared)
     await shared.db.execute(
       sql`truncate table releases, tasks, credentials, api_keys, repos, org_members, orgs, users restart identity cascade`,
@@ -172,6 +173,7 @@ export async function releaseServer(
     });
   return {
     db: database.db,
+    directory,
     changes,
     tasks,
     releases,
