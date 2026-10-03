@@ -118,11 +118,13 @@ resource "helm_release" "workers" {
   chart            = "${path.module}/charts/selfbench-workers"
   namespace        = local.worker_namespace
   create_namespace = true
-  # Replaced pods drain their Harbor work for hours; the release does not wait for them.
-  wait = false
+  # Waits for the workflow Deployment to roll (KEDA's Harbor jobs are not part of the release),
+  # allowing for Autopilot to add a node.
+  timeout = 900
   values = [yamlencode({
     image          = var.image
     environment    = var.environment
+    release        = var.release_id
     runtimeAccount = google_service_account.runtime.email
     env            = local.shared_env
     secrets = {
@@ -141,7 +143,9 @@ resource "helm_release" "workers" {
     workflowReplicas    = var.worker_instances
     activityConcurrency = var.activity_concurrency
   })]
+  # The API migrates the schema on start; the workflow worker rolls only after it is ready.
   depends_on = [
+    google_cloud_run_v2_service.api,
     helm_release.keda,
     google_service_account_iam_member.runtime_workload_identity,
     google_secret_manager_secret_iam_member.worker_pod_reader,

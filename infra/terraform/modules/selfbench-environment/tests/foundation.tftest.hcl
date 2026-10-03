@@ -331,8 +331,8 @@ run "gke_workers" {
     error_message = "KEDA scales on the Harbor queue, up to 20 pods by default."
   }
   assert {
-    condition     = yamldecode(helm_release.workers[0].values[0]).workflowReplicas == 1 && yamldecode(helm_release.workers[0].values[0]).activityConcurrency == 8
-    error_message = "The cluster runs the workflow worker with the pool's instance count and activity slots."
+    condition     = yamldecode(helm_release.workers[0].values[0]).workflowReplicas == 1 && yamldecode(helm_release.workers[0].values[0]).activityConcurrency == 8 && yamldecode(helm_release.workers[0].values[0]).release == var.release_id
+    error_message = "The cluster runs the workflow worker with the pool's instance count and activity slots, rolled on every release."
   }
   assert {
     condition     = length(google_cloud_run_v2_worker_pool.worker) == 0

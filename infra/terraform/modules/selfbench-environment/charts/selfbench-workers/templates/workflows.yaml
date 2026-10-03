@@ -14,6 +14,9 @@ spec:
     metadata:
       labels:
         app: selfbench-workflow-worker
+      annotations:
+        # Every release starts a new pod, which reads each secret's latest version.
+        selfbench.dev/release: {{ .Values.release | quote }}
     spec:
       # As for Harbor pods: a SIGTERM before the worker installs its handlers ends node at once.
       shareProcessNamespace: true
@@ -42,6 +45,9 @@ spec:
               value: {{ .Values.environment | quote }}
             - name: SELFBENCH_ACTIVITY_CONCURRENCY
               value: {{ .Values.activityConcurrency | quote }}
+            # Finishes in-flight activities within Kubernetes' default 30-second grace.
+            - name: SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS
+              value: "25"
           resources:
             requests: { cpu: "1", memory: 4Gi, ephemeral-storage: 10Gi }
             limits: { cpu: "1", memory: 4Gi, ephemeral-storage: 10Gi }

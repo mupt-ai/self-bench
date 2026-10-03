@@ -151,7 +151,7 @@ jobs:
           terraform_version: 1.14.2
           terraform_wrapper: false
       # The release is plain Terraform input: the pushed digest, public origins, run identity and
-      # worker concurrency. Applying it rolls the API revision, then the worker pool.
+      # worker concurrency. Applying it rolls the API revision, then the workers.
       - name: Generate Terraform Plan
         id: plan
         env:
@@ -241,5 +241,5 @@ jobs:
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
-            echo "API service and worker pool rolled out; HTTPS health, anonymous auth rejection and results site checks passed."
+            echo "API service and workers rolled out; HTTPS health, anonymous auth rejection and results site checks passed."
           } >> "$GITHUB_STEP_SUMMARY"
