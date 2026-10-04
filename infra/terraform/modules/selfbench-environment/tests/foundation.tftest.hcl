@@ -287,8 +287,8 @@ run "task_images_off_by_default" {
     error_message = "Trials keep building Dockerfiles until task_images is set."
   }
   assert {
-    condition     = google_artifact_registry_repository.tasks.docker_config[0].immutable_tags
-    error_message = "Task image tags must not be overwritten."
+    condition     = length(google_artifact_registry_repository.tasks) == 0 && length(google_artifact_registry_repository_iam_member.runtime_task_images) == 0 && length(google_artifact_registry_repository_iam_member.api_task_images) == 0
+    error_message = "Task image infrastructure must not be created until enabled."
   }
 }
 run "task_images" {
@@ -308,7 +308,11 @@ run "task_images" {
     error_message = "The API serves pulls from the task repository."
   }
   assert {
-    condition     = google_artifact_registry_repository_iam_member.runtime_task_images.role == "roles/artifactregistry.writer" && google_artifact_registry_repository_iam_member.api_task_images.role == "roles/artifactregistry.reader"
+    condition     = google_artifact_registry_repository.tasks[0].docker_config[0].immutable_tags
+    error_message = "Task image tags must not be overwritten."
+  }
+  assert {
+    condition     = google_artifact_registry_repository_iam_member.runtime_task_images[0].role == "roles/artifactregistry.writer" && google_artifact_registry_repository_iam_member.api_task_images[0].role == "roles/artifactregistry.reader"
     error_message = "Only the worker writes task images; the API only reads them."
   }
 }
