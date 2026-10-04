@@ -68,6 +68,9 @@ try {
     "dist/runtime/command.sh",
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
+    "dist/maintenance/recompute-cost.js",
+    "dist/maintenance/backfill-agent-timeouts.js",
+    "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
     "dist/harnesses/harbor/runtime/selfbench_e2b.py",
@@ -85,6 +88,22 @@ try {
     "dist/public-site/index.html",
   ]) {
     await readFile(join(installedRoot, asset));
+  }
+  for (const [program, usage] of [
+    ["recompute-cost", "Usage: recompute-cost.js"],
+    ["backfill-agent-timeouts", "Usage: backfill-agent-timeouts.js"],
+    ["records-migration", "Set SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY"],
+  ] as const) {
+    const child = Bun.spawn(["node", join(installedRoot, "dist/maintenance", `${program}.js`)], {
+      cwd: installRoot,
+      env: { PATH: process.env.PATH },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+    if (exitCode === 0 || !stderr.includes(usage)) {
+      throw new Error(`packed maintenance program ${program} did not report its own usage`);
+    }
   }
   for (const asset of [
     "harbor_gateway.py",

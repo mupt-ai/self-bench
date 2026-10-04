@@ -2,8 +2,8 @@
  * Re-derives trial cost fields from a finished evaluation's stored Harbor artifacts, for runs
  * recorded before a cost fix shipped.
  *
- *   node dist/evaluation/recompute-cost.js <repoId> <evaluationId>           # dry run
- *   node dist/evaluation/recompute-cost.js <repoId> <evaluationId> --apply   # save a snapshot
+ *   node dist/maintenance/recompute-cost.js <repoId> <evaluationId>           # dry run
+ *   node dist/maintenance/recompute-cost.js <repoId> <evaluationId> --apply   # save a snapshot
  *
  * Reads the artifact store from the usual SELFBENCH_ARTIFACT_* / SELFBENCH_GCS_* settings. Runs
  * recorded before the model credential's sign-in type was saved with the evaluation look it up in
@@ -17,22 +17,20 @@
  * unpriced, and whose stored transcript is cut too far to count again, is priced from its recorded
  * token usage (recordedUsageCost). It refuses runs that are still queued or running.
  */
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { type ArtifactStore, createArtifactStore } from "../artifacts/index.js";
-import { loadConfig } from "../contracts/config/index.js";
-import { openDatabase } from "../db/client.js";
-import { isGateway } from "../gateways/index.js";
-import { refreshGateway } from "../gateways/refresh.js";
-import { HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
-import { releaseCredentials } from "../public/release-sources.js";
-import { referencePricing } from "./catalog.js";
-import { referenceCost, trialCost } from "./cost.js";
-import { evaluationCredentialOrg } from "./execution.js";
-import { record } from "./output.js";
-import { evaluationPrefix, getEvaluation, saveEvaluation } from "./store.js";
-import type { EvaluationRun, EvaluationTrial } from "./types.js";
+import { type ArtifactStore, createArtifactStore } from "../src/artifacts/index.js";
+import { loadConfig } from "../src/contracts/config/index.js";
+import { openDatabase } from "../src/db/client.js";
+import { referencePricing } from "../src/evaluation/catalog.js";
+import { referenceCost, trialCost } from "../src/evaluation/cost.js";
+import { evaluationCredentialOrg } from "../src/evaluation/execution.js";
+import { record } from "../src/evaluation/output.js";
+import { evaluationPrefix, getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
+import type { EvaluationRun, EvaluationTrial } from "../src/evaluation/types.js";
+import { isGateway } from "../src/gateways/index.js";
+import { refreshGateway } from "../src/gateways/refresh.js";
+import { HOUR_CACHE_WRITE_MULTIPLIER } from "../src/harnesses/claude-code/cost.js";
+import { releaseCredentials } from "../src/public/release-sources.js";
 
 export type ModelAuth = NonNullable<NonNullable<EvaluationRun["credentials"]>["auth"]>;
 /** The sign-in type of a saved model credential, deleted ones included. */
@@ -245,7 +243,7 @@ export async function recomputeEvaluationCost(
   return report;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+export async function main(): Promise<void> {
   const [repoId, id] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!repoId || !/^\d+$/.test(repoId) || !id)
     throw new Error(

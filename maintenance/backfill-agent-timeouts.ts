@@ -3,8 +3,8 @@
  * agent at its time limit, for runs recorded before such trials counted (runner.ts). Each takes
  * the verifier's scores and a cost from its stored Harbor artifacts, as the runner gives it now.
  *
- *   node dist/evaluation/backfill-agent-timeouts.js <repoId>...           # dry run
- *   node dist/evaluation/backfill-agent-timeouts.js <repoId>... --apply   # save snapshots
+ *   node dist/maintenance/backfill-agent-timeouts.js <repoId>...           # dry run
+ *   node dist/maintenance/backfill-agent-timeouts.js <repoId>... --apply   # save snapshots
  *
  * Reads the artifact store and model sign-in types as recompute-cost.js does. A trial whose result
  * has no scores, or whose Pi stopped on a model error before its time ran out, stays failed. Apply
@@ -12,15 +12,12 @@
  * trials then all completed is completed. Runs still going are safe to backfill: the change is
  * applied to the latest record, and only to a trial still failed on its timeout.
  */
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { type ArtifactStore, createArtifactStore } from "../artifacts/index.js";
-import { loadConfig } from "../contracts/config/index.js";
-import { openDatabase } from "../db/client.js";
-import { releaseCredentials } from "../public/release-sources.js";
-import { trialCost } from "./cost.js";
-import { eligibleTrial } from "./eligible.js";
-import { agentTimedOut, piFailure, record, verifierRewards } from "./output.js";
+import { type ArtifactStore, createArtifactStore } from "../src/artifacts/index.js";
+import { loadConfig } from "../src/contracts/config/index.js";
+import { openDatabase } from "../src/db/client.js";
+import { trialCost } from "../src/evaluation/cost.js";
+import { eligibleTrial } from "../src/evaluation/eligible.js";
+import { agentTimedOut, piFailure, record, verifierRewards } from "../src/evaluation/output.js";
 import {
   type CostFields,
   costFields,
@@ -30,8 +27,9 @@ import {
   modelAuth,
   storedHarborFiles,
 } from "./recompute-cost.js";
-import { listEvaluations, updateEvaluation } from "./store.js";
-import type { EvaluationRun, EvaluationTrial } from "./types.js";
+import { listEvaluations, updateEvaluation } from "../src/evaluation/store.js";
+import type { EvaluationRun, EvaluationTrial } from "../src/evaluation/types.js";
+import { releaseCredentials } from "../src/public/release-sources.js";
 
 /** The error the runner recorded for a trial whose agent Harbor stopped at its time limit. */
 const TIMED_OUT = /^Agent execution timed out after /;
@@ -149,7 +147,7 @@ export async function backfillAgentTimeouts(
   return report;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+export async function main(): Promise<void> {
   const repoIds = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (repoIds.length === 0 || !repoIds.every((id) => /^\d+$/.test(id)))
     throw new Error(
