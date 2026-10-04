@@ -203,6 +203,11 @@ export async function recomputeEvaluationCost(
   };
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
+    // A billed gateway cost cannot be reconstructed from token usage or stored transcripts.
+    if (before.costSource === "gateway") {
+      report.trials.push({ index, before, changed: false });
+      continue;
+    }
     const { files, result } = await storedHarborFiles(store, run, trial);
     // Without the sign-in type, an earlier recompute's inferred cache writes cannot be rederived.
     if (!result || (!auth && trial.cacheWritesInferred)) {

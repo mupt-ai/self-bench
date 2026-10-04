@@ -9,6 +9,7 @@ import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
+import { gateways } from "../gateways/index.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
@@ -17,6 +18,7 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent } from "./execution.js";
+import { gatewayCost } from "./gateway-cost.js";
 import { thinkingArguments } from "./models.js";
 import {
   agentTimedOut,
@@ -219,6 +221,23 @@ async function runTrial(context: {
       // Long transcripts are cut for storage; cost and failures need every request.
       const records = await wholeTranscripts(jobs, files);
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
+      if (
+        run.credentials?.provider === "openrouter" ||
+        run.credentials?.provider === "vercel-ai-gateway"
+      ) {
+        const cost = trial.modelVerified
+          ? await gatewayCost(
+              run.credentials.provider,
+              child[gateways[run.credentials.provider].keyVariable],
+              trial.harness,
+              records,
+            )
+          : undefined;
+        if (cost !== undefined) {
+          trial.apiCostUsd = cost;
+          trial.costSource = "gateway";
+        }
+      }
       trial.rewards = verifierRewards(parsed);
       // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
       const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
