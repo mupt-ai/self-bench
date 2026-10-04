@@ -1,8 +1,8 @@
 import React from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
-import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
+import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationRun, evaluationRequest } from "./api";
 import { ChartPreview } from "./ChartPreview";
 import { ComparisonHistory } from "./ComparisonHistory";
@@ -58,12 +58,6 @@ export function EvaluationPage() {
         <span className="md:hidden">
           <ChartPreview repo={repo} variant="button" />
         </span>
-        <Link className={buttonStyles.secondary} to={`/repos/${repo}/releases?release=1`}>
-          Release Results
-        </Link>
-        <Link className={buttonStyles.primary} to={`/repos/${repo}/run`}>
-          New Comparison
-        </Link>
         {selectedId && (
           <Button type="button" variant="secondary" onClick={() => setSearch({})}>
             All Results
@@ -100,8 +94,8 @@ export function EvaluationPage() {
             </div>
           )}
           {!loading && !runs.length && (
-            <EmptyState title="No Runs Yet" className="mt-8">
-              Choose models and a sandbox on the Run page to compare them against your dataset.
+            <EmptyState title="No Runs Yet" className="mt-6">
+              Choose models and a sandbox to compare them against your dataset.
             </EmptyState>
           )}
           {/* Below the table once it has its rows, so it can tell whether it is in view. */}
