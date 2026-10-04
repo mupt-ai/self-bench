@@ -4,10 +4,8 @@
     "src/api/cli/bin.ts!",
     "src/api/main.ts!",
     "src/temporal/worker-main.ts!",
-    // The one-time evaluation records migration, run by operators from the API image.
-    "src/db/records-migration.ts!",
-    // The one-off trial cost recompute, run by operators from the API or worker image.
-    "src/evaluation/recompute-cost.ts!",
+    // Operator-only maintenance programs, bundled into dist/maintenance.
+    "maintenance/bin/*.ts!",
     // Temporal loads workflows and Pi loads extensions by path, not imports.
     "src/temporal/workflows.ts!",
     "src/evaluation/workflow.ts!",
@@ -22,6 +20,7 @@
     "src/**/*.ts!",
     "review/src/**/*.{ts,tsx,css}!",
     "scripts/**/*.ts!",
+    "maintenance/**/*.ts!",
     "tests/**/*.ts"
   ],
   // The phone checks (review/src/public-site/AGENTS.md); the plugin reads their files from it.

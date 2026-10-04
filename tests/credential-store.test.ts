@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { migrateEvaluationRecords } from "../maintenance/records-migration.js";
 import { createEncryptedRecords } from "../src/db/encrypted-records.js";
-import { migrateEvaluationRecords } from "../src/db/records-migration.js";
 import { comparisons, credentials } from "../src/db/schema.js";
 import { createUserStore } from "../src/db/users.js";
 import { createVault } from "../src/db/vault.js";
