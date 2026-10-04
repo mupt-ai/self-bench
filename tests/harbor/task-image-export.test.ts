@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
@@ -104,7 +104,7 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
     bundle,
     images: { provider: "modal", agent: "im-Agent1", verifier: "im-Verifier1" },
   };
-  const calls: { args: readonly string[]; env: NodeJS.ProcessEnv }[] = [];
+  const calls: { args: readonly string[]; env: NodeJS.ProcessEnv; token: string }[] = [];
   const bin = join(root, "bin");
   await mkdir(bin);
   await writeFile(join(bin, "harbor"), "#!/usr/bin/python3\n");
@@ -121,7 +121,12 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
       args: readonly string[],
       options?: { env?: NodeJS.ProcessEnv },
     ) => {
-      calls.push({ args, env: options?.env ?? {} });
+      const env = options?.env ?? {};
+      calls.push({
+        args,
+        env,
+        token: await readFile(env.SELFBENCH_EXPORT_TOKEN_FILE ?? "", "utf8"),
+      });
       const digit = args[1] === "im-Agent1" ? "1" : "2";
       return { exitCode: 0, stdout: `pushing\nsha256:${digit.repeat(64)}\n`, stderr: "" };
     }) as typeof runCommand,
@@ -143,7 +148,7 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
   for (const [index, call] of calls.entries()) {
     expect(call.args[0]?.endsWith("selfbench_export.py")).toBe(true);
     expect(call.env.MODAL_TOKEN_ID).toBe("modal");
-    expect(call.env.SELFBENCH_EXPORT_TOKEN).toBe("push-token");
+    expect(call.token).toBe("push-token");
     expect(call.env.SELFBENCH_EXPORT_REGISTRY).toBe(
       "https://us-central1-docker.pkg.dev/v2/selfbench-test/selfbench-tasks",
     );

@@ -8,7 +8,8 @@ manifest to the repository, by digest and untagged so it can be deleted with its
 other provider can start from exactly what passed. The environment carries where and how:
 
 - SELFBENCH_EXPORT_REGISTRY: the repository's registry API, `https://<host>/v2/<path>`
-- SELFBENCH_EXPORT_TOKEN: an access token that may push there (Artifact Registry's Basic login)
+- SELFBENCH_EXPORT_TOKEN_FILE: a file holding an access token that may push there (Artifact
+  Registry's Basic login), reread before each request because the worker refreshes it
 - SELFBENCH_EXPORT_CONFIG: the image config (Env, User, WorkingDir) as JSON; a running sandbox's
   environment carries Modal's own variables, so the worker derives it from the Dockerfile
 
@@ -36,18 +37,27 @@ SANDBOX_LIFETIME_SECS = 2 * 60 * 60
 
 
 class Registry:
-    def __init__(self, api: str, token: str):
+    def __init__(self, api: str, token_file: str):
         parsed = urllib.parse.urlsplit(api)
         self.origin = f"{parsed.scheme}://{parsed.netloc}"
         self.path = parsed.path.rstrip("/")
+        self.token_file = token_file
+
+    def authorization(self) -> str:
+        # The worker keeps the file fresh; an export outlives one access token.
+        with open(self.token_file) as file:
+            token = file.read().strip()
         login = base64.b64encode(f"oauth2accesstoken:{token}".encode()).decode()
-        self.headers = {"Authorization": f"Basic {login}"}
+        return f"Basic {login}"
 
     def request(self, method: str, url: str, body=b"", headers: dict | None = None):
         # A generator body is sent with chunked transfer encoding.
         absolute = urllib.parse.urljoin(self.origin + "/", url)
         request = urllib.request.Request(
-            absolute, data=body, method=method, headers={**self.headers, **(headers or {})}
+            absolute,
+            data=body,
+            method=method,
+            headers={"Authorization": self.authorization(), **(headers or {})},
         )
         with urllib.request.urlopen(request, timeout=600) as response:
             return response.status, dict(response.headers), response.read()
@@ -144,7 +154,9 @@ async def stream_root(sandbox, layer: LayerUpload) -> None:
 
 
 async def export(image_id: str, name: str) -> str:
-    registry = Registry(os.environ["SELFBENCH_EXPORT_REGISTRY"], os.environ["SELFBENCH_EXPORT_TOKEN"])
+    registry = Registry(
+        os.environ["SELFBENCH_EXPORT_REGISTRY"], os.environ["SELFBENCH_EXPORT_TOKEN_FILE"]
+    )
     config = json.loads(os.environ["SELFBENCH_EXPORT_CONFIG"])
     # Harbor's Modal environment builds in its default app, so its images live there.
     app = await App.lookup.aio(name="__harbor__", create_if_missing=True)

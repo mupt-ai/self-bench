@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
@@ -18,6 +18,7 @@ import { withHeartbeats } from "./helpers.js";
 import { unpackTask } from "./remote-gate.js";
 
 const EXPORT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 const ROLES = [
   { role: "agent", context: "environment" },
   { role: "verifier", context: "tests" },
@@ -77,7 +78,18 @@ export async function exportTaskImages(
   if (!images || images.registry) return task;
   const command = options.command ?? runCommand;
   const root = await mkdtemp(join(tmpdir(), `selfbench-export-${task.taskId}-`));
+  // An access token lasts about an hour and an export can take two, so the exporter rereads this
+  // file before each registry request while it is kept fresh here.
+  const tokenFile = join(root, "registry-token");
+  const writeToken = async () => {
+    await writeFile(`${tokenFile}.new`, await options.token(), { mode: 0o600 });
+    await rename(`${tokenFile}.new`, tokenFile);
+  };
+  let refresh: ReturnType<typeof setInterval> | undefined;
   try {
+    await writeToken();
+    // A failed refresh keeps the previous token until the next one.
+    refresh = setInterval(() => void writeToken().catch(() => {}), TOKEN_REFRESH_MS);
     const directory = await unpackTask(store, task.bundle, root, options.signal);
     const python = await harborPython(options.env);
     const [host, ...path] = options.repository.split("/");
@@ -96,7 +108,7 @@ export async function exportTaskImages(
             ...options.env,
             SELFBENCH_EXPORT_REGISTRY:
               options.registryApi ?? `https://${host}/v2/${path.join("/")}`,
-            SELFBENCH_EXPORT_TOKEN: await options.token(),
+            SELFBENCH_EXPORT_TOKEN_FILE: tokenFile,
             SELFBENCH_EXPORT_CONFIG: JSON.stringify(config),
           },
           timeoutMs: EXPORT_TIMEOUT_MS,
@@ -120,6 +132,7 @@ export async function exportTaskImages(
       },
     };
   } finally {
+    clearInterval(refresh);
     await rm(root, { recursive: true, force: true });
   }
 }

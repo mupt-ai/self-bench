@@ -25,8 +25,12 @@ async function temporary(): Promise<string> {
 
 const sha256 = (data: Uint8Array) => `sha256:${createHash("sha256").update(data).digest("hex")}`;
 
-/** Registry stand-in for the export's pushes: chunked and monolithic blob uploads, manifests. */
-async function fakeRegistry(): Promise<{
+/**
+ * Registry stand-in for the export's pushes: chunked and monolithic blob uploads, manifests. The
+ * worker refreshes the push token while the layer streams, so the token in `tokenFile` changes
+ * after the layer upload and every later request must carry the new one.
+ */
+async function fakeRegistry(tokenFile: string): Promise<{
   api: string;
   blobs: Map<string, Buffer>;
   manifests: Map<string, Buffer>;
@@ -34,13 +38,15 @@ async function fakeRegistry(): Promise<{
   const blobs = new Map<string, Buffer>();
   const manifests = new Map<string, Buffer>();
   const uploads = new Map<string, Buffer[]>();
+  let token = "push-token";
+  await writeFile(tokenFile, token);
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(chunk as Buffer);
     const body = Buffer.concat(chunks);
     const url = new URL(request.url ?? "/", "http://localhost");
     expect(request.headers.authorization).toBe(
-      `Basic ${Buffer.from("oauth2accesstoken:push-token").toString("base64")}`,
+      `Basic ${Buffer.from(`oauth2accesstoken:${token}`).toString("base64")}`,
     );
     if (request.method === "POST" && url.pathname.endsWith("/blobs/uploads/")) {
       const id = String(uploads.size);
@@ -48,6 +54,8 @@ async function fakeRegistry(): Promise<{
       response.writeHead(202, { location: `/upload/${id}?state=x` }).end();
     } else if (request.method === "PATCH" && url.pathname.startsWith("/upload/")) {
       uploads.get(url.pathname.slice(8))?.push(body);
+      token = "fresh-token";
+      await writeFile(tokenFile, token);
       response.writeHead(202, { location: `${url.pathname}?state=y` }).end();
     } else if (request.method === "PUT" && url.pathname.startsWith("/upload/")) {
       const data = Buffer.concat([...(uploads.get(url.pathname.slice(8)) ?? []), body]);
@@ -67,8 +75,9 @@ async function fakeRegistry(): Promise<{
 }
 
 test("the export streams the sandbox's root filesystem into one layer and pushes the image", async () => {
-  const registry = await fakeRegistry();
   const root = await temporary();
+  const tokenFile = join(root, "registry-token");
+  const registry = await fakeRegistry(tokenFile);
   const tar = join(root, "rootfs.tar");
   await writeFile(tar, Buffer.alloc(70_000, 7));
   const result = await runCommand(
@@ -120,7 +129,7 @@ assert Sandbox.terminated
       env: {
         ...process.env,
         SELFBENCH_EXPORT_REGISTRY: registry.api,
-        SELFBENCH_EXPORT_TOKEN: "push-token",
+        SELFBENCH_EXPORT_TOKEN_FILE: tokenFile,
         SELFBENCH_EXPORT_CONFIG: JSON.stringify({
           Env: ["CI=1"],
           User: "agent",
