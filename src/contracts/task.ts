@@ -191,17 +191,27 @@ export const authoredTaskDraftSchema = z.object({
 export type AuthoredTaskDraft = z.infer<typeof authoredTaskDraftSchema>;
 
 const modalImageIdSchema = z.string().regex(/^im-[A-Za-z0-9]{1,64}$/);
+const registryImageSchema = z
+  .string()
+  .regex(/^[a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$/);
 
 /**
- * The Modal images a task's verification built and passed its oracle on: the agent's (from
- * `environment/`) and the separate verifier's (from `tests/`, absent for tasks with services).
- * Modal trials start from them instead of building the Dockerfiles; they are IDs in the Modal
- * workspace that verified the task, so any other backend or workspace builds as before.
+ * The images a task's verification passed its oracle on: the agent's (from `environment/`) and
+ * the separate verifier's (from `tests/`, absent for tasks with services). They are IDs in the
+ * Modal workspace that verified the task; Modal trials there start from them instead of building
+ * the Dockerfiles.
+ *
+ * `registry` holds the same images exported, once the task was accepted, into SelfBench's task
+ * image repository by digest, so providers that cannot use a Modal ID (E2B, Docker, another Modal
+ * workspace) start from exactly what verification ran on too.
  */
 export const taskImagesSchema = z.object({
   provider: z.literal("modal"),
   agent: modalImageIdSchema,
   verifier: modalImageIdSchema.optional(),
+  registry: z
+    .object({ agent: registryImageSchema, verifier: registryImageSchema.optional() })
+    .optional(),
 });
 
 export type TaskImages = z.infer<typeof taskImagesSchema>;

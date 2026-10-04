@@ -71,6 +71,7 @@ module "selfbench" {
   activity_concurrency        = var.activity_concurrency
   worker_instances            = var.worker_instances
   gke_workers                 = var.gke_workers
+  task_images                 = var.task_images
   temporal_address            = var.temporal_address
   temporal_namespace          = var.temporal_namespace
   harbor_worker_max_replicas  = var.harbor_worker_max_replicas

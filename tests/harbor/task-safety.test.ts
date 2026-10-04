@@ -99,6 +99,15 @@ test("free-form metadata may use any key", async () => {
   await assertHostSafeTask(root, harborEnv, 60);
 });
 
+test("a bundle may not name its own image: only SelfBench sets docker_image", async () => {
+  const task = await mkdtemp(join(tmpdir(), "selfbench-task-safety-"));
+  roots.push(task);
+  for (const table of ["environment", "verifier.environment"]) {
+    await writeFile(join(task, "task.toml"), `[${table}]\ndocker_image = "evil.example/x"\n`);
+    await expect(assertHostSafeTask(task, harborEnv, 60)).rejects.toThrow(`${table}.docker_image`);
+  }
+});
+
 test("a compose file may not name a credential the Harbor process holds", async () => {
   // Harbor's Modal compose mode matches the name even behind Compose's `$$` escape.
   for (const reference of [

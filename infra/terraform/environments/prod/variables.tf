@@ -101,3 +101,7 @@ variable "harbor_worker_max_replicas" {
   type    = number
   default = 20
 }
+variable "task_images" {
+  type    = bool
+  default = false
+}

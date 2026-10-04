@@ -139,21 +139,75 @@ export async function pinEnvironmentImages(
   };
 }
 
+/** An image's config as its manifest names it: what a container of it starts with. */
+export interface ImageConfig {
+  readonly Env?: readonly string[];
+  readonly User?: string;
+  readonly WorkingDir?: string;
+}
+
+/**
+ * The linux/amd64 config of a digest-pinned image, read anonymously from its registry as
+ * {@link resolveImage} reads its manifest.
+ */
+export async function imageConfig(
+  image: string,
+  options: RegistryOptions = {},
+): Promise<ImageConfig> {
+  const parsed = parseImageReference(image);
+  if (!parsed?.digest) throw new Error(`${image} is not pinned to a digest`);
+  const json = async (response: Response) => {
+    if (!response.ok) {
+      throw new RegistryUnavailableError(`${parsed.host} answered ${response.status} for ${image}`);
+    }
+    return (await response.json()) as Record<string, unknown>;
+  };
+  let manifest = await json(await manifestRequest(parsed, parsed.digest, "GET", options));
+  if (Array.isArray(manifest.manifests)) {
+    const platform = (
+      manifest.manifests as { digest: string; platform?: Record<string, string> }[]
+    ).find((child) => child.platform?.os === "linux" && child.platform.architecture === "amd64");
+    if (!platform) throw new Error(`${image} has no linux/amd64 image`);
+    manifest = await json(await manifestRequest(parsed, platform.digest, "GET", options));
+  }
+  const config = (manifest.config as { digest?: string } | undefined)?.digest;
+  if (!config) throw new Error(`${image} names no config`);
+  const blob = await json(await registryRequest(parsed, `blobs/${config}`, "GET", {}, options));
+  return (blob.config as ImageConfig | undefined) ?? {};
+}
+
 async function manifestRequest(
   image: ImageReference,
   target: string,
   method: "HEAD" | "GET",
   options: RegistryOptions,
 ): Promise<Response> {
-  const url = `https://${image.host}/v2/${image.repository}/manifests/${target}`;
-  const headers: Record<string, string> = { Accept: manifestTypes };
-  const first = await send(url, { method, headers }, options);
+  return await registryRequest(
+    image,
+    `manifests/${target}`,
+    method,
+    { Accept: manifestTypes },
+    options,
+  );
+}
+
+async function registryRequest(
+  image: ImageReference,
+  path: string,
+  method: "HEAD" | "GET",
+  headers: Record<string, string>,
+  options: RegistryOptions,
+): Promise<Response> {
+  const url = `https://${image.host}/v2/${image.repository}/${path}`;
+  // Registries redirect blobs to their storage; manifests are answered in place.
+  const redirect = path.startsWith("blobs/") ? "follow" : "error";
+  const first = await send(url, { method, headers, redirect }, options);
   if (first.status !== 401) return first;
   const token = await bearerToken(first.headers.get("www-authenticate"), image, options);
   if (!token) return first;
   return await send(
     url,
-    { method, headers: { ...headers, Authorization: `Bearer ${token}` } },
+    { method, headers: { ...headers, Authorization: `Bearer ${token}` }, redirect },
     options,
   );
 }
@@ -197,7 +251,7 @@ async function send(url: string, init: RequestInit, options: RegistryOptions): P
   const timeout = AbortSignal.timeout(requestTimeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   try {
-    return await (options.fetch ?? fetch)(url, { ...init, signal, redirect: "error" });
+    return await (options.fetch ?? fetch)(url, { redirect: "error", ...init, signal });
   } catch (error) {
     if (options.signal?.aborted) throw error;
     throw new RegistryUnavailableError(`could not reach ${new URL(url).host}`, { cause: error });

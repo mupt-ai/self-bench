@@ -29,8 +29,10 @@ const COMPOSE_MAX_BYTES = 256 * 1024;
 /**
  * Keys whose values Harbor resolves against the host environment or acts on outside the sandbox.
  * Harbor ignores keys it does not know, so only these matter; older bundles keep their other keys.
+ * `docker_image` is set only by SelfBench (see registry-pull.ts), after this check: a run that can
+ * pull task images would pull whatever image a bundle named.
  */
-const HOST_KEYS = new Set(["env", "mcp_servers", "steps", "skills_dir"]);
+const HOST_KEYS = new Set(["env", "mcp_servers", "steps", "skills_dir", "docker_image"]);
 /** Host values that are paths or locale, never credentials; compose may mention them. */
 const HARMLESS_VARIABLES = new Set(["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL"]);
 /** Harbor's own pattern for the host variables a compose file pulls in. */

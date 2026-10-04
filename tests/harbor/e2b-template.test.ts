@@ -8,8 +8,11 @@ test("the E2B environment builds a template unless its default build is ready", 
     `import asyncio, enum, importlib.util, logging, sys, types
 from dataclasses import dataclass, field
 e2b = types.ModuleType("e2b")
+e2b.Template = object
+sys.modules["httpx"] = types.ModuleType("httpx")
 class TemplateBuildStatus(str, enum.Enum):
     BUILDING = "building"; WAITING = "waiting"; READY = "ready"; ERROR = "error"
+class BuildException(Exception): pass
 @dataclass
 class BuildInfo:
     template_id: str; build_id: str; name: str; alias: str; tags: list = field(default_factory=list)
@@ -18,6 +21,9 @@ templates = {
     "ready": ("b1", TemplateBuildStatus.READY),
     "failed": ("b2", TemplateBuildStatus.ERROR),
     "building": ("b3", TemplateBuildStatus.BUILDING),
+    "waiting": ("b4", TemplateBuildStatus.WAITING),
+    "missing-build": ("b5", None),
+    "unrelated-error": ("b6", None),
     "untagged": (None, None),
 }
 class AsyncTemplate:
@@ -31,8 +37,10 @@ class AsyncTemplate:
     async def get_build_status(info):
         build, status = templates[info.template_id]
         assert info.build_id == build, info
+        if info.template_id == "missing-build": raise BuildException(f"400: Build '{build}' not found")
+        if info.template_id == "unrelated-error": raise BuildException("401: Unauthorized")
         return types.SimpleNamespace(status=status)
-e2b.AsyncTemplate, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildInfo, TemplateBuildStatus
+e2b.AsyncTemplate, e2b.BuildException, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, BuildInfo, TemplateBuildStatus
 harbor_e2b = types.ModuleType("harbor.environments.e2b")
 class E2BEnvironment:
     def __init__(self, name):
@@ -44,12 +52,89 @@ sys.modules.update({"e2b": e2b, "harbor.environments.e2b": harbor_e2b})
 spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 async def check():
-    found = {name: await module.SelfBenchE2BEnvironment(name)._does_template_exist() for name in [*templates, "missing"]}
-    # A name whose last build failed or is unfinished has no sandbox to start, so it is built again.
-    assert found == {"ready": True, "failed": False, "building": False, "untagged": False, "missing": False}, found
+    found = {name: await module.SelfBenchE2BEnvironment(name)._does_template_exist() for name in ["ready", "failed", "building", "waiting", "missing-build", "untagged", "missing"]}
+    # An exact missing build is rebuilt, while other E2B failures still surface.
+    assert found == {"ready": True, "failed": False, "building": False, "waiting": False, "missing-build": False, "untagged": False, "missing": False}, found
+    try:
+        await module.SelfBenchE2BEnvironment("unrelated-error")._does_template_exist()
+    except BuildException as error:
+        assert str(error) == "401: Unauthorized", error
+    else:
+        raise AssertionError("unrelated E2B errors must propagate")
 asyncio.run(check())
 `,
     fileURLToPath(new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url)),
   ]);
+  expect(result.exitCode).toBe(0);
+});
+
+test("the E2B environment makes a SelfBench task image's template with the run's pull grant", async () => {
+  const result = await runCommand(
+    "python3",
+    [
+      "-c",
+      `import asyncio, importlib.util, logging, os, sys, types
+e2b = types.ModuleType("e2b")
+builds = []
+class Builder:
+    def __init__(self, *steps): self.steps = steps
+    def run_cmd(self, command, user=None): return Builder(*self.steps, ("run", command, user))
+    def set_user(self, user): return Builder(*self.steps, ("user", user))
+    def set_workdir(self, workdir): return Builder(*self.steps, ("workdir", workdir))
+    def __eq__(self, other): return isinstance(other, Builder) and self.steps == other.steps
+    def __repr__(self): return repr(self.steps)
+class BuildException(Exception): pass
+class Template:
+    def from_image(self, image, username=None, password=None):
+        return Builder(("image", image, username, password))
+class AsyncTemplate:
+    @staticmethod
+    async def build(template, alias, **resources): builds.append((template, alias, resources))
+e2b.AsyncTemplate, e2b.BuildException, e2b.Template, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, Template, object, object
+harbor_e2b = types.ModuleType("harbor.environments.e2b")
+class E2BEnvironment:
+    def __init__(self, image, cpus=None):
+        self.task_env_config = types.SimpleNamespace(docker_image=image)
+        self._template_name = "task__hash"
+        self._effective_cpus, self._effective_memory_mb = cpus, 8192
+        self.logger = logging.getLogger("test")
+    async def _create_template(self): builds.append("dockerfile")
+harbor_e2b.E2BEnvironment = E2BEnvironment
+sys.modules.update({"e2b": e2b, "harbor.environments.e2b": harbor_e2b})
+spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
+sys.modules["httpx"] = types.ModuleType("httpx")
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+image = "app.selfbench.test/task@sha256:" + "a" * 64
+async def image_config(pulled, username, password):
+    assert (pulled, username, password) == (image, "selfbench", "grant")
+    return {"Env": ["PATH=/usr/local/cargo/bin:/usr/bin", "CI=1"], "User": "agent", "WorkingDir": "/app"}
+module.image_config = image_config
+async def check():
+    await module.SelfBenchE2BEnvironment(image, cpus=4)._create_template()
+    # E2B drops an image's config, so the template carries its ENV, USER and WORKDIR itself.
+    profile = "printf %s 'export PATH=/usr/local/cargo/bin:/usr/bin\\nexport CI=1\\n' > /etc/profile.d/selfbench-image-env.sh"
+    expected = Builder(("image", image, "selfbench", "grant"), ("run", profile, "root"), ("user", "agent"), ("workdir", "/app"))
+    assert builds == [(expected, "task__hash", {"cpu_count": 4, "memory_mb": 8192})], builds
+    builds.clear()
+    # Any other image, or a task without one, is Harbor's own build.
+    await module.SelfBenchE2BEnvironment("docker.io/library/python:3")._create_template()
+    await module.SelfBenchE2BEnvironment(None)._create_template()
+    assert builds == ["dockerfile", "dockerfile"], builds
+asyncio.run(check())
+`,
+      fileURLToPath(
+        new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url),
+      ),
+    ],
+    {
+      env: {
+        ...process.env,
+        SELFBENCH_REGISTRY_HOST: "app.selfbench.test",
+        SELFBENCH_REGISTRY_USERNAME: "selfbench",
+        SELFBENCH_REGISTRY_PASSWORD: "grant",
+      },
+    },
+  );
+  expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });

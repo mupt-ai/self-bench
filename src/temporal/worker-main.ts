@@ -49,7 +49,7 @@ const vault =
 const usage = vault && database ? createUsageStore(database.db) : undefined;
 const artifacts = createArtifactStore(config.artifact);
 if (database) keepRunSummaries(artifacts, createRunSummaryStore(database.db));
-const { verifyCompiled, ...generation } = createActivities(config, vault, usage);
+const { verifyCompiled, exportTaskImages, ...generation } = createActivities(config, vault, usage);
 const batches = database
   ? createBatchActivities({
       store: createBatchStore(database.db),
@@ -97,7 +97,7 @@ const workers = await Promise.all([
           connection,
           namespace: config.temporal.namespace,
           taskQueue: `${config.temporal.taskQueue}-harbor`,
-          activities: { verifyCompiled, runSolverTrial, prepareTaskImages },
+          activities: { verifyCompiled, exportTaskImages, runSolverTrial, prepareTaskImages },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
