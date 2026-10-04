@@ -283,7 +283,7 @@ run "allow_operator_chosen_project" {
 run "task_images_off_by_default" {
   command = plan
   assert {
-    condition     = length([for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env if startswith(env.name, "SELFBENCH_TASK_IMAGE_")]) == 0
+    condition     = length([for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env if startswith(env.name, "SELFBENCH_TASK_IMAGE_")]) == 0
     error_message = "Trials keep building Dockerfiles until task_images is set."
   }
   assert {
@@ -298,7 +298,7 @@ run "task_images" {
   }
   assert {
     condition = {
-      for env in google_cloud_run_v2_worker_pool.worker.template[0].containers[0].env : env.name => env.value
+      for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.name => env.value
       if startswith(env.name, "SELFBENCH_TASK_IMAGE_REPOSITORY")
     } == { SELFBENCH_TASK_IMAGE_REPOSITORY = "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench-tasks" }
     error_message = "The worker exports into the task repository."
