@@ -1,7 +1,27 @@
+import { gateways } from "../gateways/index.js";
 import { record, TRUNCATED_OUTPUT } from "./output.js";
-import type { Harness } from "./types.js";
+import type { EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 type BilledGateway = "openrouter" | "vercel-ai-gateway";
+
+/** Override the usage estimate only when the whole trial's gateway bill is available. */
+export async function billedTrialCost(
+  run: EvaluationRun,
+  trial: EvaluationTrial,
+  env: NodeJS.ProcessEnv,
+  files: Map<string, string>,
+): Promise<Pick<EvaluationTrial, "apiCostUsd" | "costSource">> {
+  const provider = run.credentials?.provider;
+  if (!trial.modelVerified || (provider !== "openrouter" && provider !== "vercel-ai-gateway"))
+    return {};
+  const cost = await gatewayCost(
+    provider,
+    env[gateways[provider].keyVariable],
+    trial.harness,
+    files,
+  );
+  return cost === undefined ? {} : { apiCostUsd: cost, costSource: "gateway" };
+}
 
 /** Only completed Pi replies have a generation ID we can match to a gateway bill. */
 export function generationIds(harness: Harness, files: Map<string, string>): string[] | undefined {
@@ -61,7 +81,7 @@ function responseIds(messages: Record<string, unknown>[]): string[] | undefined 
     : undefined;
 }
 
-/** Gateway's charged USD, not Pi's price-list estimate. Missing bills stay unknown. */
+/** Gateway's charged USD; incomplete lookups leave the caller's usage estimate in place. */
 export async function gatewayCost(
   provider: BilledGateway,
   key: string | undefined,

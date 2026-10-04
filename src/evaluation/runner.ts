@@ -9,7 +9,6 @@ import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import { gateways } from "../gateways/index.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
@@ -18,7 +17,7 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent } from "./execution.js";
-import { gatewayCost } from "./gateway-cost.js";
+import { billedTrialCost } from "./gateway-cost.js";
 import { thinkingArguments } from "./models.js";
 import {
   agentTimedOut,
@@ -218,26 +217,9 @@ async function runTrial(context: {
       const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
-      // Long transcripts are cut for storage; cost and failures need every request.
       const records = await wholeTranscripts(jobs, files);
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      if (
-        run.credentials?.provider === "openrouter" ||
-        run.credentials?.provider === "vercel-ai-gateway"
-      ) {
-        const cost = trial.modelVerified
-          ? await gatewayCost(
-              run.credentials.provider,
-              child[gateways[run.credentials.provider].keyVariable],
-              trial.harness,
-              records,
-            )
-          : undefined;
-        if (cost !== undefined) {
-          trial.apiCostUsd = cost;
-          trial.costSource = "gateway";
-        }
-      }
+      Object.assign(trial, await billedTrialCost(run, trial, child, records));
       trial.rewards = verifierRewards(parsed);
       // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
       const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
@@ -246,7 +228,6 @@ async function runTrial(context: {
         throw new Error(
           String(record(parsed.exception_info).exception_message ?? "Harbor trial failed"),
         );
-      // Pi exits 0 in JSON mode when its last request fails, so Harbor scores the unfinished work.
       const pi = [...records].find(([name]) => name.endsWith("/pi.txt"));
       const failure = pi && piFailure(pi[1]);
       if (failure) throw new Error(`Pi stopped on a model error: ${failure}`);
