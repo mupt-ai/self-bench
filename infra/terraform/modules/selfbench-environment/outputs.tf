@@ -4,7 +4,7 @@ output "deployment" {
     environment     = var.environment
     project_id      = var.project_id
     region          = var.region
-    worker_pool     = google_cloud_run_v2_worker_pool.worker.name
+    worker_pool     = var.gke_workers ? null : google_cloud_run_v2_worker_pool.worker[0].name
     workers_cluster = var.gke_workers ? google_container_cluster.workers[0].name : null
     runtime_account = google_service_account.runtime.email
     artifact_bucket = google_storage_bucket.artifacts.name

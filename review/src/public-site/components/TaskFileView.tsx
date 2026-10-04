@@ -1,3 +1,4 @@
+import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   baseCommit,
@@ -6,7 +7,8 @@ import {
   fileSize,
   isSnapshot,
   laidOut,
-  snapshotCommands,
+  shownText,
+  snapshotCommand,
   type TaskFile,
 } from "../task-files";
 
@@ -49,8 +51,9 @@ export function FileButton({
 
 /**
  * The chosen file: named in a bar above it, and the task's canary in a matching bar below, so
- * every file shown has it beside it, the instruction and patches included, which do not carry
- * it themselves. The canary keeps to one line; its full text is still in the page.
+ * every file shown has it beside it: the patches and JSON, which do not carry it, and the
+ * instruction, shown without the copy it opens with. The canary keeps to one line; its full
+ * text is still in the page.
  */
 export function FilePane({
   file,
@@ -72,7 +75,13 @@ export function FilePane({
         <span className="shrink-0 text-muted-foreground">{fileSize(file.sizeBytes)}</span>
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
-        <FileView file={file} files={files} repository={repository} taskId={taskId} />
+        <FileView
+          file={file}
+          files={files}
+          repository={repository}
+          taskId={taskId}
+          canary={canary}
+        />
       </div>
       {canary && (
         <p
@@ -92,23 +101,25 @@ function FileView({
   files,
   repository,
   taskId,
+  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
+  canary: string | undefined;
 }) {
   const kind = fileKind(file);
   if (kind === "none") {
     const commit = baseCommit(files);
     return isSnapshot(file.path) ? (
-      <div className="flex max-w-3xl flex-col gap-3 p-4">
-        <p>
+      <div className="flex flex-col gap-3 p-4">
+        <p className="max-w-3xl">
           The repository{commit ? ` at ${commit.slice(0, 12)}` : ""}, as the task builds from it (
-          {fileSize(file.sizeBytes)}). It is left out of the download; these commands, run where you
-          unpacked it, recreate it exactly.
+          {fileSize(file.sizeBytes)}). Both of its copies, in environment/ and tests/, are left out
+          of the download; this command, run where you unpacked it, recreates them exactly.
         </p>
-        {commit && <Commands text={snapshotCommands(repository, commit, taskId)} />}
+        {commit && <Command text={snapshotCommand(repository, commit, taskId)} />}
       </div>
     ) : (
       <p className="p-4 text-muted-foreground">
@@ -116,7 +127,7 @@ function FileView({
       </p>
     );
   }
-  const text = kind === "json" ? laidOut(file.text ?? "") : (file.text ?? "");
+  const text = kind === "json" ? laidOut(file.text ?? "") : shownText(file, canary);
   const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
   return (
     <pre
@@ -136,25 +147,53 @@ function FileView({
   );
 }
 
-/** Commands to paste into a shell, with a button that copies them. */
-function Commands({ text }: { text: string }) {
+/**
+ * A command to paste into a shell, wrapped to fit, each wrapped line indented under the one it
+ * continues, with a button in its corner that copies it whole. Where the clipboard is out of
+ * reach, the button selects it instead, for the keyboard to copy.
+ */
+function Command({ text }: { text: string }) {
+  const block = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const shown = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(shown);
+  }, [copied]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      if (block.current) window.getSelection()?.selectAllChildren(block.current);
+    }
+  };
   return (
-    <div className="flex flex-col items-start gap-2">
-      <pre className="w-full overflow-x-auto bg-muted p-3 font-mono text-xs leading-relaxed">
-        {text}
+    <div className="relative">
+      <pre
+        ref={block}
+        className="bg-muted py-3 pr-11 pl-3 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"
+      >
+        {text.split("\n").map((line, number) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a command's lines are known by position
+          <span key={number} className="block pl-[4ch] -indent-[4ch]">
+            {line}
+            {"\n"}
+          </span>
+        ))}
       </pre>
       <button
         type="button"
-        onClick={() =>
-          void navigator.clipboard?.writeText(text).then(
-            () => setCopied(true),
-            () => undefined,
-          )
-        }
-        className="hit relative text-sm font-medium underline underline-offset-4"
+        aria-label={copied ? "Copied" : "Copy Command"}
+        title={copied ? "Copied" : "Copy Command"}
+        onClick={() => void copy()}
+        className="hit absolute top-1.5 right-1.5 p-1.5 text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
       >
-        {copied ? "Copied" : "Copy Commands"}
+        {copied ? (
+          <Check className="size-4" aria-hidden="true" />
+        ) : (
+          <Copy className="size-4" aria-hidden="true" />
+        )}
       </button>
     </div>
   );

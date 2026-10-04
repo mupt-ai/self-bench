@@ -1,6 +1,6 @@
-# Harbor work on GKE Autopilot, when gke_workers is on: one Deployment polls the Harbor queue and
-# KEDA sets its pod count from that queue's Temporal backlog. The Cloud Run worker pool keeps
-# polling both queues.
+# The Temporal workers on GKE Autopilot, when gke_workers is on: a Deployment polls the workflow
+# queue, and KEDA starts Harbor job pods from the Harbor queue's Temporal backlog. Cloud Run keeps
+# only the API.
 locals {
   gke              = var.gke_workers ? 1 : 0
   worker_namespace = "selfbench"
@@ -118,11 +118,13 @@ resource "helm_release" "workers" {
   chart            = "${path.module}/charts/selfbench-workers"
   namespace        = local.worker_namespace
   create_namespace = true
-  # Replaced pods drain their Harbor work for hours; the release does not wait for them.
-  wait = false
+  # Waits for the workflow Deployment to roll (KEDA's Harbor jobs are not part of the release),
+  # allowing for Autopilot to add a node.
+  timeout = 900
   values = [yamlencode({
     image          = var.image
     environment    = var.environment
+    release        = var.release_id
     runtimeAccount = google_service_account.runtime.email
     env            = local.shared_env
     secrets = {
@@ -137,9 +139,13 @@ resource "helm_release" "workers" {
       namespace = var.temporal_namespace
       queue     = "${local.name}-harbor"
     }
-    maxReplicas = var.harbor_worker_max_replicas
+    maxReplicas         = var.harbor_worker_max_replicas
+    workflowReplicas    = var.worker_instances
+    activityConcurrency = var.activity_concurrency
   })]
+  # The API migrates the schema on start; the workflow worker rolls only after it is ready.
   depends_on = [
+    google_cloud_run_v2_service.api,
     helm_release.keda,
     google_service_account_iam_member.runtime_workload_identity,
     google_secret_manager_secret_iam_member.worker_pod_reader,

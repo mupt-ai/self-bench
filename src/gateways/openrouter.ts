@@ -1,8 +1,10 @@
-import { modelIdPattern, type Rates } from "../contracts/models.js";
+import { modelIdPattern } from "../contracts/models.js";
 import {
   type Gateway,
   type ListedModel,
+  type ListedRates,
   listRates,
+  longContextFrom,
   readsAndWritesText,
   reasoningLevels,
 } from "./gateway.js";
@@ -36,7 +38,7 @@ export const openRouter: Gateway = {
  * intelligence index OpenRouter reports, then the unscored ones by popularity.
  */
 function parse(body: unknown, asOf: string) {
-  const rates = new Map<string, { rates: Rates; asOf: string }>();
+  const rates = new Map<string, ListedRates>();
   const listed: (ListedModel & { intelligence: number })[] = [];
   for (const entry of (body as { data?: OpenRouterEntry[] }).data ?? []) {
     if (typeof entry.id !== "string") continue;
@@ -48,7 +50,20 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_write,
     );
     if (!entryRates) continue;
-    rates.set(entry.id, { rates: entryRates, asOf });
+    // An override reprices prompts over its min_prompt_tokens (time-of-day ones set none).
+    const overrides = Array.isArray(pricing.overrides) ? pricing.overrides : [];
+    const longContext = longContextFrom(
+      overrides.map((override) =>
+        typeof override?.min_prompt_tokens === "number"
+          ? override.min_prompt_tokens + 1
+          : undefined,
+      ),
+    );
+    rates.set(entry.id, {
+      rates: entryRates,
+      asOf,
+      ...(longContext ? { longContextFrom: longContext } : {}),
+    });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning);
       const index = entry.benchmarks?.artificial_analysis?.intelligence_index;

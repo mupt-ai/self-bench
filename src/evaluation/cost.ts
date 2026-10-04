@@ -1,7 +1,8 @@
+import type { ModelPricing } from "../contracts/models.js";
 import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
-import { harborCallUsage, harborCost } from "../harnesses/harbor/cost.js";
+import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
-import { record, TRUNCATED_OUTPUT } from "./output.js";
+import { agentTimedOut, record, TRUNCATED_OUTPUT } from "./output.js";
 import type { EvaluationRun, EvaluationTrial, Harness, TokenUsage } from "./types.js";
 
 const count = (value: unknown): value is number =>
@@ -22,7 +23,7 @@ function inferSubscriptionWrites(
   const pricing = run.pricing;
   // Without a write premium the buckets price identically.
   if (!pricing || pricing.cacheWrite <= pricing.input) return "unchanged";
-  const calls = harborCallUsage(trajectory);
+  const calls = codexCallUsage(trajectory);
   if (!calls) return null;
   const original: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const inferred: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -70,19 +71,28 @@ function inferSubscriptionWrites(
  * stored from its tail has lost its early message_end events, but its final agent_end lists every
  * message of that agent run. The run must start with the prompt: a retry's run starts with its
  * first reply, and the attempts before it are gone.
+ *
+ * A Pi stopped at its time limit never writes its agent_end, and its last line is usually cut
+ * where its output stopped, so every whole message_end of its stream counts. A stored tail's
+ * replies then only vouch for the model; trialCost takes the totals from Harbor.
  */
-function piAssistantMessages(text: string): Record<string, unknown>[] | undefined {
+function piAssistantMessages(
+  text: string,
+  stopped: boolean,
+): Record<string, unknown>[] | undefined {
   const truncated = text.startsWith(TRUNCATED_OUTPUT);
   const events: Record<string, unknown>[] = [];
-  for (const line of text.split("\n").filter(Boolean)) {
+  const lines = text.split("\n").filter(Boolean);
+  for (const [index, line] of lines.entries()) {
     try {
       events.push(record(JSON.parse(line)));
     } catch {
       // Only the notice and the line the cut went through may precede the first whole event.
-      if (!truncated || events.length) return undefined;
+      if (truncated && !events.length) continue;
+      if (!(stopped && index === lines.length - 1)) return undefined;
     }
   }
-  if (!truncated)
+  if (!truncated || stopped)
     return events
       .filter((event) => event.type === "message_end")
       .map((event) => record(event.message))
@@ -93,6 +103,18 @@ function piAssistantMessages(text: string): Record<string, unknown>[] | undefine
   const messages = end.messages.map(record);
   if (messages.find((message) => message.role !== "system")?.role !== "user") return undefined;
   return messages.filter((message) => message.role === "assistant");
+}
+
+/** `usage` at the reference rates, with `hourCacheWrite` of its cache writes kept for an hour. */
+export function referenceCost(pricing: ModelPricing, usage: TokenUsage, hourCacheWrite = 0) {
+  return (
+    (usage.input * pricing.input +
+      usage.output * pricing.output +
+      usage.cacheRead * pricing.cacheRead +
+      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
+      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
+    1_000_000
+  );
 }
 
 export function trialCost(
@@ -120,7 +142,8 @@ export function trialCost(
   if (harness === "pi") {
     const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
     if (!text) return {};
-    const messages = piAssistantMessages(text);
+    const stopped = agentTimedOut(result);
+    const messages = piAssistantMessages(text, stopped);
     if (!messages) return {};
     verified =
       messages.length > 0 &&
@@ -140,6 +163,25 @@ export function trialCost(
       );
     }
     usage = totals;
+    if (stopped && text.startsWith(TRUNCATED_OUTPUT)) {
+      // Harbor summed the whole stream's replies, but without cache writes: it stands in only
+      // when the tail's replies wrote none.
+      const tokens = record(record(result).agent_result);
+      if (
+        totals.cacheWrite > 0 ||
+        !count(tokens.n_input_tokens) ||
+        !count(tokens.n_output_tokens) ||
+        !count(tokens.n_cache_tokens) ||
+        tokens.n_cache_tokens > tokens.n_input_tokens
+      )
+        return { modelVerified: verified };
+      usage = {
+        input: tokens.n_input_tokens - tokens.n_cache_tokens,
+        output: tokens.n_output_tokens,
+        cacheRead: tokens.n_cache_tokens,
+        cacheWrite: 0,
+      };
+    }
   } else if (harness === "codex") {
     const text = [...files].find(([name]) => name.endsWith("/trajectory.json"))?.[1];
     if (!text) return {};
@@ -165,7 +207,7 @@ export function trialCost(
       count(cacheWrite) &&
       tokens.n_cache_tokens + cacheWrite <= tokens.n_input_tokens
     ) {
-      const calls = harborCallUsage(trajectory);
+      const calls = codexCallUsage(trajectory);
       if (calls)
         largestPrompt = Math.max(
           0,
@@ -218,13 +260,7 @@ export function trialCost(
   // The bound is per request; without per-request records the trial's total stands in for one.
   const prompt = largestPrompt ?? usage.input + usage.cacheRead + usage.cacheWrite;
   if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return measured;
-  const apiCostUsd =
-    (usage.input * pricing.input +
-      usage.output * pricing.output +
-      usage.cacheRead * pricing.cacheRead +
-      (usage.cacheWrite - hourCacheWrite) * pricing.cacheWrite +
-      hourCacheWrite * pricing.input * HOUR_CACHE_WRITE_MULTIPLIER) /
-    1_000_000;
+  const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
   return Number.isFinite(apiCostUsd)
     ? { ...measured, apiCostUsd, costSource: "reference-rates" }
     : measured;

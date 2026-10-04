@@ -13,7 +13,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("panel flex flex-col gap-4 p-5 text-left", className)}>
+    <div className={cn("panel empty-state flex flex-col gap-4 p-5 text-left", className)}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {children && <div className="max-w-2xl text-sm text-muted-foreground">{children}</div>}

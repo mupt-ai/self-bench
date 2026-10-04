@@ -9,11 +9,19 @@ export interface ListedModel {
   readonly thinking?: readonly ThinkingLevel[];
 }
 
+/** A gateway's list price for one model. */
+export interface ListedRates {
+  readonly rates: Rates;
+  readonly asOf: string;
+  /** The prompt size at which its long-context rates begin, when it charges more for those. */
+  readonly longContextFrom?: number;
+}
+
 /** What a gateway's models API says: its agent-capable models, frontier first, and its prices. */
 export interface GatewayListing {
   readonly models: readonly ListedModel[];
   /** List prices by the gateway's model id. */
-  readonly rates: ReadonlyMap<string, { readonly rates: Rates; readonly asOf: string }>;
+  readonly rates: ReadonlyMap<string, ListedRates>;
 }
 
 /**
@@ -79,6 +87,14 @@ export function listRates(
     perMillion(cacheRead) ?? inputRate,
     perMillion(cacheWrite) ?? inputRate,
   ];
+}
+
+/** The smallest positive prompt size among `sizes`: where a gateway's long-context rates begin. */
+export function longContextFrom(sizes: readonly unknown[]): number | undefined {
+  const starts = sizes.filter(
+    (size): size is number => typeof size === "number" && Number.isSafeInteger(size) && size > 0,
+  );
+  return starts.length ? Math.min(...starts) : undefined;
 }
 
 /** Every harness is an agent loop over text: a model must read and write text. */

@@ -48,12 +48,13 @@ async function fromRecords() {
     trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
   }));
 }
-/** Counts the records read while `work` runs. */
-async function recordsRead(work: () => Promise<unknown>): Promise<number> {
+/** Counts the records read while `work` runs, each read `slowMs` slower than it would be. */
+async function recordsRead(work: () => Promise<unknown>, slowMs = 0): Promise<number> {
   const read = server.artifacts.getByKey.bind(server.artifacts);
   let count = 0;
-  server.artifacts.getByKey = (key) => {
+  server.artifacts.getByKey = async (key) => {
     count += 1;
+    if (slowMs > 0) await new Promise((resolve) => setTimeout(resolve, slowMs));
     return read(key);
   };
   try {
@@ -64,6 +65,15 @@ async function recordsRead(work: () => Promise<unknown>): Promise<number> {
   return count;
 }
 const listed = async () => (await (await server.request(server.base)).json()).runs;
+/** The repository's summary revisions once `done` holds: a list saves what it rebuilds behind it. */
+async function storedWhen(done: (revisions: Map<string, number>) => boolean) {
+  for (let tries = 0; tries < 100; tries += 1) {
+    const revisions = await server.summaries.revisions(server.repo.id);
+    if (done(revisions)) return revisions;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return server.summaries.revisions(server.repo.id);
+}
 
 test("a save writes the run's summary, and a list reads summaries, not records", async () => {
   const first = await savedRun(server.artifacts, "2026-01-01T00:00:00.000Z");
@@ -106,7 +116,7 @@ test("a run saved without its summary is listed, and its summary rebuilt once", 
   expect(runs.find((run) => run.id === known.id)?.trials[0]?.status).toBe("completed");
   expect(runs.some((run) => run.id === unseen.id)).toBe(true);
   // Both summaries now stand, so the next list reads no record.
-  const rebuilt = await server.summaries.revisions(server.repo.id);
+  const rebuilt = await storedWhen((stored) => stored.get(known.id) === 2 && stored.has(unseen.id));
   expect([rebuilt.get(unseen.id), rebuilt.get(known.id)]).toEqual([1, 2]);
   expect(await recordsRead(listed)).toBe(0);
 });
@@ -162,6 +172,46 @@ test("a save succeeds when its summary cannot be saved, and the list still has t
   expect((await listed()).some((entry: EvaluationRun) => entry.id === run.id)).toBe(true);
 });
 
+test("a list stores the summaries it rebuilds, however slow the database and while saves pause", async () => {
+  // As on a busy server: every save takes longer than a run's save may wait, and the first
+  // run's own save has just failed, so run saves are paused.
+  const busy = new LocalArtifactStore(server.directory);
+  let calls = 0;
+  const slow: RunSummaryStore = {
+    ...server.summaries,
+    save: async (repoId, summary) => {
+      calls += 1;
+      if (calls === 1) throw new Error("database unavailable");
+      await new Promise((resolve) => setTimeout(resolve, 2_100));
+      await server.summaries.save(repoId, summary);
+    },
+  };
+  keepRunSummaries(busy, slow);
+  const warn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (message: string) => warnings.push(message);
+  try {
+    const first = await savedRun(busy);
+    const second = await savedRun(busy);
+    expect(calls).toBe(1);
+    // Neither has a summary yet: the list rebuilds both, answers without waiting for the slow
+    // saves, and the saves still store them.
+    const started = Date.now();
+    const { runs } = await listRuns(busy, server.repo.id);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(runs?.some((run) => run.id === first.id)).toBe(true);
+    const stored = await storedWhen(
+      (revisions) => revisions.has(first.id) && revisions.has(second.id),
+    );
+    expect([stored.get(first.id), stored.get(second.id)]).toEqual([1, 1]);
+    expect(warnings).toEqual([
+      `evaluation ${first.id}: summary of revision 1 not saved: database unavailable`,
+    ]);
+  } finally {
+    console.warn = warn;
+  }
+}, 15_000);
+
 test("a poll that sends the list's tag is told when nothing changed, without the list", async () => {
   const run = await savedRun();
   const first = await server.request(server.base);
@@ -195,7 +245,8 @@ test("a poll that sends the list's tag is told when nothing changed, without the
 
 test("overlapping lists share one read of a record that needs rebuilding", async () => {
   await savedRun(older);
-  expect(await recordsRead(() => Promise.all([listed(), listed(), listed()]))).toBe(1);
+  // Slow reads, so all three lists arrive while the first is still reading, however busy CI is.
+  expect(await recordsRead(() => Promise.all([listed(), listed(), listed()]), 500)).toBe(1);
 });
 
 test("a store that keeps no summaries lists from the records, as before", async () => {

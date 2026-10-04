@@ -29,6 +29,7 @@ export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 export type Rates = readonly [number, number, number, number];
 
 export interface ModelPricing {
+  /** The largest prompt the rates cover; past it the provider charges long-context rates. */
   maxInputTokens?: number;
   input: number;
   output: number;
@@ -48,6 +49,11 @@ export interface Model {
   readonly source: string;
   /** Reference rates on the vendor's own key and through a gateway. */
   readonly rates?: { readonly native?: Rates; readonly gateway?: Rates };
+  /**
+   * The smallest prompt the vendor's long-context rates apply to (OpenAI's apply over 272k);
+   * absent when it has none.
+   */
+  readonly longContextFrom?: number;
   /** Selectable reasoning levels, in display order; absent means the provider default only. */
   readonly thinking?: readonly ThinkingLevel[];
   /** Offered for task authoring and verification. */
@@ -67,6 +73,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6.1-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
     rates: { native: [2, 10, 0.1, 2.5], gateway: [2, 10, 0.1, 2.5] },
+    longContextFrom: 272_001,
     thinking: vendorThinking,
   },
   {
@@ -76,6 +83,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-astra",
     source: "https://developers.openai.com/api/docs/models/gpt-6-astra",
     rates: { native: [10, 50, 1, 12.5], gateway: [10, 50, 1, 12.5] },
+    longContextFrom: 272_001,
     thinking: vendorThinking,
     generation: true,
   },
@@ -86,6 +94,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6-sol",
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
+    longContextFrom: 272_001,
     thinking: openAiThinking,
     generation: true,
   },
@@ -96,6 +105,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-luna",
     source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
     rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
+    longContextFrom: 272_001,
     thinking: openAiThinking,
   },
   {
@@ -180,14 +190,26 @@ export function nativePricing(model: Model): ModelPricing | undefined {
     model.vendor === "anthropic"
       ? "https://platform.claude.com/docs/en/about-claude/pricing"
       : model.source;
-  return ratesPricing(rates, source);
+  return ratesPricing(rates, source, undefined, model.longContextFrom);
 }
 
-/** Pricing from `rates`, dated `asOf` or else as of the catalog's reference rates. */
+/**
+ * Pricing from `rates`, dated `asOf` or else as of the catalog's reference rates. The rates cover
+ * prompts below `longContextFrom`, when the provider charges more for longer ones.
+ */
 export function ratesPricing(
   [input, output, cacheRead, cacheWrite]: Rates,
   source: string,
   asOf = RATES_AS_OF,
+  longContextFrom?: number,
 ): ModelPricing {
-  return { input, output, cacheRead, cacheWrite, source, asOf, maxInputTokens: 200_000 };
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    source,
+    asOf,
+    ...(longContextFrom ? { maxInputTokens: longContextFrom - 1 } : {}),
+  };
 }

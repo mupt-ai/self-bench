@@ -26,6 +26,19 @@ export function fileKind(file: TaskFile): "diff" | "json" | "text" | "none" {
   return "text";
 }
 
+/**
+ * A file's text as the viewer shows it. The instruction opens with the canary in the download
+ * (the server's `withCanary`), and is shown without it, as Harbor gives it to an agent; the bar
+ * below every file shows the canary instead. Every other file is shown as it is downloaded.
+ */
+export function shownText(file: TaskFile, canary: string | undefined): string {
+  const text = file.text ?? "";
+  const opening = `<!-- ${canary} -->\n\n`;
+  return canary && file.path === "instruction.md" && text.startsWith(opening)
+    ? text.slice(opening.length)
+    : text;
+}
+
 /** JSON with two-space indents, or the text as it is when it does not parse. */
 export function laidOut(text: string): string {
   try {
@@ -51,17 +64,25 @@ export function baseCommit(files: readonly TaskFile[]): string | undefined {
   return /^base_commit\s*=\s*"([0-9a-f]{7,64})"/m.exec(config)?.[1];
 }
 
+/** A path as a shell reads it: quoted unless it is only letters, digits, and `._/-`. */
+const shellPath = (path: string) => (/^[\w./-]+$/.test(path) ? path : `'${path}'`);
+
 /**
- * Commands that rebuild the repository snapshots a download leaves out, in the folder the
- * download unpacks to. Each snapshot is `git archive` of the repository at the task's base
- * commit, so this gives the same files; one shallow fetch of that commit is all it needs.
+ * One command that rebuilds both repository snapshots a download leaves out, run in the folder
+ * the download unpacks to. Each snapshot is `git archive` of the repository at the task's base
+ * commit, so this gives the same files; one shallow fetch of that commit is all it needs, into a
+ * scratch repository inside the task that it removes at the end. Its steps are joined with `&&`
+ * on continued lines, so pasting the whole of it runs it, and it stops at the first that fails.
  */
-export function snapshotCommands(repository: string, commit: string, folder: string): string {
+export function snapshotCommand(repository: string, commit: string, folder: string): string {
+  const scratch = shellPath(`${folder}/.snapshot`);
   return [
-    `git init -q snapshot && git -C snapshot fetch -q --depth 1 https://github.com/${repository} ${commit}`,
-    `git -C snapshot archive --format=tar.gz -o "$PWD/${folder}/environment/repo.tar.gz" FETCH_HEAD`,
-    `cp ${folder}/environment/repo.tar.gz ${folder}/tests/repo.tar.gz`,
-  ].join("\n");
+    `git init -q ${scratch}`,
+    `git -C ${scratch} fetch -q --depth 1 https://github.com/${repository} ${commit}`,
+    `git -C ${scratch} archive --format=tar.gz -o "$PWD/${folder}/environment/repo.tar.gz" FETCH_HEAD`,
+    `cp ${shellPath(`${folder}/environment/repo.tar.gz`)} ${shellPath(`${folder}/tests/repo.tar.gz`)}`,
+    `rm -rf ${scratch}`,
+  ].join(" && \\\n  ");
 }
 
 /** A file size, as the file list shows it. */

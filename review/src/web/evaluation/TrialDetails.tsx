@@ -1,3 +1,4 @@
+import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import type { EvaluationRun, EvaluationTrial } from "./api";
 import { TokenCosts } from "./TokenCosts";
 
@@ -27,6 +28,12 @@ export function TrialDetails({
   return (
     <div className="[&_h4]:mb-3 [&_h4]:text-sm [&_h4]:font-semibold [&_h5]:my-2 [&_h5]:text-xs [&_h5]:text-muted-foreground [&_details]:mt-3 [&_details]:border [&_details]:border-border [&_details]:bg-background [&_summary]:cursor-pointer [&_summary]:px-4 [&_summary]:py-3 [&_summary]:text-sm [&_summary]:font-medium [&_details_h5]:px-4 [&_pre]:max-h-96 [&_pre]:overflow-auto [&_pre]:bg-muted/60 [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-6 [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
       {trial.error && <p className="mb-4 text-sm text-destructive">{trial.error}</p>}
+      {trial.agentTimedOut && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          The agent reached its {run.agentMinutes ?? AGENT_MINUTES.default}-minute limit, so it was
+          scored on the work it had done by then.
+        </p>
+      )}
       <TokenCosts trial={trial} />
       {!active && finalMessage && (
         <div className="my-5 border-l-2 border-foreground/30 bg-muted/60 p-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">

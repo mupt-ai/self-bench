@@ -78,9 +78,30 @@ const pausedUntil = new WeakMap<RunSummaryStore, number>();
  * save it follows: a summary that was not saved is found behind its run and rebuilt by the next
  * list of runs (run-list.ts).
  */
-export async function saveSummary(store: ArtifactStore, run: EvaluationRun): Promise<void> {
+async function saveSummary(store: ArtifactStore, run: EvaluationRun): Promise<void> {
   const summaries = summaryStores.get(store);
   if (!summaries || Date.now() < (pausedUntil.get(summaries) ?? 0)) return;
+  if (!(await writeSummary(summaries, run, SUMMARY_SAVE_MS)))
+    pausedUntil.set(summaries, Date.now() + SUMMARY_PAUSE_MS);
+}
+
+/**
+ * Saves a summary a list of runs rebuilt, however long that takes, and never skips it: saves that
+ * hurry or pause are for runs, and a summary skipped here would be rebuilt by every list until a
+ * save stores it. A first view rebuilds many at once and can keep a small server busy for
+ * seconds, longer than a run's save may wait.
+ */
+export async function keepSummary(store: ArtifactStore, run: EvaluationRun): Promise<void> {
+  const summaries = summaryStores.get(store);
+  if (summaries) await writeSummary(summaries, run);
+}
+
+/** Writes `run`'s summary within `limitMs` if given; a failure is logged and reported, not thrown. */
+async function writeSummary(
+  summaries: RunSummaryStore,
+  run: EvaluationRun,
+  limitMs?: number,
+): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const { id, revision } = run;
@@ -91,20 +112,23 @@ export async function saveSummary(store: ArtifactStore, run: EvaluationRun): Pro
     });
     // Should it lose the race below, its own failure is nobody's to handle.
     saved.catch(() => undefined);
-    await Promise.race([
-      saved,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timed out")), SUMMARY_SAVE_MS);
-      }),
-    ]);
+    await (limitMs === undefined
+      ? saved
+      : Promise.race([
+          saved,
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("timed out")), limitMs);
+          }),
+        ]));
+    return true;
   } catch (error) {
-    pausedUntil.set(summaries, Date.now() + SUMMARY_PAUSE_MS);
     // A query's own message repeats the whole summary; its cause says what went wrong.
     const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
     const reason = (cause instanceof Error ? cause.message : String(cause)).slice(0, 200);
     const message = `evaluation ${run.id}: summary of revision ${run.revision} not saved: ${reason}`;
     console.warn(message);
     reportError(new Error(message), { repeatKey: "evaluation-summary-save" });
+    return false;
   } finally {
     clearTimeout(timer);
   }

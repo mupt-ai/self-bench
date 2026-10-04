@@ -70,6 +70,11 @@ export interface EvaluationTrial {
   /** When Harbor started; from then on the trial may have spent, so it never runs again. */
   solverStartedAt?: string;
   finishedAt?: string;
+  /**
+   * The agent was stopped at its time limit (agentMinutes). Harbor grades what it left, as for
+   * any other agent, so the trial completes with that score.
+   */
+  agentTimedOut?: boolean;
   modelVerified?: boolean;
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;

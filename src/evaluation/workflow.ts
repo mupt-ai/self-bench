@@ -11,7 +11,6 @@ import {
 } from "@temporalio/workflow";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
-import { harborTaskQueue } from "../temporal/task-queues.js";
 import type { EvaluationActivities } from "./activities.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
@@ -29,7 +28,7 @@ const trial = (input: EvaluationInput) =>
     heartbeatTimeout: "2 minutes",
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
-    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+    taskQueue: `${workflowInfo().taskQueue}-harbor`,
   });
 // Building a large task's two images from cold takes minutes; retrying once covers a lost worker.
 const prepare = () =>
@@ -38,7 +37,7 @@ const prepare = () =>
     heartbeatTimeout: "2 minutes",
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
     retry: { maximumAttempts: 2 },
-    taskQueue: harborTaskQueue(workflowInfo().taskQueue),
+    taskQueue: `${workflowInfo().taskQueue}-harbor`,
   });
 const records = proxyActivities<EvaluationActivities>({
   startToCloseTimeout: "1 minute",

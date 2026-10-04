@@ -23,6 +23,18 @@ export function record(value: unknown): Record<string, unknown> {
     ? (value as Record<string, unknown>)
     : {};
 }
+/** The verifier's scores in Harbor's trial result: its finite numbers only. */
+export function verifierRewards(result: unknown): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(record(record(record(result).verifier_result).rewards)).filter(
+      (pair): pair is [string, number] => typeof pair[1] === "number" && Number.isFinite(pair[1]),
+    ),
+  );
+}
+/** Whether Harbor's trial result says it stopped the agent at its time limit. */
+export function agentTimedOut(result: unknown): boolean {
+  return record(record(result).exception_info).exception_type === "AgentTimeoutError";
+}
 function display(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;

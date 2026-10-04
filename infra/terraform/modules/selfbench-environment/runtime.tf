@@ -130,6 +130,7 @@ locals {
     SELFBENCH_EVAL_TASK_QUEUE           = local.name
     SELFBENCH_EXECUTION_BACKEND         = "modal"
     SELFBENCH_HARBOR_ENVIRONMENT        = "modal"
+    SELFBENCH_CUSTOM_MODEL_HOSTS        = var.environment == "prod" ? "routing.dari.dev" : null
     SELFBENCH_SANDBOX_CALLBACK_URL      = var.public_url
     SELFBENCH_MANAGED_OFFERING          = var.managed_offering ? "true" : null
     SELFBENCH_MANAGED_MODAL_ENVIRONMENT = var.managed_offering ? local.name : null

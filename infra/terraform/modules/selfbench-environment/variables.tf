@@ -146,7 +146,7 @@ variable "activity_concurrency" {
   }
 }
 variable "worker_instances" {
-  description = "Worker pool instances; each polls with activity_concurrency slots."
+  description = "Workflow worker instances (pool instances, or GKE replicas with gke_workers); each polls with activity_concurrency slots."
   type        = number
   default     = 1
 }
@@ -161,7 +161,7 @@ variable "task_images" {
   default     = false
 }
 variable "gke_workers" {
-  description = "Run Harbor work on GKE Autopilot, scaled by KEDA on the Harbor queue backlog."
+  description = "Run the Temporal workers on GKE Autopilot instead of a Cloud Run worker pool: the workflow worker as a Deployment, Harbor work as jobs scaled by KEDA on the Harbor queue backlog."
   type        = bool
   default     = false
 }
@@ -185,13 +185,4 @@ variable "harbor_worker_max_replicas" {
   description = "Most Harbor worker pods; each runs 10 Harbor activities, so 20 allows 200 at once. Also caps the pod spend (about $0.14 an hour each)."
   type        = number
   default     = 20
-}
-variable "worker_pool_polls_harbor" {
-  description = "Whether the Cloud Run worker pool also runs Harbor work; turn off to leave it to the GKE workers."
-  type        = bool
-  default     = true
-  validation {
-    condition     = var.worker_pool_polls_harbor || var.gke_workers
-    error_message = "Something must poll the Harbor queue: keep the pool on it or turn on gke_workers."
-  }
 }

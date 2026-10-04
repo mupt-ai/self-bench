@@ -157,7 +157,7 @@ async function copyEntries(
       // A file of these kinds is text; one that is not is copied as it is.
       const bytes = original.includes(0)
         ? original
-        : Buffer.from(withCanary(original.toString("utf8"), canary));
+        : Buffer.from(withCanary(path, original.toString("utf8"), canary));
       await new Promise<void>((resolve, reject) =>
         output.entry({ ...header, size: bytes.length }, bytes, (error) =>
           error ? reject(error) : resolve(),

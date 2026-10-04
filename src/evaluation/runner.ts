@@ -19,6 +19,7 @@ import { trialCost } from "./cost.js";
 import { solverAgent } from "./execution.js";
 import { thinkingArguments } from "./models.js";
 import {
+  agentTimedOut,
   boundedSteps,
   collectOutput,
   completeLines,
@@ -28,6 +29,7 @@ import {
   redactOutput,
   trajectorySteps,
   trialLog,
+  verifierRewards,
   wholeTranscripts,
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
@@ -139,8 +141,9 @@ export async function executeTrial(
         () => false,
       ));
     if (retrying) throw failure;
-    trial.status = "failed";
-    trial.error = failure.message;
+    // A timed-out agent's trial can still fail after its scores were read (Harbor's exit status).
+    Object.assign(trial, { status: "failed", error: failure.message });
+    delete trial.agentTimedOut;
   } finally {
     try {
       if (!retrying) {
@@ -216,14 +219,11 @@ async function runTrial(context: {
       // Long transcripts are cut for storage; cost and failures need every request.
       const records = await wholeTranscripts(jobs, files);
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      const rewards = record(record(parsed.verifier_result).rewards);
-      trial.rewards = Object.fromEntries(
-        Object.entries(rewards).filter(
-          (pair): pair is [string, number] =>
-            typeof pair[1] === "number" && Number.isFinite(pair[1]),
-        ),
-      );
-      if (parsed.exception_info)
+      trial.rewards = verifierRewards(parsed);
+      // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
+      const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
+      if (timedOut) trial.agentTimedOut = true;
+      else if (parsed.exception_info)
         throw new Error(
           String(record(parsed.exception_info).exception_message ?? "Harbor trial failed"),
         );

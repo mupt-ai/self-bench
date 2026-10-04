@@ -87,7 +87,7 @@ variable "worker_instances" {
   default = 1
 }
 variable "gke_workers" {
-  description = "Run Harbor work on GKE Autopilot, scaled by KEDA."
+  description = "Run the Temporal workers on GKE Autopilot, Harbor work scaled by KEDA."
   type        = bool
   default     = false
 }

@@ -151,7 +151,7 @@ jobs:
           terraform_version: 1.14.2
           terraform_wrapper: false
       # The release is plain Terraform input: the pushed digest, public origins, run identity and
-      # worker concurrency. Applying it rolls the API revision, then the worker pool.
+      # worker concurrency. Applying it rolls the API revision, then the workers.
       - name: Generate Terraform Plan
         id: plan
         env:
@@ -185,14 +185,8 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
-      # gcloud is already installed, and the step above points it at the apply identity
-      # (CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE), so dev skips reinstalling it. Prod keeps the
-      # reinstall until dev deploys have shown it is not needed.
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-        if: inputs.target_environment == 'prod'
-        with:
-          # Terraform's Helm provider reaches the GKE worker cluster through it.
-          install_components: gke-gcloud-auth-plugin
+      # gcloud and its GKE plugin are already installed, and the step above points them at the
+      # apply identity (CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE), so neither is set up again.
       # Prod backs up before every release. Dev backs up only when the release brings migrations
       # its database has not run; Cloud SQL's daily backups and point-in-time recovery cover the
       # rest.
@@ -247,5 +241,5 @@ jobs:
             echo "## Deployed ${TF_ENVIRONMENT}"
             echo "Image: \`${IMAGE}\`"
             echo
-            echo "API service and worker pool rolled out; HTTPS health, anonymous auth rejection and results site checks passed."
+            echo "API service and workers rolled out; HTTPS health, anonymous auth rejection and results site checks passed."
           } >> "$GITHUB_STEP_SUMMARY"
