@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { backfillAgentTimeouts } from "../maintenance/backfill-agent-timeouts.js";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
-import { backfillAgentTimeouts } from "../src/evaluation/backfill-agent-timeouts.js";
 import { eligibleTrial } from "../src/evaluation/eligible.js";
 import {
   evaluationPrefix,

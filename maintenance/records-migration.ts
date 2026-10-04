@@ -2,26 +2,24 @@
  * One-time copy of evaluation credentials and comparisons out of the encrypted
  * `evaluation_records` account blobs into the `credentials` and `comparisons` tables.
  *
- *   node dist/db/records-migration.js            # dry run: counts only, writes nothing
- *   node dist/db/records-migration.js --apply    # insert missing rows
+ *   node dist/maintenance/records-migration.js            # dry run: counts only, writes nothing
+ *   node dist/maintenance/records-migration.js --apply    # insert missing rows
  *
  * Needs SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY. It is idempotent: rows keep
  * their original IDs and inserts skip IDs that already exist. The source records are left in
  * place, so rolling back the code needs no data restore. Stop the API and worker and back up the
  * database before applying.
  */
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { and, eq, like, or } from "drizzle-orm";
-import type { EvaluationInput } from "../evaluation/types.js";
-import { type Database, openDatabase } from "./client.js";
+import { type Database, openDatabase } from "../src/db/client.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
 import {
   type CredentialInfo,
   type CredentialSecret,
   createCredentialStore,
-} from "./credentials.js";
-import { createEncryptedRecords } from "./encrypted-records.js";
-import { comparisons, credentials, evaluationRecords, orgs } from "./schema.js";
+} from "../src/db/credentials.js";
+import { createEncryptedRecords } from "../src/db/encrypted-records.js";
+import { comparisons, credentials, evaluationRecords, orgs } from "../src/db/schema.js";
 
 interface LegacyAccount {
   credentials: (CredentialInfo & { deleted?: boolean; migratedFrom?: string })[];
@@ -130,7 +128,7 @@ async function personalOrg(db: Database, githubId: number): Promise<number | und
   return org?.id;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+export async function main(): Promise<void> {
   const url = process.env.SELFBENCH_DATABASE_URL;
   const key = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY;
   if (!url || !key)

@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recomputeEvaluationCost } from "../maintenance/recompute-cost.js";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
-import { recomputeEvaluationCost } from "../src/evaluation/recompute-cost.js";
 import {
   evaluationPrefix,
   getEvaluation,
