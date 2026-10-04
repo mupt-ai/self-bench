@@ -21,7 +21,7 @@ import os
 import shlex
 
 import httpx
-from e2b import AsyncTemplate, BuildInfo, Template, TemplateBuildStatus
+from e2b import AsyncTemplate, BuildException, BuildInfo, Template, TemplateBuildStatus
 
 from harbor.environments.e2b import E2BEnvironment
 
@@ -46,12 +46,20 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         build = next((tag.build_id for tag in tags if tag.tag == TAG), None)
         if build is None:
             return False
-        status = await AsyncTemplate.get_build_status(
-            BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
-        )
-        if status.status == TemplateBuildStatus.READY:
+        try:
+            status = (
+                await AsyncTemplate.get_build_status(
+                    BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
+                )
+            ).status
+        except BuildException as error:
+            if str(error) != f"400: Build '{build}' not found":
+                raise
+            self.logger.warning(f"Template {name} build {build} is missing; building it again")
+            return False
+        if status == TemplateBuildStatus.READY:
             return True
-        self.logger.warning(f"Template {name} build {build} is {status.status.value}; building it again")
+        self.logger.warning(f"Template {name} build {build} is {status.value}; building it again")
         return False
 
     async def _create_template(self):
