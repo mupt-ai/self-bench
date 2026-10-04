@@ -79,7 +79,7 @@ export interface EvaluationTrial {
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;
   cacheWritesInferred?: boolean;
-  costSource?: "harbor" | "reference-rates";
+  costSource?: "harbor" | "reference-rates" | "gateway";
 }
 export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
   revision: number;

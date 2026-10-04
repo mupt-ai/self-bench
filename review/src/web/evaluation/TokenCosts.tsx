@@ -30,7 +30,9 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
           "Codex sign-in does not report cache writes; eligible uncached input is counted as inferred cache writes. Exact cache-write tokens may differ due to provider rounding. "}
         {trial.apiCostUsd === undefined
           ? "Cost unavailable: incomplete pricing or usage records."
-          : `${trial.costSource === "harbor" ? "Harbor’s per-request" : "Reference-rate"} estimate from token usage. Not an invoice; sandbox charges excluded.`}
+          : trial.costSource === "gateway"
+            ? "Gateway-reported model cost. Sandbox charges excluded."
+            : `${trial.costSource === "harbor" ? "Harbor’s per-request" : "Reference-rate"} estimate from token usage. Not an invoice; sandbox charges excluded.`}
       </p>
     </section>
   );
