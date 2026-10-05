@@ -130,7 +130,7 @@ function repositoryStructuredData(
         distribution: {
           "@type": "DataDownload",
           encodingFormat: "application/json",
-          contentUrl: `${origin}/api/public/repos/${fullName}`,
+          contentUrl: `${origin}/api/public/results/${fullName}`,
         },
       },
     ],

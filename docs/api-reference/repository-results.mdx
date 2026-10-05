@@ -1,0 +1,45 @@
+---
+title: "Get Repository Results"
+api: "GET https://selfbench.dev/api/public/results/{owner}/{name}"
+description: "Get current releases and model scores for a repository."
+icon: "chart-scatter"
+---
+
+Returns `{ "lines": [...] }`, one current release per publisher. Returns `404` if the repository has no release.
+
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl https://selfbench.dev/api/public/results/earendil-works/pi
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "lines": [{
+    "release": {
+      "schemaVersion": 1,
+      "releaseId": "release-id",
+      "releasedAt": "2026-10-04T18:41:01.523Z",
+      "repository": { "id": 123456, "fullName": "earendil-works/pi" },
+      "publisher": { "login": "earendil-works", "kind": "org" },
+      "tasks": 51,
+      "settings": [{
+        "id": "gpt-6-luna|codex|high",
+        "model": { "catalogId": "gpt-6-luna", "name": "openai/gpt-6-luna", "label": "GPT-6 Luna" },
+        "harness": "codex", "reasoningLevel": "high", "provider": "openai", "custom": false,
+        "tasks": 51, "passed": 35, "accuracy": 68.63,
+        "costPerTaskUsd": 0.02806, "totalCostUsd": 1.43099, "onFrontier": true
+      }],
+      "frontier": ["gpt-6-luna|codex|high"]
+    },
+    "endorsed": false
+  }]
+}
+```
+</ResponseExample>
+
+Example abbreviated. `accuracy` is a percentage; costs are model API USD. `frontier` contains setting IDs. Per-task trial results are private.

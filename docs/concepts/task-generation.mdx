@@ -1,4 +1,8 @@
-# How SelfBench works
+---
+title: "Task Generation"
+description: "How merged pull requests become verified Harbor tasks."
+icon: "gears"
+---
 
 SelfBench turns merged pull requests into Harbor tasks. This page covers the pipeline, the rules an accepted task must meet, and what an export contains.
 
@@ -39,7 +43,7 @@ One authoring agent session owns the whole task: the instruction, the test comma
 
 The next turn resumes the same session in a fresh sandbox with the report as its next message. A round allows five `verify` calls and ends with `submit_task`. A fresh read-only review agent then judges each green submission: accept, reject, or send suggestions back for another authoring round. Three failed rounds reject the candidate; a step that still fails after its retries (a Harbor check gets four attempts) marks it `infrastructure_failed`.
 
-The authoring prompt, including the anti-coupling rules, is [`src/generation/pipeline/prompts/authoring.md`](../src/generation/pipeline/prompts/authoring.md).
+The authoring prompt, including the anti-coupling rules, is [`src/generation/pipeline/prompts/authoring.md`](https://github.com/mupt-ai/self-bench/blob/main/src/generation/pipeline/prompts/authoring.md).
 
 ## What an accepted task must satisfy
 
@@ -63,7 +67,7 @@ The agent runs as `root` in `/app` after `setup.sh`, with network limited to the
 
 ## Export
 
-A batch export is a `.tar.gz`, downloaded with `GET /v1/runs/:runId/export` (see the [HTTP API](api.md)):
+A batch export is a `.tar.gz`, downloaded with `GET /v1/runs/:runId/export` (see the [Workspace API](/api-reference/workspace)):
 
 ```text
 manifest.json

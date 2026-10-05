@@ -195,7 +195,7 @@ test("a repository page describes its place in the site and its results as a dat
     name: "earendil-works/pi coding agent benchmark results",
     url: "https://selfbench.dev/earendil-works/pi",
     datePublished: "2026-09-02T00:00:00Z",
-    distribution: { contentUrl: "https://selfbench.dev/api/public/repos/earendil-works/pi" },
+    distribution: { contentUrl: "https://selfbench.dev/api/public/results/earendil-works/pi" },
   });
   // The whole summary, which search results would cut short.
   expect(dataset?.description).toEndWith("from its merged pull requests.");

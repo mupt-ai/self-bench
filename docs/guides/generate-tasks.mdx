@@ -1,0 +1,23 @@
+---
+title: "Generate Tasks"
+description: "Build and curate a benchmark dataset from merged pull requests."
+icon: "code-pull-request"
+---
+
+SelfBench turns merged PRs into tasks against the repository state before each change. Each task contains an instruction, environment, held-out tests, and a reference patch.
+
+## Choose PRs
+
+Connect a repository, then start **Batch Generation** with a target count of easy, medium, and hard candidates. Discovery proposes merged PRs, and each candidate is authored and verified independently. A candidate that fails verification is not silently replaced. You can also use **Add PRs** on **Dataset** to select individual merged PRs without discovery.
+
+Generation uses a model and a sandbox. Check **Credentials** first; the [Quickstart](/quickstart) describes the initial setup. A batch can run for hours and continues after you leave the app.
+
+## Review the Dataset
+
+Open **Dataset** to follow progress and inspect each finished task. Review its instruction, setup, hidden tests, reference patch, and gate artifacts before approving or rejecting it. Only approved tasks appear as options for evaluations.
+
+SelfBench checks that the tests fail without a solution, pass with the reference patch, and pass again, then asks an independent reviewer to judge the task. These checks do not replace your own review of whether the task is useful for your benchmark. Learn about the [verification pipeline](/concepts/task-generation).
+
+## Export
+
+A batch export contains Harbor task archives, including repository snapshots, hidden tests, and reference solutions. Treat exports as private. See [Task Generation: Export](/concepts/task-generation#export) and the [export description](/concepts/task-generation#export).

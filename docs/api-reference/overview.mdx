@@ -1,0 +1,24 @@
+---
+title: "Public Results API"
+description: "Read published benchmarks without signing in."
+icon: "chart-scatter"
+---
+
+Read the same aggregate results shown on [selfbench.dev](https://selfbench.dev). No key required.
+
+<CardGroup cols={2}>
+  <Card title="List Results" icon="list" href="/api-reference/list-results">
+    Find released repositories and their frontier picks.
+  </Card>
+  <Card title="Get Repository Results" icon="chart-scatter" href="/api-reference/repository-results">
+    Compare accuracy and cost across settings.
+  </Card>
+</CardGroup>
+
+```bash
+curl https://selfbench.dev/api/public/results/earendil-works/pi
+```
+
+Responses have an `ETag` and a 10-second shared cache. A missing repository returns `404`; excess requests return `429` with `Retry-After`. The older `/api/public/directory` and `/api/public/repos/{owner}/{name}` paths still work.
+
+For authenticated repository management and evaluations, see the [Workspace API](/api-reference/workspace).

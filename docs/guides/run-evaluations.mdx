@@ -1,0 +1,19 @@
+---
+title: "Run Evaluations"
+description: "Compare coding agents on approved tasks and inspect their trials."
+icon: "chart-scatter"
+---
+
+An evaluation runs a model and harness against approved tasks in fresh sandboxes. The agent sees the base repository and instruction, not the held-out tests or reference solution.
+
+## Configure a Comparison
+
+Open your repository's **Run** page. Select approved tasks, add model and harness pairs, choose a sandbox, and supply the required workspace credentials. Model choices and reference pricing come from the app's catalog. **Run Full Comparison** executes every selected task for each model/harness pair; **Run Missing Tasks** skips completed trials for those pairs. Each trial is a separate Harbor run.
+
+A ChatGPT or Claude sign-in or a model API key can run evaluations, subject to harness compatibility. Modal, E2B, or Daytona can run the tasks. See [Quickstart](/quickstart) for credentials and [Task Generation](/concepts/task-generation#what-the-evaluated-agent-sees) for what the evaluated agent can access.
+
+## Read Results
+
+Open **Results** to compare accuracy and model API cost per task. Inspect a trial to read its transcript, scores, and artifacts. The Pareto frontier highlights settings that are not beaten on both accuracy and cost.
+
+To share aggregate results for a public repository, [publish a release](/guides/publish-results). Per-task results remain private.

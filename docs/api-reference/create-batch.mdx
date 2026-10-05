@@ -1,0 +1,29 @@
+---
+title: "Create a Batch"
+api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/batches"
+description: "Generate benchmark tasks from merged pull requests."
+icon: "list-plus"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
+<ParamField body="candidateCounts" type="object" required>Easy, medium, and hard counts; 1–300 total.</ParamField>
+<ParamField body="generation" type="object">Model, reasoning, sandbox, and credential choices. Required when credential storage is configured.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench/batches \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"candidateCounts":{"easy":1,"medium":2,"hard":0},"generation":{
+    "authorModel":"<model-id>","verifierModel":"<model-id>","reasoning":"medium",
+    "modelAccess":"credential","modelCredentialId":"<uuid>",
+    "sandbox":"e2b","sandboxCredentialId":"<uuid>",
+    "harborEnvironment":"e2b","harborCredentialId":"<uuid>"
+  }}'
+```
+</RequestExample>
+
+Returns `202` with `{ "runId": "batch-…", "run": { … } }`. Poll `GET /api/orgs/{org}/repos/{owner}/{name}/batches/{runId}` for progress. Get available choices from `GET /api/orgs/{org}/repos/{owner}/{name}/generation-options`.

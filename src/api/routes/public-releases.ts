@@ -197,14 +197,20 @@ export function createPublicReleaseRoutes(
         });
         return true;
       }
-      if (route === "directory" && rest.length === 0) {
+      if (
+        (route === "results" && rest.length === 0) ||
+        (route === "directory" && rest.length === 0)
+      ) {
         sendTagged(request, response, (await snapshot()).directory(), {
           "cache-control": CACHED,
           "content-type": JSON_TYPE,
         });
         return true;
       }
-      const repository = route === "repos" && rest.length === 2 ? repositoryPath(rest) : undefined;
+      const repository =
+        (route === "results" || route === "repos") && rest.length === 2
+          ? repositoryPath(rest)
+          : undefined;
       if (repository) {
         const body = (await snapshot()).repository(`${repository.owner}/${repository.name}`);
         if (body) {

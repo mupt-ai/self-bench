@@ -60,18 +60,18 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. **API Keys** gives scripts the same access over the [HTTP API](docs/api.md).
+Models and sandboxes run on your organization's own keys under **Credentials**. Read released results through the [Public Results API](docs/api-reference/overview.mdx), or automate your workspace with an [API key](docs/api-reference/workspace.mdx).
 
 ## Self-hosting
 
-SelfBench's reference deployment runs on GCP: Cloud Run for the API and Temporal worker, with optional GKE Autopilot workers for Harbor jobs, plus Cloud SQL and GCS.
+SelfBench's reference deployment runs on GCP: Cloud Run serves the API, while GKE Autopilot runs the Temporal workflow worker and KEDA-scaled Harbor jobs, with Cloud SQL and GCS. A Cloud Run worker pool remains available as an alternative.
 
 1. Provision a GCP project, billing, Terraform state bucket, and GitHub Actions Workload Identity Federation.
 2. Configure Terraform inputs and store each runtime secret value in its own Secret Manager secret.
 3. Apply the environment with Terraform, or configure the protected GitHub `dev` and `prod` environments to deploy through Actions.
 4. Point your domain at the provisioned load balancer and configure GitHub OAuth for the app URL.
 
-For prerequisites, exact Terraform commands, runtime configuration, GitHub Actions setup, and optional GKE workers, see the [self-hosting and infrastructure guide](infra/README.md).
+For prerequisites, exact Terraform commands, runtime configuration, GitHub Actions setup, and GKE worker setup, see the [self-hosting and infrastructure guide](infra/README.md).
 
 ## Development
 
@@ -96,8 +96,9 @@ For frontend work, `bun run dev:site` runs the API and Vite with hot reload (sec
 
 ## Documentation
 
-- [How it works](docs/how-it-works.md): the pipeline and what makes a task valid
-- [HTTP API](docs/api.md)
+- [Mintlify docs](docs/): guides, public results API, and workspace API (`cd docs && npm ci && npm run dev`)
+- [How it works](docs/concepts/task-generation.mdx): the pipeline and what makes a task valid
+- [Public Results API](docs/api-reference/overview.mdx) · [Workspace API](docs/api-reference/workspace.mdx)
 - [Infrastructure](infra/README.md)
 
 ## License

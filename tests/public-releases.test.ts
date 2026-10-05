@@ -164,6 +164,8 @@ test("every public response is tagged; a client holding it gets a bodyless 304",
     "/api/public/releases",
     "/api/public/directory",
     "/api/public/repos/Vercel/Next.js",
+    "/api/public/results",
+    "/api/public/results/Vercel/Next.js",
   ]) {
     const first = await get(path);
     expect(first.status).toBe(200);
@@ -174,6 +176,20 @@ test("every public response is tagged; a client holding it gets a bodyless 304",
     expect(await again.text()).toBe("");
     expect(again.headers.get("etag")).toBe(etag);
     expect(again.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10");
+  }
+});
+
+test("the results routes share the directory and repository result payloads", async () => {
+  const { get } = await serve(async () => [line("vercel/next.js", "acme", "2026-09-10T00:00:00Z")]);
+  for (const [canonical, legacy] of [
+    ["/api/public/results", "/api/public/directory"] as const,
+    ["/api/public/results/vercel/next.js", "/api/public/repos/vercel/next.js"] as const,
+  ]) {
+    const [current, alias] = await Promise.all([get(canonical), get(legacy)]);
+    expect(current.status).toBe(200);
+    expect(alias.status).toBe(200);
+    expect(await current.json()).toEqual(await alias.json());
+    expect(current.headers.get("etag")).toBe(alias.headers.get("etag"));
   }
 });
 

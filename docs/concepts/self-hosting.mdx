@@ -1,0 +1,14 @@
+---
+title: "Self-Hosting"
+description: "Deploy SelfBench with your own infrastructure and credentials."
+icon: "server"
+---
+
+The reference deployment uses GCP: Cloud Run serves the API, while GKE Autopilot runs the Temporal workflow worker and KEDA-scaled Harbor jobs. Cloud SQL stores application data and GCS stores artifacts. A Cloud Run worker pool remains available as an alternative, but GKE is the primary worker deployment. The infrastructure is defined in this repository under [`infra/`](https://github.com/mupt-ai/self-bench/tree/main/infra).
+
+1. Provision a GCP project, billing, Terraform state bucket, and GitHub Actions Workload Identity Federation.
+2. Configure Terraform inputs and store each runtime secret value in its own Secret Manager secret.
+3. Apply the environment with Terraform, or deploy through protected GitHub `dev` and `prod` environments.
+4. Point your domain at the provisioned load balancer and register the app URL with GitHub OAuth.
+
+For prerequisites, Terraform commands, runtime configuration, and GKE worker setup, follow the [infrastructure guide](https://github.com/mupt-ai/self-bench/blob/main/infra/README.md). Set `gke_workers` to `true` in the deployment inputs to use the primary worker architecture; the Cloud Run worker pool is the fallback. For a local stack, see the [Development section of the README](https://github.com/mupt-ai/self-bench#development).

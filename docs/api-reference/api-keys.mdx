@@ -1,0 +1,21 @@
+---
+title: "API Keys"
+description: "Authenticate requests to the private workspace API."
+icon: "key"
+---
+
+Create keys in **Settings → API Keys**. The secret is shown once. Use `Authorization: Bearer $SELFBENCH_API_KEY` or `X-API-Key: $SELFBENCH_API_KEY`.
+
+| Scope | Access |
+| --- | --- |
+| `read` | GET requests only |
+| `write` | Actions allowed by the key owner's workspace role |
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/me` | Caller, workspaces, auth method, and managed-offering status |
+| `GET` | `/api/api-keys` | Active keys without secrets |
+| `POST` | `/api/api-keys` | Create a key with `{ "name": "CI", "scope": "read" }` |
+| `DELETE` | `/api/api-keys/{id}` | Revoke a key |
+
+Creating and revoking keys requires a signed-in browser session; a key cannot mint another key. API-key requests do not need an `Origin` header.

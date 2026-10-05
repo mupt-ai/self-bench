@@ -1,0 +1,34 @@
+---
+title: "List Tasks"
+api: "GET https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/tasks"
+description: "List generated tasks for a connected repository."
+icon: "list"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a SelfBench API key.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench/tasks \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "tasks": [{
+    "runId": "batch-…",
+    "taskId": "task-id",
+    "difficulty": "medium",
+    "state": "accepted",
+    "sourcePr": 123
+  }]
+}
+```
+</ResponseExample>
+
+The example omits progress, review, and artifact fields. Only human-approved tasks can be evaluated.

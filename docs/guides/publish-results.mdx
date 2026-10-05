@@ -1,0 +1,11 @@
+---
+title: "Publish Results"
+description: "Release aggregate benchmark results for a public repository."
+icon: "globe"
+---
+
+After evaluating approved tasks, open your repository's **Releases** page. Preview the available model, harness, and reasoning settings, choose the settings to include, and publish a release. The repository must be public on GitHub and the selected settings must share at least one approved task.
+
+A release displays aggregate accuracy and cost on [selfbench.dev](https://selfbench.dev). A repository can have multiple publisher workspaces; each line shows its newest release that has not been withdrawn. You can withdraw a release, and the line falls back to its prior release.
+
+Per-task trial results are not part of the public release. Publishing task files is a separate optional choice in the release flow; review that choice before publishing if your benchmark tasks should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).

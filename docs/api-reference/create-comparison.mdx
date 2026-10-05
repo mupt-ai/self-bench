@@ -1,0 +1,31 @@
+---
+title: "Create a Comparison"
+api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/evaluations/comparisons"
+description: "Run model and harness settings on approved tasks."
+icon: "chart-scatter"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
+<ParamField body="id" type="string" required>Client-generated UUID; reuse it when retrying.</ParamField>
+<ParamField body="tasks" type="array" required>Approved `{runId, taskId}` pairs.</ParamField>
+<ParamField body="models" type="array" required>Model catalog ID, credential ID, and harnesses (up to 12 model choices).</ParamField>
+<ParamField body="sandbox" type="string" required>Sandbox from the evaluation catalog.</ParamField>
+<ParamField body="sandboxCredentialId" type="string" required>Matching credential ID.</ParamField>
+<ParamField body="skipCompleted" type="boolean">Skip already completed trials.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench/evaluations/comparisons \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"7e0acb2b-3b1e-4df6-8afb-1b0a1cf2d6a8",
+    "tasks":[{"runId":"batch-…","taskId":"task-id"}],
+    "models":[{"catalogId":"<catalog-id>","credentialId":"<uuid>","harnesses":["codex"]}],
+    "sandbox":"e2b","sandboxCredentialId":"<uuid>","skipCompleted":true}'
+```
+</RequestExample>
+
+Returns `202` with comparison status. Fetch tasks from `GET …/evaluations/options`, models and sandboxes from `GET …/evaluations/catalog`, and status from `GET …/evaluations/comparisons/{id}`. If `submissionError` is present, resume the same comparison at `POST …/comparisons/{id}/resume`.

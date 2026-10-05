@@ -1,0 +1,38 @@
+---
+title: "List Results"
+api: "GET https://selfbench.dev/api/public/results"
+description: "List released repositories and leaderboard summaries."
+icon: "list"
+---
+
+Returns `{ "cards": [...] }`: one card per repository and publisher, newest first. `defaultLine` marks the publisher shown by default.
+
+<RequestExample>
+```bash cURL
+curl https://selfbench.dev/api/public/results
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "cards": [{
+    "repository": { "id": 1298096233, "fullName": "mupt-ai/self-bench" },
+    "publisher": { "login": "mupt-ai", "kind": "org" },
+    "releaseId": "c3779cc9-92c9-4111-83a9-8e6334138cc1",
+    "releasedAt": "2026-10-04T18:41:01.523Z",
+    "tasks": 38,
+    "settings": 6,
+    "picks": [{
+      "setting": { "id": "gpt-6-luna|codex|high", "model": { "label": "GPT-6 Luna" }, "accuracy": 47.37, "costPerTaskUsd": 0.02717 },
+      "roles": ["cheapest"]
+    }],
+    "frontier": [{ "id": "gpt-6-luna|codex|high", "model": { "label": "GPT-6 Luna" }, "accuracy": 47.37, "costPerTaskUsd": 0.02717 }],
+    "endorsed": false,
+    "defaultLine": true
+  }]
+}
+```
+</ResponseExample>
+
+Example abbreviated: `picks` highlights the cheapest and most accurate frontier settings; `frontier` lists all of them. `accuracy` is a percentage (0–100), and `costPerTaskUsd` is USD per task.
