@@ -28,6 +28,23 @@ test("gateway trials sum charged generations rather than Pi's reference-rate cos
   expect(urls[0]).toStartWith("https://openrouter.ai/api/v1/generation?id=");
 });
 
+test("BYOK generations count the provider's charge, which the gateway leaves out of total_cost", async () => {
+  // As OpenRouter reported a Fireworks BYOK glm-5.3 request on 2026-09-30.
+  const fetcher = (async (url: string) =>
+    Response.json({
+      data: url.endsWith("FAV")
+        ? { total_cost: 0, upstream_inference_cost: 0.02228638, is_byok: true }
+        : { total_cost: 0.022165855, upstream_inference_cost: 0, is_byok: false },
+    })) as unknown as typeof fetch;
+  for (const gateway of ["openrouter", "vercel-ai-gateway"] as const)
+    expect(await gatewayCost(gateway, "key", "pi", files, fetcher)).toBeCloseTo(
+      0.02228638 + 0.022165855,
+    );
+  const unbilled = (async () =>
+    Response.json({ data: { total_cost: 0, is_byok: true } })) as unknown as typeof fetch;
+  expect(await gatewayCost("vercel-ai-gateway", "key", "pi", files, unbilled)).toBeUndefined();
+});
+
 test("missing bills and unsupported harnesses leave the caller's usage estimate untouched", async () => {
   const missing = (async () => Response.json({ data: {} })) as unknown as typeof fetch;
   expect(await gatewayCost("openrouter", "key", "pi", files, missing)).toBeUndefined();
