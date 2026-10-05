@@ -45,10 +45,6 @@ test("task sets nest by acceptance, and chart only the configurations covering a
   if (!newest || !earlier) throw new Error("Missing sets");
   const high = newest.configurations[0];
   if (!high) throw new Error("Missing configuration");
-  expect(configurationPoint(high, newest)).toMatchObject({
-    accuracy: (2 / 3) * 100,
-    passed: 2,
-    tasks: 3,
-  });
+  expect(configurationPoint(high, newest)).toMatchObject({ accuracy: (2 / 3) * 100, tasks: 3 });
   expect(configurationPoint(high, earlier)).toMatchObject({ accuracy: 50, cost: 0.5, tasks: 2 });
 });

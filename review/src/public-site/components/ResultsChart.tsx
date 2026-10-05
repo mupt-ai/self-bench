@@ -1,15 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { accuracyInterval } from "../../../../src/public/accuracy-interval";
 import type { PublicSetting } from "../contract";
-import {
-  accuracyDomain,
-  accuracyTick,
-  dollars,
-  harnessLabel,
-  intervalNote,
-  settingLabel,
-  vendorPoint,
-} from "../format";
+import { accuracyTick, dollars, harnessLabel, settingLabel, vendorPoint } from "../format";
 import { ResultsPlot } from "./ResultsPlot";
 
 /**
@@ -50,6 +41,7 @@ export function ResultsChart({
     if (Math.abs(next - width) >= 0.5) setWidth(next);
   });
   const narrow = width < 560;
+  const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
     <div ref={frame}>
       <ResultsPlot
@@ -73,24 +65,15 @@ export function ResultsChart({
         hoverRadius={36}
         // A quiet corner button for making the chart's text smaller or larger.
         showSettings
-        points={settings.map((setting) => {
-          const interval = accuracyInterval(setting);
-          return {
-            id: setting.id,
-            label: settingLabel(setting, settings),
-            ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
-            x: setting.costPerTaskUsd,
-            y: setting.accuracy,
-            ...(interval ? { yInterval: interval } : {}),
-            ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
-            description: [
-              harnessLabel(setting),
-              setting.reasoningLevel,
-              `${setting.passed} / ${setting.tasks} passed`,
-              ...(interval ? [intervalNote(interval)] : []),
-            ].join(" · "),
-          };
-        })}
+        points={settings.map((setting) => ({
+          id: setting.id,
+          label: settingLabel(setting, settings),
+          ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
+          x: setting.costPerTaskUsd,
+          y: setting.accuracy,
+          ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
+          description: `${harnessLabel(setting)} · ${setting.reasoningLevel} · ${setting.passed} / ${setting.tasks} passed`,
+        }))}
         xAxis={{
           label: "Cost per Task",
           objective: "minimize",
@@ -107,7 +90,8 @@ export function ResultsChart({
         yAxis={{
           label: "Accuracy",
           objective: "maximize",
-          domain: accuracyDomain(settings),
+          // A little headroom so the top points and their labels clear the edge.
+          domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
           nice: true,
           ticks: 6,
           format: accuracyTick,

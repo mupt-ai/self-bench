@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  accuracyDomain,
   accuracyTick,
   compactNumber,
   pickLabel,
@@ -99,15 +98,6 @@ test("accuracy ticks above 100% are left unlabelled", () => {
   expect(accuracyTick(100)).toBe("100%");
   expect(accuracyTick(92.5)).toBe("92.5%");
   expect(accuracyTick(102.5)).toBe("");
-});
-
-test("the accuracy axis starts low enough for every point's error bar", () => {
-  // 36 of 40 (90%): its interval, about 77%–96%, fits above the usual start, ten points below.
-  expect(accuracyDomain([{ passed: 36, tasks: 40, accuracy: 90 }])).toEqual([70, 104]);
-  // 21 of 40 (52.5%): its interval reaches down to about 37%, below the usual start of 40.
-  expect(accuracyDomain([{ passed: 21, tasks: 40, accuracy: 52.5 }])).toEqual([30, 104]);
-  // Counts that disagree with the accuracy get no bar, and leave the axis as it was.
-  expect(accuracyDomain([{ passed: 5, tasks: 10, accuracy: 94 }])).toEqual([80, 104]);
 });
 
 test("counts shorten to thousands, and past a million to millions", () => {
