@@ -1,0 +1,35 @@
+---
+title: "Workspace API"
+description: "Manage private tasks, evaluations, and releases with an API key."
+icon: "key"
+---
+
+The app at `https://app.selfbench.dev` exposes an authenticated JSON API. Create a key in **Settings → API Keys**; copy the `sbk_` secret when shown.
+
+```bash
+export SELFBENCH_API_KEY=sbk_…
+curl https://app.selfbench.dev/api/me \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY"
+```
+
+A key acts as its owner, including workspace roles. `read` keys allow only `GET`; `write` keys can mutate what the owner can. Key creation and revocation require a browser session. Errors are JSON with an `error` field.
+
+<CardGroup cols={2}>
+  <Card title="API Keys" icon="key" href="/api-reference/api-keys">Authentication and key management.</Card>
+  <Card title="List Tasks" icon="list" href="/api-reference/list-tasks">Read a repository's dataset.</Card>
+  <Card title="Create a Batch" icon="list-plus" href="/api-reference/create-batch">Generate tasks from merged PRs.</Card>
+  <Card title="Create a Comparison" icon="chart-scatter" href="/api-reference/create-comparison">Evaluate models on approved tasks.</Card>
+  <Card title="Publish a Release" icon="globe" href="/api-reference/publish-release">Make aggregate results public.</Card>
+</CardGroup>
+
+Repository routes use `/api/orgs/{org}/repos/{owner}/{name}`. Other useful routes:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/orgs/{org}/repos` | List or connect repositories |
+| `PUT` | `/api/orgs/{org}/repos/{owner}/{name}/tasks/{runId}/{taskId}/review` | Approve or reject a task |
+| `GET` | `/api/orgs/{org}/repos/{owner}/{name}/evaluations/comparisons` | List comparisons |
+| `GET` | `/api/orgs/{org}/credentials` | List workspace credentials |
+| `GET` | `/v1/runs/{runId}/export` | Download a batch's Harbor tasks |
+
+The workspace API is separate from the anonymous [Public Results API](/api-reference/overview). For self-hosted deployments, replace the app origin with your own.

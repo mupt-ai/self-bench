@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { KeyRound, Plus, ShieldCheck } from "lucide-react";
 import React from "react";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageFrame, PageHeader } from "../ui";
@@ -40,15 +40,52 @@ export function ApiKeysPage() {
   };
   return (
     <PageFrame>
-      <PageHeader
-        title="API Keys"
-        description="Create personal keys for scripts and CI. Each key can reach every organization you belong to."
-      >
+      <PageHeader title="API Keys" description="Manage keys for scripts and CI.">
         <Button size="small" variant="primary" onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Create Key
         </Button>
       </PageHeader>
+      <section className="mb-8 grid border border-border bg-card sm:grid-cols-2">
+        <div className="border-b border-border p-4 sm:border-r sm:border-b-0">
+          <div className="flex items-start gap-3">
+            <KeyRound className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">Use a Key</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Send it as a bearer token or with the X-API-Key header.
+              </p>
+              <code className="mt-3 block overflow-x-auto border border-border bg-background px-3 py-2 font-mono text-xs text-foreground">
+                Authorization: Bearer sbk_…
+              </code>
+            </div>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <h2 className="text-sm font-semibold">Choose a Scope</h2>
+              <div className="mt-2 grid gap-1.5 text-xs">
+                <p>
+                  <span className="font-medium text-foreground">Read Only</span>
+                  <span className="text-muted-foreground"> — list and download</span>
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Read &amp; Write</span>
+                  <span className="text-muted-foreground"> — manage resources as you</span>
+                </p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Keys inherit your workspace access. The full secret appears only once.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
       {error && (
         <Notice className="mb-6">
           <p>{error}</p>

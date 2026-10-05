@@ -1,0 +1,29 @@
+---
+title: "Quickstart"
+description: "Connect a repository, generate tasks, and compare coding agents."
+icon: "bolt"
+---
+
+Use [app.selfbench.dev](https://app.selfbench.dev) to run your first private benchmark. You need a GitHub account with access to the repository and an organization admin to configure credentials.
+
+## 1. Sign In and Connect a Repository
+
+Sign in with GitHub, choose your workspace, and connect a repository from **Repositories**. SelfBench uses merged pull requests as the source of benchmark tasks.
+
+## 2. Connect Credentials
+
+Open **Credentials** (or **Finish Setup**). Connect a model credential such as a ChatGPT sign-in or a model API key, and a sandbox credential such as Modal or E2B. A Claude sign-in can run Claude Code evaluations but cannot generate tasks. Credentials belong to the workspace; only admins can manage them. Your own keys run models and sandboxes unless the deployment offers managed usage.
+
+## 3. Build and Review Tasks
+
+From the repository, start **Batch Generation** and choose counts for easy, medium, and hard tasks. Alternatively, use **Add PRs** on **Dataset** to select individual merged PRs. Batches continue after you close the page and can take hours.
+
+On **Dataset**, inspect the instruction, environment, hidden tests, reference patch, and verification artifacts. Approve the tasks you want to evaluate; reject tasks that do not represent the change you intended to measure. See [Generate Tasks](/guides/generate-tasks).
+
+## 4. Run a Comparison
+
+On **Run**, select approved tasks, models and harnesses, then a sandbox. **Run Full Comparison** runs every selected task for each model/harness pair; **Run Missing Tasks** skips pairs with completed results. On **Results**, compare accuracy against model API cost and inspect individual trial transcripts. See [Run Evaluations](/guides/run-evaluations).
+
+## 5. Share Results (Optional)
+
+For a public GitHub repository, use **Releases** to select settings and publish aggregate results on [selfbench.dev](https://selfbench.dev). Private task contents and per-task trial results are not published by default. See [Publish Results](/guides/publish-results).

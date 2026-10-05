@@ -1,0 +1,34 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "SelfBench",
+  "colors": {
+    "primary": "#0F9D76",
+    "light": "#0F9D76",
+    "dark": "#29C79B"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo.svg",
+    "dark": "/logo.svg"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          { "group": "Get Started", "pages": ["index", "quickstart"] },
+          { "group": "Use SelfBench", "pages": ["guides/generate-tasks", "guides/run-evaluations", "guides/publish-results"] },
+          { "group": "Concepts", "pages": ["concepts/task-generation", "concepts/self-hosting"] }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          { "group": "Public Results", "pages": ["api-reference/overview", "api-reference/list-results", "api-reference/repository-results"] },
+          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-comparison", "api-reference/publish-release"] }
+        ]
+      }
+    ]
+  }
+}

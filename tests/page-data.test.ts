@@ -90,15 +90,15 @@ afterAll(async () => {
 
 test("the home page carries exactly what the directory API answers", async () => {
   const home = await carried("/");
-  expect(home?.url).toBe("/api/public/directory");
-  expect(home?.body).toEqual(await (await get("/api/public/directory")).json());
+  expect(home?.url).toBe("/api/public/results");
+  expect(home?.body).toEqual(await (await get("/api/public/results")).json());
 });
 
 test("a repository page carries its repository's response, at the address the site asks", async () => {
   const page = await carried("/Vercel/Next.js/acme");
   // The site asks with the path's own spelling (api-source.ts), so the block answers that.
-  expect(page?.url).toBe("/api/public/repos/Vercel/Next.js");
-  expect(page?.body).toEqual(await (await get("/api/public/repos/vercel/next.js")).json());
+  expect(page?.url).toBe("/api/public/results/Vercel/Next.js");
+  expect(page?.body).toEqual(await (await get("/api/public/results/vercel/next.js")).json());
 });
 
 test("release text cannot close the block, and a page not found carries nothing", async () => {
@@ -109,6 +109,6 @@ test("release text cannot close the block, and a page not found carries nothing"
 });
 
 test("a response too large to carry is left for the site to fetch", () => {
-  expect(pageData("/api/public/directory", "x".repeat(300 * 1024))).toBe("");
-  expect(pageData("/api/public/directory", undefined)).toBe("");
+  expect(pageData("/api/public/results", "x".repeat(300 * 1024))).toBe("");
+  expect(pageData("/api/public/results", undefined)).toBe("");
 });

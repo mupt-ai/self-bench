@@ -1,0 +1,31 @@
+---
+title: "SelfBench Overview"
+description: "Build private coding-agent benchmarks from your repository's merged pull requests."
+icon: "house"
+---
+
+SelfBench helps you find the best models for *your* repository. It turns merged pull requests into tasks with hidden tests, runs coding agents against them, and compares accuracy with model cost. You can keep your dataset private or release aggregate results for a public repository on [selfbench.dev](https://selfbench.dev).
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Connect a repository, build tasks, and run your first comparison.
+  </Card>
+  <Card title="Generate Tasks" icon="code-pull-request" href="/guides/generate-tasks">
+    Create and review tasks from merged pull requests.
+  </Card>
+  <Card title="Run Evaluations" icon="chart-scatter" href="/guides/run-evaluations">
+    Compare models, harnesses, and reasoning settings.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Read public results or automate your workspace.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcSet="/media/how-it-works-dark.gif" />
+  <img src="/media/how-it-works-light.gif" alt="A merged PR becomes a verified task; agents then attempt it and their accuracy is plotted against cost." />
+</picture>
+
+SelfBench starts at the commit before a PR's change. An authoring agent creates an instruction, held-out tests, and a reference solution. A task is accepted only after smoke, no-solution, reference-solution, and determinism checks, followed by an independent review. Accepted tasks can run as native [Harbor](https://harborframework.com/) tasks. Read [Task Generation](/concepts/task-generation) for the full pipeline.

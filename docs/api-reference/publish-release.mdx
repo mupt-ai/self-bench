@@ -1,0 +1,26 @@
+---
+title: "Publish a Release"
+api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/releases"
+description: "Publish aggregate benchmark results for a public repository."
+icon: "globe"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
+<ParamField body="settings" type="array" required>Setting keys from the release preview.</ParamField>
+<ParamField body="head" type="string | null" required>Head release ID from the preview, or `null` for a first release.</ParamField>
+<ParamField body="fingerprint" type="string" required>Preview fingerprint; prevents publishing stale results.</ParamField>
+<ParamField body="publishTasks" type="boolean">Also make task files public. Defaults to false.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench/releases \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"settings":["<setting-key>"],"head":null,"fingerprint":"<preview-fingerprint>"}'
+```
+</RequestExample>
+
+First call `GET …/releases/preview` to get setting keys, `head`, and `fingerprint`. A new release returns `201`; unchanged results return `200`; a stale preview returns `409` with a fresh preview. Published aggregates appear in the [Public Results API](/api-reference/overview). Task files remain private unless `publishTasks` is true.

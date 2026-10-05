@@ -31,7 +31,7 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
         status: 200,
         head: homeHead(origin),
         body: homeBody(repositories ?? []),
-        data: pageData("/api/public/directory", directory),
+        data: pageData("/api/public/results", directory),
         partial: !repositories,
       };
     }
@@ -42,7 +42,7 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
     const head = repositoryHead(origin, lines, path.publisher);
     const body = repositoryBody(lines, path.publisher);
     // Addressed as the site asks for it: the path's own spelling, each part encoded.
-    const api = `/api/public/repos/${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
+    const api = `/api/public/results/${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
     const data = pageData(api, await publicRoutes.repositoryBody(fullName).catch(() => undefined));
     return head && body
       ? { status: 200, head, body, data }

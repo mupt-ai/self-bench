@@ -60,7 +60,7 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   let directory: Promise<PublicRepoSummary[]> | undefined;
   const everything = () => {
     if (!directory) {
-      const request = answer<{ cards: PublicRepoSummary[] }>(`${base}/api/public/directory`).then(
+      const request = answer<{ cards: PublicRepoSummary[] }>(`${base}/api/public/results`).then(
         (answer) => answer?.cards ?? [],
       );
       const settled = () => {
@@ -74,7 +74,9 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   const repository = async (owner: string, name: string) =>
     memorySource(
       await linesFrom(
-        answer(`${base}/api/public/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`),
+        answer(
+          `${base}/api/public/results/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+        ),
       ),
     );
   const tasksOf = (releaseId: string) =>
