@@ -72,7 +72,8 @@ class PlanLimitedSandbox(AsyncSandbox):
         except SandboxException as error:
             limit = PLAN_LIMIT.search(str(error))
             hours = int(limit[1]) if limit else 0
-            refused = getattr(error, "status_code", None) == 400
+            # Older e2b releases leave status_code unset; the message leads with the status.
+            refused = getattr(error, "status_code", None) == 400 or str(error).startswith("400:")
             if not refused or not 0 < hours * 60 * 60 < cls.lifetime_secs:
                 raise
             # The process's later sandboxes (a separate verifier's) start at the limit at once.

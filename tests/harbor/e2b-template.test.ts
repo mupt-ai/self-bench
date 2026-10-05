@@ -152,7 +152,7 @@ test("E2B sandboxes live as long as the longest Harbor run, or the plan's limit"
   const result = await runCommand("python3", [
     "-c",
     `${STUBS}import asyncio
-plan = {"hours": 24, "error": None}
+plan = {"hours": 24, "error": None, "status": 400}
 calls = []
 class AsyncSandbox:
     @classmethod
@@ -161,7 +161,7 @@ class AsyncSandbox:
         if plan["error"]: raise SandboxException(*plan["error"])
         if options["timeout"] > plan["hours"] * 3600:
             # E2B's answer, as a Hobby key gives it, to a lifetime beyond the plan.
-            raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours", 400)
+            raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours", plan["status"])
         return cls()
 e2b.AsyncSandbox = harbor_e2b.AsyncSandbox = AsyncSandbox
 # Harbor's own E2BEnvironment._create_sandbox, through its module's AsyncSandbox.
@@ -188,6 +188,9 @@ async def check():
     assert await start(1) == (True, [3 * 3600, 3600]), calls
     # ...and the process's next sandbox asks for that hour straight away.
     assert await start(1) == (True, [3600]), calls
+    # Older e2b releases leave the status off the exception; the message still leads with it.
+    module.PlanLimitedSandbox.lifetime_secs, plan["status"] = 3 * 3600, None
+    assert await start(1) == (True, [3 * 3600, 3600]), calls
 asyncio.run(check())
 `,
     ENVIRONMENT,
