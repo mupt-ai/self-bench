@@ -17,11 +17,15 @@ hash covers `docker_image`, so the template is named after the image.
 Harbor starts every sandbox with a 24-hour lifetime, which E2B's Hobby plan refuses ("400: Timeout
 cannot be greater than 1 hours"), so no trial could start on a Hobby key, and a sandbox whose
 trial stopped without cleaning up ran for a day. Here a sandbox lives as long as the longest
-Harbor process, or as long as the account's plan allows when that is shorter.
+Harbor process, or as long as the account's plan allows when that is shorter; on a Hobby key a
+trial that runs past the hour loses its sandbox. Harbor creates the sandbox through the
+``AsyncSandbox`` its E2B module imported, so that name is pointed at ``PlanLimitedSandbox`` and
+every other argument Harbor passes stays Harbor's.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shlex
@@ -36,16 +40,15 @@ from e2b import (
     Template,
     TemplateBuildStatus,
 )
-from tenacity import retry, stop_after_attempt, wait_exponential
 
+import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
-from harbor.models.task.config import NetworkMode
 
 TAG = "default"
 # No Harbor process outlives the 3-hour gate cap (HARBOR_PROCESS_TIMEOUT_MS) or a solver trial
 # with the most agent minutes (trialTimeouts, under 3 hours).
 SANDBOX_LIFETIME_SECS = 3 * 60 * 60
-PLAN_LIMIT = re.compile(r"^400: Timeout cannot be greater than (\d+) hours?$")
+PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
 MANIFEST_TYPES = ", ".join(
     [
@@ -55,6 +58,32 @@ MANIFEST_TYPES = ", ".join(
         "application/vnd.docker.distribution.manifest.v2+json",
     ]
 )
+
+
+class PlanLimitedSandbox(AsyncSandbox):
+    """E2B's sandbox, created with SelfBench's lifetime in place of the one Harbor asks for."""
+
+    lifetime_secs = SANDBOX_LIFETIME_SECS
+
+    @classmethod
+    async def create(cls, *args, **kwargs):
+        try:
+            return await super().create(*args, **{**kwargs, "timeout": cls.lifetime_secs})
+        except SandboxException as error:
+            limit = PLAN_LIMIT.search(str(error))
+            hours = int(limit[1]) if limit else 0
+            refused = getattr(error, "status_code", None) == 400
+            if not refused or not 0 < hours * 60 * 60 < cls.lifetime_secs:
+                raise
+            # The process's later sandboxes (a separate verifier's) start at the limit at once.
+            PlanLimitedSandbox.lifetime_secs = hours * 60 * 60
+            logging.getLogger(__name__).warning(
+                f"The E2B plan allows sandboxes {hours}h; a trial running longer loses its sandbox"
+            )
+            return await super().create(*args, **{**kwargs, "timeout": cls.lifetime_secs})
+
+
+harbor_e2b.AsyncSandbox = PlanLimitedSandbox
 
 
 class SelfBenchE2BEnvironment(E2BEnvironment):
@@ -81,33 +110,6 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
             return True
         self.logger.warning(f"Template {name} build {build} is {status.value}; building it again")
         return False
-
-    # Harbor's own _create_sandbox, with SelfBench's lifetime in place of its fixed 24 hours.
-    @retry(
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        reraise=True,
-    )
-    async def _create_sandbox(self):
-        try:
-            await self._start_sandbox(SANDBOX_LIFETIME_SECS)
-        except SandboxException as error:
-            limit = PLAN_LIMIT.match(str(error))
-            if not limit:
-                raise
-            hours = int(limit[1])
-            self.logger.warning(f"The E2B plan allows sandboxes {hours}h; starting one that long")
-            await self._start_sandbox(hours * 60 * 60)
-
-    async def _start_sandbox(self, lifetime_secs: int) -> None:
-        self._sandbox = await AsyncSandbox.create(
-            template=self._template_name,
-            metadata={"environment_name": self.environment_name, "session_id": self.session_id},
-            envs=self._startup_env(),
-            timeout=lifetime_secs,
-            allow_internet_access=self.network_policy.network_mode != NetworkMode.NO_NETWORK,
-            network=self._sandbox_create_network_options(),
-        )
 
     async def _create_template(self):
         image = self.task_env_config.docker_image

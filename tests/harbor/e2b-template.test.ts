@@ -7,16 +7,17 @@ const ENVIRONMENT = fileURLToPath(
 );
 /** Empty stand-ins for the modules selfbench_e2b.py imports; each test fills in what it uses. */
 const STUBS = `import sys, types
-for name in ["e2b", "httpx", "tenacity", "harbor.environments.e2b", "harbor.models.task.config"]:
+for name in ["e2b", "httpx", "harbor", "harbor.environments", "harbor.environments.e2b"]:
     sys.modules[name] = types.ModuleType(name)
-e2b, harbor_e2b, tenacity = (sys.modules[name] for name in ["e2b", "harbor.environments.e2b", "tenacity"])
+e2b, harbor_e2b = sys.modules["e2b"], sys.modules["harbor.environments.e2b"]
+sys.modules["harbor"].environments = sys.modules["harbor.environments"]
+sys.modules["harbor.environments"].e2b = harbor_e2b
 for name in ["AsyncSandbox", "AsyncTemplate", "BuildException", "BuildInfo", "Template", "TemplateBuildStatus"]:
     setattr(e2b, name, object)
-class SandboxException(Exception): pass
+class SandboxException(Exception):
+    def __init__(self, message, status_code=None):
+        super().__init__(message); self.status_code = status_code
 e2b.SandboxException = SandboxException
-tenacity.retry = lambda **_: lambda function: function
-tenacity.stop_after_attempt = tenacity.wait_exponential = lambda *_, **__: None
-sys.modules["harbor.models.task.config"].NetworkMode = types.SimpleNamespace(NO_NETWORK="none")
 def load():
     import importlib.util
     spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
@@ -147,48 +148,46 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
-test("the E2B environment starts a sandbox for the longest Harbor run, or the plan's limit", async () => {
+test("E2B sandboxes live as long as the longest Harbor run, or the plan's limit", async () => {
   const result = await runCommand("python3", [
     "-c",
-    `${STUBS}import asyncio, logging
-# E2B's answer when a lifetime exceeds the account's plan, as a Hobby key gives it.
+    `${STUBS}import asyncio
 plan = {"hours": 24, "error": None}
-lifetimes = []
+calls = []
 class AsyncSandbox:
-    @staticmethod
-    async def create(timeout, **options):
-        lifetimes.append(timeout)
-        if plan["error"]: raise SandboxException(plan["error"])
-        if timeout > plan["hours"] * 3600:
-            raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours")
-        return "sandbox"
-e2b.AsyncSandbox = AsyncSandbox
-class E2BEnvironment:
-    environment_name, session_id = "task", "trial"
-    network_policy = types.SimpleNamespace(network_mode="allowlist")
-    def __init__(self):
-        self._template_name, self._sandbox = "task__hash", None
-        self.logger = logging.getLogger("test")
-    def _startup_env(self): return {}
-    def _sandbox_create_network_options(self): return None
-harbor_e2b.E2BEnvironment = E2BEnvironment
+    @classmethod
+    async def create(cls, **options):
+        calls.append(options)
+        if plan["error"]: raise SandboxException(*plan["error"])
+        if options["timeout"] > plan["hours"] * 3600:
+            # E2B's answer, as a Hobby key gives it, to a lifetime beyond the plan.
+            raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours", 400)
+        return cls()
+e2b.AsyncSandbox = harbor_e2b.AsyncSandbox = AsyncSandbox
+# Harbor's own E2BEnvironment._create_sandbox, through its module's AsyncSandbox.
+harbor_e2b.E2BEnvironment = type("E2BEnvironment", (), {})
+async def harbor_create():
+    return await harbor_e2b.AsyncSandbox.create(template="task__hash", timeout=86_400, network="allowlist")
 module = load()
 async def start(hours, error=None):
-    plan.update(hours=hours, error=error); lifetimes.clear()
-    environment = module.SelfBenchE2BEnvironment()
-    await environment._create_sandbox()
-    return environment._sandbox, list(lifetimes)
+    plan.update(hours=hours, error=error); calls.clear()
+    sandbox = await harbor_create()
+    return isinstance(sandbox, AsyncSandbox), [call["timeout"] for call in calls]
 async def check():
-    # Three hours outlasts every Harbor run; Harbor's own 24 left an orphaned sandbox running a day.
-    assert await start(24) == ("sandbox", [3 * 3600]), lifetimes
-    # A Hobby key refuses anything over an hour, so the sandbox gets the hour it allows.
-    assert await start(1) == ("sandbox", [3 * 3600, 3600]), lifetimes
+    # Three hours outlasts every Harbor run; Harbor's own 24 kept an orphaned sandbox for a day.
+    assert await start(24) == (True, [3 * 3600]), calls
+    # Harbor's other arguments reach E2B unchanged.
+    assert calls == [{"template": "task__hash", "timeout": 3 * 3600, "network": "allowlist"}], calls
     try:
-        await start(24, "429: Rate limit exceeded")
+        await start(24, ("429: Rate limit exceeded", 429))
     except SandboxException as error:
-        assert str(error) == "429: Rate limit exceeded" and lifetimes == [3 * 3600], (error, lifetimes)
+        assert str(error) == "429: Rate limit exceeded", error
     else:
         raise AssertionError("other E2B errors must propagate")
+    # A Hobby key refuses anything over an hour, so the sandbox gets the hour it allows...
+    assert await start(1) == (True, [3 * 3600, 3600]), calls
+    # ...and the process's next sandbox asks for that hour straight away.
+    assert await start(1) == (True, [3600]), calls
 asyncio.run(check())
 `,
     ENVIRONMENT,
