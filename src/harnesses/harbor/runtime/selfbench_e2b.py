@@ -14,18 +14,15 @@ image's files but not its config, and its commands run in login shells that rese
 image's ENV goes into /etc/profile.d and its USER and WORKDIR onto the template. Harbor's content
 hash covers `docker_image`, so the template is named after the image.
 
-Harbor starts every sandbox with a 24-hour lifetime, which E2B's Hobby plan refuses ("400: Timeout
-cannot be greater than 1 hours"), so no trial could start on a Hobby key, and a sandbox whose
-trial stopped without cleaning up ran for a day. Here a sandbox lives as long as the longest
-Harbor process, or as long as the account's plan allows when that is shorter; on a Hobby key a
-trial that runs past the hour loses its sandbox. Harbor creates the sandbox through the
-``AsyncSandbox`` its E2B module imported, so that name is pointed at ``PlanLimitedSandbox`` and
-every other argument Harbor passes stays Harbor's.
+Harbor starts every sandbox with a 24-hour lifetime. E2B's Hobby plan caps sandboxes at an hour
+and refuses with "400: Timeout cannot be greater than 1 hours", which left a trial failing with no
+hint of what to change; that refusal is reported here as the key's plan being too small. Harbor
+creates sandboxes through the ``AsyncSandbox`` its E2B module imported, so that name is pointed at
+``PlanCheckedSandbox``, which passes Harbor's arguments through unchanged.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 import re
 import shlex
@@ -45,9 +42,6 @@ import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
 
 TAG = "default"
-# No Harbor process outlives the 3-hour gate cap (HARBOR_PROCESS_TIMEOUT_MS) or a solver trial
-# with the most agent minutes (trialTimeouts, under 3 hours).
-SANDBOX_LIFETIME_SECS = 3 * 60 * 60
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
 MANIFEST_TYPES = ", ".join(
@@ -60,31 +54,28 @@ MANIFEST_TYPES = ", ".join(
 )
 
 
-class PlanLimitedSandbox(AsyncSandbox):
-    """E2B's sandbox, created with SelfBench's lifetime in place of the one Harbor asks for."""
-
-    lifetime_secs = SANDBOX_LIFETIME_SECS
+class PlanCheckedSandbox(AsyncSandbox):
+    """E2B's sandbox, whose refusal of Harbor's lifetime names the plan as the cause."""
 
     @classmethod
     async def create(cls, *args, **kwargs):
         try:
-            return await super().create(*args, **{**kwargs, "timeout": cls.lifetime_secs})
+            return await super().create(*args, **kwargs)
         except SandboxException as error:
             limit = PLAN_LIMIT.search(str(error))
-            hours = int(limit[1]) if limit else 0
             # Older e2b releases leave status_code unset; the message leads with the status.
             refused = getattr(error, "status_code", None) == 400 or str(error).startswith("400:")
-            if not refused or not 0 < hours * 60 * 60 < cls.lifetime_secs:
+            if not refused or not limit:
                 raise
-            # The process's later sandboxes (a separate verifier's) start at the limit at once.
-            PlanLimitedSandbox.lifetime_secs = hours * 60 * 60
-            logging.getLogger(__name__).warning(
-                f"The E2B plan allows sandboxes {hours}h; a trial running longer loses its sandbox"
-            )
-            return await super().create(*args, **{**kwargs, "timeout": cls.lifetime_secs})
+            hours = int(limit[1])
+            raise SandboxException(
+                f"This E2B key's plan allows sandboxes of at most {hours} hour"
+                f"{'' if hours == 1 else 's'}, and SelfBench trials run in 24-hour sandboxes. "
+                "Use an E2B key on a plan that allows 24-hour sandboxes, such as Pro."
+            ) from error
 
 
-harbor_e2b.AsyncSandbox = PlanLimitedSandbox
+harbor_e2b.AsyncSandbox = PlanCheckedSandbox
 
 
 class SelfBenchE2BEnvironment(E2BEnvironment):

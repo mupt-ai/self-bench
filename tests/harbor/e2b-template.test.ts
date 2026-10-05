@@ -148,7 +148,7 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
-test("E2B sandboxes live as long as the longest Harbor run, or the plan's limit", async () => {
+test("an E2B plan too small for Harbor's 24-hour sandboxes is named as the cause", async () => {
   const result = await runCommand("python3", [
     "-c",
     `${STUBS}import asyncio
@@ -164,33 +164,29 @@ class AsyncSandbox:
             raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours", plan["status"])
         return cls()
 e2b.AsyncSandbox = harbor_e2b.AsyncSandbox = AsyncSandbox
-# Harbor's own E2BEnvironment._create_sandbox, through its module's AsyncSandbox.
 harbor_e2b.E2BEnvironment = type("E2BEnvironment", (), {})
-async def harbor_create():
-    return await harbor_e2b.AsyncSandbox.create(template="task__hash", timeout=86_400, network="allowlist")
 module = load()
-async def start(hours, error=None):
-    plan.update(hours=hours, error=error); calls.clear()
-    sandbox = await harbor_create()
-    return isinstance(sandbox, AsyncSandbox), [call["timeout"] for call in calls]
-async def check():
-    # Three hours outlasts every Harbor run; Harbor's own 24 kept an orphaned sandbox for a day.
-    assert await start(24) == (True, [3 * 3600]), calls
-    # Harbor's other arguments reach E2B unchanged.
-    assert calls == [{"template": "task__hash", "timeout": 3 * 3600, "network": "allowlist"}], calls
+async def start(hours, status=400, error=None):
+    plan.update(hours=hours, status=status, error=error); calls.clear()
+    # Harbor's own E2BEnvironment._create_sandbox, through its module's AsyncSandbox.
+    return await harbor_e2b.AsyncSandbox.create(template="task__hash", timeout=86_400, network="allowlist")
+async def refusal(*args):
     try:
-        await start(24, ("429: Rate limit exceeded", 429))
+        await start(*args)
     except SandboxException as error:
-        assert str(error) == "429: Rate limit exceeded", error
-    else:
-        raise AssertionError("other E2B errors must propagate")
-    # A Hobby key refuses anything over an hour, so the sandbox gets the hour it allows...
-    assert await start(1) == (True, [3 * 3600, 3600]), calls
-    # ...and the process's next sandbox asks for that hour straight away.
-    assert await start(1) == (True, [3600]), calls
-    # Older e2b releases leave the status off the exception; the message still leads with it.
-    module.PlanLimitedSandbox.lifetime_secs, plan["status"] = 3 * 3600, None
-    assert await start(1) == (True, [3 * 3600, 3600]), calls
+        return str(error)
+    raise AssertionError("the sandbox must not start")
+async def check():
+    # A plan that allows a day gets exactly what Harbor asked for.
+    assert isinstance(await start(24), AsyncSandbox)
+    assert calls == [{"template": "task__hash", "timeout": 86_400, "network": "allowlist"}], calls
+    # A Hobby key is told its plan is the cause, with or without the status older e2b leaves off.
+    for status in [400, None]:
+        message = await refusal(1, status)
+        assert message.startswith("This E2B key's plan allows sandboxes of at most 1 hour,"), message
+        assert "such as Pro" in message and calls == [calls[0]] and calls[0]["timeout"] == 86_400, calls
+    # Any other E2B error is E2B's own.
+    assert await refusal(24, 400, ("429: Rate limit exceeded", 429)) == "429: Rate limit exceeded"
 asyncio.run(check())
 `,
     ENVIRONMENT,
