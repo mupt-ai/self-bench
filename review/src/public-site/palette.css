@@ -17,6 +17,8 @@
   --input: hsl(35 16% 84%);
   --accent: hsl(40 22% 90%);
   --brand: hsl(38 92% 48%);
+  /* The brand as text: dark enough to read on paper. */
+  --brand-fg: hsl(32 90% 32%);
   --primary: hsl(30 8% 12%);
   --primary-fg: hsl(40 22% 94.8%);
   --ok: hsl(150 45% 34%);
@@ -61,6 +63,7 @@
   --input: hsl(215 16% 16%);
   --accent: hsl(215 18% 10%);
   --brand: hsl(210 90% 65%);
+  --brand-fg: hsl(210 90% 70%);
   --primary: hsl(0 0% 100%);
   --primary-fg: hsl(0 0% 0%);
   --ok: hsl(150 40% 45%);
