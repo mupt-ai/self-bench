@@ -103,8 +103,12 @@ export async function gatewayCost(
           signal: AbortSignal.timeout(5000),
         });
         if (response.ok) {
-          const cost = record((await response.json()).data).total_cost;
-          return typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : undefined;
+          // Both gateways leave a BYOK request's provider charge out of total_cost, which then
+          // holds only the gateway's own fee, and report it as upstream_inference_cost instead.
+          const data = record((await response.json()).data);
+          const total = charge(data.total_cost);
+          const upstream = data.is_byok === true ? charge(data.upstream_inference_cost) : 0;
+          return total === undefined || upstream === undefined ? undefined : total + upstream;
         }
         if (response.status !== 404) return undefined;
         if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -121,4 +125,8 @@ export async function gatewayCost(
     total += (costs as number[]).reduce((sum, cost) => sum + cost, 0);
   }
   return total;
+}
+
+function charge(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
