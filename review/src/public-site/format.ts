@@ -1,5 +1,6 @@
 import type { ParetoPlotProps, ParetoPoint } from "@mupt-ai/dari-pareto";
 import { gateways, isGateway } from "../../../src/gateways/index";
+import { accuracyInterval } from "../../../src/public/accuracy-interval";
 import {
   CUSTOM_VENDOR,
   type ModelSource,
@@ -52,6 +53,25 @@ export function settingLabel(setting: PublicSetting, all: readonly PublicSetting
 
 export function percent(value: number): string {
   return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+}
+
+/**
+ * The accuracy axis of both results charts: from a round ten at least ten points below the lowest
+ * point, lower still if a point's interval reaches further, so no error bar runs off the plot; and
+ * a little headroom above 100% so the top points and their labels clear the edge.
+ */
+export function accuracyDomain(
+  entries: readonly { passed: number; tasks: number; accuracy: number }[],
+): [number, number] {
+  const lowest = Math.min(...entries.map((entry) => entry.accuracy));
+  const lowestBound = Math.min(...entries.map((entry) => accuracyInterval(entry)?.[0] ?? 100));
+  const start = Math.min(Math.floor((lowest - 10) / 10), Math.floor(lowestBound / 10)) * 10;
+  return [Math.max(0, start), 104];
+}
+
+/** How both results charts describe a point's accuracy interval, for its details and screen readers. */
+export function intervalNote([lower, upper]: readonly [number, number]): string {
+  return `95% Wilson confidence interval: ${lower.toFixed(1)}%–${upper.toFixed(1)}%`;
 }
 
 /**

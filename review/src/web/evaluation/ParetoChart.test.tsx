@@ -16,6 +16,7 @@ test("single-harness charts name points by model, with a recorded reasoning leve
           thinking: "high",
           harness: "codex",
           accuracy: 75,
+          passed: 3,
           cost: 0.1,
           tasks: 4,
           datasetKey: "dataset",
@@ -30,6 +31,7 @@ test("single-harness charts name points by model, with a recorded reasoning leve
           thinking: "default",
           harness: "codex",
           accuracy: 60,
+          passed: 2,
           cost: 0.05,
           tasks: 4,
           datasetKey: "dataset",
@@ -38,9 +40,12 @@ test("single-harness charts name points by model, with a recorded reasoning leve
       onSelect={() => {}}
     />,
   );
-  expect(html).toContain(">Model Comparison</text>");
+  expect(html).toContain(">Chart</text>");
   expect(html).toContain('aria-label="Model (high). Cost per Task');
   expect(html).toContain('aria-label="Cheaper. Cost per Task');
+  // Each point carries its 95% Wilson interval: a bar on the plot, and its bounds for screen readers.
+  expect(html.match(/class="pareto-error-bar[ "]/g)).toHaveLength(2);
+  expect(html).toContain("3 / 4 passed · 95% Wilson confidence interval: 30.1%–95.4%");
   // Names show only for the point under the pointer.
   expect(html).not.toContain(`class="pareto-point-label`);
 });
@@ -59,6 +64,7 @@ test("runs are grouped by vendor, with custom endpoints last", () => {
           thinking: "default",
           harness: "codex",
           accuracy: 70,
+          passed: 2,
           cost: 0.02,
           tasks: 4,
           datasetKey: "dataset",
@@ -73,6 +79,7 @@ test("runs are grouped by vendor, with custom endpoints last", () => {
           thinking: "high",
           harness: "codex",
           accuracy: 60,
+          passed: 2,
           cost: 0.05,
           tasks: 4,
           datasetKey: "dataset",
@@ -96,6 +103,7 @@ test("a zero-cost run sits on the log axis's zero tick, and no tick reads over 1
     thinking: "high",
     harness: "codex",
     accuracy,
+    passed: Math.round((accuracy / 100) * 4),
     cost,
     tasks: 4,
     datasetKey: "dataset",

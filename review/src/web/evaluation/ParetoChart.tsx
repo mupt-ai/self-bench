@@ -1,11 +1,12 @@
-import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useRef, useState } from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
+import { accuracyInterval } from "../../../../src/public/accuracy-interval";
+import { ResultsPlot } from "../../public-site/components/ResultsPlot";
 import {
+  accuracyDomain,
   accuracyTick,
-  CHART_LOOK,
+  intervalNote,
   dollars as tickDollars,
-  VENDOR_CHIPS,
   vendorPoint,
 } from "../../public-site/format";
 import { type BenchmarkPoint, dollars } from "./benchmark";
@@ -32,7 +33,6 @@ export function ParetoChart({
   }, []);
   const narrow = width < 640;
   const oneHarness = new Set(points.map((point) => point.harness)).size === 1;
-  const lowest = Math.min(...points.map((point) => point.accuracy));
   return (
     <section ref={container} className="panel p-4 sm:p-6" aria-label="Accuracy versus Cost">
       {!points.length ? (
@@ -45,9 +45,8 @@ export function ParetoChart({
         </div>
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
-          <ParetoPlot
-            {...CHART_LOOK}
-            title="Model Comparison"
+          <ResultsPlot
+            title="Chart"
             showTitle={showTitle}
             description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
             width={width}
@@ -60,10 +59,9 @@ export function ParetoChart({
             labelPlacement="auto"
             // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
             hoverRadius={36}
-            // The public repository page's vendor chips: hovering one fades the rest.
-            {...VENDOR_CHIPS}
             showSettings
             points={points.map((point) => {
+              const interval = accuracyInterval(point);
               const source = { provider: point.provider, model: { name: point.model } };
               const customModel = point.provider === "custom" ? point.model : undefined;
               const label = oneHarness
@@ -75,8 +73,13 @@ export function ParetoChart({
                 ...(point.thinking === "default" ? {} : { note: point.thinking }),
                 x: point.cost,
                 y: point.accuracy,
+                ...(interval ? { yInterval: interval } : {}),
                 ...vendorPoint(source, customModel),
-                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+                description: [
+                  `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+                  `${point.passed} / ${point.tasks} passed`,
+                  ...(interval ? [intervalNote(interval)] : []),
+                ].join(" · "),
               };
             })}
             xAxis={{
@@ -94,8 +97,7 @@ export function ParetoChart({
             yAxis={{
               label: "Accuracy",
               objective: "maximize",
-              // A little headroom so the top points and their labels clear the edge.
-              domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
+              domain: accuracyDomain(points),
               nice: true,
               ticks: 6,
               format: accuracyTick,

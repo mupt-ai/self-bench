@@ -91,7 +91,7 @@ function MiniChart({ points }: { points: readonly BenchmarkPoint[] }) {
 }
 
 /**
- * The model comparison chart, on the Results page: a small preview in the repository header that
+ * The Results chart: a small preview in the repository header that
  * opens the full chart in a dialog, or on a phone a Chart button in the page's actions. Hidden
  * until some run can be charted.
  */
@@ -133,7 +133,7 @@ export function ChartPreview({
         <button
           type="button"
           className={buttonStyles.secondary}
-          aria-label="Open Model Comparison"
+          aria-label="Open Chart"
           onClick={() => setOpen(true)}
         >
           <ChartScatter aria-hidden="true" />
@@ -143,16 +143,14 @@ export function ChartPreview({
         <button
           type="button"
           className="group flex items-center gap-3 border border-border bg-card px-2.5 py-2 text-left text-muted-foreground hover:border-foreground/35 hover:text-foreground"
-          aria-label="Open Model Comparison"
-          title="Open Model Comparison"
+          aria-label="Open Chart"
+          title="Open Chart"
           onClick={() => setOpen(true)}
         >
           <MiniChart points={points} />
           {/* Centered against the chart, so the space above and below the text is the same. */}
           <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
-            <span className="text-xs leading-4 font-semibold text-foreground">
-              Model Comparison
-            </span>
+            <span className="text-xs leading-4 font-semibold text-foreground">Chart</span>
             <span className="flex items-center gap-1.5 font-mono text-[11px] leading-4">
               <Maximize2
                 className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
@@ -168,7 +166,7 @@ export function ChartPreview({
           initialFocus={close}
           onDismiss={() => setOpen(false)}
           size="wide"
-          aria-labelledby="model-comparison-title"
+          aria-labelledby="results-chart-title"
           // The app's dialogs ignore Escape (closedby="none"); this one closes on it.
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -178,8 +176,8 @@ export function ChartPreview({
           }}
         >
           <DialogHeader
-            title="Model Comparison"
-            titleId="model-comparison-title"
+            title="Chart"
+            titleId="results-chart-title"
             description="Each configuration's latest usable result on every task in the set; a configuration missing any is left out. Select a point to open its latest run."
             onClose={() => setOpen(false)}
             closeRef={close}

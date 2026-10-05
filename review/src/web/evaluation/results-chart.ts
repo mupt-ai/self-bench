@@ -88,6 +88,7 @@ export function configurationPoint(configuration: Configuration, set: TaskSet): 
     thinking: configuration.thinking ?? "default",
     harness: configuration.harness,
     accuracy: mean(results.map((result) => result.trial.rewards.reward ?? 0)) * 100,
+    passed: results.filter((result) => result.trial.rewards.reward === 1).length,
     cost: mean(results.map((result) => result.trial.apiCostUsd ?? 0)),
     tasks: results.length,
     datasetKey: String(set.tasks.length),

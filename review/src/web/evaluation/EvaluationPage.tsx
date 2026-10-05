@@ -53,7 +53,7 @@ export function EvaluationPage() {
   }, [url, selectedId, update]);
   return (
     <PageContent>
-      <PageHeader title="Results" description="Compare your runs. Inspect what the solver did.">
+      <PageHeader title="Results" description="Inspect accuracy, cost, and what the solver did.">
         {/* The header's chart preview has no room on a phone; this opens the same chart. */}
         <span className="md:hidden">
           <ChartPreview repo={repo} variant="button" />

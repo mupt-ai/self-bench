@@ -1,15 +1,16 @@
-import { ParetoPlot } from "@mupt-ai/dari-pareto";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { accuracyInterval } from "../../../../src/public/accuracy-interval";
 import type { PublicSetting } from "../contract";
 import {
+  accuracyDomain,
   accuracyTick,
-  CHART_LOOK,
   dollars,
   harnessLabel,
+  intervalNote,
   settingLabel,
-  VENDOR_CHIPS,
   vendorPoint,
 } from "../format";
+import { ResultsPlot } from "./ResultsPlot";
 
 /**
  * Accuracy against cost per task, one point per setting, colored by model vendor. It tells the
@@ -49,11 +50,9 @@ export function ResultsChart({
     if (Math.abs(next - width) >= 0.5) setWidth(next);
   });
   const narrow = width < 560;
-  const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
     <div ref={frame}>
-      <ParetoPlot
-        {...CHART_LOOK}
+      <ResultsPlot
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
         showLegend={false}
@@ -72,20 +71,26 @@ export function ResultsChart({
         labelPlacement="auto"
         // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
         hoverRadius={36}
-        // A chip per vendor above the plot, shared with the app's chart: hovering one fades the
-        // other vendors' settings.
-        {...VENDOR_CHIPS}
         // A quiet corner button for making the chart's text smaller or larger.
         showSettings
-        points={settings.map((setting) => ({
-          id: setting.id,
-          label: settingLabel(setting, settings),
-          ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
-          x: setting.costPerTaskUsd,
-          y: setting.accuracy,
-          ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
-          description: `${harnessLabel(setting)} · ${setting.reasoningLevel} · ${setting.passed} / ${setting.tasks} passed`,
-        }))}
+        points={settings.map((setting) => {
+          const interval = accuracyInterval(setting);
+          return {
+            id: setting.id,
+            label: settingLabel(setting, settings),
+            ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
+            x: setting.costPerTaskUsd,
+            y: setting.accuracy,
+            ...(interval ? { yInterval: interval } : {}),
+            ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
+            description: [
+              harnessLabel(setting),
+              setting.reasoningLevel,
+              `${setting.passed} / ${setting.tasks} passed`,
+              ...(interval ? [intervalNote(interval)] : []),
+            ].join(" · "),
+          };
+        })}
         xAxis={{
           label: "Cost per Task",
           objective: "minimize",
@@ -102,8 +107,7 @@ export function ResultsChart({
         yAxis={{
           label: "Accuracy",
           objective: "maximize",
-          // A little headroom so the top points and their labels clear the edge.
-          domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
+          domain: accuracyDomain(settings),
           nice: true,
           ticks: 6,
           format: accuracyTick,
