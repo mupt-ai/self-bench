@@ -12,8 +12,6 @@ export interface BenchmarkPoint {
   thinking: string;
   harness: string;
   accuracy: number;
-  /** Number of scored tasks with reward exactly one in this point's task set. */
-  passed: number;
   cost: number;
   tasks: number;
   datasetKey: string;
