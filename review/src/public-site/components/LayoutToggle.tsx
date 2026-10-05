@@ -6,9 +6,12 @@ export type ResultsLayout = "stacked" | "side";
 
 const KEY = "selfbench-results-layout";
 
-/** The layout this browser last chose, kept like the theme (see preferences.ts); stacked at first. */
+/**
+ * The layout this browser last chose, kept like the theme (see preferences.ts); side by side at
+ * first, which takes effect only on a window wide enough for it.
+ */
 export function readResultsLayout(): ResultsLayout {
-  return sharedPreferences()?.getItem(KEY) === "side" ? "side" : "stacked";
+  return sharedPreferences()?.getItem(KEY) === "stacked" ? "stacked" : "side";
 }
 
 export function rememberResultsLayout(layout: ResultsLayout): void {

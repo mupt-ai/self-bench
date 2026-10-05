@@ -28,6 +28,18 @@ const HOVER_READ_MS = 80;
 /** How many frontier settings the hover preview lists; more would not fit the card. */
 const PREVIEW_LINES = ["first", "second", "third", "fourth", "fifth"] as const;
 const PREVIEW_ROWS = PREVIEW_LINES.length;
+/**
+ * Text that types in on hover and is erased right to left on leave: the frontier caption and the
+ * prompt beside it, side by side and in step. Each adds its own steps, one per character.
+ */
+const TYPED =
+  "[clip-path:inset(0_100%_0_0)] transition-[clip-path] delay-0 duration-290 card-on:[clip-path:inset(0_0_0_0)] card-on:duration-200";
+/**
+ * The prompt beside the caption, typed in with it, underlined like a link: on each of its spans,
+ * since an underline does not reach into inline blocks, and close under the text, inside the box
+ * the typing clips to.
+ */
+const PROMPT = `${TYPED} underline decoration-1 underline-offset-2`;
 
 /**
  * A uniform card. Every card has the same height: the description always takes two lines.
@@ -167,9 +179,10 @@ function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
 
 /**
  * The best settings by accuracy, always five lines: a short frontier leaves faint rules in the
- * spare lines so every card's preview has the same shape. On hover the caption types in and
- * the lines fade in one by one; on leave the lines fade from the bottom up while the caption
- * is erased right to left, both finishing together before the card body returns.
+ * spare lines so every card's preview has the same shape. On hover the caption types in, with a
+ * prompt to open the page for the chart typing in beside it, and the lines fade in one by one;
+ * on leave the lines fade from the bottom up while the caption and prompt are erased right to
+ * left, all finishing together before the card body returns.
  */
 function FrontierPreview({ card }: { card: PublicRepoSummary }) {
   const rows = [...card.frontier]
@@ -184,10 +197,21 @@ function FrontierPreview({ card }: { card: PublicRepoSummary }) {
     "translate-y-1 opacity-0 transition-[opacity,translate] duration-150 [transition-delay:var(--out)] card-on:translate-y-0 card-on:opacity-100 card-on:duration-200 card-on:[transition-delay:var(--in)]";
   return (
     <div className="pointer-events-none flex flex-col gap-1.5 text-xs" aria-hidden="true">
-      {/* Erased over the same 290 ms the lines take to go: four 35 ms steps plus a 150 ms fade. */}
-      <p className="mb-0.5 self-start text-muted-foreground [clip-path:inset(0_100%_0_0)] transition-[clip-path] delay-0 duration-290 ease-[steps(24)] card-on:[clip-path:inset(0_0_0_0)] card-on:duration-200">
-        Frontier · {card.settings} settings tested
-      </p>
+      <div className="@container mb-0.5 flex items-baseline justify-between gap-3">
+        {/* Erased over the same 290 ms the lines take to go: four 35 ms steps plus a 150 ms fade. */}
+        <p className={`text-muted-foreground ${TYPED} ease-[steps(24)]`}>
+          Frontier · {card.settings} settings tested
+        </p>
+        {/* In the brand's colour so it stands out; the long wording only where the line has room. */}
+        <p className="shrink-0 font-semibold text-brand-foreground">
+          <span className={`inline-block @min-[19rem]:hidden ${PROMPT} ease-[steps(13)]`}>
+            See the Chart
+          </span>
+          <span className={`hidden @min-[19rem]:inline-block ${PROMPT} ease-[steps(24)]`}>
+            See Chart &amp; All Settings
+          </span>
+        </p>
+      </div>
       {PREVIEW_LINES.map((slot, index) => {
         const entry = rows[index];
         if (!entry)

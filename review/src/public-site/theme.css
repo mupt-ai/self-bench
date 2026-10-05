@@ -24,6 +24,7 @@
   --color-input: var(--input);
   --color-accent: var(--accent);
   --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-fg);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-fg);
   --color-destructive: var(--bad-fg);

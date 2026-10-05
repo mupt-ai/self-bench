@@ -10,6 +10,6 @@ test("the switch marks the current layout, and shows only on a wide window", () 
   expect(html).toContain("min-[90rem]:inline-flex");
 });
 
-test("with nothing remembered, the page starts stacked", () => {
-  expect(readResultsLayout()).toBe("stacked");
+test("with nothing remembered, the page starts side by side", () => {
+  expect(readResultsLayout()).toBe("side");
 });
