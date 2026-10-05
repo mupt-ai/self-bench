@@ -178,16 +178,19 @@ function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
 }
 
 /**
- * The best settings by accuracy, always five lines: a short frontier leaves faint rules in the
- * spare lines so every card's preview has the same shape. On hover the caption types in, with a
+ * Five lines of settings: the frontier by accuracy, then the most accurate of the rest. A
+ * release with fewer leaves faint rules in the spare lines so every card's preview has the same
+ * shape. On hover the caption types in, with a
  * prompt to open the page for the chart typing in beside it, and the lines fade in one by one;
  * on leave the lines fade from the bottom up while the caption and prompt are erased right to
  * left, all finishing together before the card body returns.
  */
 function FrontierPreview({ card }: { card: PublicRepoSummary }) {
-  const rows = [...card.frontier]
+  const frontier = [...card.frontier]
     .sort((left, right) => right.accuracy - left.accuracy)
     .slice(0, PREVIEW_ROWS);
+  // A directory from before `others` (a page cached across a release) lists the frontier alone.
+  const rows = [...frontier, ...(card.others ?? []).slice(0, PREVIEW_ROWS - frontier.length)];
   const timing = (index: number) =>
     ({
       "--in": `${120 + index * 45}ms`,
@@ -200,7 +203,7 @@ function FrontierPreview({ card }: { card: PublicRepoSummary }) {
       <div className="@container mb-0.5 flex items-baseline justify-between gap-3">
         {/* Erased over the same 290 ms the lines take to go: four 35 ms steps plus a 150 ms fade. */}
         <p className={`text-muted-foreground ${TYPED} ease-[steps(24)]`}>
-          Frontier · {card.settings} settings tested
+          Results · {card.settings} settings tested
         </p>
         {/* In the brand's colour so it stands out; the long wording only where the line has room. */}
         <p className="shrink-0 font-semibold text-brand-foreground">
@@ -227,7 +230,7 @@ function FrontierPreview({ card }: { card: PublicRepoSummary }) {
             style={timing(index)}
           >
             <span className="min-w-0 flex-1 truncate font-medium">{entry.model.label}</span>
-            <span className="font-mono tabular-nums">{percent(entry.accuracy)}</span>
+            <span className="shrink-0 font-mono tabular-nums">{percent(entry.accuracy)}</span>
             <span className="w-14 text-right font-mono tabular-nums text-muted-foreground">
               {dollars(entry.costPerTaskUsd)}
             </span>

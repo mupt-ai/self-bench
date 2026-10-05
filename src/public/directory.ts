@@ -27,6 +27,9 @@ interface CardSetting {
   costPerTaskUsd: number;
 }
 
+/** How many lines a card's hover preview has (RepoCard's PREVIEW_LINES). */
+const PREVIEW_LINES = 5;
+
 /** One release line, reduced to its card. */
 export interface DirectoryCard {
   repository: Pick<
@@ -42,6 +45,11 @@ export interface DirectoryCard {
   picks: SettingPick<CardSetting>[];
   /** Every frontier setting, cheapest first, for the card's hover preview. */
   frontier: CardSetting[];
+  /**
+   * The most accurate settings off the frontier, most accurate first, as many as the hover
+   * preview has lines: it lists them below the frontier, in the lines the frontier leaves.
+   */
+  others: CardSetting[];
   endorsed: boolean;
   /** The line the repository shows by default: its endorsed line, else its newest. */
   defaultLine: boolean;
@@ -84,6 +92,18 @@ export function picks<S extends Ranked>(settings: readonly S[]): SettingPick<S>[
   ];
 }
 
+/** Settings off the frontier, most accurate first; cost breaks accuracy ties, then id. */
+export function offFrontier<S extends Ranked>(settings: readonly S[]): S[] {
+  return settings
+    .filter((setting) => !setting.onFrontier)
+    .sort(
+      (left, right) =>
+        right.accuracy - left.accuracy ||
+        left.costPerTaskUsd - right.costPerTaskUsd ||
+        left.id.localeCompare(right.id),
+    );
+}
+
 const cardSetting = (setting: ReleaseSetting): CardSetting => ({
   id: setting.id,
   model: { label: setting.model.label },
@@ -109,6 +129,7 @@ function cardOf(line: PublishedLine, defaultLine: boolean): DirectoryCard {
     settings: release.settings.length,
     picks: picks(release.settings).map((pick) => ({ ...pick, setting: cardSetting(pick.setting) })),
     frontier: frontierSettings(release.settings).map(cardSetting),
+    others: offFrontier(release.settings).slice(0, PREVIEW_LINES).map(cardSetting),
     endorsed: line.endorsed,
     defaultLine,
   };

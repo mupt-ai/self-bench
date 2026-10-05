@@ -21,6 +21,13 @@ const setting = (id: string, accuracy: number, costPerTaskUsd: number, onFrontie
     totalCostUsd: costPerTaskUsd * 10,
     onFrontier,
   }) as ReleaseSetting;
+/** A setting as a directory card shows it. */
+const shown = (id: string, accuracy: number, costPerTaskUsd: number) => ({
+  id,
+  model: { label: id.toUpperCase() },
+  accuracy,
+  costPerTaskUsd,
+});
 
 const line = (
   fullName: string,
@@ -129,19 +136,11 @@ test("the directory is one card per line, holding only what a card and search sh
     tasks: 10,
     settings: 3,
     picks: [
-      {
-        setting: { id: "luna", model: { label: "LUNA" }, accuracy: 70, costPerTaskUsd: 0.4 },
-        roles: ["cheapest"],
-      },
-      {
-        setting: { id: "sol", model: { label: "SOL" }, accuracy: 100, costPerTaskUsd: 3 },
-        roles: ["mostAccurate"],
-      },
+      { setting: shown("luna", 70, 0.4), roles: ["cheapest"] },
+      { setting: shown("sol", 100, 3), roles: ["mostAccurate"] },
     ],
-    frontier: [
-      { id: "luna", model: { label: "LUNA" }, accuracy: 70, costPerTaskUsd: 0.4 },
-      { id: "sol", model: { label: "SOL" }, accuracy: 100, costPerTaskUsd: 3 },
-    ],
+    frontier: [shown("luna", 70, 0.4), shown("sol", 100, 3)],
+    others: [shown("weak", 50, 5)],
     endorsed: false,
     defaultLine: true,
   });
