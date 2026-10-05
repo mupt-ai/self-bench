@@ -69,7 +69,8 @@ const SELFBENCH_ENVIRONMENTS: Partial<Record<HarborEnvironment, string>> = {
  * Modal runs through SelfBench's subclass of Harbor's Modal environment (runtime/selfbench_modal.py),
  * which records the images a run built and starts trials from a task's pinned images. With no
  * pins it behaves exactly like `--env modal`. E2B's subclass (runtime/selfbench_e2b.py) rebuilds a
- * template whose last build failed instead of starting from it. Every other provider is Harbor's own.
+ * template whose last build failed instead of starting from it, and says when a key's E2B plan is
+ * too small for Harbor's 24-hour sandboxes. Every other provider is Harbor's own.
  */
 function harborEnvironmentArgument(environment: HarborEnvironment): string {
   return SELFBENCH_ENVIRONMENTS[environment] ?? environment;

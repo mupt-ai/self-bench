@@ -2,14 +2,34 @@ import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { runCommand } from "../../src/lib/process.js";
 
+const ENVIRONMENT = fileURLToPath(
+  new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url),
+);
+/** Empty stand-ins for the modules selfbench_e2b.py imports; each test fills in what it uses. */
+const STUBS = `import sys, types
+for name in ["e2b", "httpx", "harbor", "harbor.environments", "harbor.environments.e2b"]:
+    sys.modules[name] = types.ModuleType(name)
+e2b, harbor_e2b = sys.modules["e2b"], sys.modules["harbor.environments.e2b"]
+sys.modules["harbor"].environments = sys.modules["harbor.environments"]
+sys.modules["harbor.environments"].e2b = harbor_e2b
+for name in ["AsyncSandbox", "AsyncTemplate", "BuildException", "BuildInfo", "Template", "TemplateBuildStatus"]:
+    setattr(e2b, name, object)
+class SandboxException(Exception):
+    def __init__(self, message, status_code=None):
+        super().__init__(message); self.status_code = status_code
+e2b.SandboxException = SandboxException
+def load():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module
+`;
+
 test("the E2B environment builds a template unless its default build is ready", async () => {
   const result = await runCommand("python3", [
     "-c",
-    `import asyncio, enum, importlib.util, logging, sys, types
+    `${STUBS}import asyncio, enum, logging
 from dataclasses import dataclass, field
-e2b = types.ModuleType("e2b")
-e2b.Template = object
-sys.modules["httpx"] = types.ModuleType("httpx")
 class TemplateBuildStatus(str, enum.Enum):
     BUILDING = "building"; WAITING = "waiting"; READY = "ready"; ERROR = "error"
 class BuildException(Exception): pass
@@ -41,16 +61,13 @@ class AsyncTemplate:
         if info.template_id == "unrelated-error": raise BuildException("401: Unauthorized")
         return types.SimpleNamespace(status=status)
 e2b.AsyncTemplate, e2b.BuildException, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, BuildInfo, TemplateBuildStatus
-harbor_e2b = types.ModuleType("harbor.environments.e2b")
 class E2BEnvironment:
     def __init__(self, name):
         self._template_name = name
         self.logger = logging.getLogger("test")
     async def _does_template_exist(self): return await AsyncTemplate.alias_exists(self._template_name)
 harbor_e2b.E2BEnvironment = E2BEnvironment
-sys.modules.update({"e2b": e2b, "harbor.environments.e2b": harbor_e2b})
-spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
-module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+module = load()
 async def check():
     found = {name: await module.SelfBenchE2BEnvironment(name)._does_template_exist() for name in ["ready", "failed", "building", "waiting", "missing-build", "untagged", "missing"]}
     # An exact missing build is rebuilt, while other E2B failures still surface.
@@ -63,7 +80,7 @@ async def check():
         raise AssertionError("unrelated E2B errors must propagate")
 asyncio.run(check())
 `,
-    fileURLToPath(new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url)),
+    ENVIRONMENT,
   ]);
   expect(result.exitCode).toBe(0);
 });
@@ -73,8 +90,7 @@ test("the E2B environment makes a SelfBench task image's template with the run's
     "python3",
     [
       "-c",
-      `import asyncio, importlib.util, logging, os, sys, types
-e2b = types.ModuleType("e2b")
+      `${STUBS}import asyncio, logging
 builds = []
 class Builder:
     def __init__(self, *steps): self.steps = steps
@@ -83,15 +99,13 @@ class Builder:
     def set_workdir(self, workdir): return Builder(*self.steps, ("workdir", workdir))
     def __eq__(self, other): return isinstance(other, Builder) and self.steps == other.steps
     def __repr__(self): return repr(self.steps)
-class BuildException(Exception): pass
 class Template:
     def from_image(self, image, username=None, password=None):
         return Builder(("image", image, username, password))
 class AsyncTemplate:
     @staticmethod
     async def build(template, alias, **resources): builds.append((template, alias, resources))
-e2b.AsyncTemplate, e2b.BuildException, e2b.Template, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, Template, object, object
-harbor_e2b = types.ModuleType("harbor.environments.e2b")
+e2b.AsyncTemplate, e2b.Template = AsyncTemplate, Template
 class E2BEnvironment:
     def __init__(self, image, cpus=None):
         self.task_env_config = types.SimpleNamespace(docker_image=image)
@@ -100,10 +114,7 @@ class E2BEnvironment:
         self.logger = logging.getLogger("test")
     async def _create_template(self): builds.append("dockerfile")
 harbor_e2b.E2BEnvironment = E2BEnvironment
-sys.modules.update({"e2b": e2b, "harbor.environments.e2b": harbor_e2b})
-spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
-sys.modules["httpx"] = types.ModuleType("httpx")
-module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+module = load()
 image = "app.selfbench.test/task@sha256:" + "a" * 64
 async def image_config(pulled, username, password):
     assert (pulled, username, password) == (image, "selfbench", "grant")
@@ -122,9 +133,7 @@ async def check():
     assert builds == ["dockerfile", "dockerfile"], builds
 asyncio.run(check())
 `,
-      fileURLToPath(
-        new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url),
-      ),
+      ENVIRONMENT,
     ],
     {
       env: {
@@ -136,5 +145,51 @@ asyncio.run(check())
     },
   );
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});
+
+test("an E2B plan too small for Harbor's 24-hour sandboxes is named as the cause", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `${STUBS}import asyncio
+plan = {"hours": 24, "error": None, "status": 400}
+calls = []
+class AsyncSandbox:
+    @classmethod
+    async def create(cls, **options):
+        calls.append(options)
+        if plan["error"]: raise SandboxException(*plan["error"])
+        if options["timeout"] > plan["hours"] * 3600:
+            # E2B's answer, as a Hobby key gives it, to a lifetime beyond the plan.
+            raise SandboxException(f"400: Timeout cannot be greater than {plan['hours']} hours", plan["status"])
+        return cls()
+e2b.AsyncSandbox = harbor_e2b.AsyncSandbox = AsyncSandbox
+harbor_e2b.E2BEnvironment = type("E2BEnvironment", (), {})
+module = load()
+async def start(hours, status=400, error=None):
+    plan.update(hours=hours, status=status, error=error); calls.clear()
+    # Harbor's own E2BEnvironment._create_sandbox, through its module's AsyncSandbox.
+    return await harbor_e2b.AsyncSandbox.create(template="task__hash", timeout=86_400, network="allowlist")
+async def refusal(*args):
+    try:
+        await start(*args)
+    except SandboxException as error:
+        return str(error)
+    raise AssertionError("the sandbox must not start")
+async def check():
+    # A plan that allows a day gets exactly what Harbor asked for.
+    assert isinstance(await start(24), AsyncSandbox)
+    assert calls == [{"template": "task__hash", "timeout": 86_400, "network": "allowlist"}], calls
+    # A Hobby key is told its plan is the cause, with or without the status older e2b leaves off.
+    for status in [400, None]:
+        message = await refusal(1, status)
+        assert message.startswith("This E2B key's plan allows sandboxes of at most 1 hour,"), message
+        assert "such as Pro" in message and calls == [calls[0]] and calls[0]["timeout"] == 86_400, calls
+    # Any other E2B error is E2B's own.
+    assert await refusal(24, 400, ("429: Rate limit exceeded", 429)) == "429: Rate limit exceeded"
+asyncio.run(check())
+`,
+    ENVIRONMENT,
+  ]);
   expect(result.exitCode).toBe(0);
 });

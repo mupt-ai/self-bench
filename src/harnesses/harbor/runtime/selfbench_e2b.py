@@ -13,19 +13,36 @@ grant (SELFBENCH_REGISTRY_*), which Harbor's own E2B environment does not pass. 
 image's files but not its config, and its commands run in login shells that reset PATH, so the
 image's ENV goes into /etc/profile.d and its USER and WORKDIR onto the template. Harbor's content
 hash covers `docker_image`, so the template is named after the image.
+
+Harbor starts every sandbox with a 24-hour lifetime. E2B's Hobby plan caps sandboxes at an hour
+and refuses with "400: Timeout cannot be greater than 1 hours", which left a trial failing with no
+hint of what to change; that refusal is reported here as the key's plan being too small. Harbor
+creates sandboxes through the ``AsyncSandbox`` its E2B module imported, so that name is pointed at
+``PlanCheckedSandbox``, which passes Harbor's arguments through unchanged.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import shlex
 
 import httpx
-from e2b import AsyncTemplate, BuildException, BuildInfo, Template, TemplateBuildStatus
+from e2b import (
+    AsyncSandbox,
+    AsyncTemplate,
+    BuildException,
+    BuildInfo,
+    SandboxException,
+    Template,
+    TemplateBuildStatus,
+)
 
+import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
 
 TAG = "default"
+PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
 MANIFEST_TYPES = ", ".join(
     [
@@ -35,6 +52,30 @@ MANIFEST_TYPES = ", ".join(
         "application/vnd.docker.distribution.manifest.v2+json",
     ]
 )
+
+
+class PlanCheckedSandbox(AsyncSandbox):
+    """E2B's sandbox, whose refusal of Harbor's lifetime names the plan as the cause."""
+
+    @classmethod
+    async def create(cls, *args, **kwargs):
+        try:
+            return await super().create(*args, **kwargs)
+        except SandboxException as error:
+            limit = PLAN_LIMIT.search(str(error))
+            # Older e2b releases leave status_code unset; the message leads with the status.
+            refused = getattr(error, "status_code", None) == 400 or str(error).startswith("400:")
+            if not refused or not limit:
+                raise
+            hours = int(limit[1])
+            raise SandboxException(
+                f"This E2B key's plan allows sandboxes of at most {hours} hour"
+                f"{'' if hours == 1 else 's'}, and SelfBench trials run in 24-hour sandboxes. "
+                "Use an E2B key on a plan that allows 24-hour sandboxes, such as Pro."
+            ) from error
+
+
+harbor_e2b.AsyncSandbox = PlanCheckedSandbox
 
 
 class SelfBenchE2BEnvironment(E2BEnvironment):
