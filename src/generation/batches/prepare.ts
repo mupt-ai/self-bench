@@ -40,10 +40,13 @@ export async function prepareGenerationBatch(options: {
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
   const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
-  // A focus is often rare among recent PRs, so focused discovery looks further back.
+  // A focus is often rare among recent PRs, so focused discovery looks further back. Spreading
+  // the PRs evenly keeps every planned shard, so per-shard targets still add up to the request.
+  const pool = discoveryPrsPerShard(requested, shardCount);
+  const prCount = new Set(chunks.flat().map((message) => message.sourcePr)).size;
   const prsPerShard = run.focus
-    ? FOCUSED_PRS_PER_SHARD
-    : discoveryPrsPerShard(requested, shardCount);
+    ? Math.max(pool, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
+    : pool;
   const selected = takeNewestShards(chunks, shardCount, prsPerShard);
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(

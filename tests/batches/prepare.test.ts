@@ -86,16 +86,17 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
       changedFiles: 1,
       author: { login: "human", __typename: "User" },
     }));
-    const stagedPrs = async (focus?: string) => {
+    let attempt = 0;
+    const stage = async (hard: number, focus?: string) => {
       const shards = await prepareGenerationBatch({
         run: {
           ...run,
           provenance,
-          candidateCounts: { easy: 0, medium: 0, hard: 1 },
+          candidateCounts: { easy: 0, medium: 0, hard },
           ...(focus ? { focus } : {}),
         },
         token: "secret-lookup-token",
-        attempt: focus ? 2 : 1,
+        attempt: ++attempt,
         artifacts,
         fetchImpl: async (_url, init) => {
           const body = JSON.parse(String(init.body)) as { variables: { after: string | null } };
@@ -116,7 +117,6 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
           });
         },
       });
-      expect(shards).toHaveLength(1);
       const prs = new Set<number>();
       for (const shard of shards)
         for (const line of Buffer.from(await artifacts.get(shard.input.run.provenance))
@@ -124,14 +124,21 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
           .trim()
           .split("\n"))
           prs.add((JSON.parse(line) as { sourcePr: number }).sourcePr);
-      return prs;
+      return { shards, prs };
     };
-    expect((await stagedPrs()).size).toBe(25);
+    const focus = "Next.js App Router features";
+    expect((await stage(1)).prs.size).toBe(25);
     // Capped so one agent can still shortlist and inspect within its discovery timeout.
-    const focused = await stagedPrs("Next.js App Router features");
-    expect(focused.size).toBe(150);
-    expect(focused.has(200)).toBe(true);
-    expect(focused.has(50)).toBe(false);
+    const one = await stage(1, focus);
+    expect(one.shards).toHaveLength(1);
+    expect(one.prs.size).toBe(150);
+    expect(one.prs.has(200)).toBe(true);
+    expect(one.prs.has(50)).toBe(false);
+    // Wider shards never merge away planned ones, so the shard targets still sum to the request.
+    const five = await stage(5, focus);
+    expect(five.shards).toHaveLength(5);
+    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([1, 1, 1, 1, 1]);
+    expect(five.prs.size).toBe(200);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
