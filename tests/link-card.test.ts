@@ -53,3 +53,12 @@ test("the preview fits the longest names GitHub allows in three lines", () => {
   expect(lines[2]).toMatch(/…$/);
   for (const line of lines) expect(line.length).toBeLessThanOrEqual(room);
 });
+
+test("a group's name, which has no owner, wraps over up to three lines rather than shrinking", () => {
+  expect(nameLayout("Next.js Apps")).toEqual({ size: 112, lines: ["Next.js Apps"] });
+  const long = nameLayout("Full-Stack Next.js Applications Running on Vercel");
+  expect(long.lines.length).toBeGreaterThan(1);
+  expect(long.size).toBeGreaterThanOrEqual(56);
+  const longest = nameLayout("x".repeat(80));
+  expect(longest.lines.length).toBeLessThanOrEqual(3);
+});

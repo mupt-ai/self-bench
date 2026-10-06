@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
-import { repositoryPath, segmentsOf } from "../public/paths.js";
-import type { PublishedRelease } from "../public/release-types.js";
+import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
+import type { PublishedGroupRelease, PublishedRelease } from "../public/release-types.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { INDEXNOW_KEY_PATH, sendIndexNowKey } from "./indexnow.js";
 import { cardPng } from "./link-card.js";
@@ -108,7 +108,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
     );
   /** Preview images already drawn, by release id, oldest first. */
   const cards = new Map<string, Buffer>();
-  const cardFor = (release: PublishedRelease) => {
+  const cardFor = (release: PublishedRelease | PublishedGroupRelease) => {
     let png = cards.get(release.releaseId);
     if (!png) {
       png = cardPng(release);
@@ -167,11 +167,18 @@ export function createResultsSite(options: ResultsSiteOptions) {
       // A repository's link preview image: /og/<owner>/<name>.png, or …/<name>/<publisher>.png.
       const card = /^\/og\/(.+)\.png$/.exec(url.pathname);
       if (card) {
-        const path = repositoryPath(segmentsOf(card[1] ?? ""));
+        const segments = segmentsOf(card[1] ?? "");
+        // A group's, /og/groups/<slug>.png, before any repository's.
+        const slug = groupPath(segments);
+        const path = slug ? undefined : repositoryPath(segments);
         const lines = path
           ? await options.publicRoutes.linesFor(`${path.owner}/${path.name}`).catch(() => [])
           : [];
-        const release = path ? lineAt(lines, path.publisher)?.release : undefined;
+        const release = slug
+          ? await options.publicRoutes.groupFor(slug).catch(() => undefined)
+          : path
+            ? lineAt(lines, path.publisher)?.release
+            : undefined;
         if (!release) {
           sendJson(response, 404, { error: "not found" });
           return true;
@@ -225,12 +232,13 @@ export function createResultsSite(options: ResultsSiteOptions) {
       // it lists a release as soon as its page shows it. Kept by the CDN as briefly as pages are.
       if (url.pathname === "/sitemap.xml" && options.indexable) {
         const repositories = await options.publicRoutes.repositories().catch(() => undefined);
-        if (!repositories) {
+        const groups = repositories && (await options.publicRoutes.groups().catch(() => undefined));
+        if (!repositories || !groups) {
           response.setHeader("cache-control", "no-store");
           sendJson(response, 503, { error: "Try again shortly" });
           return true;
         }
-        sendTagged(request, response, tagged(sitemapOf(origin, repositories)), {
+        sendTagged(request, response, tagged(sitemapOf(origin, repositories, groups)), {
           "cache-control": PAGE_CACHE,
           "content-type": "application/xml; charset=utf-8",
         });

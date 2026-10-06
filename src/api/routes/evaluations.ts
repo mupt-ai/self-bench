@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
+import type { GroupReleaseStore } from "../../db/group-releases.js";
 import type { RepoGroupStore } from "../../db/repo-groups.js";
 import type { RepoStore } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
@@ -48,6 +49,8 @@ export interface EvaluationRoutesOptions {
   vault?: Vault;
   /** Repository groups; their evaluations also need the vault. */
   groups?: RepoGroupStore;
+  /** Group releases: a group with a current release cannot be deleted. */
+  groupReleases?: GroupReleaseStore;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
 }

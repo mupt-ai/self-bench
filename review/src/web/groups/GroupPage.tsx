@@ -3,6 +3,8 @@ import React from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { requestJson } from "../api";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { groupReleasesUrl } from "../releases/api";
+import { ReleasesSection } from "../releases/ReleasesPage";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import {
@@ -163,6 +165,22 @@ export function GroupPage() {
               </tbody>
             </DataTable>
           )}
+        </section>
+      )}
+      {group && (
+        <section className="mt-8">
+          <ReleasesSection
+            url={groupReleasesUrl(org.login, groupId)}
+            subject={{ kind: "group", name: group.name }}
+            header={(actions) => (
+              <SectionHeader
+                title="Releases"
+                description="Publish this group's results on selfbench.dev as one benchmark."
+              >
+                <div className="flex flex-wrap gap-2">{actions}</div>
+              </SectionHeader>
+            )}
+          />
         </section>
       )}
       {deleting && group && (

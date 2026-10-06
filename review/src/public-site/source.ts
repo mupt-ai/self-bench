@@ -1,5 +1,12 @@
-import { directoryOf } from "../../../src/public/directory";
-import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
+import { directoryOf, groupCardsOf } from "../../../src/public/directory";
+import type {
+  PublicGroupRelease,
+  PublicGroupSummary,
+  PublicRepoPage,
+  PublicRepoSummary,
+  PublicTask,
+  PublicTaskFiles,
+} from "./contract";
 
 /**
  * Where public pages get their data. Pages call only this. Fixtures implement it during
@@ -14,6 +21,10 @@ export interface PublicSource {
   getRepo(owner: string, name: string): Promise<PublicRepoPage | undefined>;
   /** One publisher's line of a repository. */
   getLine(owner: string, name: string, publisher: string): Promise<PublicRepoPage | undefined>;
+  /** Every group's current release as a card, newest first. */
+  listGroups(): Promise<PublicGroupSummary[]>;
+  /** A group's current release, or undefined when it has none. */
+  getGroup(slug: string): Promise<PublicGroupRelease | undefined>;
   /** A release's tasks, or undefined when its publisher did not publish them. */
   getTasks(releaseId: string): Promise<PublicTask[] | undefined>;
   /** One published task's files, or undefined when the release has no such task. */
@@ -33,12 +44,14 @@ const sameName = (left: string, right: string) => left.toLowerCase() === right.t
 /**
  * A source over pages held in memory. One page per release line. A repository's default
  * line is its endorsed line, else its most recently released one, for the directory and the
- * repository page alike. The directory's cards are built exactly as the server builds them.
+ * repository page alike. The directory's cards, a repository's or a group's, are built exactly as
+ * the server builds them.
  * Used by tests and the local fixture loader.
  */
 export function memorySource(
   pages: readonly PublicRepoPage[],
   published: MemoryTasks = {},
+  groups: readonly PublicGroupRelease[] = [],
 ): PublicSource {
   const newestFirst = (candidates: readonly PublicRepoPage[]) =>
     [...candidates].sort((left, right) =>
@@ -79,6 +92,12 @@ export function memorySource(
       const lines = linesOf(owner, name);
       const page = lines.find((line) => sameName(line.release.publisher.login, publisher));
       return page ? withLines(page, lines) : undefined;
+    },
+    async listGroups() {
+      return groupCardsOf(groups);
+    },
+    async getGroup(slug) {
+      return groups.find((release) => sameName(release.group.slug, slug));
     },
     async getTasks(releaseId) {
       return published[releaseId]?.tasks;

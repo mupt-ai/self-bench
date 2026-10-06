@@ -97,8 +97,8 @@ WebKit here does not, so for effects also look on a real iPhone:
 
 ## Keeping the Checks Current
 
-- New kinds of content go into `synthetic.ts` (a repository, a setting, a route), so the checks
-  see them. Published tasks and their files are in `synthetic-tasks.ts`, with a route that opens
+- New kinds of content go into `synthetic.ts` (a repository, a setting, a group, a route), so
+  the checks see them. Published tasks and their files are in `synthetic-tasks.ts`, with a route that opens
   one in the viewer. It is built with the unit tests' builders (`test-fixture.ts`), so contract changes
   surface there as type errors.
 - A deliberate exception is marked on the element, with a comment saying why:

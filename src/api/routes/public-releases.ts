@@ -1,9 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import type { GroupReleaseStore } from "../../db/group-releases.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import { directoryOf } from "../../public/directory.js";
-import { repositoryPath, segmentsOf } from "../../public/paths.js";
-import type { PublishedLine, PublishedRelease } from "../../public/release-types.js";
+import { directoryOf, groupCardsOf } from "../../public/directory.js";
+import { groupSlug, repositoryPath, segmentsOf } from "../../public/paths.js";
+import type {
+  PublishedGroupRelease,
+  PublishedLine,
+  PublishedRelease,
+} from "../../public/release-types.js";
 import { sendJson } from "../http.js";
 import { clientIp, type RateLimiter } from "../rate-limit.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
@@ -30,12 +35,17 @@ const JSON_TYPE = "application/json; charset=utf-8";
 interface Snapshot {
   /** Current lines by lower-case repository name, newest first. */
   byRepository: Map<string, PublishedLine[]>;
-  /** Current releases by id. */
-  byRelease: Map<string, PublishedRelease>;
+  /** Each group's current release, by lower-case slug. */
+  byGroup: Map<string, PublishedGroupRelease>;
+  /** Current releases by id, repositories' and groups' alike. */
+  byRelease: Map<string, Pick<PublishedRelease, "releaseId" | "tasksPublished">>;
   releases: () => TaggedBody;
   directory: () => TaggedBody;
+  groups: () => TaggedBody;
   /** One repository's response, or undefined when nothing is released for it. */
   repository: (fullName: string) => TaggedBody | undefined;
+  /** One group's response, or undefined when it has no current release. */
+  group: (slug: string) => TaggedBody | undefined;
 }
 
 /** `build`, run once on first use. */
@@ -47,29 +57,42 @@ function once<T>(build: () => T): () => T {
   };
 }
 
-function snapshotOf(lines: PublishedLine[]): Snapshot {
+/** A response per key, built and tagged the first time it is asked for. */
+function bodies<V>(found: Map<string, V>, build: (value: V) => string) {
+  const built = new Map<string, TaggedBody>();
+  return (key: string) => {
+    const value = found.get(key.toLowerCase());
+    if (value === undefined) return undefined;
+    let body = built.get(key.toLowerCase());
+    if (!body) {
+      body = tagged(build(value));
+      built.set(key.toLowerCase(), body);
+    }
+    return body;
+  };
+}
+
+function snapshotOf(lines: PublishedLine[], groups: PublishedGroupRelease[]): Snapshot {
   const byRepository = new Map<string, PublishedLine[]>();
   for (const line of lines) {
     const key = line.release.repository.fullName.toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
-  const repositories = new Map<string, TaggedBody>();
+  const byGroup = new Map(groups.map((release) => [release.group.slug.toLowerCase(), release]));
   return {
     byRepository,
-    byRelease: new Map(lines.map((line) => [line.release.releaseId, line.release])),
+    byGroup,
+    byRelease: new Map<string, Pick<PublishedRelease, "releaseId" | "tasksPublished">>([
+      ...lines.map((line) => [line.release.releaseId, line.release] as const),
+      ...groups.map((release) => [release.releaseId, release] as const),
+    ]),
     releases: once(() => tagged(JSON.stringify({ lines }))),
-    directory: once(() => tagged(JSON.stringify({ cards: directoryOf(lines) }))),
-    repository(fullName) {
-      const key = fullName.toLowerCase();
-      const found = byRepository.get(key);
-      if (!found) return undefined;
-      let body = repositories.get(key);
-      if (!body) {
-        body = tagged(JSON.stringify({ lines: found }));
-        repositories.set(key, body);
-      }
-      return body;
-    },
+    directory: once(() =>
+      tagged(JSON.stringify({ cards: directoryOf(lines), groups: groupCardsOf(groups) })),
+    ),
+    groups: once(() => tagged(JSON.stringify({ groups }))),
+    repository: bodies(byRepository, (found) => JSON.stringify({ lines: found })),
+    group: bodies(byGroup, (release) => JSON.stringify({ release })),
   };
 }
 
@@ -81,6 +104,8 @@ export interface PublicReleaseRoutesOptions {
   artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
   /** The canary line published tasks carry (src/public/task-canary.ts). */
   taskCanary?: string;
+  /** Groups' releases, served beside repositories'. */
+  groupReleases?: Pick<GroupReleaseStore, "currentLines" | "releasedTasks">;
 }
 
 /**
@@ -93,10 +118,14 @@ export function createPublicReleaseRoutes(
   options: PublicReleaseRoutesOptions = {},
 ) {
   const now = options.now ?? Date.now;
+  const { groupReleases } = options;
+  const releasedTasks = releases.releasedTasks?.bind(releases);
   const tasks =
-    releases.releasedTasks && options.artifacts
+    releasedTasks && options.artifacts
       ? createPublicTaskRoutes({
-          releasedTasks: releases.releasedTasks.bind(releases),
+          // A release id names a repository's release or a group's, never both.
+          releasedTasks: async (id) =>
+            (await releasedTasks(id)) ?? (await groupReleases?.releasedTasks(id)),
           artifacts: options.artifacts,
           ...(options.taskCanary ? { canary: options.taskCanary } : {}),
         })
@@ -114,7 +143,12 @@ export function createPublicReleaseRoutes(
     if (!reading || now() - reading.at >= SNAPSHOT_MS) {
       reads += 1;
       const read = reads;
-      const entry = { snapshot: releases.currentLines().then(snapshotOf), at: now() };
+      const entry = {
+        snapshot: Promise.all([releases.currentLines(), groupReleases?.currentLines() ?? []]).then(
+          ([lines, groups]) => snapshotOf(lines, groups),
+        ),
+        at: now(),
+      };
       reading = entry;
       entry.snapshot.then(
         (snapshot) => {
@@ -149,6 +183,18 @@ export function createPublicReleaseRoutes(
     /** Every repository's current lines, for selfbench.dev's sitemap. */
     async repositories(): Promise<PublishedLine[][]> {
       return [...(await snapshot()).byRepository.values()];
+    },
+    /** A group's current release, for the page status of selfbench.dev. */
+    async groupFor(slug: string): Promise<PublishedGroupRelease | undefined> {
+      return (await snapshot()).byGroup.get(slug.toLowerCase());
+    },
+    /** Every group's current release, for selfbench.dev's sitemap. */
+    async groups(): Promise<PublishedGroupRelease[]> {
+      return [...(await snapshot()).byGroup.values()];
+    },
+    /** The body /api/public/groups/<slug> answers, or undefined when it has no release. */
+    async groupBody(slug: string): Promise<string | undefined> {
+      return (await snapshot()).group(slug)?.body;
     },
     /**
      * The body /api/public/directory answers, for the home page to carry into its first render:
@@ -205,6 +251,27 @@ export function createPublicReleaseRoutes(
           "cache-control": CACHED,
           "content-type": JSON_TYPE,
         });
+        return true;
+      }
+      if (route === "groups" && rest.length === 0) {
+        sendTagged(request, response, (await snapshot()).groups(), {
+          "cache-control": CACHED,
+          "content-type": JSON_TYPE,
+        });
+        return true;
+      }
+      const slug = route === "groups" && rest.length === 1 ? groupSlug(rest[0]) : undefined;
+      if (slug) {
+        const body = (await snapshot()).group(slug);
+        if (body) {
+          sendTagged(request, response, body, {
+            "cache-control": CACHED,
+            "content-type": JSON_TYPE,
+          });
+        } else {
+          uncached();
+          sendJson(response, 404, { error: "Nothing released for this group" });
+        }
         return true;
       }
       const repository =

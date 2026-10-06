@@ -212,3 +212,33 @@ test("a group with no approved tasks cannot be evaluated", async () => {
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "Add a repository to this group first" });
 });
+
+test("a group with a current release cannot be deleted until it is withdrawn", async () => {
+  const group = await createGroup("Released", ["avyay/repo"]);
+  const line = {
+    orgId: (await server.users.orgsFor(server.user.id))[0]?.id ?? 0,
+    groupId: group.id,
+  };
+  const released = await server.groupReleases.insert({
+    line,
+    slug: "released",
+    name: group.name,
+    publisherLogin: "avyay",
+    releasedBy: { id: server.user.id, login: "avyay" },
+    hash: "hash",
+    payload: {
+      schemaVersion: 1,
+      group: { slug: "released", name: group.name, members: [] },
+      publisher: { login: "avyay", kind: "user" },
+      tasks: 1,
+      settings: [],
+      frontier: [],
+      breakdown: [],
+    },
+    detail: {},
+  });
+  const refused = await server.request(`${groups}/${group.id}`, { method: "DELETE" });
+  expect(refused.status).toBe(409);
+  await server.groupReleases.withdraw(line, released.id, "avyay");
+  expect((await server.request(`${groups}/${group.id}`, { method: "DELETE" })).status).toBe(200);
+});

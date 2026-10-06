@@ -1,7 +1,11 @@
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
-import { directoryOf } from "../public/directory.js";
-import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
+import { directoryOf, groupCardsOf } from "../public/directory.js";
+import type {
+  PublishedGroupRelease,
+  PublishedLine,
+  ReleaseSetting,
+} from "../public/release-types.js";
 import {
   defaultLineOf,
   HOME_DESCRIPTION,
@@ -22,45 +26,68 @@ import { lineAt } from "./site-head.js";
 /** The home page lists as many repositories as its directory shows (HomePage.tsx). */
 const HOME_LIMIT = 100;
 
-const percent = (value: number) => `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
-const dollars = (value: number) => (value === 0 ? "$0" : `$${value.toFixed(value < 0.1 ? 3 : 2)}`);
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
-const day = (iso: string) => iso.slice(0, 10);
+export const percent = (value: number) => `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+export const dollars = (value: number) =>
+  value === 0 ? "$0" : `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
+export const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+export const day = (iso: string) => iso.slice(0, 10);
 
-const link = (href: string, text: string) =>
+export const link = (href: string, text: string) =>
   `<a href="${escapeAttribute(href)}">${escapeText(text)}</a>`;
-const HOME_LINK = `<p>${link("/", "All Repositories on SelfBench")}</p>`;
+export const HOME_LINK = `<p>${link("/", "All Repositories on SelfBench")}</p>`;
 
 /** The page's main content, as the root's only child; `kind` sets its layout in page-text.css. */
-const main = (kind: "home" | "repository" | "missing", parts: readonly string[]) =>
+export const main = (kind: "home" | "repository" | "missing", parts: readonly string[]) =>
   `<main class="page-text" data-page="${kind}">${parts.join("")}</main>`;
 
-/** The directory's heading and every repository's default line, newest first, as the page lists them. */
-export function homeBody(repositories: readonly (readonly PublishedLine[])[]): string {
+/** A card's line in the home page's list: its counts, its publisher, and its two picks. */
+function cardItem(
+  href: string,
+  name: string,
+  card: Pick<
+    ReturnType<typeof directoryOf>[number],
+    "tasks" | "settings" | "publisher" | "frontier"
+  >,
+): string {
+  // The two picks, as the page's description names them: the most accurate setting and the next
+  // on the frontier, the most accurate of those that cost less.
+  const [best, next] = [...card.frontier].sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  );
+  const scored = (setting: { accuracy: number; costPerTaskUsd: number }) =>
+    `${percent(setting.accuracy)} at ${dollars(setting.costPerTaskUsd)}`;
+  const facts = [
+    `${plural(card.tasks, "task")}, ${plural(card.settings, "setting")}, run by ${card.publisher.login}.`,
+    best ? `Most accurate: ${best.model.label}, ${scored(best)} per task.` : "",
+    next ? `Best for less: ${next.model.label}, ${scored(next)}.` : "",
+  ];
+  return `<li>${link(href, name)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
+}
+
+/**
+ * The directory's heading, every group's current release, and every repository's default line,
+ * newest first, as the page lists them.
+ */
+export function homeBody(
+  repositories: readonly (readonly PublishedLine[])[],
+  groups: readonly PublishedGroupRelease[] = [],
+): string {
   const cards = directoryOf(repositories.flat())
     .filter((card) => card.defaultLine)
     .slice(0, HOME_LIMIT);
-  const items = cards.map((card) => {
-    // The repository's two picks, as its description names them: the most accurate setting and
-    // the next on the frontier, the most accurate of those that cost less.
-    const [best, next] = [...card.frontier].sort(
-      (left, right) =>
-        right.accuracy - left.accuracy ||
-        left.costPerTaskUsd - right.costPerTaskUsd ||
-        left.id.localeCompare(right.id),
-    );
-    const scored = (setting: { accuracy: number; costPerTaskUsd: number }) =>
-      `${percent(setting.accuracy)} at ${dollars(setting.costPerTaskUsd)}`;
-    const facts = [
-      `${plural(card.tasks, "task")}, ${plural(card.settings, "setting")}, run by ${card.publisher.login}.`,
-      best ? `Most accurate: ${best.model.label}, ${scored(best)} per task.` : "",
-      next ? `Best for less: ${next.model.label}, ${scored(next)}.` : "",
-    ];
-    return `<li>${link(`/${card.repository.fullName}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
-  });
+  const items = cards.map((card) =>
+    cardItem(`/${card.repository.fullName}`, card.repository.fullName, card),
+  );
+  const grouped = groupCardsOf(groups).map((card) =>
+    cardItem(`/groups/${card.group.slug}`, card.group.name, card),
+  );
   return main("home", [
     `<h1>${escapeText(HOME_HEADING)}</h1>`,
     `<p>${escapeText(HOME_DESCRIPTION)}</p>`,
+    ...(grouped.length > 0 ? ["<h2>Repository Groups</h2>", `<ul>${grouped.join("")}</ul>`] : []),
     items.length > 0 ? `<ul>${items.join("")}</ul>` : "",
   ]);
 }
@@ -90,7 +117,7 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
 ];
 
 /** Every setting, most accurate first, then cheapest, as the page's table starts. */
-function settingsTable(settings: readonly ReleaseSetting[]): string {
+export function settingsTable(settings: readonly ReleaseSetting[]): string {
   const rows = [...settings]
     .sort(
       (left, right) =>

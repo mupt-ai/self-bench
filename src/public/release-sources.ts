@@ -59,30 +59,24 @@ export async function releaseCredentials(
   );
 }
 
-/** Everything the release rule reads for one connected repository and its line's rows. */
-export async function releaseInputs(
-  db: Database,
-  artifacts: ArtifactStore,
-  scope: { repoId: number; orgId: number },
-  rows: readonly ReleaseRow[],
-): Promise<ReleaseInputs> {
-  const [taskList, runs, credentialFacts] = await Promise.all([
-    releaseTasks(db, scope.repoId),
-    listEvaluations(artifacts, scope.repoId),
-    releaseCredentials(db, scope.orgId),
-  ]);
+/** What a line's rows tell the rule: its current release, every task it ever released, its head. */
+export function lineState(
+  rows: readonly {
+    readonly id: string;
+    readonly releasedAt: string;
+    readonly withdrawnAt?: string;
+    readonly detail: Record<string, unknown>;
+  }[],
+): Pick<ReleaseInputs, "previous" | "everReleased" | "headId" | "currentId"> {
   const head = headOf(rows);
   const current = currentOf(rows);
-  const keys = (row: ReleaseRow, field: "tasks" | "settings" | "declined") => {
+  const keys = (row: (typeof rows)[number], field: "tasks" | "settings" | "declined") => {
     const value = row.detail[field];
     return Array.isArray(value)
       ? value.filter((item): item is string => typeof item === "string")
       : [];
   };
   return {
-    tasks: taskList,
-    runs,
-    credentials: credentialFacts,
     ...(current
       ? {
           previous: {
@@ -95,6 +89,57 @@ export async function releaseInputs(
     everReleased: new Set(rows.flatMap((row) => keys(row, "tasks"))),
     ...(head ? { headId: head.id } : {}),
     ...(current ? { currentId: current.id } : {}),
+  };
+}
+
+/** Everything the release rule reads for one connected repository and its line's rows. */
+export async function releaseInputs(
+  db: Database,
+  artifacts: ArtifactStore,
+  scope: { repoId: number; orgId: number },
+  rows: readonly ReleaseRow[],
+): Promise<ReleaseInputs> {
+  const [taskList, runs, credentialFacts] = await Promise.all([
+    releaseTasks(db, scope.repoId),
+    listEvaluations(artifacts, scope.repoId),
+    releaseCredentials(db, scope.orgId),
+  ]);
+  return { tasks: taskList, runs, credentials: credentialFacts, ...lineState(rows) };
+}
+
+/**
+ * What the rule reads for a group: every member's tasks and runs as one repository's, which
+ * their keys (each task's generation batch and id) keep apart. `memberOf` names each task's
+ * member by the key the caller gave it.
+ */
+export async function groupReleaseInputs<Key>(
+  db: Database,
+  artifacts: ArtifactStore,
+  scope: { orgId: number; members: readonly { repoId: number; key: Key }[] },
+  rows: Parameters<typeof lineState>[0],
+): Promise<{ inputs: ReleaseInputs; memberOf: Map<string, Key> }> {
+  const [members, credentialFacts] = await Promise.all([
+    Promise.all(
+      scope.members.map(async (member) => {
+        const [tasks, runs] = await Promise.all([
+          releaseTasks(db, member.repoId),
+          listEvaluations(artifacts, member.repoId),
+        ]);
+        return { key: member.key, tasks, runs };
+      }),
+    ),
+    releaseCredentials(db, scope.orgId),
+  ]);
+  return {
+    inputs: {
+      tasks: members.flatMap((member) => member.tasks),
+      runs: members.flatMap((member) => member.runs),
+      credentials: credentialFacts,
+      ...lineState(rows),
+    },
+    memberOf: new Map(
+      members.flatMap((member) => member.tasks.map((task) => [task.key, member.key] as const)),
+    ),
   };
 }
 
@@ -144,4 +189,37 @@ export async function lookupRepositoryById(
     ...(row.pushed_at ? { pushedAt: row.pushed_at } : {}),
     ...(row.owner?.avatar_url ? { ownerAvatarUrl: row.owner.avatar_url } : {}),
   };
+}
+
+/**
+ * Each repository as GitHub reports it now, when every one is public; otherwise why not, as a
+ * status and message for the releaser.
+ */
+export async function publicRepositories(
+  githubApiUrl: string,
+  token: string,
+  repositories: readonly { githubId: number; fullName: string }[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ repositories: GitHubRepository[] } | { status: 400 | 503; error: string }> {
+  let found: (GitHubRepository | undefined)[];
+  try {
+    found = await Promise.all(
+      repositories.map((repo) =>
+        lookupRepositoryById(githubApiUrl, token, repo.githubId, fetchImpl),
+      ),
+    );
+  } catch (error) {
+    if (!(error instanceof GitHubOAuthError)) throw error;
+    return {
+      status: 503,
+      error: "GitHub could not confirm that the repositories are public. Try again in a moment.",
+    };
+  }
+  const closed = repositories.filter((_, index) => !found[index] || found[index]?.private);
+  if (closed.length > 0)
+    return {
+      status: 400,
+      error: `Only public repositories can be released. Not public: ${closed.map((repo) => repo.fullName).join(", ")}.`,
+    };
+  return { repositories: found.filter((repo) => repo !== undefined) };
 }

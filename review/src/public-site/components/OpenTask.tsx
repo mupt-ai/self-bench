@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import type { PublicRelease } from "../contract";
+import type { TaskRelease } from "../contract";
 import { loadTaskViewer, type OpenedTask } from "./TaskList";
 
 const TaskViewer = lazy(loadTaskViewer);
@@ -9,7 +9,7 @@ const TaskViewer = lazy(loadTaskViewer);
  * The task the address names (`?task=<id>`), in the task viewer over the page. Opened from the
  * list, closing goes back to it; opened from a link, closing takes the task out of the address.
  */
-export function OpenTask({ release }: { release: PublicRelease }) {
+export function OpenTask({ release }: { release: TaskRelease }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();

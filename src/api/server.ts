@@ -123,6 +123,7 @@ export async function startApi(
         if (await site.pullRequests.handle(request, url, response, user)) return;
         if (await site.evaluations.handle(request, url, response, user)) return;
         if (await site.releases.handle(request, url, response, user)) return;
+        if (await site.groupReleases.handle(request, url, response, user)) return;
         if (await site.batches.handle(request, url, response, user)) return;
         if (await site.tasks.handle(request, url, response, user)) return;
       }

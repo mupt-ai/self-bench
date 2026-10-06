@@ -1,4 +1,5 @@
 import type {
+  PublishedGroupRelease,
   PublishedLine,
   ReleasePublisher,
   ReleaseRepository,
@@ -92,6 +93,16 @@ export function picks<S extends Ranked>(settings: readonly S[]): SettingPick<S>[
   ];
 }
 
+/** The most accurate frontier setting, as a page's description names it first. */
+export function leadingSetting<S extends Ranked>(settings: readonly S[]): S | undefined {
+  return [...frontierSettings(settings)].sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  )[0];
+}
+
 /** Settings off the frontier, most accurate first; cost breaks accuracy ties, then id. */
 export function offFrontier<S extends Ranked>(settings: readonly S[]): S[] {
   return settings
@@ -111,6 +122,17 @@ const cardSetting = (setting: ReleaseSetting): CardSetting => ({
   costPerTaskUsd: setting.costPerTaskUsd,
 });
 
+/** What a card shows of any release, a repository's or a group's: its counts and settings. */
+function cardSettings(release: Pick<PublishedGroupRelease, "tasks" | "settings">) {
+  return {
+    tasks: release.tasks,
+    settings: release.settings.length,
+    picks: picks(release.settings).map((pick) => ({ ...pick, setting: cardSetting(pick.setting) })),
+    frontier: frontierSettings(release.settings).map(cardSetting),
+    others: offFrontier(release.settings).slice(0, PREVIEW_LINES).map(cardSetting),
+  };
+}
+
 function cardOf(line: PublishedLine, defaultLine: boolean): DirectoryCard {
   const { release } = line;
   const { id, fullName, description, stars, ownerAvatarUrl } = release.repository;
@@ -125,11 +147,7 @@ function cardOf(line: PublishedLine, defaultLine: boolean): DirectoryCard {
     publisher: release.publisher,
     releaseId: release.releaseId,
     releasedAt: release.releasedAt,
-    tasks: release.tasks,
-    settings: release.settings.length,
-    picks: picks(release.settings).map((pick) => ({ ...pick, setting: cardSetting(pick.setting) })),
-    frontier: frontierSettings(release.settings).map(cardSetting),
-    others: offFrontier(release.settings).slice(0, PREVIEW_LINES).map(cardSetting),
+    ...cardSettings(release),
     endorsed: line.endorsed,
     defaultLine,
   };
@@ -154,4 +172,38 @@ export function directoryOf(lines: readonly PublishedLine[]): DirectoryCard[] {
   }
   const chosen = new Set(defaults.values());
   return ordered.map((line) => cardOf(line, chosen.has(line)));
+}
+
+/** A group's current release, reduced to its card. */
+export interface GroupCard extends Omit<DirectoryCard, "repository" | "endorsed" | "defaultLine"> {
+  group: {
+    slug: string;
+    name: string;
+    members: Pick<ReleaseRepository, "id" | "fullName" | "ownerAvatarUrl">[];
+  };
+}
+
+/** Every group's current release as a card, newest first (release id breaks ties). */
+export function groupCardsOf(releases: readonly PublishedGroupRelease[]): GroupCard[] {
+  return [...releases]
+    .sort(
+      (left, right) =>
+        right.releasedAt.localeCompare(left.releasedAt) ||
+        left.releaseId.localeCompare(right.releaseId),
+    )
+    .map((release) => ({
+      group: {
+        slug: release.group.slug,
+        name: release.group.name,
+        members: release.group.members.map(({ id, fullName, ownerAvatarUrl }) => ({
+          id,
+          fullName,
+          ...(ownerAvatarUrl === undefined ? {} : { ownerAvatarUrl }),
+        })),
+      },
+      publisher: release.publisher,
+      releaseId: release.releaseId,
+      releasedAt: release.releasedAt,
+      ...cardSettings(release),
+    }));
 }

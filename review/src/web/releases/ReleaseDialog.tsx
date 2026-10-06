@@ -5,38 +5,39 @@ import { Dialog, DialogBody } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, Notice } from "../ui";
-import { ReleaseRequestError, type ReleaseSummary, type ReleaseView, releaseRequest } from "./api";
+import {
+  type GroupReleaseView,
+  ReleaseRequestError,
+  type ReleaseSummary,
+  type ReleaseView,
+  releaseRequest,
+} from "./api";
+import { GroupReleaseFields, validSlug } from "./GroupReleaseFields";
+import { Notes, privacyNote } from "./release-notes";
 import { SettingsPicker, Tick } from "./SettingsPicker";
 import { selectionOf } from "./selection";
 
-/** What becomes public and what stays private, shown on the info icon beside the summary. */
 /** A release publishes its tasks unless the releaser unticks Publish Tasks. */
 const PUBLISH_TASKS = true;
 
-function privacyNote(workspace: { login: string; kind: "org" | "user" }, tasks: boolean): string {
-  const publisher =
-    workspace.kind === "user"
-      ? `you as publisher, under your GitHub username ${workspace.login}`
-      : `the ${workspace.login} workspace as publisher`;
-  return tasks
-    ? `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, and each task with its pull request, instruction, tests, and solution. Private: per-task results, transcripts, endpoint hosts, and who pressed Release.`
-    : `Public: the repository, ${publisher}, and each setting's model, harness, accuracy, and cost. Private: which tasks and pull requests were used, per-task results, transcripts, endpoint hosts, and who pressed Release.`;
-}
-
 /**
- * Publishes the repository's results on selfbench.dev. Fetches its own fresh preview, lets the
- * releaser tick settings, and shows exactly what would be public. A 409 swaps in the server's
- * fresh preview and says why; pressing Release again is the deliberate retry.
+ * Publishes a repository's results on selfbench.dev, or a group's as one benchmark. Fetches its
+ * own fresh preview, lets the releaser tick settings, and shows exactly what would be public. A
+ * 409 swaps in the server's fresh preview and says why; pressing Release again is the
+ * deliberate retry.
  */
 export function ReleaseDialog({
   url,
   workspace,
+  subject = "repository",
   onReleased,
   onClose,
 }: {
   url: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
   workspace: { login: string; kind: "org" | "user" };
+  /** A group's release also chooses its page's address, the first time. */
+  subject?: "repository" | "group";
   onReleased(release: ReleaseSummary, unchanged: boolean): void;
   onClose(): void;
 }) {
@@ -48,8 +49,10 @@ export function ReleaseDialog({
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
   const [query, setQuery] = React.useState("");
+  const [slug, setSlug] = React.useState("");
   const show = React.useCallback((next: ReleaseView, keep?: ReadonlySet<string>) => {
     setView(next);
+    setSlug((current) => current || (next as Partial<GroupReleaseView>).suggestedSlug || "");
     const available = new Set(next.preview.settings.map((setting) => setting.key));
     setTicked(
       keep
@@ -82,7 +85,14 @@ export function ReleaseDialog({
     publishTasks === PUBLISH_TASKS &&
     ticked.size === defaults.size &&
     [...ticked].every((key) => defaults.has(key));
-  const blocked = !selection || selection.settings === 0 || selection.tasks.length === 0;
+  // A group's first release claims its address, which must be one selfbench.dev can serve.
+  const group = subject === "group" ? (view as GroupReleaseView | undefined) : undefined;
+  const claiming = group?.slug === null;
+  const blocked =
+    !selection ||
+    selection.settings === 0 ||
+    selection.tasks.length === 0 ||
+    (claiming && !validSlug(slug));
   const release = async () => {
     if (!view) return;
     setBusy(true);
@@ -94,6 +104,7 @@ export function ReleaseDialog({
         head: view.head?.id ?? null,
         fingerprint: view.preview.fingerprint,
         publishTasks,
+        ...(claiming ? { slug } : {}),
       });
       onReleased(result.release, result.unchanged === true);
     } catch (cause) {
@@ -122,7 +133,9 @@ export function ReleaseDialog({
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">
-            Publish this repository's results on selfbench.dev, where anyone can see them.
+            {subject === "group"
+              ? "Publish this group's results on selfbench.dev as one benchmark, where anyone can see them."
+              : "Publish this repository's results on selfbench.dev, where anyone can see them."}
           </p>
         </div>
         <button
@@ -162,6 +175,15 @@ export function ReleaseDialog({
               onChange={setTicked}
             />
             {selection && <Notes view={view} selection={selection} />}
+            {group && selection && (
+              <GroupReleaseFields
+                view={group}
+                tasks={selection.tasks}
+                slug={slug}
+                onSlug={setSlug}
+                disabled={busy}
+              />
+            )}
             {/* Boxed, and tinted while on, so a release that publishes its tasks is plain to see. */}
             <label
               htmlFor="release-publish-tasks"
@@ -217,7 +239,7 @@ export function ReleaseDialog({
                 </span>
                 {selection && (
                   <InfoTooltip
-                    label={privacyNote(workspace, publishTasks)}
+                    label={privacyNote(workspace, publishTasks, subject)}
                     contentClassName="border border-border bg-card text-foreground"
                   />
                 )}
@@ -242,35 +264,5 @@ export function ReleaseDialog({
         </div>
       </DialogBody>
     </Dialog>
-  );
-}
-
-/** What changes against the current release, as short notes above the summary line. */
-function Notes({
-  view,
-  selection,
-}: {
-  view: ReleaseView;
-  selection: ReturnType<typeof selectionOf>;
-}) {
-  // Added and left-out tasks only mean something against a current release.
-  const since = view.current !== null;
-  const lines = [
-    since &&
-      selection.added.new > 0 &&
-      `${plural(selection.added.new, "new task")} since the last release`,
-    since && selection.added.returning > 0 && plural(selection.added.returning, "returning task"),
-    since &&
-      selection.droppedFromCurrent > 0 &&
-      `${plural(selection.droppedFromCurrent, "task")} of the current release left out`,
-    view.preview.unrun > 0 && `${plural(view.preview.unrun, "approved task")} no setting has run`,
-  ].filter((line): line is string => !!line);
-  if (lines.length === 0) return null;
-  return (
-    <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
-      {lines.map((line) => (
-        <li key={line}>{line}</li>
-      ))}
-    </ul>
   );
 }

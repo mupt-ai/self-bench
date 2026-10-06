@@ -21,6 +21,8 @@ export interface ReleaseTask
   state: TaskState | "deleted";
   /** Whether a release may use it: see `runnable()`. */
   runnable: boolean;
+  /** In a group's release, the member repository the task was built from, as `owner/name`. */
+  repository?: string;
 }
 
 /** What the line's current release recorded, for the default ticks. */

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
-import type { PublishedRelease } from "../public/release-types.js";
+import type { PublishedGroupRelease, PublishedRelease } from "../public/release-types.js";
 
 /**
  * The picture a shared repository page shows in Slack, X, LinkedIn, Discord and iMessage: the
@@ -18,6 +18,32 @@ const HEIGHT = CARD_HEIGHT;
 export function cardPath(fullName: string, publisher?: string): string {
   return `/og/${fullName}${publisher ? `/${publisher}` : ""}.png`;
 }
+
+/** Where a group's preview image is served. */
+export const groupCardPath = (slug: string) => `/og/groups/${slug}.png`;
+
+/** What a card names and counts: a repository with its stars, or a group with its repositories. */
+interface CardFace {
+  name: string;
+  tasks: number;
+  settings: number;
+  stars?: number;
+  repositories?: number;
+}
+
+const repositoryFace = (release: PublishedRelease): CardFace => ({
+  name: release.repository.fullName,
+  tasks: release.tasks,
+  settings: release.settings.length,
+  ...(release.repository.stars === undefined ? {} : { stars: release.repository.stars }),
+});
+
+const groupFace = (release: PublishedGroupRelease): CardFace => ({
+  name: release.group.name,
+  tasks: release.tasks,
+  settings: release.settings.length,
+  repositories: release.group.members.length,
+});
 const PAD = 72;
 
 /** The site's dark palette (review/src/public-site/palette.css), which reads well in any feed. */
@@ -73,11 +99,14 @@ const HEADER = 166;
 const LINE = WIDTH - PAD * 2;
 const chars = (size: number) => Math.floor(LINE / (size * ADVANCE) + 1e-9);
 
-/** Splits `text` into lines of at most `perLine` characters, breaking after - _ or . when it can. */
+/**
+ * Splits `text` into lines of at most `perLine` characters, breaking after - _ . or a space when
+ * it can.
+ */
 function wrap(text: string, perLine: number): string[] {
   const lines: string[] = [];
   let line = "";
-  for (const piece of text.match(/[^-_.]+[-_.]?|[-_.]/g) ?? []) {
+  for (const piece of text.match(/[^-_. ]+[-_. ]?|[-_. ]/g) ?? []) {
     if (line.length + piece.length <= perLine) {
       line += piece;
       continue;
@@ -111,6 +140,15 @@ function balanced(text: string, perLine: number): string[] {
  */
 export function nameLayout(fullName: string): { size: number; lines: string[] } {
   const slash = fullName.indexOf("/");
+  // A group's name has no owner: on one line from 80px, two from 56px, else three at 48px.
+  if (slash < 0) {
+    for (let size = 112; size >= 48; size -= 2) {
+      const lines = balanced(fullName, chars(size)).map((line) => line.trimEnd());
+      if (lines.length <= (size >= 80 ? 1 : size >= 56 ? 2 : 3)) return { size, lines };
+    }
+    const [first = "", second = "", ...rest] = balanced(fullName, chars(48));
+    return { size: 48, lines: [first, second, clip(rest.join(""), chars(48))] };
+  }
   const owner = fullName.slice(0, slash + 1);
   const repo = fullName.slice(slash + 1);
   const fit = (lineLength: number) => Math.min(112, LINE / (lineLength * ADVANCE));
@@ -142,9 +180,8 @@ export function nameLayout(fullName: string): { size: number; lines: string[] } 
  * below. No results: they change as settings are added, and the page's own preview text names
  * them.
  */
-function cardSvg(release: PublishedRelease): string {
-  const { repository } = release;
-  const { size, lines } = nameLayout(repository.fullName);
+function cardSvg(face: CardFace): string {
+  const { size, lines } = nameLayout(face.name);
   const leading = size * 1.1;
   // The name and the facts under it, centred as they look (from the name's capitals to the facts'
   // descenders) between the header and the card's foot.
@@ -160,8 +197,12 @@ function cardSvg(release: PublishedRelease): string {
   // Single spaces, as SVG draws runs of spaces as one; the stars' separator ends the text, so the
   // star follows it one space on, as the site's cards show them: a star, then the count. Stars
   // are short ("143k"), so the line fits at 44px; it shrinks should a count ever run long.
-  const count = repository.stars === undefined ? "" : compact(repository.stars);
-  const facts = `${[plural(release.tasks, "task"), plural(release.settings.length, "setting")].join(" · ")}${count ? " ·" : ""}`;
+  const count = face.stars === undefined ? "" : compact(face.stars);
+  const facts = `${[
+    ...(face.repositories === undefined ? [] : [plural(face.repositories, "repo")]),
+    plural(face.tasks, "task"),
+    plural(face.settings, "setting"),
+  ].join(" · ")}${count ? " ·" : ""}`;
   const ems = (facts.length + (count ? 1 + count.length : 0)) * ADVANCE + (count ? 1 : 0);
   const factsSize = Math.min(44, LINE / ems);
   const starX = PAD + (facts.length + 1) * factsSize * ADVANCE;
@@ -185,11 +226,12 @@ function cardSvg(release: PublishedRelease): string {
 }
 
 /** The preview image as a PNG, which every unfurler accepts (SVG is not). */
-export function cardPng(release: PublishedRelease): Buffer {
+export function cardPng(release: PublishedRelease | PublishedGroupRelease): Buffer {
   // resvg draws a missing font as no text at all, so a card without its fonts fails instead.
   const missing = FONTS.find((file) => !existsSync(file));
   if (missing) throw new Error(`The link preview's font is missing: ${missing}`);
-  const png = new Resvg(cardSvg(release), {
+  const face = "group" in release ? groupFace(release) : repositoryFace(release);
+  const png = new Resvg(cardSvg(face), {
     font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: "JetBrains Mono" },
     fitTo: { mode: "width", value: WIDTH },
   })

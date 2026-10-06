@@ -48,6 +48,7 @@ export function publishedTasks(
           difficulty: task.difficulty,
           ...(task.sourcePr !== undefined ? { sourcePr: task.sourcePr } : {}),
           ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
+          ...(task.repository ? { repository: task.repository } : {}),
         },
         ...(task.bundleKey ? { bundleKey: task.bundleKey } : {}),
       };

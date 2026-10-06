@@ -1,4 +1,4 @@
-import type { PublishedLine } from "../public/release-types.js";
+import type { PublishedGroupRelease, PublishedLine } from "../public/release-types.js";
 import {
   defaultLineOf,
   HOME_DESCRIPTION,
@@ -210,15 +210,19 @@ const newest = (dates: readonly string[]) =>
   );
 
 /**
- * Every page the site can show, for search engines: the home page, each repository's page, and
- * each other publisher's line, at their canonical addresses, each dated by its newest release.
+ * Every page the site can show, for search engines: the home page, each group's page, each
+ * repository's page, and each other publisher's line, at their canonical addresses, each dated by its newest release.
  * Built from the released lines, so a new release is listed without any step of its own.
  */
 export function sitemapOf(
   origin: string,
   repositories: readonly (readonly PublishedLine[])[],
+  groups: readonly PublishedGroupRelease[] = [],
 ): string {
-  const pages: { loc: string; lastmod: string | undefined }[] = [];
+  const pages: { loc: string; lastmod: string | undefined }[] = groups.map((release) => ({
+    loc: `${origin}/groups/${release.group.slug}`,
+    lastmod: release.releasedAt,
+  }));
   for (const lines of repositories) {
     const fallback = defaultLineOf(lines);
     if (!fallback) continue;
@@ -238,7 +242,10 @@ export function sitemapOf(
   pages.sort((left, right) => left.loc.localeCompare(right.loc));
   const home = {
     loc: `${origin}/`,
-    lastmod: newest(repositories.flat().map((line) => line.release.releasedAt)),
+    lastmod: newest([
+      ...repositories.flat().map((line) => line.release.releasedAt),
+      ...groups.map((release) => release.releasedAt),
+    ]),
   };
   const urls = [home, ...pages].map(
     ({ loc, lastmod }) =>

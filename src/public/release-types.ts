@@ -89,6 +89,8 @@ export interface PublishedTask {
   /** The merged pull request the task was built from. */
   sourcePr?: number;
   sourceUrl?: string;
+  /** In a group's release, the repository the pull request belongs to, as `owner/name`. */
+  repository?: string;
 }
 
 /** A published task's files: small text files with their contents, the rest by size alone. */
@@ -97,6 +99,37 @@ export interface PublishedTaskFiles {
   files: { path: string; sizeBytes: number; text?: string }[];
   /** The line asking for the task never to be trained on, which its files carry too. */
   canary?: string;
+}
+
+/** A named set of public repositories, released as one benchmark over all their tasks. */
+interface ReleaseGroup {
+  /** The group's address on selfbench.dev: `/groups/<slug>`. Permanent once released. */
+  slug: string;
+  name: string;
+  /** The repositories with a task in the release, as GitHub reported them when it was written. */
+  members: ReleaseRepository[];
+}
+
+/** One member repository's share of a group release: each setting over that member's tasks. */
+interface GroupMemberResult {
+  repositoryId: number;
+  tasks: number;
+  settings: Pick<
+    ReleaseSetting,
+    "id" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd"
+  >[];
+}
+
+/** A group release's `payload`: a repository release's, over every member's tasks pooled. */
+export interface GroupReleasePayload extends Omit<ReleasePayload, "repository"> {
+  group: ReleaseGroup;
+  breakdown: GroupMemberResult[];
+}
+
+/** One group release, as served: the payload plus id and time. */
+export interface PublishedGroupRelease extends GroupReleasePayload {
+  releaseId: string;
+  releasedAt: string;
 }
 
 /** One release line's current release, as the public API lists it. */

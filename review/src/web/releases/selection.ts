@@ -37,3 +37,22 @@ export function selectionOf(preview: ReleasePreview, ticked: ReadonlySet<string>
     droppedFromCurrent: preview.removed.length + (inCurrent - keptFromCurrent),
   };
 }
+
+/**
+ * In a group's preview, each member repository and how many of the selection's tasks are its own:
+ * a repository with none would be left out of the release.
+ */
+export function repositoriesOf(
+  preview: ReleasePreview,
+  tasks: readonly number[],
+): { fullName: string; tasks: number }[] {
+  const counts = new Map<string, number>();
+  for (const task of preview.tasks) if (task.repository) counts.set(task.repository, 0);
+  for (const index of tasks) {
+    const repository = preview.tasks[index]?.repository;
+    if (repository) counts.set(repository, (counts.get(repository) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([fullName, count]) => ({ fullName, tasks: count }))
+    .sort((left, right) => left.fullName.localeCompare(right.fullName));
+}
