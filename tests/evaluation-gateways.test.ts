@@ -26,6 +26,7 @@ module.Codex = Codex
 sys.modules[module.__name__] = module
 pi = types.ModuleType("harbor.agents.installed.pi")
 pi.Pi = type("Pi", (), {})
+pi.PiOptions = type("PiOptions", (), {})
 sys.modules[pi.__name__] = pi
 connection = types.ModuleType("harbor.agents.model_connection")
 connection.ModelConnectionSpec = lambda **kwargs: kwargs
@@ -65,7 +66,7 @@ test("Claude Code installs into an agent-owned cache without Node on non-Alpine 
     "-c",
     `import asyncio, importlib.util, sys, types
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
-sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object)
+sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object, PiOptions=object)
 sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=dict)
 module = types.ModuleType("harbor.agents.installed.claude_code")
 class ClaudeCode:
@@ -98,6 +99,48 @@ async def check():
         assert agent.installed and agent.root == []
     await agent.ensure_system_dependencies(None, DEPENDENCIES)
     assert agent.ensured == DEPENDENCIES
+asyncio.run(check())
+`,
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
+  ]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});
+
+test("gateway Pi writes the model's models.json where Pi reads it before Pi starts", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `import asyncio, importlib.util, json, os, subprocess, sys, tempfile, types
+pi = types.ModuleType("harbor.agents.installed.pi")
+class Pi:
+    def __init__(self, models_json):
+        self.options, self.commands = types.SimpleNamespace(models_json=models_json), []
+    async def exec_as_agent(self, environment, command):
+        self.commands.append(command)
+    async def run(self, instruction, environment, context):
+        self.commands.append("pi " + instruction)
+pi.Pi, pi.PiOptions = Pi, type("PiOptions", (), {})
+sys.modules[pi.__name__] = pi
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
+sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=dict)
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+assert adapter.GatewayPi.options_model is adapter.GatewayPiOptions
+models = {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/it's", "name": "It's"}]}}}
+async def check():
+    agent = adapter.GatewayPi(models)
+    await agent.run("task", None, None)
+    write, start = agent.commands
+    assert start == "pi task"
+    with tempfile.TemporaryDirectory() as home:
+        subprocess.check_call(["bash", "-c", write], env={**os.environ, "HOME": home})
+        with open(os.path.join(home, ".pi/agent/models.json")) as file:
+            assert json.load(file) == models
+    agent = adapter.GatewayPi(None)
+    await agent.run("task", None, None)
+    assert agent.commands == ["pi task"]
 asyncio.run(check())
 `,
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),

@@ -70,10 +70,13 @@ export const catalog: CatalogModel[] = models.map((model) => {
 
 /**
  * Every model the gateways list for agents: each gateway's in its order, frontier first, the
- * earlier gateways' first. A model two gateways list is one entry with a route on each. A curated
- * model takes its place in that order and keeps its own levels, or else takes each gateway's;
- * curated models no gateway lists follow at the end. A curated model loses its route on a
- * gateway whose prices have loaded without it. Before the first load it is the curated catalog.
+ * earlier gateways' first. A model two gateways list is one entry with a route on each, whether
+ * they give it the same id or only the same vendor and name ("mistralai/mistral-large-4-0" and
+ * "mistral/mistral-large-4", both Mistral Large 4); a gateway that lists one name twice keeps
+ * its first. A curated model takes its place in that order and keeps its own levels, or else
+ * takes each gateway's; curated models no gateway lists follow at the end. A curated model loses
+ * its route on a gateway whose prices have loaded without it. Before the first load it is the
+ * curated catalog.
  */
 export function evaluationCatalog(): CatalogModel[] {
   const curated = new Map(
@@ -81,9 +84,22 @@ export function evaluationCatalog(): CatalogModel[] {
   );
   const ownLevels = new Set(catalog.filter((model) => model.thinking).map((model) => model.id));
   const merged = new Map<string, CatalogModel>();
+  /** Catalog ids by name, for a model a later gateway lists under an id of its own. */
+  const named = new Map<string, string[]>();
+  for (const [id, model] of curated) addName(named, model.label, id);
   for (const gateway of gatewayIds) {
     for (const entry of listedModels(gateway)) {
-      const id = catalogModelId(gateway, entry.id);
+      let id = catalogModelId(gateway, entry.id);
+      if (!merged.has(id) && !curated.has(id)) {
+        const entryVendors = vendors({ [gateway]: entry.id });
+        const twin = named.get(nameKey(entry.label))?.find((candidate) => {
+          const model = merged.get(candidate) ?? curated.get(candidate);
+          const routes = model?.gateways ?? {};
+          return [...vendors(routes)].some((vendor) => entryVendors.has(vendor));
+        });
+        if (twin && (merged.get(twin) ?? curated.get(twin))?.gateways?.[gateway]) continue;
+        if (twin) id = twin;
+      }
       const known = merged.get(id) ?? curated.get(id);
       curated.delete(id);
       const model: CatalogModel = {
@@ -103,10 +119,36 @@ export function evaluationCatalog(): CatalogModel[] {
         const shown = known?.thinking ?? (levels.length ? levels : undefined);
         if (shown) model.thinking = shown;
       }
+      if (!known) addName(named, entry.label, id);
       merged.set(id, model);
     }
   }
   return [...merged.values(), ...curated.values()];
+}
+
+/** A name as gateways spell it either way: "Qwen3-14B" is "Qwen3 14B". */
+function nameKey(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ")
+    .trim();
+}
+
+function addName(named: Map<string, string[]>, label: string, id: string): void {
+  const key = nameKey(label);
+  named.set(key, [...(named.get(key) ?? []), id]);
+}
+
+/**
+ * The vendors a model's gateway ids name, as each gateway spells them and as the catalog does:
+ * a vendor alias can stand for more than one of OpenRouter's vendors ("meta" and "meta-llama").
+ */
+function vendors(routes: Partial<Record<GatewayId, string>>): Set<string> {
+  return new Set(
+    Object.entries(routes).flatMap(([gateway, id]) =>
+      [id, catalogModelId(gateway as GatewayId, id)].map((name) => name.split("/")[0] ?? ""),
+    ),
+  );
 }
 
 /** A curated model with routes only on the gateways that serve it. */

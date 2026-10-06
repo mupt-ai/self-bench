@@ -2,16 +2,17 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ApplicationFailure } from "@temporalio/common";
+import type { ThinkingLevel } from "../contracts/models.js";
 import { validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import { gateways, isGateway, modelApiKeyVariable } from "../gateways/index.js";
+import { gateways, isGateway, modelApiKeyVariable, piModels } from "../gateways/index.js";
 import {
   managedModalEnvironment,
   managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
-import { signInRefusal } from "./models.js";
+import { signInRefusal, thinkingArguments } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /**
@@ -143,6 +144,22 @@ export function solverAgent(harness: Harness, provider?: string): string {
   // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's
   // HTTPS-only provider.
   return isGateway(provider) ? "harbor_gateway:GatewayCodex" : "harbor_gateway:SelfBenchCodex";
+}
+
+/**
+ * The solver's Harbor agent arguments: its thinking level, and for Pi over a gateway that
+ * describes its models to Pi, the model's models.json, which its harborPi adapter writes.
+ */
+export function solverAgentArguments(
+  harness: Harness,
+  provider: string | undefined,
+  model: string,
+  thinking?: ThinkingLevel,
+): string[] {
+  const levels = thinkingArguments(harness, thinking);
+  if (harness !== "pi" || !isGateway(provider)) return levels;
+  const models = piModels(provider, model.slice(provider.length + 1));
+  return models ? [...levels, "--agent-kwarg", `models_json=${JSON.stringify(models)}`] : levels;
 }
 
 /** The model name Harbor receives for a harness over the selected connection. */

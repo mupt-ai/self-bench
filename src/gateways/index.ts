@@ -55,6 +55,15 @@ export function findListedModel(id: string): ListedModel | undefined {
 }
 
 /**
+ * Pi's models.json for the gateway's model `id`, when its listing describes the model to Pi
+ * (ListedModel.pi); the gateway's id is Pi's provider name for it.
+ */
+export function piModels(gateway: GatewayId, id: string): object | undefined {
+  const model = listing(gateway).models.find((entry) => entry.id === id)?.pi;
+  return model && { providers: { [gateway]: { models: [model] } } };
+}
+
+/**
  * Whether the gateway serves its model `id`: it prices it, or its prices have not loaded yet (and
  * in the browser), when a curated model is assumed to be on every gateway.
  */

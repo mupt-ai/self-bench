@@ -193,7 +193,7 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
     });
   }) as unknown as typeof fetch);
   expect(url).toBe("https://ai-gateway.vercel.sh/v1/models");
-  expect(listedModels("vercel-ai-gateway")).toEqual([
+  expect(listedModels("vercel-ai-gateway").map(({ pi: _pi, ...model }) => model)).toEqual([
     {
       id: "vendor/newest",
       label: "Name of vendor/newest",

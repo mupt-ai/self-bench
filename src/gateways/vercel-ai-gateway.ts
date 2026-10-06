@@ -1,10 +1,11 @@
-import { modelIdPattern } from "../contracts/models.js";
+import { modelIdPattern, type Rates, type ThinkingLevel } from "../contracts/models.js";
 import {
   type Gateway,
   type ListedModel,
   type ListedRates,
   listRates,
   longContextFrom,
+  type PiModel,
   readsAndWritesText,
   reasoningLevels,
 } from "./gateway.js";
@@ -15,6 +16,8 @@ interface VercelEntry {
   type?: unknown;
   tags?: unknown;
   modalities?: { input?: unknown; output?: unknown };
+  context_window?: unknown;
+  max_tokens?: unknown;
   pricing?: unknown;
   reasoning_options?: unknown;
   deprecated_at?: unknown;
@@ -77,10 +80,13 @@ function parse(body: unknown, asOf: string) {
     });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning_options);
+      const label =
+        typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : entry.id;
       listed.push({
         id: entry.id,
-        label: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : entry.id,
+        label,
         ...(thinking.length ? { thinking } : {}),
+        pi: piModel(entry.id, label, entry, thinking, entryRates),
         released: typeof entry.released === "number" ? entry.released : -1,
       });
     }
@@ -107,4 +113,44 @@ function efforts(options: unknown) {
     ? options.find((option) => option?.type === "effort" && Array.isArray(option.values))
     : undefined;
   return effort ? reasoningLevels(effort.values) : [];
+}
+
+/**
+ * Pi reaches the gateway over Anthropic Messages. Pi asks a model its catalog lacks for a thinking
+ * budget, which the gateway cannot pass to some vendors (Mistral: "invalid mistral provider
+ * options"), while every model that lists efforts takes adaptive thinking with an effort.
+ */
+function piModel(
+  id: string,
+  name: string,
+  entry: VercelEntry,
+  thinking: readonly ThinkingLevel[],
+  [input, output, cacheRead, cacheWrite]: Rates,
+): PiModel {
+  const tags = Array.isArray(entry.tags) ? entry.tags : [];
+  const inputs = entry.modalities?.input;
+  // Anthropic Messages has no minimal effort, so Pi keeps its own mapping (to low) for it.
+  const efforts = thinking.filter((level) => level !== "off" && level !== "minimal");
+  return {
+    id,
+    name,
+    reasoning: tags.includes("reasoning") || efforts.length > 0,
+    input: Array.isArray(inputs) && inputs.includes("image") ? ["text", "image"] : ["text"],
+    ...(positive(entry.context_window) ? { contextWindow: entry.context_window } : {}),
+    ...(positive(entry.max_tokens) ? { maxTokens: entry.max_tokens } : {}),
+    cost: { input, output, cacheRead, cacheWrite },
+    ...(efforts.length
+      ? { thinkingLevelMap: Object.fromEntries(efforts.map((level) => [level, level])) }
+      : {}),
+    // The gateway returns other vendors' reasoning without Anthropic's signatures, and takes it
+    // back so; Pi would otherwise replay it as text.
+    compat: {
+      allowEmptySignature: true,
+      ...(efforts.length ? { forceAdaptiveThinking: true } : {}),
+    },
+  };
+}
+
+function positive(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }

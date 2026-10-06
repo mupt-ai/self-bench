@@ -7,6 +7,27 @@ export interface ListedModel {
   readonly label: string;
   /** The reasoning efforts the gateway says it accepts, in display order. */
   readonly thinking?: readonly ThinkingLevel[];
+  /**
+   * Pi's models.json entry for it, from the gateway's listing, when Pi must be told how the
+   * gateway takes the model: Pi guesses at a model its catalog lacks. Its harborPi adapter
+   * writes it (harbor_gateway.py).
+   */
+  readonly pi?: PiModel;
+}
+
+/** A model in Pi's models.json (Pi's docs/models.md); what is left out takes Pi's defaults. */
+export interface PiModel {
+  readonly id: string;
+  readonly name: string;
+  readonly reasoning: boolean;
+  readonly input: readonly ("text" | "image")[];
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  /** $ per million tokens. */
+  readonly cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /** Pi's thinking levels to the efforts the endpoint takes. */
+  readonly thinkingLevelMap?: Readonly<Partial<Record<ThinkingLevel, string>>>;
+  readonly compat?: Readonly<Record<string, boolean>>;
 }
 
 /** A gateway's list price for one model. */
