@@ -40,14 +40,19 @@ export async function prepareGenerationBatch(options: {
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
   const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
-  // A focus is often rare among recent PRs, so focused discovery looks further back. Spreading
-  // the PRs evenly keeps every planned shard, so per-shard targets still add up to the request.
-  const pool = discoveryPrsPerShard(requested, shardCount);
+  // A focus is often rare among recent PRs, so focused discovery looks further back.
   const prCount = new Set(chunks.flat().map((message) => message.sourcePr)).size;
   const prsPerShard = run.focus
-    ? Math.max(pool, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
-    : pool;
+    ? Math.max(1, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
+    : discoveryPrsPerShard(requested, shardCount);
   const selected = takeNewestShards(chunks, shardCount, prsPerShard);
+  const targetCountsForShard = (shardIndex: number): RunRequest["candidateCounts"] =>
+    Object.fromEntries(
+      Object.entries(run.candidateCounts).map(([tier, count]) => [
+        tier,
+        Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
+      ]),
+    ) as RunRequest["candidateCounts"];
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(
     selected.map(async (chunk, index) => {
@@ -64,12 +69,7 @@ export async function prepareGenerationBatch(options: {
           wave: 0,
           shardIndex: index,
           shardCount: selected.length,
-          targetCounts: Object.fromEntries(
-            Object.entries(run.candidateCounts).map(([tier, count]) => [
-              tier,
-              count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
-            ]),
-          ) as RunRequest["candidateCounts"],
+          targetCounts: targetCountsForShard(index),
           excludedSourcePrs: [],
         },
       };

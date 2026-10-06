@@ -134,11 +134,18 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
     expect(one.prs.size).toBe(150);
     expect(one.prs.has(200)).toBe(true);
     expect(one.prs.has(50)).toBe(false);
-    // Wider shards never merge away planned ones, so the shard targets still sum to the request.
     const five = await stage(5, focus);
     expect(five.shards).toHaveLength(5);
     expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([1, 1, 1, 1, 1]);
     expect(five.prs.size).toBe(200);
+    // However the PRs pack into shards, the shard targets add up to exactly the request.
+    nodes.splice(20);
+    for (const focused of [undefined, focus]) {
+      const small = await stage(9, focused);
+      const targets = small.shards.map((shard) => shard.input.targetCounts.hard);
+      expect(targets.reduce((total, count) => total + count, 0)).toBe(9);
+      expect(Math.min(...targets)).toBeGreaterThan(0);
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
