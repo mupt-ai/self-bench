@@ -16,9 +16,8 @@ import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
-import { solverAgent } from "./execution.js";
+import { solverAgent, solverAgentArguments } from "./execution.js";
 import { billedTrialCost } from "./gateway-cost.js";
-import { thinkingArguments } from "./models.js";
 import {
   agentTimedOut,
   boundedSteps,
@@ -54,7 +53,7 @@ export function solverArguments(
     jobName: "solver",
     agent: solverAgent(harness, provider),
     environment: sandbox,
-    solver: { model, agentArguments: thinkingArguments(harness, thinking) },
+    solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
     extraAllowedHosts,
     // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
     ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),

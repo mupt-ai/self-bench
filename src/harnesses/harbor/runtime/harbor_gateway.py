@@ -1,9 +1,11 @@
 """Isolate Codex installation, preserve gateway model IDs, make Claude Code install reliably, and
-pass Pi its gateway key."""
+pass Pi its gateway key and model."""
+import json
 import shlex
+from typing import Any
 from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.codex import Codex
-from harbor.agents.installed.pi import Pi
+from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.model_connection import ModelConnectionSpec
 
 
@@ -67,7 +69,26 @@ class SelfBenchClaudeCode(ClaudeCode):
         await super().ensure_system_dependencies(environment, dependencies)
 
 
+class GatewayPiOptions(PiOptions):
+    # Pi's models.json describing the trial's model as the gateway lists it (ListedModel.pi).
+    models_json: dict[str, Any] | None = None
+
+
 class GatewayPi(Pi):
     # Harbor knows Vercel AI Gateway only as vercel_ai_gateway, keyed by VERCEL_AI_GATEWAY_API_KEY,
     # so Pi's vercel-ai-gateway provider would start without AI_GATEWAY_API_KEY, the key it reads.
     MODEL_CONNECTION = ModelConnectionSpec(passthrough=True, api_key_envs=("AI_GATEWAY_API_KEY",))
+    options_model = GatewayPiOptions
+
+    async def run(self, instruction, environment, context):
+        # Pi reads models.json from its own directory, which Harbor leaves at its default.
+        if self.options.models_json:
+            models = shlex.quote(json.dumps(self.options.models_json))
+            await self.exec_as_agent(
+                environment,
+                command=(
+                    'mkdir -p "$HOME/.pi/agent" && '
+                    f'printf %s {models} > "$HOME/.pi/agent/models.json"'
+                ),
+            )
+        await super().run(instruction, environment, context)

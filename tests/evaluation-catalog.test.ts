@@ -98,6 +98,47 @@ test("a model two gateways list is one entry with a route on each, under each on
   expect(routeFor(qwen, "openrouter")).toBeUndefined();
 });
 
+test("a model gateways list under different ids is one entry when vendor and name match", () => {
+  listModels("openrouter", [
+    { id: "mistralai/mistral-large-4-0", label: "Mistral Large 4", thinking: ["off", "high"] },
+    { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
+    { id: "qwen/qwen3-14b", label: "Qwen3 14B" },
+    { id: "cohere/command-a-plus", label: "Command A+" },
+  ]);
+  listModels("vercel-ai-gateway", [
+    { id: "mistral/mistral-large-4", label: "Mistral Large 4", thinking: ["low", "high"] },
+    // Vercel's meta stands for OpenRouter's meta-llama, but its Muse is OpenRouter's meta Muse.
+    { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
+    { id: "alibaba/qwen-3-14b", label: "Qwen3-14B" },
+    { id: "alibaba/qwen3-14b-preview", label: "Qwen3 14B" },
+    { id: "cohere/command-a", label: "Command A" },
+    { id: "vendor/mistral-large-4", label: "Mistral Large 4" },
+  ]);
+  const models = evaluationCatalog().filter((model) => !catalog.some(({ id }) => id === model.id));
+  expect(models.map((model) => [model.id, model.gateways])).toEqual([
+    [
+      "mistralai/mistral-large-4-0",
+      { openrouter: "mistralai/mistral-large-4-0", "vercel-ai-gateway": "mistral/mistral-large-4" },
+    ],
+    [
+      "meta/muse-spark-1.3",
+      { openrouter: "meta/muse-spark-1.3", "vercel-ai-gateway": "meta/muse-spark-1.3" },
+    ],
+    // Vercel lists the name twice; its first listing is the route.
+    ["qwen/qwen3-14b", { openrouter: "qwen/qwen3-14b", "vercel-ai-gateway": "alibaba/qwen-3-14b" }],
+    ["cohere/command-a-plus", { openrouter: "cohere/command-a-plus" }],
+    ["cohere/command-a", { "vercel-ai-gateway": "cohere/command-a" }],
+    ["vendor/mistral-large-4", { "vercel-ai-gateway": "vendor/mistral-large-4" }],
+  ]);
+  const [mistral] = models;
+  if (!mistral) throw new Error("Missing Mistral Large 4");
+  // Each route still offers the levels its own gateway lists.
+  expect(modelRoutes(mistral).map((route) => [route.provider, route.thinking])).toEqual([
+    ["openrouter", ["off", "high"]],
+    ["vercel-ai-gateway", ["low", "high"]],
+  ]);
+});
+
 test("a curated model loses its route on a gateway whose prices loaded without it", () => {
   setGatewayListing("vercel-ai-gateway", {
     models: [{ id: "zai/glm-5.3", label: "GLM 5.3" }],
