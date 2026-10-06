@@ -8,9 +8,9 @@ export interface ListedModel {
   /** The reasoning efforts the gateway says it accepts, in display order. */
   readonly thinking?: readonly ThinkingLevel[];
   /**
-   * Pi's models.json entry for it, from the gateway's listing, when Pi must be told how the
-   * gateway takes the model: Pi guesses at a model its catalog lacks. Its harborPi adapter
-   * writes it (harbor_gateway.py).
+   * Pi's models.json entry for it, from the gateway's listing, for when Pi's catalog lacks the
+   * model and Pi would guess how the gateway takes it. Its harborPi adapter writes it only then
+   * (harbor_gateway.py), leaving Pi's own entries alone.
    */
   readonly pi?: PiModel;
 }

@@ -70,7 +70,8 @@ class SelfBenchClaudeCode(ClaudeCode):
 
 
 class GatewayPiOptions(PiOptions):
-    # Pi's models.json describing the trial's model as the gateway lists it (ListedModel.pi).
+    # Pi's models.json describing the trial's model as the gateway lists it (ListedModel.pi), for
+    # Pi to use when its own catalog lacks the model.
     models_json: dict[str, Any] | None = None
 
 
@@ -81,14 +82,21 @@ class GatewayPi(Pi):
     options_model = GatewayPiOptions
 
     async def run(self, instruction, environment, context):
-        # Pi reads models.json from its own directory, which Harbor leaves at its default.
+        # A models.json entry replaces Pi's own for the same model, whose settings Pi tunes by hand,
+        # so it goes only to a model Pi does not list. Pi reads it from its own directory, which
+        # Harbor leaves at its default.
         if self.options.models_json:
+            provider, model = (shlex.quote(part) for part in self.model_name.split("/", 1))
             models = shlex.quote(json.dumps(self.options.models_json))
             await self.exec_as_agent(
                 environment,
                 command=(
-                    'mkdir -p "$HOME/.pi/agent" && '
-                    f'printf %s {models} > "$HOME/.pi/agent/models.json"'
+                    f". ~/.nvm/nvm.sh; pi --list-models {model} | "
+                    f"awk -v p={provider} -v m={model} "
+                    "'$1 == p && $2 == m { found = 1 } END { exit !found }' || "
+                    '{ mkdir -p "$HOME/.pi/agent" && '
+                    f'printf %s {models} > "$HOME/.pi/agent/models.json"; }}'
                 ),
+                env=dict(self.model_connection.env),
             )
         await super().run(instruction, environment, context)

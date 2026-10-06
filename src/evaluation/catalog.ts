@@ -72,11 +72,10 @@ export const catalog: CatalogModel[] = models.map((model) => {
  * Every model the gateways list for agents: each gateway's in its order, frontier first, the
  * earlier gateways' first. A model two gateways list is one entry with a route on each, whether
  * they give it the same id or only the same vendor and name ("mistralai/mistral-large-4-0" and
- * "mistral/mistral-large-4", both Mistral Large 4); a gateway that lists one name twice keeps
- * its first. A curated model takes its place in that order and keeps its own levels, or else
- * takes each gateway's; curated models no gateway lists follow at the end. A curated model loses
- * its route on a gateway whose prices have loaded without it. Before the first load it is the
- * curated catalog.
+ * "mistral/mistral-large-4", both Mistral Large 4). A curated model takes its place in that order
+ * and keeps its own levels, or else takes each gateway's; curated models no gateway lists follow
+ * at the end. A curated model loses its route on a gateway whose prices have loaded without it.
+ * Before the first load it is the curated catalog.
  */
 export function evaluationCatalog(): CatalogModel[] {
   const curated = new Map(
@@ -92,12 +91,13 @@ export function evaluationCatalog(): CatalogModel[] {
       let id = catalogModelId(gateway, entry.id);
       if (!merged.has(id) && !curated.has(id)) {
         const entryVendors = vendors({ [gateway]: entry.id });
+        // Only another gateway's model: one gateway's two ids under one name are two models.
         const twin = named.get(nameKey(entry.label))?.find((candidate) => {
-          const model = merged.get(candidate) ?? curated.get(candidate);
-          const routes = model?.gateways ?? {};
-          return [...vendors(routes)].some((vendor) => entryVendors.has(vendor));
+          const routes = (merged.get(candidate) ?? curated.get(candidate))?.gateways ?? {};
+          return (
+            !routes[gateway] && [...vendors(routes)].some((vendor) => entryVendors.has(vendor))
+          );
         });
-        if (twin && (merged.get(twin) ?? curated.get(twin))?.gateways?.[gateway]) continue;
         if (twin) id = twin;
       }
       const known = merged.get(id) ?? curated.get(id);

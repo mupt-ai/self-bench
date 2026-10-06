@@ -124,9 +124,10 @@ test("a model gateways list under different ids is one entry when vendor and nam
       "meta/muse-spark-1.3",
       { openrouter: "meta/muse-spark-1.3", "vercel-ai-gateway": "meta/muse-spark-1.3" },
     ],
-    // Vercel lists the name twice; its first listing is the route.
     ["qwen/qwen3-14b", { openrouter: "qwen/qwen3-14b", "vercel-ai-gateway": "alibaba/qwen-3-14b" }],
     ["cohere/command-a-plus", { openrouter: "cohere/command-a-plus" }],
+    // Vercel's second id under one name is a model of its own, not another route.
+    ["qwen/qwen3-14b-preview", { "vercel-ai-gateway": "alibaba/qwen3-14b-preview" }],
     ["cohere/command-a", { "vercel-ai-gateway": "cohere/command-a" }],
     ["vendor/mistral-large-4", { "vercel-ai-gateway": "vendor/mistral-large-4" }],
   ]);
