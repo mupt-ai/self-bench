@@ -1,6 +1,7 @@
-import { repositoryPath, segmentsOf } from "../public/paths.js";
+import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import { homeBody, notFoundBody, pageData, repositoryBody } from "./site-body.js";
+import { groupBody, groupHead } from "./site-group.js";
 import { homeHead, notFoundHead, type PageHead, repositoryHead } from "./site-head.js";
 
 /** A selfbench.dev page as the server writes it, before the shell is filled in. */
@@ -26,13 +27,27 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
   return async (pathname: string): Promise<SitePage> => {
     if (pathname === "/") {
       const repositories = await publicRoutes.repositories().catch(() => undefined);
-      const directory = repositories && (await publicRoutes.directoryBody().catch(() => undefined));
+      const groups = repositories && (await publicRoutes.groups().catch(() => undefined));
+      const directory = groups && (await publicRoutes.directoryBody().catch(() => undefined));
       return {
         status: 200,
         head: homeHead(origin),
-        body: homeBody(repositories ?? []),
+        body: homeBody(repositories ?? [], groups ?? []),
         data: pageData("/api/public/results", directory),
-        partial: !repositories,
+        partial: !groups,
+      };
+    }
+    const slug = groupPath(segmentsOf(pathname));
+    if (slug) {
+      const release = await publicRoutes.groupFor(slug).catch(() => undefined);
+      if (!release) return { status: 404, head: notFoundHead(), body: notFoundBody() };
+      // Addressed as the site asks for it (api-source.ts).
+      const api = `/api/public/groups/${encodeURIComponent(slug)}`;
+      return {
+        status: 200,
+        head: groupHead(origin, release),
+        body: groupBody(release),
+        data: pageData(api, await publicRoutes.groupBody(slug).catch(() => undefined)),
       };
     }
     const path = repositoryPath(segmentsOf(pathname));

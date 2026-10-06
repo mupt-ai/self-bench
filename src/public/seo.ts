@@ -1,5 +1,5 @@
 import { frontierSettings } from "./directory.js";
-import type { PublishedLine, ReleaseSetting } from "./release-types.js";
+import type { PublishedGroupRelease, PublishedLine, ReleaseSetting } from "./release-types.js";
 
 /**
  * What search engines and link previews read about selfbench.dev: each page's title and
@@ -24,6 +24,10 @@ export const HOME_HEADING = "Find the best models for your repo";
 
 export function repositoryTitle(fullName: string): string {
   return `${fullName}: Coding Agent Benchmark · ${SITE_NAME}`;
+}
+
+export function groupTitle(name: string): string {
+  return `${name}: Multi-Repo Coding Agent Benchmark · ${SITE_NAME}`;
 }
 
 /**
@@ -59,13 +63,17 @@ function nameBeside(setting: ReleaseSetting, other?: ReleaseSetting): string {
 const DESCRIPTION_LIMIT = 160;
 
 /**
- * A repository page's description: its most accurate setting and the best one for less (the next
- * on the frontier: the most accurate of the settings that cost less), then what was measured.
- * Search results show only the first 150 or so characters, so the picks come first, and whole
- * sentences are left off the end rather than cut.
+ * A page's description: the question it answers, its most accurate setting and the best one for
+ * less (the next on the frontier: the most accurate of the settings that cost less), then what was
+ * measured. Search results show only the first 150 or so characters, so the picks come first, and
+ * whole sentences are left off the end rather than cut.
  */
-export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_LIMIT): string {
-  const { release } = line;
+function describe(
+  question: string,
+  release: { settings: ReleaseSetting[]; tasks: number },
+  source: string,
+  limit: number,
+): string {
   const [best, next] = frontierSettings(release.settings).sort(
     (left, right) =>
       right.accuracy - left.accuracy ||
@@ -73,19 +81,50 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
       left.id.localeCompare(right.id),
   );
   const settings = release.settings.length;
-  const [question, ...rest] = [
-    `Which coding agent works best on ${release.repository.fullName}?`,
+  const rest = [
     best ? `Most accurate: ${nameBeside(best, next)}, ${scored(best)} per task.` : "",
     next ? `Best for less: ${nameBeside(next, best)}, ${scored(next)}.` : "",
-    `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
+    `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from ${source}.`,
   ].filter(Boolean);
   // Whole sentences, in order, while they fit; the question always leads.
-  let text = question ?? "";
+  let text = question;
   for (const part of rest) {
     if (text.length + 1 + part.length > limit) break;
     text = `${text} ${part}`;
   }
   return text;
+}
+
+/** A repository page's description (`describe`). */
+export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_LIMIT): string {
+  const { release } = line;
+  return describe(
+    `Which coding agent works best on ${release.repository.fullName}?`,
+    release,
+    "its merged pull requests",
+    limit,
+  );
+}
+
+/** A group's members as a sentence names them: "a/b and c/d", or "a/b, c/d and 3 more". */
+export function membersPhrase(members: readonly { fullName: string }[]): string {
+  const names = members.map((member) => member.fullName);
+  if (names.length <= 2) return names.join(" and ");
+  return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;
+}
+
+/** A group page's description (`describe`), naming the repositories it pools. */
+export function groupDescription(
+  release: PublishedGroupRelease,
+  limit = DESCRIPTION_LIMIT,
+): string {
+  const { members } = release.group;
+  return describe(
+    `Which coding agent works best across ${membersPhrase(members)}?`,
+    release,
+    `${members.length} ${members.length === 1 ? "repository’s" : "repositories’"} merged pull requests`,
+    limit,
+  );
 }
 
 /**
