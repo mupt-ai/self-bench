@@ -1,5 +1,6 @@
-import type { DirectoryCard } from "../../../src/public/directory";
+import type { DirectoryCard, GroupCard } from "../../../src/public/directory";
 import type {
+  PublishedGroupRelease,
   PublishedRelease,
   PublishedTask,
   PublishedTaskFiles,
@@ -18,6 +19,12 @@ export type PublicPublisher = ReleasePublisher;
 export type PublicSetting = ReleaseSetting;
 /** One release of one repository by one publisher: the unit a repository page shows. */
 export type PublicRelease = PublishedRelease;
+/** One release of a group of repositories: one benchmark over all their tasks. */
+export type PublicGroupRelease = PublishedGroupRelease;
+/** What the task list and viewer read of a release, a repository's or a group's. */
+export type TaskRelease = Pick<PublicRelease, "releaseId" | "tasks"> & {
+  repository?: Pick<PublicRelease["repository"], "fullName">;
+};
 /** A task of a release whose publisher published the tasks. */
 export type PublicTask = PublishedTask;
 /** A published task's files: small text files with their contents, the rest by size. */
@@ -47,3 +54,6 @@ export type { PickRole } from "../../../src/public/directory";
  * builds it (`src/public/directory.ts`), with only what a card and the search show.
  */
 export type PublicRepoSummary = DirectoryCard;
+
+/** A group's current release, reduced to its card on the home page. */
+export type PublicGroupSummary = GroupCard;

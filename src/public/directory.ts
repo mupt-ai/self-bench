@@ -93,6 +93,16 @@ export function picks<S extends Ranked>(settings: readonly S[]): SettingPick<S>[
   ];
 }
 
+/** The most accurate frontier setting, as a page's description names it first. */
+export function leadingSetting<S extends Ranked>(settings: readonly S[]): S | undefined {
+  return [...frontierSettings(settings)].sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  )[0];
+}
+
 /** Settings off the frontier, most accurate first; cost breaks accuracy ties, then id. */
 export function offFrontier<S extends Ranked>(settings: readonly S[]): S[] {
   return settings

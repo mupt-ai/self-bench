@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import type { PublicRelease, PublicTask } from "../contract";
+import type { PublicTask, TaskRelease } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { PANEL } from "../frame";
 import { canHover } from "../mobile/device";
@@ -52,7 +52,7 @@ function useNear(element: RefObject<HTMLElement | null>): boolean {
  * shows its files and offers it as a download. Nothing is read until the list nears the screen,
  * and a task's files are read as it is pointed at, pressed, or focused, before it is opened.
  */
-export function TaskList({ release }: { release: PublicRelease }) {
+export function TaskList({ release }: { release: TaskRelease }) {
   const source = useSource();
   const section = useRef<HTMLElement>(null);
   const near = useNear(section);
@@ -123,7 +123,7 @@ export function TaskList({ release }: { release: PublicRelease }) {
                     <span className="text-xs text-muted-foreground">{difficultyLabel(task)}</span>
                     {task.sourcePr !== undefined && (
                       <span className="ml-auto font-mono text-xs text-muted-foreground">
-                        PR #{task.sourcePr}
+                        {task.repository ? `${task.repository} ` : ""}PR #{task.sourcePr}
                       </span>
                     )}
                   </Link>

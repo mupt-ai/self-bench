@@ -107,7 +107,7 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
 }
 
 /** A group's members as a sentence names them: "a/b and c/d", or "a/b, c/d and 3 more". */
-export function membersPhrase(members: readonly { fullName: string }[]): string {
+function membersPhrase(members: readonly { fullName: string }[]): string {
   const names = members.map((member) => member.fullName);
   if (names.length <= 2) return names.join(" and ");
   return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;

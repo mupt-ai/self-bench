@@ -102,7 +102,7 @@ export interface PublishedTaskFiles {
 }
 
 /** A named set of public repositories, released as one benchmark over all their tasks. */
-export interface ReleaseGroup {
+interface ReleaseGroup {
   /** The group's address on selfbench.dev: `/groups/<slug>`. Permanent once released. */
   slug: string;
   name: string;
@@ -111,7 +111,7 @@ export interface ReleaseGroup {
 }
 
 /** One member repository's share of a group release: each setting over that member's tasks. */
-export interface GroupMemberResult {
+interface GroupMemberResult {
   repositoryId: number;
   tasks: number;
   settings: Pick<

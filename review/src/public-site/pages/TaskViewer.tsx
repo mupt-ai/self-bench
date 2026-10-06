@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { FileButton, FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
-import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
+import type { PublicTask, PublicTaskFiles, TaskRelease } from "../contract";
 import { useSource } from "../source-context";
 import { firstFile } from "../task-files";
 import "./task-viewer.css";
@@ -19,7 +19,7 @@ export default function TaskViewer({
   onClose,
   onSwitch,
 }: {
-  release: PublicRelease;
+  release: TaskRelease;
   taskId: string;
   onClose(): void;
   /** Shows another task of the release in the viewer's place. */
@@ -79,7 +79,8 @@ export default function TaskViewer({
   const files = current?.files?.files ?? [];
   const path = chosen?.taskId === taskId ? chosen.path : (firstFile(files)?.path ?? files[0]?.path);
   const file = files.find((entry) => entry.path === path);
-  const repository = release.repository.fullName;
+  // A group's tasks each name their repository; a repository's are all its own.
+  const repository = task?.repository ?? release.repository?.fullName ?? "";
   // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
   // the viewer lands on what it is over, or on the dialog within its box.
   const outside = (event: MouseEvent<HTMLDialogElement>) => {

@@ -1,11 +1,10 @@
 import type { RefObject } from "react";
 import { Link, useNavigate } from "react-router";
 import { Avatar } from "../components/Avatar";
-import { ModelTable } from "../components/ModelTable";
-import { ResultsChart } from "../components/ResultsChart";
+import { SettingsResults } from "../components/SettingsResults";
 import { TaskList } from "../components/TaskList";
 import type { PublicRepoPage } from "../contract";
-import { pageBody, revealGroup } from "../effects/marks";
+import { revealGroup } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
 import { ago, publisherName } from "../format";
 import { PANEL } from "../frame";
@@ -50,43 +49,17 @@ export function RepoBody({
   const navigate = useNavigate();
   return (
     <>
-      {/* Side by side, the chart stays in view while the table scrolls past it. */}
-      <div
-        {...pageBody}
-        className={`flex flex-col gap-8 ${
-          side
-            ? "min-[90rem]:grid min-[90rem]:grid-cols-[minmax(420px,2fr)_minmax(720px,3fr)] min-[90rem]:items-start min-[90rem]:gap-6"
-            : ""
-        }`}
-      >
-        <section
-          {...revealGroup}
-          data-morph="chart"
-          // min-w-0: side by side, each column keeps to its grid track, whatever its content.
-          className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
-        >
-          <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
-          <div className={`p-2 ${PANEL}`}>
-            <ResultsChart
-              key={release.releaseId}
-              settings={release.settings}
-              onActiveChange={onActiveChange}
-              onHighlightChange={onHighlightChange}
-              selectedId={rowId}
-            />
-          </div>
-        </section>
-
-        <section className="flex min-w-0 flex-col gap-3" data-morph="table" {...revealGroup}>
-          <h2 className="text-sm font-medium">All Settings</h2>
-          <ModelTable
-            settings={release.settings}
-            activeId={activeId ?? rowId}
-            highlighted={highlighted}
-            onRowHover={onRowHover}
-          />
-        </section>
-      </div>
+      <SettingsResults
+        releaseId={release.releaseId}
+        settings={release.settings}
+        side={side}
+        activeId={activeId}
+        rowId={rowId}
+        highlighted={highlighted}
+        onActiveChange={onActiveChange}
+        onHighlightChange={onHighlightChange}
+        onRowHover={onRowHover}
+      />
 
       {release.tasksPublished && <TaskList release={release} />}
 

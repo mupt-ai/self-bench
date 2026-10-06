@@ -26,6 +26,12 @@ export interface ReleaseView {
   current: ReleaseSummary | null;
 }
 
+/** A group's view adds the address its line has claimed, or none yet, and one to offer. */
+export interface GroupReleaseView extends ReleaseView {
+  slug: string | null;
+  suggestedSlug: string;
+}
+
 /** The Releases tab's list, and where released pages live: null when no results site is set up. */
 export interface ReleaseList {
   releases: ReleaseSummary[];

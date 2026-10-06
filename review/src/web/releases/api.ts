@@ -2,6 +2,7 @@ import type { ReleaseView } from "../../../../src/public/release-views";
 
 export type { PreviewSetting, ReleasePreview } from "../../../../src/public/release-build";
 export type {
+  GroupReleaseView,
   ReleaseList,
   ReleaseSummary,
   ReleaseView,
@@ -9,6 +10,10 @@ export type {
 
 export function releasesUrl(org: string, repo: string): string {
   return `/api/orgs/${encodeURIComponent(org)}/repos/${repo.split("/").map(encodeURIComponent).join("/")}/releases`;
+}
+
+export function groupReleasesUrl(org: string, groupId: string): string {
+  return `/api/orgs/${encodeURIComponent(org)}/groups/${encodeURIComponent(groupId)}/releases`;
 }
 
 /** A refused request. A 409 carries the fresh view the dialog should show instead. */
@@ -49,7 +54,7 @@ export async function releaseRequest<Result>(url: string, body?: object): Promis
   return value as Result;
 }
 
-/** The public page of a line on selfbench.dev. */
-export function publicPageUrl(site: string, fullName: string, publisher: string): string {
-  return `${site}/${fullName}/${publisher}`;
+/** The public page of a line on selfbench.dev, at the path its release summary names. */
+export function publicPageUrl(site: string, path: string): string {
+  return `${site}${path}`;
 }

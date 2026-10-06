@@ -1,6 +1,6 @@
 import { harnessLabels } from "../evaluation/models.js";
-import { frontierSettings } from "../public/directory.js";
-import type { PublishedGroupRelease, ReleaseSetting } from "../public/release-types.js";
+import { leadingSetting } from "../public/directory.js";
+import type { PublishedGroupRelease } from "../public/release-types.js";
 import { groupDescription, groupTitle, SITE_NAME } from "../public/seo.js";
 import { escapeText } from "./http.js";
 import { groupCardPath } from "./link-card.js";
@@ -20,16 +20,6 @@ import type { PageHead } from "./site-head.js";
  * A group's page, `/groups/<slug>`, as the server writes it: its head and its text, as a
  * repository page's (site-head.ts, site-body.ts) but naming every repository it pools.
  */
-
-/** The setting a group page's breakdown starts on: its most accurate, as the description names. */
-export function leadingSetting(settings: readonly ReleaseSetting[]): ReleaseSetting | undefined {
-  return [...frontierSettings(settings)].sort(
-    (left, right) =>
-      right.accuracy - left.accuracy ||
-      left.costPerTaskUsd - right.costPerTaskUsd ||
-      left.id.localeCompare(right.id),
-  )[0];
-}
 
 export function groupHead(origin: string, release: PublishedGroupRelease): PageHead {
   const { slug, name, members } = release.group;

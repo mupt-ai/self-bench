@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
-import type { PublicRepoSummary } from "../contract";
+import type { PublicGroupSummary, PublicRepoSummary } from "../contract";
 import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
@@ -19,6 +20,7 @@ const HOME_LIMIT = 100;
 interface HomeData {
   repos: PublicRepoSummary[];
   lines: PublicRepoSummary[];
+  groups: PublicGroupSummary[];
 }
 
 /**
@@ -33,9 +35,9 @@ function useHomeData(source: PublicSource) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    Promise.all([source.listRepos(), source.listLines()]).then(
-      ([repos, lines]) => {
-        const next = { repos: repos.slice(0, HOME_LIMIT), lines };
+    Promise.all([source.listRepos(), source.listLines(), source.listGroups()]).then(
+      ([repos, lines, groups]) => {
+        const next = { repos: repos.slice(0, HOME_LIMIT), lines, groups };
         if (!live || JSON.stringify(next) === JSON.stringify(kept)) return;
         kept = next;
         setData(next);
@@ -59,6 +61,7 @@ export function HomePage() {
   const setQuery = (next: string) =>
     setParams(next ? { q: next } : {}, { replace: true, state: location.state });
   const needle = query.trim().toLowerCase();
+  const groups = (data?.groups ?? []).filter((card) => !needle || groupMatches(card, needle));
 
   // Back to where the visitor left this page, before the first frame is drawn: to the card
   // they opened, placed where it was on screen, or else the same scroll offset. This entry's
@@ -123,18 +126,44 @@ export function HomePage() {
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
+      {groups.length > 0 && <Groups groups={groups} />}
       {data &&
         (needle ? (
           <Grid
             cards={data.lines.filter((card) => matches(card, needle))}
             byLine
             onOpen={opened}
-            empty={<NoMatch query={query.trim()} />}
+            empty={groups.length > 0 ? null : <NoMatch query={query.trim()} />}
           />
         ) : (
-          <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
+          <Grid cards={data.repos} onOpen={opened} empty={groups.length > 0 ? null : <NoMatch />} />
         ))}
     </div>
+  );
+}
+
+/** A group matches on its name, its address, its repositories, or its publisher. */
+function groupMatches(card: PublicGroupSummary, needle: string): boolean {
+  return [
+    card.group.name,
+    card.group.slug,
+    card.publisher.login,
+    publisherName(card.publisher),
+    ...card.group.members.map((member) => member.fullName),
+  ].some((text) => text.toLowerCase().includes(needle));
+}
+
+/** Groups of repositories, each benchmarked as one, above the repositories themselves. */
+function Groups({ groups }: { groups: PublicGroupSummary[] }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-medium">Repository Groups</h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {groups.map((card) => (
+          <GroupCard key={card.releaseId} card={card} />
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -29,8 +29,45 @@ export function ReleasesPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const repo = `${owner}/${name}`;
-  const url = releasesUrl(org.login, repo);
   useDocumentTitle(`Releases · ${repo}`);
+  return (
+    <PageContent>
+      <ReleasesSection
+        url={releasesUrl(org.login, repo)}
+        subject={{ kind: "repository", name: repo }}
+        header={(actions) => (
+          <PageHeader
+            title="Releases"
+            description="Publish this repository's results on selfbench.dev. Each release is kept."
+          >
+            {actions}
+          </PageHeader>
+        )}
+      />
+    </PageContent>
+  );
+}
+
+/** What a releases section publishes: a repository, or a group of them as one benchmark. */
+export interface ReleaseSubject {
+  kind: "repository" | "group";
+  name: string;
+}
+
+/**
+ * A line's releases, with Release Results and View Public Page as the actions its header shows:
+ * a repository's Releases tab, or a section of a group's page.
+ */
+export function ReleasesSection({
+  url,
+  subject,
+  header,
+}: {
+  url: string;
+  subject: ReleaseSubject;
+  header(actions: React.ReactNode): React.ReactNode;
+}) {
+  const { org } = useOrg();
   const [list, setList] = React.useState<ReleaseList>();
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
@@ -41,7 +78,7 @@ export function ReleasesPage() {
     if (search.has("release")) setSearch({}, { replace: true });
   }, [search, setSearch]);
   const [withdrawing, setWithdrawing] = React.useState<ReleaseSummary>();
-  // Only the latest request may set state: one page instance serves every repository.
+  // Only the latest request may set state: one page instance serves every line.
   const latest = React.useRef(0);
   const load = React.useCallback(async () => {
     latest.current += 1;
@@ -64,26 +101,25 @@ export function ReleasesPage() {
   const site = list?.resultsSiteUrl;
 
   return (
-    <PageContent>
-      <PageHeader
-        title="Releases"
-        description="Publish this repository's results on selfbench.dev. Each release is kept."
-      >
-        {current && site && (
-          <a
-            className={buttonStyles.secondary}
-            href={publicPageUrl(site, current.fullName, current.publisher)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View Public Page
-            <ArrowUpRight aria-hidden="true" />
-          </a>
-        )}
-        <Button variant="primary" onClick={() => setReleasing(true)}>
-          Release Results
-        </Button>
-      </PageHeader>
+    <>
+      {header(
+        <>
+          {current && site && (
+            <a
+              className={buttonStyles.secondary}
+              href={publicPageUrl(site, current.path)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Public Page
+              <ArrowUpRight aria-hidden="true" />
+            </a>
+          )}
+          <Button variant="primary" onClick={() => setReleasing(true)}>
+            Release Results
+          </Button>
+        </>,
+      )}
       {notice && (
         <Notice tone="success" className="mb-4">
           {notice}
@@ -94,8 +130,8 @@ export function ReleasesPage() {
         !error && <ListSkeleton label="Loading Releases" />
       ) : list.releases.length === 0 ? (
         <EmptyState title="Not Released Yet">
-          Nothing from this workspace is public for {repo}. Release Results publishes accuracy and
-          cost for the settings you choose.
+          Nothing from this workspace is public for {subject.name}. Release Results publishes
+          accuracy and cost for the settings you choose.
         </EmptyState>
       ) : (
         <>
@@ -151,6 +187,7 @@ export function ReleasesPage() {
         <ReleaseDialog
           url={url}
           workspace={org}
+          subject={subject.kind}
           onClose={() => setReleasing(false)}
           onReleased={(release, unchanged) => {
             setReleasing(false);
@@ -179,7 +216,7 @@ export function ReleasesPage() {
           }}
         />
       )}
-    </PageContent>
+    </>
   );
 }
 

@@ -23,7 +23,12 @@ import {
   groupReleaseInputs,
   lookupRepositoryById,
 } from "../../public/release-sources.js";
-import { type ReleaseList, summaryOf, viewOf } from "../../public/release-views.js";
+import {
+  type GroupReleaseView,
+  type ReleaseList,
+  summaryOf,
+  viewOf,
+} from "../../public/release-views.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -39,7 +44,7 @@ const groupReleaseRequest = releaseRequest
 type GroupReleaseRequest = z.infer<typeof groupReleaseRequest>;
 
 /** A slug from the group's name, offered for its first release. */
-export function suggestedSlug(name: string): string {
+function suggestedSlug(name: string): string {
   const slug = name
     .normalize("NFKD")
     .toLowerCase()
@@ -114,7 +119,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
           ...viewOf(rows, { ...preview, tasks }, pathOf),
           slug: headOf(rows)?.slug ?? null,
           suggestedSlug: suggestedSlug(scope.group.name),
-        },
+        } satisfies GroupReleaseView,
       };
     },
     pathOf,

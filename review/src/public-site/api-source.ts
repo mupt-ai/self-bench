@@ -1,5 +1,12 @@
 import type { PublishedLine } from "../../../src/public/release-types";
-import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
+import type {
+  PublicGroupRelease,
+  PublicGroupSummary,
+  PublicRepoPage,
+  PublicRepoSummary,
+  PublicTask,
+  PublicTaskFiles,
+} from "./contract";
 import { memorySource, type PublicSource } from "./source";
 
 /** The server answered with an error; pages show their error state. */
@@ -57,12 +64,12 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   };
   // The home page asks for repositories and lines together; concurrent callers share one
   // request, and the next call after it settles fetches again.
-  let directory: Promise<PublicRepoSummary[]> | undefined;
+  let directory: Promise<{ cards: PublicRepoSummary[]; groups: PublicGroupSummary[] }> | undefined;
   const everything = () => {
     if (!directory) {
-      const request = answer<{ cards: PublicRepoSummary[] }>(`${base}/api/public/results`).then(
-        (answer) => answer?.cards ?? [],
-      );
+      const request = answer<{ cards: PublicRepoSummary[]; groups?: PublicGroupSummary[] }>(
+        `${base}/api/public/results`,
+      ).then((answer) => ({ cards: answer?.cards ?? [], groups: answer?.groups ?? [] }));
       const settled = () => {
         if (directory === request) directory = undefined;
       };
@@ -82,8 +89,15 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   const tasksOf = (releaseId: string) =>
     `${base}/api/public/releases/${encodeURIComponent(releaseId)}/tasks`;
   return {
-    listRepos: async () => (await everything()).filter((card) => card.defaultLine),
-    listLines: async () => everything(),
+    listRepos: async () => (await everything()).cards.filter((card) => card.defaultLine),
+    listLines: async () => (await everything()).cards,
+    listGroups: async () => (await everything()).groups,
+    getGroup: async (slug) =>
+      (
+        await answer<{ release: PublicGroupRelease }>(
+          `${base}/api/public/groups/${encodeURIComponent(slug)}`,
+        )
+      )?.release,
     getRepo: async (owner, name) => (await repository(owner, name)).getRepo(owner, name),
     getLine: async (owner, name, publisher) =>
       (await repository(owner, name)).getLine(owner, name, publisher),

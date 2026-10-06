@@ -155,7 +155,7 @@ export function RepoCard({
  * The card's two picks, one line each: what it is, model, accuracy, cost per task. A lone pick,
  * the cheapest and the most accurate at once, sits on the second line, where Most Accurate goes.
  */
-function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
+export function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
   return (
     <ul className="flex flex-col gap-1.5">
       {picks.length === 1 && (
