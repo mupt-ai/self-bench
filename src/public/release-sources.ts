@@ -120,11 +120,13 @@ export async function groupReleaseInputs<Key>(
 ): Promise<{ inputs: ReleaseInputs; memberOf: Map<string, Key> }> {
   const [members, credentialFacts] = await Promise.all([
     Promise.all(
-      scope.members.map(async (member) => ({
-        key: member.key,
-        tasks: await releaseTasks(db, member.repoId),
-        runs: await listEvaluations(artifacts, member.repoId),
-      })),
+      scope.members.map(async (member) => {
+        const [tasks, runs] = await Promise.all([
+          releaseTasks(db, member.repoId),
+          listEvaluations(artifacts, member.repoId),
+        ]);
+        return { key: member.key, tasks, runs };
+      }),
     ),
     releaseCredentials(db, scope.orgId),
   ]);
@@ -187,4 +189,37 @@ export async function lookupRepositoryById(
     ...(row.pushed_at ? { pushedAt: row.pushed_at } : {}),
     ...(row.owner?.avatar_url ? { ownerAvatarUrl: row.owner.avatar_url } : {}),
   };
+}
+
+/**
+ * Each repository as GitHub reports it now, when every one is public; otherwise why not, as a
+ * status and message for the releaser.
+ */
+export async function publicRepositories(
+  githubApiUrl: string,
+  token: string,
+  repositories: readonly { githubId: number; fullName: string }[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ repositories: GitHubRepository[] } | { status: 400 | 503; error: string }> {
+  let found: (GitHubRepository | undefined)[];
+  try {
+    found = await Promise.all(
+      repositories.map((repo) =>
+        lookupRepositoryById(githubApiUrl, token, repo.githubId, fetchImpl),
+      ),
+    );
+  } catch (error) {
+    if (!(error instanceof GitHubOAuthError)) throw error;
+    return {
+      status: 503,
+      error: "GitHub could not confirm that the repositories are public. Try again in a moment.",
+    };
+  }
+  const closed = repositories.filter((_, index) => !found[index] || found[index]?.private);
+  if (closed.length > 0)
+    return {
+      status: 400,
+      error: `Only public repositories can be released. Not public: ${closed.map((repo) => repo.fullName).join(", ")}.`,
+    };
+  return { repositories: found.filter((repo) => repo !== undefined) };
 }

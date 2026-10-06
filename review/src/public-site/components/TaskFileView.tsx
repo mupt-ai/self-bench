@@ -64,7 +64,8 @@ export function FilePane({
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
-  repository: string;
+  /** The task's repository, `owner/name`; unknown for a group task that names none. */
+  repository: string | undefined;
   taskId: string;
   canary?: string | undefined;
 }) {
@@ -105,7 +106,8 @@ function FileView({
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
-  repository: string;
+  /** The task's repository, `owner/name`; unknown for a group task that names none. */
+  repository: string | undefined;
   taskId: string;
   canary: string | undefined;
 }) {
@@ -119,7 +121,7 @@ function FileView({
           {fileSize(file.sizeBytes)}). Both of its copies, in environment/ and tests/, are left out
           of the download; this command, run where you unpacked it, recreates them exactly.
         </p>
-        {commit && <Command text={snapshotCommand(repository, commit, taskId)} />}
+        {commit && repository && <Command text={snapshotCommand(repository, commit, taskId)} />}
       </div>
     ) : (
       <p className="p-4 text-muted-foreground">

@@ -48,5 +48,17 @@ export function groupPath(segments: readonly string[]): string | undefined {
   return segments.length === 2 && segments[0] === "groups" ? groupSlug(segments[1]) : undefined;
 }
 
+/** A slug from the group's name, offered for its first release. */
+export function suggestedSlug(name: string): string {
+  const slug = name
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/, "");
+  return slug || "group";
+}
+
 /** The non-empty segments of a URL path. */
 export const segmentsOf = (pathname: string) => pathname.split("/").filter(Boolean);

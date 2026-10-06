@@ -99,11 +99,14 @@ const HEADER = 166;
 const LINE = WIDTH - PAD * 2;
 const chars = (size: number) => Math.floor(LINE / (size * ADVANCE) + 1e-9);
 
-/** Splits `text` into lines of at most `perLine` characters, breaking after - _ or . when it can. */
+/**
+ * Splits `text` into lines of at most `perLine` characters, breaking after - _ . or a space when
+ * it can.
+ */
 function wrap(text: string, perLine: number): string[] {
   const lines: string[] = [];
   let line = "";
-  for (const piece of text.match(/[^-_.]+[-_.]?|[-_.]/g) ?? []) {
+  for (const piece of text.match(/[^-_. ]+[-_. ]?|[-_. ]/g) ?? []) {
     if (line.length + piece.length <= perLine) {
       line += piece;
       continue;
@@ -137,6 +140,15 @@ function balanced(text: string, perLine: number): string[] {
  */
 export function nameLayout(fullName: string): { size: number; lines: string[] } {
   const slash = fullName.indexOf("/");
+  // A group's name has no owner: on one line from 80px, two from 56px, else three at 48px.
+  if (slash < 0) {
+    for (let size = 112; size >= 48; size -= 2) {
+      const lines = balanced(fullName, chars(size)).map((line) => line.trimEnd());
+      if (lines.length <= (size >= 80 ? 1 : size >= 56 ? 2 : 3)) return { size, lines };
+    }
+    const [first = "", second = "", ...rest] = balanced(fullName, chars(48));
+    return { size: 48, lines: [first, second, clip(rest.join(""), chars(48))] };
+  }
   const owner = fullName.slice(0, slash + 1);
   const repo = fullName.slice(slash + 1);
   const fit = (lineLength: number) => Math.min(112, LINE / (lineLength * ADVANCE));

@@ -97,6 +97,22 @@ test("a group releases every member's tasks as one benchmark at its own address"
   expect((await again.json()).release.path).toBe("/groups/nextjs-apps");
 });
 
+test("a private member with no task in the release does not hold it back", async () => {
+  // Only luna is released, and it ran only next.js: commerce is left out, so its privacy is moot.
+  await server.save(full("luna", ["t1", "t2", "t3"]));
+  server.commerceOnGitHub.private = true;
+  const view = await (await server.request(`${base}/preview`)).json();
+  const luna = view.preview.settings.find((setting: { id: string }) =>
+    setting.id.startsWith("luna"),
+  );
+  const response = await release({ slug: "nextjs-apps", settings: [luna.key] });
+  expect(response.status).toBe(201);
+  const served = await (await server.request("/api/public/groups/nextjs-apps", {}, null)).json();
+  expect(
+    served.release.group.members.map((member: { fullName: string }) => member.fullName),
+  ).toEqual(["vercel/next.js"]);
+});
+
 test("every member must be public, checked live on GitHub", async () => {
   server.commerceOnGitHub.private = true;
   const response = await release({ slug: "nextjs-apps" });
@@ -105,7 +121,7 @@ test("every member must be public, checked live on GitHub", async () => {
   expect((await server.request("/api/public/groups/nextjs-apps", {}, null)).status).toBe(404);
 });
 
-test("another workspace's group cannot take a released address", async () => {
+test("another group cannot take a released address, which stays its line's for good", async () => {
   expect((await release({ slug: "nextjs-apps" })).status).toBe(201);
   const other = await server.groups.create(server.tenant.id, "Other Apps", [server.repo.id]);
   base = `/api/orgs/acme/groups/${other.id}/releases`;
@@ -116,6 +132,9 @@ test("another workspace's group cannot take a released address", async () => {
 
 test("withdrawing a group's release takes its page off selfbench.dev", async () => {
   const { release: released } = await (await release({ slug: "nextjs-apps" })).json();
+  // An id the route's pattern admits but no uuid is: not found, never a database error.
+  const malformed = await server.request(`${base}/${"-".repeat(36)}/withdraw`, { method: "POST" });
+  expect(malformed.status).toBe(404);
   const withdrawn = await server.request(`${base}/${released.id}/withdraw`, { method: "POST" });
   expect(withdrawn.status).toBe(200);
   expect(server.groupChanges).toEqual(["nextjs-apps", "nextjs-apps"]);

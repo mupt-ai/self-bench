@@ -31,8 +31,15 @@ export interface Line<Row extends LineRow, Inputs, Checked, Request extends Rele
   gather(rows: readonly Row[]): Promise<{ inputs: Inputs; view: ReleaseView }>;
   /** Where the row's line shows on selfbench.dev. */
   pathOf(row: Row): string;
-  /** What must hold to release now, checked live; answers and gives undefined when it does not. */
-  check(response: ServerResponse, request: Request): Promise<Checked | undefined>;
+  /**
+   * What must hold to release now, checked live, given the line's rows and what the rule read;
+   * answers and gives undefined when it does not.
+   */
+  check(
+    response: ServerResponse,
+    request: Request,
+    read: { rows: readonly Row[]; inputs: Inputs },
+  ): Promise<Checked | undefined>;
   /** Throws `ReleaseRefused` when the ticked settings cannot be released. */
   build(
     inputs: Inputs,
@@ -71,7 +78,7 @@ export async function publish<Row extends LineRow, Inputs, Checked, Request exte
     });
     return;
   }
-  const checked = await line.check(response, body);
+  const checked = await line.check(response, body, { rows, inputs });
   if (!checked) return;
   let built: ReturnType<typeof line.build>;
   try {

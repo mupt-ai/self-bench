@@ -126,7 +126,15 @@ export function HomePage() {
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
-      {groups.length > 0 && <Groups groups={groups} />}
+      {groups.length > 0 && (
+        <Groups
+          groups={groups}
+          // Back from a group returns to the same scroll offset; its card has no marks to anchor.
+          onOpen={() =>
+            saveHomeView(location.key, { scrollTop: window.scrollY, query, anchor: undefined })
+          }
+        />
+      )}
       {data &&
         (needle ? (
           <Grid
@@ -154,13 +162,13 @@ function groupMatches(card: PublicGroupSummary, needle: string): boolean {
 }
 
 /** Groups of repositories, each benchmarked as one, above the repositories themselves. */
-function Groups({ groups }: { groups: PublicGroupSummary[] }) {
+function Groups({ groups, onOpen }: { groups: PublicGroupSummary[]; onOpen: () => void }) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">Repository Groups</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((card) => (
-          <GroupCard key={card.releaseId} card={card} />
+          <GroupCard key={card.releaseId} card={card} onOpen={onOpen} />
         ))}
       </div>
     </section>

@@ -80,7 +80,7 @@ export default function TaskViewer({
   const path = chosen?.taskId === taskId ? chosen.path : (firstFile(files)?.path ?? files[0]?.path);
   const file = files.find((entry) => entry.path === path);
   // A group's tasks each name their repository; a repository's are all its own.
-  const repository = task?.repository ?? release.repository?.fullName ?? "";
+  const repository = task?.repository ?? release.repository?.fullName;
   // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
   // the viewer lands on what it is over, or on the dialog within its box.
   const outside = (event: MouseEvent<HTMLDialogElement>) => {
@@ -95,7 +95,7 @@ export default function TaskViewer({
   };
   const prUrl =
     task?.sourceUrl ??
-    (task?.sourcePr !== undefined
+    (task?.sourcePr !== undefined && repository
       ? `https://github.com/${repository}/pull/${task.sourcePr}`
       : undefined);
 

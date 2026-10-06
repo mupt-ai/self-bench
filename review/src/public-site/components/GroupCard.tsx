@@ -13,11 +13,19 @@ const AVATARS = 4;
  * A group's card: its name and how many repositories it pools, their names where a repository's
  * card has its description, then the same two picks and footer as a repository's card.
  */
-export function GroupCard({ card }: { card: PublicGroupSummary }) {
+export function GroupCard({
+  card,
+  onOpen,
+}: {
+  card: PublicGroupSummary;
+  /** Called as the card is opened, before navigating. */
+  onOpen?: () => void;
+}) {
   const { members } = card.group;
   return (
     <Link
       to={`/groups/${card.group.slug}`}
+      onClick={onOpen}
       className={`group relative flex flex-col gap-3 px-4 pt-4 pb-2.5 transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] focus-visible:border-foreground/40 ${PANEL}`}
     >
       <div className="flex items-center gap-2.5">
@@ -31,7 +39,7 @@ export function GroupCard({ card }: { card: PublicGroupSummary }) {
         </span>
         <span className="flex shrink-0 items-center gap-1 font-mono text-xs text-muted-foreground">
           <Layers className="size-3" aria-hidden="true" />
-          {members.length} repos
+          {members.length} {members.length === 1 ? "repo" : "repos"}
         </span>
       </div>
       <p className="line-clamp-2 min-h-10 font-mono text-xs leading-5 text-foreground/70">
