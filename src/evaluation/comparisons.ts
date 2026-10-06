@@ -200,7 +200,8 @@ export async function createComparison(
   });
   if (inputs.length === 0)
     throw new Error("Every selected configuration and task already has a completed result.");
-  // The comparison's evaluations start together, so they split the account's sandboxes.
+  // The comparison's evaluations start together, so they split the account's sandboxes. Each
+  // runs at least one trial, so more evaluations than sandboxes go over; Harbor waits those out.
   const limit = "maxSandboxes" in sandbox ? sandbox.maxSandboxes : undefined;
   if (limit)
     for (const input of inputs) input.maxTrials = Math.max(1, Math.floor(limit / inputs.length));

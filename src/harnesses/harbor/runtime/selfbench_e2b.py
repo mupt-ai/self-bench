@@ -23,10 +23,10 @@ creates sandboxes through the ``AsyncSandbox`` its E2B module imported, so that 
 An E2B team runs a limited number of sandboxes and template builds at once, and refuses more with
 "429: Rate limit exceeded" ("maximum number of concurrent template builds (20)"). Harbor tried
 again once and failed the trial, so an evaluation that started more trials than the key's plan
-runs failed most of them in its first minute. Here a refused build or sandbox waits for a free
-slot and asks again, backing off from 15 seconds to two minutes. The caller's own limit still
-bounds the wait: Harbor's environment start timeout in a trial, the process timeout in
-selfbench_prepare.py.
+runs failed most of them in its first minute. Here a refused build, sandbox, or template lookup
+waits for a free slot and asks again, backing off from 15 seconds to two minutes. The caller's
+own limit still bounds the wait: Harbor's environment start timeout in a trial, the process
+timeout in selfbench_prepare.py.
 """
 
 from __future__ import annotations
@@ -116,6 +116,9 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         await self._when_free(f"template build {self._template_name}", self._build_template)
 
     async def _does_template_exist(self) -> bool:
+        return await self._when_free("template lookup", self._template_ready)
+
+    async def _template_ready(self) -> bool:
         if not await super()._does_template_exist():
             return False
         name = self._template_name
