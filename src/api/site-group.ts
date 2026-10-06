@@ -1,7 +1,7 @@
 import { harnessLabels } from "../evaluation/models.js";
 import { leadingSetting } from "../public/directory.js";
 import type { PublishedGroupRelease } from "../public/release-types.js";
-import { groupDescription, groupTitle, SITE_NAME } from "../public/seo.js";
+import { groupDescription, groupTitle, HOME_DESCRIPTION, SITE_NAME } from "../public/seo.js";
 import { escapeText } from "./http.js";
 import { groupCardPath } from "./link-card.js";
 import {
@@ -142,4 +142,19 @@ export function groupBody(release: PublishedGroupRelease): string {
       : []),
     HOME_LINK,
   ]);
+}
+
+/**
+ * A group address with nothing released: named as the site names it (GroupPage.tsx), with no
+ * address of its own.
+ */
+export function groupNotFound(slug: string): { head: PageHead; body: string } {
+  return {
+    head: { title: groupTitle(slug), description: HOME_DESCRIPTION },
+    body: main("missing", [
+      `<h1 class="name">${escapeText(slug)}</h1>`,
+      "<p>Nothing is released for this group.</p>",
+      HOME_LINK,
+    ]),
+  };
 }

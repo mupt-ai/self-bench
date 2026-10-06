@@ -1,7 +1,7 @@
 import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import { homeBody, notFoundBody, pageData, repositoryBody } from "./site-body.js";
-import { groupBody, groupHead } from "./site-group.js";
+import { groupBody, groupHead, groupNotFound } from "./site-group.js";
 import { homeHead, notFoundHead, type PageHead, repositoryHead } from "./site-head.js";
 
 /** A selfbench.dev page as the server writes it, before the shell is filled in. */
@@ -40,7 +40,7 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
     const slug = groupPath(segmentsOf(pathname));
     if (slug) {
       const release = await publicRoutes.groupFor(slug).catch(() => undefined);
-      if (!release) return { status: 404, head: notFoundHead(), body: notFoundBody() };
+      if (!release) return { status: 404, ...groupNotFound(slug) };
       // Addressed as the site asks for it (api-source.ts).
       const api = `/api/public/groups/${encodeURIComponent(slug)}`;
       return {

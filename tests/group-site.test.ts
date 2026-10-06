@@ -117,7 +117,11 @@ test("a group page carries the API response the site reads, and an unknown one i
   expect(page.status).toBe(200);
   expect(page.data).toContain('data-url="/api/public/groups/nextjs-apps"');
   expect(page.data).toContain(JSON.stringify({ release }));
-  expect((await pageOf("/groups/nothing-here")).status).toBe(404);
+  // Named as the site names it, so the page reads the same before and after its script runs.
+  const missing = await pageOf("/groups/nothing-here");
+  expect(missing.status).toBe(404);
+  expect(missing.head.title).toBe("nothing-here: Multi-Repo Coding Agent Benchmark · SelfBench");
+  expect(missing.body).toContain("Nothing is released for this group.");
   // Not a slug at all: refused before any lookup.
   expect((await pageOf("/groups/Next.js")).status).toBe(404);
 });
