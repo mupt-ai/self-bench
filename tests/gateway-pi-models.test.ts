@@ -38,7 +38,8 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
       },
     ]),
   );
-  // Efforts go as adaptive thinking, under their own names; Pi maps minimal itself.
+  // Efforts go as adaptive thinking, under their own names; Pi maps minimal itself. A Pi that
+  // lists the model takes only that from the overrides.
   expect(piModels("vercel-ai-gateway", "mistral/mistral-large-4")).toEqual({
     providers: {
       "vercel-ai-gateway": {
@@ -55,6 +56,12 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
             compat: { allowEmptySignature: true, forceAdaptiveThinking: true },
           },
         ],
+        modelOverrides: {
+          "mistral/mistral-large-4": {
+            thinkingLevelMap: { low: "low", high: "high", xhigh: "xhigh" },
+            compat: { forceAdaptiveThinking: true },
+          },
+        },
       },
     },
   });

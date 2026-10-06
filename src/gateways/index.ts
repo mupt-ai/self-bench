@@ -56,11 +56,26 @@ export function findListedModel(id: string): ListedModel | undefined {
 
 /**
  * Pi's models.json for the gateway's model `id`, when its listing describes the model to Pi
- * (ListedModel.pi); the gateway's id is Pi's provider name for it.
+ * (ListedModel.pi); the gateway's id is Pi's provider name for it. The whole entry is for a Pi
+ * whose catalog lacks the model; a Pi that lists it keeps its own entry, overriding only how it
+ * asks for thinking.
  */
 export function piModels(gateway: GatewayId, id: string): object | undefined {
   const model = listing(gateway).models.find((entry) => entry.id === id)?.pi;
-  return model && { providers: { [gateway]: { models: [model] } } };
+  if (!model) return undefined;
+  const { thinkingLevelMap, compat } = model;
+  const thinking = {
+    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+    ...(compat?.forceAdaptiveThinking ? { compat: { forceAdaptiveThinking: true } } : {}),
+  };
+  return {
+    providers: {
+      [gateway]: {
+        models: [model],
+        ...(Object.keys(thinking).length ? { modelOverrides: { [model.id]: thinking } } : {}),
+      },
+    },
+  };
 }
 
 /**

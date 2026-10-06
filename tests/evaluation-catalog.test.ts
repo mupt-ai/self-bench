@@ -104,15 +104,20 @@ test("a model gateways list under different ids is one entry when vendor and nam
     { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
     { id: "qwen/qwen3-14b", label: "Qwen3 14B" },
     { id: "cohere/command-a-plus", label: "Command A+" },
+    { id: "qwen/qwen3-32b", label: "Qwen3 32B" },
+    { id: "qwen/qwen3-32b-2604", label: "Qwen3 32B" },
   ]);
   listModels("vercel-ai-gateway", [
     { id: "mistral/mistral-large-4", label: "Mistral Large 4", thinking: ["low", "high"] },
     // Vercel's meta stands for OpenRouter's meta-llama, but its Muse is OpenRouter's meta Muse.
     { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
-    { id: "alibaba/qwen-3-14b", label: "Qwen3-14B" },
-    { id: "alibaba/qwen3-14b-preview", label: "Qwen3 14B" },
+    // Listed before the id OpenRouter shares, under the same name: a model of its own.
+    { id: "alibaba/qwen3-14b-preview", label: "Qwen3-14B" },
+    { id: "alibaba/qwen3-14b", label: "Qwen3 14B" },
     { id: "cohere/command-a", label: "Command A" },
     { id: "vendor/mistral-large-4", label: "Mistral Large 4" },
+    // OpenRouter has two models by this name, so neither is this one's pair.
+    { id: "alibaba/qwen-3-32b", label: "Qwen3-32B" },
   ]);
   const models = evaluationCatalog().filter((model) => !catalog.some(({ id }) => id === model.id));
   expect(models.map((model) => [model.id, model.gateways])).toEqual([
@@ -124,11 +129,14 @@ test("a model gateways list under different ids is one entry when vendor and nam
       "meta/muse-spark-1.3",
       { openrouter: "meta/muse-spark-1.3", "vercel-ai-gateway": "meta/muse-spark-1.3" },
     ],
-    // Vercel lists the name twice; its first listing is the route.
-    ["qwen/qwen3-14b", { openrouter: "qwen/qwen3-14b", "vercel-ai-gateway": "alibaba/qwen-3-14b" }],
+    ["qwen/qwen3-14b", { openrouter: "qwen/qwen3-14b", "vercel-ai-gateway": "alibaba/qwen3-14b" }],
     ["cohere/command-a-plus", { openrouter: "cohere/command-a-plus" }],
+    ["qwen/qwen3-32b", { openrouter: "qwen/qwen3-32b" }],
+    ["qwen/qwen3-32b-2604", { openrouter: "qwen/qwen3-32b-2604" }],
+    ["qwen/qwen3-14b-preview", { "vercel-ai-gateway": "alibaba/qwen3-14b-preview" }],
     ["cohere/command-a", { "vercel-ai-gateway": "cohere/command-a" }],
     ["vendor/mistral-large-4", { "vercel-ai-gateway": "vendor/mistral-large-4" }],
+    ["qwen/qwen-3-32b", { "vercel-ai-gateway": "alibaba/qwen-3-32b" }],
   ]);
   const [mistral] = models;
   if (!mistral) throw new Error("Missing Mistral Large 4");

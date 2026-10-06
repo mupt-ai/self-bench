@@ -107,18 +107,20 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
-test("gateway Pi writes the model's models.json where Pi reads it before Pi starts", async () => {
+test("gateway Pi gives a Pi that lists the model only the overrides, else the whole entry", async () => {
   const result = await runCommand("python3", [
     "-c",
     `import asyncio, importlib.util, json, os, subprocess, sys, tempfile, types
 pi = types.ModuleType("harbor.agents.installed.pi")
 class Pi:
-    def __init__(self, models_json):
+    def __init__(self, model_name, models_json):
+        self.model_name = model_name
+        self.model_connection = types.SimpleNamespace(env={"AI_GATEWAY_API_KEY": "key"})
         self.options, self.commands = types.SimpleNamespace(models_json=models_json), []
-    async def exec_as_agent(self, environment, command):
-        self.commands.append(command)
+    async def exec_as_agent(self, environment, command, env):
+        self.commands.append((command, env))
     async def run(self, instruction, environment, context):
-        self.commands.append("pi " + instruction)
+        self.commands.append(("pi " + instruction, None))
 pi.Pi, pi.PiOptions = Pi, type("PiOptions", (), {})
 sys.modules[pi.__name__] = pi
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
@@ -128,20 +130,42 @@ spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
 assert adapter.GatewayPi.options_model is adapter.GatewayPiOptions
-models = {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/it's", "name": "It's"}]}}}
-async def check():
-    agent = adapter.GatewayPi(models)
-    await agent.run("task", None, None)
-    write, start = agent.commands
-    assert start == "pi task"
+# Pi's --list-models table, fuzzy-matched: a similar model is not the model.
+LISTED = """provider           model                 context
+vercel-ai-gateway  vendor/known          128K
+vercel-ai-gateway  vendor/it's-older     128K
+"""
+def written(model, overrides, listing=LISTED):
+    config = {"models": [{"id": model}], **({"modelOverrides": overrides} if overrides else {})}
+    models = {"providers": {"vercel-ai-gateway": config}}
+    agent = adapter.GatewayPi("vercel-ai-gateway/" + model, models)
+    asyncio.run(agent.run("task", None, None))
+    (write, env), start = agent.commands
+    assert env == {"AI_GATEWAY_API_KEY": "key"} and start == ("pi task", None)
     with tempfile.TemporaryDirectory() as home:
-        subprocess.check_call(["bash", "-c", write], env={**os.environ, "HOME": home})
-        with open(os.path.join(home, ".pi/agent/models.json")) as file:
-            assert json.load(file) == models
-    agent = adapter.GatewayPi(None)
-    await agent.run("task", None, None)
-    assert agent.commands == ["pi task"]
-asyncio.run(check())
+        os.mkdir(os.path.join(home, ".nvm"))
+        with open(os.path.join(home, "listed.txt"), "w") as file:
+            file.write(listing)
+        with open(os.path.join(home, ".nvm/nvm.sh"), "w") as file:
+            file.write('pi() { echo "$@" > "$HOME/asked.txt"; cat "$HOME/listed.txt"; [ -s "$HOME/listed.txt" ]; }')
+        subprocess.check_call(["bash", "-c", "set -o pipefail; " + write], env={**os.environ, "HOME": home})
+        with open(os.path.join(home, "asked.txt")) as file:
+            assert file.read() == "--list-models " + model + "\\n"
+        path = os.path.join(home, ".pi/agent/models.json")
+        if not os.path.exists(path):
+            return None
+        with open(path) as file:
+            return json.load(file)
+overrides = {"vendor/known": {"compat": {"forceAdaptiveThinking": True}}}
+assert written("vendor/known", overrides) == {"providers": {"vercel-ai-gateway": {"modelOverrides": overrides}}}
+assert written("vendor/known", None) is None
+whole = {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/it's"}]}}}
+assert written("vendor/it's", None) == whole
+# Without a listing Pi would guess, so it gets the whole entry.
+assert written("vendor/known", None, listing="") == {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/known"}]}}}
+agent = adapter.GatewayPi("vercel-ai-gateway/vendor/known", None)
+asyncio.run(agent.run("task", None, None))
+assert agent.commands == [("pi task", None)]
 `,
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);

@@ -14,6 +14,7 @@ import {
   gatewayServes,
   gateways,
   isGateway,
+  type ListedModel,
   listedModels,
 } from "../gateways/index.js";
 import type { Harness } from "./models.js";
@@ -71,12 +72,11 @@ export const catalog: CatalogModel[] = models.map((model) => {
 /**
  * Every model the gateways list for agents: each gateway's in its order, frontier first, the
  * earlier gateways' first. A model two gateways list is one entry with a route on each, whether
- * they give it the same id or only the same vendor and name ("mistralai/mistral-large-4-0" and
- * "mistral/mistral-large-4", both Mistral Large 4); a gateway that lists one name twice keeps
- * its first. A curated model takes its place in that order and keeps its own levels, or else
- * takes each gateway's; curated models no gateway lists follow at the end. A curated model loses
- * its route on a gateway whose prices have loaded without it. Before the first load it is the
- * curated catalog.
+ * they give it the same id or, where the pairing is unambiguous, only the same vendor and name
+ * ("mistralai/mistral-large-4-0" and "mistral/mistral-large-4", both Mistral Large 4). A curated
+ * model takes its place in that order and keeps its own levels, or else takes each gateway's;
+ * curated models no gateway lists follow at the end. A curated model loses its route on a
+ * gateway whose prices have loaded without it. Before the first load it is the curated catalog.
  */
 export function evaluationCatalog(): CatalogModel[] {
   const curated = new Map(
@@ -88,17 +88,30 @@ export function evaluationCatalog(): CatalogModel[] {
   const named = new Map<string, string[]>();
   for (const [id, model] of curated) addName(named, model.label, id);
   for (const gateway of gatewayIds) {
-    for (const entry of listedModels(gateway)) {
+    const listed = listedModels(gateway);
+    const exact = new Set(listed.map((entry) => catalogModelId(gateway, entry.id)));
+    // A vendor's name, as this gateway lists it: "mistralai/mistral large 4".
+    const vendorName = (entry: ListedModel) =>
+      `${catalogModelId(gateway, entry.id).split("/")[0]}/${nameKey(entry.label)}`;
+    const names = new Map<string, number>();
+    for (const entry of listed)
+      names.set(vendorName(entry), (names.get(vendorName(entry)) ?? 0) + 1);
+    for (const entry of listed) {
       let id = catalogModelId(gateway, entry.id);
-      if (!merged.has(id) && !curated.has(id)) {
+      // A name stands for one model only where it is unambiguous: this gateway lists the vendor's
+      // name once, and exactly one other model of that vendor and name, which this gateway does
+      // not list by id, awaits a route here. Otherwise listing order would pick the pair.
+      if (!merged.has(id) && !curated.has(id) && names.get(vendorName(entry)) === 1) {
         const entryVendors = vendors({ [gateway]: entry.id });
-        const twin = named.get(nameKey(entry.label))?.find((candidate) => {
-          const model = merged.get(candidate) ?? curated.get(candidate);
-          const routes = model?.gateways ?? {};
-          return [...vendors(routes)].some((vendor) => entryVendors.has(vendor));
+        const [twin, ...others] = (named.get(nameKey(entry.label)) ?? []).filter((candidate) => {
+          const routes = (merged.get(candidate) ?? curated.get(candidate))?.gateways ?? {};
+          return (
+            !routes[gateway] &&
+            !exact.has(candidate) &&
+            [...vendors(routes)].some((vendor) => entryVendors.has(vendor))
+          );
         });
-        if (twin && (merged.get(twin) ?? curated.get(twin))?.gateways?.[gateway]) continue;
-        if (twin) id = twin;
+        if (twin && others.length === 0) id = twin;
       }
       const known = merged.get(id) ?? curated.get(id);
       curated.delete(id);
