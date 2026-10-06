@@ -65,6 +65,9 @@ export function discoveryPrompt(input: DiscoveryShardInput, count: number): stri
     tiers: Object.entries(difficultyThresholds)
       .map(([tier, t]) => `${tier} ≥${t.changedLines} lines across ≥${t.implementationFiles} files`)
       .join(", "),
+    inspect: run.focus
+      ? "Shortlist PRs matching the focus below from their titles and bodies (jq over /work/provenance.jsonl), then inspect only the shortlist's diffs with gh and git."
+      : "Inspect each PR's diff with gh and git.",
     // Quoted so the focus narrows the choice without replacing the rules above it.
     focus: run.focus
       ? [
@@ -78,7 +81,6 @@ export function discoveryPrompt(input: DiscoveryShardInput, count: number): stri
           "",
           "- Propose only PRs whose implementation core clearly matches it. Fewer or none is better than off-focus picks.",
           "- The rules above still apply.",
-          "- Shortlist first from titles and bodies (jq over /work/provenance.jsonl), then inspect only the shortlist's diffs.",
         ].join("\n")
       : "",
   });

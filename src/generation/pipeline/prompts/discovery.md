@@ -6,7 +6,7 @@ You are choosing which merged pull requests from this repository ({{repositoryUr
 
 # Choosing
 
-- Inspect each PR's diff with gh and git. Resolve the exact 40-character base and completed commits.
+- {{inspect}} Resolve the exact 40-character base and completed commits.
 - Tier by the implementation core only (no tests, generated code, formatting, or unrelated cleanup): {{tiers}}. Use the highest tier the PR honestly meets.
 - Prefer focused public behavior with tests that can be held out, a deterministic setup, and a request that describes the change.
 - Skip PRs whose implementation lives in paths the repository marks `export-ignore` in .gitattributes; the task snapshot won't contain them.

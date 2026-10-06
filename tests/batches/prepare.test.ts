@@ -70,7 +70,7 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
   }
 });
 
-test("a focused batch spreads every fetched PR over its shards instead of the newest window", async () => {
+test("a focused batch gives each discovery shard a wider window of the newest PRs", async () => {
   const directory = await mkdtemp(join(tmpdir(), "batch-focus-"));
   try {
     const artifacts = new LocalArtifactStore(directory);
@@ -91,7 +91,7 @@ test("a focused batch spreads every fetched PR over its shards instead of the ne
         run: {
           ...run,
           provenance,
-          candidateCounts: { easy: 0, medium: 0, hard: 2 },
+          candidateCounts: { easy: 0, medium: 0, hard: 1 },
           ...(focus ? { focus } : {}),
         },
         token: "secret-lookup-token",
@@ -116,7 +116,7 @@ test("a focused batch spreads every fetched PR over its shards instead of the ne
           });
         },
       });
-      expect(shards).toHaveLength(2);
+      expect(shards).toHaveLength(1);
       const prs = new Set<number>();
       for (const shard of shards)
         for (const line of Buffer.from(await artifacts.get(shard.input.run.provenance))
@@ -126,10 +126,12 @@ test("a focused batch spreads every fetched PR over its shards instead of the ne
           prs.add((JSON.parse(line) as { sourcePr: number }).sourcePr);
       return prs;
     };
-    expect((await stagedPrs()).size).toBe(50);
+    expect((await stagedPrs()).size).toBe(25);
+    // Capped so one agent can still shortlist and inspect within its discovery timeout.
     const focused = await stagedPrs("Next.js App Router features");
-    expect(focused.size).toBe(200);
-    expect(focused.has(1)).toBe(true);
+    expect(focused.size).toBe(150);
+    expect(focused.has(200)).toBe(true);
+    expect(focused.has(50)).toBe(false);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
