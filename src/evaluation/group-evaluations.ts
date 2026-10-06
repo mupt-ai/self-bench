@@ -35,9 +35,13 @@ interface GroupScope {
   login: string;
 }
 
-/** The comparison a group evaluation gives a repository: the same on every retry of it. */
-function childId(id: string, repoId: number): string {
-  const hex = createHash("sha256").update(`${id}/${repoId}`).digest("hex");
+/**
+ * The comparison a group evaluation gives a repository: the same on every retry of it. It comes
+ * from the whole signature, agent minutes included, so requests that share an ID but not their
+ * settings never share a comparison.
+ */
+function childId(signature: string, repoId: number): string {
+  const hex = createHash("sha256").update(`${signature}/${repoId}`).digest("hex");
   const variant = ((Number.parseInt(hex.charAt(16), 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -87,7 +91,7 @@ export async function createGroupEvaluation(
         .sort((a, b) => a.runId.localeCompare(b.runId) || a.taskId.localeCompare(b.taskId));
       const member = { repoId: repo.id, fullName: repo.fullName };
       return selected.length
-        ? { ...member, comparisonId: childId(selection.id, repo.id), tasks: selected }
+        ? { ...member, comparisonId: childId(signature, repo.id), tasks: selected }
         : { ...member, skipped: "No approved tasks" };
     }),
   );
