@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { MAX_CANDIDATES_PER_RUN } from "../../contracts/config/execution-limits.js";
+import {
+  MAX_CANDIDATES_PER_RUN,
+  MAX_FOCUS_LENGTH,
+} from "../../contracts/config/execution-limits.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { BillingStore } from "../../db/billing.js";
 import type { RepoStore } from "../../db/repos.js";
@@ -79,10 +82,14 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         }
         const parsed = batchSubmissionSchema.safeParse(body);
         if (!parsed.success) {
+          const invalid = (field: string) =>
+            parsed.error.issues.some((issue) => issue.path[0] === field);
           sendJson(response, 400, {
-            error: parsed.error.issues.some((issue) => issue.path[0] === "generation")
+            error: invalid("generation")
               ? "Choose valid generation models, reasoning, sandbox, and credentials."
-              : `Request 1–${MAX_CANDIDATES_PER_RUN} candidates total using nonnegative whole counts for easy, medium and hard.`,
+              : invalid("focus")
+                ? `Focus must be 1–${MAX_FOCUS_LENGTH} characters.`
+                : `Request 1–${MAX_CANDIDATES_PER_RUN} candidates total using nonnegative whole counts for easy, medium and hard.`,
           });
           return true;
         }
@@ -130,6 +137,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         const input = await prepareBatch({
           ...options,
           candidateCounts: parsed.data.candidateCounts,
+          ...(parsed.data.focus ? { focus: parsed.data.focus } : {}),
           ...(generation ? { generation } : {}),
           repo,
           token,
@@ -158,6 +166,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           "batch started",
           {
             candidates: counts.easy + counts.medium + counts.hard,
+            focused: parsed.data.focus !== undefined,
             ...(generation ? generationProperties(generation.settings) : {}),
           },
           tenant,

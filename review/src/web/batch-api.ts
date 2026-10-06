@@ -47,10 +47,15 @@ export const startBatch = (
   repo: BatchRepoId,
   candidateCounts: CandidateCounts,
   generation: GenerationSettings,
+  focus = "",
 ) =>
   request<{ runId: string }>(root(repo), {
     method: "POST",
-    body: JSON.stringify({ candidateCounts, generation }),
+    body: JSON.stringify({
+      candidateCounts,
+      ...(focus.trim() ? { focus: focus.trim() } : {}),
+      generation,
+    }),
   });
 export const fetchBatch = (repo: BatchRepoId, runId: string) =>
   request<BatchStatus>(`${root(repo)}/${runId}`);

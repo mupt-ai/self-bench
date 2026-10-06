@@ -2,6 +2,8 @@ import { DISCOVERY_POOL_MULTIPLIER } from "../../contracts/config/execution-limi
 import type { ProvenanceMessage } from "../../third_party/github/provenance.js";
 
 const DEFAULT_PRS_PER_SHARD = 25;
+/** A focused shard skims titles first, so it can cover more PRs within one discovery timeout. */
+export const FOCUSED_PRS_PER_SHARD = 150;
 
 /** Size each shard to expose a 1.5× PR pool without exceeding the workflow bound. */
 export function discoveryPrsPerShard(candidateCount: number, shardCount: number): number {

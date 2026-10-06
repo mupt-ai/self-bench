@@ -70,6 +70,87 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
   }
 });
 
+test("a focused batch gives each discovery shard a wider window of the newest PRs", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "batch-focus-"));
+  try {
+    const artifacts = new LocalArtifactStore(directory);
+    const provenance = await artifacts.put("input.jsonl", Buffer.alloc(0), "application/x-ndjson");
+    const nodes = Array.from({ length: 200 }, (_, i) => ({
+      number: i + 1,
+      title: "Implement feature",
+      body: "request",
+      url: `https://github.com/example/repo/pull/${i + 1}`,
+      isDraft: false,
+      additions: 25,
+      deletions: 0,
+      changedFiles: 1,
+      author: { login: "human", __typename: "User" },
+    }));
+    let attempt = 0;
+    const stage = async (hard: number, focus?: string) => {
+      const shards = await prepareGenerationBatch({
+        run: {
+          ...run,
+          provenance,
+          candidateCounts: { easy: 0, medium: 0, hard },
+          ...(focus ? { focus } : {}),
+        },
+        token: "secret-lookup-token",
+        attempt: ++attempt,
+        artifacts,
+        fetchImpl: async (_url, init) => {
+          const body = JSON.parse(String(init.body)) as { variables: { after: string | null } };
+          const start = body.variables.after ? Number(body.variables.after) : 0;
+          const end = Math.min(start + 100, nodes.length);
+          return Response.json({
+            data: {
+              repository: {
+                pullRequests: {
+                  nodes: nodes.slice(start, end),
+                  pageInfo: {
+                    hasNextPage: end < nodes.length,
+                    endCursor: end < nodes.length ? String(end) : null,
+                  },
+                },
+              },
+            },
+          });
+        },
+      });
+      const prs = new Set<number>();
+      for (const shard of shards)
+        for (const line of Buffer.from(await artifacts.get(shard.input.run.provenance))
+          .toString()
+          .trim()
+          .split("\n"))
+          prs.add((JSON.parse(line) as { sourcePr: number }).sourcePr);
+      return { shards, prs };
+    };
+    const focus = "Next.js App Router features";
+    expect((await stage(1)).prs.size).toBe(25);
+    // Capped so one agent can still shortlist and inspect within its discovery timeout.
+    const one = await stage(1, focus);
+    expect(one.shards).toHaveLength(1);
+    expect(one.prs.size).toBe(150);
+    expect(one.prs.has(200)).toBe(true);
+    expect(one.prs.has(50)).toBe(false);
+    const five = await stage(5, focus);
+    expect(five.shards).toHaveLength(5);
+    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([1, 1, 1, 1, 1]);
+    expect(five.prs.size).toBe(200);
+    // However the PRs pack into shards, the shard targets add up to exactly the request.
+    nodes.splice(20);
+    for (const focused of [undefined, focus]) {
+      const small = await stage(9, focused);
+      const targets = small.shards.map((shard) => shard.input.targetCounts.hard);
+      expect(targets.reduce((total, count) => total + count, 0)).toBe(9);
+      expect(Math.min(...targets)).toBeGreaterThan(0);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("server stages complete PR chunks before dispatch, without retaining the lookup token", async () => {
   const directory = await mkdtemp(join(tmpdir(), "batch-plan-"));
   try {

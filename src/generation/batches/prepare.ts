@@ -2,7 +2,12 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import { MAX_DISCOVERY_SHARDS } from "../../contracts/config/execution-limits.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { fetchBatchPullRequests } from "../../third_party/github/batch-pull-requests.js";
-import { discoveryPrsPerShard, partitionPullRequests, takeNewestShards } from "./shards.js";
+import {
+  discoveryPrsPerShard,
+  FOCUSED_PRS_PER_SHARD,
+  partitionPullRequests,
+  takeNewestShards,
+} from "./shards.js";
 import type { GenerationBatch } from "./types.js";
 
 /** Final: retrying the fetch finds the same PRs. */
@@ -35,11 +40,19 @@ export async function prepareGenerationBatch(options: {
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
   const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
-  const selected = takeNewestShards(
-    chunks,
-    shardCount,
-    discoveryPrsPerShard(requested, shardCount),
-  );
+  // A focus is often rare among recent PRs, so focused discovery looks further back.
+  const prCount = new Set(chunks.flat().map((message) => message.sourcePr)).size;
+  const prsPerShard = run.focus
+    ? Math.max(1, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
+    : discoveryPrsPerShard(requested, shardCount);
+  const selected = takeNewestShards(chunks, shardCount, prsPerShard);
+  const targetCountsForShard = (shardIndex: number): RunRequest["candidateCounts"] =>
+    Object.fromEntries(
+      Object.entries(run.candidateCounts).map(([tier, count]) => [
+        tier,
+        Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
+      ]),
+    ) as RunRequest["candidateCounts"];
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(
     selected.map(async (chunk, index) => {
@@ -56,12 +69,7 @@ export async function prepareGenerationBatch(options: {
           wave: 0,
           shardIndex: index,
           shardCount: selected.length,
-          targetCounts: Object.fromEntries(
-            Object.entries(run.candidateCounts).map(([tier, count]) => [
-              tier,
-              count === 0 ? 0 : Math.max(1, Math.ceil(count / selected.length)),
-            ]),
-          ) as RunRequest["candidateCounts"],
+          targetCounts: targetCountsForShard(index),
           excludedSourcePrs: [],
         },
       };

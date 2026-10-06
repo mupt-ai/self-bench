@@ -83,6 +83,25 @@ test("discovery, individual stages, failures, cancellation and Needs Review with
   expect(taskState(after.find((row) => row.candidateId === "c1") ?? good)).toBe("accepted");
 });
 
+test("a batch focus is trimmed onto the run, and a blank or overlong one never starts", async () => {
+  const f = await fixture();
+  const post = (focus: unknown) =>
+    f.request(ROOT, {
+      method: "POST",
+      body: JSON.stringify({ candidateCounts: { easy: 1, medium: 0, hard: 0 }, focus }),
+    });
+  for (const focus of ["   ", "x".repeat(1001), 5]) {
+    const response = await post(focus);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("Focus must be 1–1000 characters.");
+  }
+  expect(f.started).toHaveLength(0);
+  expect((await post("  Next.js App Router features  ")).status).toBe(202);
+  expect(f.started[0]?.focus).toBe("Next.js App Router features");
+  expect((await f.start()).status).toBe(202);
+  expect(f.started[1]?.focus).toBeUndefined();
+});
+
 test("invalid input never starts, and ambiguous start failure retains repo ownership", async () => {
   const f = await fixture({ failStart: true });
   expect((await f.request(ROOT, { method: "POST", body: "{" })).status).toBe(400);
