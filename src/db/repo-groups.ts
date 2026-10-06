@@ -167,17 +167,14 @@ export function createRepoGroupStore(db: Database) {
     async removeEvaluation(id: string): Promise<void> {
       await db.delete(groupEvaluations).where(eq(groupEvaluations.id, id));
     },
-    /** Inserts once; a concurrent insert of the same ID returns the stored record. */
-    async insertEvaluation(value: GroupEvaluationRecord): Promise<GroupEvaluationRecord> {
-      const [row] = await db
+    /** Inserts once; false when a record with its ID was already saved. */
+    async insertEvaluation(value: GroupEvaluationRecord): Promise<boolean> {
+      const rows = await db
         .insert(groupEvaluations)
         .values({ ...value, createdAt: new Date(value.createdAt) })
         .onConflictDoNothing()
-        .returning();
-      if (row) return evaluationOf(row);
-      const existing = await findEvaluation(value.id);
-      if (!existing) throw new Error("Group evaluation could not be saved");
-      return existing;
+        .returning({ id: groupEvaluations.id });
+      return rows.length > 0;
     },
   };
 }

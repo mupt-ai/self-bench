@@ -120,12 +120,13 @@ export async function groupRoutes(
     const { comparisons } = vault;
     const env = options.env ?? process.env;
     const scope = { orgId: tenant.id, tenant: tenant.login, login: user.login };
-    const submitted = async (record: GroupEvaluationRecord, message: string) => {
-      let submissionError: string | undefined;
+    /** Starts what is saved; `unsaved` names comparisons that could not be saved to start. */
+    const submitted = async (record: GroupEvaluationRecord, message: string, unsaved?: string) => {
+      let submissionError = unsaved;
       try {
         await dispatchGroupEvaluation(artifacts, comparisons, record, options.start);
       } catch {
-        submissionError = message;
+        submissionError = [unsaved, message].filter(Boolean).join(" ");
       }
       sendJson(response, 202, {
         ...(await groupEvaluationDetail(artifacts, comparisons, record)),
@@ -139,7 +140,7 @@ export async function groupRoutes(
       else if (method !== "POST") sendJson(response, 405, { error: "Method not allowed" });
       else {
         const draft = groupEvaluationSchema.parse(await body());
-        const record = await createGroupEvaluation(
+        const { record, unsaved } = await createGroupEvaluation(
           vault,
           groups,
           options.tasks,
@@ -153,6 +154,7 @@ export async function groupRoutes(
         const confirmed = await submitted(
           record,
           "Group evaluation saved. Some submissions were not confirmed; resume safely using this evaluation.",
+          unsaved,
         );
         track(
           user,
@@ -177,8 +179,16 @@ export async function groupRoutes(
       sendJson(response, 200, await groupEvaluationDetail(artifacts, comparisons, record));
     else if (method === "POST" && action === "resume") {
       // Saves any comparison an interrupted submission left out, then starts what is queued.
-      await saveComparisons(vault, options.tasks, artifacts, managedOffer(env), scope, record, env);
-      await submitted(record, "Submission not confirmed. Resume uses the same run IDs.");
+      const { unsaved } = await saveComparisons(
+        vault,
+        options.tasks,
+        artifacts,
+        managedOffer(env),
+        scope,
+        record,
+        env,
+      );
+      await submitted(record, "Submission not confirmed. Resume uses the same run IDs.", unsaved);
     } else if (method === "POST" && action === "cancel") {
       await cancelGroupEvaluation(artifacts, comparisons, record, user.login, options.stop);
       sendJson(response, 200, await groupEvaluationDetail(artifacts, comparisons, record));

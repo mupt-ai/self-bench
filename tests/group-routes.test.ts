@@ -171,6 +171,13 @@ test("resume saves and starts a comparison an interrupted submission left out", 
         comparisonId: crypto.randomUUID(),
         tasks: [{ runId: "run-one", taskId: "task-one" }],
       },
+      {
+        // Its task was never approved, so its comparison cannot be saved.
+        repoId: server.secondRepo.id,
+        fullName: "avyay/other",
+        comparisonId: crypto.randomUUID(),
+        tasks: [{ runId: "run-other", taskId: "task-other" }],
+      },
     ],
     createdByLogin: "avyay",
     createdAt: new Date().toISOString(),
@@ -178,11 +185,19 @@ test("resume saves and starts a comparison an interrupted submission left out", 
   const path = `${groups}/${group.id}/evaluations/${id}`;
   expect((await (await server.request(path)).json()).repos).toEqual([
     { fullName: "avyay/repo", unsaved: true },
+    { fullName: "avyay/other", unsaved: true },
   ]);
   const starts = server.starts.length;
   const resumed = await (await server.request(`${path}/resume`, { method: "POST" })).json();
-  expect(resumed.repos[0]).toMatchObject({ fullName: "avyay/repo", progress: { runs: [{}] } });
-  expect(server.starts.slice(starts)).toHaveLength(1);
+  // The repository that can run starts; the one that cannot is named, and holds nothing back.
+  expect(resumed.repos).toMatchObject([
+    { fullName: "avyay/repo", progress: { runs: [{}] } },
+    { fullName: "avyay/other", unsaved: true },
+  ]);
+  expect(resumed.submissionError).toBe(
+    "Not saved for avyay/other (Every task must be human-approved in this repository). Resume to retry them.",
+  );
+  expect(server.starts.slice(starts).map((input) => input.repoId)).toEqual([server.repo.id]);
   // The evaluation outlives its group.
   await server.request(`${groups}/${group.id}`, { method: "DELETE" });
   expect((await server.request(path)).status).toBe(200);
