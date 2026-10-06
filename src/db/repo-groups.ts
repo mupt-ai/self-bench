@@ -163,10 +163,6 @@ export function createRepoGroupStore(db: Database) {
         .orderBy(desc(groupEvaluations.createdAt));
       return rows.map(evaluationOf);
     },
-    /** Drops an evaluation that saved no comparison, so nothing of it is left to resume. */
-    async removeEvaluation(id: string): Promise<void> {
-      await db.delete(groupEvaluations).where(eq(groupEvaluations.id, id));
-    },
     /** Inserts once; false when a record with its ID was already saved. */
     async insertEvaluation(value: GroupEvaluationRecord): Promise<boolean> {
       const rows = await db

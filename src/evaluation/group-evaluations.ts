@@ -103,17 +103,41 @@ export async function createGroupEvaluation(
     createdByLogin: scope.login,
     createdAt: new Date().toISOString(),
   };
-  const inserted = await groups.insertEvaluation(value);
-  // A concurrent request with the same ID saved it first: finish that one.
-  const record = inserted ? value : owned(await groups.findEvaluation(selection.id));
-  const { unsaved, reasons } = await save(record);
-  // Settings that cannot run fail every comparison: drop the evaluation this request created,
-  // as nothing of it is left to resume.
-  if (unsaved && inserted && (await childrenOf(vault.comparisons, record)).length === 0) {
-    await groups.removeEvaluation(record.id);
-    throw new Error(reasons[0]);
-  }
+  // The first comparison is saved before the evaluation: settings that cannot run fail here,
+  // leaving no evaluation behind. Saving it again later finds it saved.
+  const first = members.find((member) => "comparisonId" in member);
+  if (first && "comparisonId" in first)
+    await saveComparison(vault, tasks, store, managed, scope, value, first, environment);
+  // A concurrent request with the same ID may have saved the evaluation first: finish that one.
+  const record = (await groups.insertEvaluation(value))
+    ? value
+    : owned(await groups.findEvaluation(selection.id));
+  const { unsaved } = await save(record);
   return { record, ...(unsaved ? { unsaved } : {}) };
+}
+
+type SavedMember = Extract<GroupEvaluationMember, { comparisonId: string }>;
+
+function saveComparison(
+  vault: Pick<Vault, "credentials" | "comparisons">,
+  tasks: TaskStore,
+  store: ArtifactStore,
+  managed: ManagedOffer,
+  scope: GroupScope,
+  record: GroupEvaluationRecord,
+  member: SavedMember,
+  environment: NodeJS.ProcessEnv,
+) {
+  const { agentMinutes, ...settings } = groupEvaluationSettings(record);
+  return createComparison(
+    vault,
+    tasks,
+    store,
+    managed,
+    { ...scope, login: record.createdByLogin, repoId: member.repoId, agentMinutes },
+    { ...settings, id: member.comparisonId, tasks: member.tasks },
+    environment,
+  );
 }
 
 /**
@@ -128,13 +152,12 @@ export async function saveComparisons(
   scope: GroupScope,
   record: GroupEvaluationRecord,
   environment: NodeJS.ProcessEnv = process.env,
-): Promise<{ unsaved?: string; reasons: string[] }> {
-  const { agentMinutes, ...settings } = groupEvaluationSettings(record);
-  const missing = [];
+): Promise<{ unsaved?: string }> {
+  const missing: SavedMember[] = [];
   for (const member of record.repos)
     if ("comparisonId" in member && !(await vault.comparisons.find(member.comparisonId)))
       missing.push(member);
-  if (missing.length === 0) return { reasons: [] };
+  if (missing.length === 0) return {};
   const failed: { fullName: string; reason: string }[] = [];
   if ((await vault.comparisons.countForOrg(scope.orgId)) + missing.length > 500)
     failed.push(
@@ -146,15 +169,7 @@ export async function saveComparisons(
   else
     for (const member of missing) {
       try {
-        await createComparison(
-          vault,
-          tasks,
-          store,
-          managed,
-          { ...scope, login: record.createdByLogin, repoId: member.repoId, agentMinutes },
-          { ...settings, id: member.comparisonId, tasks: member.tasks },
-          environment,
-        );
+        await saveComparison(vault, tasks, store, managed, scope, record, member, environment);
       } catch (error) {
         failed.push({
           fullName: member.fullName,
@@ -162,10 +177,9 @@ export async function saveComparisons(
         });
       }
     }
-  if (failed.length === 0) return { reasons: [] };
+  if (failed.length === 0) return {};
   return {
     unsaved: `Not saved for ${failed.map(({ fullName, reason }) => `${fullName} (${reason})`).join(", ")}. Resume to retry them.`,
-    reasons: failed.map(({ reason }) => reason),
   };
 }
 
