@@ -266,6 +266,7 @@ export const releases = pgTable(
 );
 
 export * from "./billing-schema.js";
+export * from "./group-schema.js";
 
 /**
  * Each evaluation's record without its trials' logs, transcripts and artifact lists: what lists

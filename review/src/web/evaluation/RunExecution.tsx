@@ -54,7 +54,7 @@ export function RunSetupCallout({ coverage }: { coverage: Coverage }) {
 }
 
 export function RunExecution({
-  repo,
+  returnTo,
   draft,
   credentials,
   sandboxes,
@@ -66,8 +66,11 @@ export function RunExecution({
   onSubmit,
   onRunMissing,
   readOnly = false,
+  taskCount = draft.tasks.length,
+  noun = "Comparison",
 }: {
-  repo: string;
+  /** Where the credentials page returns to. */
+  returnTo: string;
   draft: ComparisonDraft;
   credentials: CredentialInfo[];
   sandboxes: (HostedSandbox | "managed")[];
@@ -77,8 +80,13 @@ export function RunExecution({
   pairs: number;
   onChange(value: ComparisonDraft): void;
   onSubmit(): void;
-  onRunMissing(): void;
+  /** Absent where missing tasks can't be told apart, as in a group evaluation. */
+  onRunMissing?(): void;
   readOnly?: boolean;
+  /** Tasks each pair runs on, when the draft doesn't list them. */
+  taskCount?: number;
+  /** What the run buttons submit. */
+  noun?: string;
 }) {
   return (
     <aside className="panel min-w-0 xl:sticky xl:top-6">
@@ -87,7 +95,7 @@ export function RunExecution({
         {!readOnly && (
           <Link
             className={cn(buttonStyles.secondary, "h-8 px-2.5 text-xs [&>svg]:size-3.5")}
-            to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
+            to={`/settings/credentials?return=${encodeURIComponent(returnTo)}`}
           >
             <KeyRound aria-hidden="true" />
             Credentials
@@ -161,7 +169,7 @@ export function RunExecution({
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
-            <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">{taskCount}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
@@ -169,7 +177,7 @@ export function RunExecution({
           </div>
           <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
             <dt className="text-muted-foreground">Total Trials</dt>
-            <dd className="font-mono tabular-nums">{pairs * draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">{pairs * taskCount}</dd>
           </div>
         </dl>
       </div>
@@ -179,20 +187,22 @@ export function RunExecution({
           <InfoTooltip
             label={
               submitted
-                ? "Retry Same Comparison resubmits this request with the same ID."
-                : "Run Missing Tasks skips tasks that already have completed results for these model and harness pairs. Run Full Comparison runs every selected task."
+                ? `Retry Same ${noun} resubmits this request with the same ID.`
+                : `${onRunMissing ? "Run Missing Tasks skips tasks that already have completed results for these model and harness pairs. " : ""}Run Full ${noun} runs every selected task.`
             }
           />
         </h3>
-        <Button
-          type="button"
-          className="w-full"
-          disabled={readOnly || busy || submitted || !ready}
-          onClick={onRunMissing}
-        >
-          <SkipForward className="size-4" aria-hidden="true" />
-          Run Missing Tasks
-        </Button>
+        {onRunMissing && (
+          <Button
+            type="button"
+            className="w-full"
+            disabled={readOnly || busy || submitted || !ready}
+            onClick={onRunMissing}
+          >
+            <SkipForward className="size-4" aria-hidden="true" />
+            Run Missing Tasks
+          </Button>
+        )}
         <Button
           type="button"
           variant="primary"
@@ -201,11 +211,7 @@ export function RunExecution({
           onClick={onSubmit}
         >
           <Play className="size-4" aria-hidden="true" />
-          {busy
-            ? "Saving Comparison…"
-            : submitted
-              ? "Retry Same Comparison"
-              : "Run Full Comparison"}
+          {busy ? `Saving ${noun}…` : submitted ? `Retry Same ${noun}` : `Run Full ${noun}`}
         </Button>
       </div>
     </aside>

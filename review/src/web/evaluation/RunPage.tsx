@@ -1,10 +1,9 @@
 import { Plus } from "lucide-react";
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { evaluationTaskKey, routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { evaluationTaskKey } from "../../../../src/evaluation/models";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -13,11 +12,12 @@ import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
-import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
+import { customModel } from "./model-selection";
 import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
+import { credentialsWithManaged, settingsReady } from "./run-readiness";
 import { useEvaluationScope } from "./useEvaluationScope";
 
 type RunState = { draft: ComparisonDraft; submitted: boolean; sandboxDefaultPending?: boolean };
@@ -114,50 +114,13 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       disposed = true;
     };
   }, [url]);
-  const availableCredentials: CredentialInfo[] = [
-    ...(managed?.models
-      ? [
-          {
-            id: "managed-model",
-            name: "Managed",
-            kind: "openrouter" as const,
-            auth: "api-key" as const,
-            createdAt: "",
-          },
-        ]
-      : []),
-    ...(credentials ?? []),
-  ];
+  const availableCredentials = credentialsWithManaged(managed, credentials);
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
   const ready =
     tasksReady &&
     draft.tasks.length > 0 &&
-    selected.length > 0 &&
-    selected.length === draft.models.length &&
-    !hasDuplicateModelSelections([...models, customModel], draft.models, availableCredentials) &&
-    selected.length <= 12 &&
-    (draft.sandbox === "managed"
-      ? !!managed?.sandbox && draft.sandboxCredentialId === "managed-sandbox"
-      : availableCredentials.some(
-          (credential) =>
-            credential.id === draft.sandboxCredentialId && credential.kind === draft.sandbox,
-        )) &&
-    selected.every((selection) => {
-      const model =
-        selection.catalogId === "custom"
-          ? customModel
-          : models.find((entry) => entry.id === selection.catalogId);
-      const credential = availableCredentials.find((entry) => entry.id === selection.credentialId);
-      if (!model || !credential) return false;
-      const route = routeFor(model, credential.kind);
-      const levels = thinkingOptions(route ?? model, selection.harnesses);
-      return (
-        credentialRunsAll(model, credential, selection.harnesses) &&
-        (!selection.thinking || levels.includes(selection.thinking)) &&
-        (model.id !== "custom" || !!selection.customModel)
-      );
-    });
+    settingsReady({ draft, models, credentials: availableCredentials, managed });
   const coverage =
     credentials && managed && !state.submitted && setupCoverage(credentials, managed).evaluate;
   const blocker = runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
@@ -274,7 +237,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           />
         </fieldset>
         <RunExecution
-          repo={repo}
+          returnTo={`/repos/${repo}/run`}
           draft={draft}
           credentials={availableCredentials}
           sandboxes={managed?.sandbox ? ["managed", ...sandboxes] : sandboxes}

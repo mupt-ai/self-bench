@@ -7,7 +7,7 @@ function renderExecution(ready: boolean, pairs: number) {
   return renderToStaticMarkup(
     <MemoryRouter>
       <RunExecution
-        repo="mupt-ai/self-bench"
+        returnTo="/repos/mupt-ai/self-bench/run"
         draft={{
           id: "preview",
           tasks: [{ runId: "batch", taskId: "task" }],
@@ -64,7 +64,7 @@ test("managed execution hides provider credentials and does not name its backend
   const html = renderToStaticMarkup(
     <MemoryRouter>
       <RunExecution
-        repo="mupt-ai/self-bench"
+        returnTo="/repos/mupt-ai/self-bench/run"
         draft={{
           id: "preview",
           tasks: [],

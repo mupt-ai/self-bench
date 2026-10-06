@@ -1,4 +1,4 @@
-import { CreditCard, FolderGit2, KeyRound, LockKeyhole, Rocket, X } from "lucide-react";
+import { CreditCard, FolderGit2, KeyRound, Layers, LockKeyhole, Rocket, X } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
@@ -84,6 +84,16 @@ export function SiteSidebar({
                       <Link to="/" onClick={onNavigate} aria-label="Repositories">
                         <FolderGit2 />
                         {!collapsed && <span>Repositories</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </NavTooltip>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <NavTooltip collapsed={collapsed} label="Repository Groups">
+                    <SidebarMenuButton asChild isActive={pathname.startsWith("/groups")}>
+                      <Link to="/groups" onClick={onNavigate} aria-label="Repository Groups">
+                        <Layers />
+                        {!collapsed && <span>Repository Groups</span>}
                       </Link>
                     </SidebarMenuButton>
                   </NavTooltip>

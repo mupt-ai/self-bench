@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
+import type { RepoGroupStore } from "../../db/repo-groups.js";
 import type { RepoStore } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
@@ -35,6 +36,7 @@ import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
+import { groupRoutes } from "./groups.js";
 
 const route =
   /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel))?$/;
@@ -49,6 +51,8 @@ export interface EvaluationRoutesOptions {
   stop: StopEvaluation;
   env?: NodeJS.ProcessEnv;
   vault?: Vault;
+  /** Repository groups; their evaluations also need the vault. */
+  groups?: RepoGroupStore;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
 }
@@ -63,6 +67,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       user: User,
     ): Promise<boolean> {
       if (await credentialRoutes(options, request, url, response, user)) return true;
+      if (await groupRoutes(options, request, url, response, user)) return true;
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;
       response.setHeader("cache-control", "no-store");
@@ -186,16 +191,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         return true;
       }
       if (section === "catalog") {
-        sendJson(response, 200, {
-          version: catalogVersion,
-          models: evaluationCatalog().map(withReferencePricing),
-          sandboxes: hostedSandboxes,
-          customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
-          managed: {
-            ...managedOffer(env),
-            sandbox: managedHarborEnvironment(env) === "modal",
-          },
-        });
+        sendJson(response, 200, catalogOf(env));
       } else if (section === "options") {
         const available = (await tasks.listForRepo(repo.id)).filter(runnable);
         sendJson(response, 200, {
@@ -221,6 +217,20 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         else response.writeHead(304).end();
       }
       return true;
+    },
+  };
+}
+
+/** The models and sandboxes evaluations can use; the same for every repository. */
+export function catalogOf(env: NodeJS.ProcessEnv) {
+  return {
+    version: catalogVersion,
+    models: evaluationCatalog().map(withReferencePricing),
+    sandboxes: hostedSandboxes,
+    customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
+    managed: {
+      ...managedOffer(env),
+      sandbox: managedHarborEnvironment(env) === "modal",
     },
   };
 }
