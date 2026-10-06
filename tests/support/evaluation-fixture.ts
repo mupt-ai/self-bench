@@ -11,6 +11,7 @@ import {
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
 import { createRunSummaryStore } from "../../src/db/evaluation-summaries.js";
+import { createGroupReleaseStore } from "../../src/db/group-releases.js";
 import { createRepoGroupStore } from "../../src/db/repo-groups.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
@@ -124,6 +125,7 @@ export async function evaluationServer(
   });
   const tasks = createTaskStore(database.db);
   const groups = createRepoGroupStore(database.db);
+  const groupReleases = createGroupReleaseStore(database.db);
   await tasks.upsertMany([
     {
       repoId: repo.id,
@@ -196,6 +198,7 @@ export async function evaluationServer(
             env.SELFBENCH_EVAL_CREDENTIAL_KEY ?? evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY,
           ),
         groups,
+        groupReleases,
         async start(input) {
           if (failStart) throw new Error("mock connection lost");
           starts.push(input);
@@ -232,6 +235,7 @@ export async function evaluationServer(
     repo,
     secondRepo,
     groups,
+    groupReleases,
     starts,
     stops,
     outsider,

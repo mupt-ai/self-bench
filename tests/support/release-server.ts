@@ -7,32 +7,24 @@ import { sql } from "drizzle-orm";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { sendApiError } from "../../src/api/http.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
+import { createGroupReleaseRoutes } from "../../src/api/routes/group-releases.js";
 import { createPublicReleaseRoutes } from "../../src/api/routes/public-releases.js";
 import { createReleaseRoutes, type PublicChange } from "../../src/api/routes/releases.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createApiKeyStore } from "../../src/db/api-keys.js";
+import { createGroupReleaseStore } from "../../src/db/group-releases.js";
 import { createReleaseStore } from "../../src/db/releases.js";
-import { createRepoStore } from "../../src/db/repos.js";
+import { createRepoGroupStore } from "../../src/db/repo-groups.js";
+import { type ConnectedRepo, createRepoStore } from "../../src/db/repos.js";
 import { credentials } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
 import { full, names } from "./release-fixture.js";
+import { fakeGitHub } from "./release-github.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { taskBundle } from "./tar.js";
-
-/** What the fake GitHub reports for the connected repository; tests change it. */
-interface FakeRepository {
-  private: boolean;
-  stars: number;
-  fullName: string;
-  gone?: boolean;
-  /** When set, the repository lookup answers with this status and no body. */
-  lookupStatus?: number;
-  /** Runs while a release looks the repository up, to interleave another request. */
-  onLookup?: () => Promise<void>;
-}
 
 /**
  * The release routes and the public routes over PGlite, a local artifact store, and a fake
@@ -49,7 +41,7 @@ export async function releaseServer(
   const database = shared ?? (await testDatabase());
   if (shared)
     await shared.db.execute(
-      sql`truncate table releases, tasks, credentials, api_keys, repos, org_members, orgs, users restart identity cascade`,
+      sql`truncate table releases, group_releases, group_evaluations, repo_groups, tasks, credentials, api_keys, repos, org_members, orgs, users restart identity cascade`,
     );
   const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
   const member = (githubId: number, login: string, orgs: string[]) =>
@@ -89,32 +81,7 @@ export async function releaseServer(
   ]);
   const [credential] = await database.db.select().from(credentials);
   if (!credential) throw new Error("missing credential");
-  const github: FakeRepository = { private: false, stars: 137842, fullName: "vercel/next.js" };
-  const ids: Record<string, number> = { priya: 1, marco: 2, outsider: 3 };
-  const githubFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const login = new Headers(init?.headers).get("authorization")?.replace("Bearer token-", "");
-    if (url === `${testAuthConfig.githubApiUrl}/user`)
-      return Response.json({ id: ids[login ?? ""] ?? 0 });
-    if (url === `${testAuthConfig.githubApiUrl}/repositories/70107786` && github.onLookup)
-      await github.onLookup();
-    if (url === `${testAuthConfig.githubApiUrl}/repositories/70107786` && github.lookupStatus)
-      return new Response(null, { status: github.lookupStatus });
-    if (url === `${testAuthConfig.githubApiUrl}/repositories/70107786` && !github.gone)
-      return Response.json({
-        id: 70107786,
-        full_name: github.fullName,
-        private: github.private,
-        archived: false,
-        description: "The React Framework",
-        language: "JavaScript",
-        default_branch: "canary",
-        stargazers_count: github.stars,
-        pushed_at: "2026-09-22T03:14:55Z",
-        owner: { avatar_url: "https://avatars.example/vercel.png" },
-      });
-    return new Response(null, { status: 404 });
-  }) as typeof fetch;
+  const { github, commerceOnGitHub, githubFetch } = fakeGitHub();
   const auth = createSiteAuth({
     config: testAuthConfig,
     users,
@@ -131,7 +98,11 @@ export async function releaseServer(
         response.writeHead(401).end();
         return;
       }
-      if (!(await routes.handle(request, url, response, user))) response.writeHead(404).end();
+      if (
+        !(await routes.handle(request, url, response, user)) &&
+        !(await groupRoutes.handle(request, url, response, user))
+      )
+        response.writeHead(404).end();
     } catch (error) {
       sendApiError(response, error);
     }
@@ -140,19 +111,35 @@ export async function releaseServer(
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No port");
   publicUrl = `http://127.0.0.1:${address.port}`;
-  const publicRoutes = createPublicReleaseRoutes(releases, { artifacts });
-  /** What each release and withdrawal reported changing, in order. */
-  const changes: PublicChange[] = [];
-  const routes = createReleaseRoutes({
+  const groupReleases = createGroupReleaseStore(database.db);
+  const groups = createRepoGroupStore(database.db);
+  const publicRoutes = createPublicReleaseRoutes(releases, { artifacts, groupReleases });
+  /** The slugs each group release and withdrawal reported changing, in order. */
+  const groupChanges: string[] = [];
+  const options = {
     db: database.db,
     artifacts,
     users,
     repos,
-    releases,
     publicUrl,
     githubApiUrl: testAuthConfig.githubApiUrl,
     resultsSiteUrl,
     fetchImpl: githubFetch,
+  };
+  const groupRoutes = createGroupReleaseRoutes({
+    ...options,
+    groups,
+    releases: groupReleases,
+    onPublicChange: ({ slug }) => {
+      groupChanges.push(slug);
+      publicRoutes.refresh();
+    },
+  });
+  /** What each release and withdrawal reported changing, in order. */
+  const changes: PublicChange[] = [];
+  const routes = createReleaseRoutes({
+    ...options,
+    releases,
     onPublicChange: (change) => {
       changes.push(change);
       publicRoutes.refresh();
@@ -184,12 +171,27 @@ export async function releaseServer(
     line: { orgId: tenant.id, githubRepoId: 70107786 },
     base,
     request,
-    /** Approves tasks `names` of generation run "gen" on the connected repository. */
-    async approve(names: readonly string[]) {
+    groups,
+    groupReleases,
+    groupChanges,
+    commerceOnGitHub,
+    tenant,
+    /** Connects vercel/commerce too (GitHub id 4242), for a group of the two. */
+    connectCommerce: () =>
+      repos.connect({
+        orgId: tenant.id,
+        githubId: 4242,
+        fullName: "vercel/commerce",
+        defaultBranch: "main",
+        private: false,
+        connectedBy: priya.id,
+      }),
+    /** Approves tasks `names` of generation run `runId` on a connected repository. */
+    async approve(names: readonly string[], on: ConnectedRepo = repo, runId = "gen") {
       await tasks.upsertMany(
         names.map((name) => ({
-          repoId: repo.id,
-          runId: "gen",
+          repoId: on.id,
+          runId,
           candidateId: `candidate-${name}`,
           taskId: name,
           pipelineStatus: "accepted" as const,
@@ -202,15 +204,15 @@ export async function releaseServer(
       for (const name of names)
         await artifacts.put(`tasks/${name}.tar.gz`, await taskBundle(name), "application/gzip");
       for (const name of names) {
-        const task = await tasks.find(repo.id, "gen", name);
+        const task = await tasks.find(on.id, runId, name);
         if (task) await tasks.review(task.id, { decision: "approve", note: "", userId: priya.id });
       }
     },
-    /** Saves `run` on the connected repository, evaluated with the workspace's credential. */
-    async save(run: EvaluationRun) {
+    /** Saves `run` on a connected repository, evaluated with the workspace's credential. */
+    async save(run: EvaluationRun, on: ConnectedRepo = repo) {
       await saveEvaluation(artifacts, {
         ...run,
-        repoId: repo.id,
+        repoId: on.id,
         credentials: {
           modelCredentialId: credential.id,
           sandboxCredentialId: "s",

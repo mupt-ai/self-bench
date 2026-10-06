@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { directoryOf } from "../../../src/public/directory";
+import { directoryOf, groupCardsOf } from "../../../src/public/directory";
 import { apiSource } from "./api-source";
 import { page } from "./test-fixture";
 
@@ -87,4 +87,24 @@ test("a repository page takes its carried lines only for its own repository", as
   expect(calls).toHaveLength(0);
   expect(await source.getRepo("nobody", "nothing")).toBeUndefined();
   expect(calls).toEqual(["/api/public/results/nobody/nothing"]);
+});
+
+test("a group page reads its group, and the directory lists groups beside repositories", async () => {
+  const release = {
+    ...acme.release,
+    group: { slug: "nextjs-apps", name: "Next.js Apps", members: [acme.release.repository] },
+    breakdown: [],
+  };
+  const calls = serve({
+    "/api/public/groups/nextjs-apps": { body: { release } },
+    "/api/public/results": { body: { ...directory.body, groups: groupCardsOf([release]) } },
+  });
+  const source = apiSource();
+  expect((await source.getGroup("nextjs-apps"))?.group.name).toBe("Next.js Apps");
+  expect(await source.getGroup("missing")).toBeUndefined();
+  expect((await source.listGroups()).map((card) => card.group.slug)).toEqual(["nextjs-apps"]);
+  expect(calls).toContain("/api/public/groups/nextjs-apps");
+  // A directory from before groups lists none.
+  serve({ "/api/public/results": directory });
+  expect(await apiSource().listGroups()).toEqual([]);
 });
