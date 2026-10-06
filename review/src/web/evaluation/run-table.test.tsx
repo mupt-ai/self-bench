@@ -135,6 +135,7 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(html).toContain("Add Provider");
   expect(html).toContain("Save");
   expect(html).toContain('type="password"');
+  expect(html).not.toContain("Max Concurrent Sandboxes");
   expect(options(html)).toEqual([
     "openai",
     "anthropic",
@@ -160,11 +161,38 @@ test.each([false, true])("credential add action names its group (sandbox: %s)", 
   expect(html).toContain(sandbox ? "Add Sandbox" : "Add Provider");
 });
 
+test("a sandbox credential's limit shows in its group", () => {
+  const html = renderToStaticMarkup(
+    <CredentialGroup
+      title="Sandboxes"
+      credentials={[
+        {
+          id: "credential",
+          name: "Team",
+          kind: "e2b",
+          auth: "api-key",
+          createdAt: "2026-09-09T00:00:00Z",
+          maxSandboxes: 20,
+        },
+      ]}
+      loading={false}
+      canManage
+      sandbox
+      onAdd={() => {}}
+      onLimit={() => {}}
+      onReplace={() => {}}
+      onDelete={() => {}}
+    />,
+  );
+  expect(html).toContain("E2B · API Key · Up to 20 at once");
+});
+
 test("Add Sandbox offers only hosted sandboxes and the fields for its selected sandbox", () => {
   const html = credentialEditor("modal");
   expect(html).toContain("Add Sandbox");
   expect(html).toContain("Modal Token ID");
   expect(html).toContain("Modal Token Secret");
+  expect(html).toContain("Max Concurrent Sandboxes");
   expect(options(html)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   expect(html).not.toContain("ChatGPT Sign-In");
 });
@@ -176,9 +204,12 @@ test("replacement keeps the original credential category regardless of the defau
     kind: "e2b",
     auth: "api-key",
     createdAt: "2026-09-09T00:00:00Z",
+    maxSandboxes: 20,
   };
   const sandbox = credentialEditor(undefined, previous);
   expect(sandbox).toContain("Replace Credential");
+  // The replacement starts from the original's sandbox limit.
+  expect(sandbox).toMatch(/id="credential-max-sandboxes"[^>]*value="20"/);
   expect(options(sandbox)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   const provider = credentialEditor("modal", { ...previous, kind: "anthropic" });
   expect(options(provider)).toEqual([

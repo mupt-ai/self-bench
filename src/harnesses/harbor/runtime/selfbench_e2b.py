@@ -19,13 +19,25 @@ and refuses with "400: Timeout cannot be greater than 1 hours", which left a tri
 hint of what to change; that refusal is reported here as the key's plan being too small. Harbor
 creates sandboxes through the ``AsyncSandbox`` its E2B module imported, so that name is pointed at
 ``PlanCheckedSandbox``, which passes Harbor's arguments through unchanged.
+
+An E2B team runs a limited number of sandboxes and template builds at once, and refuses more with
+"429: Rate limit exceeded" ("maximum number of concurrent template builds (20)"). Harbor tried
+again once and failed the trial, so an evaluation that started more trials than the key's plan
+runs failed most of them in its first minute. Here a refused build or sandbox waits for a free
+slot and asks again, backing off from 15 seconds to two minutes. The caller's own limit still
+bounds the wait: Harbor's environment start timeout in a trial, the process timeout in
+selfbench_prepare.py.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
+import random
 import re
 import shlex
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 import httpx
 from e2b import (
@@ -33,6 +45,7 @@ from e2b import (
     AsyncTemplate,
     BuildException,
     BuildInfo,
+    RateLimitException,
     SandboxException,
     Template,
     TemplateBuildStatus,
@@ -42,6 +55,7 @@ import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
 
 TAG = "default"
+CAPACITY_WAIT_SECS = (15, 120)
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
 MANIFEST_TYPES = ", ".join(
@@ -77,8 +91,30 @@ class PlanCheckedSandbox(AsyncSandbox):
 
 harbor_e2b.AsyncSandbox = PlanCheckedSandbox
 
+T = TypeVar("T")
+
 
 class SelfBenchE2BEnvironment(E2BEnvironment):
+    async def _when_free(self, what: str, start: Callable[[], Awaitable[T]]) -> T:
+        """Runs `start`, waiting while E2B refuses it at the team's concurrency limit."""
+        first, most = CAPACITY_WAIT_SECS
+        wait = first
+        while True:
+            try:
+                return await start()
+            except RateLimitException as error:
+                # Jitter spreads the retries of many trials that were refused together.
+                delay = wait * random.uniform(0.75, 1.25)
+                self.logger.warning(f"E2B refused the {what} ({error}); asking again in {delay:.0f}s")
+                await asyncio.sleep(delay)
+                wait = min(wait * 2, most)
+
+    async def _create_sandbox(self):
+        await self._when_free("sandbox", super()._create_sandbox)
+
+    async def _create_template(self):
+        await self._when_free(f"template build {self._template_name}", self._build_template)
+
     async def _does_template_exist(self) -> bool:
         if not await super()._does_template_exist():
             return False
@@ -103,7 +139,7 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         self.logger.warning(f"Template {name} build {build} is {status.value}; building it again")
         return False
 
-    async def _create_template(self):
+    async def _build_template(self):
         image = self.task_env_config.docker_image
         host = os.environ.get("SELFBENCH_REGISTRY_HOST")
         password = os.environ.get("SELFBENCH_REGISTRY_PASSWORD")

@@ -134,6 +134,13 @@
       "when": 1790908141487,
       "tag": "0018_evaluation_summaries",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791316634478,
+      "tag": "0019_credential_max_sandboxes",
+      "breakpoints": true
     }
   ]
 }

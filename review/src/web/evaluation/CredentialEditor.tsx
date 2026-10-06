@@ -7,6 +7,7 @@ import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CodexSignIn } from "./CodexSignIn";
 import { CredentialSecret } from "./CredentialSecret";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
+import { SandboxLimitField } from "./SandboxLimit";
 
 export function CredentialEditor({
   previous,
@@ -33,6 +34,7 @@ export function CredentialEditor({
     auth: previous?.auth ?? auth,
     value: "",
     endpoint: previous?.endpoint,
+    maxSandboxes: previous?.maxSandboxes,
   });
   const [busy, setBusy] = React.useState(false);
   const [signingIn, setSigningIn] = React.useState(false);
@@ -105,6 +107,7 @@ export function CredentialEditor({
                     kind: event.target.value as CredentialDraft["kind"],
                     auth: "api-key",
                     value: "",
+                    maxSandboxes: draft.maxSandboxes,
                   });
                   setImporting(false);
                   setError("");
@@ -227,6 +230,12 @@ export function CredentialEditor({
                     />
                   </label>
                 ))}
+              {sandbox && (
+                <SandboxLimitField
+                  value={draft.maxSandboxes}
+                  onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
+                />
+              )}
               <CredentialSecret
                 draft={draft}
                 setDraft={setDraft}

@@ -1,0 +1,1 @@
+ALTER TABLE "credentials" ADD COLUMN "max_sandboxes" integer;

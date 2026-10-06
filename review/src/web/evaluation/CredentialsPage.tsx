@@ -10,6 +10,7 @@ import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
 import { isSandbox } from "./credential-presentation";
 import { DeleteCredentialDialog } from "./DeleteCredentialDialog";
+import { SandboxLimitDialog } from "./SandboxLimit";
 
 type Editor = {
   previous?: CredentialInfo;
@@ -28,6 +29,7 @@ function CredentialsContent({ org }: { org: string }) {
   const [data, setData] = React.useState<Credentials>();
   const [editing, setEditing] = React.useState<Editor>();
   const [deleting, setDeleting] = React.useState<CredentialInfo>();
+  const [limiting, setLimiting] = React.useState<CredentialInfo>();
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
   const [search] = useSearchParams();
@@ -112,6 +114,7 @@ function CredentialsContent({ org }: { org: string }) {
             title="Sandboxes"
             credentials={credentials.filter((entry) => isSandbox(entry.kind))}
             sandbox
+            onLimit={setLimiting}
             onAdd={() => setEditing({ kind: "modal" })}
           />
         </div>
@@ -123,6 +126,18 @@ function CredentialsContent({ org }: { org: string }) {
           onSave={save}
           onSaved={saved}
           onCancel={() => setEditing(undefined)}
+        />
+      )}
+      {limiting && (
+        <SandboxLimitDialog
+          credential={limiting}
+          onClose={() => setLimiting(undefined)}
+          onSave={async (maxSandboxes) => {
+            await evaluationRequest(`${url}/${limiting.id}/limit`, { maxSandboxes });
+            setLimiting(undefined);
+            setNotice("Sandbox limit saved.");
+            await refresh();
+          }}
         />
       )}
       {deleting && (

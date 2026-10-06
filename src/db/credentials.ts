@@ -7,16 +7,8 @@ import type { Database } from "./client.js";
 import { RecordStoreError } from "./encrypted-records.js";
 import { credentials } from "./schema.js";
 
-const credentialKinds = [
-  "openai",
-  "anthropic",
-  ...gatewayIds,
-  "custom",
-  "e2b",
-  "modal",
-  "daytona",
-  "vercel",
-] as const;
+const sandboxKinds = ["e2b", "modal", "daytona", "vercel"] as const;
+const credentialKinds = ["openai", "anthropic", ...gatewayIds, "custom", ...sandboxKinds] as const;
 const providerId = z
   .string()
   .trim()
@@ -27,6 +19,11 @@ const providerId = z
 export const credentialAuths = ["api-key", "codex-login", "claude-login"] as const;
 /** Claude Code's subscription token, as `claude setup-token` prints it. */
 const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
+/**
+ * How many sandboxes a sandbox credential's account runs at once (its plan's limit, or less to
+ * leave room for other work). Evaluations on the credential run at most this many trials at once.
+ */
+export const maxSandboxesSchema = z.number().int().min(1).max(1000);
 
 export const credentialSchema = z
   .object({
@@ -38,6 +35,7 @@ export const credentialSchema = z
     teamId: providerId.optional(),
     projectId: providerId.optional(),
     endpoint: z.url().optional(),
+    maxSandboxes: maxSandboxesSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -68,9 +66,15 @@ export const credentialSchema = z
       issue("Vercel requires a team ID and project ID; other providers do not accept them");
     if ((value.kind === "custom") !== !!value.endpoint)
       issue("Only custom providers require an endpoint");
+    if (value.maxSandboxes !== undefined && !isSandboxKind(value.kind))
+      issue("Only sandbox credentials take a sandbox limit");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
 type CredentialKind = (typeof credentialKinds)[number];
+
+export function isSandboxKind(kind: string): kind is (typeof sandboxKinds)[number] {
+  return (sandboxKinds as readonly string[]).includes(kind);
+}
 
 /** What the browser sees: never the secret. */
 export interface CredentialInfo {
@@ -80,6 +84,7 @@ export interface CredentialInfo {
   auth: (typeof credentialAuths)[number];
   createdAt: string;
   endpoint?: string;
+  maxSandboxes?: number;
 }
 export interface CredentialSecret {
   value: string;
@@ -117,6 +122,7 @@ export function createCredentialStore(db: Database, key: string) {
     auth: row.auth as CredentialInfo["auth"],
     createdAt: row.createdAt.toISOString(),
     ...(row.endpoint ? { endpoint: row.endpoint } : {}),
+    ...(row.maxSandboxes ? { maxSandboxes: row.maxSandboxes } : {}),
   });
   const live = (orgId: number, id: string) =>
     and(eq(credentials.orgId, orgId), eq(credentials.id, id), isNull(credentials.deletedAt));
@@ -181,6 +187,7 @@ export function createCredentialStore(db: Database, key: string) {
           kind: parsed.kind,
           auth: parsed.auth,
           endpoint,
+          maxSandboxes: parsed.maxSandboxes,
           secret: seal(id, secret),
         })
         .onConflictDoNothing()
@@ -189,6 +196,19 @@ export function createCredentialStore(db: Database, key: string) {
       const saved = await find(orgId, id);
       if (!saved) throw new RecordStoreError(409, "Credential ID already used");
       return saved;
+    },
+    /** Sets or clears a sandbox credential's limit; runs already started keep theirs. */
+    async limit(orgId: number, id: string, maxSandboxes: number | undefined): Promise<void> {
+      const credential = await find(orgId, id);
+      if (!credential) throw new Error("Credential not found");
+      if (!isSandboxKind(credential.kind))
+        throw new Error("Only sandbox credentials take a sandbox limit");
+      await db
+        .update(credentials)
+        .set({
+          maxSandboxes: maxSandboxes === undefined ? null : maxSandboxesSchema.parse(maxSandboxes),
+        })
+        .where(live(orgId, id));
     },
     /** Soft delete: the row stays for history, the secret is erased. */
     async remove(orgId: number, id: string): Promise<void> {
