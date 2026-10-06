@@ -28,7 +28,7 @@ export const evaluationRecords = pgTable("evaluation_records", {
 /**
  * Organization model and sandbox credentials. `secret` is the sealed JSON of the credential's
  * value (plus the Modal token ID or Vercel team/project); only the worker and create path open it.
- * `max_sandboxes` is how many sandboxes a sandbox credential's account runs at once, if it says.
+ * `max_sandboxes` is a sandbox credential's optional limit on sandboxes running at once.
  */
 export const credentials = pgTable(
   "credentials",
