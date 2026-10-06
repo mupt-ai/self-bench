@@ -49,6 +49,12 @@ test("groups are named sets of this tenant's connected repositories", async () =
     { fullName: "avyay/other", approvedTasks: 0 },
     { fullName: "avyay/repo", approvedTasks: 1 },
   ]);
+  const other = await createGroup("Other Apps", []);
+  const clash = await server.request(
+    `${groups}/${other.id}`,
+    post({ name: "NEXT.JS APPS", repos: [] }, "PUT"),
+  );
+  expect(await clash.json()).toEqual({ error: "A group with this name already exists" });
   const renamed = await server.request(
     `${groups}/${group.id}`,
     post({ name: "Next.js", repos: ["avyay/repo"] }, "PUT"),
@@ -96,28 +102,90 @@ test("a group evaluation runs the same settings as one comparison per repository
 });
 
 test("both repositories run once each has approved tasks", async () => {
-  const task = await server.tasks.find(server.secondRepo.id, "run-other", "task-other");
-  if (!task) throw new Error("Missing fixture task");
-  await server.tasks.review(task.id, {
-    decision: "approve",
-    note: "Reviewed",
-    userId: server.user.id,
-  });
-  const group = await createGroup("Both", ["avyay/repo", "avyay/other"]);
-  const starts = server.starts.length;
+  // Its own server: approving the second repository's task would change the other tests.
+  const own = await evaluationServer();
+  try {
+    const save = async (kind: string) =>
+      (
+        await (
+          await own.request(
+            "/api/orgs/avyay/credentials",
+            post({ kind, name: kind, value: `fake-${kind}` }),
+          )
+        ).json()
+      ).id as string;
+    const task = await own.tasks.find(own.secondRepo.id, "run-other", "task-other");
+    if (!task) throw new Error("Missing fixture task");
+    await own.tasks.review(task.id, { decision: "approve", note: "Reviewed", userId: own.user.id });
+    const created = await own.request(
+      groups,
+      post({ name: "Both", repos: ["avyay/repo", "avyay/other"] }),
+    );
+    const group = (await created.json()).group as { id: string };
+    const response = await own.request(
+      `${groups}/${group.id}/evaluations`,
+      post({
+        id: crypto.randomUUID(),
+        ...settings,
+        models: [
+          { catalogId: "gpt-6-sol", credentialId: await save("openrouter"), harnesses: ["pi"] },
+        ],
+        sandboxCredentialId: await save("e2b"),
+      }),
+    );
+    const detail = await response.json();
+    const ids = detail.repos.map((repo: { comparisonId: string }) => repo.comparisonId);
+    expect(new Set(ids).size).toBe(2);
+    expect(own.starts.map((input) => input.repoId).sort()).toEqual(
+      [own.repo.id, own.secondRepo.id].sort(),
+    );
+  } finally {
+    await own.close();
+  }
+});
+
+test("settings that cannot run leave no group evaluation behind", async () => {
+  const group = await createGroup("Bad Settings", ["avyay/repo"]);
   const response = await server.request(
     `${groups}/${group.id}/evaluations`,
-    post({ id: crypto.randomUUID(), ...settings }),
+    post({ id: crypto.randomUUID(), ...settings, sandboxCredentialId: crypto.randomUUID() }),
   );
-  const detail = await response.json();
-  const ids = detail.repos.map((repo: { comparisonId: string }) => repo.comparisonId);
-  expect(new Set(ids).size).toBe(2);
-  expect(
-    server.starts
-      .slice(starts)
-      .map((input) => input.repoId)
-      .sort(),
-  ).toEqual([server.repo.id, server.secondRepo.id].sort());
+  expect(await response.json()).toEqual({ error: "Select your matching sandbox credential" });
+  expect((await (await server.request(`${groups}/${group.id}`)).json()).evaluations).toEqual([]);
+});
+
+test("resume saves and starts a comparison an interrupted submission left out", async () => {
+  const group = await createGroup("Interrupted", ["avyay/repo"]);
+  const id = crypto.randomUUID();
+  // As a submission that saved its record and crashed before its comparison.
+  await server.groups.insertEvaluation({
+    id,
+    orgId: (await server.users.orgsFor(server.user.id))[0]?.id ?? 0,
+    groupId: group.id,
+    groupName: group.name,
+    signature: JSON.stringify({ groupId: group.id, id, ...settings }),
+    repos: [
+      {
+        repoId: server.repo.id,
+        fullName: "avyay/repo",
+        comparisonId: crypto.randomUUID(),
+        tasks: [{ runId: "run-one", taskId: "task-one" }],
+      },
+    ],
+    createdByLogin: "avyay",
+    createdAt: new Date().toISOString(),
+  });
+  const path = `${groups}/${group.id}/evaluations/${id}`;
+  expect((await (await server.request(path)).json()).repos).toEqual([
+    { fullName: "avyay/repo", unsaved: true },
+  ]);
+  const starts = server.starts.length;
+  const resumed = await (await server.request(`${path}/resume`, { method: "POST" })).json();
+  expect(resumed.repos[0]).toMatchObject({ fullName: "avyay/repo", progress: { runs: [{}] } });
+  expect(server.starts.slice(starts)).toHaveLength(1);
+  // The evaluation outlives its group.
+  await server.request(`${groups}/${group.id}`, { method: "DELETE" });
+  expect((await server.request(path)).status).toBe(200);
 });
 
 test("a group with no approved tasks cannot be evaluated", async () => {

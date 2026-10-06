@@ -27,6 +27,8 @@ export interface GroupDetail {
 /** A member as a group evaluation ran it: its comparison's progress and runs, or why it didn't. */
 type GroupEvaluationRepo =
   | { fullName: string; skipped: string }
+  /** Its comparison was not saved yet: an interrupted submission, which resuming finishes. */
+  | { fullName: string; unsaved: true }
   | {
       fullName: string;
       comparisonId: string;

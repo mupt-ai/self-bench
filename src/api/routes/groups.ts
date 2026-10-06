@@ -14,12 +14,14 @@ import {
   groupEvaluationDetail,
   groupEvaluationSchema,
   groupEvaluationSettings,
+  saveComparisons,
 } from "../../evaluation/group-evaluations.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
-import { catalogOf, type EvaluationRoutesOptions } from "./evaluations.js";
+import { catalogOf } from "./catalog.js";
+import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
   /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/groups(?:\/(catalog)|\/([a-f0-9-]{36})(?:\/(evaluations)(?:\/([a-f0-9-]{36})(?:\/(resume|cancel))?)?)?)?$/;
@@ -51,10 +53,13 @@ export async function groupRoutes(
   const [catalog, groupId, evaluationsPath, evaluationId, action] = match.slice(2);
   const body = async () => JSON.parse((await readBody(request, 30_000)).toString() || "{}");
   try {
-    if (!options.vault || !options.groups) throw new RecordStoreError(503);
-    const { groups } = options;
-    const { comparisons } = options.vault;
-    const { artifacts } = options;
+    if (catalog) {
+      if (method === "GET") sendJson(response, 200, catalogOf(options.env ?? process.env));
+      else sendJson(response, 405, { error: "Method not allowed" });
+      return true;
+    }
+    const { vault, groups, artifacts } = options;
+    if (!groups) throw new RecordStoreError(503);
     // Members are named as the repository routes name them; each must be connected here.
     const repoIds = async (names: string[]) =>
       Promise.all(
@@ -64,11 +69,6 @@ export async function groupRoutes(
           return repo.id;
         }),
       );
-    if (catalog) {
-      if (method === "GET") sendJson(response, 200, catalogOf(options.env ?? process.env));
-      else sendJson(response, 405, { error: "Method not allowed" });
-      return true;
-    }
     if (!groupId) {
       if (method === "GET")
         sendJson(response, 200, { groups: (await groups.list(tenant.id)).map(groupItem) });
@@ -79,26 +79,10 @@ export async function groupRoutes(
       } else sendJson(response, 405, { error: "Method not allowed" });
       return true;
     }
-    const group = await groups.find(tenant.id, groupId);
-    if (!group) {
-      sendJson(response, 404, { error: "Group not found" });
-      return true;
-    }
-    const submitted = async (record: GroupEvaluationRecord, message: string) => {
-      let submissionError: string | undefined;
-      try {
-        await dispatchGroupEvaluation(artifacts, comparisons, record, options.start);
-      } catch {
-        submissionError = message;
-      }
-      sendJson(response, 202, {
-        ...(await groupEvaluationDetail(artifacts, comparisons, record)),
-        submissionError,
-      });
-      return !submissionError;
-    };
     if (!evaluationsPath) {
-      if (method === "GET") {
+      const group = await groups.find(tenant.id, groupId);
+      if (!group) sendJson(response, 404, { error: "Group not found" });
+      else if (method === "GET") {
         const ready = await Promise.all(
           group.repos.map(async (repo) => ({
             fullName: repo.fullName,
@@ -132,50 +116,70 @@ export async function groupRoutes(
       } else sendJson(response, 405, { error: "Method not allowed" });
       return true;
     }
-    if (!evaluationId) {
-      if (method !== "POST") {
-        sendJson(response, 405, { error: "Method not allowed" });
-        return true;
+    if (!vault) throw new RecordStoreError(503);
+    const { comparisons } = vault;
+    const env = options.env ?? process.env;
+    const scope = { orgId: tenant.id, tenant: tenant.login, login: user.login };
+    const submitted = async (record: GroupEvaluationRecord, message: string) => {
+      let submissionError: string | undefined;
+      try {
+        await dispatchGroupEvaluation(artifacts, comparisons, record, options.start);
+      } catch {
+        submissionError = message;
       }
-      const draft = groupEvaluationSchema.parse(await body());
-      const env = options.env ?? process.env;
-      const record = await createGroupEvaluation(
-        options.vault,
-        groups,
-        options.tasks,
-        artifacts,
-        managedOffer(env),
-        { orgId: tenant.id, tenant: tenant.login, login: user.login },
-        group,
-        draft,
-        env,
-      );
-      const confirmed = await submitted(
-        record,
-        "Group evaluation saved. Some submissions were not confirmed; resume safely using this evaluation.",
-      );
-      track(
-        user,
-        "group evaluation started",
-        {
-          repos: group.repos.length,
-          models: draft.models.length,
-          harnesses: draft.models.reduce((sum, model) => sum + model.harnesses.length, 0),
-          sandbox: draft.sandbox,
-          submitted: confirmed,
-        },
-        tenant,
-      );
+      sendJson(response, 202, {
+        ...(await groupEvaluationDetail(artifacts, comparisons, record)),
+        submissionError,
+      });
+      return !submissionError;
+    };
+    if (!evaluationId) {
+      const group = await groups.find(tenant.id, groupId);
+      if (!group) sendJson(response, 404, { error: "Group not found" });
+      else if (method !== "POST") sendJson(response, 405, { error: "Method not allowed" });
+      else {
+        const draft = groupEvaluationSchema.parse(await body());
+        const record = await createGroupEvaluation(
+          vault,
+          groups,
+          options.tasks,
+          artifacts,
+          managedOffer(env),
+          scope,
+          group,
+          draft,
+          env,
+        );
+        const confirmed = await submitted(
+          record,
+          "Group evaluation saved. Some submissions were not confirmed; resume safely using this evaluation.",
+        );
+        track(
+          user,
+          "group evaluation started",
+          {
+            repos: group.repos.length,
+            models: draft.models.length,
+            harnesses: draft.models.reduce((sum, model) => sum + model.harnesses.length, 0),
+            sandbox: draft.sandbox,
+            submitted: confirmed,
+          },
+          tenant,
+        );
+      }
       return true;
     }
+    // An evaluation stays reachable after its group is deleted.
     const record = await groups.findEvaluation(evaluationId);
-    if (!record || record.orgId !== tenant.id || record.groupId !== group.id)
+    if (!record || record.orgId !== tenant.id || record.groupId !== groupId)
       sendJson(response, 404, { error: "Group evaluation not found" });
     else if (method === "GET" && !action)
       sendJson(response, 200, await groupEvaluationDetail(artifacts, comparisons, record));
-    else if (method === "POST" && action === "resume")
+    else if (method === "POST" && action === "resume") {
+      // Saves any comparison an interrupted submission left out, then starts what is queued.
+      await saveComparisons(vault, options.tasks, artifacts, managedOffer(env), scope, record, env);
       await submitted(record, "Submission not confirmed. Resume uses the same run IDs.");
-    else if (method === "POST" && action === "cancel") {
+    } else if (method === "POST" && action === "cancel") {
       await cancelGroupEvaluation(artifacts, comparisons, record, user.login, options.stop);
       sendJson(response, 200, await groupEvaluationDetail(artifacts, comparisons, record));
     } else sendJson(response, 405, { error: "Method not allowed" });

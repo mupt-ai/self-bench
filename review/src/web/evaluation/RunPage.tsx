@@ -1,10 +1,8 @@
-import { Plus } from "lucide-react";
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { evaluationTaskKey } from "../../../../src/evaluation/models";
-import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { covered, setupCoverage } from "../setup/readiness";
@@ -12,9 +10,8 @@ import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
-import { customModel } from "./model-selection";
 import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
-import { RunModelTable } from "./RunModelTable";
+import { RunModelsPanel } from "./RunModelsPanel";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { credentialsWithManaged, settingsReady } from "./run-readiness";
@@ -198,44 +195,13 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         disabled={busy || state.submitted}
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <fieldset className="panel min-w-0 p-0" disabled={busy || state.submitted}>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <div>
-              <h2 className="text-sm font-semibold">Models and Harnesses</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {draft.models.length} of 12 configurations
-              </p>
-            </div>
-            <InfoTooltip label="Add Model">
-              <Button
-                type="button"
-                size="icon"
-                aria-label="Add Model"
-                disabled={
-                  draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)
-                }
-                onClick={() =>
-                  setState({
-                    ...state,
-                    draft: {
-                      ...draft,
-                      models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
-                    },
-                    submitted: false,
-                  })
-                }
-              >
-                <Plus className="size-4" aria-hidden="true" />
-              </Button>
-            </InfoTooltip>
-          </div>
-          <RunModelTable
-            models={[...models, customModel]}
-            credentials={availableCredentials}
-            draft={draft}
-            onChange={(value) => setState({ ...state, draft: value, submitted: false })}
-          />
-        </fieldset>
+        <RunModelsPanel
+          models={models}
+          credentials={availableCredentials}
+          draft={draft}
+          disabled={busy || state.submitted}
+          onChange={(value) => setState({ ...state, draft: value, submitted: false })}
+        />
         <RunExecution
           returnTo={`/repos/${repo}/run`}
           draft={draft}

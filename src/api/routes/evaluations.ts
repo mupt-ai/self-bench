@@ -13,12 +13,6 @@ import {
   cancelEvaluation,
   type StopEvaluation,
 } from "../../evaluation/cancel.js";
-import {
-  catalogVersion,
-  evaluationCatalog,
-  hostedSandboxes,
-  withReferencePricing,
-} from "../../evaluation/catalog.js";
 import { comparisonProgress } from "../../evaluation/comparison-progress.js";
 import {
   comparisonSchema,
@@ -29,12 +23,13 @@ import {
 import { listRuns } from "../../evaluation/run-list.js";
 import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
-import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
+import { managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
+import { catalogOf } from "./catalog.js";
 import { credentialRoutes } from "./credentials.js";
 import { groupRoutes } from "./groups.js";
 
@@ -217,20 +212,6 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         else response.writeHead(304).end();
       }
       return true;
-    },
-  };
-}
-
-/** The models and sandboxes evaluations can use; the same for every repository. */
-export function catalogOf(env: NodeJS.ProcessEnv) {
-  return {
-    version: catalogVersion,
-    models: evaluationCatalog().map(withReferencePricing),
-    sandboxes: hostedSandboxes,
-    customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
-    managed: {
-      ...managedOffer(env),
-      sandbox: managedHarborEnvironment(env) === "modal",
     },
   };
 }

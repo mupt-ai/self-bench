@@ -18,15 +18,20 @@ export function runBlocker({
   submitted,
   tasksReady,
   pairs,
+  tasks = draft.tasks.length,
+  noTasks = "Select at least one accepted task to continue.",
 }: {
   draft: ComparisonDraft;
   ready: boolean;
   submitted: boolean;
   tasksReady: boolean;
   pairs: number;
+  /** Tasks each pair runs on, when the draft doesn't list them, and what to say when none. */
+  tasks?: number;
+  noTasks?: string;
 }): string | undefined {
   if (ready || submitted || !tasksReady) return undefined;
-  if (!draft.tasks.length) return "Select at least one accepted task to continue.";
+  if (!tasks) return noTasks;
   if (!pairs) return "Add a model to continue.";
   if (!draft.sandboxCredentialId) return "Select a sandbox credential to continue.";
   return "Check the credentials and harness for each model.";

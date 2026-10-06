@@ -1,4 +1,3 @@
-import { Plus } from "lucide-react";
 import React from "react";
 import { useNavigate, useParams } from "react-router";
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
@@ -6,9 +5,8 @@ import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/cat
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { requestJson } from "../api";
 import { evaluationRequest, evaluationRequestId } from "../evaluation/api";
-import { customModel } from "../evaluation/model-selection";
-import { RunBlockerNotice, RunExecution } from "../evaluation/RunExecution";
-import { RunModelTable } from "../evaluation/RunModelTable";
+import { RunBlockerNotice, RunExecution, runBlocker } from "../evaluation/RunExecution";
+import { RunModelsPanel } from "../evaluation/RunModelsPanel";
 import { credentialsWithManaged, settingsReady } from "../evaluation/run-readiness";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
@@ -18,6 +16,14 @@ import { Breadcrumbs, Button, fieldStyles, Input, Notice, PageFrame, PageHeader 
 import { type GroupDetail, type GroupEvaluation, type GroupSettings, groupsUrl } from "./api";
 
 type Draft = GroupSettings & { id: string };
+
+const emptyDraft = (): Draft => ({
+  id: evaluationRequestId(),
+  models: [{ catalogId: "", credentialId: "", harnesses: [] }],
+  sandbox: "e2b",
+  sandboxCredentialId: "",
+  agentMinutes: AGENT_MINUTES.default,
+});
 
 /** The Run page's models and sandbox, for every approved task of each repository in a group. */
 export function GroupRunPage() {
@@ -31,13 +37,9 @@ export function GroupRunPage() {
   const [credentials, credentialsError] = useOrgCredentials(org.login);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [draft, setDraft] = React.useState<Draft>(() => ({
-    id: evaluationRequestId(),
-    models: [{ catalogId: "", credentialId: "", harnesses: [] }],
-    sandbox: "e2b",
-    sandboxCredentialId: "",
-    agentMinutes: AGENT_MINUTES.default,
-  }));
+  const [draft, setDraft] = React.useState(emptyDraft);
+  // Once sent, the settings belong to that request's ID until a new evaluation is started.
+  const [submitted, setSubmitted] = React.useState(false);
   useDocumentTitle(`Run · ${detail?.group.name ?? "Repository Group"}`);
   React.useEffect(() => {
     let disposed = false;
@@ -88,18 +90,32 @@ export function GroupRunPage() {
   const comparison: ComparisonDraft = { ...draft, tasks: [] };
   const edit = ({ tasks: _, skipCompleted: __, ...value }: ComparisonDraft) =>
     setDraft((current) => ({ ...value, agentMinutes: current.agentMinutes }));
+  const blocker =
+    detail && !submitted && tasks > 0 && pairs > 0 && !minutesValid
+      ? `Set agent minutes from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max}.`
+      : runBlocker({
+          draft: comparison,
+          ready,
+          submitted,
+          tasksReady: !!detail,
+          pairs,
+          tasks,
+          noTasks: "Approve tasks in a repository of this group to continue.",
+        });
   const submit = async () => {
-    if (busy || !ready) return;
+    if (busy || (!submitted && !ready)) return;
     setBusy(true);
+    setSubmitted(true);
     setError("");
     try {
       const result = await evaluationRequest<GroupEvaluation>(
         groupsUrl(org.login, groupId, "evaluations"),
         { ...draft, models: draft.models.filter((model) => model.harnesses.length > 0) },
       );
-      void navigate(`/groups/${groupId}/evaluations/${result.id}`);
+      void navigate(`/groups/${groupId}/evaluations/${result.id}`, {
+        state: { submissionError: result.submissionError },
+      });
     } catch (cause) {
-      // The ID stays, so a retry finishes this submission rather than starting another.
       setError(cause instanceof Error ? cause.message : "Submission not confirmed. Retry safely.");
     } finally {
       setBusy(false);
@@ -119,56 +135,34 @@ export function GroupRunPage() {
         title="Run Group Evaluation"
         description={`Runs every approved task in ${repos} of ${detail?.group.repos.length ?? 0} repositories, as one comparison per repository.`}
       />
-      {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
-      {!ready && !busy && detail && (
-        <RunBlockerNotice>
-          {tasks === 0
-            ? "Approve tasks in a repository of this group to continue."
-            : !pairs
-              ? "Add a model to continue."
-              : !draft.sandboxCredentialId
-                ? "Select a sandbox credential to continue."
-                : !minutesValid
-                  ? `Set agent minutes from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max}.`
-                  : "Check the credentials and harness for each model."}
-        </RunBlockerNotice>
+      {submitted && !busy && (
+        <div className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm">
+            These settings belong to a submitted request. Retry it, or start a new evaluation.
+          </p>
+          <Button
+            onClick={() => {
+              setDraft({ ...draft, id: evaluationRequestId() });
+              setSubmitted(false);
+              setError("");
+            }}
+          >
+            New Evaluation
+          </Button>
+        </div>
       )}
+      {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
+      {blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="grid min-w-0 gap-5">
-          <fieldset className="panel min-w-0 p-0" disabled={busy}>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold">Models and Harnesses</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {draft.models.length} of 12 configurations
-                </p>
-              </div>
-              <InfoTooltip label="Add Model">
-                <Button
-                  size="icon"
-                  aria-label="Add Model"
-                  disabled={
-                    draft.models.length >= 12 || draft.models.some((model) => !model.catalogId)
-                  }
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      models: [...draft.models, { catalogId: "", credentialId: "", harnesses: [] }],
-                    })
-                  }
-                >
-                  <Plus className="size-4" aria-hidden="true" />
-                </Button>
-              </InfoTooltip>
-            </div>
-            <RunModelTable
-              models={[...models, customModel]}
-              credentials={available}
-              draft={comparison}
-              onChange={edit}
-            />
-          </fieldset>
-          <fieldset className="panel grid gap-2 p-4" disabled={busy}>
+          <RunModelsPanel
+            models={models}
+            credentials={available}
+            draft={comparison}
+            disabled={busy || submitted}
+            onChange={edit}
+          />
+          <fieldset className="panel grid gap-2 p-4" disabled={busy || submitted}>
             <label className={fieldStyles} htmlFor="group-agent-minutes">
               <span className="flex items-center gap-1.5">
                 Agent Minutes
@@ -195,7 +189,7 @@ export function GroupRunPage() {
           draft={comparison}
           credentials={available}
           sandboxes={managed?.sandbox ? ["managed", ...sandboxes] : sandboxes}
-          submitted={false}
+          submitted={submitted}
           busy={busy}
           ready={ready}
           pairs={pairs}

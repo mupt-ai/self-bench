@@ -1,6 +1,6 @@
 import { Square } from "lucide-react";
 import React from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { requestJson } from "../api";
 import { evaluationRequest } from "../evaluation/api";
 import { useOrg } from "../SiteLayout";
@@ -21,6 +21,13 @@ import { settingsLabel } from "./settings-label";
 
 const unfinished = (status: string) =>
   status === "pending" || status === "queued" || status === "running";
+const statusesOf = (evaluation: GroupEvaluation | undefined) =>
+  evaluation?.repos.flatMap((repo) =>
+    "progress" in repo ? repo.progress.runs.map((run) => run.status) : [],
+  ) ?? [];
+/** Still going: a comparison not saved yet, or a run not finished. */
+const live = (evaluation: GroupEvaluation | undefined) =>
+  !!evaluation?.repos.some((repo) => "unsaved" in repo) || statusesOf(evaluation).some(unfinished);
 
 /** One group evaluation: each repository's progress, then repositories against settings. */
 export function GroupEvaluationPage() {
@@ -28,16 +35,21 @@ export function GroupEvaluationPage() {
   const { groupId = "", evaluationId = "" } = useParams();
   const url = groupsUrl(org.login, groupId, "evaluations", evaluationId);
   const [evaluation, setEvaluation] = React.useState<GroupEvaluation>();
+  // A submission whose runs were not all confirmed says so on the page it lands on.
+  const { state } = useLocation() as { state?: { submissionError?: string } };
+  const [warning, setWarning] = React.useState(state?.submissionError);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   useDocumentTitle(`Evaluation · ${evaluation?.groupName ?? "Repository Group"}`);
-  const statuses =
-    evaluation?.repos.flatMap((repo) =>
-      "progress" in repo ? repo.progress.runs.map((run) => run.status) : [],
-    ) ?? [];
-  const running = statuses.some(unfinished);
-  // A run still pending was never confirmed as submitted; resuming submits it with its ID.
-  const unsubmitted = statuses.includes("pending");
+  const statuses = statusesOf(evaluation);
+  const unsaved = !!evaluation?.repos.some((repo) => "unsaved" in repo);
+  const running = live(evaluation);
+  const [polls, setPolls] = React.useState(0);
+  // Resuming saves a comparison an interrupted submission left out, and starts every run that
+  // was never confirmed as started, with its own ID.
+  const resumable =
+    unsaved || statuses.some((status) => status === "pending" || status === "queued");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a resume or cancel restarts polling.
   React.useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -47,14 +59,13 @@ export function GroupEvaluationPage() {
           if (disposed) return;
           setEvaluation(result);
           setError("");
-          const live = result.repos.some(
-            (repo) =>
-              "progress" in repo && repo.progress.runs.some((run) => unfinished(run.status)),
-          );
-          if (live) timer = setTimeout(poll, 10_000);
+          if (live(result)) timer = setTimeout(poll, 10_000);
         },
         (cause) => {
-          if (!disposed) setError(cause.message);
+          if (disposed) return;
+          setError(cause.message);
+          // A failed read is retried, so a long evaluation's page never goes stale.
+          timer = setTimeout(poll, 30_000);
         },
       );
     void poll();
@@ -62,13 +73,15 @@ export function GroupEvaluationPage() {
       disposed = true;
       clearTimeout(timer);
     };
-  }, [url]);
+  }, [url, polls]);
   const act = async (action: "resume" | "cancel") => {
     setBusy(true);
     try {
       const result = await evaluationRequest<GroupEvaluation>(`${url}/${action}`, {});
       setEvaluation(result);
-      setError(result.submissionError ?? "");
+      setWarning(result.submissionError);
+      setError("");
+      setPolls((count) => count + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Request failed");
     } finally {
@@ -94,7 +107,7 @@ export function GroupEvaluationPage() {
       >
         {running && (
           <>
-            {unsubmitted && (
+            {resumable && (
               <Button size="small" disabled={busy} onClick={() => void act("resume")}>
                 Resume Submission
               </Button>
@@ -106,6 +119,7 @@ export function GroupEvaluationPage() {
           </>
         )}
       </PageHeader>
+      {warning && <Notice className="mb-6">{warning}</Notice>}
       {error && <Notice className="mb-6">{error}</Notice>}
       {evaluation && (
         <section className="mb-8">
@@ -136,6 +150,10 @@ export function GroupEvaluationPage() {
                   <td>
                     {"progress" in repo ? (
                       <RunStatus value={statusOf(repo.progress.runs.map((run) => run.status))} />
+                    ) : "unsaved" in repo ? (
+                      <span className="text-xs text-muted-foreground">
+                        Not saved yet; resume to submit it.
+                      </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">{repo.skipped}</span>
                     )}

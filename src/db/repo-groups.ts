@@ -25,7 +25,7 @@ export interface RepoGroup {
 
 /** A group member as a group evaluation submitted it: its comparison, or why it has none. */
 export type GroupEvaluationMember = { repoId: number; fullName: string } & (
-  | { comparisonId: string }
+  | { comparisonId: string; tasks: { runId: string; taskId: string }[] }
   | { skipped: string }
 );
 
@@ -38,6 +38,23 @@ export interface GroupEvaluationRecord {
   repos: GroupEvaluationMember[];
   createdByLogin: string;
   createdAt: string;
+}
+
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/** A write's database error as the browser should read it: a name in use, or a repository gone. */
+async function saving(write: () => Promise<void>) {
+  try {
+    await write();
+  } catch (error) {
+    let cause: unknown = error;
+    while (cause && typeof cause === "object" && !("code" in cause))
+      cause = "cause" in cause ? cause.cause : undefined;
+    const code = cause && typeof cause === "object" && "code" in cause ? cause.code : undefined;
+    if (code === "23505") throw new Error("A group with this name already exists");
+    if (code === "23503") throw new Error("A repository is no longer connected; reload and retry");
+    throw error;
+  }
 }
 
 export function createRepoGroupStore(db: Database) {
@@ -73,23 +90,13 @@ export function createRepoGroupStore(db: Database) {
       .where(and(eq(repoGroups.orgId, orgId), eq(repoGroups.id, id)));
     return (await groupsOf(rows))[0];
   };
-  const nameTaken = async (orgId: number, name: string, except?: string) => {
-    const [row] = await db
-      .select({ id: repoGroups.id })
-      .from(repoGroups)
-      .where(
-        and(eq(repoGroups.orgId, orgId), eq(sql`lower(${repoGroups.name})`, name.toLowerCase())),
-      );
-    return row !== undefined && row.id !== except;
+  const setMembers = async (tx: Transaction, groupId: string, repoIds: readonly number[]) => {
+    await tx.delete(repoGroupMembers).where(eq(repoGroupMembers.groupId, groupId));
+    if (repoIds.length)
+      await tx
+        .insert(repoGroupMembers)
+        .values([...new Set(repoIds)].map((repoId) => ({ groupId, repoId })));
   };
-  const setMembers = (groupId: string, repoIds: readonly number[]) =>
-    db.transaction(async (tx) => {
-      await tx.delete(repoGroupMembers).where(eq(repoGroupMembers.groupId, groupId));
-      if (repoIds.length)
-        await tx
-          .insert(repoGroupMembers)
-          .values([...new Set(repoIds)].map((repoId) => ({ groupId, repoId })));
-    });
   const evaluationOf = (row: typeof groupEvaluations.$inferSelect): GroupEvaluationRecord => ({
     ...row,
     repos: row.repos as GroupEvaluationMember[],
@@ -116,15 +123,13 @@ export function createRepoGroupStore(db: Database) {
         .from(repoGroups)
         .where(eq(repoGroups.orgId, orgId));
       if ((total?.value ?? 0) >= GROUP_LIMIT) throw new Error("Repository group limit reached");
-      if (await nameTaken(orgId, name)) throw new Error("A group with this name already exists");
       const id = randomUUID();
-      const [row] = await db
-        .insert(repoGroups)
-        .values({ id, orgId, name })
-        .onConflictDoNothing()
-        .returning();
-      if (!row) throw new Error("A group with this name already exists");
-      await setMembers(id, repoIds);
+      await saving(() =>
+        db.transaction(async (tx) => {
+          await tx.insert(repoGroups).values({ id, orgId, name });
+          await setMembers(tx, id, repoIds);
+        }),
+      );
       const group = await find(orgId, id);
       if (!group) throw new Error("Repository group could not be saved");
       return group;
@@ -132,10 +137,12 @@ export function createRepoGroupStore(db: Database) {
     /** Renames a group and replaces its members; undefined when it is not this tenant's. */
     async update(orgId: number, id: string, name: string, repoIds: readonly number[]) {
       if (!(await find(orgId, id))) return undefined;
-      if (await nameTaken(orgId, name, id))
-        throw new Error("A group with this name already exists");
-      await db.update(repoGroups).set({ name }).where(eq(repoGroups.id, id));
-      await setMembers(id, repoIds);
+      await saving(() =>
+        db.transaction(async (tx) => {
+          await tx.update(repoGroups).set({ name }).where(eq(repoGroups.id, id));
+          await setMembers(tx, id, repoIds);
+        }),
+      );
       return find(orgId, id);
     },
     /** True when a group was removed. Its evaluations, and their comparisons, stay. */
@@ -155,6 +162,10 @@ export function createRepoGroupStore(db: Database) {
         .where(and(eq(groupEvaluations.orgId, orgId), eq(groupEvaluations.groupId, groupId)))
         .orderBy(desc(groupEvaluations.createdAt));
       return rows.map(evaluationOf);
+    },
+    /** Drops an evaluation that saved no comparison, so nothing of it is left to resume. */
+    async removeEvaluation(id: string): Promise<void> {
+      await db.delete(groupEvaluations).where(eq(groupEvaluations.id, id));
     },
     /** Inserts once; a concurrent insert of the same ID returns the stored record. */
     async insertEvaluation(value: GroupEvaluationRecord): Promise<GroupEvaluationRecord> {

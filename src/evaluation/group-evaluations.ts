@@ -43,9 +43,9 @@ function childId(id: string, repoId: number): string {
 }
 
 /**
- * Saves one comparison per repository of the group that has approved tasks, then the group
- * evaluation naming them. Each is idempotent, so a retry with the same ID finishes a submission
- * that failed part way. A repository with no approved tasks is recorded as left out.
+ * Saves a group evaluation, which fixes each member's tasks and comparison ID, then a comparison
+ * per member with approved tasks. A retry with the same ID, or a resume, saves any comparison a
+ * failed attempt left out, from the same tasks. A member with no approved tasks is left out.
  */
 export async function createGroupEvaluation(
   vault: Pick<Vault, "credentials" | "comparisons">,
@@ -69,44 +69,31 @@ export async function createGroupEvaluation(
       throw new Error("Group evaluation ID belongs to a different selection");
     return record;
   };
+  const save = (record: GroupEvaluationRecord) =>
+    saveComparisons(vault, tasks, store, managed, scope, record, environment);
   const previous = await groups.findEvaluation(selection.id);
-  if (previous) return owned(previous);
+  if (previous) {
+    await save(owned(previous));
+    return previous;
+  }
   if (group.repos.length === 0) throw new Error("Add a repository to this group first");
-  const planned = await Promise.all(
-    group.repos.map(async (repo) => ({
-      repo,
-      tasks: (await tasks.listForRepo(repo.id))
+  const members = await Promise.all(
+    group.repos.map(async (repo): Promise<GroupEvaluationMember> => {
+      const selected = (await tasks.listForRepo(repo.id))
         .filter(runnable)
         .map(({ runId, taskId }) => ({ runId, taskId }))
-        .sort((a, b) => a.runId.localeCompare(b.runId) || a.taskId.localeCompare(b.taskId)),
-    })),
+        .sort((a, b) => a.runId.localeCompare(b.runId) || a.taskId.localeCompare(b.taskId));
+      const member = { repoId: repo.id, fullName: repo.fullName };
+      return selected.length
+        ? { ...member, comparisonId: childId(selection.id, repo.id), tasks: selected }
+        : { ...member, skipped: "No approved tasks" };
+    }),
   );
-  const ready = planned.filter((entry) => entry.tasks.length > 0).length;
-  if (ready === 0) throw new Error("No repository in this group has approved tasks");
-  if ((await vault.comparisons.countForOrg(scope.orgId)) + ready > 500)
-    throw new Error("Comparison retention limit reached; contact an operator");
-  const { id, agentMinutes, ...settings } = selection;
-  const members: GroupEvaluationMember[] = [];
-  for (const { repo, tasks: selected } of planned) {
-    const member = { repoId: repo.id, fullName: repo.fullName };
-    if (selected.length === 0) {
-      members.push({ ...member, skipped: "No approved tasks" });
-      continue;
-    }
-    const comparison = await createComparison(
-      vault,
-      tasks,
-      store,
-      managed,
-      { ...scope, repoId: repo.id, agentMinutes },
-      { ...settings, id: childId(id, repo.id), tasks: selected },
-      environment,
-    );
-    members.push({ ...member, comparisonId: comparison.id });
-  }
-  return owned(
+  if (!members.some((member) => "comparisonId" in member))
+    throw new Error("No repository in this group has approved tasks");
+  const record = owned(
     await groups.insertEvaluation({
-      id,
+      id: selection.id,
       orgId: scope.orgId,
       groupId: group.id,
       groupName: group.name,
@@ -116,6 +103,45 @@ export async function createGroupEvaluation(
       createdAt: new Date().toISOString(),
     }),
   );
+  try {
+    await save(record);
+  } catch (error) {
+    // Settings that cannot run fail on the first comparison: nothing is left to resume.
+    if ((await childrenOf(vault.comparisons, record)).length === 0)
+      await groups.removeEvaluation(record.id);
+    throw error;
+  }
+  return record;
+}
+
+/** Saves the comparisons a group evaluation lists and has not saved yet. */
+export async function saveComparisons(
+  vault: Pick<Vault, "credentials" | "comparisons">,
+  tasks: TaskStore,
+  store: ArtifactStore,
+  managed: ManagedOffer,
+  scope: GroupScope,
+  record: GroupEvaluationRecord,
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const { agentMinutes, ...settings } = groupEvaluationSettings(record);
+  const missing = [];
+  for (const member of record.repos)
+    if ("comparisonId" in member && !(await vault.comparisons.find(member.comparisonId)))
+      missing.push(member);
+  if (missing.length === 0) return;
+  if ((await vault.comparisons.countForOrg(scope.orgId)) + missing.length > 500)
+    throw new Error("Comparison retention limit reached; contact an operator");
+  for (const member of missing)
+    await createComparison(
+      vault,
+      tasks,
+      store,
+      managed,
+      { ...scope, login: record.createdByLogin, repoId: member.repoId, agentMinutes },
+      { ...settings, id: member.comparisonId, tasks: member.tasks },
+      environment,
+    );
 }
 
 /** The comparisons a group evaluation saved, with the repositories they belong to. */
@@ -184,11 +210,8 @@ export async function groupEvaluationDetail(
     repos: await Promise.all(
       record.repos.map(async (member) => {
         const comparison = "comparisonId" in member ? children.get(member.comparisonId) : undefined;
-        if (!comparison)
-          return {
-            fullName: member.fullName,
-            skipped: "skipped" in member ? member.skipped : "Comparison not found",
-          };
+        if ("skipped" in member) return { fullName: member.fullName, skipped: member.skipped };
+        if (!comparison) return { fullName: member.fullName, unsaved: true as const };
         const ids = new Set(comparison.inputs.map((input) => input.id));
         const { runs = [] } = await listRuns(store, member.repoId);
         const own = runs.filter((run) => ids.has(run.id));

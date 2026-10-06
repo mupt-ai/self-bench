@@ -70,15 +70,16 @@ export function groupMatrix(repos: readonly { fullName: string; runs: Evaluation
       const cell = row.cells.get(key);
       return cell ? [cell] : [];
     });
-    const rates = cells.flatMap((cell) => (cell.passRate !== undefined ? [cell.passRate] : []));
-    const passRate = mean(rates);
+    // Only repositories with a pass rate count, for the cost too, so both describe the same ones.
+    const rated = cells.filter((cell) => cell.passRate !== undefined);
+    const passRate = mean(rated.map((cell) => cell.passRate ?? 0));
     const costPerTask = mean(
-      cells.flatMap((cell) => (cell.costPerTask !== undefined ? [cell.costPerTask] : [])),
+      rated.flatMap((cell) => (cell.costPerTask !== undefined ? [cell.costPerTask] : [])),
     );
     average.set(key, {
       ...(passRate !== undefined ? { passRate } : {}),
       ...(costPerTask !== undefined ? { costPerTask } : {}),
-      repos: rates.length,
+      repos: rated.length,
     });
     const passed = cells.reduce((sum, cell) => sum + cell.passed, 0);
     const scored = cells.reduce((sum, cell) => sum + cell.scored, 0);
