@@ -1,7 +1,10 @@
 import { Layers } from "lucide-react";
 import React from "react";
 import { Link } from "react-router";
-import { MAX_CANDIDATES_PER_RUN } from "../../../src/contracts/config/execution-limits";
+import {
+  MAX_CANDIDATES_PER_RUN,
+  MAX_FOCUS_LENGTH,
+} from "../../../src/contracts/config/execution-limits";
 import {
   type BatchRepoId,
   BatchRequestError,
@@ -12,10 +15,26 @@ import {
 import { batchPath } from "./batches/presentation";
 import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
+import { cn } from "./primitives/cn";
 import { covered, setupCoverage } from "./setup/readiness";
 import { SetupCallout } from "./setup/SetupCallout";
-import { Button, fieldStyles, Input } from "./ui";
+import { Button, controlStyles, fieldStyles, Input } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
+
+function storedFocus(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberFocus(key: string, focus: string) {
+  try {
+    if (focus.trim()) window.localStorage.setItem(key, focus);
+    else window.localStorage.removeItem(key);
+  } catch {}
+}
 
 export interface GenerateBatchProps {
   repoId: BatchRepoId;
@@ -40,6 +59,8 @@ export function GenerateBatch({
   const submitting = React.useRef(false);
   const closeButton = React.useRef<HTMLButtonElement>(null);
   const { org, fullName } = repoId;
+  const focusKey = `selfbench-batch-focus:${org}:${fullName}`;
+  const [focus, setFocus] = React.useState(() => storedFocus(focusKey));
   const {
     settings,
     setSettings,
@@ -58,7 +79,8 @@ export function GenerateBatch({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await startBatch({ org, fullName }, counts, settings);
+      rememberFocus(focusKey, focus);
+      const result = await startBatch({ org, fullName }, counts, settings, focus);
       setOpen(false);
       onStarted?.(result.runId);
     } catch (cause) {
@@ -154,6 +176,24 @@ export function GenerateBatch({
                   1–{MAX_CANDIDATES_PER_RUN} candidates total.
                 </p>
               </fieldset>
+              <label htmlFor="batch-focus" className={cn(fieldStyles, "mt-8")}>
+                Focus
+                <textarea
+                  id="batch-focus"
+                  aria-describedby="batch-focus-help"
+                  rows={3}
+                  maxLength={MAX_FOCUS_LENGTH}
+                  placeholder="Complex Next.js features: App Router, server actions, middleware, caching"
+                  className={cn(controlStyles, "h-auto resize-y py-2")}
+                  value={focus}
+                  disabled={busy}
+                  onChange={(event) => setFocus(event.target.value)}
+                />
+              </label>
+              <p id="batch-focus-help" className="mt-2 text-sm text-muted-foreground">
+                Optional. Describe the PRs discovery should pick. With a focus, it searches further
+                back and may return fewer candidates.
+              </p>
               <div className="mt-8">
                 {optionsError ? (
                   <div role="alert" className="space-y-3 text-sm text-destructive">

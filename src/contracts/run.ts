@@ -2,7 +2,7 @@ import { z } from "zod";
 import { gatewayIds } from "../gateways/index.js";
 import { generationReferenceSchema } from "../generation/settings/settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
-import { MAX_CANDIDATES_PER_RUN } from "./config/execution-limits.js";
+import { MAX_CANDIDATES_PER_RUN, MAX_FOCUS_LENGTH } from "./config/execution-limits.js";
 import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "./config/providers.js";
 
 export { MAX_CANDIDATES_PER_RUN } from "./config/execution-limits.js";
@@ -59,6 +59,8 @@ export const runRequestSchema = z.object({
   provenance: artifactRefSchema,
   candidateCounts: candidateCountsSchema,
   excludeRuns: excludeRunsSchema.optional(),
+  /** The requester's description of which PRs discovery should pick. */
+  focus: z.string().trim().min(1).max(MAX_FOCUS_LENGTH).optional(),
   authoring: authoringSchema,
   generation: generationReferenceSchema.optional(),
   version: runVersionSchema,

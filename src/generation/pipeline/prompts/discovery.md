@@ -13,4 +13,6 @@ You are choosing which merged pull requests from this repository ({{repositoryUr
 - Skip PRs listed in /work/excluded-source-prs.json (check a number with jq; don't read the whole list).
 - Only PRs from {{repositoryUrl}}. Use each record only for its own sourcePr and sourceUrl, and copy its sourceType, sessionId, and messageIndex exactly. Never invent request text. Don't modify the repository.
 
+{{focus}}
+
 Call submit_discovery exactly once, then stop.

@@ -9,6 +9,8 @@ export const MAX_PENDING_TRIAL_WORKFLOWS = 1000;
 export const MAX_CANDIDATES_PER_RUN = 300;
 export const MAX_DISCOVERY_SHARDS = 8;
 export const DISCOVERY_POOL_MULTIPLIER = 1.5;
+/** Longest batch focus, the requester's description of which PRs discovery picks. */
+export const MAX_FOCUS_LENGTH = 1000;
 
 /** Batch status: Temporal RPCs one read of a running batch keeps in flight. */
 export const BATCH_RPC_CONCURRENCY = 8;

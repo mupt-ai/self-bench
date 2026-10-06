@@ -12,6 +12,7 @@ import { type GenerationReference, generationSettingsSchema } from "../settings/
 export const batchSubmissionSchema = z
   .object({
     candidateCounts: runRequestSchema.shape.candidateCounts,
+    focus: runRequestSchema.shape.focus,
     generation: generationSettingsSchema.optional(),
   })
   .strict();
@@ -26,6 +27,7 @@ export async function prepareBatch(options: {
   token: string;
   githubApiUrl: string;
   candidateCounts: RunRequest["candidateCounts"];
+  focus?: string;
   fetchImpl?: typeof fetch;
   generation?: GenerationReference;
 }): Promise<RunRequest> {
@@ -55,6 +57,7 @@ export async function prepareBatch(options: {
     candidateCounts,
     selfbenchCommit: buildCommit,
   });
+  if (options.focus) run.focus = options.focus;
   if (options.generation) configureGenerationRun(run, options.generation, config);
   return run;
 }

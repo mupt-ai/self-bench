@@ -70,6 +70,71 @@ test("caps independent discovery while covering enough PRs for a max-size run", 
   }
 });
 
+test("a focused batch spreads every fetched PR over its shards instead of the newest window", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "batch-focus-"));
+  try {
+    const artifacts = new LocalArtifactStore(directory);
+    const provenance = await artifacts.put("input.jsonl", Buffer.alloc(0), "application/x-ndjson");
+    const nodes = Array.from({ length: 200 }, (_, i) => ({
+      number: i + 1,
+      title: "Implement feature",
+      body: "request",
+      url: `https://github.com/example/repo/pull/${i + 1}`,
+      isDraft: false,
+      additions: 25,
+      deletions: 0,
+      changedFiles: 1,
+      author: { login: "human", __typename: "User" },
+    }));
+    const stagedPrs = async (focus?: string) => {
+      const shards = await prepareGenerationBatch({
+        run: {
+          ...run,
+          provenance,
+          candidateCounts: { easy: 0, medium: 0, hard: 2 },
+          ...(focus ? { focus } : {}),
+        },
+        token: "secret-lookup-token",
+        attempt: focus ? 2 : 1,
+        artifacts,
+        fetchImpl: async (_url, init) => {
+          const body = JSON.parse(String(init.body)) as { variables: { after: string | null } };
+          const start = body.variables.after ? Number(body.variables.after) : 0;
+          const end = Math.min(start + 100, nodes.length);
+          return Response.json({
+            data: {
+              repository: {
+                pullRequests: {
+                  nodes: nodes.slice(start, end),
+                  pageInfo: {
+                    hasNextPage: end < nodes.length,
+                    endCursor: end < nodes.length ? String(end) : null,
+                  },
+                },
+              },
+            },
+          });
+        },
+      });
+      expect(shards).toHaveLength(2);
+      const prs = new Set<number>();
+      for (const shard of shards)
+        for (const line of Buffer.from(await artifacts.get(shard.input.run.provenance))
+          .toString()
+          .trim()
+          .split("\n"))
+          prs.add((JSON.parse(line) as { sourcePr: number }).sourcePr);
+      return prs;
+    };
+    expect((await stagedPrs()).size).toBe(50);
+    const focused = await stagedPrs("Next.js App Router features");
+    expect(focused.size).toBe(200);
+    expect(focused.has(1)).toBe(true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("server stages complete PR chunks before dispatch, without retaining the lookup token", async () => {
   const directory = await mkdtemp(join(tmpdir(), "batch-plan-"));
   try {

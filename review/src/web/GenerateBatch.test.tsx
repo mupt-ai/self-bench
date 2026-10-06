@@ -72,6 +72,19 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       field.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
     });
   };
+  // React's legacy change detection: it watches the focused field and compares on keyup.
+  const type = async (selector: string, value: string) => {
+    const field = container.querySelector<HTMLTextAreaElement>(selector);
+    if (!field) throw new Error(`Missing field ${selector}`);
+    Object.assign(field, { attachEvent() {}, detachEvent() {} });
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+    const event = (name: string) => new browser.Event(name, { bubbles: true }) as unknown as Event;
+    await act(async () => field.dispatchEvent(event("focusin")));
+    await act(async () => {
+      setter?.call(field, value);
+      field.dispatchEvent(event("keyup"));
+    });
+  };
   const submitForm = () =>
     act(async () => {
       browser.document
@@ -125,10 +138,12 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     expect(button("Generate").disabled).toBe(false);
     await select("Modal Credential", sandboxId);
     expect(button("Generate").disabled).toBe(false);
+    await type("#batch-focus", "  Next.js server actions  ");
     await submitForm();
     expect(submissions).toEqual([
       {
         candidateCounts: { easy: 1, medium: 1, hard: 1 },
+        focus: "Next.js server actions",
         generation: {
           authorModel: "gpt-6-astra",
           verifierModel: "gpt-6-sol",
@@ -152,6 +167,9 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Author Model"]')?.value,
     ).toBe("gpt-6-astra");
+    expect(container.querySelector<HTMLTextAreaElement>("#batch-focus")?.value).toBe(
+      "  Next.js server actions  ",
+    );
     // Without a sandbox to run on, the settings give way to the setup popup's callout.
     hasSandbox = false;
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));

@@ -53,6 +53,37 @@ export interface FinishDiscoveryShardInput extends DiscoveryShardInput {
   readonly outcome: SandboxJobOutcome;
 }
 
+/** The discovery agent's instructions for one shard, with the requester's focus when set. */
+export function discoveryPrompt(input: DiscoveryShardInput, count: number): string {
+  const { run } = input;
+  return renderPrompt("discovery", {
+    repositoryUrl: run.repository.url,
+    easy: input.targetCounts.easy,
+    medium: input.targetCounts.medium,
+    hard: input.targetCounts.hard,
+    count,
+    tiers: Object.entries(difficultyThresholds)
+      .map(([tier, t]) => `${tier} ≥${t.changedLines} lines across ≥${t.implementationFiles} files`)
+      .join(", "),
+    // Quoted so the focus narrows the choice without replacing the rules above it.
+    focus: run.focus
+      ? [
+          "# Focus",
+          "",
+          "The requester only wants candidates matching this description:",
+          "",
+          "```text",
+          run.focus.replaceAll("```", "'''"),
+          "```",
+          "",
+          "- Propose only PRs whose implementation core clearly matches it. Fewer or none is better than off-focus picks.",
+          "- The rules above still apply.",
+          "- Shortlist first from titles and bodies (jq over /work/provenance.jsonl), then inspect only the shortlist's diffs.",
+        ].join("\n")
+      : "",
+  });
+}
+
 async function shardProvenance(store: ArtifactStore, input: DiscoveryShardInput) {
   const all = parseProvenance(await store.get(input.run.provenance));
   return input.partitioned
@@ -83,18 +114,7 @@ export async function startDiscoveryShard(
     workspace: { kind: "clone", commit: run.repository.commit },
     extension: "/work/discovery.ts",
     tools: "read,bash,grep,find,ls,submit_discovery",
-    prompt: renderPrompt("discovery", {
-      repositoryUrl: run.repository.url,
-      easy: input.targetCounts.easy,
-      medium: input.targetCounts.medium,
-      hard: input.targetCounts.hard,
-      count: shard.length,
-      tiers: Object.entries(difficultyThresholds)
-        .map(
-          ([tier, t]) => `${tier} ≥${t.changedLines} lines across ≥${t.implementationFiles} files`,
-        )
-        .join(", "),
-    }),
+    prompt: discoveryPrompt(input, shard.length),
     files: [
       {
         path: "/work/discovery.ts",

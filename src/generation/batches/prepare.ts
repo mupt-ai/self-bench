@@ -35,11 +35,12 @@ export async function prepareGenerationBatch(options: {
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
   const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
-  const selected = takeNewestShards(
-    chunks,
-    shardCount,
-    discoveryPrsPerShard(requested, shardCount),
-  );
+  // A focus is often rare among recent PRs, so focused discovery spreads all fetched PRs over
+  // its shards and shortlists by title before reading diffs.
+  const prsPerShard = run.focus
+    ? Math.ceil(new Set(chunks.flat().map((message) => message.sourcePr)).size / shardCount)
+    : discoveryPrsPerShard(requested, shardCount);
+  const selected = takeNewestShards(chunks, shardCount, prsPerShard);
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(
     selected.map(async (chunk, index) => {
