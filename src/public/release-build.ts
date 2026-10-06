@@ -1,5 +1,6 @@
 import type { EvaluationRun } from "../evaluation/types.js";
 import { sha256 } from "../lib/hash.js";
+import { detailOf } from "./release-detail.js";
 import { type CredentialFacts, resultsBySetting, type Setting } from "./release-results.js";
 import {
   approvedKeys,
@@ -17,6 +18,7 @@ import {
   type ReleasePayload,
   type ReleasePublisher,
   type ReleaseRepository,
+  type ReleaseSetting,
 } from "./release-types.js";
 
 /** JSON with object keys sorted and undefined values dropped, so equal data hashes equally. */
@@ -59,6 +61,8 @@ interface PreviewTask {
   sourceUrl?: string;
   /** In the current release, new since it, or returning after an earlier release. */
   status: "released" | "new" | "returning";
+  /** In a group's preview, the member repository the task belongs to. */
+  repository?: string;
 }
 
 /** What the release dialog shows, and the fingerprint the release must match. */
@@ -171,20 +175,26 @@ export interface BuiltRelease {
   detail: Record<string, unknown> & PreviousRelease;
 }
 
+/** A release's numbers and private record, before it names what it is a release of. */
+export interface ScoredRelease {
+  /** The released task keys: every approved task each chosen setting has a result for. */
+  tasks: string[];
+  settings: ReleaseSetting[];
+  chosen: Candidate[];
+  results: Record<string, Record<string, unknown>>;
+  declined: string[];
+  detail: Record<string, unknown> & PreviousRelease & { releasedTasks: ReleaseTask[] };
+}
+
 /**
- * Builds the release for the ticked settings. With `publishTasks`, the payload says the tasks
- * are public, and selfbench.dev serves the compiled task each one's evaluations ran (recorded
- * per task in `detail.releasedTasks`).
+ * Scores the ticked settings over the tasks they share. With `publishTasks`, every task must have
+ * the compiled files its evaluations ran, which selfbench.dev then serves.
  */
-export function buildRelease(
+export function scoreRelease(
   inputs: ReleaseInputs,
   chosenKeys: readonly string[],
-  context: {
-    repository: Pick<ReleaseRepository, "id" | "fullName">;
-    publisher: ReleasePublisher;
-    publishTasks?: boolean;
-  },
-): BuiltRelease {
+  publishTasks = false,
+): ScoredRelease {
   const { approved, all } = evaluate(inputs);
   const wanted = new Set(chosenKeys);
   const chosen = all.filter((entry) => wanted.has(entry.setting.key));
@@ -195,20 +205,11 @@ export function buildRelease(
   if (tasks.length === 0)
     throw new ReleaseRefused("The selected settings have no approved task in common.");
   const settings = scores(chosen, tasks);
-  if (context.publishTasks) {
+  if (publishTasks) {
     const byKey = new Map(inputs.tasks.map((task) => [task.key, task]));
     if (tasks.some((key) => !byKey.get(key)?.bundleKey))
       throw new ReleaseRefused("A task has no compiled files to publish; refresh and try again.");
   }
-  const payload: ReleasePayload = {
-    schemaVersion: RELEASE_SCHEMA_VERSION,
-    repository: { id: context.repository.id, fullName: context.repository.fullName },
-    publisher: { login: context.publisher.login, kind: context.publisher.kind },
-    tasks: tasks.length,
-    settings,
-    frontier: settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
-    ...(context.publishTasks ? { tasksPublished: true as const } : {}),
-  };
   const results = Object.fromEntries(
     chosen.map((entry) => [
       entry.setting.key,
@@ -238,12 +239,12 @@ export function buildRelease(
   const released = new Set(tasks);
   const taskList = [...inputs.tasks].sort((left, right) => left.key.localeCompare(right.key));
   const declined = declinedFor(all, wanted, tasks);
-  // Covers the published numbers, which trial supplied each result, and the settings left out:
-  // declining a setting is a decision the next release's defaults must see, so it is recorded.
-  const hash = sha256(canonicalJson({ payload, results, declined }));
   return {
-    payload,
-    hash,
+    tasks,
+    settings,
+    chosen,
+    results,
+    declined,
     detail: {
       tasks,
       settings: chosen.map((entry) => entry.setting.key),
@@ -258,42 +259,36 @@ export function buildRelease(
   };
 }
 
-/** Private per-setting detail: routes, pricing, token sums, and trial dates. */
-function detailOf(
-  entry: Candidate,
-  tasks: readonly string[],
-  credentials: ReadonlyMap<string, CredentialFacts>,
-) {
-  const chosen = tasks.flatMap((task) => {
-    const result = entry.results.get(task);
-    return result ? [result] : [];
-  });
-  const sum = (field: "input" | "output" | "cacheRead" | "cacheWrite") =>
-    chosen.reduce((total, result) => total + (result.trial.tokenUsage?.[field] ?? 0), 0);
-  const times = chosen.flatMap((result) =>
-    result.trial.finishedAt ? [result.trial.finishedAt] : [],
-  );
-  times.sort();
-  const latestRun = chosen
-    .map((result) => result.run)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .at(-1);
-  return {
-    routes: chosen.map(({ run }) => ({
-      evaluationId: run.id,
-      provider: run.credentials?.provider,
-      signIn: credentials.get(run.credentials?.modelCredentialId ?? "")?.auth,
-      endpoint: credentials.get(run.credentials?.modelCredentialId ?? "")?.endpoint,
-    })),
-    sandbox: latestRun?.sandbox,
-    pricing: latestRun?.pricing,
-    tokens: {
-      input: sum("input"),
-      output: sum("output"),
-      cacheRead: sum("cacheRead"),
-      cacheWrite: sum("cacheWrite"),
-    },
-    firstTrialAt: times[0],
-    lastTrialAt: times.at(-1),
+/**
+ * Covers the published numbers, which trial supplied each result, and the settings left out:
+ * declining a setting is a decision the next release's defaults must see, so it is recorded.
+ */
+export const releaseHash = (payload: object, scored: ScoredRelease) =>
+  sha256(canonicalJson({ payload, results: scored.results, declined: scored.declined }));
+
+/**
+ * Builds the release for the ticked settings. With `publishTasks`, the payload says the tasks
+ * are public, and selfbench.dev serves the compiled task each one's evaluations ran (recorded
+ * per task in `detail.releasedTasks`).
+ */
+export function buildRelease(
+  inputs: ReleaseInputs,
+  chosenKeys: readonly string[],
+  context: {
+    repository: Pick<ReleaseRepository, "id" | "fullName">;
+    publisher: ReleasePublisher;
+    publishTasks?: boolean;
+  },
+): BuiltRelease {
+  const scored = scoreRelease(inputs, chosenKeys, context.publishTasks);
+  const payload: ReleasePayload = {
+    schemaVersion: RELEASE_SCHEMA_VERSION,
+    repository: { id: context.repository.id, fullName: context.repository.fullName },
+    publisher: { login: context.publisher.login, kind: context.publisher.kind },
+    tasks: scored.tasks.length,
+    settings: scored.settings,
+    frontier: scored.settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
+    ...(context.publishTasks ? { tasksPublished: true as const } : {}),
   };
+  return { payload, hash: releaseHash(payload, scored), detail: scored.detail };
 }

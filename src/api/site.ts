@@ -5,6 +5,7 @@ import { createApiKeyStore } from "../db/api-keys.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
+import { createGroupReleaseStore } from "../db/group-releases.js";
 import { createReleaseStore } from "../db/releases.js";
 import { createRepoGroupStore } from "../db/repo-groups.js";
 import { createRepoStore } from "../db/repos.js";
@@ -35,6 +36,7 @@ import { type BatchRoutes, createBatchRoutes } from "./routes/batches.js";
 import { type BillingRoutes, createBillingRoutes } from "./routes/billing.js";
 import { createEvaluationRoutes } from "./routes/evaluations.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./routes/github-repos.js";
+import { createGroupReleaseRoutes, type GroupReleaseRoutes } from "./routes/group-releases.js";
 import { createPublicReleaseRoutes, type PublicReleaseRoutes } from "./routes/public-releases.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./routes/pull-requests.js";
 import { createReleaseRoutes, type ReleaseRoutes } from "./routes/releases.js";
@@ -54,6 +56,7 @@ interface Site {
   /** Present only with the managed offering; a BYOK-only deployment has no billing routes. */
   readonly billing?: BillingRoutes;
   readonly releases: ReleaseRoutes;
+  readonly groupReleases: GroupReleaseRoutes;
   /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
   readonly publicReleases: PublicReleaseRoutes;
   /** selfbench.dev itself, answered on its own host by this same server, when configured. */
@@ -85,6 +88,8 @@ export async function openSite(
   const runs = createRunStore(database.db);
   const usage = createUsageStore(database.db);
   const releases = createReleaseStore(database.db);
+  const groupReleases = createGroupReleaseStore(database.db);
+  const groups = createRepoGroupStore(database.db);
   // Unset means no public results site: no host serves it and nothing links to it.
   const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
   // Only prod's site may be indexed; dev's, and any local run, never tells a search engine.
@@ -104,6 +109,7 @@ export async function openSite(
   if (canaryGuid && !canary)
     console.error("SELFBENCH_TASK_CANARY is not a GUID; published tasks are served without one");
   const publicReleases = createPublicReleaseRoutes(releases, {
+    groupReleases,
     limiter,
     artifacts,
     ...(canary ? { taskCanary: canary } : {}),
@@ -145,7 +151,8 @@ export async function openSite(
       artifacts,
       publicUrl,
       ...(vault ? { vault } : {}),
-      groups: createRepoGroupStore(database.db),
+      groups,
+      groupReleases,
       start: evaluationStarter(client, config.temporal.taskQueue),
       stop: evaluationStopper(client),
     }),
@@ -163,6 +170,21 @@ export async function openSite(
         publicReleases.refresh();
         // The repository's page, the publisher's line, and the home page's directory.
         void indexNow?.changed(["/", `/${fullName}`, `/${fullName}/${publisher}`]);
+      },
+    }),
+    groupReleases: createGroupReleaseRoutes({
+      db: database.db,
+      artifacts,
+      users,
+      repos,
+      groups,
+      releases: groupReleases,
+      publicUrl,
+      githubApiUrl: auth.githubApiUrl,
+      resultsSiteUrl,
+      onPublicChange: ({ slug }) => {
+        publicReleases.refresh();
+        void indexNow?.changed(["/", `/groups/${slug}`]);
       },
     }),
     publicReleases,

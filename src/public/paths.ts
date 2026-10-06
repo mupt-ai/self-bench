@@ -1,5 +1,5 @@
 /**
- * The one definition of which selfbench.dev paths name a repository. Page status and the
+ * The one definition of which selfbench.dev paths name a repository or a group. Page status and the
  * public API both read it, so anything else is refused before any lookup. Names follow
  * GitHub's character set and lengths: owners and publishers up to 39 characters, repositories
  * up to 100, of letters, digits, `.`, `_` and `-` (never `.` or `..` alone).
@@ -33,6 +33,19 @@ export function repositoryPath(segments: readonly string[]): RepositoryPath | un
   if (!valid(owner, 39) || !valid(name, 100)) return undefined;
   if (publisher !== undefined && !valid(publisher, 39)) return undefined;
   return publisher === undefined ? { owner, name } : { owner, name, publisher };
+}
+
+/** A group's address on selfbench.dev, `/groups/<slug>`: lowercase words joined by hyphens. */
+export const GROUP_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+
+/** The slug a path segment names, or undefined when it is not one. */
+export function groupSlug(segment: string | undefined): string | undefined {
+  return segment !== undefined && GROUP_SLUG.test(segment) ? segment : undefined;
+}
+
+/** The group named by path segments `["groups", slug]`, or undefined when they name none. */
+export function groupPath(segments: readonly string[]): string | undefined {
+  return segments.length === 2 && segments[0] === "groups" ? groupSlug(segments[1]) : undefined;
 }
 
 /** The non-empty segments of a URL path. */

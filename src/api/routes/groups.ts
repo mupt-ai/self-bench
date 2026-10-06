@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { RecordStoreError } from "../../db/encrypted-records.js";
+import { currentOf } from "../../db/releases.js";
 import {
   type GroupEvaluationRecord,
   type RepoGroup,
@@ -111,6 +112,12 @@ export async function groupRoutes(
         if (updated) sendJson(response, 200, { group: groupItem(updated) });
         else sendJson(response, 404, { error: "Group not found" });
       } else if (method === "DELETE") {
+        // Its public page would outlive it with no way to withdraw it.
+        const released = await options.groupReleases?.list({ orgId: tenant.id, groupId: group.id });
+        if (released && currentOf(released)) {
+          sendJson(response, 409, { error: "Withdraw this group's release before deleting it." });
+          return true;
+        }
         await groups.remove(tenant.id, group.id);
         sendJson(response, 200, { ok: true });
       } else sendJson(response, 405, { error: "Method not allowed" });

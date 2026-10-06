@@ -18,7 +18,8 @@ type ServerEvent =
   | "pull request task started"
   | "comparison started"
   | "group evaluation started"
-  | "release published";
+  | "release published"
+  | "group release published";
 
 let client: PostHog | undefined;
 let environment = "local";

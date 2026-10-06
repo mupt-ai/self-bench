@@ -72,19 +72,27 @@ const published = (row: ReleaseRow): PublishedRelease => ({
   releasedAt: row.releasedAt,
 });
 
-const isUniqueViolation = (error: unknown): boolean => {
+export const isUniqueViolation = (error: unknown): boolean => {
   const code = (error as { code?: unknown; cause?: { code?: unknown } }).code;
   const causeCode = (error as { cause?: { code?: unknown } }).cause?.code;
   return code === "23505" || causeCode === "23505";
 };
 
+/** What the chain of a line's rows reads from each row, for a repository's line or a group's. */
+interface ChainRow {
+  readonly id: string;
+  readonly predecessorId?: string;
+  readonly releasedAt: string;
+  readonly withdrawnAt?: string;
+}
+
 /**
  * A line's rows along the predecessor chain, newest first. Each row names the head it was
  * written after, so the chain, not the clock, decides which row is newest.
  */
-function chainOrder(rows: readonly ReleaseRow[]): ReleaseRow[] {
+export function chainOrder<Row extends ChainRow>(rows: readonly Row[]): Row[] {
   const next = new Map(rows.map((row) => [row.predecessorId ?? "", row]));
-  const chain: ReleaseRow[] = [];
+  const chain: Row[] = [];
   for (let row = next.get(""); row && chain.length < rows.length; row = next.get(row.id))
     chain.push(row);
   // The unique constraint keeps every row on the chain; any stray row is kept rather than lost.
@@ -93,22 +101,24 @@ function chainOrder(rows: readonly ReleaseRow[]): ReleaseRow[] {
 }
 
 /** The line's newest row, withdrawn or not. A release names the head it was built on. */
-export const headOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined => rows[0];
+export const headOf = <Row extends ChainRow>(rows: readonly Row[]): Row | undefined => rows[0];
 /** The line's newest row not withdrawn: what the public sees. */
-export const currentOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined =>
+export const currentOf = <Row extends ChainRow>(rows: readonly Row[]): Row | undefined =>
   rows.find((row) => !row.withdrawnAt);
 
 /** Each line's current release among `rows`, which must hold whole lines. Newest first. */
-function currentAmong(rows: readonly ReleaseRow[]): ReleaseRow[] {
-  const byLine = new Map<string, ReleaseRow[]>();
-  for (const row of rows) {
-    const key = `${row.line.orgId}/${row.line.githubRepoId}`;
-    byLine.set(key, [...(byLine.get(key) ?? []), row]);
-  }
+export function currentAmong<Row extends ChainRow>(
+  rows: readonly Row[],
+  lineOf: (row: Row) => string,
+): Row[] {
+  const byLine = new Map<string, Row[]>();
+  for (const row of rows) byLine.set(lineOf(row), [...(byLine.get(lineOf(row)) ?? []), row]);
   return [...byLine.values()]
     .flatMap((line) => currentOf(chainOrder(line)) ?? [])
     .sort((left, right) => right.releasedAt.localeCompare(left.releasedAt));
 }
+
+const repositoryLine = (row: ReleaseRow) => `${row.line.orgId}/${row.line.githubRepoId}`;
 
 export function createReleaseStore(db: Database, options: { now?: () => Date } = {}) {
   const now = options.now ?? (() => new Date());
@@ -194,7 +204,7 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
     },
     /** Every line's current release, newest first. */
     async currentLines(): Promise<PublishedLine[]> {
-      return asLines(currentAmong(await publicRowsWhere()));
+      return asLines(currentAmong(await publicRowsWhere(), repositoryLine));
     },
     /** The current release of each line whose latest release names `fullName`, newest first. */
     async currentLinesFor(fullName: string): Promise<PublishedLine[]> {
@@ -206,7 +216,7 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         .from(releases)
         .where(eq(sql`lower(${releases.fullName})`, wanted));
       if (named.length === 0) return [];
-      const current = currentAmong(await publicRowsWhere(or(...named.map(ofLine))));
+      const current = currentAmong(await publicRowsWhere(or(...named.map(ofLine))), repositoryLine);
       return asLines(current.filter((row) => row.fullName.toLowerCase() === wanted));
     },
   };

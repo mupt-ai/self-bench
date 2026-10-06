@@ -59,30 +59,24 @@ export async function releaseCredentials(
   );
 }
 
-/** Everything the release rule reads for one connected repository and its line's rows. */
-export async function releaseInputs(
-  db: Database,
-  artifacts: ArtifactStore,
-  scope: { repoId: number; orgId: number },
-  rows: readonly ReleaseRow[],
-): Promise<ReleaseInputs> {
-  const [taskList, runs, credentialFacts] = await Promise.all([
-    releaseTasks(db, scope.repoId),
-    listEvaluations(artifacts, scope.repoId),
-    releaseCredentials(db, scope.orgId),
-  ]);
+/** What a line's rows tell the rule: its current release, every task it ever released, its head. */
+export function lineState(
+  rows: readonly {
+    readonly id: string;
+    readonly releasedAt: string;
+    readonly withdrawnAt?: string;
+    readonly detail: Record<string, unknown>;
+  }[],
+): Pick<ReleaseInputs, "previous" | "everReleased" | "headId" | "currentId"> {
   const head = headOf(rows);
   const current = currentOf(rows);
-  const keys = (row: ReleaseRow, field: "tasks" | "settings" | "declined") => {
+  const keys = (row: (typeof rows)[number], field: "tasks" | "settings" | "declined") => {
     const value = row.detail[field];
     return Array.isArray(value)
       ? value.filter((item): item is string => typeof item === "string")
       : [];
   };
   return {
-    tasks: taskList,
-    runs,
-    credentials: credentialFacts,
     ...(current
       ? {
           previous: {
@@ -95,6 +89,55 @@ export async function releaseInputs(
     everReleased: new Set(rows.flatMap((row) => keys(row, "tasks"))),
     ...(head ? { headId: head.id } : {}),
     ...(current ? { currentId: current.id } : {}),
+  };
+}
+
+/** Everything the release rule reads for one connected repository and its line's rows. */
+export async function releaseInputs(
+  db: Database,
+  artifacts: ArtifactStore,
+  scope: { repoId: number; orgId: number },
+  rows: readonly ReleaseRow[],
+): Promise<ReleaseInputs> {
+  const [taskList, runs, credentialFacts] = await Promise.all([
+    releaseTasks(db, scope.repoId),
+    listEvaluations(artifacts, scope.repoId),
+    releaseCredentials(db, scope.orgId),
+  ]);
+  return { tasks: taskList, runs, credentials: credentialFacts, ...lineState(rows) };
+}
+
+/**
+ * What the rule reads for a group: every member's tasks and runs as one repository's, which
+ * their keys (each task's generation batch and id) keep apart. `memberOf` names each task's
+ * member by the key the caller gave it.
+ */
+export async function groupReleaseInputs<Key>(
+  db: Database,
+  artifacts: ArtifactStore,
+  scope: { orgId: number; members: readonly { repoId: number; key: Key }[] },
+  rows: Parameters<typeof lineState>[0],
+): Promise<{ inputs: ReleaseInputs; memberOf: Map<string, Key> }> {
+  const [members, credentialFacts] = await Promise.all([
+    Promise.all(
+      scope.members.map(async (member) => ({
+        key: member.key,
+        tasks: await releaseTasks(db, member.repoId),
+        runs: await listEvaluations(artifacts, member.repoId),
+      })),
+    ),
+    releaseCredentials(db, scope.orgId),
+  ]);
+  return {
+    inputs: {
+      tasks: members.flatMap((member) => member.tasks),
+      runs: members.flatMap((member) => member.runs),
+      credentials: credentialFacts,
+      ...lineState(rows),
+    },
+    memberOf: new Map(
+      members.flatMap((member) => member.tasks.map((task) => [task.key, member.key] as const)),
+    ),
   };
 }
 

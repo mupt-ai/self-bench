@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -59,4 +60,40 @@ export const groupEvaluations = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [index("group_evaluations_group").on(table.groupId, table.createdAt)],
+);
+
+/**
+ * Public releases of a group, as `releases` holds them for a repository: append-only, a line per
+ * workspace and group, no foreign keys. A line keeps the slug its first release claimed, so a
+ * group's address on selfbench.dev never changes and no other line can take it.
+ */
+export const groupReleases = pgTable(
+  "group_releases",
+  {
+    id: uuid("id").primaryKey(),
+    orgId: bigint("org_id", { mode: "number" }).notNull(),
+    groupId: uuid("group_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    publisherLogin: text("publisher_login").notNull(),
+    predecessorId: uuid("predecessor_id"),
+    releasedBy: bigint("released_by", { mode: "number" }).notNull(),
+    releasedByLogin: text("released_by_login").notNull(),
+    releasedAt: timestamptz("released_at").notNull().defaultNow(),
+    withdrawnAt: timestamptz("withdrawn_at"),
+    withdrawnByLogin: text("withdrawn_by_login"),
+    hash: text("hash").notNull(),
+    payload: jsonb("payload").notNull(),
+    detail: jsonb("detail").notNull(),
+  },
+  (table) => [
+    index("group_releases_line_time").on(table.orgId, table.groupId, table.releasedAt),
+    unique("group_releases_line_predecessor")
+      .on(table.orgId, table.groupId, table.predecessorId)
+      .nullsNotDistinct(),
+    // Only a line's first row has no predecessor: one line per slug, for good.
+    uniqueIndex("group_releases_slug")
+      .on(sql`lower(${table.slug})`)
+      .where(sql`${table.predecessorId} is null`),
+  ],
 );
