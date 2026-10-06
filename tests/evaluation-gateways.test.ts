@@ -107,7 +107,7 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
-test("gateway Pi describes a model to Pi only when Pi's own catalog lacks it", async () => {
+test("gateway Pi gives a Pi that lists the model only the overrides, else the whole entry", async () => {
   const result = await runCommand("python3", [
     "-c",
     `import asyncio, importlib.util, json, os, subprocess, sys, tempfile, types
@@ -135,8 +135,9 @@ LISTED = """provider           model                 context
 vercel-ai-gateway  vendor/known          128K
 vercel-ai-gateway  vendor/it's-older     128K
 """
-def written(model):
-    models = {"providers": {"vercel-ai-gateway": {"models": [{"id": model}]}}}
+def written(model, overrides, listing=LISTED):
+    config = {"models": [{"id": model}], **({"modelOverrides": overrides} if overrides else {})}
+    models = {"providers": {"vercel-ai-gateway": config}}
     agent = adapter.GatewayPi("vercel-ai-gateway/" + model, models)
     asyncio.run(agent.run("task", None, None))
     (write, env), start = agent.commands
@@ -144,9 +145,9 @@ def written(model):
     with tempfile.TemporaryDirectory() as home:
         os.mkdir(os.path.join(home, ".nvm"))
         with open(os.path.join(home, "listed.txt"), "w") as file:
-            file.write(LISTED)
+            file.write(listing)
         with open(os.path.join(home, ".nvm/nvm.sh"), "w") as file:
-            file.write('pi() { echo "$@" > "$HOME/asked.txt"; cat "$HOME/listed.txt"; }')
+            file.write('pi() { echo "$@" > "$HOME/asked.txt"; cat "$HOME/listed.txt"; [ -s "$HOME/listed.txt" ]; }')
         subprocess.check_call(["bash", "-c", "set -o pipefail; " + write], env={**os.environ, "HOME": home})
         with open(os.path.join(home, "asked.txt")) as file:
             assert file.read() == "--list-models " + model + "\\n"
@@ -154,11 +155,14 @@ def written(model):
         if not os.path.exists(path):
             return None
         with open(path) as file:
-            loaded = json.load(file)
-        assert loaded == models
-        return loaded
-assert written("vendor/known") is None
-assert written("vendor/it's") is not None
+            return json.load(file)
+overrides = {"vendor/known": {"compat": {"forceAdaptiveThinking": True}}}
+assert written("vendor/known", overrides) == {"providers": {"vercel-ai-gateway": {"modelOverrides": overrides}}}
+assert written("vendor/known", None) is None
+whole = {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/it's"}]}}}
+assert written("vendor/it's", None) == whole
+# Without a listing Pi would guess, so it gets the whole entry.
+assert written("vendor/known", None, listing="") == {"providers": {"vercel-ai-gateway": {"models": [{"id": "vendor/known"}]}}}
 agent = adapter.GatewayPi("vercel-ai-gateway/vendor/known", None)
 asyncio.run(agent.run("task", None, None))
 assert agent.commands == [("pi task", None)]

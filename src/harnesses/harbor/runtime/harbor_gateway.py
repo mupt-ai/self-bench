@@ -70,8 +70,8 @@ class SelfBenchClaudeCode(ClaudeCode):
 
 
 class GatewayPiOptions(PiOptions):
-    # Pi's models.json describing the trial's model as the gateway lists it (ListedModel.pi), for
-    # Pi to use when its own catalog lacks the model.
+    # Pi's models.json describing the trial's model as the gateway lists it (piModels): `models`
+    # for a Pi whose catalog lacks the model, `modelOverrides` for one that lists it.
     models_json: dict[str, Any] | None = None
 
 
@@ -82,21 +82,33 @@ class GatewayPi(Pi):
     options_model = GatewayPiOptions
 
     async def run(self, instruction, environment, context):
-        # A models.json entry replaces Pi's own for the same model, whose settings Pi tunes by hand,
-        # so it goes only to a model Pi does not list. Pi reads it from its own directory, which
-        # Harbor leaves at its default.
-        if self.options.models_json:
-            provider, model = (shlex.quote(part) for part in self.model_name.split("/", 1))
-            models = shlex.quote(json.dumps(self.options.models_json))
+        provider, _, model = self.model_name.partition("/")
+        if self.options.models_json and model:
             await self.exec_as_agent(
                 environment,
-                command=(
-                    f". ~/.nvm/nvm.sh; pi --list-models {model} | "
-                    f"awk -v p={provider} -v m={model} "
-                    "'$1 == p && $2 == m { found = 1 } END { exit !found }' || "
-                    '{ mkdir -p "$HOME/.pi/agent" && '
-                    f'printf %s {models} > "$HOME/.pi/agent/models.json"; }}'
-                ),
+                command=self._models_json_command(provider, model),
                 env=dict(self.model_connection.env),
             )
         await super().run(instruction, environment, context)
+
+    def _models_json_command(self, provider, model):
+        # A `models` entry replaces Pi's own for the same model, which Pi tunes by hand, so a Pi
+        # that lists the model gets only the overrides. A failed listing counts as Pi lacking
+        # the model: without the entry Pi would guess. Pi reads models.json from its own
+        # directory, which Harbor leaves at its default.
+        full = self.options.models_json
+        listed = {
+            "providers": {
+                name: rest
+                for name, config in full.get("providers", {}).items()
+                if (rest := {key: value for key, value in config.items() if key != "models"})
+            }
+        }
+        write = 'mkdir -p "$HOME/.pi/agent" && printf %s {} > "$HOME/.pi/agent/models.json"'
+        model = shlex.quote(model)
+        lists = (
+            f". ~/.nvm/nvm.sh; pi --list-models {model} | awk -v p={shlex.quote(provider)} "
+            f"-v m={model} '$1 == p && $2 == m {{ found = 1 }} END {{ exit !found }}'"
+        )
+        known = write.format(shlex.quote(json.dumps(listed))) if listed["providers"] else "true"
+        return f"if {lists}; then {known}; else {write.format(shlex.quote(json.dumps(full)))}; fi"
