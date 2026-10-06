@@ -100,7 +100,7 @@ class GatewayPi(Pi):
         listed = {
             "providers": {
                 name: rest
-                for name, config in full.get("providers", {}).items()
+                for name, config in full["providers"].items()
                 if (rest := {key: value for key, value in config.items() if key != "models"})
             }
         }

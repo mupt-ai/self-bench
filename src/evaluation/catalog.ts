@@ -103,7 +103,7 @@ export function evaluationCatalog(): CatalogModel[] {
       // not list by id, awaits a route here. Otherwise listing order would pick the pair.
       if (!merged.has(id) && !curated.has(id) && names.get(vendorName(entry)) === 1) {
         const entryVendors = vendors({ [gateway]: entry.id });
-        const twins = (named.get(nameKey(entry.label)) ?? []).filter((candidate) => {
+        const [twin, ...others] = (named.get(nameKey(entry.label)) ?? []).filter((candidate) => {
           const routes = (merged.get(candidate) ?? curated.get(candidate))?.gateways ?? {};
           return (
             !routes[gateway] &&
@@ -111,7 +111,6 @@ export function evaluationCatalog(): CatalogModel[] {
             [...vendors(routes)].some((vendor) => entryVendors.has(vendor))
           );
         });
-        const [twin, ...others] = twins;
         if (twin && others.length === 0) id = twin;
       }
       const known = merged.get(id) ?? curated.get(id);
