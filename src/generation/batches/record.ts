@@ -62,8 +62,9 @@ export function recordShard(
 }
 
 /**
- * Deterministic shard order wins duplicate PRs; no candidate is dispatched twice. The plan
- * commits before any author workflow starts.
+ * Deterministic shard order wins duplicate PRs and a tier's last slots; no candidate is
+ * dispatched twice, and no tier gets more than requested. The plan commits before any author
+ * workflow starts.
  */
 export function planCandidates(batch: GenerationBatch): boolean {
   if (batch.phase === "cancelling") return finishCancel(batch);
@@ -73,6 +74,10 @@ export function planCandidates(batch: GenerationBatch): boolean {
   for (const shard of batch.shards)
     for (const candidate of shard.result?.candidates ?? []) {
       if (seen.has(candidate.sourcePr)) continue;
+      const tier = candidates.filter(
+        (item) => item.candidate.difficulty === candidate.difficulty,
+      ).length;
+      if (tier >= batch.run.candidateCounts[candidate.difficulty]) continue;
       seen.add(candidate.sourcePr);
       if (candidates.some((item) => item.candidate.candidateId === candidate.candidateId))
         return fail(batch, "Duplicate candidate ID across discovery shards");

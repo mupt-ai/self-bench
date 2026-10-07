@@ -111,22 +111,26 @@ test("a batch cancelled before preparation ends cancelled without fetching", asy
   expect((await f.read()).phase).toBe("cancelled");
 });
 
-test("planning keeps the first shard's candidate for a PR and fails an empty or ambiguous plan", async () => {
+test("planning keeps the first shard's candidate for a PR, trims each tier to its request, and fails an empty or ambiguous plan", async () => {
   const found = (...candidates: ReturnType<typeof candidate>[]) => ({
     report: artifact,
     candidates,
   });
-  const f = await activitiesFor({ phase: "discovering", shards: [shard(0), shard(1)] });
+  const two = { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } };
+  const f = await activitiesFor({ run: two, phase: "discovering", shards: [shard(0), shard(1)] });
   await f.activities.recordBatchShard(run.runId, 0, {
     result: found(candidate("one", 1), candidate("two", 2)),
   });
-  await f.activities.recordBatchShard(run.runId, 1, { result: found(candidate("again", 1)) });
+  // A focused shard may propose the whole request, so a later shard's extras are dropped.
+  await f.activities.recordBatchShard(run.runId, 1, {
+    result: found(candidate("again", 1), candidate("three", 3)),
+  });
   const planned = await f.activities.planBatch(run.runId);
   expect(planned.map((item) => item.workflowId)).toEqual([
     `${run.runId}/candidate/one`,
     `${run.runId}/candidate/two`,
   ]);
-  expect(planned[0]?.input).toEqual({ run, candidate: candidate("one", 1) });
+  expect(planned[0]?.input).toEqual({ run: two, candidate: candidate("one", 1) });
   expect((await f.read()).phase).toBe("authoring");
   expect(await f.activities.planBatch(run.runId)).toEqual(planned);
 
@@ -138,7 +142,11 @@ test("planning keeps the first shard's candidate for a PR and fails an empty or 
     error: "Discovery returned no candidates",
   });
 
-  const ambiguous = await activitiesFor({ phase: "discovering", shards: [shard(0), shard(1)] });
+  const ambiguous = await activitiesFor({
+    run: two,
+    phase: "discovering",
+    shards: [shard(0), shard(1)],
+  });
   await ambiguous.activities.recordBatchShard(run.runId, 0, { result: found(candidate("one", 1)) });
   await ambiguous.activities.recordBatchShard(run.runId, 1, { result: found(candidate("one", 2)) });
   expect(await ambiguous.activities.planBatch(run.runId)).toEqual([]);

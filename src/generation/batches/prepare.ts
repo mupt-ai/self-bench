@@ -5,6 +5,7 @@ import { fetchBatchPullRequests } from "../../third_party/github/batch-pull-requ
 import {
   discoveryPrsPerShard,
   FOCUSED_PRS_PER_SHARD,
+  MAX_FOCUSED_DISCOVERY_SHARDS,
   partitionPullRequests,
   takeNewestShards,
 } from "./shards.js";
@@ -28,31 +29,41 @@ export async function prepareGenerationBatch(options: {
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<GenerationBatch["shards"]> {
   const { run, artifacts } = options;
-  const github = await fetchBatchPullRequests({
-    repositoryUrl: run.repository.url,
-    token: options.token,
-    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-  });
-  const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
-  if (!chunks.length) throw new NoEligiblePullRequestsError();
   // One discovery agent can fill a small request from a single PR window. Larger
   // requests widen each window rather than exceeding the workflow shard bound.
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
   const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
-  const shardCount = Math.min(MAX_DISCOVERY_SHARDS, needed);
-  // A focus is often rare among recent PRs, so focused discovery looks further back.
+  // A focused window can't widen, so a focused batch looks further back with more shards.
+  const shardCount = Math.min(
+    run.focus ? MAX_FOCUSED_DISCOVERY_SHARDS : MAX_DISCOVERY_SHARDS,
+    needed,
+  );
+  const github = await fetchBatchPullRequests({
+    repositoryUrl: run.repository.url,
+    token: options.token,
+    // A focus is often rare among recent PRs, so focused discovery fetches enough to fill every
+    // shard's full window. Drafts, bots, and tiny PRs drop out after the fetch, hence twice that.
+    ...(run.focus ? { limit: 2 * shardCount * FOCUSED_PRS_PER_SHARD } : {}),
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
+  const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
+  if (!chunks.length) throw new NoEligiblePullRequestsError();
   const prCount = new Set(chunks.flat().map((message) => message.sourcePr)).size;
   const prsPerShard = run.focus
     ? Math.max(1, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
     : discoveryPrsPerShard(requested, shardCount);
   const selected = takeNewestShards(chunks, shardCount, prsPerShard);
+  // A focus's matches cluster in a few windows, so each focused shard may propose the whole
+  // request and planning trims each tier to its count.
   const targetCountsForShard = (shardIndex: number): RunRequest["candidateCounts"] =>
-    Object.fromEntries(
-      Object.entries(run.candidateCounts).map(([tier, count]) => [
-        tier,
-        Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
-      ]),
-    ) as RunRequest["candidateCounts"];
+    run.focus
+      ? run.candidateCounts
+      : (Object.fromEntries(
+          Object.entries(run.candidateCounts).map(([tier, count]) => [
+            tier,
+            Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
+          ]),
+        ) as RunRequest["candidateCounts"]);
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(
     selected.map(async (chunk, index) => {
