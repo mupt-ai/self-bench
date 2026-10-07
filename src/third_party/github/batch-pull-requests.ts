@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sleep } from "../../lib/util.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
 import type { ProvenanceMessage } from "./provenance.js";
 import { extractGitHubPullRequestProvenance } from "./provenance.js";
@@ -51,6 +52,10 @@ const pageSchema = z.object({
   }),
 });
 
+export const DEFAULT_PR_FETCH_LIMIT = 500;
+export const MAX_PR_FETCH_LIMIT = 10_000;
+const PAGE_ATTEMPTS = 3;
+
 /** Server-side metadata fetch; never launches gh or a Temporal activity. Limit is before filtering. */
 export async function fetchBatchPullRequests(options: {
   repositoryUrl: string;
@@ -58,24 +63,35 @@ export async function fetchBatchPullRequests(options: {
   limit?: number;
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<ProvenanceMessage[]> {
-  const limit = options.limit ?? 500;
-  if (!Number.isInteger(limit) || limit < 1 || limit > 10_000)
+  const limit = options.limit ?? DEFAULT_PR_FETCH_LIMIT;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PR_FETCH_LIMIT)
     throw new Error("Invalid PR fetch limit");
   const [owner, name] = githubRepository(options.repositoryUrl).split("/");
   const rows: unknown[] = [];
   const cursors = new Set<string>();
   let after: string | null = null;
   while (rows.length < limit) {
-    const response = await (options.fetchImpl ?? fetch)("https://api.github.com/graphql", {
-      method: "POST",
-      redirect: "error",
-      headers: { ...apiHeaders(options.token), "content-type": "application/json" },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        query,
-        variables: { owner, name, first: Math.min(100, limit - rows.length), after },
-      }),
+    const body = JSON.stringify({
+      query,
+      variables: { owner, name, first: Math.min(100, limit - rows.length), after },
     });
+    // A deep fetch is many pages, so a GitHub hiccup retries its page rather than the fetch.
+    let response: Response | undefined;
+    for (let attempt = 1; !response; attempt += 1) {
+      try {
+        const reply = await (options.fetchImpl ?? fetch)("https://api.github.com/graphql", {
+          method: "POST",
+          redirect: "error",
+          headers: { ...apiHeaders(options.token), "content-type": "application/json" },
+          signal: AbortSignal.timeout(30_000),
+          body,
+        });
+        if (reply.status < 500 || attempt === PAGE_ATTEMPTS) response = reply;
+      } catch (error) {
+        if (attempt === PAGE_ATTEMPTS) throw error;
+      }
+      if (!response) await sleep(1_000 * attempt);
+    }
     if (!response.ok)
       throw new GitHubOAuthError(`GitHub PR fetch failed (${response.status})`, response.status);
     const raw: unknown = await response.json();

@@ -24,7 +24,8 @@ const records = proxyActivities<BatchActivities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 5 },
 });
-// Fetching up to 500 merged PRs; the same fetch finding none again cannot succeed.
+// Fetching merged PRs, thousands for a focused batch; the same fetch finding none again cannot
+// succeed.
 const preparing = proxyActivities<Pick<BatchActivities, "prepareBatch">>({
   startToCloseTimeout: "15 minutes",
   retry: { maximumAttempts: 3, nonRetryableErrorTypes: ["NoEligiblePullRequestsError"] },

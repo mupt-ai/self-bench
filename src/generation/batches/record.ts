@@ -62,20 +62,28 @@ export function recordShard(
 }
 
 /**
- * Deterministic shard order wins duplicate PRs; no candidate is dispatched twice. The plan
- * commits before any author workflow starts.
+ * Shards take turns by rank, newest PR window first, so no one window fills a tier. The first
+ * claim on a PR wins, no candidate is dispatched twice, and no tier gets more than requested. The
+ * plan commits before any author workflow starts.
  */
 export function planCandidates(batch: GenerationBatch): boolean {
   if (batch.phase === "cancelling") return finishCancel(batch);
   if (batch.phase !== "discovering") return false;
   const seen = new Set<number>();
   const candidates: Candidate[] = [];
-  for (const shard of batch.shards)
-    for (const candidate of shard.result?.candidates ?? []) {
-      if (seen.has(candidate.sourcePr)) continue;
+  const lists = batch.shards.map((shard) => shard.result?.candidates ?? []).reverse();
+  const depth = Math.max(0, ...lists.map((list) => list.length));
+  for (let rank = 0; rank < depth; rank += 1)
+    for (const list of lists) {
+      const candidate = list[rank];
+      if (!candidate || seen.has(candidate.sourcePr)) continue;
       seen.add(candidate.sourcePr);
       if (candidates.some((item) => item.candidate.candidateId === candidate.candidateId))
         return fail(batch, "Duplicate candidate ID across discovery shards");
+      const tier = candidates.filter(
+        (item) => item.candidate.difficulty === candidate.difficulty,
+      ).length;
+      if (tier >= batch.run.candidateCounts[candidate.difficulty]) continue;
       candidates.push({
         workflowId: `${batch.run.runId}/candidate/${candidate.candidateId}`,
         candidate,

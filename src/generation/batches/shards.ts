@@ -4,6 +4,10 @@ import type { ProvenanceMessage } from "../../third_party/github/provenance.js";
 const DEFAULT_PRS_PER_SHARD = 25;
 /** A focused shard skims titles first, so it can cover more PRs within one discovery timeout. */
 export const FOCUSED_PRS_PER_SHARD = 150;
+/** Up to 4,800 PRs, which with filtering headroom stays within the 10,000-PR fetch bound. */
+export const MAX_FOCUSED_DISCOVERY_SHARDS = 32;
+/** How many times its share of each tier a focused shard may propose. */
+export const FOCUSED_SHARD_SURPLUS = 3;
 
 /** Size each shard to expose a 1.5× PR pool without exceeding the workflow bound. */
 export function discoveryPrsPerShard(candidateCount: number, shardCount: number): number {

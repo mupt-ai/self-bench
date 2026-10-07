@@ -58,6 +58,28 @@ test("fails closed on auth, GraphQL partial data and repeated cursors", async ()
     }),
   ).rejects.toThrow("did not advance");
 });
+test("a transient GitHub error retries its page, and a persistent one fails the fetch", async () => {
+  let calls = 0;
+  const flaky = async () => (++calls === 1 ? new Response("", { status: 502 }) : page([pr(1)]));
+  const result = await fetchBatchPullRequests({
+    repositoryUrl: "https://github.com/o/r",
+    token: "test",
+    fetchImpl: flaky,
+  });
+  expect(result.map((row) => row.sourcePr)).toEqual([1]);
+  calls = 0;
+  await expect(
+    fetchBatchPullRequests({
+      repositoryUrl: "https://github.com/o/r",
+      token: "test",
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("", { status: 502 });
+      },
+    }),
+  ).rejects.toThrow("GitHub PR fetch failed (502)");
+  expect(calls).toBe(3);
+});
 test("null descriptions and unavailable diff stats do not discard unrelated PRs", async () => {
   const result = await fetchBatchPullRequests({
     repositoryUrl: "https://github.com/o/r",

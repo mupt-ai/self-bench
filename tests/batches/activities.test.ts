@@ -111,22 +111,27 @@ test("a batch cancelled before preparation ends cancelled without fetching", asy
   expect((await f.read()).phase).toBe("cancelled");
 });
 
-test("planning keeps the first shard's candidate for a PR and fails an empty or ambiguous plan", async () => {
+test("planning takes shards in turn, newest first, trims each tier, and fails an empty or ambiguous plan", async () => {
   const found = (...candidates: ReturnType<typeof candidate>[]) => ({
     report: artifact,
     candidates,
   });
-  const f = await activitiesFor({ phase: "discovering", shards: [shard(0), shard(1)] });
+  const three = { ...run, candidateCounts: { easy: 0, medium: 0, hard: 3 } };
+  const f = await activitiesFor({ run: three, phase: "discovering", shards: [shard(0), shard(1)] });
   await f.activities.recordBatchShard(run.runId, 0, {
     result: found(candidate("one", 1), candidate("two", 2)),
   });
-  await f.activities.recordBatchShard(run.runId, 1, { result: found(candidate("again", 1)) });
+  // The newer window claims PR 1 first, and its third pick loses to the older window's second.
+  await f.activities.recordBatchShard(run.runId, 1, {
+    result: found(candidate("again", 1), candidate("three", 3), candidate("four", 4)),
+  });
   const planned = await f.activities.planBatch(run.runId);
   expect(planned.map((item) => item.workflowId)).toEqual([
-    `${run.runId}/candidate/one`,
+    `${run.runId}/candidate/again`,
+    `${run.runId}/candidate/three`,
     `${run.runId}/candidate/two`,
   ]);
-  expect(planned[0]?.input).toEqual({ run, candidate: candidate("one", 1) });
+  expect(planned[0]?.input).toEqual({ run: three, candidate: candidate("again", 1) });
   expect((await f.read()).phase).toBe("authoring");
   expect(await f.activities.planBatch(run.runId)).toEqual(planned);
 

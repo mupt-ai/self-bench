@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { MAX_DISCOVERY_SHARDS } from "../../src/contracts/config/execution-limits.js";
 import { prepareGenerationBatch } from "../../src/generation/batches/prepare.js";
+import { MAX_FOCUSED_DISCOVERY_SHARDS } from "../../src/generation/batches/shards.js";
 import { run } from "../support/workflow-fixture.js";
 
 test("caps independent discovery while covering enough PRs for a max-size run", async () => {
@@ -75,17 +76,18 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
   try {
     const artifacts = new LocalArtifactStore(directory);
     const provenance = await artifacts.put("input.jsonl", Buffer.alloc(0), "application/x-ndjson");
-    const nodes = Array.from({ length: 200 }, (_, i) => ({
-      number: i + 1,
+    const node = (number: number) => ({
+      number,
       title: "Implement feature",
       body: "request",
-      url: `https://github.com/example/repo/pull/${i + 1}`,
+      url: `https://github.com/example/repo/pull/${number}`,
       isDraft: false,
       additions: 25,
       deletions: 0,
       changedFiles: 1,
       author: { login: "human", __typename: "User" },
-    }));
+    });
+    const nodes = Array.from({ length: 200 }, (_, i) => node(i + 1));
     let attempt = 0;
     const stage = async (hard: number, focus?: string) => {
       const shards = await prepareGenerationBatch({
@@ -136,16 +138,21 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
     expect(one.prs.has(50)).toBe(false);
     const five = await stage(5, focus);
     expect(five.shards).toHaveLength(5);
-    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([1, 1, 1, 1, 1]);
+    // A focus's matches cluster, so each focused shard may propose a few times its share.
+    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([3, 3, 3, 3, 3]);
     expect(five.prs.size).toBe(200);
-    // However the PRs pack into shards, the shard targets add up to exactly the request.
+    // A busy repository's newest 500 PRs can span a week; a large focused run looks back further.
+    nodes.push(...Array.from({ length: 4800 }, (_, i) => node(i + 201)));
+    const full = await stage(80, focus);
+    expect(full.shards).toHaveLength(MAX_FOCUSED_DISCOVERY_SHARDS);
+    expect(full.prs.size).toBe(MAX_FOCUSED_DISCOVERY_SHARDS * 150);
+    expect(full.prs.has(5000)).toBe(true);
+    // However the PRs pack into shards, unfocused shard targets add up to exactly the request.
     nodes.splice(20);
-    for (const focused of [undefined, focus]) {
-      const small = await stage(9, focused);
-      const targets = small.shards.map((shard) => shard.input.targetCounts.hard);
-      expect(targets.reduce((total, count) => total + count, 0)).toBe(9);
-      expect(Math.min(...targets)).toBeGreaterThan(0);
-    }
+    const small = await stage(9);
+    const targets = small.shards.map((shard) => shard.input.targetCounts.hard);
+    expect(targets.reduce((total, count) => total + count, 0)).toBe(9);
+    expect(Math.min(...targets)).toBeGreaterThan(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
