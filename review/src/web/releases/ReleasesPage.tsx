@@ -94,15 +94,7 @@ export function ReleasesPage() {
       {!list ? (
         !error && <ListSkeleton label="Loading Releases" />
       ) : list.releases.length === 0 ? (
-        <EmptyState
-          title="Not Released Yet"
-          visual={<GhostRelease repo={repo} />}
-          action={
-            <Button variant="primary" onClick={() => setReleasing(true)}>
-              Release Results
-            </Button>
-          }
-        >
+        <EmptyState title="Not Released Yet" visual={<GhostRelease repo={repo} />}>
           Nothing from this workspace is public for {repo}. Release Results publishes accuracy and
           cost for the settings you choose.
         </EmptyState>
