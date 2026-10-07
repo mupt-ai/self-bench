@@ -138,8 +138,8 @@ test("a focused batch gives each discovery shard a wider window of the newest PR
     expect(one.prs.has(50)).toBe(false);
     const five = await stage(5, focus);
     expect(five.shards).toHaveLength(5);
-    // A focus's matches cluster, so each focused shard may propose the whole request.
-    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([5, 5, 5, 5, 5]);
+    // A focus's matches cluster, so each focused shard may propose a few times its share.
+    expect(five.shards.map((shard) => shard.input.targetCounts.hard)).toEqual([3, 3, 3, 3, 3]);
     expect(five.prs.size).toBe(200);
     // A busy repository's newest 500 PRs can span a week; a large focused run looks back further.
     nodes.push(...Array.from({ length: 4800 }, (_, i) => node(i + 201)));

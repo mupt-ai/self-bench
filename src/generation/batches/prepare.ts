@@ -1,10 +1,15 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { MAX_DISCOVERY_SHARDS } from "../../contracts/config/execution-limits.js";
 import type { RunRequest } from "../../contracts/index.js";
-import { fetchBatchPullRequests } from "../../third_party/github/batch-pull-requests.js";
+import {
+  DEFAULT_PR_FETCH_LIMIT,
+  fetchBatchPullRequests,
+  MAX_PR_FETCH_LIMIT,
+} from "../../third_party/github/batch-pull-requests.js";
 import {
   discoveryPrsPerShard,
   FOCUSED_PRS_PER_SHARD,
+  FOCUSED_SHARD_SURPLUS,
   MAX_FOCUSED_DISCOVERY_SHARDS,
   partitionPullRequests,
   takeNewestShards,
@@ -41,9 +46,15 @@ export async function prepareGenerationBatch(options: {
   const github = await fetchBatchPullRequests({
     repositoryUrl: run.repository.url,
     token: options.token,
-    // A focus is often rare among recent PRs, so focused discovery fetches enough to fill every
-    // shard's full window. Drafts, bots, and tiny PRs drop out after the fetch, hence twice that.
-    ...(run.focus ? { limit: 2 * shardCount * FOCUSED_PRS_PER_SHARD } : {}),
+    // Twice the focused windows, since drafts, bots, and tiny PRs drop out after the fetch.
+    ...(run.focus
+      ? {
+          limit: Math.min(
+            MAX_PR_FETCH_LIMIT,
+            Math.max(DEFAULT_PR_FETCH_LIMIT, 2 * shardCount * FOCUSED_PRS_PER_SHARD),
+          ),
+        }
+      : {}),
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });
   const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
@@ -53,17 +64,17 @@ export async function prepareGenerationBatch(options: {
     ? Math.max(1, Math.min(FOCUSED_PRS_PER_SHARD, Math.ceil(prCount / shardCount)))
     : discoveryPrsPerShard(requested, shardCount);
   const selected = takeNewestShards(chunks, shardCount, prsPerShard);
-  // A focus's matches cluster in a few windows, so each focused shard may propose the whole
-  // request and planning trims each tier to its count.
+  // A focus's matches cluster in a few windows, so a focused shard may propose a few times its
+  // share of each tier, and planning trims each tier to its count.
   const targetCountsForShard = (shardIndex: number): RunRequest["candidateCounts"] =>
-    run.focus
-      ? run.candidateCounts
-      : (Object.fromEntries(
-          Object.entries(run.candidateCounts).map(([tier, count]) => [
-            tier,
-            Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
-          ]),
-        ) as RunRequest["candidateCounts"]);
+    Object.fromEntries(
+      Object.entries(run.candidateCounts).map(([tier, count]) => [
+        tier,
+        run.focus
+          ? Math.min(count, FOCUSED_SHARD_SURPLUS * Math.ceil(count / selected.length))
+          : Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
+      ]),
+    ) as RunRequest["candidateCounts"];
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
   return await Promise.all(
     selected.map(async (chunk, index) => {
