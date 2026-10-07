@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
+import { GhostTasks } from "../ghosts";
 import { cn } from "../primitives/cn";
 import { queueState, taskPath } from "../task/review-queue";
 import { DifficultyStamp } from "../task/state";
@@ -143,14 +144,15 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
             })}
           </ul>
           {!visible.length && (
-            <EmptyState title="No Matching Tasks">
+            <EmptyState title="No Matching Tasks" visual={<GhostTasks />}>
               No tasks currently match this filter. Choose All Tasks to see the batch.
             </EmptyState>
           )}
         </>
       ) : (
         <EmptyState
-          className="border-solid"
+          // Only while tasks are still on the way: a finished batch shows nothing to come.
+          visual={status.tasks && !batchIsTerminal(status.phase) ? <GhostTasks /> : undefined}
           title={
             status.tasks
               ? batchIsTerminal(status.phase)

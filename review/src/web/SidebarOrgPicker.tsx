@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 import React from "react";
 import { Avatar } from "./Dropdown";
 import { cn } from "./primitives/cn";
@@ -42,16 +42,24 @@ export function SidebarOrgPicker({
             type="button"
             aria-label="Organization"
             className={cn(
-              "flex h-10 w-full min-w-0 cursor-pointer items-center gap-2.5 border border-foreground/15 bg-card px-2.5 text-sm font-medium hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
-              collapsed && "justify-center px-0",
+              "flex h-12 w-full min-w-0 cursor-pointer items-center gap-2.5 border border-foreground/15 bg-card px-2.5 text-sm hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
+              collapsed && "h-8 justify-center border-0 bg-transparent px-0",
             )}
           >
-            <Avatar login={org.login} url={org.avatarUrl} size={20} />
+            <Avatar login={org.login} url={org.avatarUrl} size={collapsed ? 20 : 24} />
             {!collapsed && (
-              <span className="min-w-0 flex-1 truncate text-left font-mono">{org.login}</span>
+              <span className="min-w-0 flex-1 text-left leading-tight">
+                <span className="block truncate font-medium text-foreground">{org.login}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {org.kind === "user" ? "Personal Account" : "Organization"}
+                </span>
+              </span>
             )}
             {!collapsed && (
-              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <ChevronsUpDown
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             )}
           </button>
         </DropdownMenuTrigger>

@@ -1,5 +1,6 @@
 import { Clock3, KeyRound, ShieldCheck } from "lucide-react";
 import { formatAgo } from "../api";
+import { GhostKeys } from "../ghosts";
 import { Skeleton } from "../LoadingSkeleton";
 import { Button, EmptyState, SectionHeader } from "../ui";
 import { type ApiKey, scopeLabels } from "./api-keys";
@@ -31,7 +32,7 @@ export function ApiKeyList({
       {loading ? (
         <ApiKeyListSkeleton />
       ) : !keys?.length ? (
-        <EmptyState title="No API Keys Yet">
+        <EmptyState title="No API Keys Yet" visual={<GhostKeys />}>
           Create a key to give scripts access to your workspaces. The full secret is shown once.
         </EmptyState>
       ) : (

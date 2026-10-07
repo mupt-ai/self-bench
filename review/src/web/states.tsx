@@ -1,24 +1,47 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "./primitives/cn";
 
+/**
+ * What a page shows before it has anything: what will be here, and the action that fills it. With
+ * `visual`, a faint picture of the page to come (ghosts.tsx) sits beside the words, stacked below
+ * them wherever the card itself is narrow, in a page or a sheet alike.
+ */
 export function EmptyState({
   title,
   children,
   action,
+  visual,
   className,
 }: {
   title: string;
   children?: ReactNode;
   action?: ReactNode;
+  visual?: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("panel empty-state flex flex-col gap-4 p-5 text-left", className)}>
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {children && <div className="max-w-2xl text-sm text-muted-foreground">{children}</div>}
+    <div className={cn("panel @container text-left", className)}>
+      <div className={cn("grid", visual && "@2xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]")}>
+        <div className="flex flex-col justify-center p-6 sm:p-8">
+          <h3 className="text-lg leading-7 font-semibold tracking-tight text-foreground">
+            {title}
+          </h3>
+          {children && (
+            <div className="mt-2 max-w-[52ch] text-sm leading-6 text-muted-foreground">
+              {children}
+            </div>
+          )}
+          {action && <div className="mt-6 flex flex-wrap gap-2.5">{action}</div>}
+        </div>
+        {visual && (
+          <div
+            aria-hidden="true"
+            className="flex items-center border-t border-border p-6 @2xl:border-t-0 @2xl:border-l"
+          >
+            <div className="w-full">{visual}</div>
+          </div>
+        )}
       </div>
-      {action && <div className="flex flex-wrap gap-2">{action}</div>}
     </div>
   );
 }

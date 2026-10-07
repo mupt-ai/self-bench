@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { GenerateBatch } from "../GenerateBatch";
+import { GhostBatches } from "../ghosts";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
@@ -40,7 +41,7 @@ export function BatchesPage() {
       )}
       {!runs && !error && <ListSkeleton label="Loading Batch Generation" />}
       {runs?.length === 0 && (
-        <EmptyState title="No Batches Yet">
+        <EmptyState title="No Batches Yet" visual={<GhostBatches />}>
           Generate a batch to create tasks from repository changes.
         </EmptyState>
       )}
