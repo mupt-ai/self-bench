@@ -1,4 +1,5 @@
 import type { ModelPricing } from "../contracts/models.js";
+import { isGateway } from "../gateways/index.js";
 import { claudeCodeUsage, HOUR_CACHE_WRITE_MULTIPLIER } from "../harnesses/claude-code/cost.js";
 import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
 import { gatewayModel } from "./execution.js";
@@ -250,7 +251,9 @@ export function trialCost(
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
   if (!verified || !usage) return measured;
-  if (reportedCost !== undefined)
+  // Harbor prices a gateway route from LiteLLM's table for it, which may carry a discount or
+  // another provider's rates; gateway runs are priced at their vendor's list rates (runPricing).
+  if (reportedCost !== undefined && !(pricing && isGateway(run.credentials?.provider)))
     return {
       ...measured,
       apiCostUsd: reportedCost,

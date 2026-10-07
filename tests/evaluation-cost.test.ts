@@ -230,11 +230,12 @@ test("OpenRouter Codex trials verify against the gateway model name Harbor recor
     },
   };
   const usage = { input: 210, output: 256, cacheRead: 25793, cacheWrite: 29793 };
+  // Harbor's 0.43 is LiteLLM's price for the gateway route; the run's vendor rates price it.
   expect(trialCost(run, "codex", files("openai/openai/gpt-6-astra"), result)).toEqual({
     modelVerified: true,
     tokenUsage: usage,
-    apiCostUsd: 0.43,
-    costSource: "harbor",
+    apiCostUsd: (210 * 2 + 256 * 8 + 25793 * 0.5 + 29793 * 2.5) / 1_000_000,
+    costSource: "reference-rates",
   });
   expect(trialCost(run, "codex", files("openai/openai/gpt-6-other"), result)).toEqual({
     modelVerified: false,

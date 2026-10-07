@@ -79,7 +79,10 @@ export interface EvaluationTrial {
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;
   cacheWritesInferred?: boolean;
+  /** "gateway": a gateway's charge, as trials recorded before costs moved to vendor list rates. */
   costSource?: "harbor" | "reference-rates" | "gateway";
+  /** What the gateway charged, for comparing with the bill; apiCostUsd is the cost shown. */
+  billedCostUsd?: number;
 }
 export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
   revision: number;

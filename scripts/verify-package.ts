@@ -69,6 +69,7 @@ try {
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
     "dist/maintenance/recompute-cost.js",
+    "dist/maintenance/reprice-vendor-rates.js",
     "dist/maintenance/backfill-agent-timeouts.js",
     "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
@@ -92,6 +93,7 @@ try {
   }
   for (const [program, usage] of [
     ["recompute-cost", "Usage: recompute-cost.js"],
+    ["reprice-vendor-rates", "Usage: reprice-vendor-rates.js"],
     ["backfill-agent-timeouts", "Usage: backfill-agent-timeouts.js"],
     ["records-migration", "Set SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY"],
   ] as const) {

@@ -24,6 +24,12 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
           <dt>Estimated Model Cost</dt>
           <dd>{trial.apiCostUsd === undefined ? "Not Available" : dollars(trial.apiCostUsd)}</dd>
         </div>
+        {trial.billedCostUsd !== undefined && (
+          <div>
+            <dt>Billed by Gateway</dt>
+            <dd>{dollars(trial.billedCostUsd)}</dd>
+          </div>
+        )}
       </dl>
       <p className="mb-6 text-xs text-muted-foreground">
         {trial.cacheWritesInferred &&
@@ -33,6 +39,8 @@ export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
           : trial.costSource === "gateway"
             ? "Gateway-reported model cost. Sandbox charges excluded."
             : `${trial.costSource === "harbor" ? "Harbor’s per-request" : "Reference-rate"} estimate from token usage. Not an invoice; sandbox charges excluded.`}
+        {trial.billedCostUsd !== undefined &&
+          " The gateway’s charge can differ: it reflects the provider it routed to and any discount."}
       </p>
     </section>
   );
