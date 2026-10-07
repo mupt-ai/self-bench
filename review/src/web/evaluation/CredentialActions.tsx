@@ -1,4 +1,4 @@
-import { Ellipsis, RefreshCw, Trash2 } from "lucide-react";
+import { Ellipsis, Gauge, RefreshCw, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import {
   DropdownMenu,
@@ -11,15 +11,18 @@ import { Button } from "../ui";
 
 export function CredentialActions({
   name,
+  onLimit,
   onReplace,
   onDelete,
 }: {
   name: string;
+  /** Sandbox credentials only: opens the limit on sandboxes running at once. */
+  onLimit?(): void;
   onReplace(): void;
   onDelete(): void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
-  const pending = useRef<"replace" | "delete" | null>(null);
+  const pending = useRef<"limit" | "replace" | "delete" | null>(null);
   return (
     <DropdownMenu
       onOpenChange={(open) => {
@@ -47,10 +50,21 @@ export function CredentialActions({
           event.preventDefault();
           pending.current = null;
           trigger.current?.focus();
-          if (action === "replace") onReplace();
+          if (action === "limit") onLimit?.();
+          else if (action === "replace") onReplace();
           else onDelete();
         }}
       >
+        {onLimit && (
+          <DropdownMenuItem
+            onSelect={() => {
+              pending.current = "limit";
+            }}
+          >
+            <Gauge aria-hidden="true" />
+            Set Sandbox Limit
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onSelect={() => {
             pending.current = "replace";

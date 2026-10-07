@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { credentialSchema } from "../../db/credentials.js";
+import { credentialSchema, maxSandboxesSchema } from "../../db/credentials.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
 import { assertCredentialUnused } from "../../evaluation/comparisons.js";
@@ -11,11 +11,15 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/delete)?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit))?$/;
 const loginStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 const claudeCompleteSchema = z.object({ code: z.string().trim().min(1).max(4096) }).strict();
+const limitSchema = z.object({ maxSandboxes: maxSandboxesSchema.nullable() }).strict();
 
-/** Organization credentials: anyone in the org lists them; only admins add or delete them. */
+/**
+ * Organization credentials: anyone in the org lists them; only admins add, delete, or set a
+ * sandbox credential's limit.
+ */
 export async function credentialRoutes(
   options: EvaluationRoutesOptions,
   request: IncomingMessage,
@@ -40,7 +44,7 @@ export async function credentialRoutes(
     sendJson(response, 403, { error: "Organization admin and same-origin JSON request required" });
     return true;
   }
-  const [loginId, loginAction, deleteId] = [match[3], match[4], match[5]];
+  const [loginId, loginAction, credentialId, action] = [match[3], match[4], match[5], match[6]];
   try {
     if (!options.vault) throw new RecordStoreError(503);
     const vault = options.vault;
@@ -63,15 +67,21 @@ export async function credentialRoutes(
         await logins.cancel(vault, org.id, user.id, loginId);
         sendJson(response, 200, { cancelled: true });
       } else sendJson(response, 405, { error: "Method not allowed" });
-    } else if (!mutation && !deleteId) {
+    } else if (!mutation && !credentialId) {
       sendJson(response, 200, {
         credentials: await credentials.list(org.id),
         canManage: org.role === "admin",
       });
-    } else if (mutation && deleteId) {
-      if (!(await credentials.find(org.id, deleteId))) throw new Error("Credential not found");
-      await assertCredentialUnused(comparisons, options.artifacts, org.id, deleteId);
-      await credentials.remove(org.id, deleteId);
+    } else if (mutation && credentialId && action === "limit") {
+      const { maxSandboxes } = limitSchema.parse(
+        JSON.parse((await readBody(request, 1024)).toString()),
+      );
+      await credentials.limit(org.id, credentialId, maxSandboxes ?? undefined);
+      sendJson(response, 200, await credentials.find(org.id, credentialId));
+    } else if (mutation && credentialId) {
+      if (!(await credentials.find(org.id, credentialId))) throw new Error("Credential not found");
+      await assertCredentialUnused(comparisons, options.artifacts, org.id, credentialId);
+      await credentials.remove(org.id, credentialId);
       sendJson(response, 200, { deleted: true });
     } else if (mutation) {
       const draft = credentialSchema.parse(

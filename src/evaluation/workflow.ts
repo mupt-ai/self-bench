@@ -47,9 +47,10 @@ const records = proxyActivities<EvaluationActivities>({
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
  * at once, so a trial's history stands alone in Temporal and the Harbor queue sees the whole
- * evaluation. Cancelling the evaluation cancels every trial workflow and waits for each to record
- * where it stopped; closing it any other way terminates them. A task's trials start once its
- * images are built (taskImagesReady).
+ * evaluation; under a sandbox limit (maxTrials), each starts as another ends. Cancelling the
+ * evaluation cancels every trial workflow and waits for each to record where it stopped; closing
+ * it any other way terminates them. A task's trials start once its images are built
+ * (taskImagesReady).
  */
 export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Promise<void> {
   const { workflowId } = workflowInfo();
@@ -70,7 +71,7 @@ export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Pr
           parentClosePolicy: ParentClosePolicy.TERMINATE,
         });
       },
-      MAX_PENDING_TRIAL_WORKFLOWS,
+      Math.min(MAX_PENDING_TRIAL_WORKFLOWS, input.maxTrials ?? Number.POSITIVE_INFINITY),
     );
   } catch {
     await CancellationScope.nonCancellable(() => records.failSolverEvaluation(input));

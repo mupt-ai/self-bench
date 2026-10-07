@@ -4,6 +4,8 @@ import {
   type CredentialSecret,
   type CredentialStore,
   credentialSchema,
+  isSandboxKind,
+  maxSandboxesSchema,
   validateEndpoint,
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
@@ -71,6 +73,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         auth: parsed.auth,
         createdAt: new Date().toISOString(),
         ...(endpoint ? { endpoint } : {}),
+        ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         secret: {
           value,
           ...(tokenId ? { tokenId } : {}),
@@ -79,6 +82,14 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         },
       });
       return (await find(orgId, id)) as CredentialInfo;
+    },
+    async limit(orgId, id, maxSandboxes) {
+      const row = live(orgId, id);
+      if (!row) throw new Error("Credential not found");
+      if (!isSandboxKind(row.kind))
+        throw new Error("Only sandbox credentials take a sandbox limit");
+      if (maxSandboxes === undefined) delete row.maxSandboxes;
+      else row.maxSandboxes = maxSandboxesSchema.parse(maxSandboxes);
     },
     async remove(orgId, id) {
       const row = live(orgId, id);

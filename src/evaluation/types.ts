@@ -31,6 +31,11 @@ export interface EvaluationInput {
    * before repositories set it ran with the default.
    */
   agentMinutes?: number;
+  /**
+   * At most this many of the evaluation's trials run at once: its share of the sandbox
+   * credential's limit (maxSandboxes) when it started. A trial holds one sandbox at a time.
+   */
+  maxTrials?: number;
   pricing?: ModelPricing;
   credentialOwnerId?: number;
   credentialOrgId?: number;

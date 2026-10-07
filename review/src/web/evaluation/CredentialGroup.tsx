@@ -12,6 +12,7 @@ export function CredentialGroup({
   canManage,
   sandbox = false,
   onAdd,
+  onLimit,
   onReplace,
   onDelete,
 }: {
@@ -21,6 +22,8 @@ export function CredentialGroup({
   canManage: boolean;
   sandbox?: boolean;
   onAdd(): void;
+  /** Sandbox credentials' limit on sandboxes running at once. */
+  onLimit?(credential: CredentialInfo): void;
   onReplace(credential: CredentialInfo): void;
   onDelete(credential: CredentialInfo): void;
 }) {
@@ -70,11 +73,13 @@ export function CredentialGroup({
                 >
                   {credentialProvider(credential)} · {credentialAccess(credential)}
                   {credential.endpoint && <> · {credential.endpoint}</>}
+                  {credential.maxSandboxes && <> · Up to {credential.maxSandboxes} at once</>}
                 </p>
               </div>
               {canManage && (
                 <CredentialActions
                   name={credential.name}
+                  {...(onLimit ? { onLimit: () => onLimit(credential) } : {})}
                   onReplace={() => onReplace(credential)}
                   onDelete={() => onDelete(credential)}
                 />

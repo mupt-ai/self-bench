@@ -17,7 +17,9 @@ for name in ["AsyncSandbox", "AsyncTemplate", "BuildException", "BuildInfo", "Te
 class SandboxException(Exception):
     def __init__(self, message, status_code=None):
         super().__init__(message); self.status_code = status_code
-e2b.SandboxException = SandboxException
+class RateLimitException(SandboxException):
+    def __init__(self, message): super().__init__(message, 429)
+e2b.SandboxException, e2b.RateLimitException = SandboxException, RateLimitException
 def load():
     import importlib.util
     spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
@@ -191,5 +193,56 @@ asyncio.run(check())
 `,
     ENVIRONMENT,
   ]);
+  expect(result.exitCode).toBe(0);
+});
+
+test("the E2B environment waits for a free slot when E2B is at its concurrency limit", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `${STUBS}import asyncio, logging
+# E2B's answer once the team runs its plan's concurrent builds; a third request finds a slot.
+full = "429: Rate limit exceeded, please try again later. - you have reached the maximum number of concurrent template builds (20)."
+refusals = {"sandbox": 2, "template": 2}
+calls, warnings = [], []
+class E2BEnvironment:
+    def __init__(self):
+        self.task_env_config = types.SimpleNamespace(docker_image=None)
+        self._template_name = "task__hash"
+        self.logger = types.SimpleNamespace(warning=warnings.append)
+    async def _create_sandbox(self): await self.answer("sandbox")
+    async def _create_template(self): await self.answer("template")
+    async def answer(self, what):
+        calls.append(what)
+        if what == "sandbox" and refusals.get("other"): raise SandboxException("500: Internal error", 500)
+        if refusals[what]:
+            refusals[what] -= 1
+            raise RateLimitException(full)
+harbor_e2b.E2BEnvironment = E2BEnvironment
+module = load()
+waits = []
+async def sleep(seconds): waits.append(seconds)
+module.asyncio.sleep = sleep
+module.random.uniform = lambda low, high: 1
+async def check():
+    environment = module.SelfBenchE2BEnvironment()
+    await environment._create_template()
+    await environment._create_sandbox()
+    # Each refused request waits, twice as long as the last, then asks again until E2B accepts.
+    assert calls == ["template"] * 3 + ["sandbox"] * 3, calls
+    assert waits == [15, 30, 15, 30], waits
+    assert warnings[0] == f"E2B refused the template build task__hash ({full}); asking again in 15s", warnings
+    # Any other E2B error fails at once, as before.
+    refusals["other"] = 1; calls.clear(); waits.clear()
+    try:
+        await environment._create_sandbox()
+    except SandboxException as error:
+        assert str(error) == "500: Internal error" and calls == ["sandbox"] and waits == [], (error, calls, waits)
+    else:
+        raise AssertionError("other E2B errors must propagate")
+asyncio.run(check())
+`,
+    ENVIRONMENT,
+  ]);
+  expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
