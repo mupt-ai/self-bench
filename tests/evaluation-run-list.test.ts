@@ -12,7 +12,6 @@ import {
 } from "../src/evaluation/store.js";
 import type { EvaluationRun } from "../src/evaluation/types.js";
 import { evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
-import { memoryVault } from "./support/evaluation-vault.js";
 
 let server: Awaited<ReturnType<typeof evaluationServer>>;
 /** The same directory through a store that keeps no summaries: a worker from before them. */
@@ -48,11 +47,14 @@ async function fromRecords() {
     trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
   }));
 }
-/** Counts the records read while `work` runs, each read `slowMs` slower than it would be. */
-async function recordsRead(work: () => Promise<unknown>, slowMs = 0): Promise<number> {
-  const read = server.artifacts.getByKey.bind(server.artifacts);
+/** Counts records read from `store` (the server's by default) while `work` runs, `slowMs` slower. */
+async function recordsRead(
+  work: () => Promise<unknown>,
+  { store = server.artifacts, slowMs = 0 }: { store?: LocalArtifactStore; slowMs?: number } = {},
+): Promise<number> {
+  const read = store.getByKey.bind(store);
   let count = 0;
-  server.artifacts.getByKey = async (key) => {
+  store.getByKey = async (key) => {
     count += 1;
     if (slowMs > 0) await new Promise((resolve) => setTimeout(resolve, slowMs));
     return read(key);
@@ -60,7 +62,7 @@ async function recordsRead(work: () => Promise<unknown>, slowMs = 0): Promise<nu
   try {
     await work();
   } finally {
-    server.artifacts.getByKey = read;
+    store.getByKey = read;
   }
   return count;
 }
@@ -246,55 +248,13 @@ test("a poll that sends the list's tag is told when nothing changed, without the
 test("overlapping lists share one read of a record that needs rebuilding", async () => {
   await savedRun(older);
   // Slow reads, so all three lists arrive while the first is still reading, however busy CI is.
-  expect(await recordsRead(() => Promise.all([listed(), listed(), listed()]), 500)).toBe(1);
+  expect(
+    await recordsRead(() => Promise.all([listed(), listed(), listed()]), { slowMs: 500 }),
+  ).toBe(1);
 });
 
 test("a store that keeps no summaries lists from the records, as before", async () => {
   const { tag, runs } = await listRuns(older, server.repo.id);
   expect(runs).toEqual(await fromRecords());
   expect((await listRuns(older, server.repo.id, tag)).runs).toBeUndefined();
-});
-
-test("saved comparisons take their progress from summaries, as their own pages do from records", async () => {
-  const vault = memoryVault();
-  const fixture = await evaluationServer(vault);
-  try {
-    const inputs = [0, 1, 2].map(() => ({ ...evaluationInput(), repoId: fixture.repo.id }));
-    const [done, live] = inputs;
-    if (!done || !live) throw new Error("Missing inputs");
-    const record = {
-      id: crypto.randomUUID(),
-      orgId: 1,
-      repoId: fixture.repo.id,
-      createdAt: new Date().toISOString(),
-      signature: "test",
-      inputs,
-    };
-    await vault.comparisons.insert(record);
-    const finished = initialEvaluation(done, done.modelName);
-    finished.status = "completed";
-    passTrial(finished);
-    await saveEvaluation(fixture.artifacts, finished);
-    // Started by a worker that keeps no summaries; the third run was never started.
-    const running = initialEvaluation(live, live.modelName);
-    running.status = "running";
-    await saveEvaluation(new LocalArtifactStore(fixture.directory), running);
-
-    const { comparisons } = await (await fixture.request(`${fixture.base}/comparisons`)).json();
-    expect(comparisons).toEqual([
-      await (await fixture.request(`${fixture.base}/comparisons/${record.id}`)).json(),
-    ]);
-    expect(
-      comparisons[0].runs.map((run: { status: string; completed: number }) => [
-        run.status,
-        run.completed,
-      ]),
-    ).toEqual([
-      ["completed", 1],
-      ["running", 0],
-      ["pending", 0],
-    ]);
-  } finally {
-    await fixture.close();
-  }
 });

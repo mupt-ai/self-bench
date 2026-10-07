@@ -254,13 +254,13 @@ function completedConfigurationTasks(runs: readonly EvaluationRun[]) {
   return completed;
 }
 
+/** A comparison's progress from its runs' summaries (run-list.ts): a page polls this. */
 export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
-  const runs = await Promise.all(
-    record.inputs.map((input) => getEvaluation(store, record.repoId, input.id)),
-  );
+  const wanted = new Set(record.inputs.map((input) => input.id));
+  const { runs = [] } = await listRuns(store, record.repoId);
   return comparisonProgress(
     record,
-    new Map(runs.flatMap((run) => (run ? [[run.id, run] as const] : []))),
+    new Map(runs.filter((run) => wanted.has(run.id)).map((run) => [run.id, run])),
   );
 }
 export async function dispatchComparison(
