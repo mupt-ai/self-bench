@@ -7,7 +7,7 @@ import { credentials } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
-import { listEvaluations } from "../evaluation/store.js";
+import { listRuns } from "../evaluation/run-list.js";
 import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
 import type { CredentialFacts } from "./release-results.js";
@@ -59,7 +59,11 @@ export async function releaseCredentials(
   );
 }
 
-/** Everything the release rule reads for one connected repository and its line's rows. */
+/**
+ * Everything the release rule reads for one connected repository and its line's rows. Runs come as
+ * the runs list has them (run-list.ts): each run's stored summary, checked against its record.
+ * The rule reads only results, costs and times, never transcripts or logs.
+ */
 export async function releaseInputs(
   db: Database,
   artifacts: ArtifactStore,
@@ -68,7 +72,7 @@ export async function releaseInputs(
 ): Promise<ReleaseInputs> {
   const [taskList, runs, credentialFacts] = await Promise.all([
     releaseTasks(db, scope.repoId),
-    listEvaluations(artifacts, scope.repoId),
+    listRuns(artifacts, scope.repoId).then(({ runs = [] }) => runs),
     releaseCredentials(db, scope.orgId),
   ]);
   const head = headOf(rows);
