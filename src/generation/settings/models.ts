@@ -1,4 +1,4 @@
-import { type Model, models } from "../../contracts/models.js";
+import { longContextOf, type Model, models } from "../../contracts/models.js";
 import {
   type GatewayId,
   gatewayIds,
@@ -62,6 +62,6 @@ export function generationModelRoute(
 export function generationModelPricing(id: string) {
   const info = generationModelInfo(id);
   return info
-    ? gatewayPricing("openrouter", info.openRouter, info.rates?.gateway, info.longContextFrom)
+    ? gatewayPricing("openrouter", info.openRouter, info.rates?.gateway, longContextOf(info))
     : undefined;
 }

@@ -1,5 +1,18 @@
-import type { ModelPricing, Rates } from "../contracts/models.js";
+import {
+  baseRatesLimit,
+  type ModelPricing,
+  type PromptTiers,
+  type Rates,
+  ratesPricing,
+} from "../contracts/models.js";
 import { listRates } from "./gateway.js";
+import { overrideTiers } from "./openrouter.js";
+
+/** A vendor's undiscounted list rates, with what it charges longer prompts. */
+export interface VendorRates extends PromptTiers {
+  readonly rates: Rates;
+  readonly source: string;
+}
 
 /** OpenRouter's provider slug for a vendor that serves its own models under another name. */
 const VENDOR_PROVIDERS: Readonly<Record<string, string>> = {
@@ -22,7 +35,7 @@ const VENDOR_PROVIDERS: Readonly<Record<string, string>> = {
 export async function vendorListRates(
   id: string,
   fetcher: typeof fetch = fetch,
-): Promise<{ rates: Rates; source: string } | undefined> {
+): Promise<VendorRates | undefined> {
   const vendor = id.slice(0, Math.max(0, id.indexOf("/")));
   if (!vendor) return undefined;
   const provider = VENDOR_PROVIDERS[vendor] ?? vendor;
@@ -51,21 +64,38 @@ export async function vendorListRates(
         ? pricing.discount
         : 0;
     const full = (rate: number) => Number((rate / (1 - discount)).toFixed(6));
-    const [input, output, cacheRead, cacheWrite] = rates;
+    const undiscounted = ([input, output, cacheRead, cacheWrite]: Rates): Rates => [
+      full(input),
+      full(output),
+      full(cacheRead),
+      full(cacheWrite),
+    ];
+    // Its long-context tiers carry the same discount.
+    const { longContext, unpricedFrom } = overrideTiers(pricing);
     return {
-      rates: [full(input), full(output), full(cacheRead), full(cacheWrite)],
+      rates: undiscounted(rates),
       source: `https://openrouter.ai/${id}/providers`,
+      ...(longContext
+        ? { longContext: longContext.map((tier) => ({ ...tier, rates: undiscounted(tier.rates) })) }
+        : {}),
+      ...(unpricedFrom ? { unpricedFrom } : {}),
     };
   } catch {
     return undefined;
   }
 }
 
-/** `pricing` at the vendor's list rates, keeping its long-context bound. */
+/**
+ * `pricing` at the vendor's list rates and long-context tiers. Where the vendor lists none, the
+ * route's first long-context size still bounds what the vendor's rates price.
+ */
 export function atVendorRates(
   pricing: ModelPricing,
-  { rates: [input, output, cacheRead, cacheWrite], source }: { rates: Rates; source: string },
+  vendor: VendorRates,
   asOf: string,
 ): ModelPricing {
-  return { ...pricing, input, output, cacheRead, cacheWrite, source, asOf };
+  const limit = baseRatesLimit(pricing);
+  const listed = vendor.longContext?.length || vendor.unpricedFrom;
+  const tiers = listed || limit === undefined ? vendor : { unpricedFrom: limit };
+  return ratesPricing(vendor.rates, vendor.source, asOf, tiers);
 }

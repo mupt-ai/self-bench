@@ -48,8 +48,9 @@ export function generationIds(harness: Harness, files: Map<string, string>): str
     try {
       event = record(JSON.parse(line));
     } catch {
-      // A stored tail's final agent_end carries all messages of that agent run.
-      if (text.startsWith(TRUNCATED_OUTPUT) && !started) continue;
+      // Pi's notices precede its stream; a stored tail's final agent_end carries all messages of
+      // that agent run.
+      if (!started) continue;
       if (index === lines.length - 1 && !text.endsWith("\n")) {
         unfinished = true;
         break;

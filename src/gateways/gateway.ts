@@ -1,4 +1,10 @@
-import { type Rates, type ThinkingLevel, thinkingLevels } from "../contracts/models.js";
+import {
+  type PromptTiers,
+  type Rates,
+  type RateTier,
+  type ThinkingLevel,
+  thinkingLevels,
+} from "../contracts/models.js";
 
 /** A model a gateway lists that a coding agent can drive. */
 export interface ListedModel {
@@ -30,12 +36,10 @@ export interface PiModel {
   readonly compat?: Readonly<Record<string, boolean>>;
 }
 
-/** A gateway's list price for one model. */
-export interface ListedRates {
+/** A gateway's list price for one model, with what it charges longer prompts. */
+export interface ListedRates extends PromptTiers {
   readonly rates: Rates;
   readonly asOf: string;
-  /** The prompt size at which its long-context rates begin, when it charges more for those. */
-  readonly longContextFrom?: number;
 }
 
 /** What a gateway's models API says: its agent-capable models, frontier first, and its prices. */
@@ -110,12 +114,44 @@ export function listRates(
   ];
 }
 
-/** The smallest positive prompt size among `sizes`: where a gateway's long-context rates begin. */
-export function longContextFrom(sizes: readonly unknown[]): number | undefined {
-  const starts = sizes.filter(
-    (size): size is number => typeof size === "number" && Number.isSafeInteger(size) && size > 0,
-  );
-  return starts.length ? Math.min(...starts) : undefined;
+/** A long-context tier as a gateway lists it: its prices once a prompt reaches `from` tokens. */
+export interface ListedTier {
+  readonly from: number;
+  readonly input: unknown;
+  readonly output: unknown;
+  readonly cacheRead: unknown;
+  readonly cacheWrite: unknown;
+}
+
+/**
+ * Long-context tiers from a gateway's prices for them, read like listRates: a cache price the
+ * base listing leaves out follows the tier's input price, while one the base lists must be listed
+ * for the tier too. Pricing stops at the first tier that cannot be read, its `unpricedFrom`.
+ */
+export function listTiers(
+  base: { readonly cacheRead: unknown; readonly cacheWrite: unknown },
+  tiers: readonly ListedTier[],
+): PromptTiers {
+  const longContext: RateTier[] = [];
+  const sizes = tiers.filter((tier) => Number.isSafeInteger(tier.from) && tier.from > 0);
+  for (const tier of sizes.sort((left, right) => left.from - right.from)) {
+    if (longContext.at(-1)?.from === tier.from) continue;
+    const input = perMillion(tier.input);
+    const output = perMillion(tier.output);
+    const cache = (price: unknown, baseListed: unknown) =>
+      perMillion(baseListed) === undefined ? (perMillion(price) ?? input) : perMillion(price);
+    const cacheRead = cache(tier.cacheRead, base.cacheRead);
+    const cacheWrite = cache(tier.cacheWrite, base.cacheWrite);
+    if (
+      input === undefined ||
+      output === undefined ||
+      cacheRead === undefined ||
+      cacheWrite === undefined
+    )
+      return { ...(longContext.length ? { longContext } : {}), unpricedFrom: tier.from };
+    longContext.push({ from: tier.from, rates: [input, output, cacheRead, cacheWrite] });
+  }
+  return longContext.length ? { longContext } : {};
 }
 
 /** Every harness is an agent loop over text: a model must read and write text. */

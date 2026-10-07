@@ -4,7 +4,7 @@ import {
   type ListedModel,
   type ListedRates,
   listRates,
-  longContextFrom,
+  listTiers,
   type PiModel,
   readsAndWritesText,
   reasoningLevels,
@@ -63,21 +63,7 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_write,
     );
     if (!entryRates) continue;
-    // Tiered models price prompts by size; the first tier is the listed rates.
-    const tiers = [
-      "input_tiers",
-      "output_tiers",
-      "input_cache_read_tiers",
-      "input_cache_write_tiers",
-    ]
-      .flatMap((key) => (Array.isArray(pricing[key]) ? pricing[key] : []))
-      .map((tier) => tier?.min);
-    const longContext = longContextFrom(tiers);
-    rates.set(entry.id, {
-      rates: entryRates,
-      asOf,
-      ...(longContext ? { longContextFrom: longContext } : {}),
-    });
+    rates.set(entry.id, { rates: entryRates, asOf, ...sizeTiers(pricing) });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning_options);
       const label =
@@ -93,6 +79,51 @@ function parse(body: unknown, asOf: string) {
   }
   listed.sort((left, right) => right.released - left.released);
   return { rates, models: listed.map(({ released: _released, ...model }) => model) };
+}
+
+/**
+ * Tiered models price prompts by size, each price in its own list of tiers whose first is the
+ * listed rate. A long-context tier begins wherever one list's does; a list that has not begun yet
+ * still charges its listed rate, and a price without a list is unknown past the first tier.
+ */
+function sizeTiers(pricing: Record<string, unknown>) {
+  const lists = [
+    pricing.input_tiers,
+    pricing.output_tiers,
+    pricing.input_cache_read_tiers,
+    pricing.input_cache_write_tiers,
+  ].map((list) => (Array.isArray(list) ? list : undefined));
+  const listed = [
+    pricing.input,
+    pricing.output,
+    pricing.input_cache_read,
+    pricing.input_cache_write,
+  ];
+  const starts = new Set(lists.flatMap((list) => list?.map((tier) => tier?.min) ?? []));
+  const price = (index: number, from: number) => {
+    const list = lists[index];
+    if (!list) return undefined;
+    const tier = list.find(
+      (candidate) =>
+        typeof candidate?.min === "number" &&
+        candidate.min <= from &&
+        (typeof candidate.max !== "number" || from < candidate.max),
+    );
+    const begins = list.every(
+      (candidate) => typeof candidate?.min === "number" && candidate.min > from,
+    );
+    return tier ? tier.cost : begins ? listed[index] : undefined;
+  };
+  return listTiers(
+    { cacheRead: pricing.input_cache_read, cacheWrite: pricing.input_cache_write },
+    [...starts].filter(positive).map((from) => ({
+      from,
+      input: price(0, from),
+      output: price(1, from),
+      cacheRead: price(2, from),
+      cacheWrite: price(3, from),
+    })),
+  );
 }
 
 /** A language model that calls tools and reads and writes text, not scheduled for removal. */

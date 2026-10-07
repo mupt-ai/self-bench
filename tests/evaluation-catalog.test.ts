@@ -244,13 +244,14 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
     ["vercel-ai-gateway", 2],
   ]);
 
-  // Haiku 5.5's list rates cover prompts up to 100k tokens; Anthropic charges more past them.
+  // Haiku 5.5 bills a request whose prompt passes 100k tokens at five times its list rates.
   const haiku = catalog.find((model) => model.id === "claude-haiku-5-5");
   if (!haiku) throw new Error("Missing Haiku 5.5");
   const haikuRoutes = modelRoutes(haiku);
   expect(haikuRoutes.map((route) => route.provider)).toEqual(["anthropic", ...gatewayIds]);
+  const long = { from: 100_001, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 };
   for (const route of haikuRoutes)
-    expect(route.pricing).toMatchObject({ input: 0.1, output: 0.5, maxInputTokens: 100_000 });
+    expect(route.pricing).toMatchObject({ input: 0.1, output: 0.5, longContext: [long] });
   expect(thinkingOptions(haiku, ["claude-code"])).toContain("max");
 });
 

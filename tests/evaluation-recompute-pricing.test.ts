@@ -152,59 +152,67 @@ test("recompute prices a cut Claude Code trial by the cache lifetimes Claude Cod
   expect((await recompute(hourly, false))?.changed).toBe(false);
 });
 
-test("recompute drops a cut trial's cost when the run's bound tightens past what priced it", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
-  directories.push(directory);
-  const store = new LocalArtifactStore(directory);
-  // The gateway now prices prompts from 32,001 tokens at a higher tier.
-  setGatewayListing("vercel-ai-gateway", {
-    models: [],
-    rates: new Map([
-      ["vendor/tiered", { rates: [1, 2, 0.1, 1], asOf: "2026-10-02", longContextFrom: 32_001 }],
-    ]),
-  });
-  const run = initialEvaluation(
-    {
-      ...evaluationInput(),
-      model: "vendor/tiered",
-      modelName: "vercel-ai-gateway/vendor/tiered",
-      harnesses: ["pi"],
-      pricing: {
-        ...{ input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
-        ...{ source: "https://vercel.com/ai-gateway/models/tiered", asOf: "2026-09-30" },
-        maxInputTokens: 200_000,
+test.each([
+  ["a bound", { unpricedFrom: 32_001 }, 32_000],
+  [
+    "a long-context tier",
+    { longContext: [{ from: 32_001, rates: [2, 4, 0.2, 2] as const }] },
+    undefined,
+  ],
+])(
+  "recompute drops a cut trial's cost when %s now begins below what priced it",
+  async (_name, tiers, bound) => {
+    const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
+    directories.push(directory);
+    const store = new LocalArtifactStore(directory);
+    // The gateway now prices prompts from 32,001 tokens at a higher tier, or not at all.
+    setGatewayListing("vercel-ai-gateway", {
+      models: [],
+      rates: new Map([["vendor/tiered", { rates: [1, 2, 0.1, 1], asOf: "2026-10-02", ...tiers }]]),
+    });
+    const run = initialEvaluation(
+      {
+        ...evaluationInput(),
+        model: "vendor/tiered",
+        modelName: "vercel-ai-gateway/vendor/tiered",
+        harnesses: ["pi"],
+        pricing: {
+          ...{ input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+          ...{ source: "https://vercel.com/ai-gateway/models/tiered", asOf: "2026-09-30" },
+          maxInputTokens: 200_000,
+        },
+        credentials: {
+          modelCredentialId: "model",
+          sandboxCredentialId: "sandbox",
+          provider: "vercel-ai-gateway",
+          auth: "api-key",
+        },
       },
-      credentials: {
-        modelCredentialId: "model",
-        sandboxCredentialId: "sandbox",
-        provider: "vercel-ai-gateway",
-        auth: "api-key",
-      },
-    },
-    "Test",
-  );
-  const trial = run.trials[0];
-  if (!trial) throw new Error("Missing trial");
-  run.status = "completed";
-  const usage = { input: 100_000, output: 1_000, cacheRead: 0, cacheWrite: 0 };
-  Object.assign(trial, {
-    ...{ status: "completed", modelVerified: true, tokenUsage: usage },
-    ...{ apiCostUsd: 0.102, costSource: "reference-rates" },
-  });
-  for (const [name, body] of [
-    // A tail whose final agent_end was cut away, so its requests cannot be sized again.
-    ["0/solver/task__1/agent/pi.txt", '[Earlier output truncated]\n{"type":"turn_end"}\n'],
-    ["0/solver/task__1/result.json", "{}"],
-  ] as const) {
-    trial.artifacts.push(name);
-    await store.put(
-      `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
-      Buffer.from(body),
-      "text/plain",
+      "Test",
     );
-  }
-  await saveEvaluation(store, run);
-  const report = await recomputeEvaluationCost(store, run.repoId, run.id, false);
-  expect(report.maxInputTokens).toEqual({ before: 200_000, after: 32_000, changed: true });
-  expect(report.trials[0]?.after).toEqual({ modelVerified: true, tokenUsage: usage });
-});
+    const trial = run.trials[0];
+    if (!trial) throw new Error("Missing trial");
+    run.status = "completed";
+    const usage = { input: 100_000, output: 1_000, cacheRead: 0, cacheWrite: 0 };
+    Object.assign(trial, {
+      ...{ status: "completed", modelVerified: true, tokenUsage: usage },
+      ...{ apiCostUsd: 0.102, costSource: "reference-rates" },
+    });
+    for (const [name, body] of [
+      // A tail whose final agent_end was cut away, so its requests cannot be sized again.
+      ["0/solver/task__1/agent/pi.txt", '[Earlier output truncated]\n{"type":"turn_end"}\n'],
+      ["0/solver/task__1/result.json", "{}"],
+    ] as const) {
+      trial.artifacts.push(name);
+      await store.put(
+        `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+        Buffer.from(body),
+        "text/plain",
+      );
+    }
+    await saveEvaluation(store, run);
+    const report = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+    expect(report.maxInputTokens).toEqual({ before: 200_000, after: bound, changed: true });
+    expect(report.trials[0]?.after).toEqual({ modelVerified: true, tokenUsage: usage });
+  },
+);

@@ -62,10 +62,17 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
     cacheWrite: 3.75,
     source: "https://openrouter.ai/openai/gpt-6-sol",
     asOf: new Date().toISOString().slice(0, 10),
-    // An override reprices prompts over its threshold, so the listed rates cover 272,000.
+    // An override reprices prompts over its threshold; this one leaves out the cache prices the
+    // listed rates have, so nothing prices prompts past 272,000.
     maxInputTokens: 272_000,
   });
-  expect(nativePricing(sol())).toMatchObject({ input: 2, output: 10, maxInputTokens: 272_000 });
+  expect(solPricing("openrouter")?.longContext).toBeUndefined();
+  expect(nativePricing(sol())).toMatchObject({
+    input: 2,
+    output: 10,
+    longContext: [{ from: 272_001, input: 4, output: 15, cacheRead: 0.4, cacheWrite: 5 }],
+  });
+  expect(nativePricing(sol())?.maxInputTokens).toBeUndefined();
   const kimi = gatewayPricing("openrouter", "moonshotai/kimi-k3");
   expect(kimi).toMatchObject({ cacheRead: 3, cacheWrite: 3 });
   // One rate covers its whole context window, so no prompt is too long to price.
@@ -203,9 +210,10 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
     { id: "zai/glm-5.3", label: "Name of zai/glm-5.3", thinking: ["low", "high", "max"] },
     { id: "vendor/tiered", label: "Name of vendor/tiered" },
   ]);
+  // Its unlisted cache prices follow the input price in its long-context tier too.
   expect(gatewayPricing("vercel-ai-gateway", "vendor/tiered")).toMatchObject({
     input: 1,
-    maxInputTokens: 128_000,
+    longContext: [{ from: 128_001, input: 2, output: 2, cacheRead: 2, cacheWrite: 2 }],
   });
   // Cache writes fall back to the input price; the curated GLM takes Vercel's spelling and price.
   const glm = findModel("glm-5.3");

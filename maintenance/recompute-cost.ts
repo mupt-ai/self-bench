@@ -11,18 +11,21 @@
  * Codex sign-in cache writes are not inferred. A sign-in type recorded or saved always wins over
  * the flag. A trial whose stored transcript is cut too far to count again keeps its cost. Apply
  * appends a new snapshot and never rewrites old ones, so the previous revision stays readable.
- * Only the cost fields and the pricing's long-context bound change: runs recorded before the bound
- * came from the vendor's or gateway's pricing carried a flat 200k one, so it is re-derived from the
- * catalog and the run's gateway listing, while the recorded rates stay. A trial that bound left
- * unpriced, and whose stored transcript is cut too far to count again, is priced from its recorded
- * token usage (recordedUsageCost). It refuses runs that are still queued or running.
+ * Only the cost fields and the pricing's long-context bound and tiers change: runs recorded before
+ * the bound came from the vendor's or gateway's pricing carried a flat 200k one, so both are
+ * re-derived from the catalog and the run's gateway listing, while the recorded rates stay. A
+ * trial that bound left unpriced, and whose stored transcript is cut too far to count again, is
+ * priced from its recorded token usage (recordedUsageCost). It refuses runs that are still queued
+ * or running.
  */
 import { isDeepStrictEqual } from "node:util";
 import { type ArtifactStore, createArtifactStore } from "../src/artifacts/index.js";
 import { loadConfig } from "../src/contracts/config/index.js";
 import { openDatabase } from "../src/db/client.js";
+import { baseRatesLimit } from "../src/contracts/models.js";
 import { referencePricing } from "../src/evaluation/catalog.js";
-import { referenceCost, trialCost } from "../src/evaluation/cost.js";
+import { trialCost } from "../src/evaluation/cost.js";
+import { referenceCost } from "../src/evaluation/request-cost.js";
 import { evaluationCredentialOrg } from "../src/evaluation/execution.js";
 import { record } from "../src/evaluation/output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
@@ -96,17 +99,22 @@ export async function modelAuth(
   return saved ?? fallback;
 }
 
-/** The run's pricing with the long-context bound its route's pricing has now, if it is known. */
+/**
+ * The run's pricing with the long-context tiers and bound its route's pricing has now, if it is
+ * known. A run that recorded its own tiers keeps them.
+ */
 function currentBound(run: EvaluationRun): EvaluationRun["pricing"] {
   const provider = run.credentials?.provider;
-  if (!run.pricing || !provider) return run.pricing;
+  if (!run.pricing || run.pricing.longContext || !provider) return run.pricing;
   if (provider !== "openai" && provider !== "anthropic" && !isGateway(provider)) return run.pricing;
   const now = referencePricing(run.model, provider, run.modelName.slice(provider.length + 1));
   if (!now) return run.pricing;
   const { maxInputTokens: _recorded, ...rates } = run.pricing;
-  return now.maxInputTokens === undefined
-    ? rates
-    : { ...rates, maxInputTokens: now.maxInputTokens };
+  return {
+    ...rates,
+    ...(now.longContext ? { longContext: now.longContext } : {}),
+    ...(now.maxInputTokens === undefined ? {} : { maxInputTokens: now.maxInputTokens }),
+  };
 }
 
 /**
@@ -153,7 +161,9 @@ function recordedUsageCost(
 ): CostFields | undefined {
   const { pricing } = run;
   const usage = trial.tokenUsage;
-  if (!pricing || pricing.maxInputTokens || !usage || !trial.modelVerified) return undefined;
+  // Recorded totals cannot be split between a bound's or tiers' prompt sizes.
+  if (!pricing || pricing.maxInputTokens || pricing.longContext || !usage || !trial.modelVerified)
+    return undefined;
   if (trial.apiCostUsd !== undefined || trial.cacheWritesInferred) return undefined;
   if (trial.harness === "codex" && auth !== "api-key") return undefined;
   let hourCacheWrite = 0;
@@ -186,12 +196,16 @@ export async function recomputeEvaluationCost(
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");
   const auth = await modelAuth(run, lookup, fallbackAuth);
-  const before = run.pricing?.maxInputTokens;
+  const recorded = run.pricing;
   const pricing = currentBound(run);
   if (pricing) run.pricing = pricing;
+  const before = recorded?.maxInputTokens;
   const after = run.pricing?.maxInputTokens;
-  // A cost priced under a looser bound than the run's now may cover a request the rates do not.
-  const tightened = after !== undefined && (before === undefined || after < before);
+  // A cost priced under base rates that reached further than the run's do now may cover a
+  // request the rates now bound or charge a long-context tier for.
+  const reach = (rates: EvaluationRun["pricing"]) =>
+    (rates && baseRatesLimit(rates)) ?? Number.POSITIVE_INFINITY;
+  const tightened = reach(run.pricing) < reach(recorded);
   const report: RecomputeReport = {
     status: run.status,
     auth: auth ?? "unknown",
@@ -236,7 +250,8 @@ export async function recomputeEvaluationCost(
       Object.assign(trial, after);
     }
   }
-  if (apply && (report.maxInputTokens.changed || report.trials.some((trial) => trial.changed))) {
+  const repriced = !isDeepStrictEqual(recorded, run.pricing);
+  if (apply && (repriced || report.trials.some((trial) => trial.changed))) {
     await saveEvaluation(store, run);
     report.applied = true;
   }

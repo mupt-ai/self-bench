@@ -28,13 +28,44 @@ export const modelIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/;
 /** [input, output, cache read, cache write] in $ per million tokens. */
 export type Rates = readonly [number, number, number, number];
 
+/**
+ * Rates a provider charges instead once a request's prompt reaches `from` tokens. They price the
+ * whole request: its input, cache reads and writes, and output.
+ */
+export interface RateTier {
+  readonly from: number;
+  readonly rates: Rates;
+}
+
+/** What a provider charges by prompt size beyond its base rates. */
+export interface PromptTiers {
+  /** Long-context tiers, in ascending `from` order. */
+  readonly longContext?: readonly RateTier[];
+  /** The smallest prompt it charges rates for that are not recorded here. */
+  readonly unpricedFrom?: number;
+}
+
+/** A long-context tier as a run records its pricing. */
+interface TierPricing {
+  from: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
 export interface ModelPricing {
-  /** The largest prompt the rates cover; past it the provider charges long-context rates. */
+  /** The largest prompt the rates cover; past it the provider charges rates not recorded here. */
   maxInputTokens?: number;
   input: number;
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /**
+   * The rates for longer prompts, in ascending `from` order: a request whose prompt reaches a
+   * tier's `from` is billed whole at that tier's rates.
+   */
+  longContext?: TierPricing[];
   source: string;
   asOf: string;
 }
@@ -50,10 +81,10 @@ export interface Model {
   /** Reference rates on the vendor's own key and through a gateway. */
   readonly rates?: { readonly native?: Rates; readonly gateway?: Rates };
   /**
-   * The smallest prompt the vendor's long-context rates apply to (OpenAI's apply over 272k);
-   * absent when it has none.
+   * The vendor's long-context rates, on its own key and through a gateway, and the smallest
+   * prompt they apply to (OpenAI's apply over 272k); absent when one rate covers every prompt.
    */
-  readonly longContextFrom?: number;
+  readonly longContext?: RateTier;
   /** Selectable reasoning levels, in display order; absent means the provider default only. */
   readonly thinking?: readonly ThinkingLevel[];
   /** Offered for task authoring and verification. */
@@ -73,7 +104,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6.1-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
     rates: { native: [2, 10, 0.1, 2.5], gateway: [2, 10, 0.1, 2.5] },
-    longContextFrom: 272_001,
+    longContext: { from: 272_001, rates: [4, 15, 0.2, 5] },
     thinking: vendorThinking,
   },
   {
@@ -83,7 +114,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-astra",
     source: "https://developers.openai.com/api/docs/models/gpt-6-astra",
     rates: { native: [10, 50, 1, 12.5], gateway: [10, 50, 1, 12.5] },
-    longContextFrom: 272_001,
+    longContext: { from: 272_001, rates: [20, 75, 2, 25] },
     thinking: vendorThinking,
     generation: true,
   },
@@ -94,7 +125,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-sol",
     source: "https://developers.openai.com/api/docs/models/gpt-6-sol",
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
-    longContextFrom: 272_001,
+    longContext: { from: 272_001, rates: [4, 15, 0.4, 5] },
     thinking: openAiThinking,
     generation: true,
   },
@@ -105,7 +136,7 @@ export const models: readonly Model[] = [
     openRouter: "openai/gpt-6-luna",
     source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
     rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
-    longContextFrom: 272_001,
+    longContext: { from: 272_001, rates: [0.2, 0.75, 0.02, 0.25] },
     thinking: openAiThinking,
   },
   {
@@ -144,7 +175,7 @@ export const models: readonly Model[] = [
     openRouter: "anthropic/claude-haiku-5.5",
     source: "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
     rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
-    longContextFrom: 100_001,
+    longContext: { from: 100_001, rates: [0.5, 2.5, 0.05, 0.625] },
     thinking: vendorThinking,
   },
   {
@@ -200,19 +231,34 @@ export function nativePricing(model: Model): ModelPricing | undefined {
     model.vendor === "anthropic"
       ? "https://platform.claude.com/docs/en/about-claude/pricing"
       : model.source;
-  return ratesPricing(rates, source, undefined, model.longContextFrom);
+  return ratesPricing(rates, source, undefined, longContextOf(model));
+}
+
+/** The catalog's long-context tier for `model`, which its gateway reference rates share. */
+export function longContextOf(model: Model | undefined): PromptTiers {
+  return model?.longContext ? { longContext: [model.longContext] } : {};
+}
+
+/** The smallest prompt `pricing`'s base rates do not price: its first tier's, or past its limit. */
+export function baseRatesLimit(pricing: ModelPricing): number | undefined {
+  const limits = [
+    pricing.longContext?.[0]?.from,
+    pricing.maxInputTokens === undefined ? undefined : pricing.maxInputTokens + 1,
+  ].filter((limit) => limit !== undefined);
+  return limits.length ? Math.min(...limits) : undefined;
 }
 
 /**
- * Pricing from `rates`, dated `asOf` or else as of the catalog's reference rates. The rates cover
- * prompts below `longContextFrom`, when the provider charges more for longer ones.
+ * Pricing from `rates` and the long-context `tiers` beyond them, dated `asOf` or else as of the
+ * catalog's reference rates. Past `tiers.unpricedFrom` the provider charges rates not recorded.
  */
 export function ratesPricing(
   [input, output, cacheRead, cacheWrite]: Rates,
   source: string,
   asOf = RATES_AS_OF,
-  longContextFrom?: number,
+  { longContext = [], unpricedFrom }: PromptTiers = {},
 ): ModelPricing {
+  const tiers = longContext.filter((tier) => !unpricedFrom || tier.from < unpricedFrom);
   return {
     input,
     output,
@@ -220,6 +266,17 @@ export function ratesPricing(
     cacheWrite,
     source,
     asOf,
-    ...(longContextFrom ? { maxInputTokens: longContextFrom - 1 } : {}),
+    ...(tiers.length
+      ? {
+          longContext: tiers.map(({ from, rates }) => ({
+            from,
+            input: rates[0],
+            output: rates[1],
+            cacheRead: rates[2],
+            cacheWrite: rates[3],
+          })),
+        }
+      : {}),
+    ...(unpricedFrom ? { maxInputTokens: unpricedFrom - 1 } : {}),
   };
 }

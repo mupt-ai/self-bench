@@ -11,14 +11,16 @@
  * Each trial is priced from the token usage the runner recorded from whole transcripts, which
  * stored ones may no longer be. A gateway's recorded charge moves to billedCostUsd. A trial the
  * rates cannot price whole keeps its cost: Claude Code's (its cache lifetimes are not recorded),
- * or, under a long-context bound, one not priced at reference rates, whose requests may have
- * crossed it. Only the pricing and cost fields change; apply appends a new snapshot and never
- * rewrites old ones. It refuses runs that are still queued or running.
+ * or, under a long-context bound or tiers, one whose requests may have crossed them; a
+ * reference-rate cost under an earlier bound no further out checked each request. Only the
+ * pricing and cost fields change; apply appends a new snapshot and never rewrites old ones. It
+ * refuses runs that are still queued or running.
  */
 import { type ArtifactStore, createArtifactStore } from "../src/artifacts/index.js";
 import { loadConfig } from "../src/contracts/config/index.js";
+import { baseRatesLimit } from "../src/contracts/models.js";
 import { evaluationCatalog, vendorModelId } from "../src/evaluation/catalog.js";
-import { referenceCost } from "../src/evaluation/cost.js";
+import { referenceCost } from "../src/evaluation/request-cost.js";
 import { getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationTrial } from "../src/evaluation/types.js";
 import { isGateway } from "../src/gateways/index.js";
@@ -59,6 +61,7 @@ export async function repriceEvaluation(
   if (!vendor) throw new Error(`OpenRouter lists no vendor rates for ${vendorId}`);
   const before = run.pricing;
   const pricing = atVendorRates(before, vendor, new Date().toISOString().slice(0, 10));
+  const limit = baseRatesLimit(pricing);
   run.pricing = pricing;
   const report: RepriceReport = {
     pricing: { before, after: pricing },
@@ -75,8 +78,12 @@ export async function repriceEvaluation(
       trial.modelVerified &&
       trial.harness !== "claude-code" &&
       !trial.cacheWritesInferred &&
-      // Only a reference-rate cost checked each request against the bound.
-      (!pricing.maxInputTokens || trial.costSource === "reference-rates");
+      // Totals price at the base rates only when every request was within them: a reference-rate
+      // cost under the run's earlier bound checked each request against it.
+      (limit === undefined ||
+        (trial.costSource === "reference-rates" &&
+          !before.longContext &&
+          (baseRatesLimit(before) ?? Number.POSITIVE_INFINITY) <= limit));
     if (whole) {
       const billedCostUsd = trial.costSource === "gateway" ? trial.apiCostUsd : trial.billedCostUsd;
       Object.assign(trial, {
