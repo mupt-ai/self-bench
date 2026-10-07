@@ -29,8 +29,9 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(4);
+  expect(links).toHaveLength(5);
   expect(html).toContain('aria-label="Organization Navigation"');
+  expect(html).toContain(">Repository Groups</span>");
   expect(html).toContain('aria-label="Credentials"');
   expect(html).toContain("Credentials");
   expect(html).toContain('aria-label="API Keys"');
@@ -43,7 +44,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(3);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(4);
   expect(html).not.toContain("Billing");
 });
 
@@ -67,6 +68,7 @@ test("sidebar supports the compact icon mode", () => {
     </MemoryRouter>,
   );
   expect(html).not.toContain(">Repositories</span>");
+  expect(html).not.toContain(">Repository Groups</span>");
   expect(html).not.toContain(">Credentials</span>");
   expect(html).not.toContain(">API Keys</span>");
   expect(html).not.toContain(">Billing</span>");
@@ -76,6 +78,7 @@ test("sidebar preserves active navigation across repository and settings routes"
   for (const [path, href] of [
     ["/", "/"],
     ["/repos/example-account/example-repo", "/"],
+    ["/groups/7a1c1e0e-5f8b-4c2d-9f3a-2b6d8e4f1a90/run", "/groups"],
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/billing", "/settings/billing"],

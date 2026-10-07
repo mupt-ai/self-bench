@@ -6,6 +6,7 @@ import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
 import { createReleaseStore } from "../db/releases.js";
+import { createRepoGroupStore } from "../db/repo-groups.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
 import { createTaskStore } from "../db/tasks.js";
@@ -144,6 +145,7 @@ export async function openSite(
       artifacts,
       publicUrl,
       ...(vault ? { vault } : {}),
+      groups: createRepoGroupStore(database.db),
       start: evaluationStarter(client, config.temporal.taskQueue),
       stop: evaluationStopper(client),
     }),

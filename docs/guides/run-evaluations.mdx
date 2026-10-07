@@ -17,3 +17,11 @@ A ChatGPT or Claude sign-in or a model API key can run evaluations, subject to h
 Open **Results** to compare accuracy and model API cost per task. Inspect a trial to read its transcript, scores, and artifacts. The Pareto frontier highlights settings that are not beaten on both accuracy and cost.
 
 To share aggregate results for a public repository, [publish a release](/guides/publish-results). Per-task results remain private.
+
+## Evaluate a Repository Group
+
+A repository group is a named set of connected repositories, such as several Next.js apps, that you evaluate with the same settings. Create one under **Repository Groups**. Then open the group and choose **Run Evaluation**. Pick models, harnesses, a sandbox, and agent minutes once. The minutes apply to every repository, so their results compare.
+
+Each group evaluation runs every approved task in each member repository. It saves one ordinary comparison per repository, which also appears on that repository's **Results** page. Repositories with no approved tasks are left out and listed as skipped. The evaluation page compares the repositories against each setting in two ways. **Average** counts each repository once. **Pooled** counts each task once, so larger repositories weigh more. Results are pinned to the evaluation's own runs, so later runs in a repository never change them.
+
+The same flow is available over the API with a write API key. Create the group with `POST /api/orgs/{org}/groups` and `{"name", "repos": ["owner/name"]}`. Start an evaluation with `POST /api/orgs/{org}/groups/{groupId}/evaluations`. Its body is a comparison body with no `tasks`, plus `agentMinutes`. Retrying with the same `id` finishes a partial submission rather than starting another.

@@ -17,6 +17,7 @@ type ServerEvent =
   | "batch started"
   | "pull request task started"
   | "comparison started"
+  | "group evaluation started"
   | "release published";
 
 let client: PostHog | undefined;

@@ -10,6 +10,10 @@ import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
+import { GroupEvaluationPage } from "./groups/GroupEvaluationPage";
+import { GroupPage } from "./groups/GroupPage";
+import { GroupRunPage } from "./groups/GroupRunPage";
+import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -78,6 +82,13 @@ export function WebApp() {
                 <Route path="/demo/run" element={<DemoRunPage />} />
                 <Route element={<RequireUser />}>
                   <Route index element={<ReposPage />} />
+                  <Route path="groups" element={<GroupsPage />} />
+                  <Route path="groups/:groupId" element={<GroupPage />} />
+                  <Route path="groups/:groupId/run" element={<GroupRunPage />} />
+                  <Route
+                    path="groups/:groupId/evaluations/:evaluationId"
+                    element={<GroupEvaluationPage />}
+                  />
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
                   {session.status === "signed-in" && session.managedOffering && (
