@@ -151,7 +151,8 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
         </>
       ) : (
         <EmptyState
-          visual={<GhostTasks />}
+          // Only while tasks are still on the way: a finished batch shows nothing to come.
+          visual={status.tasks && !batchIsTerminal(status.phase) ? <GhostTasks /> : undefined}
           title={
             status.tasks
               ? batchIsTerminal(status.phase)

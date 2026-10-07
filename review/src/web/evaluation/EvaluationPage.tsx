@@ -94,7 +94,8 @@ export function EvaluationPage() {
               <ListSkeleton label="Loading Runs" />
             </div>
           )}
-          {!loading && !runs.length && (
+          {/* Not when the list failed: the repository may have runs it could not show. */}
+          {!loading && !listError && !runs.length && (
             <EmptyState
               title="No Runs Yet"
               className="mt-6"

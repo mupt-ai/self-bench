@@ -4,35 +4,60 @@ import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import { requestJson } from "../api";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, controlStyles, Notice, PageContent, PageHeader } from "../ui";
+import { Button, Input, Notice, PageContent, PageHeader } from "../ui";
+
+type Result = { tone: "success" | "error"; text: string; retry?: boolean };
 
 export function RepoSettingsPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   useDocumentTitle(`Settings · ${owner}/${name} · SelfBench`);
   const path = `/api/orgs/${encodeURIComponent(org.login)}/repos/${owner}/${name}`;
+  return <AgentLimit key={path} path={path} />;
+}
+
+/** The repository's agent time limit, read on open and saved with the card's Save. */
+function AgentLimit({ path }: { path: string }) {
   const [saved, setSaved] = React.useState<number>();
   const [minutes, setMinutes] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [result, setResult] = React.useState<{ tone: "success" | "error"; text: string }>();
+  const [result, setResult] = React.useState<Result>();
+  const [attempt, setAttempt] = React.useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` reads the limit again
   React.useEffect(() => {
+    let live = true;
     requestJson<{ repo: { agentMinutes: number } }>(path).then(
       ({ repo }) => {
+        if (!live) return;
         setSaved(repo.agentMinutes);
         setMinutes(String(repo.agentMinutes));
+        setResult(undefined);
       },
-      (cause: Error) => setResult({ tone: "error", text: cause.message }),
+      (cause: Error) => live && setResult({ tone: "error", text: cause.message, retry: true }),
     );
-  }, [path]);
+    return () => {
+      live = false;
+    };
+  }, [path, attempt]);
   const value = Number(minutes);
-  const valid = Number.isInteger(value) && value >= AGENT_MINUTES.min && value <= AGENT_MINUTES.max;
-  const changed = saved !== undefined && value !== saved;
+  const valid =
+    minutes !== "" &&
+    Number.isInteger(value) &&
+    value >= AGENT_MINUTES.min &&
+    value <= AGENT_MINUTES.max;
+  // Before the current limit has loaded, any valid value can still be saved.
+  const changed = value !== saved;
   return (
     <PageContent>
       <PageHeader title="Settings" description="Choose how evaluations of this repository run." />
       {result && (
         <Notice tone={result.tone} className="mb-5">
           {result.text}
+          {result.retry && (
+            <Button size="small" onClick={() => setAttempt((count) => count + 1)}>
+              Try Again
+            </Button>
+          )}
         </Notice>
       )}
       <form
@@ -71,19 +96,22 @@ export function RepoSettingsPage() {
           <div className="grid gap-2">
             <label htmlFor="agent-minutes" className="flex">
               <span className="sr-only">Agent Time Limit (Minutes)</span>
-              <input
+              <Input
                 id="agent-minutes"
                 type="number"
                 min={AGENT_MINUTES.min}
                 max={AGENT_MINUTES.max}
                 required
                 value={minutes}
-                disabled={saved === undefined || busy}
-                onChange={(event) => setMinutes(event.target.value)}
-                className={`${controlStyles} min-w-0 flex-1 text-right font-mono tabular-nums`}
+                onChange={(event) => {
+                  setMinutes(event.target.value);
+                  // A notice about the last save no longer describes what the field holds.
+                  if (result?.tone === "success") setResult(undefined);
+                }}
+                className="min-w-0 flex-1 text-right font-mono tabular-nums"
               />
               <span className="flex shrink-0 items-center border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-                minutes
+                Minutes
               </span>
             </label>
             <p className="text-sm text-muted-foreground sm:text-right">

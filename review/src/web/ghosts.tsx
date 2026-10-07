@@ -20,7 +20,7 @@ function Bar({ width, strong = false }: { width: string; strong?: boolean }) {
 function Chip({ children, width = "3rem" }: { children?: ReactNode; width?: string }) {
   return (
     <span
-      className="flex h-5 shrink-0 items-center justify-center border border-foreground/15 px-1.5 font-mono text-xs text-(--faint)"
+      className="flex h-5 shrink-0 items-center justify-center border border-foreground/15 px-1.5 text-xs text-(--faint)"
       style={{ minWidth: width }}
     >
       {children}
@@ -67,7 +67,7 @@ export function GhostTasks() {
     <Rows
       rows={["70%", "55%", "64%"]}
       mark={() => ring()}
-      end={(index) => <Chip>{["easy", "hard", "medium"][index]}</Chip>}
+      end={(index) => <Chip>{["Easy", "Hard", "Medium"][index]}</Chip>}
     />
   );
 }
@@ -89,7 +89,7 @@ export function GhostKeys() {
     <Rows
       rows={["50%", "40%"]}
       mark={() => <span className="shrink-0 font-mono text-xs text-(--faint)">sbk_</span>}
-      end={(index) => <Chip width="4.5rem">{index === 0 ? "write" : "read"}</Chip>}
+      end={(index) => <Chip width="6rem">{index === 0 ? "Read & Write" : "Read Only"}</Chip>}
     />
   );
 }
@@ -159,39 +159,37 @@ export function GhostRelease({ repo }: { repo: string }) {
           </div>
         ))}
       </div>
-      <div className="mt-4 border-t border-foreground/[0.08] pt-3 font-mono text-xs text-(--faint)">
+      <div className="mt-4 truncate border-t border-foreground/[0.08] pt-3 font-mono text-xs text-(--faint)">
         selfbench.dev/{repo}
       </div>
     </div>
   );
 }
 
-/** Managed usage: tokens and sandbox time by day, as columns along an axis. */
+/** Managed usage: model tokens, split by kind, and sandbox runtime, as the totals will show them. */
 export function GhostUsage() {
-  const heights = [36, 64, 48, 92, 70, 120, 84, 104] as const;
   return (
-    <svg viewBox="0 0 380 170" className="block h-auto w-full" fill="none" role="presentation">
-      <g stroke="var(--ruler)">
-        <path d="M20 30h350M20 80h350" />
-      </g>
-      <path d="M20 140h350" stroke="var(--border)" strokeWidth="1.5" />
-      <g stroke="var(--faint)" strokeWidth="1.5">
-        {heights.map((height, index) => (
-          <rect
-            key={height}
-            x={32 + index * 42}
-            y={140 - height}
-            width="24"
-            height={height}
-            opacity={index < 5 ? 0.6 : 1}
-          />
-        ))}
-      </g>
-      <g fill="var(--faint)" fontSize="12" fontFamily="var(--sans)">
-        <text x="20" y="162">
-          Tokens and sandbox time
-        </text>
-      </g>
-    </svg>
+    <div className="grid gap-3">
+      {[
+        { title: "Model Usage", segments: ["45%", "25%", "20%", "10%"] },
+        { title: "Sandbox Usage", segments: ["100%"] },
+      ].map(({ title, segments }) => (
+        <div key={title} className="border border-foreground/[0.12] p-4">
+          <div className="flex items-center justify-between gap-3 text-xs text-(--faint)">
+            <span>{title}</span>
+            <Bar width="3rem" />
+          </div>
+          <div className="mt-3 flex h-2 gap-0.5">
+            {segments.map((width, index) => (
+              <span
+                key={width}
+                className="block h-full border border-(--faint)"
+                style={{ width, opacity: 1 - index * 0.2 }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -34,7 +34,8 @@ export function Discovery({ status }: { status: BatchStatus }) {
         </ul>
       ) : (
         <EmptyState
-          visual={<GhostDiscovery />}
+          // While discovery is still coming; a batch with no traces left shows nothing to come.
+          visual={preparing || active ? <GhostDiscovery /> : undefined}
           title={
             preparing
               ? "Collecting Merged PRs"
