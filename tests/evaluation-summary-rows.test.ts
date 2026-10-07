@@ -11,14 +11,15 @@ afterAll(async () => {
   await server.close();
 });
 
-/** The stored summary of `id`, once `done` holds for its revision. */
-async function storedWhen(id: string, done: (revision: number | undefined) => boolean) {
+/** The stored summary of `id`, once its body is no longer `damaged`: a rebuild saves behind the list. */
+async function storedOnceReplaced(id: string, damaged: string) {
+  let stored: { body: string } | undefined;
   for (let tries = 0; tries < 100; tries += 1) {
-    const revisions = await server.summaries.revisions(server.repo.id);
-    if (done(revisions.get(id))) break;
+    stored = (await server.summaries.list(server.repo.id)).find((entry) => entry.id === id);
+    if (stored && stored.body !== damaged) break;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  return (await server.summaries.list(server.repo.id)).find((entry) => entry.id === id);
+  return stored;
 }
 
 test("a stored summary that does not read as a run is rebuilt from the record and written over", async () => {
@@ -36,10 +37,10 @@ test("a stored summary that does not read as a run is rebuilt from the record an
       const listed = runs.find((entry: EvaluationRun) => entry.id === run.id);
       expect(listed?.trials).toHaveLength(1);
       expect(listed?.status).toBe("queued");
-      // The rebuild wrote the summary back.
-      const stored = await storedWhen(run.id, (revision) => revision === run.revision);
+      // The rebuild wrote the summary back, at the same revision the damaged row claimed.
+      const stored = await storedOnceReplaced(run.id, body);
       expect(stored?.body).not.toBe(body);
-      expect(JSON.parse(stored?.body ?? "").id).toBe(run.id);
+      expect(JSON.parse(stored?.body ?? "")).toMatchObject({ id: run.id, revision: run.revision });
     }
     expect(warnings).toEqual(
       Array(4).fill(`evaluation ${run.id}: stored summary does not read as a run; rebuilt`),
