@@ -50,8 +50,10 @@ export async function vendorListRates(
       typeof pricing.discount === "number" && pricing.discount > 0 && pricing.discount < 1
         ? pricing.discount
         : 0;
+    const full = (rate: number) => Number((rate / (1 - discount)).toFixed(6));
+    const [input, output, cacheRead, cacheWrite] = rates;
     return {
-      rates: rates.map((rate) => Number((rate / (1 - discount)).toFixed(6))) as unknown as Rates,
+      rates: [full(input), full(output), full(cacheRead), full(cacheWrite)],
       source: `https://openrouter.ai/${id}/providers`,
     };
   } catch {

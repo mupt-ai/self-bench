@@ -237,6 +237,15 @@ test("OpenRouter Codex trials verify against the gateway model name Harbor recor
     apiCostUsd: (210 * 2 + 256 * 8 + 25793 * 0.5 + 29793 * 2.5) / 1_000_000,
     costSource: "reference-rates",
   });
+  // A request past the rates' long-context bound leaves Harbor's figure as the only cost.
+  const bounded = initialEvaluation(
+    { ...input, pricing: { ...pricing, maxInputTokens: 1000 } },
+    "",
+  );
+  expect(trialCost(bounded, "codex", files("openai/openai/gpt-6-astra"), result)).toMatchObject({
+    apiCostUsd: 0.43,
+    costSource: "harbor",
+  });
   expect(trialCost(run, "codex", files("openai/openai/gpt-6-other"), result)).toEqual({
     modelVerified: false,
     tokenUsage: usage,

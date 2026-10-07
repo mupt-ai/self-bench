@@ -251,20 +251,24 @@ export function trialCost(
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
   if (!verified || !usage) return measured;
+  const reported =
+    reportedCost === undefined
+      ? measured
+      : {
+          ...measured,
+          apiCostUsd: reportedCost,
+          costSource: cacheWritesInferred ? ("reference-rates" as const) : ("harbor" as const),
+        };
   // Harbor prices a gateway route from LiteLLM's table for it, which may carry a discount or
-  // another provider's rates; gateway runs are priced at their vendor's list rates (runPricing).
-  if (reportedCost !== undefined && !(pricing && isGateway(run.credentials?.provider)))
-    return {
-      ...measured,
-      apiCostUsd: reportedCost,
-      costSource: cacheWritesInferred ? "reference-rates" : "harbor",
-    };
-  if (!pricing) return measured;
+  // another provider's rates; gateway runs are priced at their vendor's list rates (runPricing),
+  // and Harbor's figure stands in only where those cannot price the trial.
+  if (!pricing || (reportedCost !== undefined && !isGateway(run.credentials?.provider)))
+    return reported;
   // The bound is per request; without per-request records the trial's total stands in for one.
   const prompt = largestPrompt ?? usage.input + usage.cacheRead + usage.cacheWrite;
-  if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return measured;
+  if (pricing.maxInputTokens && prompt > pricing.maxInputTokens) return reported;
   const apiCostUsd = referenceCost(pricing, usage, hourCacheWrite);
   return Number.isFinite(apiCostUsd)
     ? { ...measured, apiCostUsd, costSource: "reference-rates" }
-    : measured;
+    : reported;
 }
