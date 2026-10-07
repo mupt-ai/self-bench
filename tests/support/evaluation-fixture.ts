@@ -187,6 +187,8 @@ export async function evaluationServer(
         publicUrl,
         ...logins,
         env,
+        // OpenRouter lists no vendor endpoint, so gateway runs keep their route's pricing.
+        fetch: (async () => new Response(null, { status: 404 })) as unknown as typeof fetch,
         vault:
           vault ??
           createVault(

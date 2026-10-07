@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { gatewayCost, generationIds } from "../src/evaluation/gateway-cost.js";
+import { billedTrialCost, gatewayCost, generationIds } from "../src/evaluation/gateway-cost.js";
+import { initialEvaluation } from "../src/evaluation/store.js";
+import { evaluationInput } from "./support/evaluation-fixture.js";
 
 const files = new Map([
   [
@@ -60,4 +62,37 @@ test("missing bills and unsupported harnesses leave the caller's usage estimate 
     ],
   ]);
   expect(generationIds("pi", tail)).toEqual(["gen_01ARZ3NDEKTSV4RRFFQ69G5FAV"]);
+});
+
+test("a gateway's charge is kept beside the shown cost, and stands in only for a missing one", async () => {
+  const run = initialEvaluation(
+    {
+      ...evaluationInput(),
+      modelName: "vercel-ai-gateway/mistral/mistral-large-4",
+      credentials: {
+        modelCredentialId: "model",
+        sandboxCredentialId: "sandbox",
+        provider: "vercel-ai-gateway",
+      },
+    },
+    "Mistral Large 4",
+  );
+  const trial = run.trials[0];
+  if (!trial) throw new Error("Missing trial");
+  const env = { AI_GATEWAY_API_KEY: "key" };
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    Response.json({ data: { total_cost: 0.25 } })) as unknown as typeof fetch;
+  try {
+    const priced = { ...trial, harness: "pi" as const, modelVerified: true, apiCostUsd: 1 };
+    expect(await billedTrialCost(run, priced, env, files)).toEqual({ billedCostUsd: 0.5 });
+    const { apiCostUsd: _cost, ...unpriced } = priced;
+    expect(await billedTrialCost(run, unpriced, env, files)).toEqual({
+      billedCostUsd: 0.5,
+      apiCostUsd: 0.5,
+      costSource: "gateway",
+    });
+  } finally {
+    globalThis.fetch = original;
+  }
 });

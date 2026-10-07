@@ -17,6 +17,7 @@ import {
   type ListedModel,
   listedModels,
 } from "../gateways/index.js";
+import { atVendorRates, vendorListRates } from "../gateways/vendor-pricing.js";
 import type { Harness } from "./models.js";
 
 export { catalogVersion } from "../contracts/models.js";
@@ -189,6 +190,27 @@ export function referencePricing(
 export function withReferencePricing(model: CatalogModel): CatalogModel {
   const pricing = referencePricing(model.id, model.provider, model.model);
   return pricing ? { ...model, pricing } : model;
+}
+
+/** The model's id as OpenRouter spells it, vendor first, which its vendor list rates go by. */
+export function vendorModelId(model: Pick<CatalogModel, "id" | "gateways">): string {
+  return findModel(model.id)?.openRouter ?? model.gateways?.openrouter ?? model.id;
+}
+
+/**
+ * The model's pricing on the route a run takes: on a gateway, its vendor's own undiscounted list
+ * rates where OpenRouter reports them (vendorListRates), else the route's reference pricing.
+ */
+export async function runPricing(
+  model: CatalogModel,
+  route: CatalogModel,
+  fetcher: typeof fetch = fetch,
+): Promise<ModelPricing | undefined> {
+  if (!route.pricing || !isGateway(route.provider)) return route.pricing;
+  const vendor = await vendorListRates(vendorModelId(model), fetcher);
+  return vendor
+    ? atVendorRates(route.pricing, vendor, new Date().toISOString().slice(0, 10))
+    : route.pricing;
 }
 
 export const hostedSandboxes = ["e2b", "modal", "daytona"] as const;

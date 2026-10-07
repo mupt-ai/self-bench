@@ -48,6 +48,8 @@ export interface EvaluationRoutesOptions {
   start(input: EvaluationInput): Promise<void>;
   stop: StopEvaluation;
   env?: NodeJS.ProcessEnv;
+  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing). */
+  fetch?: typeof fetch;
   vault?: Vault;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
@@ -116,6 +118,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               },
               draft,
               env,
+              options.fetch,
             );
             const submitted = await resume(
               record,

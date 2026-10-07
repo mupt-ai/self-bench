@@ -4,13 +4,18 @@ import type { EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 type BilledGateway = "openrouter" | "vercel-ai-gateway";
 
-/** Override the usage estimate only when the whole trial's gateway bill is available. */
+/**
+ * What the gateway charged for the whole trial, when every request's bill is available. It is
+ * kept beside the trial's cost rather than replacing it: costs are priced at the vendor's list
+ * rates (runPricing), and a gateway's charge reflects its routing and any discount. It stands in
+ * only for a cost those rates cannot give, as for a request past their long-context bound.
+ */
 export async function billedTrialCost(
   run: EvaluationRun,
   trial: EvaluationTrial,
   env: NodeJS.ProcessEnv,
   files: Map<string, string>,
-): Promise<Pick<EvaluationTrial, "apiCostUsd" | "costSource">> {
+): Promise<Pick<EvaluationTrial, "billedCostUsd" | "apiCostUsd" | "costSource">> {
   const provider = run.credentials?.provider;
   if (!trial.modelVerified || (provider !== "openrouter" && provider !== "vercel-ai-gateway"))
     return {};
@@ -20,7 +25,10 @@ export async function billedTrialCost(
     trial.harness,
     files,
   );
-  return cost === undefined ? {} : { apiCostUsd: cost, costSource: "gateway" };
+  if (cost === undefined) return {};
+  return trial.apiCostUsd === undefined
+    ? { billedCostUsd: cost, apiCostUsd: cost, costSource: "gateway" }
+    : { billedCostUsd: cost };
 }
 
 /** Only completed Pi replies have a generation ID we can match to a gateway bill. */

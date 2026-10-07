@@ -7,7 +7,7 @@ import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
-import { type CatalogModel, evaluationCatalog, hostedSandboxes } from "./catalog.js";
+import { type CatalogModel, evaluationCatalog, hostedSandboxes, runPricing } from "./catalog.js";
 import { comparisonProgress } from "./comparison-progress.js";
 import {
   defaultThinking,
@@ -65,6 +65,7 @@ export async function createComparison(
   scope: ComparisonScope,
   draft: ComparisonDraft,
   environment: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = fetch,
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   const signature = JSON.stringify(selection);
@@ -118,7 +119,7 @@ export async function createComparison(
   const seen = new Set<string>();
   const createdAt = new Date().toISOString();
   const catalogModels = evaluationCatalog();
-  const inputs: EvaluationInput[] = selection.models.flatMap((selected) => {
+  const selections = selection.models.map(async (selected): Promise<EvaluationInput[]> => {
     const model: CatalogModel | undefined =
       selected.catalogId === "custom" && selected.customModel
         ? {
@@ -170,6 +171,7 @@ export async function createComparison(
           ),
         }))
       : [{ harnesses: selected.harnesses, tasks: frozen }];
+    const pricing = await runPricing(model, route, fetcher);
     return groups
       .filter((group) => group.tasks.length > 0)
       .map(
@@ -186,7 +188,7 @@ export async function createComparison(
           tenant: scope.tenant,
           startedBy: scope.login,
           createdAt,
-          ...(route.pricing ? { pricing: route.pricing } : {}),
+          ...(pricing ? { pricing } : {}),
           credentialOrgId: scope.orgId,
           comparisonId: selection.id,
           credentials: {
@@ -198,6 +200,7 @@ export async function createComparison(
         }),
       );
   });
+  const inputs = (await Promise.all(selections)).flat();
   if (inputs.length === 0)
     throw new Error("Every selected configuration and task already has a completed result.");
   return owned(
