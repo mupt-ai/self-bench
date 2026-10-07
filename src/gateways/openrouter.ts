@@ -4,7 +4,7 @@ import {
   type ListedModel,
   type ListedRates,
   listRates,
-  longContextFrom,
+  listTiers,
   readsAndWritesText,
   reasoningLevels,
 } from "./gateway.js";
@@ -50,20 +50,7 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_write,
     );
     if (!entryRates) continue;
-    // An override reprices prompts over its min_prompt_tokens (time-of-day ones set none).
-    const overrides = Array.isArray(pricing.overrides) ? pricing.overrides : [];
-    const longContext = longContextFrom(
-      overrides.map((override) =>
-        typeof override?.min_prompt_tokens === "number"
-          ? override.min_prompt_tokens + 1
-          : undefined,
-      ),
-    );
-    rates.set(entry.id, {
-      rates: entryRates,
-      asOf,
-      ...(longContext ? { longContextFrom: longContext } : {}),
-    });
+    rates.set(entry.id, { rates: entryRates, asOf, ...overrideTiers(pricing) });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning);
       const index = entry.benchmarks?.artificial_analysis?.intelligence_index;
@@ -78,6 +65,30 @@ function parse(body: unknown, asOf: string) {
   // The sort is stable, so equal and unscored models keep OpenRouter's popularity order.
   listed.sort((left, right) => right.intelligence - left.intelligence);
   return { rates, models: listed.map(({ intelligence: _intelligence, ...model }) => model) };
+}
+
+/**
+ * The long-context tiers OpenRouter prices a model or endpoint at: an override reprices prompts
+ * over its min_prompt_tokens (time-of-day ones set none).
+ */
+export function overrideTiers(pricing: Record<string, unknown>) {
+  const overrides = Array.isArray(pricing.overrides) ? pricing.overrides : [];
+  return listTiers(
+    { cacheRead: pricing.input_cache_read, cacheWrite: pricing.input_cache_write },
+    overrides.flatMap((override) =>
+      typeof override?.min_prompt_tokens === "number"
+        ? [
+            {
+              from: override.min_prompt_tokens + 1,
+              input: override.prompt,
+              output: override.completion,
+              cacheRead: override.input_cache_read,
+              cacheWrite: override.input_cache_write,
+            },
+          ]
+        : [],
+    ),
+  );
 }
 
 /** OpenRouter's name without its vendor prefix: "Kimi K3", not "MoonshotAI: Kimi K3". */

@@ -1,5 +1,6 @@
 import {
   findModel,
+  longContextOf,
   type ModelPricing,
   models,
   nativePricing,
@@ -182,7 +183,7 @@ export function referencePricing(
 ): ModelPricing | undefined {
   const entry = findModel(id);
   return isGateway(provider)
-    ? gatewayPricing(provider, model, entry?.rates?.gateway, entry?.longContextFrom)
+    ? gatewayPricing(provider, model, entry?.rates?.gateway, longContextOf(entry))
     : entry && nativePricing(entry);
 }
 

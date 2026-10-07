@@ -4,7 +4,12 @@
  * Server processes load each gateway's live models and list prices (refresh.ts); until then,
  * and in the browser, only curated models route through them, at reference rates.
  */
-import { type ModelPricing, type Rates, ratesPricing } from "../contracts/models.js";
+import {
+  type ModelPricing,
+  type PromptTiers,
+  type Rates,
+  ratesPricing,
+} from "../contracts/models.js";
 import type { Gateway, GatewayListing, ListedModel } from "./gateway.js";
 import { openRouter } from "./openrouter.js";
 import { vercelAiGateway } from "./vercel-ai-gateway.js";
@@ -106,19 +111,19 @@ function respell(id: string, alias: (vendor: string) => string | undefined): str
 }
 
 /**
- * The gateway's live list price for its model `id`, else the `reference` rates, which cover
- * prompts below `referenceLongContextFrom`.
+ * The gateway's live list price for its model `id`, else the `reference` rates, with the
+ * reference long-context tiers beyond them.
  */
 export function gatewayPricing(
   gateway: GatewayId,
   id: string,
   reference?: Rates,
-  referenceLongContextFrom?: number,
+  referenceTiers?: PromptTiers,
 ): ModelPricing | undefined {
   const page = gateways[gateway].modelPage(id);
   const live = listing(gateway).rates.get(id);
-  if (live) return ratesPricing(live.rates, page, live.asOf, live.longContextFrom);
-  return reference && ratesPricing(reference, page, undefined, referenceLongContextFrom);
+  if (live) return ratesPricing(live.rates, page, live.asOf, live);
+  return reference && ratesPricing(reference, page, undefined, referenceTiers);
 }
 
 /**

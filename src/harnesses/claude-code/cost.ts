@@ -1,11 +1,13 @@
 import type { TokenUsage } from "../../evaluation/types.js";
-import { harborCallUsage } from "../harbor/cost.js";
+import { type HarborCallUsage, harborCallUsage } from "../harbor/cost.js";
 
 /** Anthropic bills one-hour cache writes at twice the input rate, five-minute ones at 1.25×. */
 export const HOUR_CACHE_WRITE_MULTIPLIER = 2;
 
 export interface ClaudeCodeUsage {
   usage: TokenUsage;
+  /** Each request's usage, which adds up to `usage`. */
+  requests: HarborCallUsage[];
   /** The part of `usage.cacheWrite` cached for an hour, which Claude sign-ins request. */
   hourCacheWrite: number;
   largestPrompt: number;
@@ -43,6 +45,7 @@ export function claudeCodeUsage(
     return undefined;
   return {
     usage,
+    requests: calls,
     hourCacheWrite,
     largestPrompt,
     // Claude Code records an API error or interrupt as a "<synthetic>" message with no usage.
