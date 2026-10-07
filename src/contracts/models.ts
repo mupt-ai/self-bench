@@ -60,7 +60,7 @@ export interface Model {
   readonly generation?: boolean;
 }
 
-export const catalogVersion = "2026-10-01.1";
+export const catalogVersion = "2026-10-07.1";
 const RATES_AS_OF = "2026-09-23";
 const openAiThinking = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 const vendorThinking = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -135,6 +135,16 @@ export const models: readonly Model[] = [
     openRouter: "anthropic/claude-sonnet-5.5",
     source: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
+    thinking: vendorThinking,
+  },
+  {
+    id: "claude-haiku-5-5",
+    label: "Claude Haiku 5.5",
+    vendor: "anthropic",
+    openRouter: "anthropic/claude-haiku-5.5",
+    source: "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
+    rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
+    longContextFrom: 100_001,
     thinking: vendorThinking,
   },
   {

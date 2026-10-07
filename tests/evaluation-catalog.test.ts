@@ -243,6 +243,15 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
     ["openrouter", 2],
     ["vercel-ai-gateway", 2],
   ]);
+
+  // Haiku 5.5's list rates cover prompts up to 100k tokens; Anthropic charges more past them.
+  const haiku = catalog.find((model) => model.id === "claude-haiku-5-5");
+  if (!haiku) throw new Error("Missing Haiku 5.5");
+  const haikuRoutes = modelRoutes(haiku);
+  expect(haikuRoutes.map((route) => route.provider)).toEqual(["anthropic", ...gatewayIds]);
+  for (const route of haikuRoutes)
+    expect(route.pricing).toMatchObject({ input: 0.1, output: 0.5, maxInputTokens: 100_000 });
+  expect(thinkingOptions(haiku, ["claude-code"])).toContain("max");
 });
 
 test("thinking levels reach the actual Harbor harness flags without changing models", () => {
