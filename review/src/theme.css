@@ -88,13 +88,6 @@ html {
     box-shadow: var(--panel-shadow);
   }
 
-  .empty-state {
-    border: 0;
-    border-block: 1px solid var(--border);
-    border-inline-start: 2px solid var(--brand);
-    background: transparent;
-    box-shadow: none;
-  }
 }
 
 /* Selects stay native <select>s, so the keyboard, screen readers, phone pickers, and anything

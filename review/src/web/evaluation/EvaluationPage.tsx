@@ -1,12 +1,13 @@
 import React from "react";
-import { useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
-import { Button, EmptyState, Notice, PageContent, PageHeader } from "../ui";
+import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationRun, evaluationRequest } from "./api";
 import { ChartPreview } from "./ChartPreview";
 import { ComparisonHistory } from "./ComparisonHistory";
 import { EvaluationResults } from "./EvaluationResults";
+import { GhostChart } from "./GhostChart";
 import { useRepoRuns } from "./RepoRuns";
 import { ResultsTable } from "./ResultsTable";
 
@@ -94,8 +95,23 @@ export function EvaluationPage() {
             </div>
           )}
           {!loading && !runs.length && (
-            <EmptyState title="No Runs Yet" className="mt-6">
-              Choose models and a sandbox to compare them against your dataset.
+            <EmptyState
+              title="No Runs Yet"
+              className="mt-6"
+              visual={<GhostChart />}
+              action={
+                <>
+                  <Link className={buttonStyles.primary} to={`/repos/${repo}/run`}>
+                    Run Models
+                  </Link>
+                  <Link className={buttonStyles.secondary} to={`/repos/${repo}`}>
+                    Review Tasks
+                  </Link>
+                </>
+              }
+            >
+              Run models on this repository's approved tasks. Each one lands on the chart by how
+              many tasks it solved and what each task cost.
             </EmptyState>
           )}
           {/* Below the table once it has its rows, so it can tell whether it is in view. */}

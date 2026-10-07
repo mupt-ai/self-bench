@@ -4,10 +4,8 @@ import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
 import {
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -48,10 +46,13 @@ export function SiteSidebar({
       <SidebarHeader className="flex h-16 shrink-0 flex-row items-center border-b border-border px-5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
         <Lockup compact showName={!collapsed} />
       </SidebarHeader>
+      {/* The workspace leads: everything below belongs to it. */}
+      <div className="px-3 pt-4 pb-2 group-data-[collapsible=icon]/sidebar:px-2">
+        <SidebarOrgPicker org={org} orgs={orgs} onSelect={onSelect} collapsed={collapsed} />
+      </div>
       <SidebarContent>
         <nav aria-label="Organization Navigation">
           <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {onSetup && (
@@ -135,9 +136,6 @@ export function SiteSidebar({
           </SidebarGroup>
         </nav>
       </SidebarContent>
-      <SidebarFooter className="border-t border-border p-3 group-data-[collapsible=icon]/sidebar:p-2">
-        <SidebarOrgPicker org={org} orgs={orgs} onSelect={onSelect} collapsed={collapsed} />
-      </SidebarFooter>
     </aside>
   );
 }
