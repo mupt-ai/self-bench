@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { GhostUsage } from "../ghosts";
 import { EmptyState } from "../ui";
 import { type BillingUsageSummary, formatBillingDollars } from "./billing";
 
@@ -33,7 +34,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
         <span className="text-[10px] tracking-wider text-muted-foreground uppercase">All Time</span>
       </div>
       {!hasUsage ? (
-        <EmptyState title="No Managed Usage Yet">
+        <EmptyState title="No Managed Usage Yet" visual={<GhostUsage />}>
           Model token and sandbox runtime totals will appear here after the first managed run.
         </EmptyState>
       ) : (

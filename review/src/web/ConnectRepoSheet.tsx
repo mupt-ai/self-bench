@@ -7,6 +7,7 @@ import {
   type Repo,
 } from "./api";
 import { Dialog, DialogHeader } from "./Dialog";
+import { GhostRepos } from "./ghosts";
 import { ListSkeleton } from "./LoadingSkeleton";
 import type { SiteOrg } from "./session";
 import { Button, EmptyState, Input, Notice, SearchInput } from "./ui";
@@ -147,7 +148,10 @@ export function ConnectRepoSheet({
           )}
           {mode === "mine" && repos.status === "error" && <Notice>{repos.message}</Notice>}
           {mode === "mine" && repos.status === "ok" && visible.length === 0 && (
-            <EmptyState title={needle ? "No Matching Repositories" : "No Repositories"}>
+            <EmptyState
+              title={needle ? "No Matching Repositories" : "No Repositories"}
+              visual={<GhostRepos />}
+            >
               Try another search or connect a public repository.
             </EmptyState>
           )}

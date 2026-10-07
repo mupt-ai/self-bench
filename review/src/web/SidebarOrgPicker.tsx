@@ -65,7 +65,7 @@ export function SidebarOrgPicker({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           container={container}
-          side="bottom"
+          side="top"
           align="start"
           className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-52 max-w-[calc(100vw-24px)] p-1.5"
           aria-label="Switch Organization"

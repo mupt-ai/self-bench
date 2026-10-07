@@ -1,6 +1,7 @@
 import type { DiscoveryShardProgress } from "../../../../src/contracts/index";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
 import { GenerationCost } from "../GenerationCost";
+import { GhostDiscovery } from "../ghosts";
 import { EmptyState, SectionHeader } from "../ui";
 import { DiscoveryFeed } from "./DiscoveryFeed";
 
@@ -33,7 +34,7 @@ export function Discovery({ status }: { status: BatchStatus }) {
         </ul>
       ) : (
         <EmptyState
-          className="border-solid"
+          visual={<GhostDiscovery />}
           title={
             preparing
               ? "Collecting Merged PRs"
