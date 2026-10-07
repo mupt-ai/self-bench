@@ -23,17 +23,21 @@ function AgentLimit({ path }: { path: string }) {
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<Result>();
   const [attempt, setAttempt] = React.useState(0);
+  // Saves started on this page. A read that began before one is out of date when it lands.
+  const writes = React.useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` reads the limit again
   React.useEffect(() => {
     let live = true;
+    const before = writes.current;
+    const current = () => live && writes.current === before;
     requestJson<{ repo: { agentMinutes: number } }>(path).then(
       ({ repo }) => {
-        if (!live) return;
+        if (!current()) return;
         setSaved(repo.agentMinutes);
         setMinutes(String(repo.agentMinutes));
         setResult(undefined);
       },
-      (cause: Error) => live && setResult({ tone: "error", text: cause.message, retry: true }),
+      (cause: Error) => current() && setResult({ tone: "error", text: cause.message, retry: true }),
     );
     return () => {
       live = false;
@@ -67,6 +71,7 @@ function AgentLimit({ path }: { path: string }) {
           if (!valid || !changed || busy) return;
           setBusy(true);
           setResult(undefined);
+          writes.current += 1;
           try {
             await requestJson(path, {
               method: "PATCH",
