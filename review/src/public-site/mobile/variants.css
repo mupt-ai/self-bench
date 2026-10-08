@@ -1,0 +1,30 @@
+/*
+ * The mobile layer's variants and tap utility, apart from its page-wide rules so the app can
+ * load them for the components it shares with selfbench.dev (the task file tree and viewer).
+ */
+
+/*
+ * A small or short screen: a phone either way up. (The block form keeps the comma inside one
+ * media query; the one-line form would split the variant in two.)
+ */
+@custom-variant compact {
+  @media (width < 40rem), (height < 32rem) {
+    @slot;
+  }
+}
+/* A finger rather than a mouse. Matches TOUCH in device.ts. */
+@custom-variant touch (@media (pointer: coarse));
+
+/*
+ * A control smaller than a fingertip: on touch, an invisible area around it takes the tap,
+ * at least 44px each way, without moving anything. The control must be positioned.
+ */
+@utility hit {
+  @media (pointer: coarse) {
+    &::after {
+      content: "";
+      position: absolute;
+      inset: min(0px, calc(50% - 22px));
+    }
+  }
+}

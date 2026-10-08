@@ -14,31 +14,8 @@
  * - Behaviour: device.ts asks the input questions from scripts, with the same media queries.
  */
 
-/*
- * A small or short screen: a phone either way up. (The block form keeps the comma inside one
- * media query; the one-line form would split the variant in two.)
- */
-@custom-variant compact {
-  @media (width < 40rem), (height < 32rem) {
-    @slot;
-  }
-}
-/* A finger rather than a mouse. Matches TOUCH in device.ts. */
-@custom-variant touch (@media (pointer: coarse));
-
-/*
- * A control smaller than a fingertip: on touch, an invisible area around it takes the tap,
- * at least 44px each way, without moving anything. The control must be positioned.
- */
-@utility hit {
-  @media (pointer: coarse) {
-    &::after {
-      content: "";
-      position: absolute;
-      inset: min(0px, calc(50% - 22px));
-    }
-  }
-}
+/* compact:, touch: and hit, which the app's shared components use too. */
+@import "./variants.css";
 
 @media (pointer: coarse) {
   /* iOS zooms the page into any field smaller than 16px when it takes focus. */

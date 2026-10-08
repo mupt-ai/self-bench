@@ -44,7 +44,7 @@ function TreeNode({
   const chosen = current === node.path;
   // In a list too short to show every file, the open one scrolls into view.
   React.useEffect(() => {
-    if (chosen) button.current?.scrollIntoView({ block: "nearest" });
+    if (chosen && button.current) revealInList(button.current);
   }, [chosen]);
   if (node.file) {
     const binary = node.file.text === undefined;
@@ -118,4 +118,18 @@ function buildTree(files: readonly TaskFileEntry[]): Node {
   };
   order(root);
   return root;
+}
+
+/**
+ * Scrolls the list a row is in, and nothing around it, until the row shows: `scrollIntoView`
+ * would also move a page or grid that hides its overflow, which no one could scroll back.
+ */
+function revealInList(row: HTMLElement): void {
+  let list = row.parentElement;
+  while (list && !/auto|scroll/.test(getComputedStyle(list).overflowY)) list = list.parentElement;
+  if (!list) return;
+  const shown = list.getBoundingClientRect();
+  const box = row.getBoundingClientRect();
+  if (box.top < shown.top) list.scrollTop -= shown.top - box.top;
+  else if (box.bottom > shown.bottom) list.scrollTop += box.bottom - shown.bottom;
 }

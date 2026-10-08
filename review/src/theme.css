@@ -5,6 +5,7 @@
 @import "./public-site/palette.css";
 /* The frame's measurements, for the sign-in page, which is built on selfbench.dev's frame. */
 @import "./public-site/frame.css";
+@import "./public-site/mobile/variants.css";
 
 /* Token names are shared with the public site's theme.css, so both render the same palette. */
 @theme inline {

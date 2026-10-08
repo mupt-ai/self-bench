@@ -13,6 +13,9 @@ export interface OpenFile {
   error?: string;
 }
 
+/** Prose, which wraps; code and config keep their lines and scroll sideways. */
+const PROSE = /\.(md|markdown|txt)$/i;
+
 const KIND_LABELS: Record<string, string> = {
   patch: "Patch",
   json: "JSON",
@@ -38,6 +41,15 @@ export function FileViewer({
   footer?: React.ReactNode;
 }) {
   const [fullscreen, setFullscreen] = React.useState(false);
+  const expand = React.useRef<HTMLButtonElement>(null);
+  const leaving = React.useRef(false);
+  // Leaving full screen puts focus back on the button that opened it, which was out of the page
+  // while the file was full screen, so the dialog could not remember it.
+  React.useEffect(() => {
+    if (fullscreen || !leaving.current) return;
+    leaving.current = false;
+    expand.current?.focus();
+  }, [fullscreen]);
 
   if (!file) return <p className={notice}>Select a file to inspect.</p>;
   if (file.error) return <p className={`${notice} !text-destructive`}>{file.error}</p>;
@@ -45,7 +57,7 @@ export function FileViewer({
   let content: React.ReactNode;
   if (file.text === undefined) {
     content = (
-      <Block title="Binary File" detail={file.path}>
+      <Block title="Not Shown" detail={file.path}>
         {binary ?? (
           <p className="px-4 py-3 text-muted-foreground">
             {formatBytes(size)} · not shown inline. Repository snapshots and archives stay on the
@@ -57,21 +69,26 @@ export function FileViewer({
   } else {
     const kind = fileKind(file.path);
     const kindLabel = KIND_LABELS[kind] ?? kind;
-    const stats = `${formatBytes(size)} · ${file.text.split("\n").length} lines`;
+    const lines = file.text.replace(/\n$/, "").split("\n").length;
+    const stats = `${formatBytes(size)} · ${lines} ${lines === 1 ? "line" : "lines"}`;
     const body =
       kind === "patch" ? (
         <DiffView patch={file.text} />
       ) : kind === "json" ? (
         <Script text={prettyJson(file.text)} />
       ) : (
-        <Script text={file.text} wrap={kind === "text"} />
+        <Script text={file.text} wrap={PROSE.test(file.path)} />
       );
     content = fullscreen ? (
       <FullScreen
         path={file.path}
         kindLabel={kindLabel}
         stats={stats}
-        onExit={() => setFullscreen(false)}
+        footer={footer}
+        onExit={() => {
+          leaving.current = true;
+          setFullscreen(false);
+        }}
       >
         {body}
       </FullScreen>
@@ -83,6 +100,7 @@ export function FileViewer({
           <span className="inline-flex items-center gap-3">
             <span>{stats}</span>
             <button
+              ref={expand}
               type="button"
               className="hit relative inline-flex size-8 cursor-pointer items-center justify-center text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
               onClick={() => setFullscreen(true)}
@@ -114,12 +132,14 @@ function FullScreen({
   path,
   kindLabel,
   stats,
+  footer,
   onExit,
   children,
 }: {
   path: string;
   kindLabel: string;
   stats: string;
+  footer: React.ReactNode;
   onExit(): void;
   children: React.ReactNode;
 }) {
@@ -140,7 +160,7 @@ function FullScreen({
         event.stopPropagation();
         onExit();
       }}
-      className="m-0 grid h-dvh max-h-none w-full max-w-none grid-rows-[auto_minmax(0,1fr)] border-0 bg-background p-0 text-foreground"
+      className="m-0 hidden h-dvh max-h-none w-full max-w-none grid-rows-[auto_minmax(0,1fr)_auto] border-0 bg-background p-0 text-foreground open:grid"
     >
       <div className="flex min-h-12 flex-wrap items-center gap-3 border-b border-border bg-(--viewer-panel) px-6 py-3 break-all">
         <span className="text-xs font-semibold text-muted-foreground">{kindLabel}</span>
@@ -161,6 +181,7 @@ function FullScreen({
         </button>
       </div>
       <div className="overflow-auto px-6 pt-4 pb-4 [&_pre]:p-0">{children}</div>
+      {footer}
     </dialog>
   );
 }

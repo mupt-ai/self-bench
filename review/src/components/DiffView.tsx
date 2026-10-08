@@ -24,9 +24,11 @@ function RenderedPatch({ patch }: { patch: string }) {
   const box = React.useRef<HTMLDivElement>(null);
   const [split, setSplit] = React.useState(false);
   // Sized by the pane it is in, not the screen: the same diff sits in a page and in a dialog.
-  React.useEffect(() => {
+  // Measured before the first paint, so a wide pane never draws the diff stacked first.
+  React.useLayoutEffect(() => {
     const element = box.current;
     if (!element) return;
+    setSplit(element.getBoundingClientRect().width >= SPLIT_WIDTH);
     const observer = new ResizeObserver(([entry]) =>
       setSplit((entry?.contentRect.width ?? 0) >= SPLIT_WIDTH),
     );
