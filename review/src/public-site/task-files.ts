@@ -9,42 +9,6 @@ const SNAPSHOTS = new Set(["environment/repo.tar.gz", "tests/repo.tar.gz"]);
 /** Whether `path` is one of the task's repository snapshots. */
 export const isSnapshot = (path: string) => SNAPSHOTS.has(path);
 
-/** The file a task opens on: its instruction, else its config, else its first readable file. */
-export function firstFile(files: readonly TaskFile[]): TaskFile | undefined {
-  for (const path of ["instruction.md", "task.toml", "definition.json"]) {
-    const found = files.find((file) => file.path === path && file.text !== undefined);
-    if (found) return found;
-  }
-  return files.find((file) => file.text !== undefined) ?? files[0];
-}
-
-/** How a file's text is shown: a diff in colour, JSON laid out, other text as it is. */
-export function fileKind(file: TaskFile): "diff" | "json" | "text" | "none" {
-  if (file.text === undefined) return "none";
-  if (/\.(patch|diff)$/.test(file.path)) return "diff";
-  if (file.path.endsWith(".json")) return "json";
-  return "text";
-}
-
-/** JSON with two-space indents, or the text as it is when it does not parse. */
-export function laidOut(text: string): string {
-  try {
-    return `${JSON.stringify(JSON.parse(text), null, 2)}\n`;
-  } catch {
-    return text;
-  }
-}
-
-/** What one line of a diff is, for its colour. */
-export function diffLine(line: string): "added" | "removed" | "hunk" | "meta" | "context" {
-  if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff --git"))
-    return "meta";
-  if (line.startsWith("@@")) return "hunk";
-  if (line.startsWith("+")) return "added";
-  if (line.startsWith("-")) return "removed";
-  return "context";
-}
-
 /** The commit the task starts from, as its `task.toml` names it. */
 export function baseCommit(files: readonly TaskFile[]): string | undefined {
   const config = files.find((file) => file.path === "task.toml")?.text ?? "";
@@ -70,11 +34,4 @@ export function snapshotCommand(repository: string, commit: string, folder: stri
     `cp ${shellPath(`${folder}/environment/repo.tar.gz`)} ${shellPath(`${folder}/tests/repo.tar.gz`)}`,
     `rm -rf ${scratch}`,
   ].join(" && \\\n  ");
-}
-
-/** A file size, as the file list shows it. */
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }

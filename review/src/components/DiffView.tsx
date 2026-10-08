@@ -12,32 +12,50 @@ export function DiffView({ patch }: { patch: string }) {
   );
 }
 
+/** The narrowest pane that shows a diff side by side; narrower, the two sides stack. */
+const SPLIT_WIDTH = 760;
+
 function RenderedPatch({ patch }: { patch: string }) {
   const files = React.useMemo(
     () => parsePatchFiles(patch).flatMap((parsed) => parsed.files),
     [patch],
   );
   const theme = useTheme();
+  const box = React.useRef<HTMLDivElement>(null);
+  // Unknown until the pane has a width: a diff is drawn once, in the layout that fits.
+  const [split, setSplit] = React.useState<boolean>();
+  // Sized by the pane it is in, not the screen: the same diff sits in a page and in a dialog.
+  // A pane that is not shown yet (a full-screen dialog about to open) has none, and waits.
+  React.useLayoutEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const fit = (width: number) => {
+      if (width > 0) setSplit(width >= SPLIT_WIDTH);
+    };
+    fit(element.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => fit(entry?.contentRect.width ?? 0));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   if (!files.length) return <pre className={prose}>{patch}</pre>;
   const options = {
     themeType: theme,
-    diffStyle: window.matchMedia("(max-width: 1200px)").matches
-      ? ("unified" as const)
-      : ("split" as const),
+    diffStyle: split ? ("split" as const) : ("unified" as const),
     diffIndicators: "bars" as const,
     overflow: "scroll" as const,
     stickyHeader: true,
   };
   return (
-    <div className="flex flex-col gap-3 p-3 site:gap-4 site:px-0">
-      {files.map((file) => (
-        <FileDiff
-          key={`${file.prevName ?? ""}:${file.name}`}
-          fileDiff={file}
-          disableWorkerPool
-          options={options}
-        />
-      ))}
+    <div ref={box} className="flex flex-col gap-4 py-3">
+      {split !== undefined &&
+        files.map((file) => (
+          <FileDiff
+            key={`${file.prevName ?? ""}:${file.name}`}
+            fileDiff={file}
+            disableWorkerPool
+            options={options}
+          />
+        ))}
     </div>
   );
 }

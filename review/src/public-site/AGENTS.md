@@ -10,7 +10,9 @@ branch on screen width or user agent in scripts. When something new does not fit
 extend `mobile/` (a variant, a utility, a component) and describe it here; do not special-case
 the page.
 
-The layer (`mobile/mobile.css`, `mobile/device.ts`, `mobile/AdaptiveTable.tsx`):
+The layer (`mobile/mobile.css`, `mobile/device.ts`, `mobile/AdaptiveTable.tsx`). Its variants
+and `hit` are in `mobile/variants.css`, which the app loads as well, for the components the two
+share (the task file tree and viewer):
 
 - Space: the frame's measurements are CSS variables (`--edge`, `--gutter`, `--bar-inset`,
   `--bar-top`, `--bar-bottom`, `--page-pad`), in `frame.css` and narrowed there for phones.
