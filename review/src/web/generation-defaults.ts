@@ -1,8 +1,6 @@
 import type { CredentialInfo } from "../../../src/db/credentials";
-import {
-  generationModelCredentialKinds,
-  generationModelLabel,
-} from "../../../src/generation/settings/models";
+import type { CatalogModel } from "../../../src/evaluation/catalog";
+import { generationCredentialRuns, managedRuns } from "../../../src/generation/settings/models";
 import {
   type GenerationSettings,
   generationSandboxLabels,
@@ -11,8 +9,8 @@ import {
 import type { GenerationOptions } from "./GenerationFields";
 
 export const defaultGenerationSettings: GenerationSettings = {
-  authorModel: "gpt-6-sol",
-  verifierModel: "gpt-6-sol",
+  authorModel: "gpt-6.1-sol",
+  verifierModel: "gpt-6.1-sol",
   reasoning: "high",
   modelAccess: "managed",
   sandbox: "managed",
@@ -40,14 +38,22 @@ export function rememberGenerationSettings(key: string, value: GenerationSetting
   } catch {}
 }
 
+/** The run's author and verifier models among those offered; undefined where one is not. */
+export function chosenModels(
+  value: GenerationSettings,
+  models: readonly CatalogModel[],
+): (CatalogModel | undefined)[] {
+  return [value.authorModel, value.verifierModel].map((id) =>
+    models.find((model) => model.id === id),
+  );
+}
+
 /** Whether one stored credential can run both of the run's models. */
 export function modelCredentialMatches(
   credential: Pick<CredentialInfo, "kind" | "auth">,
-  ...models: readonly string[]
+  models: readonly (CatalogModel | undefined)[],
 ): boolean {
-  if (credential.auth === "codex-login") return models.every((model) => model.startsWith("gpt-"));
-  if (credential.auth !== "api-key" || credential.kind === "custom") return false;
-  return models.every((model) => generationModelCredentialKinds(model).includes(credential.kind));
+  return models.every((model) => !!model && generationCredentialRuns(model, credential));
 }
 
 /** Coerces the settings onto what this deployment actually offers, filling empty defaults. */
@@ -63,9 +69,8 @@ export function withDefaultCredentials(
     sandbox: managedSandbox || options.sandboxes.includes(value.sandbox) ? value.sandbox : "modal",
   };
   if (next.modelAccess === "credential" && !next.modelCredentialId) {
-    const compatible = options.credentials.filter((item) =>
-      modelCredentialMatches(item, next.authorModel, next.verifierModel),
-    );
+    const models = chosenModels(next, options.models);
+    const compatible = options.credentials.filter((item) => modelCredentialMatches(item, models));
     next = {
       ...next,
       modelCredentialId:
@@ -94,11 +99,14 @@ export function withDefaultCredentials(
 }
 
 /** Short facts shown while the generation panel is collapsed. */
-export function generationSettingsSummary(value: GenerationSettings): string {
-  const model =
-    value.authorModel === value.verifierModel
-      ? generationModelLabel(value.authorModel)
-      : `${generationModelLabel(value.authorModel)} / ${generationModelLabel(value.verifierModel)}`;
+export function generationSettingsSummary(
+  value: GenerationSettings,
+  models: readonly CatalogModel[],
+): string {
+  const [author, verifier] = chosenModels(value, models).map(
+    (model, index) => model?.label ?? (index ? value.verifierModel : value.authorModel),
+  );
+  const model = author === verifier ? author : `${author} / ${verifier}`;
   const reasoning = `${value.reasoning.charAt(0).toUpperCase()}${value.reasoning.slice(1)} Reasoning`;
   if (value.modelAccess === "managed" && value.sandbox === "managed")
     return `${model} · ${reasoning} · Managed`;
@@ -115,15 +123,16 @@ export function generationSelectionProblem(
 ): string | undefined {
   if (!options.available) return "Generation is not available.";
   if (!generationSettingsSchema.safeParse(value).success) return "Settings are incomplete.";
-  if (!options.models.includes(value.authorModel)) return "Choose an author model.";
-  if (!options.models.includes(value.verifierModel)) return "Choose a verifier model.";
+  const models = chosenModels(value, options.models);
+  if (!models[0]) return "Choose an author model.";
+  if (!models[1]) return "Choose a verifier model.";
   if (value.modelAccess === "managed") {
     if (options.managed?.models !== true) return "Choose a model credential.";
+    if (!models.every((model) => model && managedRuns(model)))
+      return "Choose models that managed access offers.";
   } else if (
     !options.credentials.some(
-      (item) =>
-        item.id === value.modelCredentialId &&
-        modelCredentialMatches(item, value.authorModel, value.verifierModel),
+      (item) => item.id === value.modelCredentialId && modelCredentialMatches(item, models),
     )
   )
     return "Choose a model credential.";

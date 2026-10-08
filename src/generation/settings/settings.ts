@@ -6,8 +6,8 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
+import { modelIdPattern } from "../../contracts/models.js";
 import { sandboxImageIssue } from "../../sandbox/runtime-image-rules.js";
-import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
 const generationSandboxes = ["managed", ...HOSTED_EXECUTION_BACKENDS] as const;
@@ -39,8 +39,9 @@ export function generationHarborEnvironment(
 
 export const generationSettingsSchema = z
   .object({
-    authorModel: z.enum(generationModels),
-    verifierModel: z.enum(generationModels),
+    /** Catalog ids; the catalog changes with the gateways, so submission checks they exist. */
+    authorModel: z.string().regex(modelIdPattern),
+    verifierModel: z.string().regex(modelIdPattern),
     reasoning: z.enum(["low", "medium", "high"]),
     /**
      * "managed" routes model calls through OpenRouter behind a platform key the server

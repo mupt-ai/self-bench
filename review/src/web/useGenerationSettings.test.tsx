@@ -2,6 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { catalog } from "../../../src/evaluation/catalog";
 import { useGenerationSettings } from "./useGenerationSettings";
 
 test("generation defaults select compatible credentials and remember choices within each repository", async () => {
@@ -24,7 +25,7 @@ test("generation defaults select compatible credentials and remember choices wit
     _input: Parameters<typeof globalThis.fetch>[0],
   ) =>
     Response.json({
-      models: ["gpt-6-sol", "gpt-6-astra"],
+      models: catalog,
       sandboxes: ["modal", "e2b"],
       available: true,
       managed: { models: false, sandbox: false },
@@ -52,8 +53,8 @@ test("generation defaults select compatible credentials and remember choices wit
     await render();
     expect(current.valid).toBe(true);
     expect(current.settings).toEqual({
-      authorModel: "gpt-6-sol",
-      verifierModel: "gpt-6-sol",
+      authorModel: "gpt-6.1-sol",
+      verifierModel: "gpt-6.1-sol",
       reasoning: "high",
       modelAccess: "credential",
       sandbox: "modal",
@@ -120,10 +121,10 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.settings).toEqual(chosen);
     expect(current.valid).toBe(true);
     await render("other-team");
-    expect(current.settings.authorModel).toBe("gpt-6-sol");
+    expect(current.settings.authorModel).toBe("gpt-6.1-sol");
     expect(current.settings.modelCredentialId).toBe(id(3));
     await render("team", "owner/other");
-    expect(current.settings.authorModel).toBe("gpt-6-sol");
+    expect(current.settings.authorModel).toBe("gpt-6.1-sol");
     await render();
     expect(current.settings).toEqual(chosen);
     // Reopening reads choices saved by the other generation dialog.

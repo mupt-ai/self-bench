@@ -1,13 +1,13 @@
 /**
- * The one model catalog. Task generation (authoring and verification) and evaluation both read
- * it; each derives its own view — generation its model picker and Pi routes, evaluation its
- * per-credential Harbor routes. Browser-safe: the site imports it too.
+ * The one model catalog. Task generation (authoring and verification) and evaluation offer the
+ * same models; generation runs them in Pi, evaluation in its per-credential Harbor routes.
+ * Browser-safe: the site imports it too.
  *
  * A model with a `vendor` runs on that vendor's own key under its `id`; every model also runs
  * through each gateway (src/gateways), under the id OpenRouter gives it, `openRouter`, respelled
  * for the gateway. Rates are reference $/M tokens as of RATES_AS_OF; server processes replace the
- * gateway rates with each gateway's live list prices, and evaluation adds every other model the
- * gateways list.
+ * gateway rates with each gateway's live list prices, and evaluationCatalog adds every other
+ * model the gateways list.
  */
 
 export const thinkingLevels = [
@@ -87,8 +87,6 @@ export interface Model {
   readonly longContext?: RateTier;
   /** Selectable reasoning levels, in display order; absent means the provider default only. */
   readonly thinking?: readonly ThinkingLevel[];
-  /** Offered for task authoring and verification. */
-  readonly generation?: boolean;
 }
 
 export const catalogVersion = "2026-10-07.1";
@@ -116,7 +114,6 @@ export const models: readonly Model[] = [
     rates: { native: [10, 50, 1, 12.5], gateway: [10, 50, 1, 12.5] },
     longContext: { from: 272_001, rates: [20, 75, 2, 25] },
     thinking: vendorThinking,
-    generation: true,
   },
   {
     id: "gpt-6-sol",
@@ -127,7 +124,6 @@ export const models: readonly Model[] = [
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
     longContext: { from: 272_001, rates: [4, 15, 0.4, 5] },
     thinking: openAiThinking,
-    generation: true,
   },
   {
     id: "gpt-6-luna",
@@ -147,7 +143,6 @@ export const models: readonly Model[] = [
     source: "https://platform.claude.com/docs/en/models/overview",
     rates: { native: [10, 50, 0.25, 12.5], gateway: [10, 50, 0.25, 12.5] },
     thinking: vendorThinking,
-    generation: true,
   },
   {
     id: "claude-opus-5-5",
@@ -157,7 +152,6 @@ export const models: readonly Model[] = [
     source: "https://platform.claude.com/docs/en/models/overview",
     rates: { native: [4, 20, 0.2, 5], gateway: [4, 20, 0.2, 5] },
     thinking: vendorThinking,
-    generation: true,
   },
   {
     id: "claude-sonnet-5-5",
@@ -194,7 +188,6 @@ export const models: readonly Model[] = [
     source: "https://openrouter.ai/z-ai/glm-5.3",
     rates: { gateway: [0.84, 2.64, 0.156, 0.84] },
     thinking: ["low", "high", "max"],
-    generation: true,
   },
   {
     id: "kimi-k3",
@@ -202,7 +195,6 @@ export const models: readonly Model[] = [
     openRouter: "moonshotai/kimi-k3",
     source: "https://openrouter.ai/moonshotai/kimi-k3",
     rates: { gateway: [3, 15, 0.3, 3] },
-    generation: true,
   },
   {
     id: "gemini-3.8-flash",

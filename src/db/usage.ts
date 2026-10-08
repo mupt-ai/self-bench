@@ -26,7 +26,7 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
   return {
     async record(row) {
       // Rebuilt per row so refreshed OpenRouter rates freeze into a new snapshot.
-      const spec = rateSnapshotSpec(policy);
+      const spec = rateSnapshotSpec(policy, row.model ? [row.model] : []);
       await db.transaction(async (tx) => {
         const snapshot = row.managed
           ? await tx

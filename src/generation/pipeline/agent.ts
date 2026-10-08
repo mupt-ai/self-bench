@@ -1,5 +1,6 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef, RunRequest } from "../../contracts/index.js";
+import { isGateway, piModelOverrides, piModels } from "../../gateways/index.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
@@ -115,6 +116,7 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
           AUTHOR_MODEL: run.authoring.model,
           AUTHOR_PROVIDER: auth.provider,
           AUTHOR_THINKING: run.authoring.reasoningEffort,
+          ...piModelsEnvironment(auth.provider, run.authoring.model),
         },
       },
       outputs: [...request.outputs, SESSION_OUTPUT].map((path) => ({
@@ -134,6 +136,22 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
     },
     request.callback,
   );
+}
+
+/**
+ * Pi's models.json for a gateway model, as the gateway lists it (piModels): the whole entry for a
+ * Pi whose catalog lacks the model, which would otherwise guess at it, and only the thinking
+ * overrides for one that lists it, as Harbor's Pi adapter does for evaluation.
+ */
+export function piModelsEnvironment(provider: string, model: string): Record<string, string> {
+  if (!isGateway(provider)) return {};
+  const full = piModels(provider, model);
+  if (!full) return {};
+  const overrides = piModelOverrides(provider, model);
+  return {
+    AUTHOR_PI_MODELS: JSON.stringify(full),
+    ...(overrides ? { AUTHOR_PI_MODEL_OVERRIDES: JSON.stringify(overrides) } : {}),
+  };
 }
 
 /** Stops the agent's sandbox, bills it, and returns what the agent left behind. */
@@ -217,6 +235,13 @@ fi
 printf '%s\\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
 provider="\${AUTHOR_PROVIDER:-}"
 [ -n "$provider" ] || { [ -n "\${OPENAI_API_KEY:-}" ] && provider=openai || provider=openai-codex; }
+if [ -n "\${AUTHOR_PI_MODELS:-}" ]; then
+  if pi --list-models "$AUTHOR_MODEL" | awk -v p="$provider" -v m="$AUTHOR_MODEL" '$1 == p && $2 == m { found = 1 } END { exit !found }'; then
+    [ -z "\${AUTHOR_PI_MODEL_OVERRIDES:-}" ] || printf '%s' "$AUTHOR_PI_MODEL_OVERRIDES" > "$HOME/.pi/agent/models.json"
+  else
+    printf '%s' "$AUTHOR_PI_MODELS" > "$HOME/.pi/agent/models.json"
+  fi
+fi
 ${workspace}
 cd /work/repo
 ${request.setup ?? ""}

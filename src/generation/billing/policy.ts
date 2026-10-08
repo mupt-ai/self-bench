@@ -1,6 +1,6 @@
 import type { BillingModelRates } from "../../db/schema.js";
 import { sha256 } from "../../lib/hash.js";
-import { generationModelPricing, generationModels } from "../settings/models.js";
+import { generationModelPricing } from "../settings/models.js";
 import type { BillingPolicy } from "./config.js";
 import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "./pricing.js";
 import type { TokenUsage } from "./usage.js";
@@ -21,10 +21,16 @@ function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
   return Math.round((usd * unitScale * (10_000 + markupBps)) / 10_000);
 }
 
-/** Integer rates frozen from the current policy and published catalog/E2B figures. */
-export function rateSnapshotSpec(policy: BillingPolicy): RateSnapshotSpec {
+/**
+ * Integer rates frozen from the current policy and published catalog/E2B figures, for the
+ * `models` being billed: the catalog follows the gateways, so it has no fixed list to freeze.
+ */
+export function rateSnapshotSpec(
+  policy: BillingPolicy,
+  models: readonly string[],
+): RateSnapshotSpec {
   const modelRates: Record<string, BillingModelRates> = {};
-  for (const model of generationModels) {
+  for (const model of models) {
     const rates = generationModelPricing(model);
     if (!rates) continue;
     modelRates[model] = {

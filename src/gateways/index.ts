@@ -10,7 +10,7 @@ import {
   type Rates,
   ratesPricing,
 } from "../contracts/models.js";
-import type { Gateway, GatewayListing, ListedModel } from "./gateway.js";
+import type { Gateway, GatewayListing, ListedModel, PiModel } from "./gateway.js";
 import { openRouter } from "./openrouter.js";
 import { vercelAiGateway } from "./vercel-ai-gateway.js";
 
@@ -66,21 +66,36 @@ export function findListedModel(id: string): ListedModel | undefined {
  * asks for thinking.
  */
 export function piModels(gateway: GatewayId, id: string): object | undefined {
-  const model = listing(gateway).models.find((entry) => entry.id === id)?.pi;
+  const model = listedPiModel(gateway, id);
   if (!model) return undefined;
-  const { thinkingLevelMap, compat } = model;
-  const thinking = {
-    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-    ...(compat?.forceAdaptiveThinking ? { compat: { forceAdaptiveThinking: true } } : {}),
-  };
+  const thinking = piThinking(model);
   return {
     providers: {
       [gateway]: {
         models: [model],
-        ...(Object.keys(thinking).length ? { modelOverrides: { [model.id]: thinking } } : {}),
+        ...(thinking ? { modelOverrides: { [model.id]: thinking } } : {}),
       },
     },
   };
+}
+
+/** The part of piModels for a Pi that lists the model itself: only how it asks for thinking. */
+export function piModelOverrides(gateway: GatewayId, id: string): object | undefined {
+  const model = listedPiModel(gateway, id);
+  const thinking = model && piThinking(model);
+  return thinking && { providers: { [gateway]: { modelOverrides: { [model.id]: thinking } } } };
+}
+
+function listedPiModel(gateway: GatewayId, id: string): PiModel | undefined {
+  return listing(gateway).models.find((entry) => entry.id === id)?.pi;
+}
+
+function piThinking({ thinkingLevelMap, compat }: PiModel): object | undefined {
+  const thinking = {
+    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+    ...(compat?.forceAdaptiveThinking ? { compat: { forceAdaptiveThinking: true } } : {}),
+  };
+  return Object.keys(thinking).length ? thinking : undefined;
 }
 
 /**

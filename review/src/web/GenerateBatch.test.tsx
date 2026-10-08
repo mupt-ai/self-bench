@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { MAX_CANDIDATES_PER_RUN } from "../../../src/contracts/config/execution-limits";
+import { catalog } from "../../../src/evaluation/catalog";
 import { GenerateBatch } from "./GenerateBatch";
 
 test("batch creation is one dialog that closes and opens the submitted batch once", async () => {
@@ -40,7 +41,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       return optionsFail
         ? Response.json({ error: "Settings unavailable" }, { status: 503 })
         : Response.json({
-            models: ["gpt-6-sol", "gpt-6-astra"],
+            models: catalog,
             sandboxes: ["modal", "e2b"],
             available: optionsAvailable,
             managed: { models: false, sandbox: false },
@@ -71,6 +72,14 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       field.value = value;
       field.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
     });
+  };
+  const pick = async (label: string, model: string) => {
+    await act(async () => button(label).click());
+    const option = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+      (item) => item.textContent === model,
+    );
+    if (!option) throw new Error(`Missing model ${model}`);
+    await act(async () => option.click());
   };
   // React's legacy change detection: it watches the focused field and compares on keyup.
   const type = async (selector: string, value: string) => {
@@ -108,7 +117,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       );
     expect(container.textContent).toContain(`1–${MAX_CANDIDATES_PER_RUN} candidates total.`);
     // One dialog: the generation settings sit beside the counts with no wizard step.
-    expect(container.querySelector("select[aria-label='Author Model']")).not.toBeNull();
+    expect(button("Author Model").textContent).toBe("GPT-6.1 Sol");
     expect(container.textContent).not.toContain("Configure Generation");
     expect(button("Generate").disabled).toBe(false);
     expect(
@@ -117,8 +126,8 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     expect(
       container.querySelector<HTMLSelectElement>('select[aria-label="Modal Credential"]')?.value,
     ).toBe(sandboxId);
-    await select("Author Model", "gpt-6-astra");
-    await select("Verifier Model", "gpt-6-sol");
+    await pick("Author Model", "GPT-6 Astra");
+    await pick("Verifier Model", "GPT-6 Sol");
     await select("Reasoning", "low");
     await select("Modal Credential", "");
     await select("Model Credential", modelId);
@@ -164,9 +173,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     await act(async () => button("Generate Batch").click());
     expect(container.textContent).not.toContain("batch-test");
     expect(submissions).toHaveLength(1);
-    expect(
-      container.querySelector<HTMLSelectElement>('select[aria-label="Author Model"]')?.value,
-    ).toBe("gpt-6-astra");
+    expect(button("Author Model").textContent).toBe("GPT-6 Astra");
     expect(container.querySelector<HTMLTextAreaElement>("#batch-focus")?.value).toBe(
       "  Next.js server actions  ",
     );
@@ -175,7 +182,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
     await act(async () => browser.dispatchEvent(new browser.Event("focus")));
     expect(button("Generate").disabled).toBe(true);
     expect(container.textContent).toContain("Connect a sandbox to generate tasks.");
-    expect(container.querySelector("select[aria-label='Author Model']")).toBeNull();
+    expect(container.querySelector("button[aria-label='Author Model']")).toBeNull();
     expect(button("Finish Setup")).toBeDefined();
     hasSandbox = true;
     optionsAvailable = false;
