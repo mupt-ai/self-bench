@@ -136,7 +136,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
             return missing(response, "Task files not found");
           throw error;
         }
-        const answer: PublishedTaskFiles = { taskId: id, files: [...expanded.files] };
+        const answer: PublishedTaskFiles = { taskId: id, files: expanded.files };
         body = tagged(JSON.stringify(answer));
         files.set(key, body);
         for (const oldest of files.keys()) {

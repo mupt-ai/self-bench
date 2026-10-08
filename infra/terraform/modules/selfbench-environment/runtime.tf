@@ -93,14 +93,10 @@ locals {
       worker  = true
       enabled = var.managed_offering
     }
-    # Retired: nothing reads it. Kept only because the secret exists and is never destroyed.
-    task_canary = {
-      id      = "selfbench-task-canary"
-      env     = "SELFBENCH_TASK_CANARY"
-      api     = false
-      worker  = false
-      enabled = false
-    }
+  }
+  # Secrets nothing reads any more. Their containers stay, since secrets are never destroyed.
+  retired_secrets = {
+    task_canary = "selfbench-task-canary"
   }
   temporal_secret = {
     id  = "selfbench-temporal-api-key"
@@ -149,9 +145,9 @@ locals {
 # Terraform owns each secret container and who may read it. Values are added out of band with
 # `gcloud secrets versions add`, so Terraform state never holds them.
 resource "google_secret_manager_secret" "value" {
-  for_each  = local.runtime_secrets
+  for_each  = merge({ for key, secret in local.runtime_secrets : key => secret.id }, local.retired_secrets)
   project   = var.project_id
-  secret_id = each.value.id
+  secret_id = each.value
   labels    = local.labels
   replication {
     user_managed {
