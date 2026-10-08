@@ -19,11 +19,6 @@ import {
   type ListedModel,
   setGatewayListing,
 } from "../src/gateways/index.js";
-import {
-  generationModelLabel,
-  generationModelPricing,
-  generationModels,
-} from "../src/generation/settings/models.js";
 
 afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
@@ -198,14 +193,6 @@ test("current catalog exposes explicit model IDs and dated provider pricing", ()
     cacheWrite: 12.5,
     asOf: "2026-09-23",
   });
-});
-
-test("generation and evaluation read the same catalog", () => {
-  for (const id of generationModels) {
-    const entry = catalog.find((model) => model.id === id);
-    expect(entry?.label).toBe(generationModelLabel(id));
-    expect(generationModelPricing(id)).toEqual(entry && routeFor(entry, "openrouter")?.pricing);
-  }
 });
 
 test("a gateway-only model keeps its gateway IDs and every harness", () => {

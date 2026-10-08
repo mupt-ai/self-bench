@@ -6,7 +6,7 @@ import {
   harborEnvironmentLabels,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/db/credentials";
-import { generationModelLabel } from "../../../src/generation/settings/models";
+import { managedRuns } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,
   type GenerationSettings,
@@ -14,7 +14,8 @@ import {
   generationSandboxLabels,
 } from "../../../src/generation/settings/settings";
 import type { GenerationOptions } from "./GenerationFields";
-import { generationHints, modelCredentialMatches } from "./generation-defaults";
+import { chosenModels, generationHints, modelCredentialMatches } from "./generation-defaults";
+import { ModelPicker } from "./ModelPicker";
 import { InfoTooltip } from "./primitives/tooltip";
 import { fieldStyles, Input, Select } from "./ui";
 
@@ -35,8 +36,11 @@ export function AdvancedFields({
 }) {
   const hosted = value.sandbox !== "managed";
   const hints = generationHints(managed);
-  const compatible = (credential: CredentialInfo) =>
-    modelCredentialMatches(credential, value.authorModel, value.verifierModel);
+  const models = options?.models ?? [];
+  const chosen = chosenModels(value, models);
+  // Managed access runs on OpenRouter, so it offers only the models OpenRouter serves.
+  const offered = value.modelAccess === "managed" ? models.filter(managedRuns) : models;
+  const compatible = (credential: CredentialInfo) => modelCredentialMatches(credential, chosen);
   return (
     <div className="grid min-w-0 gap-6">
       {!options?.available && (
@@ -46,27 +50,21 @@ export function AdvancedFields({
         </p>
       )}
       <div className={pairRow}>
-        {(["authorModel", "verifierModel"] as const).map((field) => (
-          <label
-            key={field}
-            htmlFor={`generation-${field}`}
-            className={`${fieldStyles} content-start`}
-          >
-            {field === "authorModel" ? "Author Model" : "Verifier Model"}
-            <Select
-              id={`generation-${field}`}
-              aria-label={field === "authorModel" ? "Author Model" : "Verifier Model"}
-              value={value[field]}
-              onChange={(event) => onChange({ ...value, [field]: event.target.value })}
-            >
-              {options?.models.map((model) => (
-                <option key={model} value={model}>
-                  {generationModelLabel(model)}
-                </option>
-              ))}
-            </Select>
-          </label>
-        ))}
+        {(["authorModel", "verifierModel"] as const).map((field) => {
+          const label = field === "authorModel" ? "Author Model" : "Verifier Model";
+          return (
+            <div key={field} className={`${fieldStyles} content-start`}>
+              <label htmlFor={`generation-${field}`}>{label}</label>
+              <ModelPicker
+                id={`generation-${field}`}
+                label={label}
+                models={offered}
+                value={value[field]}
+                onSelect={(model) => onChange({ ...value, [field]: model.id })}
+              />
+            </div>
+          );
+        })}
       </div>
       <div className={pairRow}>
         <label htmlFor="generation-reasoning" className={`${fieldStyles} content-start`}>
@@ -122,9 +120,10 @@ export function AdvancedFields({
               }
             >
               <option value="">Choose a Credential</option>
-              {value.modelCredentialId && !options?.credentials.some(compatible) && (
-                <option value={value.modelCredentialId}>Unavailable Credential</option>
-              )}
+              {value.modelCredentialId &&
+                !options?.credentials.some(
+                  (item) => item.id === value.modelCredentialId && compatible(item),
+                ) && <option value={value.modelCredentialId}>Unavailable Credential</option>}
               {options?.credentials.filter(compatible).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}

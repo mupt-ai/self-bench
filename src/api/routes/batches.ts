@@ -23,9 +23,11 @@ import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
   GENERATION_REQUIRED,
+  generationRoutes,
   saveGenerationGitHubToken,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
+import type { GenerationReference } from "../../generation/settings/settings.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import type { AuthConfig } from "../auth/config.js";
@@ -93,7 +95,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           });
           return true;
         }
-        const generation = parsed.data.generation
+        const generation: GenerationReference | undefined = parsed.data.generation
           ? {
               ownerId: tenant.id,
               orgId: tenant.id,
@@ -116,6 +118,11 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
               tenant.id,
               generation.settings,
               managedOffer(),
+            );
+            generation.routes = await generationRoutes(
+              options.vault.credentials,
+              tenant.id,
+              generation.settings,
             );
           } catch (error) {
             sendJson(response, 400, {

@@ -64,9 +64,14 @@ test("model routes resolve per credential kind", () => {
     provider: "openrouter",
     model: "openai/gpt-6-sol",
   });
-  expect(generationModelRoute("claude-fable-5-1", { kind: "openai", auth: "codex-login" })).toEqual(
-    { provider: "openai-codex", model: "anthropic/claude-fable-5.1" },
-  );
+  expect(generationModelRoute("gpt-6-sol", { kind: "openai", auth: "codex-login" })).toEqual({
+    provider: "openai-codex",
+    model: "gpt-6-sol",
+  });
+  // A ChatGPT sign-in runs only OpenAI's models.
+  expect(() =>
+    generationModelRoute("claude-fable-5-1", { kind: "openai", auth: "codex-login" }),
+  ).toThrow("Claude Fable 5.1 cannot run on this credential");
   expect(generationModelRoute("claude-opus-5-5", { kind: "anthropic", auth: "api-key" })).toEqual({
     provider: "anthropic",
     model: "claude-opus-5-5",

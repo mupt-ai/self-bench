@@ -1,4 +1,5 @@
 import { generationModelPricing } from "../settings/models.js";
+import type { GenerationModelRates } from "../settings/settings.js";
 
 // E2B's published compute rates, per vCPU-second and per GiB-second
 // (https://e2b.dev/pricing, as of 2026-09-19). Billing snapshots freeze integer
@@ -18,7 +19,10 @@ export function managedSandboxCostUsd(
   return seconds * (cpu * E2B_VCPU_USD_PER_SECOND + (memoryMiB / 1024) * E2B_GIB_USD_PER_SECOND);
 }
 
-/** Estimated model cost for consumed tokens under the model's reference rates. */
+/**
+ * Estimated model cost for consumed tokens under the model's reference rates, or under the rates
+ * it was submitted at (`submitted`) once the gateways no longer list it.
+ */
 export function managedModelCostUsd(
   model: string,
   usage: {
@@ -27,8 +31,9 @@ export function managedModelCostUsd(
     readonly cacheRead: number;
     readonly cacheWrite: number;
   },
+  submitted?: GenerationModelRates,
 ): number | undefined {
-  const rates = generationModelPricing(model);
+  const rates = generationModelPricing(model) ?? submitted;
   if (!rates) return undefined;
   return (
     (usage.input * rates.input +

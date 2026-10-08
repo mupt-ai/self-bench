@@ -6,6 +6,7 @@ import {
   sandboxBillableUnits,
 } from "../generation/billing/policy.js";
 import type { RunUsageSummary, UsageRow } from "../generation/billing/usage.js";
+import { managedModelPricing } from "../generation/settings/models.js";
 import type { Database } from "./client.js";
 import { billingOutbox, billingRateSnapshots, generationUsage, orgBilling } from "./schema.js";
 
@@ -25,8 +26,10 @@ export function createUsageStore(db: Database, options: UsageStoreOptions = {}):
   const policy = loadBillingPolicy(options.environment);
   return {
     async record(row) {
-      // Rebuilt per row so refreshed OpenRouter rates freeze into a new snapshot.
-      const spec = rateSnapshotSpec(policy);
+      // Rebuilt per row so refreshed OpenRouter rates freeze into a new snapshot. A model the
+      // gateways have since dropped bills at the rates its run was submitted at.
+      const rates = row.model && (managedModelPricing(row.model) ?? row.modelRates);
+      const spec = rateSnapshotSpec(policy, row.model && rates ? { [row.model]: rates } : {});
       await db.transaction(async (tx) => {
         const snapshot = row.managed
           ? await tx

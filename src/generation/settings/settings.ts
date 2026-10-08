@@ -6,8 +6,9 @@ import {
   type HostedHarborEnvironment,
   harborEnvironmentLabels,
 } from "../../contracts/config/providers.js";
+import { modelIdPattern } from "../../contracts/models.js";
+import { gatewayIds } from "../../gateways/index.js";
 import { sandboxImageIssue } from "../../sandbox/runtime-image-rules.js";
-import { generationModels } from "./models.js";
 
 /** Sandbox choices for a generation run. "managed" runs in SelfBench's own E2B account. */
 const generationSandboxes = ["managed", ...HOSTED_EXECUTION_BACKENDS] as const;
@@ -39,8 +40,9 @@ export function generationHarborEnvironment(
 
 export const generationSettingsSchema = z
   .object({
-    authorModel: z.enum(generationModels),
-    verifierModel: z.enum(generationModels),
+    /** Catalog ids; the catalog changes with the gateways, so submission checks they exist. */
+    authorModel: z.string().regex(modelIdPattern),
+    verifierModel: z.string().regex(modelIdPattern),
     reasoning: z.enum(["low", "medium", "high"]),
     /**
      * "managed" routes model calls through OpenRouter behind a platform key the server
@@ -110,12 +112,49 @@ export const generationSettingsSchema = z
   });
 export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 
+const rate = z.number().nonnegative();
+/** $ per million tokens. */
+const modelRatesSchema = z
+  .object({ input: rate, output: rate, cacheRead: rate, cacheWrite: rate })
+  .strict();
+export type GenerationModelRates = z.infer<typeof modelRatesSchema>;
+
+/**
+ * Pi's models.json for a gateway model, as JSON: the whole entry for a Pi whose catalog lacks the
+ * model, and only its thinking overrides for one that lists it.
+ */
+export const piModelsSchema = z
+  .object({ models: z.string().min(1), overrides: z.string().min(1).optional() })
+  .strict();
+export type PiModelsFiles = z.infer<typeof piModelsSchema>;
+
+/**
+ * One stage's model as submission resolved it. The gateways can drop a model while a run is
+ * underway, so the run keeps what it was accepted with: the Pi provider and model id, Pi's
+ * models.json from the gateway's listing, and OpenRouter's rates, which billing falls back to
+ * when the model no longer has live ones.
+ */
+const generationRouteSchema = z
+  .object({
+    provider: z.enum(["openai", "openai-codex", "anthropic", ...gatewayIds]),
+    model: z.string().min(1),
+    piModels: piModelsSchema.optional(),
+    rates: modelRatesSchema.optional(),
+  })
+  .strict();
+export type GenerationRoute = z.infer<typeof generationRouteSchema>;
+
 export const generationReferenceSchema = z
   .object({
     ownerId: z.number().int().positive(),
     orgId: z.number().int().positive().optional(),
     repoId: z.number().int().positive(),
     settings: generationSettingsSchema,
+    /** Absent on runs submitted before routes were resolved at submission. */
+    routes: z
+      .object({ author: generationRouteSchema, verifier: generationRouteSchema })
+      .strict()
+      .optional(),
   })
   .strict();
 export type GenerationReference = z.infer<typeof generationReferenceSchema>;

@@ -9,9 +9,9 @@ import {
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
+import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
-import { ModelPicker } from "./ModelPicker";
 import { nextModelSelection } from "./model-selection";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";

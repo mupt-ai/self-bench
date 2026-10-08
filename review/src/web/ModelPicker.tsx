@@ -1,22 +1,40 @@
 import { Check, ChevronDown } from "lucide-react";
 import React from "react";
-import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import { cn } from "../primitives/cn";
-import { controlStyles, SearchInput } from "../ui";
-import { matchingModels } from "./model-selection";
+import { cn } from "./primitives/cn";
+import { controlStyles, SearchInput } from "./ui";
+import { matchesQuery } from "./word-search";
+
+/** What the picker needs of a model. */
+interface PickableModel {
+  id: string;
+  label: string;
+}
+
+/** The models whose name or id has a word starting with each word of `query`, in list order. */
+export function matchingModels<Model extends PickableModel>(
+  models: Model[],
+  query: string,
+): Model[] {
+  return models.filter((model) => matchesQuery(`${model.label} ${model.id}`, query));
+}
 
 /**
- * A model select with its search inside the list: the trigger looks like the row's other selects,
- * and opening it focuses a search box above the models.
+ * The one model select, shared by the run page and generation settings, with its search inside
+ * the list: the trigger looks like the form's other selects, and opening it focuses a search box
+ * above the models.
  */
-export function ModelPicker({
+export function ModelPicker<Model extends PickableModel>({
   models,
   value,
   onSelect,
+  id,
+  label = "Model",
 }: {
-  models: CatalogModel[];
+  models: Model[];
   value: string;
-  onSelect(model: CatalogModel): void;
+  onSelect(model: Model): void;
+  id?: string;
+  label?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -32,7 +50,7 @@ export function ModelPicker({
     setOpen(false);
     setQuery("");
   }, []);
-  const choose = (model: CatalogModel | undefined) => {
+  const choose = (model: Model | undefined) => {
     if (!model) return;
     close();
     trigger.current?.focus();
@@ -59,7 +77,8 @@ export function ModelPicker({
       <button
         type="button"
         ref={trigger}
-        aria-label="Model"
+        id={id}
+        aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(controlStyles, "flex items-center justify-between gap-2 text-left text-sm")}
@@ -82,7 +101,7 @@ export function ModelPicker({
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
       {open && (
-        <div className="panel absolute top-[calc(100%+4px)] left-0 z-30 w-full min-w-72 bg-background p-1">
+        <div className="panel absolute top-[calc(100%+4px)] left-0 z-30 w-full min-w-72 bg-background p-1 font-normal">
           <SearchInput
             autoFocus
             role="combobox"
