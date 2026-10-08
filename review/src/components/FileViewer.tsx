@@ -180,7 +180,7 @@ function FullScreen({
           <Minimize2 aria-hidden="true" className="size-4" />
         </button>
       </div>
-      <div className="overflow-auto px-6 pt-4 pb-4 [&_pre]:p-0">{children}</div>
+      <div className="overflow-auto px-6 py-4 [&_pre]:p-0">{children}</div>
       {footer}
     </dialog>
   );
