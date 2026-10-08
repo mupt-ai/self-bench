@@ -13,9 +13,13 @@ import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
   GENERATION_REQUIRED,
+  generationRoutes,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
-import { generationSettingsSchema } from "../../generation/settings/settings.js";
+import {
+  type GenerationReference,
+  generationSettingsSchema,
+} from "../../generation/settings/settings.js";
 import {
   startTaskFromPullRequest,
   taskRunId,
@@ -117,7 +121,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         });
         return true;
       }
-      const generation = parsed?.success
+      const generation: GenerationReference | undefined = parsed?.success
         ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
         : undefined;
       if (!generation && options.vault) {
@@ -135,6 +139,11 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             tenant.id,
             generation.settings,
             managedOffer(),
+          );
+          generation.routes = await generationRoutes(
+            options.vault.credentials,
+            tenant.id,
+            generation.settings,
           );
         } catch (error) {
           sendJson(response, 400, {

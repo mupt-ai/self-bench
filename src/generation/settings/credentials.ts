@@ -28,9 +28,10 @@ import {
   generationCredentialRuns,
   generationModel,
   generationModelRoute,
+  managedModelPricing,
   managedRuns,
 } from "./models.js";
-import type { GenerationReference, GenerationSettings } from "./settings.js";
+import type { GenerationReference, GenerationRoute, GenerationSettings } from "./settings.js";
 
 type ProviderCredential =
   | { role: "sandbox"; id: string | undefined; kind: HostedExecutionBackend }
@@ -118,26 +119,27 @@ export function generationRuntimeOwner(
       };
 }
 
-/** Validates the selected credentials; managed selections only require the offered flag. */
+/**
+ * Validates the selected credentials; managed selections only require the offered flag. Which
+ * models those credentials run is settled at submission (generationRoutes), so a run in progress
+ * never depends on the gateways still listing its models.
+ */
 export async function checkGenerationCredentials(
   credentials: CredentialStore,
   orgId: number,
   settings: GenerationSettings,
   offer: ManagedOffer,
 ) {
-  const models = [settings.authorModel, settings.verifierModel].map((id) => {
-    const model = generationModel(id);
-    if (!model) throw new Error(`${id} is not an available model.`);
-    return model;
-  });
   if (settings.modelAccess === "managed") {
     if (!offer.models) throw new Error("Managed models are not available on this deployment.");
-    for (const model of models)
-      if (!managedRuns(model))
-        throw new Error(`${model.label} is not available with managed models.`);
   } else {
-    const credential = await credentials.find(orgId, settings.modelCredentialId ?? "");
-    if (!credential || !models.every((model) => generationCredentialRuns(model, credential)))
+    const model = await credentials.find(orgId, settings.modelCredentialId ?? "");
+    const usable =
+      model &&
+      (model.kind === "openai"
+        ? ["api-key", "codex-login"].includes(model.auth)
+        : model.kind !== "custom" && model.auth === "api-key");
+    if (!usable)
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",
       );
@@ -151,13 +153,51 @@ export async function checkGenerationCredentials(
   }
 }
 
+/**
+ * Resolves both stages' models against the live catalog at submission, refusing a model it no
+ * longer offers or the run's model access cannot run. The run keeps the result (its `routes`).
+ */
+export async function generationRoutes(
+  credentials: CredentialStore,
+  orgId: number,
+  settings: GenerationSettings,
+): Promise<NonNullable<GenerationReference["routes"]>> {
+  const credential =
+    settings.modelAccess === "managed"
+      ? undefined
+      : await credentials.find(orgId, settings.modelCredentialId ?? "");
+  if (settings.modelAccess !== "managed" && !credential)
+    throw new Error("Model credential is unavailable.");
+  const route = (id: string): GenerationRoute => {
+    const model = generationModel(id);
+    if (!model) throw new Error(`${id} is not an available model.`);
+    if (!credential && !managedRuns(model))
+      throw new Error(`${model.label} is not available with managed models.`);
+    if (credential && !generationCredentialRuns(model, credential))
+      throw new Error(
+        "Choose a model credential that can run both the author and verifier models.",
+      );
+    const pricing = managedModelPricing(id);
+    if (!pricing) return generationModelRoute(id, credential);
+    const { input, output, cacheRead, cacheWrite } = pricing;
+    return {
+      ...generationModelRoute(id, credential),
+      rates: { input, output, cacheRead, cacheWrite },
+    };
+  };
+  return { author: route(settings.authorModel), verifier: route(settings.verifierModel) };
+}
+
 /** The Pi provider and provider-specific model id one stage's model invocation uses. */
 export async function stageAuthoring(
   credentials: CredentialStore,
   reference: GenerationReference,
   stage: "author" | "verifier",
-): Promise<{ provider: string; model: string; reasoningEffort: string }> {
+): Promise<GenerationRoute & { reasoningEffort: string }> {
   const settings = reference.settings;
+  const resolved = reference.routes?.[stage];
+  if (resolved) return { ...resolved, reasoningEffort: settings.reasoning };
+  // Runs submitted before routes were frozen resolve against the live catalog.
   const model = stage === "verifier" ? settings.verifierModel : settings.authorModel;
   const credential =
     settings.modelAccess === "managed"

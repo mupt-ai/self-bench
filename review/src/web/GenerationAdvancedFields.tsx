@@ -120,9 +120,10 @@ export function AdvancedFields({
               }
             >
               <option value="">Choose a Credential</option>
-              {value.modelCredentialId && !options?.credentials.some(compatible) && (
-                <option value={value.modelCredentialId}>Unavailable Credential</option>
-              )}
+              {value.modelCredentialId &&
+                !options?.credentials.some(
+                  (item) => item.id === value.modelCredentialId && compatible(item),
+                ) && <option value={value.modelCredentialId}>Unavailable Credential</option>}
               {options?.credentials.filter(compatible).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}

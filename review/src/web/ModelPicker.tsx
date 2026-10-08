@@ -4,7 +4,7 @@ import { cn } from "./primitives/cn";
 import { controlStyles, SearchInput } from "./ui";
 import { matchesQuery } from "./word-search";
 
-/** What the picker needs of a model: the run page passes catalog models, generation its own. */
+/** What the picker needs of a model. */
 interface PickableModel {
   id: string;
   label: string;

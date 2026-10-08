@@ -50,7 +50,7 @@ export async function withGenerationRuntime<T>(
     );
   }
   const settings = run.generation.settings;
-  let authoring: { provider: string; model: string; reasoningEffort: string };
+  let authoring: Awaited<ReturnType<typeof stageAuthoring>>;
   try {
     authoring = await stageAuthoring(vault.credentials, run.generation, stage);
   } catch (error) {
@@ -123,6 +123,7 @@ export async function withGenerationRuntime<T>(
     managedModel: settings.modelAccess === "managed",
     managedSandbox: settings.sandbox === "managed",
     model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
+    ...(authoring.rates ? { rates: authoring.rates } : {}),
     sandboxProvider: selected.execution.kind,
     provider: authoring.provider,
   });

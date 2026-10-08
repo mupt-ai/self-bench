@@ -68,8 +68,12 @@ export function withDefaultCredentials(
     modelAccess: managedModels ? value.modelAccess : "credential",
     sandbox: managedSandbox || options.sandboxes.includes(value.sandbox) ? value.sandbox : "modal",
   };
+  const models = chosenModels(next, options.models);
+  // A stored credential that cannot run the chosen models gives way to one that can.
+  const current = options.credentials.find((item) => item.id === next.modelCredentialId);
+  if (current && !modelCredentialMatches(current, models))
+    next = { ...next, modelCredentialId: undefined };
   if (next.modelAccess === "credential" && !next.modelCredentialId) {
-    const models = chosenModels(next, options.models);
     const compatible = options.credentials.filter((item) => modelCredentialMatches(item, models));
     next = {
       ...next,

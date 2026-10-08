@@ -1,6 +1,6 @@
 import type { BillingModelRates } from "../../db/schema.js";
 import { sha256 } from "../../lib/hash.js";
-import { generationModelPricing } from "../settings/models.js";
+import type { GenerationModelRates } from "../settings/settings.js";
 import type { BillingPolicy } from "./config.js";
 import { E2B_GIB_USD_PER_SECOND, E2B_VCPU_USD_PER_SECOND } from "./pricing.js";
 import type { TokenUsage } from "./usage.js";
@@ -22,22 +22,21 @@ function usdToUnits(usd: number, unitScale: number, markupBps: number): number {
 }
 
 /**
- * Integer rates frozen from the current policy and published catalog/E2B figures, for the
- * `models` being billed: the catalog follows the gateways, so it has no fixed list to freeze.
+ * Integer rates frozen from the current policy and published catalog/E2B figures, for the models
+ * being billed at the given $/M-token `rates`: the catalog follows the gateways, so it has no
+ * fixed list to freeze.
  */
 export function rateSnapshotSpec(
   policy: BillingPolicy,
-  models: readonly string[],
+  rates: Readonly<Record<string, GenerationModelRates>>,
 ): RateSnapshotSpec {
   const modelRates: Record<string, BillingModelRates> = {};
-  for (const model of models) {
-    const rates = generationModelPricing(model);
-    if (!rates) continue;
+  for (const [model, usd] of Object.entries(rates)) {
     modelRates[model] = {
-      input: usdToUnits(rates.input, policy.unitScale, policy.markupBps),
-      output: usdToUnits(rates.output, policy.unitScale, policy.markupBps),
-      cacheRead: usdToUnits(rates.cacheRead, policy.unitScale, policy.markupBps),
-      cacheWrite: usdToUnits(rates.cacheWrite, policy.unitScale, policy.markupBps),
+      input: usdToUnits(usd.input, policy.unitScale, policy.markupBps),
+      output: usdToUnits(usd.output, policy.unitScale, policy.markupBps),
+      cacheRead: usdToUnits(usd.cacheRead, policy.unitScale, policy.markupBps),
+      cacheWrite: usdToUnits(usd.cacheWrite, policy.unitScale, policy.markupBps),
     };
   }
   const spec: RateSnapshotSpec = {

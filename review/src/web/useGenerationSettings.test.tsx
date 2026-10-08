@@ -105,6 +105,18 @@ test("generation defaults select compatible credentials and remember choices wit
     expect(current.settings.sandboxCredentialId).toBe(id(4));
     expect(current.settings.harborEnvironment).toBe("modal");
     expect(current.settings.harborCredentialId).toBe(id(4));
+    // Choosing models the selected credential cannot run moves to one that can.
+    const openAi = current.settings;
+    await act(async () =>
+      current.setSettings({
+        ...openAi,
+        authorModel: "claude-opus-5-5",
+        verifierModel: "claude-opus-5-5",
+      }),
+    );
+    expect(current.settings.modelCredentialId).toBe(id(2));
+    await act(async () => current.setSettings(openAi));
+    expect(current.settings.modelCredentialId).toBe(id(3));
     const chosen: typeof current.settings = {
       ...current.settings,
       authorModel: "gpt-6-astra",
