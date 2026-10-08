@@ -7,7 +7,6 @@ import {
   fileSize,
   isSnapshot,
   laidOut,
-  shownText,
   snapshotCommand,
   type TaskFile,
 } from "../task-files";
@@ -49,24 +48,17 @@ export function FileButton({
   );
 }
 
-/**
- * The chosen file: named in a bar above it, and the task's canary in a matching bar below, so
- * every file shown has it beside it: the patches and JSON, which do not carry it, and the
- * instruction, shown without the copy it opens with. The canary keeps to one line; its full
- * text is still in the page.
- */
+/** The chosen file, named in a bar above it. */
 export function FilePane({
   file,
   files,
   repository,
   taskId,
-  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
-  canary?: string | undefined;
 }) {
   return (
     <>
@@ -75,22 +67,8 @@ export function FilePane({
         <span className="shrink-0 text-muted-foreground">{fileSize(file.sizeBytes)}</span>
       </p>
       <div className="min-h-0 flex-1 overflow-auto">
-        <FileView
-          file={file}
-          files={files}
-          repository={repository}
-          taskId={taskId}
-          canary={canary}
-        />
+        <FileView file={file} files={files} repository={repository} taskId={taskId} />
       </div>
-      {canary && (
-        <p
-          title={canary}
-          className="shrink-0 truncate border-t border-border px-4 py-1.5 font-mono text-[11px] text-(--faint)"
-        >
-          {canary}
-        </p>
-      )}
     </>
   );
 }
@@ -101,13 +79,11 @@ function FileView({
   files,
   repository,
   taskId,
-  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
-  canary: string | undefined;
 }) {
   const kind = fileKind(file);
   if (kind === "none") {
@@ -127,7 +103,7 @@ function FileView({
       </p>
     );
   }
-  const text = kind === "json" ? laidOut(file.text ?? "") : shownText(file, canary);
+  const text = kind === "json" ? laidOut(file.text ?? "") : (file.text ?? "");
   const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
   return (
     <pre

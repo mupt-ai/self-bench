@@ -26,19 +26,6 @@ export function fileKind(file: TaskFile): "diff" | "json" | "text" | "none" {
   return "text";
 }
 
-/**
- * A file's text as the viewer shows it. The instruction opens with the canary in the download
- * (the server's `withCanary`), and is shown without it, as Harbor gives it to an agent; the bar
- * below every file shows the canary instead. Every other file is shown as it is downloaded.
- */
-export function shownText(file: TaskFile, canary: string | undefined): string {
-  const text = file.text ?? "";
-  const opening = `<!-- ${canary} -->\n\n`;
-  return canary && file.path === "instruction.md" && text.startsWith(opening)
-    ? text.slice(opening.length)
-    : text;
-}
-
 /** JSON with two-space indents, or the text as it is when it does not parse. */
 export function laidOut(text: string): string {
   try {

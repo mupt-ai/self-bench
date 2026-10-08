@@ -132,11 +132,6 @@ variable "posthog_api_key" {
   type        = string
   default     = null
 }
-variable "task_canary" {
-  description = "Stamp the tasks selfbench.dev publishes with SelfBench's canary GUID, read from the selfbench-task-canary secret. Add the secret's value (a GUID) before turning this on."
-  type        = bool
-  default     = false
-}
 variable "activity_concurrency" {
   description = "Temporal activity slots per worker instance."
   type        = number

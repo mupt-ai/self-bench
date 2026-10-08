@@ -203,15 +203,7 @@ export default function TaskViewer({
             )}
           </nav>
           <section aria-label={file?.path ?? "File"} className="flex min-h-0 min-w-0 flex-col">
-            {file && (
-              <FilePane
-                file={file}
-                files={files}
-                repository={repository}
-                taskId={taskId}
-                canary={current?.files?.canary}
-              />
-            )}
+            {file && <FilePane file={file} files={files} repository={repository} taskId={taskId} />}
           </section>
         </div>
       )}
