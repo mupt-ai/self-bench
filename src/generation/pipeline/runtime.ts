@@ -3,8 +3,11 @@ import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
+import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { withCredentialCapacity } from "../../sandbox/capacity-wait.js";
+import { capacityLimitedSandbox, credentialCapacity } from "../../sandbox/credential-capacity.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { stampedManagedHarbor } from "../billing/managed.js";
@@ -31,6 +34,7 @@ export async function withGenerationRuntime<T>(
     configuredRun: RunRequest,
   ) => Promise<T>,
   usage?: UsageLedger,
+  harborWork = false,
 ) {
   if (!run.generation) return action(legacySandbox, config.harborEnvironment, run);
   let env: NodeJS.ProcessEnv;
@@ -119,13 +123,26 @@ export async function withGenerationRuntime<T>(
       reasoningEffort: authoring.reasoningEffort as RunRequest["authoring"]["reasoningEffort"],
     },
   };
-  const metered = meteredSandboxExecutor(createSandboxExecutor(execution, env), {
-    managedModel: settings.modelAccess === "managed",
-    managedSandbox: settings.sandbox === "managed",
-    model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
-    sandboxProvider: selected.execution.kind,
-    provider: authoring.provider,
-  });
+  const orgId = generation.orgId ?? generation.ownerId;
+  const capacityFor = async (id: string | undefined) => {
+    if (!id) return undefined;
+    const credential = await vault.credentials.find(orgId, id);
+    return credential?.maxSandboxes
+      ? credentialCapacity(orgRecords(vault.records, orgId), id, credential.maxSandboxes)
+      : undefined;
+  };
+  const capacity = await capacityFor(settings.sandboxCredentialId);
+  const sandbox = createSandboxExecutor(execution, env);
+  const metered = meteredSandboxExecutor(
+    capacity ? capacityLimitedSandbox(sandbox, capacity) : sandbox,
+    {
+      managedModel: settings.modelAccess === "managed",
+      managedSandbox: settings.sandbox === "managed",
+      model: stage === "verifier" ? settings.verifierModel : settings.authorModel,
+      sandboxProvider: selected.execution.kind,
+      provider: authoring.provider,
+    },
+  );
   return withExecutionEnvironment(env, async () =>
     withUsageLedger(
       async (entry) =>
@@ -136,7 +153,19 @@ export async function withGenerationRuntime<T>(
         }),
       async () => {
         try {
-          return await action(metered, selected.harborEnvironment, configuredRun);
+          if (!harborWork) return await action(metered, selected.harborEnvironment, configuredRun);
+          const harborCapacity = await capacityFor(settings.harborCredentialId);
+          if (!harborCapacity)
+            return await action(metered, selected.harborEnvironment, configuredRun);
+          // Harbor creates its own sandboxes outside the JS executor. Hold one shared slot for
+          // the entire check (nop and oracle run sequentially), including build and teardown.
+          return await withCredentialCapacity(
+            harborCapacity,
+            72 * 60 * 60_000,
+            Context.current().cancellationSignal,
+            () => safeHeartbeat("Waiting for credential sandbox capacity"),
+            () => action(metered, selected.harborEnvironment, configuredRun),
+          );
         } finally {
           metered.close();
         }

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { executionEnvironment } from "../src/contracts/config/execution-environment.js";
 import { loadWorkerConfig } from "../src/contracts/config/index.js";
 import type { RunRequest } from "../src/contracts/index.js";
@@ -6,8 +6,10 @@ import { withGenerationRuntime } from "../src/generation/pipeline/runtime.js";
 import { generationEnvironment } from "../src/generation/settings/credentials.js";
 import { generationSettingsSchema } from "../src/generation/settings/settings.js";
 import { loadPiModelAuth } from "../src/harnesses/pi/model-auth.js";
+import { SandboxCapacityError, type StartedSandbox } from "../src/sandbox/contracts.js";
 import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { providerEnvironment } from "../src/sandbox/provider-environment.js";
+import { E2BSandboxExecutor } from "../src/sandbox/providers/e2b/executor.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
 import { codexAuth } from "./support/codex-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
@@ -130,6 +132,41 @@ test.each(["batch", "pr"] as const)(
       expect(providerEnvironment(env, "e2b").E2B_API_KEY).toBe("harbor-e2b-secret");
       process.env.SELFBENCH_E2B_TEMPLATE = "changed-host-template";
       const config = loadWorkerConfig({});
+      await vault.credentials.limit(ownerId, e2b.id, 1);
+      const start = spyOn(E2BSandboxExecutor.prototype, "start").mockImplementation(async () => ({
+        sandboxId: "provider-sandbox",
+        stage: "author",
+        startedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      }));
+      const stop = spyOn(E2BSandboxExecutor.prototype, "stop").mockResolvedValue(undefined);
+      let started: StartedSandbox;
+      const invoke = <T>(
+        action: (sandbox: ReturnType<typeof createSandboxExecutor>) => Promise<T>,
+      ) =>
+        withGenerationRuntime(
+          config,
+          vault,
+          run,
+          "author",
+          createSandboxExecutor(config.execution),
+          action,
+        );
+      const request = { runId: run.runId, stage: "author", command: ["true"], timeoutMs: 60_000 };
+      try {
+        started = await invoke((sandbox) => sandbox.start(request));
+        await expect(invoke((sandbox) => sandbox.start(request))).rejects.toBeInstanceOf(
+          SandboxCapacityError,
+        );
+        expect(start).toHaveBeenCalledTimes(1);
+        await invoke((sandbox) => sandbox.stop(started));
+        await invoke((sandbox) => sandbox.start(request));
+        expect(start).toHaveBeenCalledTimes(2);
+      } finally {
+        start.mockRestore();
+        stop.mockRestore();
+      }
+      await vault.credentials.limit(ownerId, e2b.id, undefined);
       for (const stage of ["author", "verifier"] as const) {
         await withGenerationRuntime(
           config,

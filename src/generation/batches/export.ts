@@ -1,7 +1,11 @@
+import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { loadWorkerConfig } from "../../contracts/config/index.js";
+import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { withCredentialCapacity } from "../../sandbox/capacity-wait.js";
+import { credentialCapacity } from "../../sandbox/credential-capacity.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { withTaskSandbox } from "../../sandbox/task-context.js";
@@ -39,6 +43,13 @@ export async function exportBatch(
     return generationRuntimeOwner(generation, vault.records);
   });
   const inner = createSandboxExecutor(config.execution, env);
+  const orgId = generation && (generation.orgId ?? generation.ownerId);
+  const id = generation?.settings.sandboxCredentialId;
+  const credential = vault && orgId && id ? await vault.credentials.find(orgId, id) : undefined;
+  const capacity =
+    vault && orgId && id && credential?.maxSandboxes
+      ? credentialCapacity(orgRecords(vault.records, orgId), id, credential.maxSandboxes)
+      : undefined;
   const executor =
     generation && usage
       ? meteredSandboxExecutor(inner, {
@@ -49,6 +60,8 @@ export async function exportBatch(
         })
       : inner;
   try {
+    // Reserve once around the synchronous export rather than retrying a full export when
+    // another batch is using this account. No detached sandbox survives this operation.
     const runExport = () =>
       withTaskSandbox(executor, () =>
         buildExport(
@@ -62,7 +75,17 @@ export async function exportBatch(
           `application-${crypto.randomUUID()}`,
         ),
       );
-    if (!generation || !usage) return await runExport();
+    const limitedExport = () =>
+      capacity
+        ? withCredentialCapacity(
+            capacity,
+            32 * 60_000,
+            Context.current().cancellationSignal,
+            () => Context.current().heartbeat(),
+            runExport,
+          )
+        : runExport();
+    if (!generation || !usage) return await limitedExport();
     return await withUsageLedger(
       async (entry) =>
         usage.record({
@@ -70,7 +93,7 @@ export async function exportBatch(
           runId: batch.run.runId,
           orgId: generation.orgId ?? generation.ownerId,
         }),
-      runExport,
+      limitedExport,
     );
   } finally {
     executor.close();

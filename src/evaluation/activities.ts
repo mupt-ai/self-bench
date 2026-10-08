@@ -1,7 +1,10 @@
 import { Context, type Info } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { orgRecords } from "../db/encrypted-records.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
+import { withCredentialCapacity } from "../sandbox/capacity-wait.js";
+import { credentialCapacity } from "../sandbox/credential-capacity.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
@@ -43,13 +46,34 @@ export function createEvaluationActivities(
       clearInterval(timer);
     }
   };
+  const limited = async <T>(
+    input: EvaluationInput,
+    options: RunnerOptions,
+    run: () => Promise<T>,
+  ) => {
+    const orgId = input.credentialOrgId ?? input.credentialOwnerId;
+    const id = input.credentials?.sandboxCredentialId;
+    const credential = vault && orgId && id ? await vault.credentials.find(orgId, id) : undefined;
+    if (!vault || !orgId || !id || !credential?.maxSandboxes) return run();
+    return withCredentialCapacity(
+      credentialCapacity(orgRecords(vault.records, orgId), id, credential.maxSandboxes),
+      72 * 60 * 60_000,
+      Context.current().cancellationSignal,
+      () => options.heartbeat?.(),
+      run,
+    );
+  };
   return {
     startSolverEvaluation: (input) => startEvaluation(store, input),
     prepareTaskImages: (input) =>
-      heartbeating((options) => prepareTaskImages(store, input, options)),
+      heartbeating((options) =>
+        limited(input, options, () => prepareTaskImages(store, input, options)),
+      ),
     runSolverTrial: (input, index) =>
       heartbeating((options) =>
-        executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
+        limited(input, options, () =>
+          executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
+        ),
       ),
     failSolverTrial: (input, index) => failTrial(store, input, index),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),
