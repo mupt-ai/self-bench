@@ -85,7 +85,8 @@ export function createActivities(
     run: AuthoringTurnInput["run"],
     stage: "author" | "verifier",
     action: Parameters<typeof withGenerationRuntime<T>>[5],
-  ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage);
+    harborWork = false,
+  ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage, harborWork);
   return {
     startDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>
@@ -110,8 +111,11 @@ export function createActivities(
     finishCompile: (input) =>
       runtime(input.run, "author", (sandbox) => finishCompile(sandbox, input)),
     verifyCompiled: (input) =>
-      runtime(input.run, "author", (_sandbox, harbor, run) =>
-        verifyCompiled(store, harbor, { ...input, run }, callback),
+      runtime(
+        input.run,
+        "author",
+        (_sandbox, harbor, run) => verifyCompiled(store, harbor, { ...input, run }, callback),
+        true,
       ),
     startReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>
@@ -122,8 +126,12 @@ export function createActivities(
         finishReviewRound(store, sandbox, { ...input, run }),
       ),
     exportTaskImages: (input) =>
-      runtime(input.run, "author", (_sandbox, harbor) =>
-        exportAcceptedTask(store, harbor, input.task, config.taskImages?.repository),
+      runtime(
+        input.run,
+        "author",
+        (_sandbox, harbor) =>
+          exportAcceptedTask(store, harbor, input.task, config.taskImages?.repository),
+        true,
       ),
   };
 }

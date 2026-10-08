@@ -11,6 +11,7 @@ import type {
   CandidateWorkflowResult,
   DiscoveryResult,
 } from "../../contracts/index.js";
+import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
 import {
   rootMessage,
@@ -67,7 +68,7 @@ export async function selfBenchBatchWorkflow(runId: string): Promise<void> {
         recordBatchShard: keep(records.recordBatchShard),
         planBatch: records.planBatch,
         recordBatchCandidate: keep(records.recordBatchCandidate),
-        exportBatch: exporting.exportBatch,
+        exportBatch: (id) => whenSandboxFree(() => exporting.exportBatch(id)),
       },
       {
         shard: (workflowId, input) =>

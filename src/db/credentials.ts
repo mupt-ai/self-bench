@@ -21,7 +21,7 @@ export const credentialAuths = ["api-key", "codex-login", "claude-login"] as con
 const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
 /**
  * How many sandboxes a sandbox credential's account runs at once (its plan's limit, or less to
- * leave room for other work). Evaluations on the credential run at most this many trials at once.
+ * leave room for other work). Generation and evaluations share this credential's sandbox slots.
  */
 export const maxSandboxesSchema = z.number().int().min(1).max(1000);
 
@@ -197,7 +197,7 @@ export function createCredentialStore(db: Database, key: string) {
       if (!saved) throw new RecordStoreError(409, "Credential ID already used");
       return saved;
     },
-    /** Sets or clears a sandbox credential's limit; runs already started keep theirs. */
+    /** Sets or clears admission for new work; sandboxes already started are not stopped. */
     async limit(orgId: number, id: string, maxSandboxes: number | undefined): Promise<void> {
       const credential = await find(orgId, id);
       if (!credential) throw new Error("Credential not found");
