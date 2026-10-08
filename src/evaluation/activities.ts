@@ -46,11 +46,7 @@ export function createEvaluationActivities(
       clearInterval(timer);
     }
   };
-  const limited = async <T>(
-    input: EvaluationInput,
-    options: RunnerOptions,
-    run: () => Promise<T>,
-  ) => {
+  const limited = async <T>(input: EvaluationInput, run: () => Promise<T>) => {
     const orgId = input.credentialOrgId ?? input.credentialOwnerId;
     const id = input.credentials?.sandboxCredentialId;
     const credential = vault && orgId && id ? await vault.credentials.find(orgId, id) : undefined;
@@ -58,20 +54,16 @@ export function createEvaluationActivities(
     return withCredentialCapacity(
       credentialCapacity(orgRecords(vault.records, orgId), id, credential.maxSandboxes),
       72 * 60 * 60_000,
-      Context.current().cancellationSignal,
-      () => options.heartbeat?.(),
       run,
     );
   };
   return {
     startSolverEvaluation: (input) => startEvaluation(store, input),
     prepareTaskImages: (input) =>
-      heartbeating((options) =>
-        limited(input, options, () => prepareTaskImages(store, input, options)),
-      ),
+      heartbeating((options) => limited(input, () => prepareTaskImages(store, input, options))),
     runSolverTrial: (input, index) =>
       heartbeating((options) =>
-        limited(input, options, () =>
+        limited(input, () =>
           executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
         ),
       ),

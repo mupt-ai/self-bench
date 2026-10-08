@@ -1,4 +1,3 @@
-import { Context } from "@temporalio/activity";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { loadWorkerConfig } from "../../contracts/config/index.js";
 import { orgRecords } from "../../db/encrypted-records.js";
@@ -76,15 +75,7 @@ export async function exportBatch(
         ),
       );
     const limitedExport = () =>
-      capacity
-        ? withCredentialCapacity(
-            capacity,
-            32 * 60_000,
-            Context.current().cancellationSignal,
-            () => Context.current().heartbeat(),
-            runExport,
-          )
-        : runExport();
+      capacity ? withCredentialCapacity(capacity, 72 * 60 * 60_000, runExport) : runExport();
     if (!generation || !usage) return await limitedExport();
     return await withUsageLedger(
       async (entry) =>

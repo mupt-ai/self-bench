@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { ApplicationFailure } from "@temporalio/common";
 import { orgRecords } from "../../src/db/encrypted-records.js";
 import { readSandboxGrant, signSandboxGrant } from "../../src/sandbox/callback-grant.js";
 import { withCredentialCapacity } from "../../src/sandbox/capacity-wait.js";
@@ -80,32 +81,23 @@ test("credential reservations recover expiration, isolate organizations, and sha
   await capacity.release(lease);
   await capacity.acquire(-1); // expired worker reservation
   let entered = false;
-  const controller = new AbortController();
-  const harbor = withCredentialCapacity(
-    capacity,
-    60_000,
-    controller.signal,
-    () => {},
-    async () => {
-      entered = true;
-      await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
-      throw new Error("Harbor failed");
-    },
-  );
+  const harbor = withCredentialCapacity(capacity, 60_000, async () => {
+    entered = true;
+    await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
+    throw new Error("Harbor failed");
+  });
   await expect(harbor).rejects.toThrow("Harbor failed");
   expect(entered).toBe(true);
   await capacity.acquire(60_000); // failed Harbor action released its slot
   entered = false;
-  const waiting = withCredentialCapacity(
-    capacity,
-    60_000,
-    controller.signal,
-    () => controller.abort(new Error("cancelled")),
-    async () => {
-      entered = true;
-    },
-  );
-  await expect(waiting).rejects.toThrow("cancelled");
+  const waiting = withCredentialCapacity(capacity, 60_000, async () => {
+    entered = true;
+  });
+  await expect(waiting).rejects.toMatchObject({
+    type: SandboxCapacityError.type,
+    nonRetryable: true,
+  });
+  await expect(waiting).rejects.toBeInstanceOf(ApplicationFailure);
   expect(entered).toBe(false);
   await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
 });

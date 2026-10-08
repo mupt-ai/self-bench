@@ -91,8 +91,7 @@ test("batch settings reach discovery and candidate runtimes with saved organizat
       run,
       stage,
       legacy,
-      async (sandbox, environment, configured) => {
-        expect(sandbox.constructor.name).toBe("ModalSandboxExecutor");
+      async (_sandbox, environment, configured) => {
         expect(environment).toBe("modal");
         expect(configured.authoring.model).toBe(stage === "author" ? "gpt-6-astra" : "gpt-6-sol");
         expect(configured.authoring.reasoningEffort).toBe("low");

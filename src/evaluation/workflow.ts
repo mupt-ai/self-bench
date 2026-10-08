@@ -11,6 +11,7 @@ import {
 } from "@temporalio/workflow";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
+import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
@@ -56,7 +57,10 @@ export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Pr
   const { workflowId } = workflowInfo();
   // Evaluations started before images were prepared replay without it.
   const ready = patched("prepare-task-images")
-    ? taskImagesReady(input, prepare())
+    ? taskImagesReady(input, {
+        prepareTaskImages: (trialInput) =>
+          whenSandboxFree(() => prepare().prepareTaskImages(trialInput)),
+      })
     : async () => undefined;
   try {
     await runEvaluationTrials(
@@ -110,7 +114,15 @@ export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
   index: number,
 ): Promise<void> {
-  await runTrial(input, index, trial(input), records);
+  await runTrial(
+    input,
+    index,
+    {
+      runSolverTrial: (trialInput, trialIndex) =>
+        whenSandboxFree(() => trial(trialInput).runSolverTrial(trialInput, trialIndex)),
+    },
+    records,
+  );
 }
 
 /**

@@ -1,13 +1,10 @@
 import {
-  ActivityFailure,
   type ActivityOptions,
-  ApplicationFailure,
   defineQuery,
   isCancellation,
   patched,
   proxyActivities,
   setHandler,
-  sleep,
   workflowInfo,
 } from "@temporalio/workflow";
 import {
@@ -22,7 +19,7 @@ import {
   MAX_AUTHORING_ROUNDS,
   type TaskProgress,
 } from "../../contracts/index.js";
-import { SandboxCapacityError } from "../../sandbox/contracts.js";
+import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
@@ -74,26 +71,6 @@ const exporter = () =>
   });
 
 /**
- * Starts a sandbox, waiting while the provider account is at its concurrent-sandbox quota. A
- * waiting workflow holds no worker slot and spends no activity retry. Waits double from one
- * minute to eight, spreading many waiters' retries and keeping a long wait out of the history.
- */
-async function whenSandboxFree<T>(start: () => Promise<T>): Promise<T> {
-  for (let minutes = 1; ; minutes = Math.min(minutes * 2, 8)) {
-    try {
-      return await start();
-    } catch (error) {
-      const full =
-        error instanceof ActivityFailure &&
-        error.cause instanceof ApplicationFailure &&
-        error.cause.type === SandboxCapacityError.type;
-      if (!full) throw error;
-      await sleep(minutes * 60_000);
-    }
-  }
-}
-
-/**
  * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
  * reads what it reported; Harbor checks a compiled task on the memory-sized sibling queue.
  */
@@ -115,13 +92,13 @@ const workflowActivities: SelfBenchActivities = {
     }),
   // Workflows that accepted a task before exports existed replay without one.
   exportTaskImages: async (input) =>
-    patched("export-task-images") ? await exporter().exportTaskImages(input) : input.task,
+    patched("export-task-images")
+      ? await whenSandboxFree(() => exporter().exportTaskImages(input))
+      : input.task,
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
-    return await harbor().verifyCompiled({
-      ...input,
-      compiled: await finish.finishCompile({ ...input, compiled }),
-    });
+    const finished = await finish.finishCompile({ ...input, compiled });
+    return await whenSandboxFree(() => harbor().verifyCompiled({ ...input, compiled: finished }));
   },
 };
 

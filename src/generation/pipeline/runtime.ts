@@ -127,8 +127,12 @@ export async function withGenerationRuntime<T>(
   const capacityFor = async (id: string | undefined) => {
     if (!id) return undefined;
     const credential = await vault.credentials.find(orgId, id);
-    return credential?.maxSandboxes
-      ? credentialCapacity(orgRecords(vault.records, orgId), id, credential.maxSandboxes)
+    return credential
+      ? credentialCapacity(
+          orgRecords(vault.records, orgId),
+          id,
+          credential.maxSandboxes ?? Number.POSITIVE_INFINITY,
+        )
       : undefined;
   };
   const capacity = await capacityFor(settings.sandboxCredentialId);
@@ -159,12 +163,8 @@ export async function withGenerationRuntime<T>(
             return await action(metered, selected.harborEnvironment, configuredRun);
           // Harbor creates its own sandboxes outside the JS executor. Hold one shared slot for
           // the entire check (nop and oracle run sequentially), including build and teardown.
-          return await withCredentialCapacity(
-            harborCapacity,
-            72 * 60 * 60_000,
-            Context.current().cancellationSignal,
-            () => safeHeartbeat("Waiting for credential sandbox capacity"),
-            () => action(metered, selected.harborEnvironment, configuredRun),
+          return await withCredentialCapacity(harborCapacity, 72 * 60 * 60_000, () =>
+            action(metered, selected.harborEnvironment, configuredRun),
           );
         } finally {
           metered.close();
