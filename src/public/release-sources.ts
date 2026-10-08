@@ -1,13 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Database } from "../db/client.js";
 import { credentialAuths } from "../db/credentials.js";
-import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
-import { credentials } from "../db/schema.js";
+import { currentOf, headOf, type ReleaseLine, type ReleaseRow } from "../db/releases.js";
+import { credentials, repos } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
-import { listEvaluations } from "../evaluation/store.js";
+import { getEvaluation, listEvaluations } from "../evaluation/store.js";
+import type { EvaluationRun } from "../evaluation/types.js";
 import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
 import type { CredentialFacts } from "./release-results.js";
@@ -95,6 +96,20 @@ export async function releaseInputs(
     everReleased: new Set(rows.flatMap((row) => keys(row, "tasks"))),
     ...(head ? { headId: head.id } : {}),
     ...(current ? { currentId: current.id } : {}),
+  };
+}
+
+/**
+ * Reads a released trial's run from the line's connected repository, where its evaluations are
+ * kept. Undefined once the repository is disconnected or the run is gone: a release outlives both.
+ */
+export function releasedRuns(db: Database, artifacts: ArtifactStore) {
+  return async (line: ReleaseLine, evaluationId: string): Promise<EvaluationRun | undefined> => {
+    const [repo] = await db
+      .select({ id: repos.id })
+      .from(repos)
+      .where(and(eq(repos.orgId, line.orgId), eq(repos.githubId, line.githubRepoId)));
+    return repo ? getEvaluation(artifacts, repo.id, evaluationId) : undefined;
   };
 }
 

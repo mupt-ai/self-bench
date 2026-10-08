@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { ReleaseTask } from "../public/release-rule.js";
+import type { ReleasedResults } from "../public/release-trials.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
 import type { Database } from "./client.js";
 import { releases } from "./schema.js";
@@ -191,6 +192,29 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         .where(eq(releases.id, id));
       if (!row) return undefined;
       return Array.isArray(row.tasks) ? (row.tasks as ReleaseTask[]) : [];
+    },
+    /**
+     * Each setting's result on each task of a release (`detail.results`), with the line, whose
+     * repository holds the trials; undefined when there is no such row. Private: callers serve
+     * only what a release that published its trials allows.
+     */
+    async releasedResults(id: string): Promise<ReleasedResults | undefined> {
+      const [row] = await db
+        .select({
+          orgId: releases.orgId,
+          githubRepoId: releases.githubRepoId,
+          results: sql<unknown>`${releases.detail} -> 'results'`,
+        })
+        .from(releases)
+        .where(eq(releases.id, id));
+      if (!row) return undefined;
+      return {
+        line: { orgId: row.orgId, githubRepoId: row.githubRepoId },
+        results:
+          row.results && typeof row.results === "object"
+            ? (row.results as ReleasedResults["results"])
+            : {},
+      };
     },
     /** Every line's current release, newest first. */
     async currentLines(): Promise<PublishedLine[]> {

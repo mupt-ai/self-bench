@@ -26,7 +26,7 @@ export const difficultyLabel = (task: Pick<PublicTask, "difficulty">) =>
   task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1);
 
 /** Whether `element` is on screen or within `AHEAD` of it; true from then on. */
-function useNear(element: RefObject<HTMLElement | null>): boolean {
+export function useNear(element: RefObject<HTMLElement | null>): boolean {
   const [near, setNear] = useState(false);
   useEffect(() => {
     const target = element.current;

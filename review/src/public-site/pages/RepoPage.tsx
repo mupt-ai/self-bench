@@ -10,6 +10,7 @@ import {
   rememberResultsLayout,
 } from "../components/LayoutToggle";
 import { OpenTask } from "../components/OpenTask";
+import { OpenTrace } from "../components/OpenTrace";
 import type { PublicPublisher, PublicRepoPage, PublicRepoSummary } from "../contract";
 import { flightTo, pageBody, revealFade, shownLine } from "../effects/marks";
 import { bodyHeld, watchBodyHold } from "../effects/transition-run";
@@ -234,6 +235,7 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
         />
       )}
       {release?.tasksPublished && <OpenTask release={release} />}
+      {release?.trialsPublished && <OpenTrace release={release} />}
     </article>
   );
 }

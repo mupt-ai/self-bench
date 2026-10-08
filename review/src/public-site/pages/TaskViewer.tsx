@@ -1,11 +1,12 @@
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileTree } from "../../components/FileTree";
 import { firstFile } from "../../lib/task-model";
 import { FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
 import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
 import { useSource } from "../source-context";
+import { onBackdrop } from "./backdrop";
 import "./task-viewer.css";
 
 /**
@@ -81,18 +82,6 @@ export default function TaskViewer({
   const path = chosen?.taskId === taskId ? chosen.path : firstFile(files)?.path;
   const file = files.find((entry) => entry.path === path);
   const repository = release.repository.fullName;
-  // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
-  // the viewer lands on what it is over, or on the dialog within its box.
-  const outside = (event: MouseEvent<HTMLDialogElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    return (
-      event.target === event.currentTarget &&
-      (event.clientX < box.left ||
-        event.clientX > box.right ||
-        event.clientY < box.top ||
-        event.clientY > box.bottom)
-    );
-  };
   const prUrl =
     task?.sourceUrl ??
     (task?.sourcePr !== undefined
@@ -112,10 +101,10 @@ export default function TaskViewer({
       // A click around it closes it too, when it also began there: letting go out there after
       // selecting text in a file leaves the viewer open.
       onPointerDown={(event) => {
-        pressedOutside.current = outside(event);
+        pressedOutside.current = onBackdrop(event);
       }}
       onClick={(event) => {
-        if (pressedOutside.current && outside(event)) onClose();
+        if (pressedOutside.current && onBackdrop(event)) onClose();
         pressedOutside.current = false;
       }}
       className="task-viewer m-auto flex h-[min(100dvh-4rem,60rem)] max-h-none w-[min(100vw-4rem,90rem)] max-w-none flex-col border-[1.5px] border-(--panel-border) bg-background p-0 text-sm text-foreground backdrop:bg-black/40 compact:h-dvh compact:w-full compact:border-0"

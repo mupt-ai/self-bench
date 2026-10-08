@@ -1,15 +1,20 @@
-import type { PublicTask, PublicTaskFiles } from "../../contract";
+import type { PublicTask, PublicTaskFiles, PublicTrial } from "../../contract";
 import type { MemoryTasks } from "../../source";
 
 /** The task the routes open in the viewer: a long instruction, a wide diff, a snapshot. */
 export const OPENED_TASK = "widgets-pr-1203";
 
+/** The setting whose trace on the opened task the routes open in the trace viewer. */
+export const OPENED_SETTING = "alpha-codex";
+
 /**
  * The published tasks of the crowded release: a dozen, one with a long id, each with the files a
  * compiled task has, among them lines too long for a phone and the snapshot a download leaves out.
+ * Each carries every setting's result (`settingIds`), with a transcript whose tool output has
+ * lines too long for a phone.
  */
-export function syntheticTasks(): MemoryTasks {
-  const tasks: PublicTask[] = [
+export function syntheticTasks(settingIds: readonly string[]): MemoryTasks {
+  const listed: PublicTask[] = [
     ...Array.from({ length: 11 }, (_, index) => ({
       id: `widgets-pr-${1200 + index}`,
       difficulty: (["easy", "medium", "hard"] as const)[index % 3] ?? "medium",
@@ -21,6 +26,46 @@ export function syntheticTasks(): MemoryTasks {
       sourcePr: 1299,
     },
   ];
+  const tasks = listed.map((task, taskIndex) => ({
+    ...task,
+    // Some settings pass most tasks and some few, so the grid has its usual spread.
+    passed: Object.fromEntries(
+      settingIds.map((id, settingIndex) => [id, (taskIndex * 5 + settingIndex * 3) % 7 > 1]),
+    ),
+  }));
+  const trialOf = (task: PublicTask, settingId: string): PublicTrial => ({
+    taskId: task.id,
+    settingId,
+    passed: task.passed?.[settingId] === true,
+    startedAt: "2026-09-16T20:00:00Z",
+    finishedAt: "2026-09-16T20:07:30Z",
+    agentMinutes: 30,
+    apiCostUsd: 0.84,
+    costSource: "reference-rates",
+    tokenUsage: { input: 182_400, output: 9_120, cacheRead: 1_204_800, cacheWrite: 0 },
+    steps: [
+      { id: "1", role: "user", text: "Order widgets by their path.", tools: [] },
+      {
+        id: "2",
+        role: "assistant",
+        text: "I'll find where widgets are rendered first.",
+        tools: [
+          {
+            id: "t1",
+            name: "bash",
+            input: 'rg -n "render\\(" src --glob "!**/*.test.ts"',
+            output: `src/widget.ts:2:  return render({ ...options, ${"withAVeryLongOptionName: true, ".repeat(4)}});`,
+          },
+        ],
+      },
+      {
+        id: "3",
+        role: "assistant",
+        text: "Rendering now sorts by path, then module id.",
+        tools: [],
+      },
+    ],
+  });
   const filesOf = (task: PublicTask): PublicTaskFiles => ({
     taskId: task.id,
     files: [
@@ -73,6 +118,12 @@ export function syntheticTasks(): MemoryTasks {
     "synthetic-crowded": {
       tasks,
       files: Object.fromEntries(tasks.map((task) => [task.id, filesOf(task)])),
+      trials: Object.fromEntries(
+        tasks.map((task) => [
+          task.id,
+          Object.fromEntries(settingIds.map((id) => [id, trialOf(task, id)])),
+        ]),
+      ),
     },
   };
 }

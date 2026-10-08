@@ -1,7 +1,16 @@
 import type { EvaluationTrial } from "./api";
 import { dollars } from "./benchmark";
 
-export function TokenCosts({ trial }: { trial: EvaluationTrial }) {
+export function TokenCosts({
+  trial,
+}: {
+  trial: Partial<
+    Pick<
+      EvaluationTrial,
+      "tokenUsage" | "apiCostUsd" | "costSource" | "cacheWritesInferred" | "billedCostUsd"
+    >
+  >;
+}) {
   if (!trial.tokenUsage) return null;
   const usage = trial.tokenUsage;
   const counts = [

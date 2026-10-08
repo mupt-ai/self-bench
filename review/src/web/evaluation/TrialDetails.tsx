@@ -1,5 +1,5 @@
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
-import type { EvaluationRun, EvaluationTrial } from "./api";
+import type { EvaluationTrial } from "./api";
 import { TokenCosts } from "./TokenCosts";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -11,17 +11,46 @@ const ROLE_LABELS: Record<string, string> = {
 };
 const roleLabel = (role: string) => ROLE_LABELS[role] ?? role;
 
-/** One trial's error, model cost, final response, solver transcript, Harbor output and artifacts. */
+/**
+ * What TrialDetails shows of a trial. The app has whole trials; selfbench.dev shows published
+ * ones (`PublishedTrial`), which carry no error, Harbor output, or artifacts, so those parts are
+ * left out there.
+ */
+export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
+  Partial<
+    Pick<
+      EvaluationTrial,
+      | "error"
+      | "agentTimedOut"
+      | "log"
+      | "artifacts"
+      | "tokenUsage"
+      | "apiCostUsd"
+      | "costSource"
+      | "cacheWritesInferred"
+      | "billedCostUsd"
+    >
+  >;
+
+/**
+ * One trial's error, model cost, final response, solver transcript, Harbor output and artifacts.
+ * The app's trial dialog and selfbench.dev's trace viewer both show trials with it.
+ */
 export function TrialDetails({
-  run,
   trial,
-  baseUrl,
+  active = false,
+  agentMinutes,
+  artifactUrl,
 }: {
-  run: EvaluationRun;
-  trial: EvaluationTrial;
-  baseUrl: string;
+  trial: TrialTranscript;
+  /** The trial's run is still queued or running, so its transcript may be partial. */
+  active?: boolean;
+  /** The run's agent time limit, when it recorded one. */
+  agentMinutes?: number;
+  /** Where an artifact downloads from; without it, artifacts are not listed. */
+  artifactUrl?: (name: string) => string;
 }) {
-  const active = run.status === "queued" || run.status === "running";
+  const artifacts = artifactUrl ? (trial.artifacts ?? []) : [];
   const finalMessage = trial.steps
     .filter((step) => (step.role === "agent" || step.role === "assistant") && step.text)
     .at(-1)?.text;
@@ -30,7 +59,7 @@ export function TrialDetails({
       {trial.error && <p className="mb-4 text-sm text-destructive">{trial.error}</p>}
       {trial.agentTimedOut && (
         <p className="mb-4 text-sm text-muted-foreground">
-          The agent reached its {run.agentMinutes ?? AGENT_MINUTES.default}-minute limit, so it was
+          The agent reached its {agentMinutes ?? AGENT_MINUTES.default}-minute limit, so it was
           scored on the work it had done by then.
         </p>
       )}
@@ -46,7 +75,9 @@ export function TrialDetails({
         <p className="mt-2 text-sm text-muted-foreground">
           {active
             ? "Waiting for transcript events. Available raw solver and tool output is shown below."
-            : "This harness did not produce a readable structured transcript. Inspect the raw output and artifacts below."}
+            : trial.log === undefined
+              ? "This harness did not produce a readable structured transcript."
+              : "This harness did not produce a readable structured transcript. Inspect the raw output and artifacts below."}
         </p>
       )}
       <ol className="m-0 list-none p-0 [&>li]:border-t [&>li]:border-border [&>li]:py-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere">
@@ -68,21 +99,21 @@ export function TrialDetails({
           </li>
         ))}
       </ol>
-      <details open={!trial.steps.length}>
-        <summary>Harbor Output</summary>
-        {/* Unwrapped so Harbor's result tables keep their columns; the panel scrolls sideways. */}
-        <pre className="whitespace-pre!">{trial.log || "No output yet."}</pre>
-      </details>
-      {trial.artifacts.length > 0 && (
+      {trial.log !== undefined && (
+        <details open={!trial.steps.length}>
+          <summary>Harbor Output</summary>
+          {/* Unwrapped so Harbor's result tables keep their columns; the panel scrolls sideways. */}
+          <pre className="whitespace-pre!">{trial.log || "No output yet."}</pre>
+        </details>
+      )}
+      {artifactUrl && artifacts.length > 0 && (
         <details className="[&_p]:mt-3 [&_p]:text-sm [&_p]:text-muted-foreground [&_ul]:list-none [&_ul]:p-0 [&_a]:block [&_a]:py-2 [&_a]:font-mono [&_a]:text-sm [&_a]:text-foreground [&_a]:underline [&_a]:decoration-foreground/25 [&_a]:underline-offset-4 [&_a]:wrap-anywhere [&_a:hover]:decoration-foreground">
-          <summary>Artifacts · {trial.artifacts.length}</summary>
+          <summary>Artifacts · {artifacts.length}</summary>
           <p>Sanitized text exports; large files may be capped at 1 MiB.</p>
           <ul>
-            {trial.artifacts.map((name) => (
+            {artifacts.map((name) => (
               <li key={name}>
-                <a href={`${baseUrl}/${run.id}/artifacts?name=${encodeURIComponent(name)}`}>
-                  {name.split("/").slice(2).join("/")}
-                </a>
+                <a href={artifactUrl(name)}>{name.split("/").slice(2).join("/")}</a>
               </li>
             ))}
           </ul>

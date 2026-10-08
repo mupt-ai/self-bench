@@ -14,6 +14,8 @@ export interface ReleaseSummary {
   settings: number;
   /** Whether the tasks were published with it; the release dialog starts from the current one's. */
   tasksPublished: boolean;
+  /** Whether each setting's result and transcript on each task were published with it. */
+  trialsPublished: boolean;
   current: boolean;
   head: boolean;
 }
@@ -43,6 +45,7 @@ export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): Release
     tasks: row.payload.tasks,
     settings: row.payload.settings.length,
     tasksPublished: row.payload.tasksPublished === true,
+    trialsPublished: row.payload.trialsPublished === true,
     current: currentOf(rows)?.id === row.id,
     head: headOf(rows)?.id === row.id,
   };

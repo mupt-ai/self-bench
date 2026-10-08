@@ -100,8 +100,8 @@ WebKit here does not, so for effects also look on a real iPhone:
 ## Keeping the Checks Current
 
 - New kinds of content go into `synthetic.ts` (a repository, a setting, a route), so the checks
-  see them. Published tasks and their files are in `synthetic-tasks.ts`, with a route that opens
-  one in the viewer. It is built with the unit tests' builders (`test-fixture.ts`), so contract changes
+  see them. Published tasks, their files, and each setting's trial on them are in
+  `synthetic-tasks.ts`, with routes that open a task in its viewer and a trial in the trace viewer. It is built with the unit tests' builders (`test-fixture.ts`), so contract changes
   surface there as type errors.
 - A deliberate exception is marked on the element, with a comment saying why:
   `data-phone-ok="tap"` (or `overflow`, `text`, `field`, `hover`). Keep these rare.

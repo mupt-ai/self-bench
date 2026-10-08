@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Avatar } from "../components/Avatar";
 import { ModelTable } from "../components/ModelTable";
 import { ResultsChart } from "../components/ResultsChart";
+import { ResultsGrid } from "../components/ResultsGrid";
 import { TaskList } from "../components/TaskList";
 import type { PublicRepoPage } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
@@ -19,8 +20,8 @@ export interface PinnedLines {
 }
 
 /**
- * Everything on a repository page below its title: the chart, the settings table, and the
- * repository's other benchmarks. It needs the page's data, and is the heaviest thing the page
+ * Everything on a repository page below its title: the chart, the settings table, the results by
+ * task and the tasks when they were published, and the repository's other benchmarks. It needs the page's data, and is the heaviest thing the page
  * draws, so an opening transition holds it back until the title has landed (RepoPage.tsx).
  */
 export function RepoBody({
@@ -88,6 +89,7 @@ export function RepoBody({
         </section>
       </div>
 
+      {release.trialsPublished && <ResultsGrid release={release} activeId={activeId ?? rowId} />}
       {release.tasksPublished && <TaskList release={release} />}
 
       {page.lines.length > 1 && (

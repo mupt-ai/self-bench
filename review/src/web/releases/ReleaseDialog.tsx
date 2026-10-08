@@ -6,22 +6,9 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, Notice } from "../ui";
 import { ReleaseRequestError, type ReleaseSummary, type ReleaseView, releaseRequest } from "./api";
-import { SettingsPicker, Tick } from "./SettingsPicker";
+import { PUBLISH_DEFAULTS, PublishOptions, privacyNote } from "./PublishOptions";
+import { SettingsPicker } from "./SettingsPicker";
 import { selectionOf } from "./selection";
-
-/** What becomes public and what stays private, shown on the info icon beside the summary. */
-/** A release publishes its tasks unless the releaser unticks Publish Tasks. */
-const PUBLISH_TASKS = true;
-
-function privacyNote(workspace: { login: string; kind: "org" | "user" }, tasks: boolean): string {
-  const publisher =
-    workspace.kind === "user"
-      ? `you as publisher, under your GitHub username ${workspace.login}`
-      : `the ${workspace.login} workspace as publisher`;
-  return tasks
-    ? `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, and each task with its pull request, instruction, tests, and solution. Private: per-task results, transcripts, endpoint hosts, and who pressed Release.`
-    : `Public: the repository, ${publisher}, and each setting's model, harness, accuracy, and cost. Private: which tasks and pull requests were used, per-task results, transcripts, endpoint hosts, and who pressed Release.`;
-}
 
 /**
  * Publishes the repository's results on selfbench.dev. Fetches its own fresh preview, lets the
@@ -43,7 +30,7 @@ export function ReleaseDialog({
   const cancel = React.useRef<HTMLButtonElement>(null);
   const [view, setView] = React.useState<ReleaseView>();
   const [ticked, setTicked] = React.useState<Set<string>>(new Set());
-  const [publishTasks, setPublishTasks] = React.useState(PUBLISH_TASKS);
+  const [publish, setPublish] = React.useState(PUBLISH_DEFAULTS);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
@@ -79,7 +66,8 @@ export function ReleaseDialog({
   );
   const unchanged =
     query === "" &&
-    publishTasks === PUBLISH_TASKS &&
+    publish.tasks === PUBLISH_DEFAULTS.tasks &&
+    publish.trials === PUBLISH_DEFAULTS.trials &&
     ticked.size === defaults.size &&
     [...ticked].every((key) => defaults.has(key));
   const blocked = !selection || selection.settings === 0 || selection.tasks.length === 0;
@@ -93,7 +81,8 @@ export function ReleaseDialog({
         settings: [...ticked],
         head: view.head?.id ?? null,
         fingerprint: view.preview.fingerprint,
-        publishTasks,
+        publishTasks: publish.tasks,
+        publishTrials: publish.tasks && publish.trials,
       });
       onReleased(result.release, result.unchanged === true);
     } catch (cause) {
@@ -162,29 +151,7 @@ export function ReleaseDialog({
               onChange={setTicked}
             />
             {selection && <Notes view={view} selection={selection} />}
-            {/* Boxed, and tinted while on, so a release that publishes its tasks is plain to see. */}
-            <label
-              htmlFor="release-publish-tasks"
-              className={`flex cursor-pointer items-start gap-2.5 border p-3 text-sm transition-colors ${
-                publishTasks ? "border-check/50 bg-check/[0.07]" : "border-border"
-              }`}
-            >
-              <span className="mt-0.5 flex">
-                <Tick
-                  id="release-publish-tasks"
-                  checked={publishTasks}
-                  disabled={busy}
-                  onChange={setPublishTasks}
-                />
-              </span>
-              <span className="min-w-0">
-                <span className="font-medium">Publish Tasks</span>
-                <span className="block text-muted-foreground">
-                  Anyone can browse and download each task's instruction, tests, and solution on
-                  selfbench.dev. Per-task results stay private.
-                </span>
-              </span>
-            </label>
+            <PublishOptions publish={publish} disabled={busy} onChange={setPublish} />
           </>
         )}
         {/* One line when the dialog is wide. Narrow: the summary alone on top, then Reset on the
@@ -198,7 +165,7 @@ export function ReleaseDialog({
                 onClick={() => {
                   setQuery("");
                   setTicked(new Set(defaults));
-                  setPublishTasks(PUBLISH_TASKS);
+                  setPublish(PUBLISH_DEFAULTS);
                 }}
               >
                 Reset
@@ -217,7 +184,7 @@ export function ReleaseDialog({
                 </span>
                 {selection && (
                   <InfoTooltip
-                    label={privacyNote(workspace, publishTasks)}
+                    label={privacyNote(workspace, publish)}
                     contentClassName="border border-border bg-card text-foreground"
                   />
                 )}
