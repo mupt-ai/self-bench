@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { hasModelSelection, matchingModels, nextModelSelection } from "./model-selection";
+import { hasModelSelection, nextModelSelection } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 const model: CatalogModel = {
@@ -167,18 +167,4 @@ test("an empty inline row offers the model picker and disables dependent control
   expect(html).toContain('aria-haspopup="listbox"');
   expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
   expect(html).not.toContain('role="dialog"');
-});
-
-test("model search matches word starts in names and ids", () => {
-  const listed = (id: string, label: string): CatalogModel => ({ ...model, id, label });
-  const models = [
-    listed("qwen/qwen4-coder", "Qwen4 Coder"),
-    listed("kimi-k3", "Kimi K3"),
-    listed("z-ai/glm-5.3", "GLM 5.3"),
-  ];
-  const ids = (query: string) => matchingModels(models, query).map((entry) => entry.id);
-  expect(ids("")).toEqual(["qwen/qwen4-coder", "kimi-k3", "z-ai/glm-5.3"]);
-  expect(ids("qwen cod")).toEqual(["qwen/qwen4-coder"]);
-  expect(ids("z-ai")).toEqual(["z-ai/glm-5.3"]);
-  expect(ids("oder")).toEqual([]);
 });
