@@ -79,8 +79,6 @@ export interface PublicReleaseRoutesOptions {
   now?: () => number;
   /** Where published tasks' files are read from; without it, no release's tasks are served. */
   artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
-  /** The canary line published tasks carry (src/public/task-canary.ts). */
-  taskCanary?: string;
 }
 
 /**
@@ -98,7 +96,6 @@ export function createPublicReleaseRoutes(
       ? createPublicTaskRoutes({
           releasedTasks: releases.releasedTasks.bind(releases),
           artifacts: options.artifacts,
-          ...(options.taskCanary ? { canary: options.taskCanary } : {}),
         })
       : undefined;
   let reading: { snapshot: Promise<Snapshot>; at: number } | undefined;

@@ -7,7 +7,6 @@ import { createPublicReleaseRoutes } from "../src/api/routes/public-releases.js"
 import { publishedTasks } from "../src/api/routes/public-tasks.js";
 import type { ReleaseTask } from "../src/public/release-rule.js";
 import type { PublishedLine } from "../src/public/release-types.js";
-import { taskCanary } from "../src/public/task-canary.js";
 import { gzippedTar, tarEntries } from "./support/tar.js";
 
 const TASK = {
@@ -87,7 +86,7 @@ afterEach(async () => {
  * Two current releases, one that published its tasks and one that did not. The published one
  * has a task with a gate task beside its bundle and a task without (as tasks with services are).
  */
-async function serve(taskCanary?: string) {
+async function serve() {
   const withGate = "runs/batch-1/verify/c1/compile/attempt-1/harbor-task.tar.gz";
   const withoutGate = "runs/batch-1/verify/c2/compile/attempt-1/harbor-task.tar.gz";
   const objects = new Map<string, Buffer>([
@@ -110,7 +109,7 @@ async function serve(taskCanary?: string) {
       currentLines: async () => [line("published-release", true), line("private-release", false)],
       releasedTasks: async (id) => released[id],
     },
-    { artifacts: storeOf(objects), ...(taskCanary ? { taskCanary } : {}) },
+    { artifacts: storeOf(objects) },
   );
   const server = createServer(async (request, response) => {
     try {
@@ -218,34 +217,6 @@ test("a download is the task without its snapshots, in a folder named after it",
     });
     expect(again.status).toBe(304);
   }
-});
-
-test("with a canary, the files SelfBench writes carry it, downloaded and shown alike", async () => {
-  const canary = taskCanary("0f8fad5b-d9cb-469f-a165-70867728950e") ?? "";
-  const get = await serve(canary);
-  const response = await get(
-    "/api/public/releases/published-release/tasks/next-pr-1/next-pr-1.tar.gz",
-  );
-  const found = await tarEntries(Buffer.from(await response.arrayBuffer()));
-  const text = (path: string) => found.find((entry) => entry.path === `next-pr-1/${path}`)?.text;
-  expect(text("task.toml")).toBe(`name = "selfbench/next-pr-1"\n# ${canary}\n`);
-  expect(text("solution/solve.sh")).toBe(`#!/bin/sh\ngit apply gold.patch\n# ${canary}\n`);
-  expect(text("environment/Dockerfile")).toEndWith(`# ${canary}\n`);
-  // The instruction opens with it, for Harbor to remove; the patches are left exactly as they are.
-  expect(text("instruction.md")).toBe(`<!-- ${canary} -->\n\nOrder the chunks by path.\n`);
-  expect(text("solution/gold.patch")).not.toContain(canary);
-  expect(found.find((entry) => entry.path.endsWith("solve.sh"))?.mode).toBe(0o755);
-
-  const files = (await (
-    await get("/api/public/releases/published-release/tasks/next-pr-1")
-  ).json()) as { canary: string; files: { path: string; sizeBytes: number; text?: string }[] };
-  expect(files.canary).toBe(canary);
-  const toml = files.files.find((file) => file.path === "task.toml");
-  expect(toml?.text).toBe(text("task.toml"));
-  expect(toml?.sizeBytes).toBe(Buffer.byteLength(toml?.text ?? ""));
-  expect(files.files.find((file) => file.path === "instruction.md")?.text).toBe(
-    text("instruction.md"),
-  );
 });
 
 test("a task's files and its download never share an address, whatever the task is called", async () => {

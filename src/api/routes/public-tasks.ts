@@ -4,7 +4,6 @@ import { BundleNotFoundError, expandBundle } from "../../generation/runs/bundle.
 import type { ReleaseTask } from "../../public/release-rule.js";
 import type { PublishedTask, PublishedTaskFiles } from "../../public/release-types.js";
 import { TaskArchiveTooLarge, taskArchive } from "../../public/task-archive.js";
-import { takesCanary, withCanary } from "../../public/task-canary.js";
 import { sendJson } from "../http.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
 
@@ -58,8 +57,6 @@ export interface PublicTaskRoutesOptions {
   /** A release's tasks as its row records them (`ReleaseStore.releasedTasks`). */
   releasedTasks(id: string): Promise<ReleaseTask[] | undefined>;
   artifacts: Pick<ArtifactStore, "stat" | "openReadByKey">;
-  /** The canary line each served task carries (task-canary.ts); none without one configured. */
-  canary?: string;
 }
 
 /**
@@ -139,17 +136,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
             return missing(response, "Task files not found");
           throw error;
         }
-        const { canary } = options;
-        // The same files as the download, so what is shown is what is downloaded.
-        const answer: PublishedTaskFiles = {
-          taskId: id,
-          files: expanded.files.map((file) => {
-            if (!canary || file.text === undefined || !takesCanary(file.path)) return file;
-            const text = withCanary(file.path, file.text, canary);
-            return { ...file, text, sizeBytes: Buffer.byteLength(text) };
-          }),
-          ...(canary ? { canary } : {}),
-        };
+        const answer: PublishedTaskFiles = { taskId: id, files: expanded.files };
         body = tagged(JSON.stringify(answer));
         files.set(key, body);
         for (const oldest of files.keys()) {
@@ -169,13 +156,13 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
 async function sendArchive(
   request: IncomingMessage,
   response: ServerResponse,
-  options: Pick<PublicTaskRoutesOptions, "artifacts" | "canary">,
+  options: Pick<PublicTaskRoutesOptions, "artifacts">,
   bundleKey: string,
   id: string,
 ): Promise<void> {
   let archive: Awaited<ReturnType<typeof taskArchive>>;
   try {
-    archive = await taskArchive(options.artifacts, bundleKey, id, options.canary);
+    archive = await taskArchive(options.artifacts, bundleKey, id);
   } catch (error) {
     if (!(error instanceof TaskArchiveTooLarge)) throw error;
     response.setHeader("cache-control", "no-store");

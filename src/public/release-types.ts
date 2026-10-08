@@ -94,9 +94,7 @@ export interface PublishedTask {
 /** A published task's files: small text files with their contents, the rest by size alone. */
 export interface PublishedTaskFiles {
   taskId: string;
-  files: { path: string; sizeBytes: number; text?: string }[];
-  /** The line asking for the task never to be trained on, which its files carry too. */
-  canary?: string;
+  files: readonly { path: string; sizeBytes: number; text?: string }[];
 }
 
 /** One release line's current release, as the public API lists it. */

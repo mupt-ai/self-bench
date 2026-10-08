@@ -6,7 +6,6 @@ import { createGunzip, createGzip } from "node:zlib";
 import { extract, type Headers, pack } from "tar-stream";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { GATE_TASK_FILE, SNAPSHOT_PATHS } from "../sandbox/gate-bundle.js";
-import { takesCanary, withCanary } from "./task-canary.js";
 
 /** The largest archive served; a task without its repository snapshots is far smaller. */
 const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
@@ -35,16 +34,15 @@ export class TaskArchiveTooLarge extends Error {}
  * repository snapshots (`environment/repo.tar.gz` and `tests/repo.tar.gz`, each the repository
  * at the task's base commit, tens of MB or more), under `folder/` so that tasks unpack side by
  * side. Read from the gate task beside a compiled bundle when there is one (kilobytes), else
- * from the bundle itself. With a `canary`, each file that takes one carries it (task-canary.ts).
- * The same bundle always gives the same bytes. Undefined when no object is at `bundleKey`.
+ * from the bundle itself. The same bundle always gives the same bytes. Undefined when no object
+ * is at `bundleKey`.
  */
 export function taskArchive(
   store: Store,
   bundleKey: string,
   folder: string,
-  canary?: string,
 ): Promise<TaskArchive | undefined> {
-  const id = `${bundleKey}#${folder}#${canary ?? ""}`;
+  const id = `${bundleKey}#${folder}`;
   const found = kept.get(id);
   if (found) {
     kept.delete(id);
@@ -53,7 +51,7 @@ export function taskArchive(
   }
   const pending = inFlight.get(id);
   if (pending) return pending;
-  const promise = build(store, bundleKey, folder, canary)
+  const promise = build(store, bundleKey, folder)
     .then((archive) => {
       if (archive) remember(id, archive);
       return archive;
@@ -77,7 +75,6 @@ async function build(
   store: Store,
   bundleKey: string,
   folder: string,
-  canary: string | undefined,
 ): Promise<TaskArchive | undefined> {
   // The gate task is the compiled bundle without its snapshots (src/sandbox/gate-bundle.ts).
   const gateKey = bundleKey.endsWith(COMPILED_BUNDLE)
@@ -86,13 +83,13 @@ async function build(
   const gate = gateKey ? await store.stat(gateKey).catch(() => undefined) : undefined;
   const body = await store.openReadByKey(gate && gateKey ? gateKey : bundleKey);
   if (!body) return undefined;
-  const bytes = await repack(body, folder, canary);
+  const bytes = await repack(body, folder);
   const etag = `"${createHash("sha256").update(bytes).digest("base64url").slice(0, 27)}"`;
   return { bytes, etag };
 }
 
 /** The archive's task entries, renamed from `harbor-task/` to `folder/`, snapshots left out. */
-async function repack(body: Readable, folder: string, canary?: string): Promise<Buffer> {
+async function repack(body: Readable, folder: string): Promise<Buffer> {
   const input = extract();
   const reading = pipeline(body, createGunzip(), input);
   // A failure here also ends the loop below; it is rethrown by the final await.
@@ -111,7 +108,7 @@ async function repack(body: Readable, folder: string, canary?: string): Promise<
   writing.catch(() => undefined);
   const snapshots = new Set<string>(SNAPSHOT_PATHS);
   try {
-    await copyEntries(input, output, { folder, snapshots, canary });
+    await copyEntries(input, output, { folder, snapshots });
     await reading;
     await writing;
   } catch (error) {
@@ -127,9 +124,9 @@ async function repack(body: Readable, folder: string, canary?: string): Promise<
 async function copyEntries(
   input: ReturnType<typeof extract>,
   output: ReturnType<typeof pack>,
-  options: { folder: string; snapshots: ReadonlySet<string>; canary: string | undefined },
+  options: { folder: string; snapshots: ReadonlySet<string> },
 ): Promise<void> {
-  const { folder, snapshots, canary } = options;
+  const { folder, snapshots } = options;
   for await (const entry of input) {
     const name = entryPath(entry.header.name);
     const { type } = entry.header;
@@ -150,21 +147,6 @@ async function copyEntries(
       mtime: entry.header.mtime,
       size: type === "file" ? entry.header.size : 0,
     };
-    if (canary && type === "file" && takesCanary(path)) {
-      const chunks: Buffer[] = [];
-      for await (const chunk of entry) chunks.push(chunk as Buffer);
-      const original = Buffer.concat(chunks);
-      // A file of these kinds is text; one that is not is copied as it is.
-      const bytes = original.includes(0)
-        ? original
-        : Buffer.from(withCanary(path, original.toString("utf8"), canary));
-      await new Promise<void>((resolve, reject) =>
-        output.entry({ ...header, size: bytes.length }, bytes, (error) =>
-          error ? reject(error) : resolve(),
-        ),
-      );
-      continue;
-    }
     await new Promise<void>((resolve, reject) => {
       const sink = output.entry(header, (error) => (error ? reject(error) : resolve()));
       entry.on("error", reject);
