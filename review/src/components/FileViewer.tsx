@@ -2,7 +2,6 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import React from "react";
 import { formatBytes } from "../lib/format";
 import { fileKind } from "../lib/task-model";
-import { DiffView } from "./DiffView";
 import { Block, Script } from "./Script";
 import { notice, sheetBody, viewerIconButton } from "./viewer-ui";
 
@@ -12,6 +11,11 @@ export interface OpenFile {
   text?: string;
   error?: string;
 }
+
+// The diff renderer and its highlighter are most of the viewer's weight; only patches load it.
+const DiffView = React.lazy(() =>
+  import("./DiffView").then((module) => ({ default: module.DiffView })),
+);
 
 /** Prose, which wraps; code and config keep their lines and scroll sideways. */
 const PROSE = /\.(md|markdown|txt)$/i;
@@ -66,15 +70,16 @@ export function FileViewer({
   } else {
     const kind = fileKind(file.path);
     const kindLabel = KIND_LABELS[kind] ?? kind;
-    const lines = file.text.replace(/\n$/, "").split("\n").length;
+    const shown = kind === "json" ? prettyJson(file.text) : file.text;
+    const lines = shown.replace(/\n$/, "").split("\n").length;
     const stats = `${formatBytes(size)} · ${lines} ${lines === 1 ? "line" : "lines"}`;
     const body =
       kind === "patch" ? (
-        <DiffView patch={file.text} />
-      ) : kind === "json" ? (
-        <Script text={prettyJson(file.text)} />
+        <React.Suspense fallback={<Script text={shown} />}>
+          <DiffView patch={shown} />
+        </React.Suspense>
       ) : (
-        <Script text={file.text} wrap={PROSE.test(file.path)} />
+        <Script text={shown} wrap={PROSE.test(file.path)} />
       );
     content = fullscreen ? (
       <FullScreen
@@ -143,6 +148,8 @@ function FullScreen({
     <dialog
       ref={dialog}
       aria-label={`${path} Full Screen`}
+      // The page's own shortcuts (approve, next task) listen on the window; not while this is up.
+      onKeyDown={(event) => event.stopPropagation()}
       onCancel={(event) => {
         // React carries the cancel up to a dialog around this one; it is for this one only.
         event.preventDefault();
@@ -156,7 +163,7 @@ function FullScreen({
         <b className="font-mono text-sm">{path}</b>
         <span className="font-mono text-sm text-muted-foreground">{stats}</span>
         <span className="flex-1" />
-        <span className="hidden font-mono text-sm text-muted-foreground sm:inline">
+        <span className="hidden font-mono text-sm text-muted-foreground pointer-fine:sm:inline">
           esc to close
         </span>
         <button

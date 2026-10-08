@@ -13,7 +13,7 @@ export function DiffView({ patch }: { patch: string }) {
 }
 
 /** The narrowest pane that shows a diff side by side; narrower, the two sides stack. */
-const SPLIT_WIDTH = 1000;
+const SPLIT_WIDTH = 760;
 
 function RenderedPatch({ patch }: { patch: string }) {
   const files = React.useMemo(
@@ -22,16 +22,18 @@ function RenderedPatch({ patch }: { patch: string }) {
   );
   const theme = useTheme();
   const box = React.useRef<HTMLDivElement>(null);
-  const [split, setSplit] = React.useState(false);
+  // Unknown until the pane has a width: a diff is drawn once, in the layout that fits.
+  const [split, setSplit] = React.useState<boolean>();
   // Sized by the pane it is in, not the screen: the same diff sits in a page and in a dialog.
-  // Measured before the first paint, so a wide pane never draws the diff stacked first.
+  // A pane that is not shown yet (a full-screen dialog about to open) has none, and waits.
   React.useLayoutEffect(() => {
     const element = box.current;
     if (!element) return;
-    setSplit(element.getBoundingClientRect().width >= SPLIT_WIDTH);
-    const observer = new ResizeObserver(([entry]) =>
-      setSplit((entry?.contentRect.width ?? 0) >= SPLIT_WIDTH),
-    );
+    const fit = (width: number) => {
+      if (width > 0) setSplit(width >= SPLIT_WIDTH);
+    };
+    fit(element.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => fit(entry?.contentRect.width ?? 0));
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -45,14 +47,15 @@ function RenderedPatch({ patch }: { patch: string }) {
   };
   return (
     <div ref={box} className="flex flex-col gap-4 py-3">
-      {files.map((file) => (
-        <FileDiff
-          key={`${file.prevName ?? ""}:${file.name}`}
-          fileDiff={file}
-          disableWorkerPool
-          options={options}
-        />
-      ))}
+      {split !== undefined &&
+        files.map((file) => (
+          <FileDiff
+            key={`${file.prevName ?? ""}:${file.name}`}
+            fileDiff={file}
+            disableWorkerPool
+            options={options}
+          />
+        ))}
     </div>
   );
 }

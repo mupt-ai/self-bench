@@ -19,8 +19,19 @@ export function FileTree({
   onOpen: (path: string) => void;
 }) {
   const root = React.useMemo(() => buildTree(files), [files]);
+  const list = React.useRef<HTMLUListElement>(null);
+  const shown = React.useRef(current);
+  // In a list too short to show every file, a file opened from elsewhere scrolls into view. The
+  // first one shown does not, so the list starts at its top, folders and all.
+  React.useEffect(() => {
+    const previous = shown.current;
+    shown.current = current;
+    if (!previous || previous === current) return;
+    const row = list.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (row) revealInList(row);
+  }, [current]);
   return (
-    <ul className="list-none py-2 font-mono">
+    <ul ref={list} className="list-none py-2 font-mono">
       {root.children.map((node) => (
         <TreeNode key={node.path} node={node} depth={0} current={current} onOpen={onOpen} />
       ))}
@@ -40,18 +51,12 @@ function TreeNode({
   onOpen: (path: string) => void;
 }) {
   const style = { "--depth": depth } as React.CSSProperties;
-  const button = React.useRef<HTMLButtonElement>(null);
   const chosen = current === node.path;
-  // In a list too short to show every file, the open one scrolls into view.
-  React.useEffect(() => {
-    if (chosen && button.current) revealInList(button.current);
-  }, [chosen]);
   if (node.file) {
     const binary = node.file.text === undefined;
     return (
       <li>
         <button
-          ref={button}
           type="button"
           className={`flex min-h-8 touch:min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-2 border-l-2 border-transparent py-1 pr-4 pl-[calc(14px+var(--depth)*14px)] text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground aria-current:border-foreground aria-current:bg-foreground/[0.06] aria-current:font-medium aria-current:text-foreground [&_span:first-child]:min-w-0 [&_span:first-child]:truncate ${binary ? "opacity-50" : ""}`}
           style={style}

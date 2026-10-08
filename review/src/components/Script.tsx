@@ -34,7 +34,7 @@ export function Block({
 }) {
   return (
     <section className="panel shrink-0">
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground [&_b]:font-mono [&_b]:text-sm [&_b]:font-medium [&_b]:text-foreground [&_button]:h-8 [&_button]:text-xs">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted px-4 py-2 text-xs font-semibold text-muted-foreground [&_b]:min-w-0 [&_b]:font-mono [&_b]:text-sm [&_b]:wrap-anywhere [&_b]:font-medium [&_b]:text-foreground [&_button]:h-8 [&_button]:text-xs">
         <span>{title}</span>
         {detail && <b>{detail}</b>}
         {right && (
