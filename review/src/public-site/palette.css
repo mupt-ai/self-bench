@@ -27,6 +27,10 @@
   --warn-fg: hsl(35 80% 38%);
   /* Card edges and the ruler lines, derived from the text colour so every palette follows. */
   --panel-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --panel-edge: var(--panel-border);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+  /* The bar over a file shown full screen. */
+  --viewer-panel: hsl(38 19% 89.8%);
   --ruler: color-mix(in srgb, var(--foreground) 10%, transparent);
   /* A table row the results chart points at, or that points at the chart. */
   --row-mark: var(--muted);
@@ -71,6 +75,8 @@
   --bad-fg: hsl(0 70% 62%);
   --warn-fg: hsl(38 80% 60%);
   --panel-border: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --viewer-panel: hsl(215 20% 7%);
   --ruler: color-mix(in srgb, var(--foreground) 7%, transparent);
   /* Silvery blue: the plain muted fill is too close to a card's to see. */
   --row-mark: hsl(212 45% 80% / 0.1);
@@ -86,4 +92,14 @@
   --chart-frontier: rgb(142 230 189 / 0.45);
   --custom-model-1: #8d9bb3;
   --custom-model-2: #22b3c4;
+}
+
+/* Raised surface for cards, tables and panels: a firmer edge and a soft drop. It lives in the
+   components layer so any utility (border-0, shadow-none, hover borders) can override it. */
+@layer components {
+  .panel {
+    border: 1.5px solid var(--panel-edge);
+    background-color: var(--card);
+    box-shadow: var(--panel-shadow);
+  }
 }

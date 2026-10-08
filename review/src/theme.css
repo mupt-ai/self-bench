@@ -47,12 +47,9 @@
    app changes or adds is set here. Text that must read as amber uses the palette's --brand-fg,
    which is dark enough for paper; inputs get a firmer edge than cards. */
 :root {
-  --viewer-panel: hsl(38 19% 89.8%);
   --input: hsl(35 16% 80%);
   /* Ticks in checkboxes: blue in both themes. */
   --check: hsl(212 78% 46%);
-  --panel-edge: var(--panel-border);
-  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.06);
 
   --sidebar-background: var(--background);
   --sidebar-foreground: var(--foreground);
@@ -63,10 +60,8 @@
 }
 
 :root[data-theme="dark"] {
-  --viewer-panel: hsl(215 20% 7%);
   --input: hsl(215 16% 20%);
   --check: hsl(210 90% 65%);
-  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
 html {
@@ -77,17 +72,6 @@ html {
    white marks stop glaring. The filter lives in index.html. */
 :root[data-theme="dark"] img.avatar {
   filter: url(#ink-cast);
-}
-
-/* Raised surface for cards, tables and panels: a firmer edge and a soft drop. It lives in the
-   components layer so any utility (border-0, shadow-none, hover borders) can override it. */
-@layer components {
-  .panel {
-    border: 1.5px solid var(--panel-edge);
-    background-color: var(--card);
-    box-shadow: var(--panel-shadow);
-  }
-
 }
 
 /* Selects stay native <select>s, so the keyboard, screen readers, phone pickers, and anything

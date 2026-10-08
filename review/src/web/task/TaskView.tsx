@@ -1,15 +1,14 @@
 import React from "react";
 import { FileTree } from "../../components/FileTree";
+import { FileViewer, type OpenFile } from "../../components/FileViewer";
 import { notice, tabList, tab as viewerTab } from "../../components/viewer-ui";
-import { buildTaskModel } from "../../lib/task-model";
+import { buildTaskModel, firstFile } from "../../lib/task-model";
 import { AgentWorkSheet } from "../../sheets/AgentWorkSheet";
 import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
-import { FileSheet, type OpenFile } from "../../sheets/FileSheet";
 import type { TaskSource } from "../../sources/types";
 import type { TaskFiles, TaskRow } from "../../types";
 
 type Tab = "file" | "environment" | "pipeline";
-const DEFAULT_FILES = ["instruction.md", "task.toml", "definition.json"];
 
 /** The file review: bundle tree on the left, file / environment / pipeline on the right. */
 export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) {
@@ -52,9 +51,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
 
   React.useEffect(() => {
     if (!files || openFile || tab !== "file") return;
-    const first =
-      DEFAULT_FILES.map((name) => files.files.find((file) => file.path === name)).find(Boolean) ??
-      files.files.find((file) => file.text !== undefined);
+    const first = firstFile(files.files);
     if (first) {
       setOpenFile({
         path: first.path,
@@ -104,7 +101,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
               <FileTree files={files.files} current={openFile?.path ?? null} onOpen={openPath} />
             )
           ) : error ? (
-            <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{error}</p>
+            <p className={`${notice} !text-destructive`}>{error}</p>
           ) : (
             <p className={notice}>Loading files…</p>
           )}
@@ -129,11 +126,11 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
           ))}
         </div>
         {error && tab !== "pipeline" ? (
-          <p className={`${notice} !text-(--bad-fg) site:!text-destructive`}>{error}</p>
+          <p className={`${notice} !text-destructive`}>{error}</p>
         ) : tab === "pipeline" ? (
           <AgentWorkSheet source={source} row={row} />
         ) : tab === "file" ? (
-          <FileSheet key={openFile?.path ?? ""} file={openFile} />
+          <FileViewer key={openFile?.path ?? ""} file={openFile} />
         ) : !model ? (
           <p className={notice}>Loading files…</p>
         ) : (

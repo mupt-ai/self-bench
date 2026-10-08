@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import { FileButton, FilePane } from "../components/TaskFileView";
+import { FileTree } from "../../components/FileTree";
+import { firstFile } from "../../lib/task-model";
+import { FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
 import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
 import { useSource } from "../source-context";
-import { firstFile } from "../task-files";
 import "./task-viewer.css";
 
 /**
@@ -77,7 +78,7 @@ export default function TaskViewer({
 
   const current = read?.taskId === taskId ? read : undefined;
   const files = current?.files?.files ?? [];
-  const path = chosen?.taskId === taskId ? chosen.path : (firstFile(files)?.path ?? files[0]?.path);
+  const path = chosen?.taskId === taskId ? chosen.path : firstFile(files)?.path;
   const file = files.find((entry) => entry.path === path);
   const repository = release.repository.fullName;
   // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
@@ -184,27 +185,25 @@ export default function TaskViewer({
         <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(11rem,16rem)_minmax(0,1fr)] sm:grid-rows-1">
           <nav
             aria-label="Files"
-            className="max-h-40 min-h-0 overflow-y-auto border-b border-border py-1 sm:max-h-none sm:border-r sm:border-b-0"
+            className="max-h-40 min-h-0 overflow-y-auto border-b border-border sm:max-h-none sm:border-r sm:border-b-0"
           >
             {current ? (
-              <ul>
-                {files.map((entry) => (
-                  <li key={entry.path}>
-                    <FileButton
-                      file={entry}
-                      chosen={entry.path === path}
-                      onChoose={() => setChosen({ taskId, path: entry.path })}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <FileTree
+                files={files}
+                current={path ?? null}
+                onOpen={(opened) => setChosen({ taskId, path: opened })}
+              />
             ) : (
               <p className="px-4 py-2 text-muted-foreground">Loading…</p>
             )}
           </nav>
-          <section aria-label={file?.path ?? "File"} className="flex min-h-0 min-w-0 flex-col">
+          <section
+            aria-label={file?.path ?? "File"}
+            className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)]"
+          >
             {file && (
               <FilePane
+                key={`${taskId}/${file.path}`}
                 file={file}
                 files={files}
                 repository={repository}

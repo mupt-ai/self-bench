@@ -132,3 +132,12 @@ export function fileKind(
   if (name.endsWith(".sh")) return "shell";
   return "text";
 }
+
+/** The file a task opens on: its instruction, else its config, else its first readable file. */
+export function firstFile<File extends TaskFileEntry>(files: readonly File[]): File | undefined {
+  for (const path of ["instruction.md", "task.toml", "definition.json"]) {
+    const found = files.find((file) => file.path === path && file.text !== undefined);
+    if (found) return found;
+  }
+  return files.find((file) => file.text !== undefined) ?? files[0];
+}

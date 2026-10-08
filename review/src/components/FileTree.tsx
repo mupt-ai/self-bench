@@ -14,7 +14,7 @@ export function FileTree({
   current,
   onOpen,
 }: {
-  files: TaskFileEntry[];
+  files: readonly TaskFileEntry[];
   current: string | null;
   onOpen: (path: string) => void;
 }) {
@@ -40,15 +40,22 @@ function TreeNode({
   onOpen: (path: string) => void;
 }) {
   const style = { "--depth": depth } as React.CSSProperties;
+  const button = React.useRef<HTMLButtonElement>(null);
+  const chosen = current === node.path;
+  // In a list too short to show every file, the open one scrolls into view.
+  React.useEffect(() => {
+    if (chosen) button.current?.scrollIntoView({ block: "nearest" });
+  }, [chosen]);
   if (node.file) {
     const binary = node.file.text === undefined;
     return (
       <li>
         <button
+          ref={button}
           type="button"
-          className={`flex min-h-8 w-full min-w-0 cursor-pointer items-center justify-between gap-2 border-l-2 border-transparent py-1 pr-4 pl-[calc(14px+var(--depth)*14px)] text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground aria-current:border-foreground aria-current:bg-foreground/[0.06] aria-current:font-medium aria-current:text-foreground [&_span:first-child]:min-w-0 [&_span:first-child]:truncate ${binary ? "opacity-50" : ""}`}
+          className={`flex min-h-8 touch:min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-2 border-l-2 border-transparent py-1 pr-4 pl-[calc(14px+var(--depth)*14px)] text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground aria-current:border-foreground aria-current:bg-foreground/[0.06] aria-current:font-medium aria-current:text-foreground [&_span:first-child]:min-w-0 [&_span:first-child]:truncate ${binary ? "opacity-50" : ""}`}
           style={style}
-          aria-current={current === node.path}
+          aria-current={chosen}
           onClick={() => onOpen(node.path)}
           title={node.path}
         >
@@ -83,7 +90,7 @@ function TreeNode({
   );
 }
 
-function buildTree(files: TaskFileEntry[]): Node {
+function buildTree(files: readonly TaskFileEntry[]): Node {
   const root: Node = { name: "", path: "", children: [] };
   for (const file of [...files].sort((left, right) => left.path.localeCompare(right.path))) {
     const parts = file.path.split("/");
