@@ -112,6 +112,8 @@ export class SandboxCapacityError extends Error {
 /** A sandbox left running by `start`: enough to stop it later and bill for its lifetime. */
 export interface StartedSandbox {
   readonly sandboxId: string;
+  /** Shared credential admission lease, retained while a detached sandbox is alive. */
+  readonly capacityLeaseId?: string;
   readonly stage: string;
   readonly startedAt: string;
   /** When the provider deletes it on its own. */

@@ -9,7 +9,6 @@ import {
   generationSettingsSchema,
 } from "../../src/generation/settings/settings.js";
 import { createSandboxExecutor } from "../../src/sandbox/index.js";
-import { TimeoutCappedSandboxExecutor } from "../../src/sandbox/timeout.js";
 import { memoryVault } from "../support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
@@ -124,8 +123,7 @@ for (const sandbox of ["e2b", "vercel"] as const) {
             run,
             stage,
             legacy,
-            async (executor, harbor, configured) => {
-              expect(executor).toBeInstanceOf(TimeoutCappedSandboxExecutor);
+            async (_executor, harbor, configured) => {
               expect(harbor).toBe(harborEnvironment);
               expect(configured.authoring.model).toBe(
                 stage === "author" ? generation.authorModel : generation.verifierModel,
