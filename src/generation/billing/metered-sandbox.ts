@@ -8,12 +8,15 @@ import type {
   SandboxRunOptions,
   StartedSandbox,
 } from "../../sandbox/contracts.js";
+import type { GenerationModelRates } from "../settings/settings.js";
 import { managedModelCostUsd, managedSandboxCostUsd } from "./pricing.js";
 import { recordStageUsage, type StageUsage } from "./usage.js";
 
 export interface MeteredSandboxOptions {
   /** The canonical generation model id this stage's agent invokes, for cost rates. */
   readonly model?: string;
+  /** The model's rates when the run was submitted, for when it no longer has live ones. */
+  readonly rates?: GenerationModelRates;
   /** Runtime provider; only E2B has a sandbox rate in the existing pricing catalog. */
   readonly sandboxProvider?: SandboxProvider;
   /** Set when this run's model access is managed (SelfBench's own OpenRouter key). */
@@ -118,7 +121,7 @@ function stageUsage(
   usage?: ModelUsage,
 ): StageUsage {
   const modelCostUsd =
-    options.model && usage ? managedModelCostUsd(options.model, usage) : undefined;
+    options.model && usage ? managedModelCostUsd(options.model, usage, options.rates) : undefined;
   return {
     stage,
     managed: options.managedModel || options.managedSandbox,
@@ -134,6 +137,7 @@ function stageUsage(
     ...(usage && usage.messages > 0
       ? {
           ...(options.model ? { model: options.model } : {}),
+          ...(options.rates ? { modelRates: options.rates } : {}),
           tokens: {
             input: usage.input,
             output: usage.output,

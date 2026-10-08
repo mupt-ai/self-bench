@@ -47,8 +47,10 @@ test("billing policy defaults are pass-through", () => {
   });
 });
 
+const sol = { "gpt-6-sol": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 } };
+
 test("integer units come from quantities and frozen rates, not USD estimates", () => {
-  const snapshot = rateSnapshotSpec(loadBillingPolicy({}));
+  const snapshot = rateSnapshotSpec(loadBillingPolicy({}), sol);
   expect(snapshot.unitScale).toBe(10_000_000);
   expect(snapshot.markupBps).toBe(0);
   const model = modelBillableUnits(snapshot, "gpt-6-sol", {
@@ -62,7 +64,7 @@ test("integer units come from quantities and frozen rates, not USD estimates", (
   expect(modelBillableUnits(snapshot, "gpt-6-sol", undefined)).toBe(0);
   // 4 vCPU at $0.000014/s plus 8 GiB at $0.0000045/s.
   expect(sandboxBillableUnits(snapshot, 1, 4, 8192)).toBe(920);
-  const marked = rateSnapshotSpec(loadBillingPolicy({ SELFBENCH_BILLING_MARKUP_BPS: "1000" }));
+  const marked = rateSnapshotSpec(loadBillingPolicy({ SELFBENCH_BILLING_MARKUP_BPS: "1000" }), sol);
   expect(marked.markupBps).toBe(1000);
   expect(
     modelBillableUnits(marked, "gpt-6-sol", {

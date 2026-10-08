@@ -9,19 +9,6 @@ const SNAPSHOTS = new Set(["environment/repo.tar.gz", "tests/repo.tar.gz"]);
 /** Whether `path` is one of the task's repository snapshots. */
 export const isSnapshot = (path: string) => SNAPSHOTS.has(path);
 
-/**
- * A file's text as the viewer shows it. The instruction opens with the canary in the download
- * (the server's `withCanary`), and is shown without it, as Harbor gives it to an agent; the bar
- * below every file shows the canary instead. Every other file is shown as it is downloaded.
- */
-export function shownText(file: TaskFile, canary: string | undefined): string {
-  const text = file.text ?? "";
-  const opening = `<!-- ${canary} -->\n\n`;
-  return canary && file.path === "instruction.md" && text.startsWith(opening)
-    ? text.slice(opening.length)
-    : text;
-}
-
 /** The commit the task starts from, as its `task.toml` names it. */
 export function baseCommit(files: readonly TaskFile[]): string | undefined {
   const config = files.find((file) => file.path === "task.toml")?.text ?? "";

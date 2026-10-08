@@ -1,9 +1,8 @@
 import { HOSTED_EXECUTION_BACKENDS } from "../../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import { hostedSandboxes } from "../../../../src/evaluation/catalog";
-import { generationModels } from "../../../../src/generation/settings/models";
+import { catalog, hostedSandboxes } from "../../../../src/evaluation/catalog";
+import { generationCredentialRuns } from "../../../../src/generation/settings/models";
 import { isSandbox } from "../evaluation/credential-presentation";
-import { modelCredentialMatches } from "../generation-defaults";
 
 /** Whether a workflow has a model and a sandbox to run on. */
 export interface Coverage {
@@ -28,9 +27,7 @@ export function setupCoverage(
     generate: {
       model:
         !!managed.models ||
-        has((credential) =>
-          generationModels.some((model) => modelCredentialMatches(credential, model, model)),
-        ),
+        has((credential) => catalog.some((model) => generationCredentialRuns(model, credential))),
       sandbox:
         !!managed.sandbox ||
         has(

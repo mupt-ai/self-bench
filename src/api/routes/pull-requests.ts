@@ -7,15 +7,19 @@ import type { RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
+import { evaluationCatalog } from "../../evaluation/catalog.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
   checkGenerationCredentials,
   GENERATION_REQUIRED,
+  generationRoutes,
   saveGenerationRecords,
 } from "../../generation/settings/credentials.js";
-import { generationModels } from "../../generation/settings/models.js";
-import { generationSettingsSchema } from "../../generation/settings/settings.js";
+import {
+  type GenerationReference,
+  generationSettingsSchema,
+} from "../../generation/settings/settings.js";
 import {
   startTaskFromPullRequest,
   taskRunId,
@@ -94,7 +98,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
           ? await options.billing.status(tenant.id)
           : { configured: false, eligible: true, status: "disabled", cancelAtPeriodEnd: false };
         sendJson(response, 200, {
-          models: generationModels,
+          models: evaluationCatalog(),
           sandboxes: HOSTED_EXECUTION_BACKENDS,
           credentials: options.vault ? await options.vault.credentials.list(tenant.id) : [],
           available: !!options.vault,
@@ -117,7 +121,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         });
         return true;
       }
-      const generation = parsed?.success
+      const generation: GenerationReference | undefined = parsed?.success
         ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
         : undefined;
       if (!generation && options.vault) {
@@ -135,6 +139,11 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
             tenant.id,
             generation.settings,
             managedOffer(),
+          );
+          generation.routes = await generationRoutes(
+            options.vault.credentials,
+            tenant.id,
+            generation.settings,
           );
         } catch (error) {
           sendJson(response, 400, {

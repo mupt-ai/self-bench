@@ -2,41 +2,24 @@ import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FileViewer } from "../../components/FileViewer";
 import { formatBytes } from "../../lib/format";
-import { baseCommit, isSnapshot, shownText, snapshotCommand, type TaskFile } from "../task-files";
+import { baseCommit, isSnapshot, snapshotCommand, type TaskFile } from "../task-files";
 
-/**
- * The chosen file, in the app's file viewer, with the task's canary in a bar below it, so every
- * file shown has it beside it: the patches and JSON, which do not carry it, and the instruction,
- * shown without the copy it opens with. The canary keeps to one line; its full text is still in
- * the page.
- */
+/** The chosen file, in the app's file viewer. */
 export function FilePane({
   file,
   files,
   repository,
   taskId,
-  canary,
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
   repository: string;
   taskId: string;
-  canary?: string | undefined;
 }) {
   return (
     <FileViewer
-      file={file.text === undefined ? file : { ...file, text: shownText(file, canary) }}
+      file={file}
       binary={<NotShown file={file} files={files} repository={repository} taskId={taskId} />}
-      footer={
-        canary && (
-          <p
-            title={canary}
-            className="shrink-0 truncate border-t border-border px-4 py-1.5 font-mono text-[11px] text-(--faint)"
-          >
-            {canary}
-          </p>
-        )
-      }
     />
   );
 }

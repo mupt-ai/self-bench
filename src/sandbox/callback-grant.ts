@@ -21,6 +21,7 @@ const grantSchema = z.object({
   prefix: z.string().min(1),
   sandbox: z.object({
     sandboxId: z.string().min(1),
+    capacityLeaseId: z.string().uuid().optional(),
     stage: z.string().min(1),
     startedAt: z.string().min(1),
     expiresAt: z.string().min(1),

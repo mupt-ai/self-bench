@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import type { CredentialInfo } from "../../../src/db/credentials";
+import type { CatalogModel } from "../../../src/evaluation/catalog";
 import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { AdvancedFields } from "./GenerationAdvancedFields";
 import {
@@ -9,7 +10,8 @@ import {
 } from "./generation-defaults";
 
 export interface GenerationOptions {
-  models: string[];
+  /** The run page's catalog: curated models and every model the gateways list. */
+  models: CatalogModel[];
   sandboxes: string[];
   credentials: CredentialInfo[];
   available: boolean;
@@ -47,7 +49,9 @@ export function GenerationFields({
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-foreground">Generation</span>
             <span className="mt-1 block text-sm leading-6 text-muted-foreground group-open:hidden">
-              {options ? generationSettingsSummary(value) : "Loading generation settings…"}
+              {options
+                ? generationSettingsSummary(value, options.models)
+                : "Loading generation settings…"}
             </span>
           </span>
           <ChevronDown

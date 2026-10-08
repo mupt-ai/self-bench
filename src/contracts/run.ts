@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { gatewayIds } from "../gateways/index.js";
-import { generationReferenceSchema } from "../generation/settings/settings.js";
+import { generationReferenceSchema, piModelsSchema } from "../generation/settings/settings.js";
 import { artifactRefSchema, commitSchema, repositoryRefSchema } from "./common.js";
 import { MAX_CANDIDATES_PER_RUN, MAX_FOCUS_LENGTH } from "./config/execution-limits.js";
 import { EXECUTION_BACKENDS, HARBOR_ENVIRONMENTS } from "./config/providers.js";
@@ -46,6 +46,8 @@ const authoringSchema = z.object({
   provider: z.enum(["openai-codex", "openai", "anthropic", ...gatewayIds]),
   model: z.string().min(1),
   reasoningEffort: z.enum(["low", "medium", "high"]),
+  /** Pi's models.json for a gateway model, as the run's submission resolved it. */
+  piModels: piModelsSchema.optional(),
 });
 
 const MAX_EXCLUDED_RUNS = 100;

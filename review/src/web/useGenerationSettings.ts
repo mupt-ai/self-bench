@@ -31,7 +31,9 @@ export function useGenerationSettings(org: string, fullName: string, enabled = t
       options &&
       (value.sandbox !== previous.sandbox ||
         value.harborEnvironment !== previous.harborEnvironment ||
-        value.modelAccess !== previous.modelAccess)
+        value.modelAccess !== previous.modelAccess ||
+        value.authorModel !== previous.authorModel ||
+        value.verifierModel !== previous.verifierModel)
     )
       value = withDefaultCredentials(value, options);
     selection.current = { key, settings: value };

@@ -6,6 +6,7 @@ import {
   HOSTED_EXECUTION_BACKENDS,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/db/credentials";
+import { catalog } from "../../../src/evaluation/catalog";
 import type { GenerationSettings } from "../../../src/generation/settings/settings";
 import { CredentialEditor } from "./evaluation/CredentialEditor";
 import { credentialProvider, isSandbox } from "./evaluation/credential-presentation";
@@ -30,6 +31,7 @@ const base: GenerationSettings = {
   modelCredentialId: credentials[0]?.id ?? "",
   sandboxCredentialId: credentials[1]?.id,
 };
+const models = catalog.filter((model) => [base.authorModel, base.verifierModel].includes(model.id));
 function render(
   value: GenerationSettings,
   sandboxes = [...HOSTED_EXECUTION_BACKENDS],
@@ -42,7 +44,7 @@ function render(
         options={{
           available: true,
           sandboxes,
-          models: [base.authorModel, base.verifierModel],
+          models,
           credentials,
           managed,
         }}
@@ -79,7 +81,7 @@ test("managed model access and sandbox are offered only when the deployment flag
         options={{
           available: true,
           sandboxes: [...HOSTED_EXECUTION_BACKENDS],
-          models: [base.authorModel, base.verifierModel],
+          models,
           credentials,
           managed: { models: true, sandbox: true },
         }}
@@ -104,7 +106,7 @@ test("managed capabilities are gated independently by the deployment's keys", ()
         options={{
           available: true,
           sandboxes: [...HOSTED_EXECUTION_BACKENDS],
-          models: [base.authorModel, base.verifierModel],
+          models,
           credentials,
           managed: { models: false, sandbox: true },
         }}
@@ -123,22 +125,28 @@ test("managed capabilities are gated independently by the deployment's keys", ()
 
 test("collapsed generation summary is a short fact line", () => {
   expect(
-    generationSettingsSummary({
-      authorModel: "gpt-6-sol",
-      verifierModel: "gpt-6-sol",
-      reasoning: "high",
-      modelAccess: "managed",
-      sandbox: "managed",
-    }),
+    generationSettingsSummary(
+      {
+        authorModel: "gpt-6-sol",
+        verifierModel: "gpt-6-sol",
+        reasoning: "high",
+        modelAccess: "managed",
+        sandbox: "managed",
+      },
+      catalog,
+    ),
   ).toBe("GPT-6 Sol · High Reasoning · Managed");
   expect(
-    generationSettingsSummary({
-      authorModel: "gpt-6-sol",
-      verifierModel: "gpt-6-astra",
-      reasoning: "medium",
-      modelAccess: "credential",
-      sandbox: "modal",
-    }),
+    generationSettingsSummary(
+      {
+        authorModel: "gpt-6-sol",
+        verifierModel: "gpt-6-astra",
+        reasoning: "medium",
+        modelAccess: "credential",
+        sandbox: "modal",
+      },
+      catalog,
+    ),
   ).toBe("GPT-6 Sol / GPT-6 Astra · Medium Reasoning · My Credentials · Modal");
 });
 
@@ -222,7 +230,7 @@ test("managed generation cannot be submitted until billing is eligible", () => {
   const options = {
     available: true,
     sandboxes: [...HOSTED_EXECUTION_BACKENDS],
-    models: [base.authorModel, base.verifierModel],
+    models,
     credentials,
     managed: { models: true, sandbox: true },
   };

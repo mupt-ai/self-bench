@@ -32,13 +32,10 @@ const KIND_LABELS: Record<string, string> = {
 export function FileViewer({
   file,
   binary,
-  footer,
 }: {
   file: OpenFile | null;
   /** What a file without text shows in its place. */
   binary?: React.ReactNode;
-  /** Pinned under the file, outside its scrolling. */
-  footer?: React.ReactNode;
 }) {
   const [fullscreen, setFullscreen] = React.useState(false);
   const expand = React.useRef<HTMLButtonElement>(null);
@@ -84,7 +81,6 @@ export function FileViewer({
         path={file.path}
         kindLabel={kindLabel}
         stats={stats}
-        footer={footer}
         onExit={() => {
           leaving.current = true;
           setFullscreen(false);
@@ -116,12 +112,7 @@ export function FileViewer({
       </Block>
     );
   }
-  return (
-    <div className="flex min-h-0 min-w-0 flex-col">
-      <div className={`${sheetBody} min-h-0 flex-1`}>{content}</div>
-      {footer}
-    </div>
-  );
+  return <div className={sheetBody}>{content}</div>;
 }
 
 /**
@@ -132,14 +123,12 @@ function FullScreen({
   path,
   kindLabel,
   stats,
-  footer,
   onExit,
   children,
 }: {
   path: string;
   kindLabel: string;
   stats: string;
-  footer: React.ReactNode;
   onExit(): void;
   children: React.ReactNode;
 }) {
@@ -160,7 +149,7 @@ function FullScreen({
         event.stopPropagation();
         onExit();
       }}
-      className="m-0 hidden h-dvh max-h-none w-full max-w-none grid-rows-[auto_minmax(0,1fr)_auto] border-0 bg-background p-0 text-foreground open:grid"
+      className="m-0 hidden h-dvh max-h-none w-full max-w-none grid-rows-[auto_minmax(0,1fr)] border-0 bg-background p-0 text-foreground open:grid"
     >
       <div className="flex min-h-12 flex-wrap items-center gap-3 border-b border-border bg-(--viewer-panel) px-6 py-3 break-all">
         <span className="text-xs font-semibold text-muted-foreground">{kindLabel}</span>
@@ -181,7 +170,6 @@ function FullScreen({
         </button>
       </div>
       <div className="overflow-auto px-6 py-4 [&_pre]:p-0">{children}</div>
-      {footer}
     </dialog>
   );
 }

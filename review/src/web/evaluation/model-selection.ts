@@ -7,7 +7,6 @@ import {
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
-import { matchesQuery } from "../word-search";
 import type { Harness } from "./api";
 
 export const customModel: CatalogModel = {
@@ -18,11 +17,6 @@ export const customModel: CatalogModel = {
   harnesses: ["pi"],
   source: "",
 };
-
-/** The models whose name or id has a word starting with each word of `query`, in catalog order. */
-export function matchingModels(models: CatalogModel[], query: string): CatalogModel[] {
-  return models.filter((model) => matchesQuery(`${model.label} ${model.id}`, query));
-}
 
 export function nextModelSelection(
   model: CatalogModel,

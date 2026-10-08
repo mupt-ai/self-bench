@@ -31,7 +31,7 @@ export function SandboxLimitField({
         }
       />
       <span className="text-xs font-normal leading-5 text-muted-foreground">
-        Evaluations on this account run at most this many trials at once. Use your plan's limit,
+        Generation and evaluations share this credential's sandbox limit. Use your plan's limit,
         such as 20 on E2B Hobby. Leave blank for no limit.
       </span>
     </label>
@@ -88,7 +88,7 @@ export function SandboxLimitDialog({
             <SandboxLimitField value={value} onChange={setValue} inputRef={field} />
           </fieldset>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            Evaluations already running keep the limit they started with.
+            Already-started work is not stopped. New work waits for a free slot.
           </p>
           {error && (
             <p role="alert" className="mt-4 text-sm text-destructive">

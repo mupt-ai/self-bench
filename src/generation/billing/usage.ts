@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { reportError } from "../../lib/telemetry/sentry.js";
+import type { GenerationModelRates } from "../settings/settings.js";
 
 /** Model token consumption, matching Pi's per-message usage records. */
 export interface TokenUsage {
@@ -19,6 +20,8 @@ export interface StageUsage {
   /** Pi's provider/model for agent stages; absent for pure compute stages. */
   readonly provider?: string;
   readonly model?: string;
+  /** The model's rates when the run was submitted, for when it no longer has live ones. */
+  readonly modelRates?: GenerationModelRates;
   readonly tokens?: TokenUsage;
   readonly sandboxSeconds: number;
   /** Set for a started sandbox, which is recorded at most once. */

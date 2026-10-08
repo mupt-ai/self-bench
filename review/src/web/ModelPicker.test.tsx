@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import { ModelPicker } from "./ModelPicker";
+import type { CatalogModel } from "../../../src/evaluation/catalog";
+import { ModelPicker, matchingModels } from "./ModelPicker";
 
 const listed = (id: string, label: string): CatalogModel => ({
   id,
@@ -98,4 +98,17 @@ test("one control opens a search above the models and picks from the keyboard", 
   await act(async () => search.dispatchEvent(event("keydown", { key: "Enter" })));
   expect(chosen).toEqual(["moonshotai/kimi-k2.5"]);
   expect(container.querySelector('[role="listbox"]')).toBeNull();
+});
+
+test("model search matches word starts in names and ids", () => {
+  const models = [
+    { id: "qwen/qwen4-coder", label: "Qwen4 Coder" },
+    { id: "kimi-k3", label: "Kimi K3" },
+    { id: "z-ai/glm-5.3", label: "GLM 5.3" },
+  ];
+  const ids = (query: string) => matchingModels(models, query).map((entry) => entry.id);
+  expect(ids("")).toEqual(["qwen/qwen4-coder", "kimi-k3", "z-ai/glm-5.3"]);
+  expect(ids("qwen cod")).toEqual(["qwen/qwen4-coder"]);
+  expect(ids("z-ai")).toEqual(["z-ai/glm-5.3"]);
+  expect(ids("oder")).toEqual([]);
 });

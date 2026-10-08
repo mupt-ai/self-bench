@@ -23,7 +23,6 @@ import { generationRecordPath } from "../generation/settings/credentials.js";
 import type { GenerationReference } from "../generation/settings/settings.js";
 import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
 import { projectRoot } from "../lib/project-paths.js";
-import { taskCanary } from "../public/task-canary.js";
 import type { AuthConfig } from "./auth/config.js";
 import { createIndexNow } from "./indexnow.js";
 import { createRateLimiter } from "./rate-limit.js";
@@ -96,17 +95,7 @@ export async function openSite(
     burst: 60,
     onLimit: (client) => console.warn(`public site rate limit refused requests from ${client}`),
   });
-  // SelfBench's canary GUID, from deploy config (a Secret Manager secret in the cloud), so it is
-  // never in this repository; without one, published tasks are served as they are.
-  const canaryGuid = process.env.SELFBENCH_TASK_CANARY;
-  const canary = taskCanary(canaryGuid);
-  if (canaryGuid && !canary)
-    console.error("SELFBENCH_TASK_CANARY is not a GUID; published tasks are served without one");
-  const publicReleases = createPublicReleaseRoutes(releases, {
-    limiter,
-    artifacts,
-    ...(canary ? { taskCanary: canary } : {}),
-  });
+  const publicReleases = createPublicReleaseRoutes(releases, { limiter, artifacts });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
     ? createVault(database.db, process.env.SELFBENCH_EVAL_CREDENTIAL_KEY)

@@ -208,7 +208,6 @@ export default function TaskViewer({
                 files={files}
                 repository={repository}
                 taskId={taskId}
-                canary={current?.files?.canary}
               />
             )}
           </section>

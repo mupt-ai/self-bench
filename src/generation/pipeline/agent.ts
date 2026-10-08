@@ -10,6 +10,8 @@ import {
   type AgentRunRecord,
   type AgentRunResult,
 } from "../runs/types.js";
+import { piModelsFiles } from "../settings/models.js";
+import type { PiModelsFiles } from "../settings/settings.js";
 import { artifactFile } from "./helpers.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 
@@ -115,6 +117,9 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
           AUTHOR_MODEL: run.authoring.model,
           AUTHOR_PROVIDER: auth.provider,
           AUTHOR_THINKING: run.authoring.reasoningEffort,
+          ...piModelsEnvironment(
+            run.authoring.piModels ?? piModelsFiles(auth.provider, run.authoring.model),
+          ),
         },
       },
       outputs: [...request.outputs, SESSION_OUTPUT].map((path) => ({
@@ -134,6 +139,20 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
     },
     request.callback,
   );
+}
+
+/**
+ * Pi's models.json for a gateway model: the run's own from submission, which outlives the
+ * gateway dropping the model, else the live listing's. The script writes the whole entry for a
+ * Pi whose catalog lacks the model, which would otherwise guess at it, and only the thinking
+ * overrides for one that lists it, as Harbor's Pi adapter does for evaluation.
+ */
+function piModelsEnvironment(files: PiModelsFiles | undefined): Record<string, string> {
+  if (!files) return {};
+  return {
+    AUTHOR_PI_MODELS: files.models,
+    ...(files.overrides ? { AUTHOR_PI_MODEL_OVERRIDES: files.overrides } : {}),
+  };
 }
 
 /** Stops the agent's sandbox, bills it, and returns what the agent left behind. */
@@ -217,6 +236,13 @@ fi
 printf '%s\\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
 provider="\${AUTHOR_PROVIDER:-}"
 [ -n "$provider" ] || { [ -n "\${OPENAI_API_KEY:-}" ] && provider=openai || provider=openai-codex; }
+if [ -n "\${AUTHOR_PI_MODELS:-}" ]; then
+  if pi --list-models "$AUTHOR_MODEL" | awk -v p="$provider" -v m="$AUTHOR_MODEL" '$1 == p && $2 == m { found = 1 } END { exit !found }'; then
+    [ -z "\${AUTHOR_PI_MODEL_OVERRIDES:-}" ] || printf '%s' "$AUTHOR_PI_MODEL_OVERRIDES" > "$HOME/.pi/agent/models.json"
+  else
+    printf '%s' "$AUTHOR_PI_MODELS" > "$HOME/.pi/agent/models.json"
+  fi
+fi
 ${workspace}
 cd /work/repo
 ${request.setup ?? ""}
