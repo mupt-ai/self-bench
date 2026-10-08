@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { solverAgentArguments } from "../src/evaluation/execution.js";
 import { gatewayIds, piModels, setGatewayListing } from "../src/gateways/index.js";
 import { refreshGateway } from "../src/gateways/refresh.js";
-import { piModelsEnvironment } from "../src/generation/pipeline/agent.js";
+import { piModelsFiles } from "../src/generation/settings/models.js";
 
 afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
@@ -96,9 +96,9 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
     solverAgentArguments("pi", "openrouter", "openrouter/mistralai/mistral-large-4-0"),
   ).toEqual([]);
   // Generation's Pi gets the same file, and only the overrides where its catalog lists the model.
-  expect(piModelsEnvironment("vercel-ai-gateway", "mistral/mistral-large-4")).toEqual({
-    AUTHOR_PI_MODELS: JSON.stringify(piModels("vercel-ai-gateway", "mistral/mistral-large-4")),
-    AUTHOR_PI_MODEL_OVERRIDES: JSON.stringify({
+  expect(piModelsFiles("vercel-ai-gateway", "mistral/mistral-large-4")).toEqual({
+    models: JSON.stringify(piModels("vercel-ai-gateway", "mistral/mistral-large-4")),
+    overrides: JSON.stringify({
       providers: {
         "vercel-ai-gateway": {
           modelOverrides: {
@@ -111,8 +111,8 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
       },
     }),
   });
-  expect(piModelsEnvironment("vercel-ai-gateway", "vendor/plain")).toEqual({
-    AUTHOR_PI_MODELS: JSON.stringify(piModels("vercel-ai-gateway", "vendor/plain")),
+  expect(piModelsFiles("vercel-ai-gateway", "vendor/plain")).toEqual({
+    models: JSON.stringify(piModels("vercel-ai-gateway", "vendor/plain")),
   });
-  expect(piModelsEnvironment("openai", "gpt-6.1-sol")).toEqual({});
+  expect(piModelsFiles("openai", "gpt-6.1-sol")).toBeUndefined();
 });

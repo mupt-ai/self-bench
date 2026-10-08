@@ -1,6 +1,5 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef, RunRequest } from "../../contracts/index.js";
-import { isGateway, piModelOverrides, piModels } from "../../gateways/index.js";
 import { loadPiModelAuth, piModelAuthSecrets } from "../../harnesses/pi/model-auth.js";
 import type { SandboxExecutor, SandboxFile } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
@@ -11,6 +10,8 @@ import {
   type AgentRunRecord,
   type AgentRunResult,
 } from "../runs/types.js";
+import { piModelsFiles } from "../settings/models.js";
+import type { PiModelsFiles } from "../settings/settings.js";
 import { artifactFile } from "./helpers.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 
@@ -116,7 +117,9 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
           AUTHOR_MODEL: run.authoring.model,
           AUTHOR_PROVIDER: auth.provider,
           AUTHOR_THINKING: run.authoring.reasoningEffort,
-          ...piModelsEnvironment(auth.provider, run.authoring.model),
+          ...piModelsEnvironment(
+            run.authoring.piModels ?? piModelsFiles(auth.provider, run.authoring.model),
+          ),
         },
       },
       outputs: [...request.outputs, SESSION_OUTPUT].map((path) => ({
@@ -139,18 +142,16 @@ export async function startAgent(request: AgentRequest): Promise<SandboxJobOutco
 }
 
 /**
- * Pi's models.json for a gateway model, as the gateway lists it (piModels): the whole entry for a
+ * Pi's models.json for a gateway model: the run's own from submission, which outlives the
+ * gateway dropping the model, else the live listing's. The script writes the whole entry for a
  * Pi whose catalog lacks the model, which would otherwise guess at it, and only the thinking
  * overrides for one that lists it, as Harbor's Pi adapter does for evaluation.
  */
-export function piModelsEnvironment(provider: string, model: string): Record<string, string> {
-  if (!isGateway(provider)) return {};
-  const full = piModels(provider, model);
-  if (!full) return {};
-  const overrides = piModelOverrides(provider, model);
+function piModelsEnvironment(files: PiModelsFiles | undefined): Record<string, string> {
+  if (!files) return {};
   return {
-    AUTHOR_PI_MODELS: JSON.stringify(full),
-    ...(overrides ? { AUTHOR_PI_MODEL_OVERRIDES: JSON.stringify(overrides) } : {}),
+    AUTHOR_PI_MODELS: files.models,
+    ...(files.overrides ? { AUTHOR_PI_MODEL_OVERRIDES: files.overrides } : {}),
   };
 }
 

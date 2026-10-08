@@ -120,14 +120,25 @@ const modelRatesSchema = z
 export type GenerationModelRates = z.infer<typeof modelRatesSchema>;
 
 /**
+ * Pi's models.json for a gateway model, as JSON: the whole entry for a Pi whose catalog lacks the
+ * model, and only its thinking overrides for one that lists it.
+ */
+export const piModelsSchema = z
+  .object({ models: z.string().min(1), overrides: z.string().min(1).optional() })
+  .strict();
+export type PiModelsFiles = z.infer<typeof piModelsSchema>;
+
+/**
  * One stage's model as submission resolved it. The gateways can drop a model while a run is
- * underway, so the run keeps the Pi provider and model id it was accepted with, and OpenRouter's
- * rates then, which billing falls back to when the model no longer has live ones.
+ * underway, so the run keeps what it was accepted with: the Pi provider and model id, Pi's
+ * models.json from the gateway's listing, and OpenRouter's rates, which billing falls back to
+ * when the model no longer has live ones.
  */
 const generationRouteSchema = z
   .object({
     provider: z.enum(["openai", "openai-codex", "anthropic", ...gatewayIds]),
     model: z.string().min(1),
+    piModels: piModelsSchema.optional(),
     rates: modelRatesSchema.optional(),
   })
   .strict();

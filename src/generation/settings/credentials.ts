@@ -30,6 +30,7 @@ import {
   generationModelRoute,
   managedModelPricing,
   managedRuns,
+  piModelsFiles,
 } from "./models.js";
 import type { GenerationReference, GenerationRoute, GenerationSettings } from "./settings.js";
 
@@ -177,12 +178,22 @@ export async function generationRoutes(
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",
       );
+    const route = generationModelRoute(id, credential);
+    const files = piModelsFiles(route.provider, route.model);
     const pricing = managedModelPricing(id);
-    if (!pricing) return generationModelRoute(id, credential);
-    const { input, output, cacheRead, cacheWrite } = pricing;
     return {
-      ...generationModelRoute(id, credential),
-      rates: { input, output, cacheRead, cacheWrite },
+      ...route,
+      ...(files ? { piModels: files } : {}),
+      ...(pricing
+        ? {
+            rates: {
+              input: pricing.input,
+              output: pricing.output,
+              cacheRead: pricing.cacheRead,
+              cacheWrite: pricing.cacheWrite,
+            },
+          }
+        : {}),
     };
   };
   return { author: route(settings.authorModel), verifier: route(settings.verifierModel) };

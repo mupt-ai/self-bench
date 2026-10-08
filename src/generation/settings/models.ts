@@ -7,7 +7,10 @@ import {
   isGateway,
   type ListedModel,
   listedModels,
+  piModelOverrides,
+  piModels,
 } from "../../gateways/index.js";
+import type { PiModelsFiles } from "./settings.js";
 
 /** The catalog by id, as of the gateway listings it was built from. */
 let indexed:
@@ -86,4 +89,16 @@ export function generationModelPricing(id: string) {
     (model &&
       modelRoutes(model).find((route) => isGateway(route.provider) && route.pricing)?.pricing)
   );
+}
+
+/** Pi's models.json for the gateway's model `id`, when its listing describes the model to Pi. */
+export function piModelsFiles(provider: string, id: string): PiModelsFiles | undefined {
+  if (!isGateway(provider)) return undefined;
+  const models = piModels(provider, id);
+  if (!models) return undefined;
+  const overrides = piModelOverrides(provider, id);
+  return {
+    models: JSON.stringify(models),
+    ...(overrides ? { overrides: JSON.stringify(overrides) } : {}),
+  };
 }

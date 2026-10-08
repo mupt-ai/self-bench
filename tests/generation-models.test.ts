@@ -63,9 +63,16 @@ test("submission refuses a model the catalog does not offer, or managed access c
   ).rejects.toThrow("Qwen4 Max is not available with managed models.");
 });
 
-test("a run keeps the routes and rates it was submitted with after the gateways drop its model", async () => {
+const qwenPi = {
+  id: "qwen/qwen4-coder",
+  name: "Qwen4 Coder",
+  reasoning: false,
+  input: ["text" as const],
+};
+
+test("a run keeps the routes, Pi models and rates it was submitted with after the gateways drop its model", async () => {
   setGatewayListing("openrouter", {
-    models: [{ id: "qwen/qwen4-coder", label: "Qwen4 Coder" }],
+    models: [{ id: "qwen/qwen4-coder", label: "Qwen4 Coder", pi: qwenPi }],
     rates: new Map([["qwen/qwen4-coder", { rates: [1, 4, 0.1, 1], asOf: "2026-09-29" }]]),
   });
   const vault = memoryVault();
@@ -78,6 +85,9 @@ test("a run keeps the routes and rates it was submitted with after the gateways 
   expect(routes.author).toEqual({
     provider: "openrouter",
     model: "qwen/qwen4-coder",
+    piModels: {
+      models: JSON.stringify({ providers: { openrouter: { models: [qwenPi] } } }),
+    },
     rates: { input: 1, output: 4, cacheRead: 0.1, cacheWrite: 1 },
   });
   setGatewayListing("openrouter", { models: [], rates: new Map() });

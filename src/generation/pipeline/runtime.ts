@@ -117,6 +117,7 @@ export async function withGenerationRuntime<T>(
       provider: authoring.provider as RunRequest["authoring"]["provider"],
       model: authoring.model,
       reasoningEffort: authoring.reasoningEffort as RunRequest["authoring"]["reasoningEffort"],
+      ...(authoring.piModels ? { piModels: authoring.piModels } : {}),
     },
   };
   const metered = meteredSandboxExecutor(createSandboxExecutor(execution, env), {
