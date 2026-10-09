@@ -11,6 +11,8 @@ export interface Selection {
   added: { new: number; returning: number };
   /** Tasks of the current release left out: removed from the dataset, or not run by a ticked setting. */
   droppedFromCurrent: number;
+  /** Indexes of the chosen tasks no setting passed, though enough ran them: check their tests. */
+  unsolved: number[];
 }
 
 export function selectionOf(preview: ReleasePreview, ticked: ReadonlySet<string>): Selection {
@@ -35,5 +37,6 @@ export function selectionOf(preview: ReleasePreview, ticked: ReadonlySet<string>
       returning: released.filter((task) => task?.status === "returning").length,
     },
     droppedFromCurrent: preview.removed.length + (inCurrent - keptFromCurrent),
+    unsolved: tasks.filter((index) => preview.tasks[index]?.unsolved !== undefined),
   };
 }

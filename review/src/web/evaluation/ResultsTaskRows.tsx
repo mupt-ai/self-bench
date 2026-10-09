@@ -152,10 +152,13 @@ export function TaskHeadings({
 export function TaskRow({
   entry,
   cumulative,
+  unsolved,
   onOpen,
 }: {
   entry: TaskEntry;
   cumulative: boolean;
+  /** How many configurations ran the task, when enough did and none passed. */
+  unsolved?: number;
   onOpen(result: TaskResult): void;
 }) {
   const { owner = "", name = "" } = useParams();
@@ -245,6 +248,14 @@ export function TaskRow({
             title="The agent reached its time limit and was scored on the work it had done"
           >
             Timed Out
+          </span>
+        )}
+        {unsolved !== undefined && (
+          <span
+            className="ml-2 border border-current px-1 py-px text-[10px] leading-none text-warning"
+            title={`None of the ${unsolved} configurations with an eligible result on this task passed it. Check its hidden tests.`}
+          >
+            Unsolved
           </span>
         )}
       </td>

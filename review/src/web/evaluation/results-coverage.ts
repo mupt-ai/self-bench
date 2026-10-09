@@ -1,9 +1,11 @@
+import { eligibleTrial } from "../../../../src/evaluation/eligible";
+import { unsolvedTasks } from "../../../../src/public/release-rule";
 import type { AcceptedTask } from "./RepoRuns";
 import type { Configuration, Outcome } from "./results-model";
 
 /**
- * Coverage: which accepted tasks a configuration has no result for, and why. Imports no React, so
- * the table, its rows and its tests share it.
+ * Coverage: which accepted tasks a configuration has no result for, and why, and which ones no
+ * configuration passed. Imports no React, so the table, its rows and its tests share it.
  */
 
 /** An accepted task with no result: left out of a run, or added since the last one. */
@@ -51,4 +53,22 @@ export function withMissing(
   const all = { ...counts };
   for (const task of missing) all[task.outcome] += 1;
   return all;
+}
+
+/**
+ * Accepted tasks enough configurations have a usable result for and none passed, with how many
+ * ran each, by task key: their hidden tests may fail correct solutions (`unsolvedTasks`).
+ */
+export function unsolvedOf(
+  configurations: readonly Configuration[],
+  accepted: readonly AcceptedTask[] = [],
+): Map<string, number> {
+  const keys = new Set(accepted.map((task) => `${task.runId}/${task.taskId}`));
+  return unsolvedTasks(
+    configurations.map((configuration) =>
+      configuration.latest
+        .filter((result) => keys.has(result.task) && eligibleTrial(result.trial))
+        .map((result) => [result.task, result.outcome === "passed"] as const),
+    ),
+  );
 }

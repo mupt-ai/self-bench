@@ -61,6 +61,7 @@ export function ResultGroupRows({
   statusOf,
   cumulative = false,
   missing = [],
+  unsolved,
   open,
   shown,
   sort,
@@ -79,6 +80,8 @@ export function ResultGroupRows({
   cumulative?: boolean;
   /** Accepted tasks with no result here, listed as Left Out or Added Later. */
   missing?: readonly MissingTask[];
+  /** Accepted tasks no configuration passed, though enough ran them, by task key (`unsolvedOf`). */
+  unsolved?: ReadonlyMap<string, number>;
   open: boolean;
   /** The result states shown. */
   shown: ReadonlySet<Outcome>;
@@ -144,7 +147,13 @@ export function ResultGroupRows({
           </tr>
           <TaskHeadings cumulative={cumulative} sort={sort} onSort={onSort} />
           {tasks.map((entry) => (
-            <TaskRow key={entry.key} entry={entry} cumulative={cumulative} onOpen={onOpenTask} />
+            <TaskRow
+              key={entry.key}
+              entry={entry}
+              cumulative={cumulative}
+              unsolved={entry.result && unsolved?.get(entry.result.task)}
+              onOpen={onOpenTask}
+            />
           ))}
         </>
       )}

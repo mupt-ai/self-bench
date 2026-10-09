@@ -11,7 +11,7 @@ import {
 import type { AcceptedTask } from "./RepoRuns";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
 import { runStateOf } from "./ResultsMarks";
-import { missingTasks } from "./results-coverage";
+import { missingTasks, unsolvedOf } from "./results-coverage";
 import { configurationsOf } from "./results-model";
 import {
   findTrial,
@@ -48,6 +48,8 @@ export function ResultsTable({
   const [view, setView] = useResultsView(baseUrl);
   const [search, setSearch] = useSearchParams();
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
+  // Over every configuration, whatever the filters show.
+  const unsolved = useMemo(() => unsolvedOf(configurations, accepted), [configurations, accepted]);
   useScrollMemory(baseUrl, configurations.length > 0);
   // Escape folds the table up a level at a time: open runs first, then open configurations.
   useEffect(() => {
@@ -160,6 +162,7 @@ export function ResultsTable({
                   key={configuration.key}
                   configuration={configuration}
                   accepted={accepted}
+                  unsolved={unsolved}
                   view={view}
                   setView={setView}
                   onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}

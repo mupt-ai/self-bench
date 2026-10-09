@@ -7,6 +7,7 @@ import { InfoTooltip } from "../primitives/tooltip";
 import { Button, Notice } from "../ui";
 import { ReleaseRequestError, type ReleaseSummary, type ReleaseView, releaseRequest } from "./api";
 import { PUBLISH_DEFAULTS, PublishOptions, privacyNote } from "./PublishOptions";
+import { Notes, Unsolved } from "./ReleaseNotes";
 import { SettingsPicker } from "./SettingsPicker";
 import { selectionOf } from "./selection";
 
@@ -17,11 +18,14 @@ import { selectionOf } from "./selection";
  */
 export function ReleaseDialog({
   url,
+  repo,
   workspace,
   onReleased,
   onClose,
 }: {
   url: string;
+  /** The repository's full name, for links to its tasks. */
+  repo: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
   workspace: { login: string; kind: "org" | "user" };
   onReleased(release: ReleaseSummary, unchanged: boolean): void;
@@ -151,6 +155,7 @@ export function ReleaseDialog({
               onChange={setTicked}
             />
             {selection && <Notes view={view} selection={selection} />}
+            {selection && <Unsolved view={view} selection={selection} repo={repo} />}
             <PublishOptions publish={publish} disabled={busy} onChange={setPublish} />
           </>
         )}
@@ -209,35 +214,5 @@ export function ReleaseDialog({
         </div>
       </DialogBody>
     </Dialog>
-  );
-}
-
-/** What changes against the current release, as short notes above the summary line. */
-function Notes({
-  view,
-  selection,
-}: {
-  view: ReleaseView;
-  selection: ReturnType<typeof selectionOf>;
-}) {
-  // Added and left-out tasks only mean something against a current release.
-  const since = view.current !== null;
-  const lines = [
-    since &&
-      selection.added.new > 0 &&
-      `${plural(selection.added.new, "new task")} since the last release`,
-    since && selection.added.returning > 0 && plural(selection.added.returning, "returning task"),
-    since &&
-      selection.droppedFromCurrent > 0 &&
-      `${plural(selection.droppedFromCurrent, "task")} of the current release left out`,
-    view.preview.unrun > 0 && `${plural(view.preview.unrun, "approved task")} no setting has run`,
-  ].filter((line): line is string => !!line);
-  if (lines.length === 0) return null;
-  return (
-    <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
-      {lines.map((line) => (
-        <li key={line}>{line}</li>
-      ))}
-    </ul>
   );
 }

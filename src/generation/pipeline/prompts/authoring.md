@@ -70,6 +70,9 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 - gold.patch and test.patch touch different files. Fail-to-pass tests fail on the base, pass with gold, every time.
 - Pass-to-pass files are graded at their base version, whatever the agent changes, so gold.patch must not touch them.
 - Test through a public boundary. Don't import private helpers from the gold patch, and don't pin SQL, error wording, UI copy, or response shapes the request doesn't ask for. A different correct implementation must pass.
+- Unless the instruction asks for them, don't pin: exact call counts or request order; one spelling of an equivalent (a CSS longhand but not its shorthand); a type a test needs to compile; one mechanism among several correct ones (a guard where try/catch also works); text checks loose enough to match harmless prose; hidden limits on length, size, or time; mocks that refuse requests another correct approach makes; an answer to a policy choice the instruction leaves open. Assert the behavior instead: the command fails and names both flags, not its sentence; capture is no longer held, not how often release was called.
+- Pin existing text or behavior only when the instruction implies the solution goes through that existing path. Existing somewhere in the repository is not enough.
+- Don't reverse a visible existing test (a throw that now resolves) unless the instruction states the new behavior.
 - Backend + frontend change: test the backend contract, not a mocked frontend.
 
 # Keep the Instruction Fair
