@@ -16,8 +16,15 @@ const traceSearch = (taskId: string, settingId: string) =>
   `?trace=${encodeURIComponent(taskId)}&setting=${encodeURIComponent(settingId)}`;
 
 /**
+ * A result's mark: solid where it passed, hollow where it failed, so the two differ by shape and
+ * not only by hue, which red-green color blindness can't tell apart.
+ */
+export const resultMark = (passed: boolean) =>
+  passed ? "bg-(--ok)" : "border-[1.5px] border-(--bad)";
+
+/**
  * Every setting's result on every task of a release that published its trials: settings down the
- * side, tasks across, a green box where it passed and a red one where it did not. A box opens
+ * side, tasks across, a solid box where it passed and a hollow one where it did not. A box opens
  * that attempt's transcript in the trace viewer. Read as the section nears the screen, from the
  * same task list the Tasks section reads.
  */
@@ -47,11 +54,11 @@ export function ResultsGrid({
         <h2 className="text-sm font-medium">Results by Task</h2>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className="size-2.5 bg-(--ok)" />
+            <span aria-hidden="true" className={`size-2.5 ${resultMark(true)}`} />
             Passed
           </span>
           <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className="size-2.5 bg-(--bad)" />
+            <span aria-hidden="true" className={`size-2.5 ${resultMark(false)}`} />
             Failed
           </span>
           <span>Select a box to read its transcript.</span>
@@ -126,9 +133,7 @@ export function ResultsGrid({
                               onPointerEnter={() => void loadTraceViewer()}
                               onPointerDown={() => readAhead(task.id, setting.id)}
                               onFocus={() => void loadTraceViewer()}
-                              className={`h-5 outline-offset-1 hover:outline-2 hover:outline-foreground focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${
-                                passed ? "bg-(--ok)" : "bg-(--bad)"
-                              }`}
+                              className={`h-5 outline-offset-1 hover:outline-2 hover:outline-foreground focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${resultMark(passed)}`}
                             />
                           );
                         })

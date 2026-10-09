@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TrialDetails } from "../../web/evaluation/TrialDetails";
+import { resultMark } from "../components/ResultsGrid";
 import { TrialGrading } from "../components/TrialGrading";
 import type { PublicRelease, PublicTrial } from "../contract";
 import { dollars, harnessLabel, reasoningLabel, settingLabel } from "../format";
@@ -98,10 +99,7 @@ export default function TraceViewer({
       {trial && (
         <p className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-border px-4 py-2">
           <span className="flex items-center gap-1.5 font-medium">
-            <span
-              aria-hidden="true"
-              className={`size-2.5 ${trial.passed ? "bg-(--ok)" : "bg-(--bad)"}`}
-            />
+            <span aria-hidden="true" className={`size-2.5 ${resultMark(trial.passed)}`} />
             {trial.passed ? "Passed" : "Failed"}
           </span>
           {minutes !== undefined && (
