@@ -37,6 +37,20 @@ export function syntheticTasks(settingIds: readonly string[]): MemoryTasks {
     taskId: task.id,
     settingId,
     passed: task.passed?.[settingId] === true,
+    rewards: task.passed?.[settingId]
+      ? { reward: 1, patch_applied: 1, fail_to_pass: 1, deterministic: 1, pass_to_pass: 1 }
+      : {
+          reward: 0,
+          patch_applied: 1,
+          fail_to_pass: 0,
+          fail_to_pass_exit_code: 1,
+          deterministic: 0,
+          fail_to_pass_repeat_exit_code: -1,
+          pass_to_pass: 1,
+          pass_to_pass_exit_code: 0,
+        },
+    // A runner's summary table, wider than a phone.
+    verifierOutput: `PASS src/widget.test.ts\n${"─".repeat(90)}\n Tests  12 passed (12)\n`,
     startedAt: "2026-09-16T20:00:00Z",
     finishedAt: "2026-09-16T20:07:30Z",
     agentMinutes: 30,

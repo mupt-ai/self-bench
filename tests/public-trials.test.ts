@@ -27,8 +27,13 @@ const trial = (taskId: string, harness: EvaluationTrial["harness"], reward: numb
     runId: "batch-1",
     harness,
     status: "completed",
-    rewards: { reward },
-    log: "Harbor output naming https://private-endpoint.example.com",
+    rewards: { reward, patch_applied: 1, fail_to_pass: reward, pass_to_pass: 1 },
+    // Sections as output.ts `trialLog` writes them: only the verifier's test output is public.
+    log: [
+      "--- Harbor output ---\nrouted through https://private-endpoint.example.com",
+      "--- solver/harbor-task__x/verifier/test-stdout.txt ---\nPASS chunks.test.ts\nGH_AUTH_TOKEN=ghsecretvalue1234",
+      "--- solver/harbor-task__x/trial.log ---\nsandbox sb-7f3a2 started",
+    ].join("\n\n"),
     artifacts: ["0/agent/trajectory.json"],
     error: "upstream https://private-endpoint.example.com refused",
     startedAt: "2026-10-01T00:00:00Z",
@@ -58,6 +63,9 @@ const RUNS: Record<string, EvaluationRun> = {
     trials: [trial("next-pr-1", "pi", 1), trial("next-pr-2", "pi", 1)],
   } as unknown as EvaluationRun,
 };
+
+/** The transcripts runs kept, by run and artifact name. */
+const ARTIFACTS: Record<string, string> = {};
 
 const results = (evaluationId: string, passes: boolean[]) =>
   Object.fromEntries(
@@ -106,9 +114,12 @@ async function serve() {
     },
     {
       artifacts: { stat: async () => undefined, openReadByKey: async () => undefined },
-      releasedRun: async (at, evaluationId) => {
-        runReads.push(evaluationId);
-        return at.orgId === LINE.orgId ? RUNS[evaluationId] : undefined;
+      trials: {
+        run: async (at, evaluationId) => {
+          runReads.push(evaluationId);
+          return at.orgId === LINE.orgId ? RUNS[evaluationId] : undefined;
+        },
+        artifact: async (_at, evaluationId, name) => ARTIFACTS[`${evaluationId}/${name}`],
       },
     },
   );
@@ -143,7 +154,7 @@ test("a release that published its trials lists whether each setting passed each
   expect(quiet.tasks.every((entry) => !("passed" in entry))).toBe(true);
 });
 
-test("a trial is its result and redacted transcript, never its log, artifacts, or error", async () => {
+test("a trial is its result, grading, and redacted transcript, never the rest of its log", async () => {
   const { get } = await serve();
   const response = await get(`with-trials/tasks/next-pr-2/trials/${SOL_ID}`);
   expect(response.status).toBe(200);
@@ -163,7 +174,15 @@ test("a trial is its result and redacted transcript, never its log, artifacts, o
     "Checking the environment.",
   ]);
   expect(body).not.toContain("sk-abcdefghijklmnop1234");
-  for (const hidden of ["private-endpoint", "billedCostUsd", "trajectory.json"])
+  expect(trial.rewards).toEqual({ reward: 0, patch_applied: 1, fail_to_pass: 0, pass_to_pass: 1 });
+  expect(trial.verifierOutput).toStartWith("PASS chunks.test.ts\n");
+  for (const hidden of [
+    "private-endpoint",
+    "sb-7f3a2",
+    "ghsecretvalue1234",
+    "billedCostUsd",
+    "trajectory.json",
+  ])
     expect(body).not.toContain(hidden);
   // The custom model's id has a slash in it, encoded in the address.
   const custom = await get(
@@ -207,5 +226,47 @@ test("a trial its run no longer holds where the release recorded it is not found
     expect(response.status).toBe(404);
   } finally {
     RUNS["run-custom"]?.trials.reverse();
+  }
+});
+
+test("a trial recorded before whole transcripts were read is read again from the one it kept", async () => {
+  const { get } = await serve();
+  const name = "0/solver/harbor-task__x/agent/pi.txt";
+  const custom = RUNS["run-custom"]?.trials[0];
+  if (!custom) throw new Error("missing trial");
+  custom.artifacts = [name];
+  // Only the end of the log was kept, but Pi's last event repeats the whole conversation.
+  ARTIFACTS[`run-custom/${name}`] = [
+    '[Earlier output truncated]\n"partial":true}',
+    JSON.stringify({
+      type: "agent_end",
+      messages: [
+        { role: "user", content: [{ type: "text", text: "Order the chunks by path." }] },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Editing the emitter." },
+            { type: "toolCall", id: "e1", name: "edit", arguments: { path: "src/chunk.rs" } },
+          ],
+        },
+        { role: "toolResult", toolCallId: "e1", content: [{ type: "text", text: "Edited." }] },
+        { role: "assistant", content: [{ type: "text", text: "Done." }] },
+      ],
+    }),
+  ].join("\n");
+  try {
+    const response = await get(
+      `with-trials/tasks/next-pr-1/trials/${encodeURIComponent("custom/qwen|pi|default")}`,
+    );
+    const trial = (await response.json()) as PublishedTrial;
+    expect(trial.steps.map((step) => step.text)).toEqual([
+      "Order the chunks by path.",
+      "Editing the emitter.",
+      "Done.",
+    ]);
+    expect(trial.steps[1]?.tools[0]).toMatchObject({ name: "edit", output: "Edited." });
+  } finally {
+    custom.artifacts = ["0/agent/trajectory.json"];
+    delete ARTIFACTS[`run-custom/${name}`];
   }
 });

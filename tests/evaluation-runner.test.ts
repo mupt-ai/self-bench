@@ -2,19 +2,14 @@ import { expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { credentialExecution } from "../src/evaluation/execution.js";
-import {
-  collectOutput,
-  completeLines,
-  piSteps,
-  redactOutput,
-  trajectorySteps,
-} from "../src/evaluation/output.js";
+import { collectOutput, completeLines, redactOutput } from "../src/evaluation/output.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
 import {
   assertEvaluationBundleSize,
   MAX_EVALUATION_BUNDLE_BYTES,
 } from "../src/evaluation/task-bundle.js";
+import { piSteps, trajectorySteps } from "../src/evaluation/transcript.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { runCommand } from "../src/lib/process.js";
 import { testModelSecret } from "./support/evaluation-fixture.js";

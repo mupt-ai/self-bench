@@ -20,7 +20,7 @@ export function privacyNote(
       ? `you as publisher, under your GitHub username ${workspace.login}`
       : `the ${workspace.login} workspace as publisher`;
   if (publish.tasks && publish.trials)
-    return `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, each task with its pull request, instruction, tests, and solution, and each setting's result and transcript on each task, with secrets redacted. Private: Harbor logs, artifacts, endpoint hosts, and who pressed Release.`;
+    return `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, each task with its pull request, instruction, tests, and solution, and each setting's result, grading, test output, and transcript on each task, with secrets redacted. Private: the rest of Harbor's logs, artifacts, endpoint hosts, and who pressed Release.`;
   return publish.tasks
     ? `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, and each task with its pull request, instruction, tests, and solution. Private: per-task results, transcripts, endpoint hosts, and who pressed Release.`
     : `Public: the repository, ${publisher}, and each setting's model, harness, accuracy, and cost. Private: which tasks and pull requests were used, per-task results, transcripts, endpoint hosts, and who pressed Release.`;
@@ -59,8 +59,8 @@ export function PublishOptions({
         disabled={disabled || !publish.tasks}
         onChange={(trials) => onChange({ ...publish, trials })}
       >
-        Anyone can see whether each setting passed each task, and read its transcript, with secrets
-        redacted. Harbor logs and artifacts stay private.
+        Anyone can see whether each setting passed each task, how it was graded, and its test output
+        and transcript, with secrets redacted. The rest of Harbor's logs and artifacts stay private.
       </Option>
     </div>
   );

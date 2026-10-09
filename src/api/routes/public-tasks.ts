@@ -64,11 +64,11 @@ export interface PublicTaskRoutesOptions {
   /** A release's tasks as its row records them (`ReleaseStore.releasedTasks`). */
   releasedTasks(id: string): Promise<ReleaseTask[] | undefined>;
   /**
-   * Its results and where their trials are (`ReleaseStore.releasedResults`); with `releasedRun`,
+   * Its results and where their trials are (`ReleaseStore.releasedResults`); with `trials`,
    * a release that published its trials shows them. Without, it shows its tasks alone.
    */
   releasedResults?(id: string): Promise<ReleasedResults | undefined>;
-  releasedRun?: TrialBodiesOptions["releasedRun"];
+  trials?: TrialBodiesOptions["trials"];
   artifacts: Pick<ArtifactStore, "stat" | "openReadByKey">;
 }
 
@@ -81,8 +81,8 @@ export interface PublicTaskRoutesOptions {
 export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
   const indexes = new Map<string, Promise<TaskIndex | undefined>>();
   const files = new Map<string, TaggedBody>();
-  const { releasedResults, releasedRun } = options;
-  const trialBody = releasedRun ? createTrialBodies({ releasedRun }) : undefined;
+  const { releasedResults, trials } = options;
+  const trialBody = trials ? createTrialBodies({ trials }) : undefined;
   // A release's trials are published or not for good, so its index is kept either way.
   const indexOf = (releaseId: string, withTrials: boolean): Promise<TaskIndex | undefined> => {
     const found = indexes.get(releaseId);

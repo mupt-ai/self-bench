@@ -23,7 +23,7 @@ import { generationRecordPath } from "../generation/settings/credentials.js";
 import type { GenerationReference } from "../generation/settings/settings.js";
 import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
 import { projectRoot } from "../lib/project-paths.js";
-import { releasedRuns } from "../public/release-sources.js";
+import { releasedTrials } from "../public/release-sources.js";
 import type { AuthConfig } from "./auth/config.js";
 import { createIndexNow } from "./indexnow.js";
 import { createRateLimiter } from "./rate-limit.js";
@@ -99,7 +99,7 @@ export async function openSite(
   const publicReleases = createPublicReleaseRoutes(releases, {
     limiter,
     artifacts,
-    releasedRun: releasedRuns(database.db, artifacts),
+    trials: releasedTrials(database.db, artifacts),
   });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY

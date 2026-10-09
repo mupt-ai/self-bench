@@ -1,6 +1,10 @@
 import type { ReleaseLine } from "../../db/releases.js";
-import type { EvaluationRun } from "../../evaluation/types.js";
-import { publishedTrial, type ReleasedResult } from "../../public/release-trials.js";
+import {
+  fullerSteps,
+  publishedTrial,
+  type ReleasedResult,
+  type TrialSource,
+} from "../../public/release-trials.js";
 import { type TaggedBody, tagged } from "../tagged.js";
 
 /** Trials whose answers are kept, most recently used last. */
@@ -17,8 +21,8 @@ export interface ChosenTrial {
 }
 
 export interface TrialBodiesOptions {
-  /** The run a released trial belongs to (release-sources.ts `releasedRun`). */
-  releasedRun(line: ReleaseLine, evaluationId: string): Promise<EvaluationRun | undefined>;
+  /** Where released trials are read from (release-sources.ts `releasedTrials`). */
+  trials: TrialSource;
 }
 
 /**
@@ -38,8 +42,16 @@ export function createTrialBodies(options: TrialBodiesOptions) {
     }
     const { evaluationId } = chosen.result;
     const reading = (async () => {
-      const run = evaluationId ? await options.releasedRun(chosen.line, evaluationId) : undefined;
-      const trial = run && publishedTrial(run, chosen);
+      if (!evaluationId) return undefined;
+      const { trials } = options;
+      const run = await trials.run(chosen.line, evaluationId);
+      const recorded =
+        chosen.result.trialIndex === undefined ? undefined : run?.trials[chosen.result.trialIndex];
+      if (!run || !recorded) return undefined;
+      const steps = await fullerSteps(recorded, (name) =>
+        trials.artifact(chosen.line, evaluationId, name),
+      );
+      const trial = publishedTrial(run, chosen, steps);
       return trial ? tagged(JSON.stringify(trial)) : undefined;
     })();
     // A failed read is not kept: the next request reads again.

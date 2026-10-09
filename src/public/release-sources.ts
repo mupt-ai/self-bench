@@ -7,12 +7,13 @@ import { credentials, repos } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
-import { getEvaluation, listEvaluations } from "../evaluation/store.js";
+import { evaluationPrefix, getEvaluation, listEvaluations } from "../evaluation/store.js";
 import type { EvaluationRun } from "../evaluation/types.js";
 import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
 import type { CredentialFacts } from "./release-results.js";
 import type { ReleaseTask } from "./release-rule.js";
+import type { TrialSource } from "./release-trials.js";
 import type { ReleaseRepository } from "./release-types.js";
 
 /**
@@ -100,16 +101,30 @@ export async function releaseInputs(
 }
 
 /**
- * Reads a released trial's run from the line's connected repository, where its evaluations are
- * kept. Undefined once the repository is disconnected or the run is gone: a release outlives both.
+ * Reads released trials from the line's connected repository, where its evaluations are kept:
+ * nothing once the repository is disconnected or the run is gone, since a release outlives both.
  */
-export function releasedRuns(db: Database, artifacts: ArtifactStore) {
-  return async (line: ReleaseLine, evaluationId: string): Promise<EvaluationRun | undefined> => {
+export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSource {
+  const repoIdOf = async (line: ReleaseLine) => {
     const [repo] = await db
       .select({ id: repos.id })
       .from(repos)
       .where(and(eq(repos.orgId, line.orgId), eq(repos.githubId, line.githubRepoId)));
-    return repo ? getEvaluation(artifacts, repo.id, evaluationId) : undefined;
+    return repo?.id;
+  };
+  return {
+    async run(line, evaluationId): Promise<EvaluationRun | undefined> {
+      const repoId = await repoIdOf(line);
+      return repoId ? getEvaluation(artifacts, repoId, evaluationId) : undefined;
+    },
+    async artifact(line, evaluationId, name) {
+      const repoId = await repoIdOf(line);
+      if (!repoId || name.split("/").includes("..")) return undefined;
+      const bytes = await artifacts.getByKey(
+        `${evaluationPrefix(repoId, evaluationId)}artifacts/${name}`,
+      );
+      return bytes ? Buffer.from(bytes).toString("utf8") : undefined;
+    },
   };
 }
 

@@ -18,7 +18,7 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
-import { releasedRuns } from "../../src/public/release-sources.js";
+import { releasedTrials } from "../../src/public/release-sources.js";
 import { full, names } from "./release-fixture.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { taskBundle } from "./tar.js";
@@ -141,8 +141,8 @@ export async function releaseServer(
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No port");
   publicUrl = `http://127.0.0.1:${address.port}`;
-  const releasedRun = releasedRuns(database.db, artifacts);
-  const publicRoutes = createPublicReleaseRoutes(releases, { artifacts, releasedRun });
+  const trials = releasedTrials(database.db, artifacts);
+  const publicRoutes = createPublicReleaseRoutes(releases, { artifacts, trials });
   /** What each release and withdrawal reported changing, in order. */
   const changes: PublicChange[] = [];
   const routes = createReleaseRoutes({

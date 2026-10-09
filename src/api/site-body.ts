@@ -159,7 +159,7 @@ export function repositoryBody(
     ...(release.trialsPublished
       ? [
           "<h2>Results by Task</h2>",
-          "<p>Whether each setting passed each task, with the transcript of its attempt.</p>",
+          "<p>Whether each setting passed each task, with how its attempt was graded and its transcript.</p>",
         ]
       : []),
     ...(release.tasksPublished

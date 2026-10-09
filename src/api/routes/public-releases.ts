@@ -79,8 +79,8 @@ export interface PublicReleaseRoutesOptions {
   now?: () => number;
   /** Where published tasks' files are read from; without it, no release's tasks are served. */
   artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
-  /** Where published trials' runs are read from; without it, no release's trials are served. */
-  releasedRun?: PublicTaskRoutesOptions["releasedRun"];
+  /** Where published trials are read from; without it, no release's trials are served. */
+  trials?: PublicTaskRoutesOptions["trials"];
 }
 
 /**
@@ -99,10 +99,10 @@ export function createPublicReleaseRoutes(
       ? createPublicTaskRoutes({
           releasedTasks: releases.releasedTasks.bind(releases),
           artifacts: options.artifacts,
-          ...(releases.releasedResults && options.releasedRun
+          ...(releases.releasedResults && options.trials
             ? {
                 releasedResults: releases.releasedResults.bind(releases),
-                releasedRun: options.releasedRun,
+                trials: options.trials,
               }
             : {}),
         })

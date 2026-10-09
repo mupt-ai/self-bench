@@ -1,16 +1,17 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TrialDetails } from "../../web/evaluation/TrialDetails";
+import { TrialGrading } from "../components/TrialGrading";
 import type { PublicRelease, PublicTrial } from "../contract";
 import { dollars, harnessLabel, reasoningLabel, settingLabel } from "../format";
 import { useSource } from "../source-context";
 import { onBackdrop } from "./backdrop";
 
 /**
- * One setting's attempt at one task, over the page: whether it passed, what it cost, and its
- * transcript, drawn by the same component as the app's trial dialog. Opened by the page's address
- * (`?trace=<task>&setting=<id>`), so a link opens it, and Back, Escape, or a click on the page
- * around it closes it.
+ * One setting's attempt at one task, over the page: whether it passed, how the verifier graded
+ * it, what it cost, and its transcript, drawn by the same component as the app's trial dialog.
+ * Opened by the page's address (`?trace=<task>&setting=<id>`), so a link opens it, and Back,
+ * Escape, or a click on the page around it closes it.
  */
 export default function TraceViewer({
   release,
@@ -152,7 +153,10 @@ export default function TraceViewer({
             This release has no transcript for that setting on that task.
           </p>
         ) : trial ? (
-          <TrialDetails trial={trial} agentMinutes={trial.agentMinutes} />
+          <>
+            <TrialGrading trial={trial} />
+            <TrialDetails trial={trial} agentMinutes={trial.agentMinutes} />
+          </>
         ) : (
           <p className="text-muted-foreground">Loading…</p>
         )}
