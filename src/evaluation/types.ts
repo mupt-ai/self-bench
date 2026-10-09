@@ -80,6 +80,8 @@ export interface EvaluationTrial {
    * any other agent, so the trial completes with that score.
    */
   agentTimedOut?: boolean;
+  /** Why a completed trial failed its tests, in plain language (failure-summary.ts). */
+  failureSummary?: string;
   modelVerified?: boolean;
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;

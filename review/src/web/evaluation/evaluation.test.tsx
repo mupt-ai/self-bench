@@ -16,7 +16,7 @@ test("request IDs work without secure-context randomUUID and URL scopes are enco
     "/api/orgs/org%20name/repos/owner/repo/evaluations",
   );
 });
-test("results distinguish zero rewards from missing scores and show the last solver message", () => {
+test("results distinguish zero rewards from missing scores and show the last solver message and why it failed", () => {
   const run = initialEvaluation(evaluationInput(), "Test model");
   const trial = run.trials[0];
   if (!trial) throw new Error("Missing trial");
@@ -27,8 +27,12 @@ test("results distinguish zero rewards from missing scores and show the last sol
     { id: "one", role: "agent", text: "Reading the parser.", tools: [] },
     { id: "two", role: "agent", text: "Patched the parser.", tools: [] },
   ];
+  expect(renderToStaticMarkup(<TrialDetails trial={trial} />)).not.toContain("Why It Failed");
+  trial.failureSummary = "The parser still drops trailing commas.";
   const html = renderToStaticMarkup(<TrialDetails trial={trial} />);
   expect(html).toContain("Solver’s Final Response</h4><p>Patched the parser.</p>");
+  expect(html).toMatch(/Why It Failed<\/h4><p[^>]*>The parser still drops trailing commas\.<\/p>/);
+  expect(html).toContain("Summarized by GPT-6 Luna");
 });
 test("only a live run offers cancellation", () => {
   const run = initialEvaluation(evaluationInput(), "Test model");

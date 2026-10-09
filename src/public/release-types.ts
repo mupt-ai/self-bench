@@ -103,10 +103,10 @@ export interface PublishedTask {
 }
 
 /**
- * One setting's trial on one published task: its result, how the verifier graded it, what it
- * cost, and the solver's transcript, with secrets redacted. Of Harbor's log only the verifier's
- * test output; never the rest of it, the artifacts, or the error, which can name endpoint hosts
- * and sandbox details.
+ * One setting's trial on one published task: its result, how the verifier graded it and why it
+ * failed, what it cost, and the solver's transcript, with secrets redacted. Of Harbor's log only
+ * the verifier's test output; never the rest of it, the artifacts, or the error, which can name
+ * endpoint hosts and sandbox details.
  */
 export interface PublishedTrial
   extends Pick<
@@ -114,6 +114,7 @@ export interface PublishedTrial
     | "startedAt"
     | "finishedAt"
     | "agentTimedOut"
+    | "failureSummary"
     | "apiCostUsd"
     | "costSource"
     | "tokenUsage"

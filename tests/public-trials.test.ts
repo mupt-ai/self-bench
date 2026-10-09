@@ -36,6 +36,9 @@ const trial = (taskId: string, harness: EvaluationTrial["harness"], reward: numb
     ].join("\n\n"),
     artifacts: ["0/agent/trajectory.json"],
     error: "upstream https://private-endpoint.example.com refused",
+    ...(reward === 0
+      ? { failureSummary: "It posted to private-endpoint.example.com instead of sorting by path." }
+      : {}),
     startedAt: "2026-10-01T00:00:00Z",
     finishedAt: "2026-10-01T00:04:00Z",
     apiCostUsd: 0.42,
@@ -161,7 +164,7 @@ test("a release that published its trials lists whether each setting passed each
   expect(quiet.tasks.every((entry) => !("passed" in entry))).toBe(true);
 });
 
-test("a trial is its result, grading, and redacted transcript, never the rest of its log", async () => {
+test("a trial is its result, grading, failure summary, and redacted transcript, never the rest of its log", async () => {
   const { get } = await serve();
   const response = await get(`with-trials/tasks/next-pr-2/trials/${SOL_ID}`);
   expect(response.status).toBe(200);
@@ -183,6 +186,7 @@ test("a trial is its result, grading, and redacted transcript, never the rest of
   expect(body).not.toContain("sk-abcdefghijklmnop1234");
   expect(trial.rewards).toEqual({ reward: 0, patch_applied: 1, fail_to_pass: 0, pass_to_pass: 1 });
   expect(trial.verifierOutput).toStartWith("PASS chunks.test.ts\n");
+  expect(trial.failureSummary).toBe("It posted to [REDACTED HOST] instead of sorting by path.");
   for (const hidden of [
     "private-endpoint",
     "sb-7f3a2",

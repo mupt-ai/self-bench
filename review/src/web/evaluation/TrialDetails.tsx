@@ -1,4 +1,5 @@
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
+import { FAILURE_SUMMARY_MODEL, findModel } from "../../../../src/contracts/models";
 import type { EvaluationTrial } from "./api";
 import { TokenCosts } from "./TokenCosts";
 
@@ -22,6 +23,7 @@ export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
       EvaluationTrial,
       | "error"
       | "agentTimedOut"
+      | "failureSummary"
       | "log"
       | "artifacts"
       | "tokenUsage"
@@ -33,8 +35,9 @@ export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
   >;
 
 /**
- * One trial's error, model cost, final response, solver transcript, Harbor output and artifacts.
- * The app's trial dialog and selfbench.dev's trace viewer both show trials with it.
+ * One trial's error, why it failed its tests, model cost, final response, solver transcript,
+ * Harbor output and artifacts. The app's trial dialog and selfbench.dev's trace viewer both show
+ * trials with it.
  */
 export function TrialDetails({
   trial,
@@ -62,6 +65,18 @@ export function TrialDetails({
           The agent reached its {agentMinutes ?? AGENT_MINUTES.default}-minute limit, so it was
           scored on the work it had done by then.
         </p>
+      )}
+      {trial.failureSummary && (
+        <div className="mb-5 border-l-2 border-foreground/30 bg-muted/60 p-4">
+          <h4>Why It Failed</h4>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere">
+            {trial.failureSummary}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Summarized by {findModel(FAILURE_SUMMARY_MODEL)?.label ?? FAILURE_SUMMARY_MODEL} from
+            the test output and the solver’s changes.
+          </p>
+        </div>
       )}
       <TokenCosts trial={trial} />
       {!active && finalMessage && (

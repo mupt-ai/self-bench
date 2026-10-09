@@ -17,6 +17,7 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent, solverAgentArguments } from "./execution.js";
+import { summarizeFailure } from "./failure-summary.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
@@ -280,6 +281,9 @@ async function runTrial(context: {
     await refresh(true);
     if (result.exitCode !== 0) throw new Error(`Harbor exited with status ${result.exitCode}`);
     trial.status = "completed";
+    const evidence = { taskPath, jobs, files: outputs, trial };
+    const summary = await summarizeFailure(evidence, { ...options, command, redact });
+    if (summary) trial.failureSummary = summary;
   } catch (error) {
     clearInterval(timer);
     await polling;

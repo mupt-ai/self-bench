@@ -168,5 +168,6 @@ export function publishedTrial(
     ...(trial.cacheWritesInferred ? { cacheWritesInferred: true } : {}),
     steps: (steps ?? trial.steps).map((step) => redactedStep(step, hosts)),
     ...(output ? { verifierOutput: output } : {}),
+    ...(trial.failureSummary ? { failureSummary: redacted(trial.failureSummary, hosts) } : {}),
   };
 }

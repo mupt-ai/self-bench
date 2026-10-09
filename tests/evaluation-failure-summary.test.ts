@@ -1,0 +1,126 @@
+import { expect, test } from "bun:test";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { getEvaluation } from "../src/evaluation/store.js";
+import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
+import type { CommandOptions, CommandResult } from "../src/lib/process.js";
+import { testModelSecret } from "./support/evaluation-fixture.js";
+import { runEvaluation } from "./support/evaluation-run.js";
+import { runnerFixture } from "./support/evaluation-runner-fixture.js";
+
+const PLATFORM_KEY = "sk-or-platform-key-never-publish";
+const MANAGED = {
+  PATH: "/usr/bin:/bin",
+  SELFBENCH_MANAGED_OFFERING: "true",
+  SELFBENCH_MANAGED_OPENROUTER_API_KEY: PLATFORM_KEY,
+  DATABASE_URL: "postgres://worker:db-password@db/selfbench",
+};
+const TASK_FILES = {
+  "instruction.md": "Order the chunks by path.\n",
+  "tests/test.patch": "+test('chunks are ordered by path', ...)\n",
+  "solution/gold.patch": "+chunks.sort(byPath)\n",
+};
+
+interface PiCall {
+  args: readonly string[];
+  env: NodeJS.ProcessEnv;
+  material: string;
+}
+
+/** Harbor scoring `reward`, then Pi answering with `pi` when the runner asks it. */
+async function evaluate(
+  env: NodeJS.ProcessEnv,
+  reward: number,
+  pi: CommandResult = { stdout: "", stderr: "", exitCode: 0 },
+) {
+  const { store, input, vault } = await runnerFixture(undefined, undefined, TASK_FILES);
+  const calls: PiCall[] = [];
+  const command = async (name: string, args: readonly string[], options?: CommandOptions) => {
+    if (name === process.execPath) {
+      const material = args.find((arg) => arg.startsWith("@"))?.slice(1) ?? "";
+      calls.push({ args, env: options?.env ?? {}, material: await readFile(material, "utf8") });
+      return pi;
+    }
+    if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    const trial = join(args[args.indexOf("--jobs-dir") + 1] ?? "", "solver", "task__123");
+    await mkdir(join(trial, "verifier"), { recursive: true });
+    await mkdir(join(trial, "artifacts", "opt", "selfbench"), { recursive: true });
+    await writeFile(
+      join(trial, "verifier", "test-stdout.txt"),
+      `FAIL chunks are ordered by path: expected [a, b], got [b, a]\n${testModelSecret}\n`,
+    );
+    await writeFile(
+      join(trial, "artifacts", "opt", "selfbench", "agent.patch"),
+      "+chunks.reverse()\n",
+    );
+    await writeFile(
+      join(trial, "result.json"),
+      JSON.stringify({ verifier_result: { rewards: { reward } }, exception_info: null }),
+    );
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  await runEvaluation(store, input, { env, vault, command, pollMs: 5, progressMs: 0 });
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  return { trial, calls };
+}
+
+test("a trial that fails its tests is explained by Pi running GPT-6 Luna on the platform key", async () => {
+  const { trial, calls } = await evaluate(MANAGED, 0, {
+    stdout: `The agent reversed the chunks instead of sorting them by path. ${PLATFORM_KEY}\n`,
+    stderr: "",
+    exitCode: 0,
+  });
+  expect(trial?.status).toBe("completed");
+  expect(trial?.failureSummary).toBe(
+    "The agent reversed the chunks instead of sorting them by path. [redacted]",
+  );
+  const [call] = calls;
+  if (!call) throw new Error("Pi was not run");
+  const flag = (name: string) => call.args[call.args.indexOf(name) + 1];
+  expect([flag("--provider"), flag("--model"), flag("--thinking")]).toEqual([
+    "openrouter",
+    "openai/gpt-6-luna",
+    "high",
+  ]);
+  expect(call.args).toContain("--no-tools");
+  // Pi sees the platform key and nothing else of the worker's environment.
+  expect(call.env).toEqual({
+    PATH: MANAGED.PATH,
+    HOME: expect.any(String),
+    LANG: "C.UTF-8",
+    OPENROUTER_API_KEY: PLATFORM_KEY,
+  });
+  for (const evidence of [
+    "Order the chunks by path.",
+    "expected [a, b], got [b, a]",
+    "chunks are ordered by path",
+    "+chunks.reverse()",
+    "+chunks.sort(byPath)",
+  ])
+    expect(call.material).toContain(evidence);
+  expect(call.material).not.toContain(testModelSecret);
+});
+
+test("a summary never holds up or changes a trial's result", async () => {
+  const cases = [
+    { name: "a passing trial", env: MANAGED, reward: 1, runs: 0 },
+    { name: "no platform key", env: { PATH: MANAGED.PATH }, reward: 0, runs: 0 },
+    {
+      name: "Pi failing",
+      env: MANAGED,
+      reward: 0,
+      runs: 1,
+      pi: { stdout: "", stderr: "401 unauthorized", exitCode: 1 },
+    },
+  ];
+  for (const entry of cases) {
+    const { trial, calls } = await evaluate(entry.env, entry.reward, entry.pi);
+    expect({ name: entry.name, runs: calls.length, status: trial?.status }).toEqual({
+      name: entry.name,
+      runs: entry.runs,
+      status: "completed",
+    });
+    expect(trial?.rewards.reward).toBe(entry.reward);
+    expect(trial?.failureSummary).toBeUndefined();
+  }
+});
