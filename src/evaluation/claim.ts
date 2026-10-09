@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { RepeatSpendError, updateEvaluation } from "./store.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
+import type { EvaluationInput, EvaluationRun, EvaluationTrial, FailureSummary } from "./types.js";
 
 /** A trial left for another worker because this one is stopping; its solver never started. */
 export class WorkerStoppingError extends Error {
@@ -62,6 +62,16 @@ export async function claimTrial(store: ArtifactStore, input: EvaluationInput, i
       });
       trial.solverStartedAt = startedAt;
     },
+    /**
+     * Adds why the trial failed its tests once this attempt has saved it completed, unless
+     * another write has replaced it since.
+     */
+    explain: (summary: FailureSummary) =>
+      update((latest) => {
+        const current = latest.trials[index];
+        if (current?.claim !== id || current.status !== "completed") return false;
+        current.failureSummary = summary;
+      }).then(() => undefined),
     /** Returns the trial to the queue, so the next attempt can claim it again. */
     requeue: () =>
       update((latest) => {

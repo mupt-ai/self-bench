@@ -37,7 +37,7 @@ const trial = (taskId: string, harness: EvaluationTrial["harness"], reward: numb
     artifacts: ["0/agent/trajectory.json"],
     error: "upstream https://private-endpoint.example.com refused",
     ...(reward === 0
-      ? { failureSummary: "It posted to private-endpoint.example.com instead of sorting by path." }
+      ? { failureSummary: { text: "It called private-endpoint.example.com.", model: "gpt-6-luna" } }
       : {}),
     startedAt: "2026-10-01T00:00:00Z",
     finishedAt: "2026-10-01T00:04:00Z",
@@ -186,7 +186,7 @@ test("a trial is its result, grading, failure summary, and redacted transcript, 
   expect(body).not.toContain("sk-abcdefghijklmnop1234");
   expect(trial.rewards).toEqual({ reward: 0, patch_applied: 1, fail_to_pass: 0, pass_to_pass: 1 });
   expect(trial.verifierOutput).toStartWith("PASS chunks.test.ts\n");
-  expect(trial.failureSummary).toBe("It posted to [REDACTED HOST] instead of sorting by path.");
+  expect(trial.failureSummary?.text).toBe("It called [REDACTED HOST].");
   for (const hidden of [
     "private-endpoint",
     "sb-7f3a2",

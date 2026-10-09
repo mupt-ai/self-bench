@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getEvaluation } from "../src/evaluation/store.js";
+import type { EvaluationTrial } from "../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { CommandOptions, CommandResult } from "../src/lib/process.js";
 import { testModelSecret } from "./support/evaluation-fixture.js";
@@ -25,6 +26,8 @@ interface PiCall {
   args: readonly string[];
   env: NodeJS.ProcessEnv;
   material: string;
+  /** The trial as saved when Pi started. */
+  saved?: EvaluationTrial;
 }
 
 /** Harbor scoring `reward`, then Pi answering with `pi` when the runner asks it. */
@@ -38,7 +41,13 @@ async function evaluate(
   const command = async (name: string, args: readonly string[], options?: CommandOptions) => {
     if (name === process.execPath) {
       const material = args.find((arg) => arg.startsWith("@"))?.slice(1) ?? "";
-      calls.push({ args, env: options?.env ?? {}, material: await readFile(material, "utf8") });
+      const saved = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+      calls.push({
+        args,
+        env: options?.env ?? {},
+        material: await readFile(material, "utf8"),
+        ...(saved ? { saved } : {}),
+      });
       return pi;
     }
     if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
@@ -71,11 +80,15 @@ test("a trial that fails its tests is explained by Pi running GPT-6 Luna on the 
     exitCode: 0,
   });
   expect(trial?.status).toBe("completed");
-  expect(trial?.failureSummary).toBe(
-    "The agent reversed the chunks instead of sorting them by path. [redacted]",
-  );
+  expect(trial?.failureSummary).toEqual({
+    text: "The agent reversed the chunks instead of sorting them by path. [redacted]",
+    model: "gpt-6-luna",
+  });
   const [call] = calls;
   if (!call) throw new Error("Pi was not run");
+  // The scored result is saved before Pi starts, so a lost worker never loses it.
+  expect(call.saved).toMatchObject({ status: "completed", rewards: { reward: 0 } });
+  expect(call.saved?.finishedAt).toBeString();
   const flag = (name: string) => call.args[call.args.indexOf(name) + 1];
   expect([flag("--provider"), flag("--model"), flag("--thinking")]).toEqual([
     "openrouter",
@@ -105,6 +118,12 @@ test("a summary never holds up or changes a trial's result", async () => {
   const cases = [
     { name: "a passing trial", env: MANAGED, reward: 1, runs: 0 },
     { name: "no platform key", env: { PATH: MANAGED.PATH }, reward: 0, runs: 0 },
+    {
+      name: "a malformed offering switch",
+      env: { ...MANAGED, SELFBENCH_MANAGED_OFFERING: "TRUE" },
+      reward: 0,
+      runs: 0,
+    },
     {
       name: "Pi failing",
       env: MANAGED,

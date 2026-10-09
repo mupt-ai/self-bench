@@ -168,6 +168,13 @@ export function publishedTrial(
     ...(trial.cacheWritesInferred ? { cacheWritesInferred: true } : {}),
     steps: (steps ?? trial.steps).map((step) => redactedStep(step, hosts)),
     ...(output ? { verifierOutput: output } : {}),
-    ...(trial.failureSummary ? { failureSummary: redacted(trial.failureSummary, hosts) } : {}),
+    ...(trial.failureSummary
+      ? {
+          failureSummary: {
+            ...trial.failureSummary,
+            text: redacted(trial.failureSummary.text, hosts),
+          },
+        }
+      : {}),
   };
 }

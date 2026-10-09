@@ -53,6 +53,11 @@ export interface SolverStep {
   text: string;
   tools: { id: string; name: string; input: string; output: string }[];
 }
+/** A model's explanation of a failed trial, and the catalog id of the model that wrote it. */
+export interface FailureSummary {
+  text: string;
+  model: string;
+}
 export interface TokenUsage {
   input: number;
   output: number;
@@ -81,7 +86,7 @@ export interface EvaluationTrial {
    */
   agentTimedOut?: boolean;
   /** Why a completed trial failed its tests, in plain language (failure-summary.ts). */
-  failureSummary?: string;
+  failureSummary?: FailureSummary;
   modelVerified?: boolean;
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;

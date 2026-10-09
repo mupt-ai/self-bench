@@ -1,5 +1,5 @@
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
-import { FAILURE_SUMMARY_MODEL, findModel } from "../../../../src/contracts/models";
+import { findModel } from "../../../../src/contracts/models";
 import type { EvaluationTrial } from "./api";
 import { TokenCosts } from "./TokenCosts";
 
@@ -70,11 +70,12 @@ export function TrialDetails({
         <div className="mb-5 border-l-2 border-foreground/30 bg-muted/60 p-4">
           <h4>Why It Failed</h4>
           <p className="text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere">
-            {trial.failureSummary}
+            {trial.failureSummary.text}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Summarized by {findModel(FAILURE_SUMMARY_MODEL)?.label ?? FAILURE_SUMMARY_MODEL} from
-            the test output and the solver’s changes.
+            Summarized by{" "}
+            {findModel(trial.failureSummary.model)?.label ?? trial.failureSummary.model} from the
+            test output and the solver’s changes.
           </p>
         </div>
       )}

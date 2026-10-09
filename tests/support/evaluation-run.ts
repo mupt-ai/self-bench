@@ -21,7 +21,10 @@ export function runEvaluation(
       failSolverTrial: (input, index) => failTrial(store, input, index),
       finishSolverEvaluation: (input) => finishEvaluation(store, input),
     },
-    (input, index) => executeTrial(store, trialInput(input, index), index, options),
+    async (input, index) => {
+      const explain = await executeTrial(store, trialInput(input, index), index, options);
+      await explain?.();
+    },
     1,
   );
 }

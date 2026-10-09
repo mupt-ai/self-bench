@@ -62,11 +62,14 @@ export function createEvaluationActivities(
     prepareTaskImages: (input) =>
       heartbeating((options) => limited(input, () => prepareTaskImages(store, input, options))),
     runSolverTrial: (input, index) =>
-      heartbeating((options) =>
-        limited(input, () =>
-          executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
-        ),
-      ),
+      heartbeating(async (options) => {
+        const retry = retries(Context.current().info);
+        const explain = await limited(input, () =>
+          executeTrial(store, input, index, { ...options, retry }),
+        );
+        // Explaining a failed trial needs no sandbox, so it runs once the trial gives its slot back.
+        await explain?.();
+      }),
     failSolverTrial: (input, index) => failTrial(store, input, index),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),
     failSolverEvaluation: (input) =>

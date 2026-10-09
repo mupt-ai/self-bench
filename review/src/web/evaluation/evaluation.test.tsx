@@ -28,7 +28,7 @@ test("results distinguish zero rewards from missing scores and show the last sol
     { id: "two", role: "agent", text: "Patched the parser.", tools: [] },
   ];
   expect(renderToStaticMarkup(<TrialDetails trial={trial} />)).not.toContain("Why It Failed");
-  trial.failureSummary = "The parser still drops trailing commas.";
+  trial.failureSummary = { text: "The parser still drops trailing commas.", model: "gpt-6-luna" };
   const html = renderToStaticMarkup(<TrialDetails trial={trial} />);
   expect(html).toContain("Solver’s Final Response</h4><p>Patched the parser.</p>");
   expect(html).toMatch(/Why It Failed<\/h4><p[^>]*>The parser still drops trailing commas\.<\/p>/);
