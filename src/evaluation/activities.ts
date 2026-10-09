@@ -11,14 +11,14 @@ import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
-import type { EvaluationInput } from "./types.js";
+import type { EvaluationInput, FailedTrial } from "./types.js";
 
 export interface EvaluationActivities {
   startSolverEvaluation(input: EvaluationInput): Promise<number>;
   /** Builds the one task in `input`'s images before its trials; returns what it built. */
   prepareTaskImages(input: EvaluationInput): Promise<string>;
   runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
-  explainSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  explainSolverTrial(trial: FailedTrial): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
@@ -71,8 +71,8 @@ export function createEvaluationActivities(
           executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
         ),
       ),
-    explainSolverTrial: (input, index) =>
-      explainTrialFailure(store, input, index, {
+    explainSolverTrial: (trial) =>
+      explainTrialFailure(store, trial, {
         command: runCommand,
         redact: (text) => redactOutput(text, environmentSecrets(process.env)),
         signal: Context.current().cancellationSignal,

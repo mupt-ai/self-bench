@@ -16,7 +16,7 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
 import { keepRunSummaries } from "../../src/evaluation/store.js";
-import type { EvaluationInput } from "../../src/evaluation/types.js";
+import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {
@@ -154,6 +154,7 @@ export async function evaluationServer(
   await tasks.review(approved.id, { decision: "approve", note: "Reviewed", userId: user.id });
   const starts: EvaluationInput[] = [];
   const stops: string[] = [];
+  const explains: FailedTrial[] = [];
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
   const auth = createSiteAuth({
@@ -211,6 +212,9 @@ export async function evaluationServer(
         async stop(repoId, id) {
           stops.push(`evaluation/${repoId}/${id}`);
         },
+        async explain(trial) {
+          explains.push(trial);
+        },
       });
       if (
         !(await routes.handle(request, new URL(request.url ?? "/", publicUrl), response, signedIn))
@@ -240,6 +244,7 @@ export async function evaluationServer(
     repo,
     starts,
     stops,
+    explains,
     outsider,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     failStart(value: boolean) {

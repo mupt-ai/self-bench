@@ -29,11 +29,15 @@ export function runEvaluation(
       await executeTrial(store, trial, index, options);
       // As the trial workflow does, once the trial has ended.
       if (input.explainFailures)
-        await explainTrialFailure(store, trial, index, {
-          command: options.command ?? runCommand,
-          env: options.env,
-          redact: (text) => redactOutput(text, environmentSecrets(options.env ?? {})),
-        });
+        await explainTrialFailure(
+          store,
+          { repoId: input.repoId, id: input.id, index },
+          {
+            command: options.command ?? runCommand,
+            env: options.env,
+            redact: (text) => redactOutput(text, environmentSecrets(options.env ?? {})),
+          },
+        );
     },
     1,
   );

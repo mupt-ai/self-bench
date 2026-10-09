@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { evaluationPrefix, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
-import { evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
+import { evaluationEnv, evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
 
 let server: Awaited<ReturnType<typeof evaluationServer>>;
 beforeAll(async () => {
@@ -115,4 +116,66 @@ test("failures are explained only for a repository GitHub confirms is still publ
   // Connected as public, but private on GitHub since: its code stays off SelfBench's account.
   expect(await explained({ private: true })).toBeUndefined();
   expect(await explained()).toBeUndefined();
+});
+
+test("Explain Failure starts one explanation for a trial that failed its tests", async () => {
+  const fixture = await evaluationServer(
+    undefined,
+    {},
+    {
+      ...evaluationEnv,
+      SELFBENCH_MANAGED_OFFERING: "true",
+      SELFBENCH_MANAGED_OPENROUTER_API_KEY: "sk-or-platform",
+    },
+  );
+  try {
+    const input: EvaluationInput = {
+      ...evaluationInput(),
+      repoId: fixture.repo.id,
+      harnesses: ["codex", "pi"],
+    };
+    const run = initialEvaluation(input, input.modelName);
+    run.status = "completed";
+    const [codex, pi] = run.trials;
+    if (!codex || !pi) throw new Error("Missing trials");
+    Object.assign(codex, { status: "completed", rewards: { reward: 1 } });
+    Object.assign(pi, { status: "completed", rewards: { reward: 0 } });
+    await saveEvaluation(fixture.artifacts, run);
+    const explain = (harness: string, init: RequestInit = {}, user: number | null = 1) =>
+      fixture.request(
+        `${fixture.base}/${run.id}/explain`,
+        {
+          method: "POST",
+          body: JSON.stringify({ runId: "run-one", taskId: "task-one", harness }),
+          ...init,
+        },
+        user,
+      );
+    expect((await explain("pi")).status).toBe(202);
+    // The passing trial, an unknown one, and another tenant's request start nothing.
+    expect((await explain("codex")).status).toBe(409);
+    expect((await explain("terminus-2")).status).toBe(404);
+    expect((await explain("pi", {}, 2)).status).toBe(404);
+    expect(fixture.explains).toEqual([
+      { repoId: fixture.repo.id, id: run.id, index: 1, bundleKey: "tasks/task.tar.gz" },
+    ]);
+  } finally {
+    await fixture.close();
+  }
+  // Without SelfBench's managed models there is no account to explain it through.
+  const unmanaged = await evaluationServer();
+  try {
+    const input = { ...evaluationInput(), repoId: unmanaged.repo.id };
+    const run = initialEvaluation(input, input.modelName);
+    Object.assign(run.trials[0] ?? {}, { status: "completed", rewards: { reward: 0 } });
+    await saveEvaluation(unmanaged.artifacts, run);
+    const response = await unmanaged.request(`${unmanaged.base}/${run.id}/explain`, {
+      method: "POST",
+      body: JSON.stringify({ runId: "run-one", taskId: "task-one", harness: "codex" }),
+    });
+    expect(response.status).toBe(409);
+    expect(unmanaged.explains).toEqual([]);
+  } finally {
+    await unmanaged.close();
+  }
 });

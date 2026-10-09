@@ -17,7 +17,7 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent, solverAgentArguments } from "./execution.js";
-import { failureMaterial, keepFailureMaterial } from "./failure-summary.js";
+import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
@@ -155,7 +155,8 @@ export async function executeTrial(
     }
   }
   options.signal?.throwIfAborted();
-  if (material !== undefined) await keepFailureMaterial(store, input, index, material);
+  const failed = { repoId: input.repoId, id: input.id, index };
+  if (material !== undefined) await keepFailureMaterial(store, failed, material);
 }
 
 async function runTrial(context: {

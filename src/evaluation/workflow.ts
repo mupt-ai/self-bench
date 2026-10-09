@@ -1,3 +1,4 @@
+import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
 import {
   ActivityCancellationType,
   CancellationScope,
@@ -15,7 +16,7 @@ import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limit
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
-import type { EvaluationInput } from "./types.js";
+import type { EvaluationInput, FailedTrial } from "./types.js";
 
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
 const REFUSED = ["RepeatSpendError"];
@@ -134,20 +135,28 @@ export async function selfBenchSolverTrialWorkflow(
     },
     records,
   );
-  if (input.explainFailures && patched("explain-failed-trials"))
-    await startChild(selfBenchFailedTrialWorkflow, {
-      workflowId: `${workflowInfo().workflowId}/explain`,
-      args: [input, index],
-      parentClosePolicy: ParentClosePolicy.ABANDON,
-    });
+  if (input.explainFailures && patched("explain-failed-trials")) {
+    const failed = { repoId: input.repoId, id: input.id, index };
+    const bundleKey = input.tasks[0]?.bundleKey;
+    try {
+      await startChild(selfBenchFailedTrialWorkflow, {
+        workflowId: `${workflowInfo().workflowId}/explain`,
+        args: [{ ...failed, ...(bundleKey ? { bundleKey } : {}) }],
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+      });
+    } catch (error) {
+      // Someone asked for this trial's explanation already (Explain Failure in the app).
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+    }
+  }
 }
 
-/** Explains why a trial failed its tests (failure-summary.ts), after the trial has ended. */
-export async function selfBenchFailedTrialWorkflow(
-  input: EvaluationInput,
-  index: number,
-): Promise<void> {
-  await explaining.explainSolverTrial(input, index);
+/**
+ * Explains why a trial failed its tests (failure-summary.ts), after the trial has ended: started
+ * by the trial itself, or by the app (failureExplainer), under the same workflow ID.
+ */
+export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<void> {
+  await explaining.explainSolverTrial(trial);
 }
 
 /**

@@ -27,7 +27,7 @@ import {
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
 import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
-import type { EvaluationInput } from "../../evaluation/types.js";
+import type { EvaluationInput, FailedTrial } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
@@ -36,9 +36,10 @@ import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
+import { explainTrial } from "./explain-trial.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
 
 export interface EvaluationRoutesOptions {
   users: UserStore;
@@ -48,6 +49,8 @@ export interface EvaluationRoutesOptions {
   publicUrl: string;
   start(input: EvaluationInput): Promise<void>;
   stop: StopEvaluation;
+  /** Starts explaining one failed trial (explainTrial); without it, none can be asked for. */
+  explain?(trial: FailedTrial): Promise<void>;
   env?: NodeJS.ProcessEnv;
   /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
   fetch?: typeof fetch;
@@ -189,6 +192,11 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
                   : "Invalid selection or credential fields",
             });
         }
+        request.resume();
+        return true;
+      }
+      if (section && !id && action === "explain" && request.method === "POST") {
+        await explainTrial(options, request, response, { repo, evaluationId: section, user, env });
         request.resume();
         return true;
       }

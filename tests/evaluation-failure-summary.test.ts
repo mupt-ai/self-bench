@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { explainTrialFailure } from "../src/evaluation/failure-summary.js";
 import { getEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput, EvaluationTrial } from "../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
@@ -66,6 +67,8 @@ async function evaluate(
       join(trial, "artifacts", "opt", "selfbench", "agent.patch"),
       "+chunks.reverse()\n",
     );
+    await mkdir(join(trial, "agent"), { recursive: true });
+    await writeFile(join(trial, "agent", "trajectory.json"), JSON.stringify(TRAJECTORY));
     await writeFile(
       join(trial, "result.json"),
       JSON.stringify({ verifier_result: { rewards: { reward } }, exception_info: null }),
@@ -74,15 +77,36 @@ async function evaluate(
   };
   await runEvaluation(store, input, { env, vault, command, pollMs: 5, progressMs: 0 });
   const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
-  return { trial, calls };
+  return { trial, calls, store, input, command };
 }
 
+/** The solver's transcript: one edit, the only trace of its changes once Harbor's run is gone. */
+const TRAJECTORY = {
+  steps: [
+    {
+      step_id: 1,
+      source: "agent",
+      message: "Reversing the chunks.",
+      tool_calls: [
+        {
+          tool_call_id: "edit-1",
+          function_name: "edit",
+          arguments: { path: "chunks.ts", replace: "chunks.reverse()" },
+        },
+      ],
+      observation: { results: [{ source_call_id: "edit-1", content: "Edited chunks.ts" }] },
+    },
+  ],
+};
+
+const LUNA: CommandResult = {
+  stdout: `The agent reversed the chunks instead of sorting them by path. ${PLATFORM_KEY}\n`,
+  stderr: "",
+  exitCode: 0,
+};
+
 test("a trial that fails its tests is explained by Pi running GPT-6 Luna on the platform key", async () => {
-  const { trial, calls } = await evaluate(MANAGED, 0, {
-    stdout: `The agent reversed the chunks instead of sorting them by path. ${PLATFORM_KEY}\n`,
-    stderr: "",
-    exitCode: 0,
-  });
+  const { trial, calls } = await evaluate(MANAGED, 0, LUNA);
   expect(trial?.status).toBe("completed");
   expect(trial?.failureSummary).toEqual({
     text: "The agent reversed the chunks instead of sorting them by path. [redacted]",
@@ -148,4 +172,31 @@ test("a summary never holds up or changes a trial's result", async () => {
     expect(trial?.rewards.reward).toBe(entry.reward);
     expect(trial?.failureSummary).toBeUndefined();
   }
+});
+
+test("Explain Failure explains a trial that kept no material from what its evaluation stored", async () => {
+  // Run without consent, as every trial before this feature did: nothing kept, Pi never asked.
+  const { calls, store, input, command } = await evaluate(MANAGED, 0, LUNA, false);
+  expect(calls).toHaveLength(0);
+  const request = { repoId: input.repoId, id: input.id, index: 0 };
+  const bundleKey = input.tasks[0]?.bundleKey ?? "";
+  const redact = (text: string) => text.split(PLATFORM_KEY).join("[redacted]");
+  await explainTrialFailure(store, { ...request, bundleKey }, { command, env: MANAGED, redact });
+  const [call] = calls;
+  if (!call) throw new Error("Pi was not run");
+  for (const evidence of [
+    "Order the chunks by path.",
+    "expected [a, b], got [b, a]",
+    "chunks are ordered by path",
+    "+chunks.sort(byPath)",
+    "chunks.reverse()",
+  ])
+    expect(call.material).toContain(evidence);
+  // The diff only Harbor's run held is not claimed to be empty.
+  expect(call.material).not.toContain("changed no files");
+  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  expect(trial?.failureSummary?.text).toStartWith("The agent reversed the chunks");
+  // Asked again, an explained trial is left as it is.
+  await explainTrialFailure(store, { ...request, bundleKey }, { command, env: MANAGED, redact });
+  expect(calls).toHaveLength(1);
 });
