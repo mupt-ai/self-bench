@@ -124,8 +124,13 @@ export function ReleasesPage() {
                   <td className="font-mono">{release.settings}</td>
                   <td className="font-mono">
                     {release.tasks}
-                    {/* Their files are public on selfbench.dev, to browse and download. */}
-                    {release.tasksPublished && <small className="font-sans">Published</small>}
+                    {/* Their files are public on selfbench.dev, to browse and download, and with
+                        trials, each setting's result and transcript on them. */}
+                    {release.tasksPublished && (
+                      <small className="font-sans">
+                        {release.trialsPublished ? "Published with Results" : "Published"}
+                      </small>
+                    )}
                   </td>
                   <td>
                     {release.withdrawnAt ? "Withdrawn" : release.current ? "Current" : "Superseded"}

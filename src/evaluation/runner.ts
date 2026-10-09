@@ -20,19 +20,17 @@ import { solverAgent, solverAgentArguments } from "./execution.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
-  boundedSteps,
   collectOutput,
   completeLines,
   piFailure,
-  piSteps,
   record,
   redactOutput,
-  trajectorySteps,
   trialLog,
   verifierRewards,
   wholeTranscripts,
 } from "./output.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
+import { transcriptSteps } from "./transcript.js";
 import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
@@ -191,16 +189,12 @@ async function runTrial(context: {
         redact(!archive && !name.endsWith(".json") ? completeLines(text) : text),
       ]),
     );
-    const trajectory = [...clean].find(([name]) => name.endsWith("/trajectory.json"));
-    const pi = [...clean].find(([name]) => name.endsWith("/pi.txt"));
-    if (trajectory) {
-      try {
-        trial.steps = trajectorySteps(JSON.parse(trajectory[1]));
-      } catch {
-        trial.steps = [];
-      }
-    } else if (pi) trial.steps = piSteps(pi[1]);
-    trial.steps = boundedSteps(trial.steps);
+    // Live, the collected tail of the transcript; once Harbor is done, the whole of it.
+    const records = archive ? await wholeTranscripts(jobs, files) : undefined;
+    const transcripts = records
+      ? new Map([...records].map(([name, text]) => [name, redact(text)]))
+      : clean;
+    trial.steps = transcriptSteps(transcripts) ?? trial.steps;
     outputs = clean;
     trial.log = trialLog(redact(archive ? stdout : completeLines(stdout)), clean);
     if (archive) {
@@ -216,7 +210,7 @@ async function runTrial(context: {
       const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
-      const records = await wholeTranscripts(jobs, files);
+      if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
       Object.assign(trial, await billedTrialCost(run, trial, child, records));
       trial.rewards = verifierRewards(parsed);

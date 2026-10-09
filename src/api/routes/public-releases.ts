@@ -7,7 +7,7 @@ import type { PublishedLine, PublishedRelease } from "../../public/release-types
 import { sendJson } from "../http.js";
 import { clientIp, type RateLimiter } from "../rate-limit.js";
 import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
-import { createPublicTaskRoutes } from "./public-tasks.js";
+import { createPublicTaskRoutes, type PublicTaskRoutesOptions } from "./public-tasks.js";
 
 /** How long the snapshot of released lines is served before the next read of the table. */
 const SNAPSHOT_MS = 5_000;
@@ -79,6 +79,8 @@ export interface PublicReleaseRoutesOptions {
   now?: () => number;
   /** Where published tasks' files are read from; without it, no release's tasks are served. */
   artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
+  /** Where published trials are read from; without it, no release's trials are served. */
+  trials?: PublicTaskRoutesOptions["trials"];
 }
 
 /**
@@ -87,7 +89,8 @@ export interface PublicReleaseRoutesOptions {
  * however many visitors arrive, so public traffic never reaches the database per request.
  */
 export function createPublicReleaseRoutes(
-  releases: Pick<ReleaseStore, "currentLines"> & Partial<Pick<ReleaseStore, "releasedTasks">>,
+  releases: Pick<ReleaseStore, "currentLines"> &
+    Partial<Pick<ReleaseStore, "releasedTasks" | "releasedResults">>,
   options: PublicReleaseRoutesOptions = {},
 ) {
   const now = options.now ?? Date.now;
@@ -96,6 +99,12 @@ export function createPublicReleaseRoutes(
       ? createPublicTaskRoutes({
           releasedTasks: releases.releasedTasks.bind(releases),
           artifacts: options.artifacts,
+          ...(releases.releasedResults && options.trials
+            ? {
+                releasedResults: releases.releasedResults.bind(releases),
+                trials: options.trials,
+              }
+            : {}),
         })
       : undefined;
   let reading: { snapshot: Promise<Snapshot>; at: number } | undefined;
@@ -175,11 +184,12 @@ export function createPublicReleaseRoutes(
         return true;
       }
       const [, , route, ...rest] = segmentsOf(url.pathname);
-      // A release's tasks, served only while it is a current release that published them.
+      // A release's tasks, served only while it is a current release that published them, and
+      // its trials only while it also published those.
       if (route === "releases" && rest[1] === "tasks") {
         const release = (await snapshot()).byRelease.get(rest[0] ?? "");
         if (tasks && release?.tasksPublished) {
-          await tasks.handle(request, response, release.releaseId, rest.slice(2));
+          await tasks.handle(request, response, release, rest.slice(2));
         } else {
           uncached();
           response.setHeader("x-robots-tag", "noindex");

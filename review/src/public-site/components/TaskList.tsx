@@ -26,7 +26,7 @@ export const difficultyLabel = (task: Pick<PublicTask, "difficulty">) =>
   task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1);
 
 /** Whether `element` is on screen or within `AHEAD` of it; true from then on. */
-function useNear(element: RefObject<HTMLElement | null>): boolean {
+export function useNear(element: RefObject<HTMLElement | null>): boolean {
   const [near, setNear] = useState(false);
   useEffect(() => {
     const target = element.current;
@@ -48,25 +48,20 @@ function useNear(element: RefObject<HTMLElement | null>): boolean {
 }
 
 /**
- * A release's tasks, when its publisher published them: each opens in the task viewer, which
- * shows its files and offers it as a download. Nothing is read until the list nears the screen,
- * and a task's files are read as it is pointed at, pressed, or focused, before it is opened.
+ * A release's tasks, read once `enabled` (the section is near the screen). They stay with their
+ * release, so another release's page never shows them; `retry` asks again after a failure.
  */
-export function TaskList({ release }: { release: PublicRelease }) {
+export function useReleaseTasks(release: PublicRelease, enabled: boolean) {
   const source = useSource();
-  const section = useRef<HTMLElement>(null);
-  const near = useNear(section);
   const [read, setRead] = useState<{
     releaseId: string;
     tasks?: PublicTask[];
     failed?: boolean;
   }>();
   const [attempt, setAttempt] = useState(0);
-  const [all, setAll] = useState(false);
-  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` asks again after a failure
   useEffect(() => {
-    if (!near) return;
+    if (!enabled) return;
     let live = true;
     const { releaseId } = release;
     source.getTasks(releaseId).then(
@@ -76,11 +71,28 @@ export function TaskList({ release }: { release: PublicRelease }) {
     return () => {
       live = false;
     };
-  }, [near, release.releaseId, source, attempt]);
+  }, [enabled, release.releaseId, source, attempt]);
+  const current = read?.releaseId === release.releaseId ? read : undefined;
+  return {
+    tasks: current?.tasks,
+    failed: current?.failed === true,
+    retry: () => setAttempt((count) => count + 1),
+  };
+}
+
+/**
+ * A release's tasks, when its publisher published them: each opens in the task viewer, which
+ * shows its files and offers it as a download. Nothing is read until the list nears the screen,
+ * and a task's files are read as it is pointed at, pressed, or focused, before it is opened.
+ */
+export function TaskList({ release }: { release: PublicRelease }) {
+  const source = useSource();
+  const section = useRef<HTMLElement>(null);
+  const { tasks, failed, retry } = useReleaseTasks(release, useNear(section));
+  const [all, setAll] = useState(false);
+  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(hover.current), []);
 
-  const current = read?.releaseId === release.releaseId ? read : undefined;
-  const tasks = current?.tasks;
   const shown = tasks && !all ? tasks.slice(0, FIRST) : tasks;
   const readAhead = (task: PublicTask) => {
     void loadTaskViewer();
@@ -89,12 +101,12 @@ export function TaskList({ release }: { release: PublicRelease }) {
   return (
     <section ref={section} className="flex flex-col gap-3" data-morph="tasks" {...revealGroup}>
       <h2 className="text-sm font-medium">Tasks</h2>
-      {current?.failed ? (
+      {failed ? (
         <p className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${PANEL}`}>
           <span className="text-muted-foreground">The tasks didn't load.</span>
           <button
             type="button"
-            onClick={() => setAttempt((count) => count + 1)}
+            onClick={retry}
             className="hit relative font-medium underline underline-offset-4"
           >
             Try Again

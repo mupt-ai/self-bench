@@ -31,3 +31,27 @@ test("publishing the tasks marks the release and needs each task's compiled file
     ReleaseRefused,
   );
 });
+
+test("publishing the trials marks the release, but only alongside its tasks", () => {
+  const runs = baseRuns();
+  const withBundles = inputs({
+    runs,
+    tasks: approvedTasks(tPrev).map((task) => ({
+      ...task,
+      bundleKey: `tasks/${task.taskId}.tar.gz`,
+    })),
+  });
+  const chosen = previewRelease(withBundles).settings.map((setting) => setting.key);
+  const tasksOnly = buildRelease(withBundles, chosen, { ...context, publishTasks: true });
+  const trials = buildRelease(withBundles, chosen, {
+    ...context,
+    publishTasks: true,
+    publishTrials: true,
+  });
+  expect(tasksOnly.payload.trialsPublished).toBeUndefined();
+  expect(trials.payload.trialsPublished).toBe(true);
+  expect(trials.hash).not.toBe(tasksOnly.hash);
+  // The results name the tasks, so trials alone publish nothing more.
+  const alone = buildRelease(withBundles, chosen, { ...context, publishTrials: true });
+  expect(alone.payload.trialsPublished).toBeUndefined();
+});

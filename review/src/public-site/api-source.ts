@@ -1,5 +1,11 @@
 import type { PublishedLine } from "../../../src/public/release-types";
-import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
+import type {
+  PublicRepoPage,
+  PublicRepoSummary,
+  PublicTask,
+  PublicTaskFiles,
+  PublicTrial,
+} from "./contract";
 import { memorySource, type PublicSource } from "./source";
 
 /** The server answered with an error; pages show their error state. */
@@ -99,6 +105,11 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
     },
     taskDownloadUrl: (releaseId, taskId) =>
       `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}/${encodeURIComponent(taskId)}.tar.gz`,
+    // A released trial never changes either.
+    getTrial: (releaseId, taskId, settingId) => {
+      const url = `${tasksOf(releaseId)}/${encodeURIComponent(taskId)}/trials/${encodeURIComponent(settingId)}`;
+      return kept(url, () => read<PublicTrial>(url));
+    },
   };
 }
 

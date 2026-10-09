@@ -1,11 +1,12 @@
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileTree } from "../../components/FileTree";
 import { firstFile } from "../../lib/task-model";
 import { FilePane } from "../components/TaskFileView";
 import { difficultyLabel } from "../components/TaskList";
 import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
 import { useSource } from "../source-context";
+import { ViewerDialog } from "./ViewerDialog";
 import "./task-viewer.css";
 
 /**
@@ -27,22 +28,12 @@ export default function TaskViewer({
   onSwitch(taskId: string): void;
 }) {
   const source = useSource();
-  const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef<HTMLButtonElement>(null);
-  // Whether the press now under way began on the page around the viewer.
-  const pressedOutside = useRef(false);
   const [tasks, setTasks] = useState<PublicTask[]>();
   const [read, setRead] = useState<{ taskId: string; files?: PublicTaskFiles; failed?: boolean }>();
   const [attempt, setAttempt] = useState(0);
   const [chosen, setChosen] = useState<{ taskId: string; path: string }>();
 
-  useEffect(() => {
-    const element = dialog.current;
-    if (element && !element.open) element.showModal();
-    // Focus starts on Close, not on a file, so a keyboard reader hears the task first.
-    close.current?.focus();
-    return () => element?.close();
-  }, []);
   useEffect(() => {
     let live = true;
     source.getTasks(release.releaseId).then(
@@ -81,18 +72,6 @@ export default function TaskViewer({
   const path = chosen?.taskId === taskId ? chosen.path : firstFile(files)?.path;
   const file = files.find((entry) => entry.path === path);
   const repository = release.repository.fullName;
-  // The page around the viewer is its backdrop, whose clicks land on the dialog itself; one inside
-  // the viewer lands on what it is over, or on the dialog within its box.
-  const outside = (event: MouseEvent<HTMLDialogElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    return (
-      event.target === event.currentTarget &&
-      (event.clientX < box.left ||
-        event.clientX > box.right ||
-        event.clientY < box.top ||
-        event.clientY > box.bottom)
-    );
-  };
   const prUrl =
     task?.sourceUrl ??
     (task?.sourcePr !== undefined
@@ -100,25 +79,12 @@ export default function TaskViewer({
       : undefined);
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard's way to close it (onCancel)
-    <dialog
-      ref={dialog}
-      aria-labelledby="task-title"
-      // Escape closes through the address, like the Close button, so Back does not reopen it.
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      // A click around it closes it too, when it also began there: letting go out there after
-      // selecting text in a file leaves the viewer open.
-      onPointerDown={(event) => {
-        pressedOutside.current = outside(event);
-      }}
-      onClick={(event) => {
-        if (pressedOutside.current && outside(event)) onClose();
-        pressedOutside.current = false;
-      }}
-      className="task-viewer m-auto flex h-[min(100dvh-4rem,60rem)] max-h-none w-[min(100vw-4rem,90rem)] max-w-none flex-col border-[1.5px] border-(--panel-border) bg-background p-0 text-sm text-foreground backdrop:bg-black/40 compact:h-dvh compact:w-full compact:border-0"
+    // Focus starts on Close, not on a file, so a keyboard reader hears the task first.
+    <ViewerDialog
+      labelledBy="task-title"
+      initialFocus={close}
+      onClose={onClose}
+      className="task-viewer w-[min(100vw-4rem,90rem)]"
     >
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -213,7 +179,7 @@ export default function TaskViewer({
           </section>
         </div>
       )}
-    </dialog>
+    </ViewerDialog>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { EvaluationRun } from "../evaluation/types.js";
-import { sha256 } from "../lib/hash.js";
+import { canonicalJson, sha256 } from "../lib/hash.js";
 import { type CredentialFacts, resultsBySetting, type Setting } from "./release-results.js";
 import {
   approvedKeys,
@@ -18,15 +18,6 @@ import {
   type ReleasePublisher,
   type ReleaseRepository,
 } from "./release-types.js";
-
-/** JSON with object keys sorted and undefined values dropped, so equal data hashes equally. */
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) =>
-    item && typeof item === "object" && !Array.isArray(item)
-      ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => (left < right ? -1 : 1)))
-      : item,
-  );
-}
 
 /** Everything the rule reads, gathered by the route. */
 export interface ReleaseInputs {
@@ -172,9 +163,9 @@ export interface BuiltRelease {
 }
 
 /**
- * Builds the release for the ticked settings. With `publishTasks`, the payload says the tasks
- * are public, and selfbench.dev serves the compiled task each one's evaluations ran (recorded
- * per task in `detail.releasedTasks`).
+ * Builds the release for the ticked settings. With `publishTasks`, selfbench.dev serves the
+ * compiled task each one's evaluations ran (`detail.releasedTasks`); with `publishTrials` too,
+ * each setting's trial on each (`detail.results`), which names the task, so never without it.
  */
 export function buildRelease(
   inputs: ReleaseInputs,
@@ -183,6 +174,7 @@ export function buildRelease(
     repository: Pick<ReleaseRepository, "id" | "fullName">;
     publisher: ReleasePublisher;
     publishTasks?: boolean;
+    publishTrials?: boolean;
   },
 ): BuiltRelease {
   const { approved, all } = evaluate(inputs);
@@ -208,6 +200,7 @@ export function buildRelease(
     settings,
     frontier: settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
     ...(context.publishTasks ? { tasksPublished: true as const } : {}),
+    ...(context.publishTasks && context.publishTrials ? { trialsPublished: true as const } : {}),
   };
   const results = Object.fromEntries(
     chosen.map((entry) => [

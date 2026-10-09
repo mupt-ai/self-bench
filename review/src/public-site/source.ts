@@ -1,5 +1,11 @@
 import { directoryOf } from "../../../src/public/directory";
-import type { PublicRepoPage, PublicRepoSummary, PublicTask, PublicTaskFiles } from "./contract";
+import type {
+  PublicRepoPage,
+  PublicRepoSummary,
+  PublicTask,
+  PublicTaskFiles,
+  PublicTrial,
+} from "./contract";
 
 /**
  * Where public pages get their data. Pages call only this. Fixtures implement it during
@@ -20,12 +26,21 @@ export interface PublicSource {
   getTaskFiles(releaseId: string, taskId: string): Promise<PublicTaskFiles | undefined>;
   /** Where a published task downloads from, as a `.tar.gz` named after it. */
   taskDownloadUrl(releaseId: string, taskId: string): string;
+  /** One setting's trial on a task, or undefined when the release did not publish it. */
+  getTrial(releaseId: string, taskId: string, settingId: string): Promise<PublicTrial | undefined>;
 }
 
-/** Published tasks held in memory, by release id: each task's files by its id. */
+/**
+ * Published tasks held in memory, by release id: each task's files by its id, and its trials by
+ * task id, then setting id.
+ */
 export type MemoryTasks = Record<
   string,
-  { tasks: PublicTask[]; files: Record<string, PublicTaskFiles> }
+  {
+    tasks: PublicTask[];
+    files: Record<string, PublicTaskFiles>;
+    trials?: Record<string, Record<string, PublicTrial>>;
+  }
 >;
 
 const sameName = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
@@ -88,5 +103,8 @@ export function memorySource(
     },
     // Held in memory, there is no archive: the link names one the way the API would.
     taskDownloadUrl: (releaseId, taskId) => `#download/${releaseId}/${taskId}.tar.gz`,
+    async getTrial(releaseId, taskId, settingId) {
+      return published[releaseId]?.trials?.[taskId]?.[settingId];
+    },
   };
 }

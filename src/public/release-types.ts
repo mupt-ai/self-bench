@@ -2,13 +2,14 @@ import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { TaskRecord } from "../db/tasks.js";
 import type { Harness } from "../evaluation/models.js";
-import type { EvaluationInput } from "../evaluation/types.js";
+import type { EvaluationInput, EvaluationTrial } from "../evaluation/types.js";
 
 /**
  * What selfbench.dev reads, as the server writes it: the one definition of the public shapes,
  * which the site's `contract.ts` names for its pages. Aggregates, plus each task's files when
- * the publisher chose to publish them; never per-task results, credentials, endpoint hosts, or
- * people.
+ * the publisher chose to publish them, and each setting's result and transcript on each task
+ * when they chose that too; never credentials, endpoint hosts, Harbor logs beyond the verifier's
+ * test output, or people.
  */
 export const RELEASE_SCHEMA_VERSION = 1;
 
@@ -73,6 +74,11 @@ export interface ReleasePayload {
   frontier: string[];
   /** Set when the publisher chose to publish the tasks, for anyone to browse and download. */
   tasksPublished?: true;
+  /**
+   * Set when the publisher also chose to publish each setting's result on each task, with its
+   * transcript. Only ever set with `tasksPublished`, since the results name the tasks.
+   */
+  trialsPublished?: true;
 }
 
 /** One release of one repository by one publisher, as served: the payload plus id and time. */
@@ -89,6 +95,39 @@ export interface PublishedTask {
   /** The merged pull request the task was built from. */
   sourcePr?: number;
   sourceUrl?: string;
+  /**
+   * Whether each setting passed it, by setting id; only on a release that published its trials.
+   * Every setting of a release has a result on every one of its tasks.
+   */
+  passed?: Record<string, boolean>;
+}
+
+/**
+ * One setting's trial on one published task: its result, how the verifier graded it, what it
+ * cost, and the solver's transcript, with secrets redacted. Of Harbor's log only the verifier's
+ * test output; never the rest of it, the artifacts, or the error, which can name endpoint hosts
+ * and sandbox details.
+ */
+export interface PublishedTrial
+  extends Pick<
+    EvaluationTrial,
+    | "startedAt"
+    | "finishedAt"
+    | "agentTimedOut"
+    | "apiCostUsd"
+    | "costSource"
+    | "tokenUsage"
+    | "cacheWritesInferred"
+    | "steps"
+    | "rewards"
+  > {
+  taskId: string;
+  settingId: string;
+  passed: boolean;
+  /** The agent's time limit on the run, in minutes. */
+  agentMinutes?: number;
+  /** What the verifier's tests printed (the task's tests/test.sh), when the trial kept it. */
+  verifierOutput?: string;
 }
 
 /** A published task's files: small text files with their contents, the rest by size alone. */

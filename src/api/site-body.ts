@@ -154,7 +154,14 @@ export function repositoryBody(
     `<p>${escapeText(repositoryDescription(line, Number.POSITIVE_INFINITY))}</p>`,
     "<h2>All Settings</h2>",
     settingsTable(release.settings),
-    // The tasks themselves are kept out of crawls (robots.txt); the page only says they are there.
+    // The tasks and trials themselves are kept out of crawls (robots.txt); the page only says
+    // they are there.
+    ...(release.trialsPublished
+      ? [
+          "<h2>Results by Task</h2>",
+          "<p>Whether each setting passed each task, with how its attempt was graded and its transcript.</p>",
+        ]
+      : []),
     ...(release.tasksPublished
       ? [
           "<h2>Tasks</h2>",

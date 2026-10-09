@@ -65,3 +65,27 @@ test("the chain, not the clock, decides the current release, in the app and in p
     (await store.currentLinesFor("vercel/next.js")).map((entry) => entry.release.releaseId),
   ).toEqual([second.id]);
 });
+
+test("a release's results are read with the line that ran them, and nothing for no release", async () => {
+  const store = createReleaseStore(database.db);
+  const results = { '["sol","codex","high"]': { '["b","t"]': { pass: true, trialIndex: 0 } } };
+  const row = await store.insert({
+    ...release("acme/widgets", 3),
+    line: { orgId: 7, githubRepoId: 42 },
+    detail: {
+      results,
+      tasks: ['["b","t"]'],
+      settingsDetail: {
+        '["sol","codex","high"]': {
+          routes: [{ evaluationId: "e", endpoint: "https://llm.corp.example/v1" }],
+        },
+      },
+    },
+  });
+  expect(await store.releasedResults(row.id)).toEqual({
+    line: { orgId: 7, githubRepoId: 42 },
+    results,
+    endpointHosts: ["llm.corp.example"],
+  });
+  expect(await store.releasedResults("00000000-0000-4000-8000-000000000000")).toBeUndefined();
+});

@@ -1,7 +1,6 @@
 import { constants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { SolverStep } from "./types.js";
 
 export function redactOutput(value: string, secrets: readonly string[]): string {
   let result = value;
@@ -34,18 +33,6 @@ export function verifierRewards(result: unknown): Record<string, number> {
 /** Whether Harbor's trial result says it stopped the agent at its time limit. */
 export function agentTimedOut(result: unknown): boolean {
   return record(record(result).exception_info).exception_type === "AgentTimeoutError";
-}
-function display(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  if (Array.isArray(value))
-    return value
-      .map((part) =>
-        typeof part === "string" ? part : display(record(part).text ?? record(part).content),
-      )
-      .filter(Boolean)
-      .join("\n");
-  return JSON.stringify(value, null, 2);
 }
 export function completeLines(text: string): string {
   return text.slice(0, text.lastIndexOf("\n") + 1);
@@ -84,55 +71,6 @@ export function trialLog(stdout: string, files: ReadonlyMap<string, string>): st
     .map(({ name, text }) => `--- ${name} ---\n${tailLines(text.trimEnd(), share)}`)
     .join("\n\n");
 }
-export function boundedSteps(steps: SolverStep[]): SolverStep[] {
-  let budget = 100_000;
-  return steps
-    .slice(-200)
-    .reverse()
-    .map((step) => {
-      const bounded = (text: string) => {
-        const value = text.slice(0, Math.max(0, budget));
-        budget -= value.length;
-        return value;
-      };
-      return {
-        ...step,
-        text: bounded(step.text),
-        tools: step.tools
-          .slice(0, 30)
-          .map((tool) => ({ ...tool, input: bounded(tool.input), output: bounded(tool.output) })),
-      };
-    })
-    .reverse()
-    .filter((step) => step.text || step.tools.some((tool) => tool.input || tool.output));
-}
-export function trajectorySteps(value: unknown): SolverStep[] {
-  const steps = record(value).steps;
-  if (!Array.isArray(steps)) return [];
-  return steps.slice(-500).map((raw) => {
-    const step = record(raw);
-    const observations = record(step.observation).results;
-    const results = Array.isArray(observations) ? observations.map(record) : [];
-    return {
-      id: String(step.step_id),
-      role: String(step.source ?? "agent"),
-      text: display(step.message).slice(0, 20_000),
-      tools: (Array.isArray(step.tool_calls) ? step.tool_calls : []).map((rawTool) => {
-        const tool = record(rawTool);
-        return {
-          id: String(tool.tool_call_id),
-          name: String(tool.function_name ?? "tool"),
-          input: display(tool.arguments).slice(0, 20_000),
-          output: results
-            .filter((result) => result.source_call_id === tool.tool_call_id)
-            .map((result) => display(result.content))
-            .join("\n")
-            .slice(0, 30_000),
-        };
-      }),
-    };
-  });
-}
 /** The error Pi's run ended on, if its last reply failed rather than finishing. */
 export function piFailure(text: string): string | undefined {
   let last: Record<string, unknown> | undefined;
@@ -152,46 +90,6 @@ export function piFailure(text: string): string | undefined {
     ? last.errorMessage.slice(0, 2000)
     : `Model request ${reason}`;
 }
-export function piSteps(text: string): SolverStep[] {
-  const steps: SolverStep[] = [];
-  for (const line of text.split("\n")) {
-    let event: Record<string, unknown>;
-    try {
-      event = record(JSON.parse(line));
-    } catch {
-      continue;
-    }
-    if (event.type !== "message_end") continue;
-    const message = record(event.message);
-    if (message.role === "toolResult") {
-      const tool = steps
-        .flatMap((step) => step.tools)
-        .reverse()
-        .find((candidate) => candidate.id === message.toolCallId);
-      if (tool) tool.output = display(message.content).slice(0, 30_000);
-      continue;
-    }
-    const content = Array.isArray(message.content) ? message.content.map(record) : [];
-    steps.push({
-      id: String(message.timestamp ?? steps.length),
-      role: String(message.role ?? "agent"),
-      text: content
-        .filter((part) => part.type === "text")
-        .map((part) => display(part.text))
-        .join("\n"),
-      tools: content
-        .filter((part) => part.type === "toolCall")
-        .map((part) => ({
-          id: String(part.id),
-          name: String(part.name ?? "tool"),
-          input: display(part.arguments),
-          output: "",
-        })),
-    });
-  }
-  return steps.slice(-500);
-}
-
 /** Prefixed to a log collectOutput cut to its last megabyte. */
 export const TRUNCATED_OUTPUT = "[Earlier output truncated]\n";
 

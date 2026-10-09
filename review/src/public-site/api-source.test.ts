@@ -88,3 +88,14 @@ test("a repository page takes its carried lines only for its own repository", as
   expect(await source.getRepo("nobody", "nothing")).toBeUndefined();
   expect(calls).toEqual(["/api/public/results/nobody/nothing"]);
 });
+
+test("a trial is read at its task's address, with the setting id encoded, once a visit", async () => {
+  const url = "/api/public/releases/rel-1/tasks/next-pr-1/trials/custom%2Fqwen%7Cpi%7Cdefault";
+  const calls = serve({ [url]: { body: { taskId: "next-pr-1", passed: true, steps: [] } } });
+  const source = apiSource();
+  expect((await source.getTrial("rel-1", "next-pr-1", "custom/qwen|pi|default"))?.passed).toBe(
+    true,
+  );
+  await source.getTrial("rel-1", "next-pr-1", "custom/qwen|pi|default");
+  expect(calls).toEqual([url]);
+});

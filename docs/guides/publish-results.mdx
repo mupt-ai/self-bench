@@ -8,4 +8,9 @@ After evaluating approved tasks, open your repository's **Releases** page. Previ
 
 A release displays aggregate accuracy and cost on [selfbench.dev](https://selfbench.dev). A repository can have multiple publisher workspaces; each line shows its newest release that has not been withdrawn. You can withdraw a release, and the line falls back to its prior release.
 
-Per-task trial results are not part of the public release. Publishing task files is a separate optional choice in the release flow; review that choice before publishing if your benchmark tasks should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).
+Two choices in the release flow publish more than the aggregates:
+
+- **Publish Tasks** makes each task's instruction, tests, and solution public to browse and download.
+- **Publish Results by Task**, available with Publish Tasks and off by default, also shows whether each setting passed each task, with that trial's grading, test output, and solver transcript, secrets redacted. Harbor logs, artifacts, and endpoint hosts stay private.
+
+Review both before publishing if your benchmark tasks or their transcripts should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).

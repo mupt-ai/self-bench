@@ -107,3 +107,11 @@ test("a release that published its tasks says so under its own heading, without 
   expect(html).toContain("All 13 tasks, each with its instruction, tests, and solution");
   expect(repositoryBody([acme]) ?? "").not.toContain("<h2>Tasks</h2>");
 });
+
+test("a release that published its trials says so under the grid's heading, before the tasks", () => {
+  const release = { ...acme.release, tasksPublished: true as const };
+  const html = repositoryBody([{ ...acme, release: { ...release, trialsPublished: true } }]) ?? "";
+  expect(html).toContain("<h2>Results by Task</h2>");
+  expect(html.indexOf("Results by Task")).toBeLessThan(html.indexOf("<h2>Tasks</h2>"));
+  expect(repositoryBody([{ ...acme, release }]) ?? "").not.toContain("Results by Task");
+});

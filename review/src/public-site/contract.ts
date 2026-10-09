@@ -3,6 +3,7 @@ import type {
   PublishedRelease,
   PublishedTask,
   PublishedTaskFiles,
+  PublishedTrial,
   ReleasePublisher,
   ReleaseSetting,
 } from "../../../src/public/release-types";
@@ -22,6 +23,8 @@ export type PublicRelease = PublishedRelease;
 export type PublicTask = PublishedTask;
 /** A published task's files: small text files with their contents, the rest by size. */
 export type PublicTaskFiles = PublishedTaskFiles;
+/** One setting's trial on a task of a release that published its trials: result and transcript. */
+export type PublicTrial = PublishedTrial;
 
 /** One release line of a repository, for the switcher and search results. */
 interface PublicLineSummary {

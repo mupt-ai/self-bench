@@ -144,7 +144,14 @@ export function TrialDialog({
         {error ? (
           <Notice>{error}</Notice>
         ) : run ? (
-          <TrialDetails run={run} trial={trial} baseUrl={baseUrl} />
+          <TrialDetails
+            trial={trial}
+            active={run.status === "queued" || run.status === "running"}
+            agentMinutes={run.agentMinutes}
+            artifactUrl={(name) =>
+              `${baseUrl}/${run.id}/artifacts?name=${encodeURIComponent(name)}`
+            }
+          />
         ) : (
           <ListSkeleton label="Loading Transcript" />
         )}

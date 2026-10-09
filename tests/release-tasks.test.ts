@@ -7,8 +7,8 @@ beforeEach(() => {
   server = suite.server;
 });
 
-/** Releases `settings` on the current preview, publishing the tasks or not. */
-async function releaseWith(settings: string[], publishTasks?: boolean) {
+/** Releases `settings` on the current preview, publishing the tasks (and trials) or not. */
+async function releaseWith(settings: string[], publishTasks?: boolean, publishTrials?: boolean) {
   const view = await server.preview();
   return server.request(server.base, {
     method: "POST",
@@ -17,6 +17,7 @@ async function releaseWith(settings: string[], publishTasks?: boolean) {
       head: view.head?.id ?? null,
       fingerprint: view.preview.fingerprint,
       ...(publishTasks === undefined ? {} : { publishTasks }),
+      ...(publishTrials === undefined ? {} : { publishTrials }),
     }),
   });
 }
@@ -69,4 +70,23 @@ test("a release that publishes its tasks serves them; one that does not takes th
   expect((await server.request(`/api/public/releases/${release.id}/tasks`, {}, null)).status).toBe(
     404,
   );
+});
+
+test("a release that publishes its trials serves each one from its run", async () => {
+  const settings = await server.allSettings();
+  const release = (await (await releaseWith(settings, true, true)).json()).release;
+  expect(release.trialsPublished).toBe(true);
+  const { tasks } = await (
+    await server.request(`/api/public/releases/${release.id}/tasks`, {}, null)
+  ).json();
+  const passed: Record<string, boolean> = tasks[0].passed;
+  expect(Object.keys(passed)).toHaveLength(settings.length);
+  const [settingId = ""] = Object.keys(passed);
+  const trial = await server.request(
+    `/api/public/releases/${release.id}/tasks/${tasks[0].id}/trials/${encodeURIComponent(settingId)}`,
+    {},
+    null,
+  );
+  expect(trial.status).toBe(200);
+  expect(await trial.json()).toMatchObject({ taskId: tasks[0].id, settingId, steps: [] });
 });
