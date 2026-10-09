@@ -19,8 +19,7 @@ const traceSearch = (taskId: string, settingId: string) =>
  * A result's mark, in the text color: strong where it passed, a faint tint where it failed.
  * Lightness, not hue, tells them apart, so they read the same with red-green color blindness.
  */
-export const resultMark = (passed: boolean) =>
-  passed ? "bg-foreground/80" : "bg-foreground/10";
+export const resultMark = (passed: boolean) => (passed ? "bg-foreground/80" : "bg-foreground/10");
 
 /**
  * Every setting's result on every task of a release that published its trials: settings down the
