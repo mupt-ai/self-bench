@@ -7,6 +7,7 @@ import {
   ParentClosePolicy,
   patched,
   proxyActivities,
+  startChild,
   workflowInfo,
 } from "@temporalio/workflow";
 import { trialTimeouts } from "../contracts/agent-limit.js";
@@ -43,6 +44,11 @@ const prepare = () =>
 const records = proxyActivities<EvaluationActivities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 5, nonRetryableErrorTypes: REFUSED },
+});
+// One Pi call, which gives up after five minutes, and the write of what it said.
+const explaining = proxyActivities<EvaluationActivities>({
+  startToCloseTimeout: "10 minutes",
+  retry: { maximumAttempts: 2 },
 });
 
 /**
@@ -109,20 +115,43 @@ export function taskImagesReady(
   };
 }
 
-/** One trial of an evaluation: its Harbor activity, and its failure when it recorded none. */
+/**
+ * One trial of an evaluation: its Harbor activity, and its failure when it recorded none. A trial
+ * that failed its tests starts `<trial workflow ID>/explain` and ends without waiting for it, so
+ * the explanation never holds the evaluation's place for another trial.
+ */
 export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
   index: number,
 ): Promise<void> {
+  let explain = false;
   await runTrial(
     input,
     index,
     {
-      runSolverTrial: (trialInput, trialIndex) =>
-        whenSandboxFree(() => trial(trialInput).runSolverTrial(trialInput, trialIndex)),
+      runSolverTrial: async (trialInput, trialIndex) => {
+        explain = await whenSandboxFree(() =>
+          trial(trialInput).runSolverTrial(trialInput, trialIndex),
+        );
+      },
     },
     records,
   );
+  // An activity from before trials kept failure material returned nothing, so it replays as it ran.
+  if (explain && patched("explain-failed-trials"))
+    await startChild(selfBenchFailedTrialWorkflow, {
+      workflowId: `${workflowInfo().workflowId}/explain`,
+      args: [input, index],
+      parentClosePolicy: ParentClosePolicy.ABANDON,
+    });
+}
+
+/** Explains why a trial failed its tests (failure-summary.ts), after the trial has ended. */
+export async function selfBenchFailedTrialWorkflow(
+  input: EvaluationInput,
+  index: number,
+): Promise<void> {
+  await explaining.explainSolverTrial(input, index);
 }
 
 /**
@@ -132,7 +161,7 @@ export async function selfBenchSolverTrialWorkflow(
 export async function runTrial(
   input: EvaluationInput,
   index: number,
-  harbor: Pick<EvaluationActivities, "runSolverTrial">,
+  harbor: { runSolverTrial(input: EvaluationInput, index: number): Promise<unknown> },
   records: Pick<EvaluationActivities, "failSolverTrial">,
 ): Promise<void> {
   try {
@@ -154,7 +183,7 @@ export async function runEvaluationTrials(
     EvaluationActivities,
     "startSolverEvaluation" | "failSolverTrial" | "finishSolverEvaluation"
   >,
-  solve: (input: EvaluationInput, index: number) => Promise<void>,
+  solve: (input: EvaluationInput, index: number) => Promise<unknown>,
   concurrency: number,
 ): Promise<void> {
   const trials = await records.startSolverEvaluation(input);

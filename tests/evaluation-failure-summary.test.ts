@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getEvaluation } from "../src/evaluation/store.js";
-import type { EvaluationTrial } from "../src/evaluation/types.js";
+import type { EvaluationInput, EvaluationTrial } from "../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { CommandOptions, CommandResult } from "../src/lib/process.js";
 import { testModelSecret } from "./support/evaluation-fixture.js";
@@ -35,8 +35,12 @@ async function evaluate(
   env: NodeJS.ProcessEnv,
   reward: number,
   pi: CommandResult = { stdout: "", stderr: "", exitCode: 0 },
+  explainFailures = true,
 ) {
-  const { store, input, vault } = await runnerFixture(undefined, undefined, TASK_FILES);
+  const consent = (input: EvaluationInput) => {
+    if (explainFailures) input.explainFailures = true;
+  };
+  const { store, input, vault } = await runnerFixture(undefined, consent, TASK_FILES);
   const calls: PiCall[] = [];
   const command = async (name: string, args: readonly string[], options?: CommandOptions) => {
     if (name === process.execPath) {
@@ -118,6 +122,8 @@ test("a summary never holds up or changes a trial's result", async () => {
   const cases = [
     { name: "a passing trial", env: MANAGED, reward: 1, runs: 0 },
     { name: "no platform key", env: { PATH: MANAGED.PATH }, reward: 0, runs: 0 },
+    // A private repository on the organization's own key never sends its code to SelfBench's.
+    { name: "a private repository", env: MANAGED, reward: 0, runs: 0, explain: false },
     {
       name: "a malformed offering switch",
       env: { ...MANAGED, SELFBENCH_MANAGED_OFFERING: "TRUE" },
@@ -133,7 +139,7 @@ test("a summary never holds up or changes a trial's result", async () => {
     },
   ];
   for (const entry of cases) {
-    const { trial, calls } = await evaluate(entry.env, entry.reward, entry.pi);
+    const { trial, calls } = await evaluate(entry.env, entry.reward, entry.pi, entry.explain);
     expect({ name: entry.name, runs: calls.length, status: trial?.status }).toEqual({
       name: entry.name,
       runs: entry.runs,

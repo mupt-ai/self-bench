@@ -37,6 +37,12 @@ export interface EvaluationInput {
    */
   maxTrials?: number;
   pricing?: ModelPricing;
+  /**
+   * Failed trials are explained (failure-summary.ts), which sends their material to the summary
+   * model through SelfBench's account: set for a public repository, or one already running on
+   * managed model access.
+   */
+  explainFailures?: boolean;
   credentialOwnerId?: number;
   credentialOrgId?: number;
   comparisonId?: string;

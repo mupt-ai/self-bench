@@ -2,11 +2,13 @@ import { constants } from "node:fs";
 import { mkdir, mkdtemp, open, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ArtifactStore } from "../artifacts/index.js";
 import { FAILURE_SUMMARY_MODEL, findModel, type Model } from "../contracts/models.js";
 import { platformModelKey } from "../generation/billing/managed.js";
 import type { runCommand } from "../lib/process.js";
 import { projectRoot } from "../lib/project-paths.js";
-import type { EvaluationTrial, FailureSummary } from "./types.js";
+import { evaluationPrefix, updateEvaluation } from "./store.js";
+import type { EvaluationInput, EvaluationTrial, FailureSummary } from "./types.js";
 
 const TIMEOUT_MS = 5 * 60_000;
 /** The longest summary kept; the prompt asks for a few sentences. */
@@ -62,20 +64,46 @@ export async function failureMaterial(
   }
 }
 
+/** Where a failed trial's material waits for explainTrialFailure, beside its other artifacts. */
+function materialKey(input: Pick<EvaluationInput, "repoId" | "id">, index: number): string {
+  return `${evaluationPrefix(input.repoId, input.id)}failures/${index}.md`;
+}
+
+/** Keeps a saved trial's failure material for explainTrialFailure; false if it could not. */
+export function keepFailureMaterial(
+  store: ArtifactStore,
+  input: EvaluationInput,
+  index: number,
+  material: string,
+): Promise<boolean> {
+  return store.put(materialKey(input, index), Buffer.from(material), "text/markdown").then(
+    () => true,
+    (error: unknown) => {
+      console.warn("Failure material was not kept", error instanceof Error ? error.message : error);
+      return false;
+    },
+  );
+}
+
 /**
- * The step that explains a failed trial, once its result is saved: summarizes `material` and adds
- * the summary to the trial (`record`). Undefined when there is nothing to explain.
+ * Explains a trial that was saved failing its tests, from the material it kept, and adds the
+ * explanation to the trial. It needs no sandbox, so it runs apart from the trial, on its own.
  */
-export function explainFailure(
-  material: string | undefined,
-  record: (summary: FailureSummary) => Promise<void>,
+export async function explainTrialFailure(
+  store: ArtifactStore,
+  input: EvaluationInput,
+  index: number,
   options: FailureSummaryOptions,
-): (() => Promise<void>) | undefined {
-  if (material === undefined) return undefined;
-  return async () => {
-    const summary = await summarizeFailure(material, options);
-    if (summary) await record(summary).catch(() => undefined);
-  };
+): Promise<void> {
+  const material = await store.getByKey(materialKey(input, index));
+  if (!material) return;
+  const summary = await summarizeFailure(Buffer.from(material).toString("utf8"), options);
+  if (!summary) return;
+  await updateEvaluation(store, input.repoId, input.id, (run) => {
+    const trial = run.trials[index];
+    if (trial?.status !== "completed" || trial.failureSummary) return false;
+    trial.failureSummary = summary;
+  });
 }
 
 /**

@@ -111,6 +111,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               managedOffer(env),
               {
                 repoId: repo.id,
+                privateRepo: repo.private,
                 agentMinutes: repo.agentMinutes,
                 orgId: tenant.id,
                 tenant: tenant.login,

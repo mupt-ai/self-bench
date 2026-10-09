@@ -1,9 +1,12 @@
 import type { ArtifactStore } from "../../src/artifacts/index.js";
+import { explainTrialFailure } from "../../src/evaluation/failure-summary.js";
 import { failTrial, finishEvaluation, startEvaluation } from "../../src/evaluation/lifecycle.js";
+import { environmentSecrets, redactOutput } from "../../src/evaluation/output.js";
 import { executeTrial, type RunnerOptions } from "../../src/evaluation/runner.js";
 import { trialInput } from "../../src/evaluation/trial-input.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
 import { runEvaluationTrials } from "../../src/evaluation/workflow.js";
+import { runCommand } from "../../src/lib/process.js";
 
 /**
  * The evaluation workflow's own orchestration over the record and runner directly, in place of
@@ -22,8 +25,14 @@ export function runEvaluation(
       finishSolverEvaluation: (input) => finishEvaluation(store, input),
     },
     async (input, index) => {
-      const explain = await executeTrial(store, trialInput(input, index), index, options);
-      await explain?.();
+      const trial = trialInput(input, index);
+      // As the trial workflow does: a failed trial's explanation follows its activity.
+      if (await executeTrial(store, trial, index, options))
+        await explainTrialFailure(store, trial, index, {
+          command: options.command ?? runCommand,
+          env: options.env,
+          redact: (text) => redactOutput(text, environmentSecrets(options.env ?? {})),
+        });
     },
     1,
   );

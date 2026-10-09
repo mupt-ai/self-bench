@@ -3,9 +3,12 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import { orgRecords } from "../db/encrypted-records.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
+import { runCommand } from "../lib/process.js";
 import { withCredentialCapacity } from "../sandbox/capacity-wait.js";
 import { credentialCapacity } from "../sandbox/credential-capacity.js";
+import { explainTrialFailure } from "./failure-summary.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
+import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
 import type { EvaluationInput } from "./types.js";
@@ -14,7 +17,9 @@ export interface EvaluationActivities {
   startSolverEvaluation(input: EvaluationInput): Promise<number>;
   /** Builds the one task in `input`'s images before its trials; returns what it built. */
   prepareTaskImages(input: EvaluationInput): Promise<string>;
-  runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  /** Resolves true when the trial failed its tests and kept material to explain it with. */
+  runSolverTrial(input: EvaluationInput, index: number): Promise<boolean>;
+  explainSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
@@ -62,13 +67,16 @@ export function createEvaluationActivities(
     prepareTaskImages: (input) =>
       heartbeating((options) => limited(input, () => prepareTaskImages(store, input, options))),
     runSolverTrial: (input, index) =>
-      heartbeating(async (options) => {
-        const retry = retries(Context.current().info);
-        const explain = await limited(input, () =>
-          executeTrial(store, input, index, { ...options, retry }),
-        );
-        // Explaining a failed trial needs no sandbox, so it runs once the trial gives its slot back.
-        await explain?.();
+      heartbeating((options) =>
+        limited(input, () =>
+          executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
+        ),
+      ),
+    explainSolverTrial: (input, index) =>
+      explainTrialFailure(store, input, index, {
+        command: runCommand,
+        redact: (text) => redactOutput(text, environmentSecrets(process.env)),
+        signal: Context.current().cancellationSignal,
       }),
     failSolverTrial: (input, index) => failTrial(store, input, index),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),

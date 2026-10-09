@@ -17,12 +17,13 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent, solverAgentArguments } from "./execution.js";
-import { explainFailure, failureMaterial } from "./failure-summary.js";
+import { failureMaterial, keepFailureMaterial } from "./failure-summary.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
   collectOutput,
   completeLines,
+  environmentSecrets,
   piFailure,
   record,
   redactOutput,
@@ -82,15 +83,15 @@ export interface RunnerOptions {
  * Runs one trial of a started evaluation under this attempt's claim (claimTrial), so the solver
  * starts at most once however often the trial is delivered. A retryable failure before the solver
  * starts, or the worker stopping then, returns the claim for the next attempt. Every save replaces
- * only this trial, so trials running in parallel never overwrite each other. A trial saved as
- * failing its tests returns the step that explains why, which needs no sandbox.
+ * only this trial, so trials running in parallel never overwrite each other. Resolves true when
+ * the trial was saved failing its tests and its failure material kept, for explainTrialFailure.
  */
 export async function executeTrial(
   store: ArtifactStore,
   input: EvaluationInput,
   index: number,
   options: RunnerOptions = {},
-): Promise<(() => Promise<void>) | undefined> {
+): Promise<boolean> {
   // The last attempt runs to the end on a stopping worker, since nothing would take it over.
   const stopping = options.retry ? options.stopping : undefined;
   if (stopping?.aborted) throw new WorkerStoppingError();
@@ -99,10 +100,7 @@ export async function executeTrial(
   const root = await mkdtemp(join(tmpdir(), "selfbench-evaluation-"));
   const command = options.command ?? runCommand;
   const environment = options.env ?? process.env;
-  const secrets = Object.entries(environment)
-    .filter(([name]) => /SECRET|TOKEN|PASSWORD|API_KEY/.test(name))
-    .map(([, value]) => value ?? "")
-    .filter(Boolean);
+  const secrets = environmentSecrets(environment);
   const redact = (text: string) => redactOutput(text, secrets);
   // The solver may spend from the moment it starts, so only a failure before then is retried.
   let solving = false;
@@ -157,7 +155,7 @@ export async function executeTrial(
     }
   }
   options.signal?.throwIfAborted();
-  return explainFailure(material, claim.explain, { ...options, command, redact });
+  return material !== undefined && keepFailureMaterial(store, input, index, material);
 }
 
 async function runTrial(context: {
@@ -285,6 +283,7 @@ async function runTrial(context: {
     await refresh(true);
     if (result.exitCode !== 0) throw new Error(`Harbor exited with status ${result.exitCode}`);
     trial.status = "completed";
+    if (!run.explainFailures) return undefined;
     return await failureMaterial({ taskPath, jobs, files: outputs, trial }, { ...options, redact });
   } catch (error) {
     clearInterval(timer);

@@ -78,6 +78,7 @@ test("managed evaluations use the platform model and sandbox credentials", async
     ).toBe(400);
     expect(fixture.starts).toHaveLength(1);
     expect(input.sandbox).toBe("modal");
+    expect(input.explainFailures).toBe(true);
     const execution = await credentialExecution(input, home, env, records);
     expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
     expect(execution.child.MODAL_TOKEN_ID).toBe("managed-modal-id");
@@ -164,6 +165,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     expect(comparison.inputs[0]?.thinking).toBe("xhigh");
     // The repo's agent limit is frozen with the tasks; changing it later leaves this run alone.
     expect(comparison.inputs.map((input) => input.agentMinutes)).toEqual([75, 75]);
+    expect(comparison.inputs.map((input) => input.explainFailures)).toEqual([undefined, undefined]);
     await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 20 });
     expect(JSON.stringify(comparison)).not.toContain("model-secret");
     const deletion = await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}));
