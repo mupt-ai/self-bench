@@ -132,7 +132,9 @@ export function ResultsGrid({
                               onPointerEnter={() => void loadTraceViewer()}
                               onPointerDown={() => readAhead(task.id, setting.id)}
                               onFocus={() => void loadTraceViewer()}
-                              className={`h-5 outline-offset-1 hover:outline-2 hover:outline-foreground focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${resultMark(passed)}`}
+                              className={`h-5 outline-offset-1 transition-colors focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${resultMark(passed)} ${
+                                passed ? "hover:bg-foreground" : "hover:bg-foreground/25"
+                              }`}
                             />
                           );
                         })
