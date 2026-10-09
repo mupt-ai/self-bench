@@ -105,11 +105,17 @@ export async function releaseInputs(
  * nothing once the repository is disconnected or the run is gone, since a release outlives both.
  */
 export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSource {
+  // A connected repository keeps its id, so each line is looked up once; a miss is asked again.
+  const repoIds = new Map<string, number>();
   const repoIdOf = async (line: ReleaseLine) => {
+    const key = `${line.orgId}/${line.githubRepoId}`;
+    const known = repoIds.get(key);
+    if (known !== undefined) return known;
     const [repo] = await db
       .select({ id: repos.id })
       .from(repos)
       .where(and(eq(repos.orgId, line.orgId), eq(repos.githubId, line.githubRepoId)));
+    if (repo) repoIds.set(key, repo.id);
     return repo?.id;
   };
   return {

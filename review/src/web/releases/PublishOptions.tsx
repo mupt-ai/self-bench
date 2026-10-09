@@ -7,8 +7,11 @@ export interface Publish {
   trials: boolean;
 }
 
-/** A release publishes its tasks and trials unless the releaser unticks them. */
-export const PUBLISH_DEFAULTS: Publish = { tasks: true, trials: true };
+/**
+ * A release publishes its tasks unless the releaser unticks them. Its trials, with every
+ * transcript, are published only when the releaser ticks that too.
+ */
+export const PUBLISH_DEFAULTS: Publish = { tasks: true, trials: false };
 
 /** What becomes public and what stays private, shown on the info icon beside the summary. */
 export function privacyNote(

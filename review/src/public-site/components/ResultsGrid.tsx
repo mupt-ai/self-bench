@@ -1,19 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { Link } from "react-router";
-import type { PublicRelease, PublicTask } from "../contract";
+import type { PublicRelease } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
 import { PANEL } from "../frame";
-import { canHover } from "../mobile/device";
 import { resultsGrid } from "../results-grid";
 import { useSource } from "../source-context";
-import { type OpenedTask, useNear } from "./TaskList";
+import { type OpenedTask, useNear, useReleaseTasks } from "./TaskList";
 
 /** The trace viewer, fetched on first use, as the task viewer is. */
 export const loadTraceViewer = () => import("../pages/TraceViewer");
-
-/** How long a mouse rests on a box before its transcript loads: passing over one loads nothing. */
-const HOVER_MS = 120;
 
 /** The address of one setting's trace on one task, over the repository page. */
 const traceSearch = (taskId: string, settingId: string) =>
@@ -35,29 +31,12 @@ export function ResultsGrid({
 }) {
   const source = useSource();
   const section = useRef<HTMLElement>(null);
-  const near = useNear(section);
-  const [read, setRead] = useState<{ releaseId: string; tasks?: PublicTask[]; failed?: boolean }>();
-  const [attempt, setAttempt] = useState(0);
-  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` asks again after a failure
-  useEffect(() => {
-    if (!near) return;
-    let live = true;
-    const { releaseId } = release;
-    source.getTasks(releaseId).then(
-      (tasks) => live && setRead({ releaseId, tasks: tasks ?? [] }),
-      () => live && setRead({ releaseId, failed: true }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [near, release.releaseId, source, attempt]);
-  useEffect(() => () => clearTimeout(hover.current), []);
-
-  const current = read?.releaseId === release.releaseId ? read : undefined;
-  const grid = current?.tasks && resultsGrid(release.settings, current.tasks);
+  const { tasks, failed, retry } = useReleaseTasks(release, useNear(section));
+  const grid = tasks && resultsGrid(release.settings, tasks);
   // A release whose tasks carry no results has nothing to draw.
-  if (current?.tasks && !grid) return null;
+  if (tasks && !grid) return null;
+  // A transcript is large and kept for the visit, so only a press reads one ahead; pointing at or
+  // focusing a box only fetches the viewer itself.
   const readAhead = (taskId: string, settingId: string) => {
     void loadTraceViewer();
     void source.getTrial(release.releaseId, taskId, settingId).catch(() => undefined);
@@ -78,12 +57,12 @@ export function ResultsGrid({
           <span>Select a box to read its transcript.</span>
         </p>
       </div>
-      {current?.failed ? (
+      {failed ? (
         <p className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${PANEL}`}>
           <span className="text-muted-foreground">The results didn't load.</span>
           <button
             type="button"
-            onClick={() => setAttempt((count) => count + 1)}
+            onClick={retry}
             className="hit relative font-medium underline underline-offset-4"
           >
             Try Again
@@ -144,17 +123,9 @@ export function ResultsGrid({
                               preventScrollReset
                               aria-label={label}
                               title={label}
-                              onPointerEnter={(event) => {
-                                if (event.pointerType !== "mouse" || !canHover()) return;
-                                clearTimeout(hover.current);
-                                hover.current = setTimeout(
-                                  () => readAhead(task.id, setting.id),
-                                  HOVER_MS,
-                                );
-                              }}
-                              onPointerLeave={() => clearTimeout(hover.current)}
+                              onPointerEnter={() => void loadTraceViewer()}
                               onPointerDown={() => readAhead(task.id, setting.id)}
-                              onFocus={() => readAhead(task.id, setting.id)}
+                              onFocus={() => void loadTraceViewer()}
                               className={`h-5 outline-offset-1 hover:outline-2 hover:outline-foreground focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${
                                 passed ? "bg-(--ok)" : "bg-(--bad)"
                               }`}

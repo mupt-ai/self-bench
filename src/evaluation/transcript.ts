@@ -46,11 +46,15 @@ function fairShare(lengths: readonly number[], budget: number): number {
   return Number.POSITIVE_INFINITY;
 }
 
-/** `text` within `limit` characters: its start and its end, which says what the middle was. */
+/**
+ * `text` within `limit` characters: its start and its end, with a note of what the middle was.
+ * A limit too small for the note keeps only the start, so the result never exceeds `limit`.
+ */
 function clipped(text: string, limit: number): string {
   if (text.length <= limit) return text;
   const note = `\n[… ${text.length - limit} characters omitted …]\n`;
-  const kept = Math.max(0, limit - note.length);
+  if (limit < note.length * 2) return text.slice(0, Math.max(0, limit));
+  const kept = limit - note.length;
   const head = Math.ceil(kept / 2);
   return `${text.slice(0, head)}${note}${text.slice(text.length - (kept - head))}`;
 }
@@ -148,13 +152,14 @@ function piMessageSteps(messages: readonly Record<string, unknown>[]): SolverSte
 }
 
 /**
- * Pi's steps from its event log. A finished run ends with `agent_end`, which repeats the whole
- * conversation, so it alone gives every step even when only the end of the log was kept; an
- * unfinished one is read from its `message_end` events.
+ * Pi's steps from its event log: its `message_end` events, or the conversation its last
+ * `agent_end` repeats when that holds more. The repeat recovers a run whose log was kept only
+ * from its end; the events win when Pi retried, since each attempt ends with its own `agent_end`
+ * and a retry's leaves out the attempts before it (see cost.ts).
  */
 export function piSteps(text: string): SolverStep[] {
   const ended: Record<string, unknown>[] = [];
-  let whole: unknown[] | undefined;
+  let whole: unknown[] = [];
   for (const line of text.split("\n")) {
     let event: Record<string, unknown>;
     try {
@@ -165,7 +170,8 @@ export function piSteps(text: string): SolverStep[] {
     if (event.type === "agent_end" && Array.isArray(event.messages)) whole = event.messages;
     if (event.type === "message_end") ended.push(record(event.message));
   }
-  return piMessageSteps(whole ? whole.map(record) : ended).slice(-MAX_STEPS);
+  const messages = whole.length > ended.length ? whole.map(record) : ended;
+  return piMessageSteps(messages).slice(-MAX_STEPS);
 }
 
 /**

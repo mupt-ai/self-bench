@@ -47,7 +47,13 @@ const trial = (taskId: string, harness: EvaluationTrial["harness"], reward: numb
         role: "assistant",
         text: "Checking the environment.",
         tools: [
-          { id: "t", name: "bash", input: "env", output: "OPENAI_API_KEY=sk-abcdefghijklmnop1234" },
+          {
+            id: "t",
+            name: "bash",
+            input: "env",
+            output:
+              "OPENAI_API_KEY=sk-abcdefghijklmnop1234\nOPENAI_BASE_URL=https://gw.internal.example/v1\nPOST https://private-endpoint.example.com/v1/chat",
+          },
         ],
       },
     ],
@@ -105,6 +111,7 @@ async function serve() {
   const released: ReleasedResults = {
     line: LINE,
     results: { [SOL]: results("run-sol", [true, false]), [CUSTOM]: results("run-custom", [true]) },
+    endpointHosts: ["private-endpoint.example.com"],
   };
   const routes = createPublicReleaseRoutes(
     {
@@ -179,6 +186,7 @@ test("a trial is its result, grading, and redacted transcript, never the rest of
   for (const hidden of [
     "private-endpoint",
     "sb-7f3a2",
+    "gw.internal.example",
     "ghsecretvalue1234",
     "billedCostUsd",
     "trajectory.json",
@@ -269,4 +277,19 @@ test("a trial recorded before whole transcripts were read is read again from the
     custom.artifacts = ["0/agent/trajectory.json"];
     delete ARTIFACTS[`run-custom/${name}`];
   }
+});
+
+test("a trial whose run could not be found is read again on the next request", async () => {
+  const { get, runReads } = await serve();
+  const run = RUNS["run-sol"];
+  delete RUNS["run-sol"];
+  try {
+    expect((await get(`with-trials/tasks/next-pr-1/trials/${SOL_ID}`)).status).toBe(404);
+  } finally {
+    if (run) RUNS["run-sol"] = run;
+  }
+  expect((await get(`with-trials/tasks/next-pr-1/trials/${SOL_ID}`)).status).toBe(200);
+  // The second task's trial shares the run read for the first.
+  expect((await get(`with-trials/tasks/next-pr-2/trials/${SOL_ID}`)).status).toBe(200);
+  expect(runReads).toEqual(["run-sol", "run-sol"]);
 });

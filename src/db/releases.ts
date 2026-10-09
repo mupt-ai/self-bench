@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { ReleaseTask } from "../public/release-rule.js";
-import type { ReleasedResults } from "../public/release-trials.js";
+import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
 import type { Database } from "./client.js";
 import { releases } from "./schema.js";
@@ -204,6 +204,7 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
           orgId: releases.orgId,
           githubRepoId: releases.githubRepoId,
           results: sql<unknown>`${releases.detail} -> 'results'`,
+          settingsDetail: sql<unknown>`${releases.detail} -> 'settingsDetail'`,
         })
         .from(releases)
         .where(eq(releases.id, id));
@@ -214,6 +215,7 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
           row.results && typeof row.results === "object"
             ? (row.results as ReleasedResults["results"])
             : {},
+        endpointHosts: endpointHostsOf(row.settingsDetail),
       };
     },
     /** Every line's current release, newest first. */

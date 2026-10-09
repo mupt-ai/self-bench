@@ -16,6 +16,28 @@ export interface ReleasedResult {
 export interface ReleasedResults {
   line: ReleaseLine;
   results: Record<string, Record<string, ReleasedResult>>;
+  /** The hosts of the custom endpoints its settings used, which stay private. */
+  endpointHosts: string[];
+}
+
+/** The hosts of a release's custom endpoints, from its `detail.settingsDetail` routes. */
+export function endpointHostsOf(settingsDetail: unknown): string[] {
+  const hosts = new Set<string>();
+  const details =
+    settingsDetail && typeof settingsDetail === "object" ? Object.values(settingsDetail) : [];
+  for (const detail of details) {
+    const routes = (detail as { routes?: unknown })?.routes;
+    for (const route of Array.isArray(routes) ? routes : []) {
+      const endpoint = (route as { endpoint?: unknown })?.endpoint;
+      if (typeof endpoint !== "string" || !endpoint) continue;
+      try {
+        hosts.add(new URL(endpoint).host);
+      } catch {
+        hosts.add(endpoint);
+      }
+    }
+  }
+  return [...hosts];
 }
 
 /** Where a release's trials are read from: their runs, and the files each run kept. */
@@ -60,17 +82,28 @@ function partsOf(settingKey: string): string[] | undefined {
 export const settingIdOf = (settingKey: string): string | undefined =>
   partsOf(settingKey)?.join("|");
 
+/** A base URL or endpoint an agent printed from its environment or a config file. */
+const ENDPOINT_SETTING =
+  /\b([A-Z][A-Z0-9_]*(?:BASE_URL|API_BASE|API_URL|ENDPOINT))\s*([:=])\s*\S+/g;
+
 /**
  * Redacted again on the way out: the runner already replaced the run's own secrets, and this
- * catches any other credential an agent printed (an `env` dump, a config file it read).
+ * catches any other credential an agent printed (an `env` dump, a config file it read), the
+ * endpoint settings beside them, and the release's own endpoint hosts wherever they appear.
  */
-const redactedStep = (step: SolverStep): SolverStep => ({
+function redacted(text: string, hosts: readonly string[]): string {
+  let result = redactSecrets(text).replace(ENDPOINT_SETTING, "$1$2[REDACTED]");
+  for (const host of hosts) result = result.split(host).join("[REDACTED HOST]");
+  return result;
+}
+
+const redactedStep = (step: SolverStep, hosts: readonly string[]): SolverStep => ({
   ...step,
-  text: redactSecrets(step.text),
+  text: redacted(step.text, hosts),
   tools: step.tools.map((tool) => ({
     ...tool,
-    input: redactSecrets(tool.input),
-    output: redactSecrets(tool.output),
+    input: redacted(tool.input, hosts),
+    output: redacted(tool.output, hosts),
   })),
 });
 
@@ -81,12 +114,12 @@ const SECTION = /^--- (Harbor output|\S+) ---$/m;
  * The verifier's test output, from its section of the trial log (output.ts `trialLog`, which
  * already bounds it); undefined when the trial kept none.
  */
-function verifierOutput(log: string): string | undefined {
+function verifierOutput(log: string, hosts: readonly string[]): string | undefined {
   const parts = log.split(SECTION);
   for (let index = 1; index < parts.length; index += 2) {
     if (!parts[index]?.endsWith("/verifier/test-stdout.txt")) continue;
     const text = parts[index + 1]?.trim();
-    return text ? redactSecrets(text) : undefined;
+    return text ? redacted(text, hosts) : undefined;
   }
   return undefined;
 }
@@ -103,6 +136,7 @@ export function publishedTrial(
     taskKey: string;
     taskId: string;
     result: ReleasedResult;
+    endpointHosts?: readonly string[];
   },
   /** The trial's steps, when read again from its transcript (`fullerSteps`). */
   steps?: readonly SolverStep[],
@@ -115,7 +149,8 @@ export function publishedTrial(
     evaluationTaskKey(trial.runId, trial.taskId) !== chosen.taskKey
   )
     return undefined;
-  const output = verifierOutput(trial.log);
+  const hosts = chosen.endpointHosts ?? [];
+  const output = verifierOutput(trial.log, hosts);
   return {
     taskId: chosen.taskId,
     settingId: chosen.settingId,
@@ -131,7 +166,7 @@ export function publishedTrial(
     ...(trial.costSource ? { costSource: trial.costSource } : {}),
     ...(trial.tokenUsage ? { tokenUsage: trial.tokenUsage } : {}),
     ...(trial.cacheWritesInferred ? { cacheWritesInferred: true } : {}),
-    steps: (steps ?? trial.steps).map(redactedStep),
+    steps: (steps ?? trial.steps).map((step) => redactedStep(step, hosts)),
     ...(output ? { verifierOutput: output } : {}),
   };
 }

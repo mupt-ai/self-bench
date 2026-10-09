@@ -68,3 +68,51 @@ test("a trial's transcript is its trajectory, else Pi's log; a trajectory cut sh
   ).toEqual([]);
   expect(transcriptSteps(new Map([["solver/t/trial.log", "log"]]))).toBeUndefined();
 });
+
+test("the budget holds however many steps there are, and short limits keep text, not notes", () => {
+  const steps = Array.from({ length: 500 }, (_, index) => ({
+    id: String(index),
+    role: "assistant",
+    text: "t".repeat(300),
+    tools: Array.from({ length: 30 }, (_, tool) => ({
+      id: `${index}-${tool}`,
+      name: "bash",
+      input: "i".repeat(40),
+      output: "o".repeat(2000),
+    })),
+  }));
+  const kept = boundedSteps(steps);
+  const size = kept.reduce(
+    (total, entry) =>
+      total +
+      entry.text.length +
+      entry.tools.reduce((sum, tool) => sum + tool.input.length + tool.output.length, 0),
+    0,
+  );
+  expect(size).toBeLessThanOrEqual(200_000);
+  expect(kept[0]?.text).toMatch(/^t+$/);
+});
+
+test("a Pi run that retried keeps its events over an earlier attempt's repeat", () => {
+  const user = { role: "user", content: [{ type: "text", text: "Fix it." }] };
+  const first = { role: "assistant", content: [{ type: "text", text: "Attempt one." }] };
+  const retried = Array.from({ length: 3 }, (_, index) => ({
+    role: "assistant",
+    content: [{ type: "text", text: `Retry step ${index}.` }],
+  }));
+  const log = [
+    { type: "message_end", message: user },
+    { type: "message_end", message: first },
+    { type: "agent_end", willRetry: true, messages: [user, first] },
+    ...retried.map((message) => ({ type: "message_end", message })),
+  ]
+    .map((event) => JSON.stringify(event))
+    .join("\n");
+  expect(piSteps(log).map((step) => step.text)).toEqual([
+    "Fix it.",
+    "Attempt one.",
+    "Retry step 0.",
+    "Retry step 1.",
+    "Retry step 2.",
+  ]);
+});

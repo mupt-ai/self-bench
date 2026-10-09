@@ -5,7 +5,7 @@ import { TrialGrading } from "../components/TrialGrading";
 import type { PublicRelease, PublicTrial } from "../contract";
 import { dollars, harnessLabel, reasoningLabel, settingLabel } from "../format";
 import { useSource } from "../source-context";
-import { onBackdrop } from "./backdrop";
+import { ViewerDialog } from "./ViewerDialog";
 
 /**
  * One setting's attempt at one task, over the page: whether it passed, how the verifier graded
@@ -28,20 +28,11 @@ export default function TraceViewer({
   onOpenTask(): void;
 }) {
   const source = useSource();
-  const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef<HTMLButtonElement>(null);
-  // Whether the press now under way began on the page around the viewer.
-  const pressedOutside = useRef(false);
   const [read, setRead] = useState<{ key: string; trial?: PublicTrial; failed?: boolean }>();
   const [attempt, setAttempt] = useState(0);
   const key = `${taskId}\n${settingId}`;
 
-  useEffect(() => {
-    const element = dialog.current;
-    if (element && !element.open) element.showModal();
-    close.current?.focus();
-    return () => element?.close();
-  }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` asks again after a failure
   useEffect(() => {
     let live = true;
@@ -63,22 +54,11 @@ export default function TraceViewer({
       : undefined;
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard's way to close it (onCancel)
-    <dialog
-      ref={dialog}
-      aria-labelledby="trace-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onPointerDown={(event) => {
-        pressedOutside.current = onBackdrop(event);
-      }}
-      onClick={(event) => {
-        if (pressedOutside.current && onBackdrop(event)) onClose();
-        pressedOutside.current = false;
-      }}
-      className="m-auto flex h-[min(100dvh-4rem,60rem)] max-h-none w-[min(100vw-4rem,72rem)] max-w-none flex-col border-[1.5px] border-(--panel-border) bg-background p-0 text-sm text-foreground backdrop:bg-black/40 compact:h-dvh compact:w-full compact:border-0"
+    <ViewerDialog
+      labelledBy="trace-title"
+      initialFocus={close}
+      onClose={onClose}
+      className="w-[min(100vw-4rem,72rem)]"
     >
       <header className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b border-border px-4 py-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -161,6 +141,6 @@ export default function TraceViewer({
           <p className="text-muted-foreground">Loading…</p>
         )}
       </div>
-    </dialog>
+    </ViewerDialog>
   );
 }

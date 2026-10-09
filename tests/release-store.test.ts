@@ -72,11 +72,20 @@ test("a release's results are read with the line that ran them, and nothing for 
   const row = await store.insert({
     ...release("acme/widgets", 3),
     line: { orgId: 7, githubRepoId: 42 },
-    detail: { results, tasks: ['["b","t"]'] },
+    detail: {
+      results,
+      tasks: ['["b","t"]'],
+      settingsDetail: {
+        '["sol","codex","high"]': {
+          routes: [{ evaluationId: "e", endpoint: "https://llm.corp.example/v1" }],
+        },
+      },
+    },
   });
   expect(await store.releasedResults(row.id)).toEqual({
     line: { orgId: 7, githubRepoId: 42 },
     results,
+    endpointHosts: ["llm.corp.example"],
   });
   expect(await store.releasedResults("00000000-0000-4000-8000-000000000000")).toBeUndefined();
 });

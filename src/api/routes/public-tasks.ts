@@ -99,11 +99,12 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
       const entries = publishedTasks(tasks);
       const trials = new Map<string, Map<string, ChosenTrial>>();
       for (const { key: taskKey, task } of entries) {
+        if (!released) break;
         const bySetting = new Map<string, ChosenTrial>();
-        for (const [settingKey, results] of Object.entries(released?.results ?? {})) {
+        for (const [settingKey, results] of Object.entries(released.results)) {
           const settingId = settingIdOf(settingKey);
           const result = results[taskKey];
-          if (!released || !settingId || !result) continue;
+          if (!settingId || !result) continue;
           bySetting.set(settingId, {
             line: released.line,
             settingKey,
@@ -111,6 +112,7 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
             taskKey,
             taskId: task.id,
             result,
+            endpointHosts: released.endpointHosts,
           });
         }
         if (bySetting.size > 0) {
