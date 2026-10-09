@@ -165,7 +165,6 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     expect(comparison.inputs[0]?.thinking).toBe("xhigh");
     // The repo's agent limit is frozen with the tasks; changing it later leaves this run alone.
     expect(comparison.inputs.map((input) => input.agentMinutes)).toEqual([75, 75]);
-    expect(comparison.inputs.map((input) => input.explainFailures)).toEqual([undefined, undefined]);
     await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 20 });
     expect(JSON.stringify(comparison)).not.toContain("model-secret");
     const deletion = await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}));

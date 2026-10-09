@@ -116,29 +116,25 @@ export function taskImagesReady(
 }
 
 /**
- * One trial of an evaluation: its Harbor activity, and its failure when it recorded none. A trial
- * that failed its tests starts `<trial workflow ID>/explain` and ends without waiting for it, so
- * the explanation never holds the evaluation's place for another trial.
+ * One trial of an evaluation: its Harbor activity, and its failure when it recorded none. In an
+ * evaluation that explains failures, the trial then starts `<trial workflow ID>/explain` and ends
+ * without waiting for it, so the explanation never holds the evaluation's place for another trial.
+ * However the activity ended, the explanation finds whatever failure material the trial kept.
  */
 export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
   index: number,
 ): Promise<void> {
-  let explain = false;
   await runTrial(
     input,
     index,
     {
-      runSolverTrial: async (trialInput, trialIndex) => {
-        explain = await whenSandboxFree(() =>
-          trial(trialInput).runSolverTrial(trialInput, trialIndex),
-        );
-      },
+      runSolverTrial: (trialInput, trialIndex) =>
+        whenSandboxFree(() => trial(trialInput).runSolverTrial(trialInput, trialIndex)),
     },
     records,
   );
-  // An activity from before trials kept failure material returned nothing, so it replays as it ran.
-  if (explain && patched("explain-failed-trials"))
+  if (input.explainFailures && patched("explain-failed-trials"))
     await startChild(selfBenchFailedTrialWorkflow, {
       workflowId: `${workflowInfo().workflowId}/explain`,
       args: [input, index],
@@ -161,7 +157,7 @@ export async function selfBenchFailedTrialWorkflow(
 export async function runTrial(
   input: EvaluationInput,
   index: number,
-  harbor: { runSolverTrial(input: EvaluationInput, index: number): Promise<unknown> },
+  harbor: Pick<EvaluationActivities, "runSolverTrial">,
   records: Pick<EvaluationActivities, "failSolverTrial">,
 ): Promise<void> {
   try {
@@ -183,7 +179,7 @@ export async function runEvaluationTrials(
     EvaluationActivities,
     "startSolverEvaluation" | "failSolverTrial" | "finishSolverEvaluation"
   >,
-  solve: (input: EvaluationInput, index: number) => Promise<unknown>,
+  solve: (input: EvaluationInput, index: number) => Promise<void>,
   concurrency: number,
 ): Promise<void> {
   const trials = await records.startSolverEvaluation(input);

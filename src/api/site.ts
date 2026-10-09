@@ -140,6 +140,7 @@ export async function openSite(
       ...(vault ? { vault } : {}),
       start: evaluationStarter(client, config.temporal.taskQueue),
       stop: evaluationStopper(client),
+      githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
     releases: createReleaseRoutes({

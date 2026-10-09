@@ -26,8 +26,9 @@ export function runEvaluation(
     },
     async (input, index) => {
       const trial = trialInput(input, index);
-      // As the trial workflow does: a failed trial's explanation follows its activity.
-      if (await executeTrial(store, trial, index, options))
+      await executeTrial(store, trial, index, options);
+      // As the trial workflow does, once the trial has ended.
+      if (input.explainFailures)
         await explainTrialFailure(store, trial, index, {
           command: options.command ?? runCommand,
           env: options.env,

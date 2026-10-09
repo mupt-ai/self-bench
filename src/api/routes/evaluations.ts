@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
-import type { RepoStore } from "../../db/repos.js";
+import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
@@ -32,6 +32,7 @@ import { managedHarborEnvironment, managedOffer } from "../../generation/billing
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { track } from "../../lib/telemetry/posthog.js";
+import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
@@ -48,8 +49,10 @@ export interface EvaluationRoutesOptions {
   start(input: EvaluationInput): Promise<void>;
   stop: StopEvaluation;
   env?: NodeJS.ProcessEnv;
-  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing). */
+  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
   fetch?: typeof fetch;
+  /** Where GitHub's API is, to confirm a repository is still public before explaining failures. */
+  githubApiUrl?: string;
   vault?: Vault;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
@@ -57,6 +60,22 @@ export interface EvaluationRoutesOptions {
 
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
   const { users, repos, tasks, artifacts } = options;
+  /**
+   * Whether the repository may be private: as connected, or as GitHub says now, since it may have
+   * turned private since. Anything GitHub does not confirm counts as private.
+   */
+  const privateNow = async (repo: ConnectedRepo, user: User): Promise<boolean> => {
+    if (repo.private || !options.githubApiUrl) return true;
+    const token = await users.gitHubToken(user.githubId).catch(() => undefined);
+    if (!token) return true;
+    const github = await lookupRepositoryById(
+      options.githubApiUrl,
+      token,
+      repo.githubId,
+      options.fetch,
+    ).catch(() => undefined);
+    return github?.private !== false;
+  };
   return {
     async handle(
       request: IncomingMessage,
@@ -111,7 +130,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               managedOffer(env),
               {
                 repoId: repo.id,
-                privateRepo: repo.private,
+                privateRepo: await privateNow(repo, user),
                 agentMinutes: repo.agentMinutes,
                 orgId: tenant.id,
                 tenant: tenant.login,

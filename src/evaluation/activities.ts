@@ -17,8 +17,7 @@ export interface EvaluationActivities {
   startSolverEvaluation(input: EvaluationInput): Promise<number>;
   /** Builds the one task in `input`'s images before its trials; returns what it built. */
   prepareTaskImages(input: EvaluationInput): Promise<string>;
-  /** Resolves true when the trial failed its tests and kept material to explain it with. */
-  runSolverTrial(input: EvaluationInput, index: number): Promise<boolean>;
+  runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   explainSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;

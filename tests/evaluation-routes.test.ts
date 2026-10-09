@@ -79,3 +79,40 @@ test("generation checks alone never admit tasks to the dataset", async () => {
     false,
   );
 });
+
+test("failures are explained only for a repository GitHub confirms is still public", async () => {
+  const explained = async (github?: { private: boolean }) => {
+    const fixture = await evaluationServer(undefined, {}, undefined, github);
+    try {
+      const create = async (kind: string, value: string) => {
+        const body = JSON.stringify({ name: kind, kind, value });
+        const response = await fixture.request("/api/orgs/avyay/credentials", {
+          method: "POST",
+          body,
+        });
+        return (await response.json()).id as string;
+      };
+      const model = await create("openai", "sk-own-key-123456789");
+      const draft = {
+        id: crypto.randomUUID(),
+        tasks: [{ runId: "run-one", taskId: "task-one" }],
+        models: [{ catalogId: "gpt-6-sol", credentialId: model, harnesses: ["codex"] }],
+        sandbox: "e2b",
+        sandboxCredentialId: await create("e2b", "e2b-own-key"),
+      };
+      const body = JSON.stringify(draft);
+      const response = await fixture.request(`${fixture.base}/comparisons`, {
+        method: "POST",
+        body,
+      });
+      expect(response.status).toBe(202);
+      return fixture.starts[0]?.explainFailures;
+    } finally {
+      await fixture.close();
+    }
+  };
+  expect(await explained({ private: false })).toBe(true);
+  // Connected as public, but private on GitHub since: its code stays off SelfBench's account.
+  expect(await explained({ private: true })).toBeUndefined();
+  expect(await explained()).toBeUndefined();
+});

@@ -83,15 +83,15 @@ export interface RunnerOptions {
  * Runs one trial of a started evaluation under this attempt's claim (claimTrial), so the solver
  * starts at most once however often the trial is delivered. A retryable failure before the solver
  * starts, or the worker stopping then, returns the claim for the next attempt. Every save replaces
- * only this trial, so trials running in parallel never overwrite each other. Resolves true when
- * the trial was saved failing its tests and its failure material kept, for explainTrialFailure.
+ * only this trial, so trials running in parallel never overwrite each other. A trial saved failing
+ * its tests keeps the material that explainTrialFailure reads.
  */
 export async function executeTrial(
   store: ArtifactStore,
   input: EvaluationInput,
   index: number,
   options: RunnerOptions = {},
-): Promise<boolean> {
+): Promise<void> {
   // The last attempt runs to the end on a stopping worker, since nothing would take it over.
   const stopping = options.retry ? options.stopping : undefined;
   if (stopping?.aborted) throw new WorkerStoppingError();
@@ -155,7 +155,7 @@ export async function executeTrial(
     }
   }
   options.signal?.throwIfAborted();
-  return material !== undefined && keepFailureMaterial(store, input, index, material);
+  if (material !== undefined) await keepFailureMaterial(store, input, index, material);
 }
 
 async function runTrial(context: {

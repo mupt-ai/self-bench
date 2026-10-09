@@ -76,10 +76,15 @@ export function evaluationInput(): EvaluationInput {
     tasks: [{ runId: "run-one", taskId: "task-one", bundleKey: "tasks/task.tar.gz" }],
   };
 }
+/**
+ * `github` makes the repository connected as public, with GitHub now reporting it as `private`;
+ * without it the repository is connected as private.
+ */
 export async function evaluationServer(
   vault?: Vault,
   logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins"> = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
+  github?: { private: boolean },
 ) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
   const artifacts = new LocalArtifactStore(directory);
@@ -110,7 +115,7 @@ export async function evaluationServer(
     githubId: 1,
     fullName: "avyay/repo",
     defaultBranch: "main",
-    private: true,
+    private: !github,
     connectedBy: user.id,
   });
   const secondRepo = await repos.connect({
@@ -187,8 +192,12 @@ export async function evaluationServer(
         publicUrl,
         ...logins,
         env,
+        githubApiUrl: testAuthConfig.githubApiUrl,
         // OpenRouter lists no vendor endpoint, so gateway runs keep their route's pricing.
-        fetch: (async () => new Response(null, { status: 404 })) as unknown as typeof fetch,
+        fetch: (async (input: string | URL) =>
+          github && String(input) === `${testAuthConfig.githubApiUrl}/repositories/1`
+            ? Response.json({ id: 1, full_name: "avyay/repo", private: github.private })
+            : new Response(null, { status: 404 })) as unknown as typeof fetch,
         vault:
           vault ??
           createVault(

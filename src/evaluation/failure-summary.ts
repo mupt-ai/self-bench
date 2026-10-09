@@ -69,25 +69,24 @@ function materialKey(input: Pick<EvaluationInput, "repoId" | "id">, index: numbe
   return `${evaluationPrefix(input.repoId, input.id)}failures/${index}.md`;
 }
 
-/** Keeps a saved trial's failure material for explainTrialFailure; false if it could not. */
-export function keepFailureMaterial(
+/** Keeps a saved trial's failure material for explainTrialFailure; a failure only loses it. */
+export async function keepFailureMaterial(
   store: ArtifactStore,
   input: EvaluationInput,
   index: number,
   material: string,
-): Promise<boolean> {
-  return store.put(materialKey(input, index), Buffer.from(material), "text/markdown").then(
-    () => true,
-    (error: unknown) => {
-      console.warn("Failure material was not kept", error instanceof Error ? error.message : error);
-      return false;
-    },
-  );
+): Promise<void> {
+  await store
+    .put(materialKey(input, index), Buffer.from(material), "text/markdown")
+    .catch((error: unknown) =>
+      console.warn("Failure material was not kept", error instanceof Error ? error.message : error),
+    );
 }
 
 /**
  * Explains a trial that was saved failing its tests, from the material it kept, and adds the
- * explanation to the trial. It needs no sandbox, so it runs apart from the trial, on its own.
+ * explanation to the trial; any other trial kept none, and is left alone. It needs no sandbox, so
+ * it runs apart from the trial, on its own.
  */
 export async function explainTrialFailure(
   store: ArtifactStore,
