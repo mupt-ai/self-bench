@@ -11,6 +11,7 @@ import {
   type ReleaseTask,
   scores,
   taskSet,
+  unsolvedCandidates,
 } from "./release-rule.js";
 import {
   RELEASE_SCHEMA_VERSION,
@@ -50,6 +51,8 @@ interface PreviewTask {
   sourceUrl?: string;
   /** In the current release, new since it, or returning after an earlier release. */
   status: "released" | "new" | "returning";
+  /** How many settings have a result on it, when enough do and none passed (`unsolvedTasks`). */
+  unsolved?: number;
 }
 
 /** What the release dialog shows, and the fingerprint the release must match. */
@@ -104,11 +107,13 @@ export function previewRelease(inputs: ReleaseInputs): ReleasePreview {
   const ticked = new Set(defaultTicks(all, approved, inputs.previous));
   const index = new Map(approved.map((key, position) => [key, position]));
   const covered = new Set(all.flatMap((entry) => [...entry.coverage]));
+  const unsolved = unsolvedCandidates(all);
   return {
     fingerprint: fingerprintOf(inputs, all),
     tasks: approved.flatMap((key) => {
       const task = byKey.get(key);
       if (!task) return [];
+      const tried = unsolved.get(key);
       return [
         {
           key,
@@ -122,6 +127,7 @@ export function previewRelease(inputs: ReleaseInputs): ReleasePreview {
             : inputs.everReleased.has(key)
               ? ("returning" as const)
               : ("new" as const),
+          ...(tried !== undefined ? { unsolved: tried } : {}),
         },
       ];
     }),

@@ -105,6 +105,41 @@ export function taskSet(chosen: readonly Candidate[], approved: readonly string[
   return approved.filter((task) => chosen.every((entry) => entry.coverage.has(task)));
 }
 
+/** How many settings must have a result on a task before none passing it points at its tests. */
+export const UNSOLVED_MINIMUM = 3;
+
+/**
+ * Tasks at least `UNSOLVED_MINIMUM` settings have a result for and none passed, with how many
+ * settings that is: their hidden tests may fail correct solutions, so a person should check them.
+ * `settings` lists each setting's results as task key and whether it passed.
+ */
+export function unsolvedTasks(
+  settings: Iterable<Iterable<readonly [task: string, passed: boolean]>>,
+): Map<string, number> {
+  const tried = new Map<string, number>();
+  const passed = new Set<string>();
+  for (const results of settings) {
+    for (const [task, pass] of results) {
+      tried.set(task, (tried.get(task) ?? 0) + 1);
+      if (pass) passed.add(task);
+    }
+  }
+  return new Map(
+    [...tried].filter(([task, count]) => count >= UNSOLVED_MINIMUM && !passed.has(task)),
+  );
+}
+
+/** `unsolvedTasks` over the settings' results on approved tasks. */
+export function unsolvedCandidates(all: readonly Candidate[]): Map<string, number> {
+  return unsolvedTasks(
+    all.map((entry) =>
+      [...entry.coverage].map(
+        (task) => [task, entry.results.get(task)?.trial.rewards.reward === 1] as const,
+      ),
+    ),
+  );
+}
+
 /** Settings that cover the task set but were not chosen. */
 export function declinedFor(
   all: readonly Candidate[],

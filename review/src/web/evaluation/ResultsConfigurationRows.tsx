@@ -25,6 +25,7 @@ const flipped = <T,>(list: readonly T[], item: T) =>
 export function ConfigurationRows({
   configuration,
   accepted,
+  unsolved,
   view,
   setView,
   onOpenTask,
@@ -32,6 +33,8 @@ export function ConfigurationRows({
   configuration: Configuration;
   /** The repository's accepted tasks, for the ones the cumulative results haven't run. */
   accepted: readonly AcceptedTask[] | undefined;
+  /** Accepted tasks no configuration passed, though enough ran them, by task key. */
+  unsolved: ReadonlyMap<string, number>;
   view: ResultsView;
   setView: Dispatch<SetStateAction<ResultsView>>;
   onOpenTask(result: TaskResult): void;
@@ -113,6 +116,7 @@ export function ConfigurationRows({
           statusOf={[...configuration.latest, ...configuration.underway]}
           cumulative
           missing={missing}
+          unsolved={unsolved}
           {...group(`${configuration.key}\nlatest`)}
         />
       )}

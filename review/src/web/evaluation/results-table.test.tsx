@@ -5,7 +5,7 @@ import type { EvaluationRun } from "./api";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
 import { ResultsStatus } from "./ResultsMarks";
 import { ResultsTable } from "./ResultsTable";
-import { missingTasks } from "./results-coverage";
+import { missingTasks, unsolvedOf } from "./results-coverage";
 import { at, credentials, errored, NOW, passed, run, type TrialSpec } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 import { momentLabel } from "./results-presentation";
@@ -90,6 +90,7 @@ test("an open configuration lists its cumulative results, then its five newest r
               // Accepted after the last run.
               { runId: "batch-1", taskId: "task-3", difficulty: "easy", acceptedAt: at(1) },
             ]}
+            unsolved={new Map()}
             view={{
               states: [],
               facets: {},
@@ -137,4 +138,57 @@ test("a task accepted before a re-run of old tasks, but after the last new ones,
   const [picked] = configurationsOf([full, retry, pick], credentials, NOW);
   if (!picked) throw new Error("No configuration");
   expect(missingTasks(picked, [accepted("task-9", 200)])[0]?.outcome).toBe("unrun");
+});
+
+test("an accepted task three configurations ran and none passed is flagged Unsolved", () => {
+  const failed = (taskId: string): TrialSpec => ({ ...passed(taskId), rewards: { reward: 0 } });
+  const unverified = (taskId: string): TrialSpec => ({ ...failed(taskId), modelVerified: false });
+  const runs = [
+    run("low", { thinking: "low" }, [failed("task-1"), failed("task-2"), failed("task-3")]),
+    run("medium", { thinking: "medium" }, [failed("task-1"), passed("task-2"), failed("task-3")]),
+    run("high", { thinking: "high" }, [failed("task-1"), failed("task-2"), unverified("task-3")]),
+    run("custom", { credential: "gpu-a" }, [failed("task-4")]),
+  ];
+  const configurations = configurationsOf(runs, credentials, NOW);
+  const accepted = ["task-1", "task-2", "task-3"].map((taskId) => ({
+    runId: "batch-1",
+    taskId,
+    difficulty: "easy",
+  }));
+  // task-2 was passed once, and task-3 has only two usable results.
+  const unsolved = unsolvedOf(configurations, accepted);
+  expect([...unsolved]).toEqual([["batch-1/task-1", 3]]);
+  // Only accepted tasks count.
+  expect(unsolvedOf(configurations, []).size).toBe(0);
+
+  const configuration = configurations.find((entry) => entry.thinking === "low");
+  if (!configuration) throw new Error("No configuration");
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <table>
+        <tbody>
+          <ConfigurationRows
+            configuration={configuration}
+            accepted={accepted}
+            unsolved={unsolved}
+            view={{
+              states: [],
+              facets: {},
+              configurations: [configuration.key],
+              batches: [`${configuration.key}\nlatest`],
+              shown: {},
+              sorts: {},
+              runLimits: {},
+            }}
+            setView={() => {}}
+            onOpenTask={() => {}}
+          />
+        </tbody>
+      </table>
+    </MemoryRouter>,
+  );
+  expect(html.match(/>Unsolved</g)).toHaveLength(1);
+  expect(html).toContain(
+    "None of the 3 configurations with an eligible result on this task passed it.",
+  );
 });

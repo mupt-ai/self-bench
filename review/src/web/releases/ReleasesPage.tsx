@@ -156,6 +156,7 @@ export function ReleasesPage() {
       {releasing && (
         <ReleaseDialog
           url={url}
+          repo={repo}
           workspace={org}
           onClose={() => setReleasing(false)}
           onReleased={(release, unchanged) => {

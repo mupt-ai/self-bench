@@ -18,13 +18,14 @@ const setting = (key: string, coverage: number[]) =>
     ticked: false,
   }) as const;
 
-// t0 and t1 were in the current release, t2 is new, t3 is returning; t9 was removed.
+// t0 and t1 were in the current release, t2 is new, t3 is returning; t9 was removed. No setting
+// passed t2.
 const preview: ReleasePreview = {
   fingerprint: "f".repeat(64),
   tasks: [
     { key: "t0", runId: "gen", taskId: "t0", difficulty: "easy", status: "released" },
     { key: "t1", runId: "gen", taskId: "t1", difficulty: "easy", status: "released" },
-    { key: "t2", runId: "gen", taskId: "t2", difficulty: "easy", status: "new" },
+    { key: "t2", runId: "gen", taskId: "t2", difficulty: "easy", status: "new", unsolved: 3 },
     { key: "t3", runId: "gen", taskId: "t3", difficulty: "easy", status: "returning" },
   ],
   removed: [{ key: "t9", runId: "gen", taskId: "t9", state: "rejected" }],
@@ -43,4 +44,9 @@ test("added tasks are labelled new or returning; removed ones count as left out"
   const selection = selectionOf(preview, new Set(["a"]));
   expect(selection.added).toEqual({ new: 1, returning: 1 });
   expect(selection.droppedFromCurrent).toBe(1);
+});
+
+test("unsolved tasks are flagged only while they are in the task set", () => {
+  expect(selectionOf(preview, new Set(["a"])).unsolved).toEqual([2]);
+  expect(selectionOf(preview, new Set(["a", "c"])).unsolved).toEqual([]);
 });
