@@ -16,11 +16,11 @@ const traceSearch = (taskId: string, settingId: string) =>
   `?trace=${encodeURIComponent(taskId)}&setting=${encodeURIComponent(settingId)}`;
 
 /**
- * A result's mark: solid where it passed, hollow where it failed, so the two differ by shape and
- * not only by hue, which red-green color blindness can't tell apart.
+ * A result's mark, in the text color: strong where it passed, a faint tint where it failed.
+ * Lightness, not hue, tells them apart, so they read the same with red-green color blindness.
  */
 export const resultMark = (passed: boolean) =>
-  passed ? "bg-(--ok)" : "border-[1.5px] border-(--bad)";
+  passed ? "bg-foreground/80" : "bg-foreground/10";
 
 /**
  * Every setting's result on every task of a release that published its trials: settings down the
