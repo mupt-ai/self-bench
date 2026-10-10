@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { findModel } from "../../../../src/contracts/models";
+import { FAILURE_SUMMARY_MODEL, findModel } from "../../../../src/contracts/models";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
-import { buttonStyles, Notice } from "../ui";
+import { useSession } from "../session";
+import { Button, buttonStyles, Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
 import { dollars } from "./benchmark";
 import { OutcomeCircle } from "./ResultsMarks";
@@ -12,8 +13,10 @@ import { outcomeOf } from "./results-model";
 import { routeLabel, taskParts } from "./results-presentation";
 import { thinkingLabel } from "./run-presentation";
 import { TrialDetails } from "./TrialDetails";
+import { useFailureExplanation } from "./useFailureExplanation";
 
-const sameTrial = (a: EvaluationTrial, b: EvaluationTrial) =>
+type TrialIdentity = Pick<EvaluationTrial, "runId" | "taskId" | "harness">;
+const sameTrial = (a: TrialIdentity, b: TrialIdentity) =>
   a.runId === b.runId && a.taskId === b.taskId && a.harness === b.harness;
 
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
@@ -25,7 +28,8 @@ function modelName(run: EvaluationRun): string {
 /**
  * One task's trial in a dialog: what ran it, its result, and its transcript. The run list leaves
  * transcripts and logs out, so unless `loaded` says the run is complete, the dialog fetches it,
- * and keeps it fresh while it runs.
+ * and keeps it fresh while it runs. A trial that failed its tests without an explanation offers
+ * Explain Failure where the server can explain it (useFailureExplanation).
  */
 export function TrialDialog({
   run: known,
@@ -35,6 +39,7 @@ export function TrialDialog({
   baseUrl,
   repo,
   onClose,
+  onExplained,
 }: {
   run: EvaluationRun;
   trial: EvaluationTrial;
@@ -45,9 +50,13 @@ export function TrialDialog({
   baseUrl: string;
   repo: string;
   onClose(): void;
+  /** The run, once it carries the explanation this dialog asked for. */
+  onExplained?(run: EvaluationRun): void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
+  const { session } = useSession();
   const [fetched, setFetched] = useState<EvaluationRun>();
+  const [explained, setExplained] = useState<EvaluationRun>();
   const [error, setError] = useState("");
   useEffect(() => {
     if (loaded) return;
@@ -72,8 +81,21 @@ export function TrialDialog({
       clearTimeout(timer);
     };
   }, [loaded, baseUrl, known.id]);
-  const run = loaded ? known : fetched;
+  const run = explained ?? (loaded ? known : fetched);
   const trial = run?.trials.find((entry) => sameTrial(entry, chosen)) ?? chosen;
+  const explanation = useFailureExplanation({
+    baseUrl,
+    run: known,
+    trial,
+    enabled: !!run && session.status === "signed-in" && session.managedOffering,
+    onExplained: useCallback(
+      (latest: EvaluationRun) => {
+        setExplained(latest);
+        onExplained?.(latest);
+      },
+      [onExplained],
+    ),
+  });
   const task = taskParts(trial.taskId);
   const minutes =
     trial.startedAt && trial.finishedAt
@@ -127,6 +149,15 @@ export function TrialDialog({
           </span>
         )}
         <span className="ml-auto flex flex-wrap gap-2">
+          {explanation.offered && (
+            <Button
+              disabled={explanation.explaining}
+              onClick={() => void explanation.explain()}
+              title={`Sends this trial's tests, reference solution and the solver's work to ${findModel(FAILURE_SUMMARY_MODEL)?.label ?? FAILURE_SUMMARY_MODEL} through SelfBench.`}
+            >
+              {explanation.explaining ? "Explaining…" : "Explain Failure"}
+            </Button>
+          )}
           {showRun && (
             <Link className={buttonStyles.secondary} to={`?run=${encodeURIComponent(known.id)}`}>
               Open Run
@@ -141,6 +172,7 @@ export function TrialDialog({
         </span>
       </div>
       <div className="p-4 sm:p-6">
+        {explanation.error && <Notice className="mb-4">{explanation.error}</Notice>}
         {error ? (
           <Notice>{error}</Notice>
         ) : run ? (

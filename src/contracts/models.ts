@@ -215,6 +215,9 @@ export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);
 }
 
+/** Explains why failed trials failed, at high reasoning (src/evaluation/failure-summary.ts). */
+export const FAILURE_SUMMARY_MODEL = "gpt-6-luna";
+
 /** Reference pricing for running `model` on its vendor's own key. */
 export function nativePricing(model: Model): ModelPricing | undefined {
   const rates = model.rates?.native;

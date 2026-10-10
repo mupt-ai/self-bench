@@ -16,7 +16,7 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
 import { keepRunSummaries } from "../../src/evaluation/store.js";
-import type { EvaluationInput } from "../../src/evaluation/types.js";
+import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
 export const evaluationEnv = {
@@ -76,10 +76,15 @@ export function evaluationInput(): EvaluationInput {
     tasks: [{ runId: "run-one", taskId: "task-one", bundleKey: "tasks/task.tar.gz" }],
   };
 }
+/**
+ * `github` makes the repository connected as public, with GitHub now reporting it as `private`;
+ * without it the repository is connected as private.
+ */
 export async function evaluationServer(
   vault?: Vault,
   logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins"> = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
+  github?: { private: boolean },
 ) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));
   const artifacts = new LocalArtifactStore(directory);
@@ -110,7 +115,7 @@ export async function evaluationServer(
     githubId: 1,
     fullName: "avyay/repo",
     defaultBranch: "main",
-    private: true,
+    private: !github,
     connectedBy: user.id,
   });
   const secondRepo = await repos.connect({
@@ -149,6 +154,8 @@ export async function evaluationServer(
   await tasks.review(approved.id, { decision: "approve", note: "Reviewed", userId: user.id });
   const starts: EvaluationInput[] = [];
   const stops: string[] = [];
+  const explains: FailedTrial[] = [];
+  let explainState: { running: boolean; endedAt?: number } = { running: false };
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
   const auth = createSiteAuth({
@@ -187,8 +194,12 @@ export async function evaluationServer(
         publicUrl,
         ...logins,
         env,
+        githubApiUrl: testAuthConfig.githubApiUrl,
         // OpenRouter lists no vendor endpoint, so gateway runs keep their route's pricing.
-        fetch: (async () => new Response(null, { status: 404 })) as unknown as typeof fetch,
+        fetch: (async (input: string | URL) =>
+          github && String(input) === `${testAuthConfig.githubApiUrl}/repositories/1`
+            ? Response.json({ id: 1, full_name: "avyay/repo", private: github.private })
+            : new Response(null, { status: 404 })) as unknown as typeof fetch,
         vault:
           vault ??
           createVault(
@@ -201,6 +212,14 @@ export async function evaluationServer(
         },
         async stop(repoId, id) {
           stops.push(`evaluation/${repoId}/${id}`);
+        },
+        explain: {
+          async start(trial) {
+            explains.push(trial);
+          },
+          async state() {
+            return explainState;
+          },
         },
       });
       if (
@@ -231,10 +250,15 @@ export async function evaluationServer(
     repo,
     starts,
     stops,
+    explains,
     outsider,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     failStart(value: boolean) {
       failStart = value;
+    },
+    /** What the explanation of any trial reports, as Temporal would describe it. */
+    setExplainState(value: { running: boolean; endedAt?: number }) {
+      explainState = value;
     },
     request(path: string, init: RequestInit = {}, githubId: number | null = 1) {
       return fetch(`${publicUrl}${path}`, {

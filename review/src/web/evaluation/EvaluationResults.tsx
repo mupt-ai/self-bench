@@ -21,12 +21,13 @@ export function EvaluationResults({
   run,
   baseUrl,
   repo,
-  onCancelled,
+  onChanged,
 }: {
   run: EvaluationRun;
   baseUrl: string;
   repo: string;
-  onCancelled?(run: EvaluationRun): void;
+  /** The run as a cancellation or an explanation left it. */
+  onChanged?(run: EvaluationRun): void;
 }) {
   const [search, setSearch] = useSearchParams();
   const opened = findTrial([run], search.get(TRIAL_PARAM));
@@ -82,11 +83,11 @@ export function EvaluationResults({
           <span className="text-xs text-muted-foreground tabular-nums" role="status">
             {done}/{run.trials.length} completed{errorCount}
           </span>
-          {active && onCancelled && (
+          {active && onChanged && (
             <CancelEvaluation
               endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/cancel`}
               subject="Run"
-              onCancelled={onCancelled}
+              onCancelled={onChanged}
             />
           )}
         </div>
@@ -154,6 +155,7 @@ export function EvaluationResults({
           baseUrl={baseUrl}
           repo={repo}
           onClose={() => showTrial(undefined)}
+          {...(onChanged ? { onExplained: onChanged } : {})}
         />
       )}
     </section>

@@ -17,11 +17,13 @@ import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { solverAgent, solverAgentArguments } from "./execution.js";
+import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
   collectOutput,
   completeLines,
+  environmentSecrets,
   piFailure,
   record,
   redactOutput,
@@ -81,7 +83,8 @@ export interface RunnerOptions {
  * Runs one trial of a started evaluation under this attempt's claim (claimTrial), so the solver
  * starts at most once however often the trial is delivered. A retryable failure before the solver
  * starts, or the worker stopping then, returns the claim for the next attempt. Every save replaces
- * only this trial, so trials running in parallel never overwrite each other.
+ * only this trial, so trials running in parallel never overwrite each other. A trial that failed
+ * its tests keeps the material explainTrialFailure reads before it is saved.
  */
 export async function executeTrial(
   store: ArtifactStore,
@@ -97,10 +100,7 @@ export async function executeTrial(
   const root = await mkdtemp(join(tmpdir(), "selfbench-evaluation-"));
   const command = options.command ?? runCommand;
   const environment = options.env ?? process.env;
-  const secrets = Object.entries(environment)
-    .filter(([name]) => /SECRET|TOKEN|PASSWORD|API_KEY/.test(name))
-    .map(([, value]) => value ?? "")
-    .filter(Boolean);
+  const secrets = environmentSecrets(environment);
   const redact = (text: string) => redactOutput(text, secrets);
   // The solver may spend from the moment it starts, so only a failure before then is retried.
   let solving = false;
@@ -116,7 +116,11 @@ export async function executeTrial(
     if (stopping?.aborted) throw new WorkerStoppingError();
     await claim.startSolver();
     solving = true;
-    await runTrial({ store, run, trial, index, save, ...ready, command, redact, options });
+    const solver = { store, run, trial, index, save, command, redact, options };
+    const material = await runTrial({ ...solver, ...ready });
+    // Kept before the trial is saved completed, so no explanation can start without it.
+    const failed = { repoId: input.repoId, id: input.id, index };
+    if (material !== undefined) await keepFailureMaterial(store, failed, material);
   } catch (error) {
     // This attempt lost its claim (or its evaluation stopped); the trial's holder records it.
     if (error instanceof RepeatSpendError) {
@@ -172,7 +176,7 @@ async function runTrial(context: {
   command: typeof runCommand;
   redact: (text: string) => string;
   options: RunnerOptions;
-}): Promise<void> {
+}): Promise<string | undefined> {
   const { store, run, trial, index, save, taskPath, jobs, model, child, command, redact, options } =
     context;
   let stdout = "";
@@ -280,6 +284,8 @@ async function runTrial(context: {
     await refresh(true);
     if (result.exitCode !== 0) throw new Error(`Harbor exited with status ${result.exitCode}`);
     trial.status = "completed";
+    if (!run.explainFailures) return undefined;
+    return await failureMaterial({ taskPath, jobs, files: outputs, trial }, { ...options, redact });
   } catch (error) {
     clearInterval(timer);
     await polling;

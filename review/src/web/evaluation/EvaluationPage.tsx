@@ -73,7 +73,7 @@ export function EvaluationPage() {
             run={current}
             baseUrl={url}
             repo={repo}
-            onCancelled={setCurrent}
+            onChanged={setCurrent}
           />
         ) : (
           !error && <ListSkeleton label="Loading Run" />

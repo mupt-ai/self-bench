@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
-import type { RepoStore } from "../../db/repos.js";
+import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
@@ -26,18 +26,21 @@ import {
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
+import type { FailureExplainer } from "../../evaluation/start.js";
 import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import { track } from "../../lib/telemetry/posthog.js";
+import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { credentialRoutes } from "./credentials.js";
+import { explainTrial } from "./explain-trial.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
 
 export interface EvaluationRoutesOptions {
   users: UserStore;
@@ -47,9 +50,13 @@ export interface EvaluationRoutesOptions {
   publicUrl: string;
   start(input: EvaluationInput): Promise<void>;
   stop: StopEvaluation;
+  /** Explains failed trials on request (explainTrial); without it, none can be asked for. */
+  explain?: FailureExplainer;
   env?: NodeJS.ProcessEnv;
-  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing). */
+  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
   fetch?: typeof fetch;
+  /** Where GitHub's API is, to confirm a repository is still public before explaining failures. */
+  githubApiUrl?: string;
   vault?: Vault;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
@@ -57,6 +64,22 @@ export interface EvaluationRoutesOptions {
 
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
   const { users, repos, tasks, artifacts } = options;
+  /**
+   * Whether the repository may be private: as connected, or as GitHub says now, since it may have
+   * turned private since. Anything GitHub does not confirm counts as private.
+   */
+  const privateNow = async (repo: ConnectedRepo, user: User): Promise<boolean> => {
+    if (repo.private || !options.githubApiUrl) return true;
+    const token = await users.gitHubToken(user.githubId).catch(() => undefined);
+    if (!token) return true;
+    const github = await lookupRepositoryById(
+      options.githubApiUrl,
+      token,
+      repo.githubId,
+      options.fetch,
+    ).catch(() => undefined);
+    return github?.private !== false;
+  };
   return {
     async handle(
       request: IncomingMessage,
@@ -111,6 +134,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
               managedOffer(env),
               {
                 repoId: repo.id,
+                privateRepo: await privateNow(repo, user),
                 agentMinutes: repo.agentMinutes,
                 orgId: tenant.id,
                 tenant: tenant.login,
@@ -169,6 +193,21 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
                   : "Invalid selection or credential fields",
             });
         }
+        request.resume();
+        return true;
+      }
+      if (
+        section &&
+        !id &&
+        action === "explain" &&
+        ["GET", "POST"].includes(request.method ?? "")
+      ) {
+        await explainTrial(options, request, url, response, {
+          repo,
+          evaluationId: section,
+          user,
+          env,
+        });
         request.resume();
         return true;
       }

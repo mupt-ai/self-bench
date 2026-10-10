@@ -2,6 +2,14 @@ import { constants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+/** The values of the worker's secret variables, to redact from anything it records. */
+export function environmentSecrets(env: NodeJS.ProcessEnv): string[] {
+  return Object.entries(env)
+    .filter(([name]) => /SECRET|TOKEN|PASSWORD|API_KEY/.test(name))
+    .map(([, value]) => value ?? "")
+    .filter(Boolean);
+}
+
 export function redactOutput(value: string, secrets: readonly string[]): string {
   let result = value;
   for (const secret of secrets.filter(Boolean).sort((left, right) => right.length - left.length)) {

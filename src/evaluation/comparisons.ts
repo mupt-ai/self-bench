@@ -52,6 +52,8 @@ export const comparisonSchema = z
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 export interface ComparisonScope {
   repoId: number;
+  /** Whether the repository is private on GitHub. */
+  privateRepo: boolean;
   agentMinutes: number;
   orgId: number;
   tenant: string;
@@ -189,6 +191,7 @@ export async function createComparison(
           startedBy: scope.login,
           createdAt,
           ...(pricing ? { pricing } : {}),
+          ...(!scope.privateRepo || managedModel ? { explainFailures: true } : {}),
           credentialOrgId: scope.orgId,
           comparisonId: selection.id,
           credentials: {

@@ -37,6 +37,12 @@ export interface EvaluationInput {
    */
   maxTrials?: number;
   pricing?: ModelPricing;
+  /**
+   * Failed trials are explained (failure-summary.ts), which sends their material to the summary
+   * model through SelfBench's account: set for a public repository, or one already running on
+   * managed model access.
+   */
+  explainFailures?: boolean;
   credentialOwnerId?: number;
   credentialOrgId?: number;
   comparisonId?: string;
@@ -52,6 +58,19 @@ export interface SolverStep {
   role: string;
   text: string;
   tools: { id: string; name: string; input: string; output: string }[];
+}
+/** One trial to explain (failure-summary.ts): its evaluation, its place there, and its task. */
+export interface FailedTrial {
+  repoId: number;
+  id: string;
+  index: number;
+  /** The task's bundle, to rebuild the trial's material from when it kept none. */
+  bundleKey?: string;
+}
+/** A model's explanation of a failed trial, and the catalog id of the model that wrote it. */
+export interface FailureSummary {
+  text: string;
+  model: string;
 }
 export interface TokenUsage {
   input: number;
@@ -80,6 +99,8 @@ export interface EvaluationTrial {
    * any other agent, so the trial completes with that score.
    */
   agentTimedOut?: boolean;
+  /** Why a completed trial failed its tests, in plain language (failure-summary.ts). */
+  failureSummary?: FailureSummary;
   modelVerified?: boolean;
   apiCostUsd?: number;
   tokenUsage?: TokenUsage;

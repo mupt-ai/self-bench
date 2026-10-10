@@ -78,6 +78,7 @@ test("managed evaluations use the platform model and sandbox credentials", async
     ).toBe(400);
     expect(fixture.starts).toHaveLength(1);
     expect(input.sandbox).toBe("modal");
+    expect(input.explainFailures).toBe(true);
     const execution = await credentialExecution(input, home, env, records);
     expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
     expect(execution.child.MODAL_TOKEN_ID).toBe("managed-modal-id");
