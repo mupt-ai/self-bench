@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { FAILURE_SUMMARY_MODEL, findModel } from "../../../../src/contracts/models";
 import { harnessLabels } from "../../../../src/evaluation/models";
@@ -13,12 +13,11 @@ import { outcomeOf } from "./results-model";
 import { routeLabel, taskParts } from "./results-presentation";
 import { thinkingLabel } from "./run-presentation";
 import { TrialDetails } from "./TrialDetails";
+import { useFailureExplanation } from "./useFailureExplanation";
 
 type TrialIdentity = Pick<EvaluationTrial, "runId" | "taskId" | "harness">;
 const sameTrial = (a: TrialIdentity, b: TrialIdentity) =>
   a.runId === b.runId && a.taskId === b.taskId && a.harness === b.harness;
-/** How long the dialog waits for an explanation: the summary step's own limit, with room. */
-const EXPLAIN_WAIT_MS = 11 * 60_000;
 
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
 function modelName(run: EvaluationRun): string {
@@ -29,9 +28,8 @@ function modelName(run: EvaluationRun): string {
 /**
  * One task's trial in a dialog: what ran it, its result, and its transcript. The run list leaves
  * transcripts and logs out, so unless `loaded` says the run is complete, the dialog fetches it,
- * and keeps it fresh while it runs. On a deployment with managed models, a trial that failed its
- * tests without an explanation offers Explain Failure; the dialog then fetches the run until the
- * explanation arrives.
+ * and keeps it fresh while it runs. A trial that failed its tests without an explanation offers
+ * Explain Failure where the server can explain it (useFailureExplanation).
  */
 export function TrialDialog({
   run: known,
@@ -41,6 +39,7 @@ export function TrialDialog({
   baseUrl,
   repo,
   onClose,
+  onExplained,
 }: {
   run: EvaluationRun;
   trial: EvaluationTrial;
@@ -51,17 +50,16 @@ export function TrialDialog({
   baseUrl: string;
   repo: string;
   onClose(): void;
+  /** The run, once it carries the explanation this dialog asked for. */
+  onExplained?(run: EvaluationRun): void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
   const { session } = useSession();
   const [fetched, setFetched] = useState<EvaluationRun>();
+  const [explained, setExplained] = useState<EvaluationRun>();
   const [error, setError] = useState("");
-  /** When this dialog asked for an explanation it is still waiting for. */
-  const [explaining, setExplaining] = useState<number>();
-  const [explainError, setExplainError] = useState("");
-  const { runId, taskId, harness } = chosen;
   useEffect(() => {
-    if (loaded && explaining === undefined) return;
+    if (loaded) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -71,14 +69,8 @@ export function TrialDialog({
         );
         if (disposed) return;
         setFetched(run);
-        const current = run.trials.find((entry) => sameTrial(entry, { runId, taskId, harness }));
-        const waiting = explaining !== undefined && !current?.failureSummary;
-        if (waiting && Date.now() - explaining > EXPLAIN_WAIT_MS) {
-          setExplaining(undefined);
-          setExplainError("No explanation came back. Try again in a few minutes.");
-        } else if (waiting || run.status === "queued" || run.status === "running")
+        if (run.status === "queued" || run.status === "running")
           timer = setTimeout(() => void refresh(), 3000);
-        else if (explaining !== undefined) setExplaining(undefined);
       } catch (cause) {
         if (!disposed) setError(cause instanceof Error ? cause.message : "Could not load the run");
       }
@@ -88,36 +80,22 @@ export function TrialDialog({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [loaded, baseUrl, known.id, explaining, runId, taskId, harness]);
-  const explained = (run: EvaluationRun) =>
-    !!run.trials.find((entry) => sameTrial(entry, chosen))?.failureSummary;
-  // A loaded run stands until this dialog fetched a fresher one for an explanation.
-  const run = loaded
-    ? fetched && (explaining !== undefined || explained(fetched))
-      ? fetched
-      : known
-    : fetched;
+  }, [loaded, baseUrl, known.id]);
+  const run = explained ?? (loaded ? known : fetched);
   const trial = run?.trials.find((entry) => sameTrial(entry, chosen)) ?? chosen;
-  const canExplain =
-    session.status === "signed-in" &&
-    session.managedOffering &&
-    !!run &&
-    outcomeOf(trial) === "failed" &&
-    !trial.failureSummary;
-  const explain = async () => {
-    setExplainError("");
-    setExplaining(Date.now());
-    try {
-      await evaluationRequest(`${baseUrl}/${encodeURIComponent(known.id)}/explain`, {
-        runId,
-        taskId,
-        harness,
-      });
-    } catch (cause) {
-      setExplaining(undefined);
-      setExplainError(cause instanceof Error ? cause.message : "Could not start the explanation");
-    }
-  };
+  const explanation = useFailureExplanation({
+    baseUrl,
+    run: known,
+    trial,
+    enabled: !!run && session.status === "signed-in" && session.managedOffering,
+    onExplained: useCallback(
+      (latest: EvaluationRun) => {
+        setExplained(latest);
+        onExplained?.(latest);
+      },
+      [onExplained],
+    ),
+  });
   const task = taskParts(trial.taskId);
   const minutes =
     trial.startedAt && trial.finishedAt
@@ -171,13 +149,13 @@ export function TrialDialog({
           </span>
         )}
         <span className="ml-auto flex flex-wrap gap-2">
-          {canExplain && (
+          {explanation.offered && (
             <Button
-              disabled={explaining !== undefined}
-              onClick={() => void explain()}
+              disabled={explanation.explaining}
+              onClick={() => void explanation.explain()}
               title={`Sends this trial's tests, reference solution and the solver's work to ${findModel(FAILURE_SUMMARY_MODEL)?.label ?? FAILURE_SUMMARY_MODEL} through SelfBench.`}
             >
-              {explaining !== undefined ? "Explaining…" : "Explain Failure"}
+              {explanation.explaining ? "Explaining…" : "Explain Failure"}
             </Button>
           )}
           {showRun && (
@@ -194,7 +172,7 @@ export function TrialDialog({
         </span>
       </div>
       <div className="p-4 sm:p-6">
-        {explainError && <Notice className="mb-4">{explainError}</Notice>}
+        {explanation.error && <Notice className="mb-4">{explanation.error}</Notice>}
         {error ? (
           <Notice>{error}</Notice>
         ) : run ? (

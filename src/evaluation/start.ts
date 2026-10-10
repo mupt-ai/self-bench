@@ -31,26 +31,48 @@ export function evaluationStarter(
   };
 }
 
+/** Starts one failed trial's explanation, and tells whether it is running or when it last ended. */
+export interface FailureExplainer {
+  start(trial: FailedTrial): Promise<void>;
+  state(trial: FailedTrial): Promise<{ running: boolean; endedAt?: number }>;
+}
+
 /**
- * Starts the explanation of one failed trial, under the ID its trial workflow starts it with, so
- * the two never run at once. A finished one may run again: it leaves a trial already explained.
+ * Explains failed trials under the ID their trial workflow starts it with, so the two never run
+ * at once. A finished one may run again: it leaves a trial already explained.
  */
 export function failureExplainer(
   client: Client,
   fallbackQueue: string,
   env: NodeJS.ProcessEnv = process.env,
-) {
-  return async (trial: FailedTrial): Promise<void> => {
-    try {
-      await client.workflow.start("selfBenchFailedTrialWorkflow", {
-        workflowId: `${evaluationWorkflowId(trial.repoId, trial.id)}/trial/${trial.index}/explain`,
-        taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
-        args: [trial],
-        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-      });
-    } catch (error) {
-      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
-    }
+): FailureExplainer {
+  const workflowId = (trial: FailedTrial) =>
+    `${evaluationWorkflowId(trial.repoId, trial.id)}/trial/${trial.index}/explain`;
+  return {
+    async start(trial) {
+      try {
+        await client.workflow.start("selfBenchFailedTrialWorkflow", {
+          workflowId: workflowId(trial),
+          taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
+          args: [trial],
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        });
+      } catch (error) {
+        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+      }
+    },
+    async state(trial) {
+      try {
+        const { status, closeTime } = await client.workflow.getHandle(workflowId(trial)).describe();
+        return {
+          running: status.name === "RUNNING",
+          ...(closeTime ? { endedAt: closeTime.getTime() } : {}),
+        };
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return { running: false };
+        throw error;
+      }
+    },
   };
 }
 

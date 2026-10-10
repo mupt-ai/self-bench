@@ -41,10 +41,10 @@ beforeEach(() => {
     fetch: async (url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       requests.push({ url, ...(body ? { body } : {}) });
-      // Once asked, the run comes back explained.
-      return Response.json(url.endsWith("/explain") ? {} : failedRun(true), {
-        status: url.endsWith("/explain") ? 202 : 200,
-      });
+      // The trial can be explained and nothing is running; once asked, the run comes back explained.
+      if (url.includes("/explain?")) return Response.json({ available: true, running: false });
+      if (url.endsWith("/explain")) return Response.json({}, { status: 202 });
+      return Response.json(failedRun(true));
     },
   };
   const previous = Object.keys(globals).map(

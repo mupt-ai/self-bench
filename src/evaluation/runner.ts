@@ -83,8 +83,8 @@ export interface RunnerOptions {
  * Runs one trial of a started evaluation under this attempt's claim (claimTrial), so the solver
  * starts at most once however often the trial is delivered. A retryable failure before the solver
  * starts, or the worker stopping then, returns the claim for the next attempt. Every save replaces
- * only this trial, so trials running in parallel never overwrite each other. A trial saved failing
- * its tests keeps the material that explainTrialFailure reads.
+ * only this trial, so trials running in parallel never overwrite each other. A trial that failed
+ * its tests keeps the material explainTrialFailure reads before it is saved.
  */
 export async function executeTrial(
   store: ArtifactStore,
@@ -105,7 +105,6 @@ export async function executeTrial(
   // The solver may spend from the moment it starts, so only a failure before then is retried.
   let solving = false;
   let retrying = false;
-  let material: string | undefined;
   try {
     const signals = [options.signal, stopping].filter((signal) => signal !== undefined);
     const ready = await setUpTrial(store, input, run, trial, root, secrets, {
@@ -118,7 +117,10 @@ export async function executeTrial(
     await claim.startSolver();
     solving = true;
     const solver = { store, run, trial, index, save, command, redact, options };
-    material = await runTrial({ ...solver, ...ready });
+    const material = await runTrial({ ...solver, ...ready });
+    // Kept before the trial is saved completed, so no explanation can start without it.
+    const failed = { repoId: input.repoId, id: input.id, index };
+    if (material !== undefined) await keepFailureMaterial(store, failed, material);
   } catch (error) {
     // This attempt lost its claim (or its evaluation stopped); the trial's holder records it.
     if (error instanceof RepeatSpendError) {
@@ -155,8 +157,6 @@ export async function executeTrial(
     }
   }
   options.signal?.throwIfAborted();
-  const failed = { repoId: input.repoId, id: input.id, index };
-  if (material !== undefined) await keepFailureMaterial(store, failed, material);
 }
 
 async function runTrial(context: {

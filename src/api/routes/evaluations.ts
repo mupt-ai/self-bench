@@ -26,8 +26,9 @@ import {
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
+import type { FailureExplainer } from "../../evaluation/start.js";
 import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
-import type { EvaluationInput, FailedTrial } from "../../evaluation/types.js";
+import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
@@ -49,8 +50,8 @@ export interface EvaluationRoutesOptions {
   publicUrl: string;
   start(input: EvaluationInput): Promise<void>;
   stop: StopEvaluation;
-  /** Starts explaining one failed trial (explainTrial); without it, none can be asked for. */
-  explain?(trial: FailedTrial): Promise<void>;
+  /** Explains failed trials on request (explainTrial); without it, none can be asked for. */
+  explain?: FailureExplainer;
   env?: NodeJS.ProcessEnv;
   /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
   fetch?: typeof fetch;
@@ -195,8 +196,18 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         request.resume();
         return true;
       }
-      if (section && !id && action === "explain" && request.method === "POST") {
-        await explainTrial(options, request, response, { repo, evaluationId: section, user, env });
+      if (
+        section &&
+        !id &&
+        action === "explain" &&
+        ["GET", "POST"].includes(request.method ?? "")
+      ) {
+        await explainTrial(options, request, url, response, {
+          repo,
+          evaluationId: section,
+          user,
+          env,
+        });
         request.resume();
         return true;
       }

@@ -155,6 +155,7 @@ export async function evaluationServer(
   const starts: EvaluationInput[] = [];
   const stops: string[] = [];
   const explains: FailedTrial[] = [];
+  let explainState: { running: boolean; endedAt?: number } = { running: false };
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
   const auth = createSiteAuth({
@@ -212,8 +213,13 @@ export async function evaluationServer(
         async stop(repoId, id) {
           stops.push(`evaluation/${repoId}/${id}`);
         },
-        async explain(trial) {
-          explains.push(trial);
+        explain: {
+          async start(trial) {
+            explains.push(trial);
+          },
+          async state() {
+            return explainState;
+          },
         },
       });
       if (
@@ -249,6 +255,10 @@ export async function evaluationServer(
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     failStart(value: boolean) {
       failStart = value;
+    },
+    /** What the explanation of any trial reports, as Temporal would describe it. */
+    setExplainState(value: { running: boolean; endedAt?: number }) {
+      explainState = value;
     },
     request(path: string, init: RequestInit = {}, githubId: number | null = 1) {
       return fetch(`${publicUrl}${path}`, {
