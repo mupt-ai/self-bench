@@ -138,3 +138,20 @@ test("a trial explained after the page read its run shows its explanation on ope
   expect(document.body.textContent).toContain(SUMMARY.text);
   expect(explainButton()).toBeUndefined();
 });
+
+test("a request refused because the trial was explained meanwhile shows the explanation, not the refusal", async () => {
+  await open(failedRun(), true);
+  explainState = { available: false, running: false, explained: true };
+  const refusal = "Only a trial that failed its tests and has no explanation yet can be explained.";
+  const answer = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) =>
+    url.endsWith("/explain")
+      ? Response.json({ error: refusal }, { status: 409 })
+      : answer(url, init)) as typeof fetch;
+  const button = explainButton();
+  if (!button) throw new Error("Missing Explain Failure");
+  await act(async () => button.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(document.body.textContent).toContain(SUMMARY.text);
+  expect(document.body.textContent).not.toContain(refusal);
+});

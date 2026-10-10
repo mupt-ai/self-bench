@@ -52,7 +52,10 @@ export function useFailureExplanation({
       const latest = await evaluationRequest<EvaluationRun>(
         `${baseUrl}/${encodeURIComponent(evaluationId)}`,
       );
-      if (live()) onExplained(latest);
+      if (!live()) return;
+      // Whatever refused it, the trial is explained now.
+      setError("");
+      onExplained(latest);
     },
     [endpoint, query, baseUrl, evaluationId, onExplained],
   );
