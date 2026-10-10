@@ -181,6 +181,10 @@ test("Explain Failure starts one explanation for a trial that failed its tests",
     expect(await state("pi")).toMatchObject({ available: false, running: false });
     expect((await explain("pi")).status).toBe(429);
     expect(fixture.explains).toHaveLength(1);
+    // Explained since: the page holding the stale run is told to read it again.
+    Object.assign(pi, { failureSummary: { text: "It reversed them.", model: "gpt-6-luna" } });
+    await saveEvaluation(fixture.artifacts, run);
+    expect(await state("pi")).toMatchObject({ available: false, explained: true });
   } finally {
     await fixture.close();
   }

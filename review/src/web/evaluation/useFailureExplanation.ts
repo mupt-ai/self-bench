@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
 import { outcomeOf } from "./results-model";
 
@@ -7,6 +7,8 @@ interface ExplainState {
   available: boolean;
   running: boolean;
   reason?: string;
+  /** Explained since the run this page holds was read. */
+  explained?: boolean;
 }
 
 const POLL_MS = 4000;
@@ -34,26 +36,34 @@ export function useFailureExplanation({
   const [explaining, setExplaining] = useState(false);
   const [error, setError] = useState("");
   const wanted = enabled && outcomeOf(trial) === "failed" && !trial.failureSummary;
-  const endpoint = `${baseUrl}/${encodeURIComponent(run.id)}/explain`;
+  const evaluationId = run.id;
+  const endpoint = `${baseUrl}/${encodeURIComponent(evaluationId)}/explain`;
   const { runId, taskId, harness } = trial;
   const query = new URLSearchParams({ runId, taskId, harness }).toString();
 
-  // What the server offers for this trial, and whether its explanation is already running.
+  // What the server offers for this trial: a run read before its explanation was written gets it.
+  const check = useCallback(
+    async (live: () => boolean) => {
+      const answer = await evaluationRequest<ExplainState>(`${endpoint}?${query}`);
+      if (!live()) return;
+      setState(answer);
+      if (answer.running) setExplaining(true);
+      if (!answer.explained) return;
+      const latest = await evaluationRequest<EvaluationRun>(
+        `${baseUrl}/${encodeURIComponent(evaluationId)}`,
+      );
+      if (live()) onExplained(latest);
+    },
+    [endpoint, query, baseUrl, evaluationId, onExplained],
+  );
   useEffect(() => {
     if (!wanted) return;
     let disposed = false;
-    evaluationRequest<ExplainState>(`${endpoint}?${query}`).then(
-      (answer) => {
-        if (disposed) return;
-        setState(answer);
-        if (answer.running) setExplaining(true);
-      },
-      () => undefined,
-    );
+    check(() => !disposed).catch(() => undefined);
     return () => {
       disposed = true;
     };
-  }, [wanted, endpoint, query]);
+  }, [wanted, check]);
 
   useEffect(() => {
     if (!explaining) return;
@@ -68,7 +78,7 @@ export function useFailureExplanation({
           return;
         }
         const latest = await evaluationRequest<EvaluationRun>(
-          `${baseUrl}/${encodeURIComponent(run.id)}`,
+          `${baseUrl}/${encodeURIComponent(evaluationId)}`,
         );
         if (disposed) return;
         const done = latest.trials.find(
@@ -91,7 +101,7 @@ export function useFailureExplanation({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [explaining, endpoint, query, baseUrl, run.id, runId, taskId, harness, onExplained]);
+  }, [explaining, endpoint, query, baseUrl, evaluationId, runId, taskId, harness, onExplained]);
 
   const explain = async () => {
     setError("");
@@ -100,6 +110,8 @@ export function useFailureExplanation({
       setExplaining(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the explanation");
+      // Refused, perhaps because it was explained meanwhile: show what the server has now.
+      await check(() => true).catch(() => undefined);
     }
   };
 

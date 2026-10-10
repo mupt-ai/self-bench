@@ -29,7 +29,8 @@ interface Context {
 
 /**
  * `…/evaluations/<id>/explain`, for one trial of the evaluation named by its task and harness
- * (Explain Failure in the app). GET tells whether it can be explained and whether it is being;
+ * (Explain Failure in the app). GET tells whether it can be explained, whether it is being, and
+ * whether it already was (since the page holding the run read it);
  * POST starts it and answers 202. Asking is consent for that trial's material to reach the
  * summary model through SelfBench's account, whatever the repository. It needs the platform's
  * managed models, a trial that failed its tests with no explanation yet, and either material the
@@ -61,7 +62,12 @@ export async function explainTrial(
   const found = await explainableTrial(options, context, identity);
   if ("status" in found) {
     if (request.method === "GET" && found.status !== 404)
-      sendJson(response, 200, { available: false, running: false, reason: found.error });
+      sendJson(response, 200, {
+        available: false,
+        running: false,
+        reason: found.error,
+        ...(found.explained ? { explained: true } : {}),
+      });
     else sendJson(response, found.status, { error: found.error });
     return;
   }
@@ -87,7 +93,7 @@ async function explainableTrial(
   identity: z.infer<typeof trialSchema>,
 ): Promise<
   | { trial: FailedTrial; explainer: NonNullable<Options["explain"]> }
-  | { status: number; error: string }
+  | { status: number; error: string; explained?: boolean }
 > {
   if (!options.explain || !managedOffer(env).models)
     return {
@@ -108,6 +114,7 @@ async function explainableTrial(
     return {
       status: 409,
       error: "Only a trial that failed its tests and has no explanation yet can be explained.",
+      ...(trial.failureSummary ? { explained: true } : {}),
     };
   // The bundle the trial ran, as its comparison froze it; a later bundle has other tests.
   const record = run.comparisonId

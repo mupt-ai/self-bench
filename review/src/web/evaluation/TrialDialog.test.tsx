@@ -13,6 +13,8 @@ let browser: Window;
 let root: Root;
 let restoreGlobals: () => void;
 let requests: { url: string; body?: unknown }[];
+/** What the server says of the trial's explanation. */
+let explainState: object;
 
 const BASE = "/api/orgs/avyay/repos/avyay/repo/evaluations";
 const SUMMARY = { text: "The parser still drops trailing commas.", model: "gpt-6-luna" };
@@ -33,6 +35,7 @@ function failedRun(explained = false): EvaluationRun {
 beforeEach(() => {
   browser = new Window({ url: "https://selfbench.test" });
   requests = [];
+  explainState = { available: true, running: false };
   const globals = {
     window: browser,
     document: browser.document,
@@ -42,7 +45,7 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       requests.push({ url, ...(body ? { body } : {}) });
       // The trial can be explained and nothing is running; once asked, the run comes back explained.
-      if (url.includes("/explain?")) return Response.json({ available: true, running: false });
+      if (url.includes("/explain?")) return Response.json(explainState);
       if (url.endsWith("/explain")) return Response.json({}, { status: 202 });
       return Response.json(failedRun(true));
     },
@@ -126,4 +129,12 @@ test("Explain Failure is offered only for an unexplained failure on managed mode
   await open(passed, true);
   expect(explainButton()).toBeUndefined();
   expect(requests).toEqual([]);
+});
+
+test("a trial explained after the page read its run shows its explanation on opening", async () => {
+  explainState = { available: false, running: false, explained: true };
+  await open(failedRun(), true);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(document.body.textContent).toContain(SUMMARY.text);
+  expect(explainButton()).toBeUndefined();
 });
