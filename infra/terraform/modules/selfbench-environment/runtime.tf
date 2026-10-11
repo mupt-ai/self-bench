@@ -51,6 +51,10 @@ locals {
       worker  = true
       enabled = true
     }
+  }
+  # Values only the managed offering reads. Operators create these with their versions before
+  # turning it on; Terraform only grants access, so turning it off never deletes a value.
+  managed_secrets = {
     stripe_secret_key = {
       id      = "selfbench-stripe-secret-key"
       env     = "SELFBENCH_STRIPE_SECRET_KEY"
@@ -98,17 +102,22 @@ locals {
   retired_secrets = {
     task_canary = "selfbench-task-canary"
   }
+  readable_secrets = merge(local.runtime_secrets, local.managed_secrets)
+  secret_ids = merge(
+    { for key, secret in google_secret_manager_secret.value : key => secret.secret_id },
+    { for key, secret in local.managed_secrets : key => secret.id },
+  )
   temporal_secret = {
     id  = "selfbench-temporal-api-key"
     env = "SELFBENCH_TEMPORAL_API_KEY"
   }
   api_secret_env = merge(
     { (local.temporal_secret.env) = local.temporal_secret.id },
-    { for secret in values(local.runtime_secrets) : secret.env => secret.id if secret.enabled && secret.api },
+    { for secret in values(local.readable_secrets) : secret.env => secret.id if secret.enabled && secret.api },
   )
   worker_secret_env = merge(
     { (local.temporal_secret.env) = local.temporal_secret.id },
-    { for secret in values(local.runtime_secrets) : secret.env => secret.id if secret.enabled && secret.worker },
+    { for secret in values(local.readable_secrets) : secret.env => secret.id if secret.enabled && secret.worker },
   )
 
   shared_env = merge(local.task_image_env, { for name, value in {
@@ -161,11 +170,43 @@ resource "google_secret_manager_secret" "value" {
   }
   depends_on = [google_project_service.api]
 }
+# Terraform used to own the managed offering's containers. It now forgets any still in state,
+# leaving them and their values in place; a key already gone from state moves nothing.
+moved {
+  from = google_secret_manager_secret.value["stripe_secret_key"]
+  to   = google_secret_manager_secret.managed["stripe_secret_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["stripe_webhook_secret"]
+  to   = google_secret_manager_secret.managed["stripe_webhook_secret"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_openrouter_api_key"]
+  to   = google_secret_manager_secret.managed["managed_openrouter_api_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_e2b_api_key"]
+  to   = google_secret_manager_secret.managed["managed_e2b_api_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_modal_token_id"]
+  to   = google_secret_manager_secret.managed["managed_modal_token_id"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_modal_token_secret"]
+  to   = google_secret_manager_secret.managed["managed_modal_token_secret"]
+}
+removed {
+  from = google_secret_manager_secret.managed
+  lifecycle {
+    destroy = false
+  }
+}
 
 resource "google_secret_manager_secret_iam_member" "api_reader" {
-  for_each  = { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.api }
+  for_each  = { for key, secret in local.readable_secrets : key => secret if secret.enabled && secret.api }
   project   = var.project_id
-  secret_id = google_secret_manager_secret.value[each.key].secret_id
+  secret_id = local.secret_ids[each.key]
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -176,9 +217,9 @@ resource "google_secret_manager_secret_iam_member" "api_temporal_reader" {
   member    = "serviceAccount:${google_service_account.api.email}"
 }
 resource "google_secret_manager_secret_iam_member" "runtime_reader" {
-  for_each  = { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.worker }
+  for_each  = { for key, secret in local.readable_secrets : key => secret if secret.enabled && secret.worker }
   project   = var.project_id
-  secret_id = google_secret_manager_secret.value[each.key].secret_id
+  secret_id = local.secret_ids[each.key]
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }

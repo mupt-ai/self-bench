@@ -43,24 +43,23 @@ Validation does not use cloud credentials:
 bash infra/check.sh
 ```
 
-This checks shell syntax, formats and validates Terraform, and runs the module's native Terraform tests.
+This checks shell syntax and each environment's settings, formats and validates Terraform, and runs the module's native Terraform tests.
 
 ## Plan and Apply Manually
 
-Copy the examples without committing the resulting files:
+The environment's settings come from its committed `terraform.tfvars.json`. Copy the backend example without committing the result:
 
 ```sh
 cd infra/terraform/environments/dev
 cp backend.hcl.example backend.hcl
-cp terraform.tfvars.example terraform.tfvars
 ```
 
-Set `image`, `public_url`, `results_site_url` and the other runtime inputs, then initialize, review a saved plan, and apply that exact plan:
+Put `image`, `release_id`, `public_url`, `results_site_url`, `results_site_domain` and `activity_concurrency`, which the deploy workflow supplies, in an uncommitted `deploy.tfvars.json`, then initialize, review a saved plan, and apply that exact plan:
 
 ```sh
 terraform init -backend-config=backend.hcl -input=false
 terraform validate
-terraform plan -out=dev.tfplan
+terraform plan -var-file=deploy.tfvars.json -out=dev.tfplan
 terraform show -no-color dev.tfplan
 terraform apply dev.tfplan
 ```
@@ -69,7 +68,7 @@ Use the independent `prod` root, project, state bucket, and variables for produc
 
 ## Runtime Configuration
 
-Terraform creates one Secret Manager container for each sensitive runtime value. Existing environments migrated from env-file bundles set `import_runtime_secrets` to adopt containers created before that release. Values are loaded out of band so they never enter Terraform state:
+Terraform creates one Secret Manager container for each sensitive runtime value. Values are loaded out of band so they never enter Terraform state:
 
 ```sh
 printf '%s' "$VALUE" | gcloud secrets versions add selfbench-session-secret --project PROJECT --data-file=-
@@ -86,10 +85,16 @@ Required secrets:
 - `selfbench-api-token`
 - `selfbench-worker-api-token`
 
-Optional secrets must have a version before their feature is enabled:
+The managed offering's secrets are not Terraform's. Create each one, with its version, before turning on its feature; Terraform only grants the API and workers access:
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
+
+```sh
+gcloud secrets create selfbench-managed-e2b-api-key --project PROJECT --replication-policy=user-managed --locations=REGION
+```
+
+Turning the feature off removes that access and leaves the secrets in place; delete them by hand once no revision you might roll back to reads them.
 
 `selfbench-task-canary` is retired: nothing reads it, and Terraform keeps its container only because secrets are never destroyed.
 
@@ -97,7 +102,7 @@ Optional secrets must have a version before their feature is enabled:
 
 Cloud Run and GKE read `latest` when new instances start. Add a secret version, then deploy; the deploy labels new Cloud Run revisions with its run ID, so every release starts instances with the latest values. Running instances keep the values they started with until they are replaced.
 
-Non-secret runtime settings live in `TF_INPUTS_JSON` or are derived by Terraform. See `infra/runtime/*.env.example` for the full split. Images are deployed by immutable Artifact Registry digest.
+Each environment's non-secret settings live in `infra/terraform/environments/<env>/terraform.tfvars.json`, which Terraform loads on its own; the rest are derived by Terraform. `infra/check.sh` fails on a key that names no variable. See `infra/runtime/*.env.example` for the full split. Images are deployed by immutable Artifact Registry digest.
 
 The runtime expects:
 
@@ -125,7 +130,6 @@ Configure `dev` and `prod` GitHub environments. Production should require review
 | `GCP_APPLY_WORKLOAD_IDENTITY_PROVIDER` | Apply/deploy WIF provider |
 | `GCP_APPLY_SERVICE_ACCOUNT` | Apply/deploy service account |
 | `TF_STATE_BUCKET` | Environment Terraform state bucket |
-| `TF_INPUTS_JSON` | JSON object matching the root Terraform variables |
 | `SELFBENCH_PUBLIC_URL` | Public HTTPS origin |
 | `SELFBENCH_RESULTS_SITE_URL` | Results site HTTPS origin, checked after each deploy. Its host becomes `results_site_domain`: that host is served through Cloud CDN, and its cache is cleared after each apply |
 | `SELFBENCH_ACTIVITY_CONCURRENCY` | Worker concurrency from 1 to 100 |
@@ -149,7 +153,7 @@ The API is a Cloud Run service reachable only through the load balancer, with it
 Before the first release to a new environment:
 
 1. Grant the plan and apply roles the permissions for Cloud Run services and worker pools (`run.services.*`, `run.workerPools.*`, `run.operations.get`, and `iam.serviceAccounts.actAs` on the API and runtime accounts), the global load balancer (`compute.globalAddresses`, `compute.regionNetworkEndpointGroups`, `compute.backendServices`, `compute.urlMaps` including `compute.urlMaps.invalidateCache` for the apply role, which clears the results site's CDN after each release, `compute.targetHttpProxies`, `compute.targetHttpsProxies`, `compute.globalForwardingRules`, and their operations), Certificate Manager (`certificatemanager.dnsauthorizations`, `certs`, `certmaps`, `certmapentries`, and `operations`), `artifactregistry.repositories.downloadArtifacts` (Cloud Run checks that the deploying account can read the image), and service account creation. The plan role only needs the `get` and `list` permissions. A Terraform plan names any permission that is still missing.
-2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in `TF_INPUTS_JSON`, and release.
+2. Put `"api_domains": ["app.example", "example"]` and, if needed, `"redirect_domains": {"www.example": "example"}` in the environment's `terraform.tfvars.json`, and release.
 3. Add each CNAME under `deployment.api.dns_authorizations`, and point each domain's A record at `deployment.api.address`. The certificate becomes active a few minutes after the CNAMEs resolve (`gcloud certificate-manager certificates describe selfbench-<env>-api`), and the load balancer answers HTTPS a few minutes after that.
 
 ## GKE Workers
@@ -160,7 +164,7 @@ To turn it on:
 
 1. Grant the apply role `roles/container.admin`, and the plan role `container.clusters.get` plus read access to Secrets in the `keda` and `selfbench` namespaces, where Helm keeps its release records. Both also need `compute.instanceGroupManagers.get` and `.list`: the provider reads the cluster's node pools through them.
 2. Add the Temporal API key as a version of `selfbench-temporal-api-key`.
-3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` to `TF_INPUTS_JSON`, and release.
+3. Add `"gke_workers": true`, `"temporal_address"` and `"temporal_namespace"` to the environment's `terraform.tfvars.json`, and release.
 
 ## Task Images
 
@@ -169,7 +173,7 @@ With `"task_images": true`, the worker exports each accepted task's verified ima
 To turn it on:
 
 1. Grant the apply role `artifactregistry.repositories.create` (already needed for `selfbench`) and `artifactregistry.repositories.setIamPolicy`.
-2. Add `"task_images": true` to `TF_INPUTS_JSON`, and release.
+2. Add `"task_images": true` to the environment's `terraform.tfvars.json`, and release.
 
 ## Operational Notes
 

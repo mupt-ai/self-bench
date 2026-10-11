@@ -100,7 +100,10 @@ function currentKey(key: string): string {
 }
 
 /** Every approved task that all of `chosen` cover. Empty when nothing is chosen. */
-export function taskSet(chosen: readonly Candidate[], approved: readonly string[]): string[] {
+export function taskSet(
+  chosen: readonly Pick<Candidate, "coverage">[],
+  approved: readonly string[],
+): string[] {
   if (chosen.length === 0) return [];
   return approved.filter((task) => chosen.every((entry) => entry.coverage.has(task)));
 }

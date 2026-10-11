@@ -33,7 +33,7 @@ run "dev_foundation" {
     error_message = "Release tags must not be overwritten."
   }
   assert {
-    condition     = length(google_secret_manager_secret.value) == 14 && output.deployment.task_queue == "selfbench-dev"
+    condition     = length(google_secret_manager_secret.value) == 8 && output.deployment.task_queue == "selfbench-dev"
     error_message = "Each sensitive value has its own secret, and dev uses the matching queue."
   }
   assert {

@@ -50,7 +50,6 @@ jobs:
       TF_ENVIRONMENT: ${{ inputs.target_environment }}
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
       SELFBENCH_RESULTS_SITE_URL: ${{ vars.SELFBENCH_RESULTS_SITE_URL }}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
@@ -95,7 +94,6 @@ jobs:
       GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      TF_INPUTS_JSON: ${{ vars.TF_INPUTS_JSON }}
       SELFBENCH_PUBLIC_URL: ${{ vars.SELFBENCH_PUBLIC_URL }}
       SELFBENCH_RESULTS_SITE_URL: ${{ vars.SELFBENCH_RESULTS_SITE_URL }}
       SELFBENCH_ACTIVITY_CONCURRENCY: ${{ vars.SELFBENCH_ACTIVITY_CONCURRENCY }}
@@ -165,13 +163,13 @@ jobs:
           # puts that host behind Cloud CDN.
           results_site_domain="${SELFBENCH_RESULTS_SITE_URL#https://}"
           results_site_domain="$(tr '[:upper:]' '[:lower:]' <<<"${results_site_domain%%:*}")"
-          jq -n --argjson inputs "$TF_INPUTS_JSON" --arg image "$IMAGE" \
+          jq -n --arg image "$IMAGE" \
               --arg release_id "$RELEASE_ID" \
               --arg public_url "$SELFBENCH_PUBLIC_URL" \
               --arg results_site_url "$SELFBENCH_RESULTS_SITE_URL" \
               --argjson activity_concurrency "$SELFBENCH_ACTIVITY_CONCURRENCY" \
               --arg results_site_domain "$results_site_domain" \
-              '$inputs + {image: $image, release_id: $release_id, public_url: $public_url, results_site_url: $results_site_url, activity_concurrency: $activity_concurrency, results_site_domain: $results_site_domain}' \
+              '{image: $image, release_id: $release_id, public_url: $public_url, results_site_url: $results_site_url, activity_concurrency: $activity_concurrency, results_site_domain: $results_site_domain}' \
             > "$RUNNER_TEMP/terraform.tfvars.json"
           terraform -chdir="$root" init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET"
           terraform -chdir="$root" validate

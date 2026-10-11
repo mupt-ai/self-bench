@@ -107,10 +107,12 @@ export function ResultsGrid({
                       </span>
                     )}
                   </div>
-                  {/* The boxes share the row's width, down to a box each (44px on touch), past
-                      which the row scrolls. */}
+                  {/* The boxes share the row's width, down to a box each, past which the row
+                      scrolls. On touch a box is 24px, the smallest target WCAG allows, short of
+                      the site's 44px: at 44px a phone showed only a few tasks per screen. */}
                   <div
-                    className="grid min-w-0 flex-1 gap-0.5 px-3 py-2 [--box:1rem] touch:[--box:2.75rem]"
+                    data-phone-ok="tap"
+                    className="grid min-w-0 flex-1 gap-0.5 px-3 py-2 [--box:1rem] touch:[--box:1.5rem]"
                     style={{
                       gridTemplateColumns: `repeat(${grid?.tasks.length ?? Math.min(release.tasks, 24)}, minmax(var(--box), 1fr))`,
                     }}
@@ -119,7 +121,7 @@ export function ResultsGrid({
                       ? grid.tasks.map((task) => {
                           const passed = task.passed[setting.id];
                           if (passed === undefined)
-                            return <span key={task.id} className="h-5 touch:h-11" />;
+                            return <span key={task.id} className="h-5 touch:h-6" />;
                           const label = `${settingLabel(setting, release.settings)} on ${task.id}: ${passed ? "Passed" : "Failed"}`;
                           return (
                             <Link
@@ -132,7 +134,7 @@ export function ResultsGrid({
                               onPointerEnter={() => void loadTraceViewer()}
                               onPointerDown={() => readAhead(task.id, setting.id)}
                               onFocus={() => void loadTraceViewer()}
-                              className={`h-5 outline-offset-1 transition-colors focus-visible:outline-2 focus-visible:outline-foreground touch:h-11 ${resultMark(passed)} ${
+                              className={`h-5 outline-offset-1 transition-colors focus-visible:outline-2 focus-visible:outline-foreground touch:h-6 ${resultMark(passed)} ${
                                 passed ? "hover:bg-foreground" : "hover:bg-foreground/25"
                               }`}
                             />
@@ -144,7 +146,7 @@ export function ResultsGrid({
                             // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
                             key={index}
                             aria-hidden="true"
-                            className="h-5 animate-pulse bg-muted touch:h-11"
+                            className="h-5 animate-pulse bg-muted touch:h-6"
                           />
                         ))}
                   </div>

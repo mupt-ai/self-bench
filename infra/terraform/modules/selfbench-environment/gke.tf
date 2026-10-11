@@ -77,9 +77,9 @@ resource "google_service_account_iam_member" "runtime_workload_identity" {
 }
 # The Secret Manager add-on mounts values as the pod's own Kubernetes identity.
 resource "google_secret_manager_secret_iam_member" "worker_pod_reader" {
-  for_each   = var.gke_workers ? { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.worker } : {}
+  for_each   = var.gke_workers ? { for key, secret in local.readable_secrets : key => secret if secret.enabled && secret.worker } : {}
   project    = var.project_id
-  secret_id  = google_secret_manager_secret.value[each.key].secret_id
+  secret_id  = local.secret_ids[each.key]
   role       = "roles/secretmanager.secretAccessor"
   member     = "${local.kubernetes_principal}/${local.worker_namespace}/sa/${local.worker_account}"
   depends_on = [google_container_cluster.workers]

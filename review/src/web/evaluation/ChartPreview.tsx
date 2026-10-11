@@ -3,19 +3,20 @@ import { ChartScatter, Maximize2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
+import { taskSet } from "../../../../src/public/release-rule";
 import { vendorColor } from "../../public-site/format";
 import { Dialog, DialogHeader } from "../Dialog";
-import { buttonStyles, Select } from "../ui";
+import { buttonStyles } from "../ui";
 import type { BenchmarkPoint } from "./benchmark";
+import { ChartConfigurations, useChosen } from "./ChartConfigurations";
 import { ParetoChart } from "./ParetoChart";
 import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
-import { configurationPoint, taskSets } from "./results-chart";
+import { chartOptions, chosenOptions, configurationPoint } from "./results-chart";
 import { type Configuration, configurationsOf } from "./results-model";
 
 /**
  * Until the accepted tasks load, or if they can't, the tasks some configuration has a usable
- * result for, with no acceptance times. A task nobody has one for (one that errored everywhere,
- * say) is left out, or no configuration could cover the set and the chart would never show.
+ * result for, with no acceptance times.
  */
 function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
   const seen = new Map<string, AcceptedTask>();
@@ -32,9 +33,6 @@ function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
   return [...seen.values()];
 }
 
-const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
-const dayLabel = (iso: string) => day.format(new Date(iso));
-
 const WIDTH = 132;
 const HEIGHT = 44;
 const PAD = 4;
@@ -44,6 +42,10 @@ const PAD = 4;
  * joining the best ones. No axes or labels; the dialog has those.
  */
 function MiniChart({ points }: { points: readonly BenchmarkPoint[] }) {
+  if (!points.length)
+    return (
+      <svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true" />
+    );
   const costs = points.map((point) => Math.log10(Math.max(point.cost, 1e-4)));
   const accuracies = points.map((point) => point.accuracy);
   const span = (values: number[]) => {
@@ -90,10 +92,14 @@ function MiniChart({ points }: { points: readonly BenchmarkPoint[] }) {
   );
 }
 
+const plural = (count: number, word: string) =>
+  `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
+
 /**
- * The Results chart: a small preview in the repository header that
- * opens the full chart in a dialog, or on a phone a Chart button in the page's actions. Hidden
- * until some run can be charted.
+ * The Results chart: a small preview in the repository header that opens the full chart in a
+ * dialog, or on a phone a Chart button in the page's actions. The chart plots the configurations
+ * chosen in the dialog over the accepted tasks all of them have a usable result on, as a release
+ * does with the settings ticked. Hidden until some configuration has a usable result.
  */
 export function ChartPreview({
   repo,
@@ -103,30 +109,34 @@ export function ChartPreview({
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
-  const { runs, credentials, accepted, onResults } = useRepoRuns();
+  const { url, runs, credentials, accepted, onResults } = useRepoRuns();
   const navigate = useNavigate();
   const close = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState<number>();
+  const [saved, choose] = useChosen(url);
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
-  const sets = useMemo(
-    () => taskSets(configurations, accepted ?? tasksRun(configurations)),
+  const tasks = useMemo(
+    () => (accepted ?? tasksRun(configurations)).map((task) => `${task.runId}/${task.taskId}`),
     [configurations, accepted],
   );
-  if (!onResults || !sets.length) return null;
-  // The newest set unless another was picked; a pick that no longer exists falls back to it.
-  const set = sets.find((entry) => entry.tasks.length === chosen) ?? sets[0];
-  if (!set) return null;
-  const points = set.configurations.map((configuration) => configurationPoint(configuration, set));
-  const left = configurations.length - points.length;
-  const plural = (count: number, word: string) =>
-    `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
-  const setLabel = (entry: (typeof sets)[number]) =>
-    [
-      plural(entry.tasks.length, "task"),
-      ...(entry.acceptedBy ? [`accepted by ${dayLabel(entry.acceptedBy)}`] : []),
-      plural(entry.configurations.length, "configuration"),
-    ].join(" · ");
+  // Only the Results page shows the chart; elsewhere, nothing to work out.
+  const options = useMemo(
+    () => (onResults ? chartOptions(configurations, tasks) : []),
+    [onResults, configurations, tasks],
+  );
+  const chosen = useMemo(() => chosenOptions(options, saved), [options, saved]);
+  const shared = useMemo(() => taskSet(chosen, tasks), [chosen, tasks]);
+  const points = useMemo(
+    () =>
+      shared.length ? chosen.map((option) => configurationPoint(option.configuration, shared)) : [],
+    [chosen, shared],
+  );
+  if (!options.length) return null;
+  const summary = !chosen.length
+    ? "Choose configurations to chart."
+    : !shared.length
+      ? "They share no accepted task with a usable result. Untick one to chart the rest."
+      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.`;
   return (
     <>
       {variant === "button" ? (
@@ -156,7 +166,9 @@ export function ChartPreview({
                 className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
                 aria-hidden="true"
               />
-              {plural(points.length, "point")} · {plural(set.tasks.length, "task")}
+              {points.length
+                ? `${plural(points.length, "point")} · ${plural(shared.length, "task")}`
+                : "No points"}
             </span>
           </span>
         </button>
@@ -178,43 +190,30 @@ export function ChartPreview({
           <DialogHeader
             title="Chart"
             titleId="results-chart-title"
-            description="Each configuration's latest usable result on every task in the set; a configuration missing any is left out. Select a point to open its latest run."
+            description="Each chosen configuration's latest usable result on every accepted task all of them have one for. Select a point to open its latest run."
             onClose={() => setOpen(false)}
             closeRef={close}
           />
           <div className="p-4 sm:p-6">
-            {sets.length > 1 && (
-              <label
-                htmlFor="model-comparison-tasks"
-                className="mb-4 flex flex-wrap items-center gap-3.5 text-sm font-medium text-muted-foreground"
-              >
-                Tasks
-                <Select
-                  id="model-comparison-tasks"
-                  value={set.tasks.length}
-                  onChange={(event) => setChosen(Number(event.target.value))}
-                >
-                  {sets.map((entry) => (
-                    <option key={entry.tasks.length} value={entry.tasks.length}>
-                      {setLabel(entry)}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            <ParetoChart
-              points={points}
-              showTitle={false}
-              onSelect={(runId) => {
-                setOpen(false);
-                navigate(`/repos/${repo}/results?run=${encodeURIComponent(runId)}`);
-              }}
+            <ChartConfigurations
+              options={options}
+              tasks={tasks.length}
+              chosen={chosen}
+              custom={saved !== undefined}
+              summary={summary}
+              choose={choose}
             />
-            {left > 0 && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                {plural(left, "configuration")} not charted: missing a usable result on some of
-                these tasks.
-              </p>
+            {points.length ? (
+              <ParetoChart
+                points={points}
+                showTitle={false}
+                onSelect={(runId) => {
+                  setOpen(false);
+                  navigate(`/repos/${repo}/results?run=${encodeURIComponent(runId)}`);
+                }}
+              />
+            ) : (
+              <p className="panel p-4 text-sm text-muted-foreground sm:p-6">{summary}</p>
             )}
           </div>
         </Dialog>

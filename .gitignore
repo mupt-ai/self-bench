@@ -16,6 +16,8 @@ jobs/
 *.tfplan.*
 *.tfvars
 *.tfvars.json
+# Each environment's settings are not secret, and are reviewed like code.
+!/infra/terraform/environments/*/terraform.tfvars.json
 **/backend.hcl
 crash.log
 crash.*.log
