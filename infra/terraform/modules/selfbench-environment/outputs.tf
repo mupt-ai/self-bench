@@ -25,7 +25,7 @@ output "deployment" {
       }
     }
     secret_ids = merge(
-      { for key, secret in local.secret_containers : key => secret.secret_id },
+      local.secret_ids,
       { temporal_api_key = google_secret_manager_secret.temporal_api_key.secret_id },
     )
     database = var.create_cloud_sql ? {

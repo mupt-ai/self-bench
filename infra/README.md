@@ -85,16 +85,20 @@ Required secrets:
 - `selfbench-api-token`
 - `selfbench-worker-api-token`
 
-Optional secrets exist only while their feature is enabled:
+The managed offering's secrets are not Terraform's. Create each one, with its version, before turning on its feature; Terraform only grants the API and workers access:
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
 
-Enabling the feature creates its containers empty, so that deploy fails to start the new revision; add their versions, then deploy again. Disabling it deletes the containers and every version in them, which needs `secretmanager.secrets.delete` on the apply role (or delete them by hand first). Required secrets are never destroyed.
+```sh
+gcloud secrets create selfbench-managed-e2b-api-key --project PROJECT --replication-policy=user-managed --locations=REGION
+```
 
-`selfbench-task-canary` is retired: nothing reads it, and Terraform keeps its container only because required secrets are never destroyed.
+Turning the feature off removes that access and leaves the secrets in place; delete them by hand once no revision you might roll back to reads them.
 
-`managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, has none of the optional secrets above, ignores `stripe_price_id`, and the app has no Billing page.
+`selfbench-task-canary` is retired: nothing reads it, and Terraform keeps its container only because secrets are never destroyed.
+
+`managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, reads none of the secrets above, ignores `stripe_price_id`, and the app has no Billing page.
 
 Cloud Run and GKE read `latest` when new instances start. Add a secret version, then deploy; the deploy labels new Cloud Run revisions with its run ID, so every release starts instances with the latest values. Running instances keep the values they started with until they are replaced.
 

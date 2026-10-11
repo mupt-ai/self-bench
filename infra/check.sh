@@ -9,11 +9,14 @@ bash -n infra/ci/verify-source.sh
 bash -n infra/ci/new-migrations.sh
 
 # A setting that names no variable is only a warning to Terraform, so stale ones would pile up.
+# The deploy workflow supplies its own inputs, which would silently replace a committed copy.
+deploy_inputs='image release_id public_url results_site_url results_site_domain activity_concurrency'
 for env in dev prod; do
   root="infra/terraform/environments/$env"
-  unknown=$(comm -23 <(jq -r 'keys[]' "$root/terraform.tfvars.json" | sort) \
-    <(sed -nE 's/^variable "([a-z0-9_]+)".*/\1/p' "$root/variables.tf" | sort))
-  [[ -z "$unknown" ]] || { echo "$root/terraform.tfvars.json sets undeclared variables: $unknown" >&2; exit 1; }
+  settings=$(jq -r 'keys[]' "$root/terraform.tfvars.json" | sort)
+  allowed=$(sed -nE 's/^variable "([a-z0-9_]+)".*/\1/p' "$root/variables.tf" | grep -vxF -f <(tr ' ' '\n' <<<"$deploy_inputs") | sort)
+  unknown=$(comm -23 <(echo "$settings") <(echo "$allowed"))
+  [[ -z "$unknown" ]] || { echo "$root/terraform.tfvars.json sets variables it must not: $unknown" >&2; exit 1; }
 done
 
 scratch=$(mktemp -d)

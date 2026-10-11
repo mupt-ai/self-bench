@@ -27,9 +27,11 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        registry="$(jq -r '.region // "us-central1"' "infra/terraform/environments/${{ inputs.environment }}/terraform.tfvars.json")-docker.pkg.dev"
+        registry="$(jq -r '.region // "us-central1"' "infra/terraform/environments/$TF_ENV/terraform.tfvars.json")-docker.pkg.dev"
         echo "registry=$registry" >> "$GITHUB_OUTPUT"
         echo "image_prefix=$registry/$GCP_PROJECT_ID/selfbench/selfbench" >> "$GITHUB_OUTPUT"
+      env:
+        TF_ENV: ${{ inputs.environment }}
     - name: Authenticate Docker to Artifact Registry
       shell: bash
       run: gcloud auth configure-docker "$REGISTRY" --quiet
