@@ -14,19 +14,19 @@ interface ExplainState {
 const POLL_MS = 4000;
 
 /**
- * Explain Failure for one trial of `run`: whether the server offers it, asking for it, and
- * waiting while it runs. Waiting polls only the explanation's state; the run is fetched once it
- * ends, and handed to `onExplained` when it carries the explanation.
+ * Explain Failure for one trial of the evaluation `evaluationId`: whether the server offers it,
+ * asking for it, and waiting while it runs. Waiting polls only the explanation's state; the run is
+ * fetched once it ends, and handed to `onExplained` when it carries the explanation.
  */
 export function useFailureExplanation({
   baseUrl,
-  run,
+  evaluationId,
   trial,
   enabled,
   onExplained,
 }: {
   baseUrl: string;
-  run: Pick<EvaluationRun, "id">;
+  evaluationId: string;
   trial: EvaluationTrial;
   /** Whether this deployment may offer explanations at all (its managed offering). */
   enabled: boolean;
@@ -36,28 +36,25 @@ export function useFailureExplanation({
   const [explaining, setExplaining] = useState(false);
   const [error, setError] = useState("");
   const wanted = enabled && outcomeOf(trial) === "failed" && !trial.failureSummary;
-  const evaluationId = run.id;
-  const endpoint = `${baseUrl}/${encodeURIComponent(evaluationId)}/explain`;
+  const runUrl = `${baseUrl}/${encodeURIComponent(evaluationId)}`;
   const { runId, taskId, harness } = trial;
-  const query = new URLSearchParams({ runId, taskId, harness }).toString();
+  const stateUrl = `${runUrl}/explain?${new URLSearchParams({ runId, taskId, harness })}`;
 
   // What the server offers for this trial: a run read before its explanation was written gets it.
   const check = useCallback(
     async (live: () => boolean) => {
-      const answer = await evaluationRequest<ExplainState>(`${endpoint}?${query}`);
+      const answer = await evaluationRequest<ExplainState>(stateUrl);
       if (!live()) return;
       setState(answer);
       if (answer.running) setExplaining(true);
       if (!answer.explained) return;
-      const latest = await evaluationRequest<EvaluationRun>(
-        `${baseUrl}/${encodeURIComponent(evaluationId)}`,
-      );
+      const latest = await evaluationRequest<EvaluationRun>(runUrl);
       if (!live()) return;
       // Whatever refused it, the trial is explained now.
       setError("");
       onExplained(latest);
     },
-    [endpoint, query, baseUrl, evaluationId, onExplained],
+    [stateUrl, runUrl, onExplained],
   );
   useEffect(() => {
     if (!wanted) return;
@@ -74,15 +71,13 @@ export function useFailureExplanation({
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const answer = await evaluationRequest<ExplainState>(`${endpoint}?${query}`);
+        const answer = await evaluationRequest<ExplainState>(stateUrl);
         if (disposed) return;
         if (answer.running) {
           timer = setTimeout(() => void poll(), POLL_MS);
           return;
         }
-        const latest = await evaluationRequest<EvaluationRun>(
-          `${baseUrl}/${encodeURIComponent(evaluationId)}`,
-        );
+        const latest = await evaluationRequest<EvaluationRun>(runUrl);
         if (disposed) return;
         const done = latest.trials.find(
           (entry) => entry.runId === runId && entry.taskId === taskId && entry.harness === harness,
@@ -104,12 +99,12 @@ export function useFailureExplanation({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [explaining, endpoint, query, baseUrl, evaluationId, runId, taskId, harness, onExplained]);
+  }, [explaining, stateUrl, runUrl, runId, taskId, harness, onExplained]);
 
   const explain = async () => {
     setError("");
     try {
-      await evaluationRequest(endpoint, { runId, taskId, harness });
+      await evaluationRequest(`${runUrl}/explain`, { runId, taskId, harness });
       setExplaining(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the explanation");

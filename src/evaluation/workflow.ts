@@ -120,7 +120,6 @@ export function taskImagesReady(
  * One trial of an evaluation: its Harbor activity, and its failure when it recorded none. In an
  * evaluation that explains failures, the trial then starts `<trial workflow ID>/explain` and ends
  * without waiting for it, so the explanation never holds the evaluation's place for another trial.
- * However the activity ended, the explanation finds whatever failure material the trial kept.
  */
 export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
@@ -136,12 +135,11 @@ export async function selfBenchSolverTrialWorkflow(
     records,
   );
   if (input.explainFailures && patched("explain-failed-trials")) {
-    const failed = { repoId: input.repoId, id: input.id, index };
     const bundleKey = input.tasks[0]?.bundleKey;
     try {
       await startChild(selfBenchFailedTrialWorkflow, {
         workflowId: `${workflowInfo().workflowId}/explain`,
-        args: [{ ...failed, ...(bundleKey ? { bundleKey } : {}) }],
+        args: [{ repoId: input.repoId, id: input.id, index, ...(bundleKey ? { bundleKey } : {}) }],
         parentClosePolicy: ParentClosePolicy.ABANDON,
       });
     } catch (error) {

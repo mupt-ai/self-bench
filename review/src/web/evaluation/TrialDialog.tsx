@@ -85,7 +85,7 @@ export function TrialDialog({
   const trial = run?.trials.find((entry) => sameTrial(entry, chosen)) ?? chosen;
   const explanation = useFailureExplanation({
     baseUrl,
-    run: known,
+    evaluationId: known.id,
     trial,
     enabled: !!run && session.status === "signed-in" && session.managedOffering,
     onExplained: useCallback(

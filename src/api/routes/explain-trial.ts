@@ -28,14 +28,10 @@ interface Context {
 }
 
 /**
- * `…/evaluations/<id>/explain`, for one trial of the evaluation named by its task and harness
- * (Explain Failure in the app). GET tells whether it can be explained, whether it is being, and
- * whether it already was (since the page holding the run read it);
- * POST starts it and answers 202. Asking is consent for that trial's material to reach the
- * summary model through SelfBench's account, whatever the repository. It needs the platform's
- * managed models, a trial that failed its tests with no explanation yet, and either material the
- * trial kept or the bundle its comparison froze; a trial whose last explanation just ended without
- * one waits a few minutes.
+ * `…/evaluations/<id>/explain`, for one trial named by its task and harness (Explain Failure in
+ * the app). GET tells whether it can be explained, is running, or already was; POST starts it.
+ * Asking is consent for that trial's material to reach the summary model through SelfBench's
+ * account, whatever the repository.
  */
 export async function explainTrial(
   options: Options,

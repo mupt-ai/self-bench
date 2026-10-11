@@ -51,16 +51,18 @@ export async function explainTrialFailure(
   request: FailedTrial,
   options: FailureSummaryOptions,
 ): Promise<void> {
+  const environment = options.env ?? process.env;
+  const key = platformModelKey(environment);
   const run = await getEvaluation(store, request.repoId, request.id);
   const trial = run?.trials[request.index];
-  if (!trial || !explainable(trial) || !platformModelKey(options.env ?? process.env)) return;
+  if (!key || !trial || !explainable(trial)) return;
   const kept = await store.getByKey(materialKey(request));
   const material = kept
     ? Buffer.from(kept).toString("utf8")
     : request.bundleKey &&
       options.redact(await storedFailureMaterial(store, request, request.bundleKey, trial));
   if (!material) return;
-  const summary = await summarizeFailure(material, options);
+  const summary = await summarizeFailure(material, key, environment, options);
   if (!summary) return;
   await updateEvaluation(store, request.repoId, request.id, (latest) => {
     const current = latest.trials[request.index];
@@ -71,22 +73,20 @@ export async function explainTrialFailure(
 
 /**
  * Why a trial failed its tests, in plain language: Pi runs GPT-6 Luna at high reasoning over its
- * failureMaterial. It runs on the platform's OpenRouter key, so the organization is never charged,
- * and only where the managed offering has one; anywhere else, and on any failure, the trial simply
- * has no summary. Pi gets no tools and a home of its own, so nothing in the material can reach the
- * worker's files or environment.
+ * failureMaterial, on the platform's OpenRouter `key`, so the organization is never charged. Pi
+ * gets no tools and a home of its own, so nothing in the material can reach the worker's files or
+ * environment. Undefined when Pi gives no answer.
  */
 async function summarizeFailure(
   material: string,
+  key: string,
+  environment: NodeJS.ProcessEnv,
   options: FailureSummaryOptions,
 ): Promise<FailureSummary | undefined> {
-  let home: string | undefined;
+  const model = findModel(FAILURE_SUMMARY_MODEL);
+  if (!model) return undefined;
+  const home = await mkdtemp(join(tmpdir(), "selfbench-failure-summary-"));
   try {
-    const environment = options.env ?? process.env;
-    const key = platformModelKey(environment);
-    const model = findModel(FAILURE_SUMMARY_MODEL);
-    if (!key || !model) return undefined;
-    home = await mkdtemp(join(tmpdir(), "selfbench-failure-summary-"));
     const materialPath = join(home, "material.md");
     await mkdir(join(home, ".pi", "agent"), { recursive: true });
     await Promise.all([
@@ -135,12 +135,8 @@ async function summarizeFailure(
       return undefined;
     }
     return { text, model: FAILURE_SUMMARY_MODEL };
-  } catch (error) {
-    // A stopped evaluation stops here too; the trial keeps its result without a summary.
-    console.warn("Failure summary failed", error instanceof Error ? error.message : error);
-    return undefined;
   } finally {
-    if (home) await rm(home, { recursive: true, force: true }).catch(() => undefined);
+    await rm(home, { recursive: true, force: true });
   }
 }
 

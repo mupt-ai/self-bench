@@ -175,27 +175,17 @@ async function readText(path: string): Promise<string | undefined> {
 }
 
 /**
- * The solver's diff, as the verifier applied it: the agent.patch Harbor collects into a trial's
- * artifacts (task.toml). Undefined when Harbor kept none.
+ * The solver's diff, as the verifier applied it: the /opt/selfbench/agent.patch Harbor collects
+ * into a trial's artifacts (task.toml). Undefined when Harbor kept none.
  */
 async function agentPatch(jobs: string): Promise<string | undefined> {
-  const find = async (directory: string, depth: number): Promise<string | undefined> => {
-    if (depth > 5) return undefined;
-    for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
-      const path = join(directory, entry.name);
-      if (entry.isFile() && entry.name === "agent.patch") return path;
-      if (entry.isDirectory()) {
-        const found = await find(path, depth + 1);
-        if (found) return found;
-      }
-    }
-    return undefined;
-  };
   const trials = await readdir(join(jobs, "solver"), { withFileTypes: true }).catch(() => []);
   for (const trial of trials) {
     if (!trial.isDirectory()) continue;
-    const path = await find(join(jobs, "solver", trial.name, "artifacts"), 0);
-    if (path) return readText(path);
+    const patch = await readText(
+      join(jobs, "solver", trial.name, "artifacts", "opt", "selfbench", "agent.patch"),
+    );
+    if (patch !== undefined) return patch;
   }
   return undefined;
 }
