@@ -36,7 +36,7 @@ export interface ReleaseInputs {
 }
 
 /** A setting as the release dialog lists it. `coverage` indexes into the preview's tasks. */
-export interface PreviewSetting extends Omit<Setting, "key"> {
+interface PreviewSetting extends Omit<Setting, "key"> {
   key: string;
   coverage: number[];
   ticked: boolean;

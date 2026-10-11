@@ -1,50 +1,51 @@
 import { expect, test } from "bun:test";
-import { configurationPoint, taskSets } from "./results-chart";
+import { configurationPoint, defaultPicks, sharedTasks } from "./results-chart";
 import { at, credentials, errored, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 
-const accepted = (taskId: string, minutesAgo: number) => ({
-  runId: "batch-1",
-  taskId,
-  difficulty: "easy",
-  acceptedAt: at(minutesAgo),
+const failed = (taskId: string) => ({ ...passed(taskId), rewards: { reward: 0 } });
+const accepted = ["task-1", "task-2", "task-3", "task-4"].map((task) => `batch-1/${task}`);
+
+const configurations = configurationsOf(
+  [
+    // Three of the four tasks.
+    run("high", { thinking: "high" }, [passed("task-1"), failed("task-2"), passed("task-3")]),
+    // Two of them; its re-run of task-2 errored, but its earlier pass still counts.
+    run("medium", { thinking: "medium", createdAt: at(400) }, [passed("task-1"), passed("task-2")]),
+    run("medium-again", { thinking: "medium", createdAt: at(300) }, [
+      errored("task-2", "Worker interrupted or timed out before this trial completed"),
+    ]),
+    // Only the one task nobody else ran.
+    run("low", { thinking: "low" }, [passed("task-4")]),
+  ],
+  credentials,
+  NOW,
+);
+const byThinking = (thinking: string) => {
+  const found = configurations.find((configuration) => configuration.thinking === thinking);
+  if (!found) throw new Error(`Missing ${thinking}`);
+  return found;
+};
+const [high, medium, low] = [byThinking("high"), byThinking("medium"), byThinking("low")];
+
+test("chosen configurations chart over the accepted tasks all of them have a usable result on", () => {
+  const shared = sharedTasks([high, medium], accepted);
+  expect(shared).toEqual(["batch-1/task-1", "batch-1/task-2"]);
+  expect(configurationPoint(high, shared)).toMatchObject({ accuracy: 50, cost: 0.5, tasks: 2 });
+  expect(configurationPoint(medium, shared)).toMatchObject({ accuracy: 100, tasks: 2 });
+  // Alone, a configuration charts over everything it ran.
+  expect(configurationPoint(high, sharedTasks([high], accepted))).toMatchObject({
+    accuracy: (2 / 3) * 100,
+    tasks: 3,
+  });
+  expect(sharedTasks([high, low], accepted)).toEqual([]);
+  expect(sharedTasks([], accepted)).toEqual([]);
 });
 
-test("task sets nest by acceptance, and chart only the configurations covering all of one", () => {
-  const failed = (taskId: string) => ({ ...passed(taskId), rewards: { reward: 0 } });
-  const configurations = configurationsOf(
-    [
-      // Every task, the newest one included.
-      run("high", { thinking: "high" }, [passed("task-1"), failed("task-2"), passed("task-3")]),
-      // The two older tasks; its re-run of task-2 errored, but its earlier pass still counts.
-      run("medium", { thinking: "medium", createdAt: at(400) }, [
-        passed("task-1"),
-        passed("task-2"),
-      ]),
-      run("medium-again", { thinking: "medium", createdAt: at(300) }, [
-        errored("task-2", "Worker interrupted or timed out before this trial completed"),
-      ]),
-      // Only one of the two tasks accepted together: it covers no set.
-      run("low", { thinking: "low" }, [passed("task-1")]),
-    ],
-    credentials,
-    NOW,
-  );
-  const sets = taskSets(configurations, [
-    accepted("task-1", 2000),
-    accepted("task-2", 2000),
-    accepted("task-3", 100),
+test("the default leaves out a configuration that would shrink the chart", () => {
+  // high and medium chart 2 points × 2 tasks; adding low would leave no shared task.
+  expect(defaultPicks(configurations, accepted).map((entry) => entry.thinking)).toEqual([
+    "high",
+    "medium",
   ]);
-  expect(
-    sets.map((set) => [set.tasks.length, set.configurations.map((entry) => entry.thinking).sort()]),
-  ).toEqual([
-    [3, ["high"]],
-    [2, ["high", "medium"]],
-  ]);
-  const [newest, earlier] = sets;
-  if (!newest || !earlier) throw new Error("Missing sets");
-  const high = newest.configurations[0];
-  if (!high) throw new Error("Missing configuration");
-  expect(configurationPoint(high, newest)).toMatchObject({ accuracy: (2 / 3) * 100, tasks: 3 });
-  expect(configurationPoint(high, earlier)).toMatchObject({ accuracy: 50, cost: 0.5, tasks: 2 });
 });

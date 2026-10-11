@@ -1,10 +1,20 @@
 import { Check, Minus } from "lucide-react";
 import React from "react";
-import { harnessLabels } from "../../../../src/evaluation/models";
+import type { ThinkingLevel } from "../../../../src/contracts/models";
+import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
 import { thinkingLabel } from "../evaluation/run-presentation";
 import { SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
-import type { PreviewSetting } from "./api";
+
+/** What a row shows: a release preview's setting, or a configuration the Results chart can plot. */
+export interface PickerSetting {
+  key: string;
+  label: string;
+  harness: Harness;
+  reasoningLevel?: ThinkingLevel;
+  /** The tasks it has a result for, of `tasks`. */
+  coverage: readonly unknown[];
+}
 
 /** Model, harness, reasoning, tasks. Provider and sign-in can vary by task. */
 const grid =
@@ -68,12 +78,17 @@ export function SettingsPicker({
   ticked,
   query,
   disabled,
+  noun = "Settings",
+  legend = "Settings to Release",
   onQuery,
   onChange,
 }: {
-  settings: readonly PreviewSetting[];
+  settings: readonly PickerSetting[];
   /** How many approved tasks there are, for each setting's coverage. */
   tasks: number;
+  /** What the rows are called, in the search box and when none match. */
+  noun?: "Settings" | "Configurations";
+  legend?: string;
   ticked: ReadonlySet<string>;
   query: string;
   disabled: boolean;
@@ -89,7 +104,7 @@ export function SettingsPicker({
       query,
     ),
   );
-  const groups = new Map<string, PreviewSetting[]>();
+  const groups = new Map<string, PickerSetting[]>();
   for (const setting of visible)
     groups.set(setting.label, [...(groups.get(setting.label) ?? []), setting]);
   const position = new Map(settings.map((setting, index) => [setting.key, index]));
@@ -102,7 +117,7 @@ export function SettingsPicker({
     onChange(next);
   };
 
-  const row = (setting: PreviewSetting, child: { last: boolean } | undefined) => {
+  const row = (setting: PickerSetting, child: { last: boolean } | undefined) => {
     const id = `${idBase}-${position.get(setting.key)}`;
     return (
       <label
@@ -136,13 +151,13 @@ export function SettingsPicker({
   return (
     <div className="space-y-2">
       <SearchInput
-        placeholder="Search Settings"
-        aria-label="Search Settings"
+        placeholder={`Search ${noun}`}
+        aria-label={`Search ${noun}`}
         value={query}
         onChange={(event) => onQuery(event.target.value)}
       />
       <fieldset className="panel max-h-[50dvh] min-w-0 overflow-auto font-mono">
-        <legend className="sr-only">Settings to Release</legend>
+        <legend className="sr-only">{legend}</legend>
         {/* Shrinks with the dialog down to this width, then scrolls sideways; rows span it all. */}
         <div className="min-w-[32rem]">
           <div
@@ -155,7 +170,9 @@ export function SettingsPicker({
             <span className="text-right">Tasks</span>
           </div>
           {groups.size === 0 && (
-            <p className="px-4 py-3 text-sm text-muted-foreground">No settings match.</p>
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              No {noun.toLowerCase()} match.
+            </p>
           )}
           <div className="divide-y divide-border">
             {[...groups].map(([model, members], group) => {

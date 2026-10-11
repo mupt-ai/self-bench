@@ -1,6 +1,6 @@
 import type { ReleaseView } from "../../../../src/public/release-views";
 
-export type { PreviewSetting, ReleasePreview } from "../../../../src/public/release-build";
+export type { ReleasePreview } from "../../../../src/public/release-build";
 export type {
   ReleaseList,
   ReleaseSummary,
