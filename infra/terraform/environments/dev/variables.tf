@@ -36,11 +36,6 @@ variable "image" {
   description = "Set by the deploy workflow to the digest it just pushed."
   type        = string
 }
-variable "import_runtime_secrets" {
-  description = "Adopt secret containers created while moving an existing environment off env-file bundles."
-  type        = bool
-  default     = false
-}
 variable "release_id" {
   description = "Set by the deploy workflow from the GitHub run."
   type        = string

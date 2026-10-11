@@ -21,30 +21,6 @@ provider "helm" {
     }
   }
 }
-# Existing environments created these secret containers while moving off env-file bundles.
-# Set import_runtime_secrets for that one migration; new environments let Terraform create them.
-locals {
-  imported_runtime_secrets = {
-    database_url               = "selfbench-database-url"
-    eval_credential_key        = "selfbench-eval-credential-key"
-    sandbox_secret             = "selfbench-sandbox-secret"
-    github_oauth_client_secret = "selfbench-github-oauth-client-secret"
-    session_secret             = "selfbench-session-secret"
-    api_token                  = "selfbench-api-token"
-    worker_api_token           = "selfbench-worker-api-token"
-    stripe_secret_key          = "selfbench-stripe-secret-key"
-    stripe_webhook_secret      = "selfbench-stripe-webhook-secret"
-    managed_openrouter_api_key = "selfbench-managed-openrouter-api-key"
-    managed_e2b_api_key        = "selfbench-managed-e2b-api-key"
-    managed_modal_token_id     = "selfbench-managed-modal-token-id"
-    managed_modal_token_secret = "selfbench-managed-modal-token-secret"
-  }
-}
-import {
-  for_each = var.import_runtime_secrets ? local.imported_runtime_secrets : {}
-  to       = module.selfbench.google_secret_manager_secret.value[each.key]
-  id       = "projects/${var.project_id}/secrets/${each.value}"
-}
 module "selfbench" {
   source                      = "../../modules/selfbench-environment"
   project_id                  = var.project_id
