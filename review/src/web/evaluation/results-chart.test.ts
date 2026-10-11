@@ -1,22 +1,18 @@
 import { expect, test } from "bun:test";
-import { configurationPoint, taskSets } from "./results-chart";
+import { taskSet } from "../../../../src/public/release-rule";
+import { type ChartOption, chartOptions, chosenOptions, configurationPoint } from "./results-chart";
 import { at, credentials, errored, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 
-const accepted = (taskId: string, minutesAgo: number) => ({
-  runId: "batch-1",
-  taskId,
-  difficulty: "easy",
-  acceptedAt: at(minutesAgo),
-});
+const failed = (taskId: string) => ({ ...passed(taskId), rewards: { reward: 0 } });
+const accepted = ["task-1", "task-2", "task-3", "task-4"].map((task) => `batch-1/${task}`);
 
-test("task sets nest by acceptance, and chart only the configurations covering all of one", () => {
-  const failed = (taskId: string) => ({ ...passed(taskId), rewards: { reward: 0 } });
-  const configurations = configurationsOf(
+const options = chartOptions(
+  configurationsOf(
     [
-      // Every task, the newest one included.
+      // Three of the four tasks.
       run("high", { thinking: "high" }, [passed("task-1"), failed("task-2"), passed("task-3")]),
-      // The two older tasks; its re-run of task-2 errored, but its earlier pass still counts.
+      // Two of them; its re-run of task-2 errored, but its earlier pass still counts.
       run("medium", { thinking: "medium", createdAt: at(400) }, [
         passed("task-1"),
         passed("task-2"),
@@ -24,27 +20,51 @@ test("task sets nest by acceptance, and chart only the configurations covering a
       run("medium-again", { thinking: "medium", createdAt: at(300) }, [
         errored("task-2", "Worker interrupted or timed out before this trial completed"),
       ]),
-      // Only one of the two tasks accepted together: it covers no set.
-      run("low", { thinking: "low" }, [passed("task-1")]),
+      // Only the one task nobody else ran.
+      run("low", { thinking: "low" }, [passed("task-4")]),
+      // Nothing usable: not offered.
+      run("none", { thinking: "minimal" }, [errored("task-1", "Sandbox failed to start")]),
     ],
     credentials,
     NOW,
-  );
-  const sets = taskSets(configurations, [
-    accepted("task-1", 2000),
-    accepted("task-2", 2000),
-    accepted("task-3", 100),
-  ]);
-  expect(
-    sets.map((set) => [set.tasks.length, set.configurations.map((entry) => entry.thinking).sort()]),
-  ).toEqual([
-    [3, ["high"]],
-    [2, ["high", "medium"]],
-  ]);
-  const [newest, earlier] = sets;
-  if (!newest || !earlier) throw new Error("Missing sets");
-  const high = newest.configurations[0];
-  if (!high) throw new Error("Missing configuration");
-  expect(configurationPoint(high, newest)).toMatchObject({ accuracy: (2 / 3) * 100, tasks: 3 });
-  expect(configurationPoint(high, earlier)).toMatchObject({ accuracy: 50, cost: 0.5, tasks: 2 });
+  ),
+  accepted,
+);
+const option = (thinking: string) => {
+  const found = options.find((entry) => entry.configuration.thinking === thinking);
+  if (!found) throw new Error(`Missing ${thinking}`);
+  return found;
+};
+const [high, medium, low] = [option("high"), option("medium"), option("low")];
+const thinking = (chosen: readonly ChartOption[]) =>
+  chosen.map((entry) => entry.configuration.thinking).sort();
+
+test("chosen configurations chart over the accepted tasks all of them have a usable result on", () => {
+  expect(thinking(options)).toEqual(["high", "low", "medium"]);
+  const shared = taskSet([high, medium], accepted);
+  expect(shared).toEqual(["batch-1/task-1", "batch-1/task-2"]);
+  expect(configurationPoint(high.configuration, shared)).toMatchObject({
+    accuracy: 50,
+    cost: 0.5,
+    tasks: 2,
+  });
+  expect(configurationPoint(medium.configuration, shared)).toMatchObject({
+    accuracy: 100,
+    tasks: 2,
+  });
+  // Alone, a configuration charts over everything it ran.
+  expect(configurationPoint(high.configuration, taskSet([high], accepted))).toMatchObject({
+    accuracy: (2 / 3) * 100,
+    tasks: 3,
+  });
+  expect(taskSet([high, low], accepted)).toEqual([]);
+});
+
+test("the default charts the group with the most results, and a saved choice replaces it", () => {
+  // high alone charts 1 × 3; with medium, which covers part of its tasks, 2 × 2; low 1 × 1.
+  expect(thinking(chosenOptions(options, undefined))).toEqual(["high", "medium"]);
+  expect(thinking(chosenOptions(options, [low.configuration.key, "gone"]))).toEqual(["low"]);
+  // Clearing every box charts nothing; a choice no longer offered falls back to the default.
+  expect(chosenOptions(options, [])).toEqual([]);
+  expect(thinking(chosenOptions(options, ["gone"]))).toEqual(["high", "medium"]);
 });
