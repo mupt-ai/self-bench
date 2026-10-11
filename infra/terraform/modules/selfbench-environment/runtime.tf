@@ -94,10 +94,17 @@ locals {
       enabled = var.managed_offering
     }
   }
-  # Secrets nothing reads any more. Their containers stay, since secrets are never destroyed.
+  # Values only the managed offering reads. Their containers exist only while it is enabled, so
+  # turning it off deletes them and their values.
+  optional_secrets = toset([
+    "stripe_secret_key", "stripe_webhook_secret", "managed_openrouter_api_key",
+    "managed_e2b_api_key", "managed_modal_token_id", "managed_modal_token_secret",
+  ])
+  # Secrets nothing reads any more. Their containers stay, since core secrets are never destroyed.
   retired_secrets = {
     task_canary = "selfbench-task-canary"
   }
+  secret_containers = merge(google_secret_manager_secret.value, google_secret_manager_secret.optional)
   temporal_secret = {
     id  = "selfbench-temporal-api-key"
     env = "SELFBENCH_TEMPORAL_API_KEY"
@@ -145,7 +152,10 @@ locals {
 # Terraform owns each secret container and who may read it. Values are added out of band with
 # `gcloud secrets versions add`, so Terraform state never holds them.
 resource "google_secret_manager_secret" "value" {
-  for_each  = merge({ for key, secret in local.runtime_secrets : key => secret.id }, local.retired_secrets)
+  for_each = merge(
+    { for key, secret in local.runtime_secrets : key => secret.id if !contains(local.optional_secrets, key) },
+    local.retired_secrets,
+  )
   project   = var.project_id
   secret_id = each.value
   labels    = local.labels
@@ -161,11 +171,53 @@ resource "google_secret_manager_secret" "value" {
   }
   depends_on = [google_project_service.api]
 }
+# Turning the managed offering on creates these empty, so that first deploy fails to start the
+# new revision; add their versions, then deploy again.
+resource "google_secret_manager_secret" "optional" {
+  for_each  = { for key, secret in local.runtime_secrets : key => secret.id if contains(local.optional_secrets, key) && secret.enabled }
+  project   = var.project_id
+  secret_id = each.value
+  labels    = local.labels
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+  depends_on = [google_project_service.api]
+}
+# Optional containers used to share the protected resource. Moving them out lets an environment
+# with the managed offering off delete them; a key already gone from state moves nothing.
+moved {
+  from = google_secret_manager_secret.value["stripe_secret_key"]
+  to   = google_secret_manager_secret.optional["stripe_secret_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["stripe_webhook_secret"]
+  to   = google_secret_manager_secret.optional["stripe_webhook_secret"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_openrouter_api_key"]
+  to   = google_secret_manager_secret.optional["managed_openrouter_api_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_e2b_api_key"]
+  to   = google_secret_manager_secret.optional["managed_e2b_api_key"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_modal_token_id"]
+  to   = google_secret_manager_secret.optional["managed_modal_token_id"]
+}
+moved {
+  from = google_secret_manager_secret.value["managed_modal_token_secret"]
+  to   = google_secret_manager_secret.optional["managed_modal_token_secret"]
+}
 
 resource "google_secret_manager_secret_iam_member" "api_reader" {
   for_each  = { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.api }
   project   = var.project_id
-  secret_id = google_secret_manager_secret.value[each.key].secret_id
+  secret_id = local.secret_containers[each.key].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -178,7 +230,7 @@ resource "google_secret_manager_secret_iam_member" "api_temporal_reader" {
 resource "google_secret_manager_secret_iam_member" "runtime_reader" {
   for_each  = { for key, secret in local.runtime_secrets : key => secret if secret.enabled && secret.worker }
   project   = var.project_id
-  secret_id = google_secret_manager_secret.value[each.key].secret_id
+  secret_id = local.secret_containers[each.key].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }

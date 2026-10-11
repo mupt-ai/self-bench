@@ -33,7 +33,7 @@ run "dev_foundation" {
     error_message = "Release tags must not be overwritten."
   }
   assert {
-    condition     = length(google_secret_manager_secret.value) == 14 && output.deployment.task_queue == "selfbench-dev"
+    condition     = length(google_secret_manager_secret.value) == 8 && output.deployment.task_queue == "selfbench-dev"
     error_message = "Each sensitive value has its own secret, and dev uses the matching queue."
   }
   assert {
@@ -190,6 +190,10 @@ run "optional_secret_values" {
     condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_MANAGED_OFFERING"]) == "true"
     error_message = "The managed offering switch reaches the app."
   }
+  assert {
+    condition     = length(google_secret_manager_secret.optional) == 6
+    error_message = "The managed offering creates a container for each of its values."
+  }
 }
 run "byok_only_ignores_billing_inputs" {
   command = plan
@@ -203,6 +207,10 @@ run "byok_only_ignores_billing_inputs" {
   assert {
     condition     = length([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.name if contains(["SELFBENCH_MANAGED_OFFERING", "SELFBENCH_STRIPE_PRICE_ID"], env.name)]) == 0
     error_message = "Without the managed offering, the app gets neither the switch nor a Stripe price."
+  }
+  assert {
+    condition     = length(google_secret_manager_secret.optional) == 0
+    error_message = "Without the managed offering, its secret containers are deleted."
   }
 }
 run "prod_foundation" {

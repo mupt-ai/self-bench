@@ -32,12 +32,6 @@ locals {
     session_secret             = "selfbench-session-secret"
     api_token                  = "selfbench-api-token"
     worker_api_token           = "selfbench-worker-api-token"
-    stripe_secret_key          = "selfbench-stripe-secret-key"
-    stripe_webhook_secret      = "selfbench-stripe-webhook-secret"
-    managed_openrouter_api_key = "selfbench-managed-openrouter-api-key"
-    managed_e2b_api_key        = "selfbench-managed-e2b-api-key"
-    managed_modal_token_id     = "selfbench-managed-modal-token-id"
-    managed_modal_token_secret = "selfbench-managed-modal-token-secret"
   }
 }
 import {

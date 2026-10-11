@@ -86,14 +86,16 @@ Required secrets:
 - `selfbench-api-token`
 - `selfbench-worker-api-token`
 
-Optional secrets must have a version before their feature is enabled:
+Optional secrets exist only while their feature is enabled:
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
 
-`selfbench-task-canary` is retired: nothing reads it, and Terraform keeps its container only because secrets are never destroyed.
+Enabling the feature creates its containers empty, so that deploy fails to start the new revision; add their versions, then deploy again. Disabling it deletes the containers and every version in them, which needs `secretmanager.secrets.delete` on the apply role (or delete them by hand first). Required secrets are never destroyed.
 
-`managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, reads none of the secrets above, ignores `stripe_price_id`, and the app has no Billing page.
+`selfbench-task-canary` is retired: nothing reads it, and Terraform keeps its container only because required secrets are never destroyed.
+
+`managed_offering` is the one switch for the managed offering (`SELFBENCH_MANAGED_OFFERING` in the app). It defaults to false: the deployment is bring-your-own-key only, has none of the optional secrets above, ignores `stripe_price_id`, and the app has no Billing page.
 
 Cloud Run and GKE read `latest` when new instances start. Add a secret version, then deploy; the deploy labels new Cloud Run revisions with its run ID, so every release starts instances with the latest values. Running instances keep the values they started with until they are replaced.
 
