@@ -196,6 +196,45 @@ asyncio.run(check())
   expect(result.exitCode).toBe(0);
 });
 
+test("an E2B plan's memory cap is named when it refuses a task's template", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `${STUBS}import asyncio, logging
+class BuildException(Exception): pass
+e2b.BuildException = BuildException
+# E2B's answer, as a Pro key gives it, to a template asking for more memory than the plan allows.
+capped = "400: Memory can't be higher than 8192 MiB (if you need to increase this limit, please contact support)"
+setup = "failed to run command 'cd /app && /opt/selfbench-environment/setup.sh': exit status 2"
+class E2BEnvironment:
+    def __init__(self, error):
+        self.task_env_config = types.SimpleNamespace(docker_image=None)
+        self._template_name = "task__hash"
+        self._effective_memory_mb = 12288
+        self.logger = logging.getLogger("test")
+        self.error = error
+    async def _create_template(self): raise BuildException(self.error)
+harbor_e2b.E2BEnvironment = E2BEnvironment
+module = load()
+async def refusal(error):
+    try:
+        await module.SelfBenchE2BEnvironment(error)._create_template()
+    except BuildException as refused:
+        return refused
+    raise AssertionError("the template must not build")
+async def check():
+    refused = await refusal(capped)
+    assert str(refused).startswith("This E2B key's plan allows sandboxes of at most 8 GiB of memory, and this task asks for 12 GiB."), refused
+    assert "support@e2b.dev" in str(refused) and str(refused.__cause__) == capped, refused
+    # Any other failed build is E2B's own.
+    assert str(await refusal(setup)) == setup
+asyncio.run(check())
+`,
+    ENVIRONMENT,
+  ]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});
+
 test("the E2B environment waits for a free slot when E2B is at its concurrency limit", async () => {
   const result = await runCommand("python3", [
     "-c",
