@@ -2,7 +2,7 @@ import { ChevronDown, ListChecks } from "lucide-react";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { SettingsPicker } from "../releases/SettingsPicker";
 import { Button } from "../ui";
-import type { Configuration } from "./results-model";
+import type { ChartOption } from "./results-chart";
 
 /**
  * The configurations chosen for the chart, kept for the session per repository. The header's card
@@ -35,9 +35,10 @@ const chosenStore = {
 
 /** The chosen configurations' keys, undefined until something is chosen, and how to choose. */
 export function useChosen(
-  repo: string,
+  /** The repository's evaluations URL, which names its org too. */
+  url: string,
 ): [string[] | undefined, (keys: string[] | undefined) => void] {
-  const key = `selfbench-chart-configurations:${repo}`;
+  const key = `selfbench-chart-configurations:${url}`;
   const read = () => chosenStore.read(key);
   const raw = useSyncExternalStore(chosenStore.subscribe, read, read);
   const chosen = useMemo(() => {
@@ -57,17 +58,11 @@ export function useChosen(
   return [chosen, choose];
 }
 
-/** A configuration the chart can plot, with the accepted tasks it has a usable result on. */
-export interface ChartOption {
-  configuration: Configuration;
-  coverage: string[];
-}
-
 /** The chart's configurations: what's chosen, and, opened, the picker to change it. */
 export function ChartConfigurations({
   options,
   tasks,
-  ticked,
+  chosen,
   custom,
   summary,
   choose,
@@ -75,7 +70,7 @@ export function ChartConfigurations({
   options: readonly ChartOption[];
   /** How many accepted tasks there are, for each configuration's coverage. */
   tasks: number;
-  ticked: ReadonlySet<string>;
+  chosen: readonly ChartOption[];
   /** Whether something was chosen, rather than the default. */
   custom: boolean;
   /** What the chosen configurations chart over. */
@@ -83,7 +78,7 @@ export function ChartConfigurations({
   choose(keys: string[] | undefined): void;
 }) {
   const [query, setQuery] = useState("");
-  const chosen = options.filter((option) => ticked.has(option.configuration.key));
+  const ticked = new Set(chosen.map((option) => option.configuration.key));
   return (
     <details className="group panel mb-4">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
@@ -123,7 +118,7 @@ export function ChartConfigurations({
             label: configuration.label,
             harness: configuration.harness,
             ...(configuration.thinking ? { reasoningLevel: configuration.thinking } : {}),
-            coverage,
+            covered: coverage.size,
           }))}
           tasks={tasks}
           ticked={ticked}

@@ -3,6 +3,7 @@ import { ChartScatter, Maximize2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
+import { taskSet } from "../../../../src/public/release-rule";
 import { vendorColor } from "../../public-site/format";
 import { Dialog, DialogHeader } from "../Dialog";
 import { buttonStyles } from "../ui";
@@ -10,13 +11,12 @@ import type { BenchmarkPoint } from "./benchmark";
 import { ChartConfigurations, useChosen } from "./ChartConfigurations";
 import { ParetoChart } from "./ParetoChart";
 import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
-import { configurationPoint, coverageOf, defaultPicks, sharedTasks } from "./results-chart";
+import { chartOptions, chosenOptions, configurationPoint } from "./results-chart";
 import { type Configuration, configurationsOf } from "./results-model";
 
 /**
  * Until the accepted tasks load, or if they can't, the tasks some configuration has a usable
- * result for, with no acceptance times. A task nobody has one for (one that errored everywhere,
- * say) is left out, or no configuration could cover the set and the chart would never show.
+ * result for, with no acceptance times.
  */
 function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
   const seen = new Map<string, AcceptedTask>();
@@ -42,6 +42,10 @@ const PAD = 4;
  * joining the best ones. No axes or labels; the dialog has those.
  */
 function MiniChart({ points }: { points: readonly BenchmarkPoint[] }) {
+  if (!points.length)
+    return (
+      <svg width={WIDTH} height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true" />
+    );
   const costs = points.map((point) => Math.log10(Math.max(point.cost, 1e-4)));
   const accuracies = points.map((point) => point.accuracy);
   const span = (values: number[]) => {
@@ -105,41 +109,29 @@ export function ChartPreview({
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
-  const { runs, credentials, accepted, onResults } = useRepoRuns();
+  const { url, runs, credentials, accepted, onResults } = useRepoRuns();
   const navigate = useNavigate();
   const close = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [saved, choose] = useChosen(repo);
+  const [saved, choose] = useChosen(url);
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
   const tasks = useMemo(
     () => (accepted ?? tasksRun(configurations)).map((task) => `${task.runId}/${task.taskId}`),
     [configurations, accepted],
   );
-  // Only configurations with a usable result on some accepted task can be charted.
+  // Only the Results page shows the chart; elsewhere, nothing to work out.
   const options = useMemo(
+    () => (onResults ? chartOptions(configurations, tasks) : []),
+    [onResults, configurations, tasks],
+  );
+  const chosen = useMemo(() => chosenOptions(options, saved), [options, saved]);
+  const shared = useMemo(() => taskSet(chosen, tasks), [chosen, tasks]);
+  const points = useMemo(
     () =>
-      configurations.flatMap((configuration) => {
-        const coverage = coverageOf(configuration, tasks);
-        return coverage.length ? [{ configuration, coverage }] : [];
-      }),
-    [configurations, tasks],
+      shared.length ? chosen.map((option) => configurationPoint(option.configuration, shared)) : [],
+    [chosen, shared],
   );
-  const fallback = useMemo(
-    () => defaultPicks(configurations, tasks).map((configuration) => configuration.key),
-    [configurations, tasks],
-  );
-  if (!onResults || !options.length) return null;
-  // Chosen configurations no longer offered drop out; if that leaves none of a choice, or nothing
-  // was chosen, the default. Clearing every box is a choice, and charts nothing.
-  const kept = saved?.filter((key) => options.some((option) => option.configuration.key === key));
-  const ticked = new Set(!kept || (saved?.length && !kept.length) ? fallback : kept);
-  const chosen = options
-    .filter((option) => ticked.has(option.configuration.key))
-    .map((option) => option.configuration);
-  const shared = sharedTasks(chosen, tasks);
-  const points = shared.length
-    ? chosen.map((configuration) => configurationPoint(configuration, shared))
-    : [];
+  if (!options.length) return null;
   const summary = !chosen.length
     ? "Choose configurations to chart."
     : !shared.length
@@ -174,7 +166,9 @@ export function ChartPreview({
                 className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
                 aria-hidden="true"
               />
-              {plural(points.length, "point")} · {plural(shared.length, "task")}
+              {points.length
+                ? `${plural(points.length, "point")} · ${plural(shared.length, "task")}`
+                : "No points"}
             </span>
           </span>
         </button>
@@ -204,7 +198,7 @@ export function ChartPreview({
             <ChartConfigurations
               options={options}
               tasks={tasks.length}
-              ticked={ticked}
+              chosen={chosen}
               custom={saved !== undefined}
               summary={summary}
               choose={choose}

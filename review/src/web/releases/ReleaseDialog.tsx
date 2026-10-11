@@ -146,7 +146,10 @@ export function ReleaseDialog({
         ) : (
           <>
             <SettingsPicker
-              settings={view.preview.settings}
+              settings={view.preview.settings.map((setting) => ({
+                ...setting,
+                covered: setting.coverage.length,
+              }))}
               tasks={view.preview.tasks.length}
               ticked={ticked}
               query={query}

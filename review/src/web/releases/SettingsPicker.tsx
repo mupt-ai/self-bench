@@ -12,8 +12,8 @@ export interface PickerSetting {
   label: string;
   harness: Harness;
   reasoningLevel?: ThinkingLevel;
-  /** The tasks it has a result for, of `tasks`. */
-  coverage: readonly unknown[];
+  /** How many of `tasks` it has a result for. */
+  covered: number;
 }
 
 /** Model, harness, reasoning, tasks. Provider and sign-in can vary by task. */
@@ -142,7 +142,7 @@ export function SettingsPicker({
         <span className="min-w-0 break-words">{harnessLabels[setting.harness]}</span>
         <span className="min-w-0 break-words">{thinkingLabel(setting.reasoningLevel)}</span>
         <span className="text-right">
-          {setting.coverage.length} / {tasks}
+          {setting.covered} / {tasks}
         </span>
       </label>
     );
