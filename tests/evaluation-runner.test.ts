@@ -27,6 +27,56 @@ test("solver invocation carries the selected thinking level", () => {
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
   expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
 });
+test("Pi custom endpoints receive Harbor's explicit Chat Completions API style", () => {
+  for (const model of ["openai/dari/routing", "openai/jev-test"]) {
+    const args = solverArguments(
+      "/task",
+      "/jobs",
+      "pi",
+      model,
+      "e2b",
+      "default",
+      ["routing.dari.dev"],
+      undefined,
+      "custom",
+    );
+    expect(args.slice(-2)).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
+    expect(args[args.indexOf("--model") + 1]).toBe(model);
+  }
+  const native = solverArguments("/task", "/jobs", "pi", "openai/gpt-6-astra", "e2b");
+  expect(native).not.toContain("model_api=openai-completions");
+});
+test("custom endpoint API style preserves thinking and leaves other harnesses unchanged", () => {
+  const args = solverArguments(
+    "/task",
+    "/jobs",
+    "pi",
+    "openai/dari/routing",
+    "modal",
+    "high",
+    [],
+    undefined,
+    "custom",
+  );
+  expect(args.slice(-4)).toEqual([
+    "--agent-kwarg",
+    "thinking=high",
+    "--agent-kwarg",
+    "model_api=openai-completions",
+  ]);
+  const codex = solverArguments(
+    "/task",
+    "/jobs",
+    "codex",
+    "openai/dari/routing",
+    "e2b",
+    undefined,
+    [],
+    undefined,
+    "custom",
+  );
+  expect(codex).not.toContain("model_api=openai-completions");
+});
 const trajectory = {
   steps: [
     {
