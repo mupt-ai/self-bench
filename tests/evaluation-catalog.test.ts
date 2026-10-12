@@ -61,6 +61,24 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
 });
 
+test("a variable-price router is selectable on OpenRouter without invented reference pricing", () => {
+  setGatewayListing("openrouter", {
+    models: [{ id: "typesafe/jev-router", label: "Jev Router" }],
+    rates: new Map([["openai/gpt-6-luna", { rates: [0.1, 0.5, 0.1, 0.1], asOf: "2026-10-12" }]]),
+  });
+  const jev = evaluationCatalog().find((model) => model.id === "typesafe/jev-router");
+  if (!jev) throw new Error("Missing Jev Router");
+  const route = routeFor(jev, "openrouter");
+  expect(route).toMatchObject({
+    model: "typesafe/jev-router",
+    provider: "openrouter",
+    harnesses: [...harnessIds],
+  });
+  expect(route?.pricing).toBeUndefined();
+  expect(thinkingOptions(jev, ["pi"])).toEqual(["default"]);
+  expect(routeFor(jev, "vercel-ai-gateway")).toBeUndefined();
+});
+
 test("a model two gateways list is one entry with a route on each, under each one's id", () => {
   listModels("openrouter", [{ id: "z-ai/glm-6", label: "GLM 6", thinking: ["low", "high"] }]);
   listModels("vercel-ai-gateway", [

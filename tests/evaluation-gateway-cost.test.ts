@@ -47,6 +47,51 @@ test("BYOK generations count the provider's charge, which the gateway leaves out
   expect(await gatewayCost("vercel-ai-gateway", "key", "pi", files, unbilled)).toBeUndefined();
 });
 
+test("OpenRouter Jev generations become available after delayed indexing", async () => {
+  let attempts = 0;
+  let waitMs = 0;
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((
+    callback: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ) => {
+    waitMs += delay ?? 0;
+    queueMicrotask(() => callback(...args));
+    return 0 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  const delayed = (async () => {
+    attempts += 1;
+    return attempts < 3
+      ? Response.json({ error: { message: "Generation not found" } }, { status: 404 })
+      : Response.json({
+          data: {
+            router: "typesafe/jev-router",
+            model: "openai/gpt-6-luna",
+            total_cost: 0,
+            upstream_inference_cost: 0.0000039,
+            is_byok: true,
+          },
+        });
+  }) as unknown as typeof fetch;
+  try {
+    const single = new Map([
+      [
+        "solver/trial/agent/pi.txt",
+        JSON.stringify({
+          type: "message_end",
+          message: { role: "assistant", responseId: "gen-1791843781-jevtest" },
+        }),
+      ],
+    ]);
+    expect(await gatewayCost("openrouter", "key", "pi", single, delayed)).toBeCloseTo(0.0000039);
+    expect(attempts).toBe(3);
+    expect(waitMs).toBe(10_000);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
 test("missing bills and unsupported harnesses leave the caller's usage estimate untouched", async () => {
   const missing = (async () => Response.json({ data: {} })) as unknown as typeof fetch;
   expect(await gatewayCost("openrouter", "key", "pi", files, missing)).toBeUndefined();
