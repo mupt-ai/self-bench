@@ -8,15 +8,22 @@ import { RecordStoreError } from "./encrypted-records.js";
 import { credentials } from "./schema.js";
 
 const sandboxKinds = ["e2b", "modal", "daytona", "vercel"] as const;
-const credentialKinds = ["openai", "anthropic", ...gatewayIds, "custom", ...sandboxKinds] as const;
+const credentialKinds = [
+  "openai",
+  "anthropic",
+  "meta",
+  ...gatewayIds,
+  "custom",
+  ...sandboxKinds,
+] as const;
 const providerId = z
   .string()
   .trim()
   .min(1)
   .max(256)
   .regex(/^[a-zA-Z0-9_-]+$/);
-/** API keys, and the subscription sign-ins of Codex (ChatGPT) and Claude Code (Claude). */
-export const credentialAuths = ["api-key", "codex-login", "claude-login"] as const;
+/** API keys, and the subscription sign-ins of Codex (ChatGPT), Claude Code (Claude), and Muse Code (Meta). */
+export const credentialAuths = ["api-key", "codex-login", "claude-login", "muse-login"] as const;
 /** Claude Code's subscription token, as `claude setup-token` prints it. */
 const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
 /**
@@ -56,6 +63,9 @@ export const credentialSchema = z
     } else if (value.auth === "claude-login") {
       if (value.kind !== "anthropic" || !claudeToken.test(value.value))
         issue("Provide a Claude Code token from claude setup-token, not an API key");
+    } else if (value.auth === "muse-login") {
+      if (value.kind !== "meta" || !museSignIn(value.value))
+        issue("Provide a Muse Code auth.json from a Meta sign-in, not an API key");
     } else if (/[\r\n\0]/.test(value.value)) issue("API keys must be a single line");
     else if (value.kind === "anthropic" && value.value.startsWith("sk-ant-oat"))
       issue("This is a Claude subscription token; add it as a Claude sign-in instead");
@@ -70,6 +80,16 @@ export const credentialSchema = z
       issue("Only sandbox credentials take a sandbox limit");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
+
+/** Muse Code's auth.json holding a Meta sign-in's token in the file, as SelfBench writes it. */
+function museSignIn(value: string): boolean {
+  try {
+    const meta = JSON.parse(value).providers?.meta;
+    return meta?.mechanism === "oauth" && meta.storage === "file" && !!meta.access_token;
+  } catch {
+    return false;
+  }
+}
 type CredentialKind = (typeof credentialKinds)[number];
 
 export function isSandboxKind(kind: string): kind is (typeof sandboxKinds)[number] {

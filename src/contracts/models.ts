@@ -74,7 +74,7 @@ export interface Model {
   /** The vendor's model id, or a short slug for gateway-only models. */
   readonly id: string;
   readonly label: string;
-  readonly vendor?: "openai" | "anthropic";
+  readonly vendor?: "openai" | "anthropic" | "meta";
   /** OpenRouter's id, which names the model on every gateway. */
   readonly openRouter: string;
   readonly source: string;
@@ -89,7 +89,7 @@ export interface Model {
   readonly thinking?: readonly ThinkingLevel[];
 }
 
-export const catalogVersion = "2026-10-07.1";
+export const catalogVersion = "2026-10-12.1";
 const RATES_AS_OF = "2026-09-23";
 const openAiThinking = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 const vendorThinking = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -181,6 +181,16 @@ export const models: readonly Model[] = [
     rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
     thinking: vendorThinking,
   },
+  muse("muse-wonder-1.0", "Muse Wonder", "meta/muse-wonder", [4, 20, 0.2, 4]),
+  muse("muse-spark-1.3", "Muse Spark 1.3", "meta/muse-spark-1.3", [1.25, 4.25, 0.15, 1.25]),
+  // Meta documents max for Muse Spark 1.3 and Muse Wonder only.
+  muse(
+    "muse-spark-1.2",
+    "Muse Spark 1.2",
+    "meta/muse-spark-1.2",
+    [1.25, 4.25, 0.15, 1.25],
+    "xhigh",
+  ),
   {
     id: "glm-5.3",
     label: "GLM 5.3",
@@ -210,6 +220,15 @@ export const models: readonly Model[] = [
     thinking: ["off", "low", "high", "max"],
   },
 ];
+
+/** A Muse model, at Meta's list rates on its key and through a gateway (Muse refuses "none"). */
+function muse(id: string, label: string, openRouter: string, rates: Rates, top = "max"): Model {
+  const levels: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+  const thinking = levels.slice(0, levels.indexOf(top as ThinkingLevel) + 1);
+  const pricing = { native: rates, gateway: rates };
+  const source = "https://dev.meta.ai/docs/pricing-rate-limits";
+  return { id, label, vendor: "meta", openRouter, source, rates: pricing, thinking };
+}
 
 export function findModel(id: string): Model | undefined {
   return models.find((model) => model.id === id);

@@ -152,7 +152,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
       sandboxCredentialId,
       models: [
         { ...selection, harnesses: ["codex"], thinking: "low" },
-        { ...selection, harnesses: ["mini-swe-agent"] },
+        { ...selection, harnesses: ["mini-swe-agent"], thinking: "high" },
       ],
     };
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);

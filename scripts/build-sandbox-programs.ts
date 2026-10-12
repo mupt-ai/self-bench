@@ -12,6 +12,7 @@ await mkdir(outputDirectory, { recursive: true });
 await mkdir(join(outputDirectory, "harnesses/harbor/runtime"), { recursive: true });
 for (const asset of [
   "harbor_gateway.py",
+  "harbor_muse.py",
   "harbor_smoke.py",
   "selfbench_e2b.py",
   "selfbench_export.py",

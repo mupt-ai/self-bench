@@ -1,17 +1,40 @@
 import { ArrowUpRight, Check, Copy } from "lucide-react";
 import React from "react";
 import type { CodexLoginStatus } from "../../../../src/harnesses/codex/login";
+import type { MuseLoginStatus } from "../../../../src/harnesses/muse-code/login";
 import { Skeleton } from "../LoadingSkeleton";
 import { Button, buttonStyles } from "../ui";
 import { evaluationRequest } from "./api";
 
-export function CodexSignIn({
+/** The device-code sign-ins: the user approves a code on the vendor's site while SelfBench polls. */
+const devices = {
+  "codex-login": {
+    connected: "Codex Connected",
+    pitch: "Use your ChatGPT plan for Codex runs.",
+    start: "Sign In with ChatGPT",
+    prompt: "Enter this code on OpenAI.",
+    continueLabel: "Continue on OpenAI",
+    help: "Enable device code login in your ChatGPT security settings. Your subscription limits apply.",
+  },
+  "muse-login": {
+    connected: "Muse Code Connected",
+    pitch: "Use your Muse Code plan for Muse Code runs.",
+    start: "Sign In with Meta",
+    prompt: "Check that Meta shows this code.",
+    continueLabel: "Continue on Meta",
+    help: "Approve with the Meta account that holds your Muse Code subscription. Your subscription limits apply.",
+  },
+} as const;
+
+export function DeviceSignIn({
+  login,
   org,
   name,
   onActiveChange,
   onDone,
   autoStart = false,
 }: {
+  login: keyof typeof devices;
   org: string;
   name: string;
   onActiveChange(active: boolean): void;
@@ -19,8 +42,9 @@ export function CodexSignIn({
   /** Begin the sign-in on mount, for a caller whose own button already asked for it. */
   autoStart?: boolean;
 }) {
-  const url = `/api/orgs/${encodeURIComponent(org)}/credentials/codex-login`;
-  const [session, setSession] = React.useState<CodexLoginStatus>();
+  const device = devices[login];
+  const url = `/api/orgs/${encodeURIComponent(org)}/credentials/${login}`;
+  const [session, setSession] = React.useState<CodexLoginStatus | MuseLoginStatus>();
   const [starting, setStarting] = React.useState(autoStart);
   const [error, setError] = React.useState("");
   const [copied, setCopied] = React.useState(false);
@@ -49,7 +73,9 @@ export function CodexSignIn({
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const next = await evaluationRequest<CodexLoginStatus>(`${url}/${sessionId}`);
+        const next = await evaluationRequest<CodexLoginStatus | MuseLoginStatus>(
+          `${url}/${sessionId}`,
+        );
         if (stale()) return;
         setSession(next);
         if (next.status === "failed" || next.status === "saved") {
@@ -57,7 +83,7 @@ export function CodexSignIn({
           if (next.status === "saved") void completed.current();
           return;
         }
-        // Each poll asks OpenAI once; its device flow allows one check every five seconds.
+        // Each poll asks the vendor once; their device flows allow one check every five seconds.
         timer = setTimeout(poll, 5000);
       } catch (cause) {
         if (!stale()) {
@@ -80,7 +106,9 @@ export function CodexSignIn({
     setCopyHint("");
     onActiveChange(true);
     try {
-      const next = await evaluationRequest<CodexLoginStatus>(url, { name: name.trim() });
+      const next = await evaluationRequest<CodexLoginStatus | MuseLoginStatus>(url, {
+        name: name.trim(),
+      });
       if (!alive.current) {
         void evaluationRequest(`${url}/${next.id}/cancel`, {}).catch(() => undefined);
         return;
@@ -110,7 +138,7 @@ export function CodexSignIn({
         role="status"
       >
         <Check className="text-success" size={18} aria-hidden="true" />
-        <h3 className="flex-1 text-sm font-semibold">Codex Connected</h3>
+        <h3 className="flex-1 text-sm font-semibold">{device.connected}</h3>
         <Button type="button" variant="primary" onClick={() => void onDone()}>
           Done
         </Button>
@@ -120,9 +148,7 @@ export function CodexSignIn({
     <div className="space-y-4">
       {!session && !starting ? (
         <div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Use your ChatGPT plan for Codex runs.
-          </p>
+          <p className="text-sm leading-6 text-muted-foreground">{device.pitch}</p>
           <Button
             type="button"
             className="mt-3 w-full"
@@ -130,7 +156,7 @@ export function CodexSignIn({
             disabled={!name.trim()}
             onClick={() => void start()}
           >
-            Sign In with ChatGPT
+            {device.start}
             <ArrowUpRight size={15} aria-hidden="true" />
           </Button>
         </div>
@@ -150,7 +176,7 @@ export function CodexSignIn({
         </div>
       ) : (
         <div className="panel p-4">
-          <p className="mb-3 text-sm text-muted-foreground">Enter this code on OpenAI.</p>
+          <p className="mb-3 text-sm text-muted-foreground">{device.prompt}</p>
           <div className="flex border border-input bg-background">
             <input
               ref={code}
@@ -194,7 +220,7 @@ export function CodexSignIn({
             target="_blank"
             rel="noreferrer"
           >
-            Continue on OpenAI
+            {device.continueLabel}
             <ArrowUpRight size={15} aria-hidden="true" />
           </a>
           <p
@@ -226,10 +252,7 @@ export function CodexSignIn({
       )}
       <details className="text-xs leading-5 text-muted-foreground">
         <summary className="w-fit cursor-pointer hover:text-foreground">Sign-In Help</summary>
-        <p className="mt-2">
-          Enable device code login in your ChatGPT security settings. Your subscription limits
-          apply.
-        </p>
+        <p className="mt-2">{device.help}</p>
       </details>
     </div>
   );

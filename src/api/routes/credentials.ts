@@ -6,12 +6,13 @@ import type { User } from "../../db/users.js";
 import { assertCredentialUnused } from "../../evaluation/comparisons.js";
 import { claudeLogins } from "../../harnesses/claude-code/login.js";
 import { codexLogins } from "../../harnesses/codex/login.js";
+import { museLogins } from "../../harnesses/muse-code/login.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login|muse-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit))?$/;
 const loginStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 const claudeCompleteSchema = z.object({ code: z.string().trim().min(1).max(4096) }).strict();
 const limitSchema = z.object({ maxSandboxes: maxSandboxesSchema.nullable() }).strict();
@@ -52,11 +53,17 @@ export async function credentialRoutes(
     if (login) {
       const codex = options.codexLogins ?? codexLogins;
       const claude = options.claudeLogins ?? claudeLogins;
-      const logins = login === "codex-login" ? codex : claude;
+      const muse = options.museLogins ?? museLogins;
+      const logins = login === "codex-login" ? codex : login === "muse-login" ? muse : claude;
       const body = async (limit: number) => JSON.parse((await readBody(request, limit)).toString());
-      // Codex polls OpenAI for the approval; Claude is completed with the code Anthropic shows.
-      if (login === "codex-login" && !mutation && loginId && !loginAction)
-        sendJson(response, 200, await codex.status(vault, org.id, user.id, loginId));
+      // Codex and Muse poll their device sign-ins for the approval; Claude is completed with the
+      // code Anthropic shows.
+      if (login !== "claude-login" && !mutation && loginId && !loginAction)
+        sendJson(
+          response,
+          200,
+          await (login === "muse-login" ? muse : codex).status(vault, org.id, user.id, loginId),
+        );
       else if (login === "claude-login" && mutation && loginId && loginAction === "complete") {
         const { code } = claudeCompleteSchema.parse(await body(8192));
         sendJson(response, 200, await claude.complete(vault, org.id, user.id, loginId, code));
