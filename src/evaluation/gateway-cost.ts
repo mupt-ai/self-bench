@@ -106,7 +106,9 @@ export async function gatewayCost(
       : "https://ai-gateway.vercel.sh/v1/generation?id=";
   const lookup = async (id: string): Promise<number | undefined> => {
     try {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      // OpenRouter's generation record can take ~10 seconds to appear, especially for router
+      // models. Keep 404 distinct from other failures, but retry long enough for normal indexing.
+      for (let attempt = 0; attempt < 7; attempt++) {
         const response = await fetcher(base + encodeURIComponent(id), {
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
@@ -120,7 +122,7 @@ export async function gatewayCost(
           return total === undefined || upstream === undefined ? undefined : total + upstream;
         }
         if (response.status !== 404) return undefined;
-        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (attempt < 6) await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     } catch {
       // A lookup failure is not a zero-cost request.
