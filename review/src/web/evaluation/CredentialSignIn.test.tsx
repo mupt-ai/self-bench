@@ -206,3 +206,47 @@ test("a pasted setup token is saved without the line breaks a terminal adds", as
     value: "sk-ant-oat01-abcdef",
   });
 });
+
+test("Meta sign-in shows Meta's code and link, polls the server, and offers no import", async () => {
+  const museBase = "/api/orgs/test/credentials/muse-login";
+  const verificationUrl = "https://auth.meta.com/oauth/device/?code=ABCD-EFGH";
+  const waiting = {
+    id: "attempt",
+    status: "waiting",
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    instructions: { userCode: "ABCD-EFGH", verificationUrl },
+  };
+  respond = (path) =>
+    path === museBase
+      ? Response.json(waiting)
+      : Response.json({
+          ...waiting,
+          status: "saved",
+          credential: { ...saved, kind: "meta", auth: "muse-login" },
+        });
+  await act(async () =>
+    root.render(
+      <CredentialEditor
+        key="muse"
+        org="test"
+        kind="meta"
+        auth="muse-login"
+        onSave={async () => {}}
+        onSaved={onSaved}
+        onCancel={onCancel}
+      />,
+    ),
+  );
+  expect(container.textContent).toContain("only works with the Muse Code harness");
+  // A Mac's sign-in keeps its token in the keychain, so there is no auth.json to import.
+  expect(container.textContent).not.toContain("Import");
+  await click("Sign In with Meta");
+  await waitFor(() => !!container.querySelector('input[aria-label="One-Time Code"]'));
+  expect(
+    container.querySelector<HTMLInputElement>('input[aria-label="One-Time Code"]')?.value,
+  ).toBe("ABCD-EFGH");
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(verificationUrl);
+  await waitFor(() => onSaved.mock.calls.length === 1);
+  expect(container.textContent).toContain("Muse Code Connected");
+  expect(requests).toEqual([`POST ${museBase}`, `GET ${museBase}/attempt`]);
+});

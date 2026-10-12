@@ -147,5 +147,6 @@ export function gatewayPricing(
  */
 export function modelApiKeyVariable(provider: string): string {
   if (isGateway(provider)) return gateways[provider].keyVariable;
+  if (provider === "meta") return "META_API_KEY";
   return provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
 }

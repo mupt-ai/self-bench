@@ -28,6 +28,7 @@ const VENDOR_COLORS: Record<string, string> = {
   "z-ai": "#8b5cf6",
   deepseek: "#4f63d8",
   moonshotai: "#c0457a",
+  meta: "#0ea5e9",
   custom: "#8a8580",
 };
 
@@ -46,6 +47,7 @@ const VENDOR_NAMES: Record<string, string> = {
   "z-ai": "Z.ai",
   deepseek: "DeepSeek",
   moonshotai: "Moonshot AI",
+  meta: "Meta",
   custom: CUSTOM_VENDOR,
 };
 

@@ -31,6 +31,7 @@ import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
+import type { MuseLogins } from "../../harnesses/muse-code/login.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -53,6 +54,7 @@ export interface EvaluationRoutesOptions {
   vault?: Vault;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
+  museLogins?: MuseLogins;
 }
 
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {

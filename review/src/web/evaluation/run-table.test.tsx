@@ -139,6 +139,7 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(options(html)).toEqual([
     "openai",
     "anthropic",
+    "meta",
     "openrouter",
     "vercel-ai-gateway",
     "custom",
@@ -215,6 +216,7 @@ test("replacement keeps the original credential category regardless of the defau
   expect(options(provider)).toEqual([
     "openai",
     "anthropic",
+    "meta",
     "openrouter",
     "vercel-ai-gateway",
     "custom",

@@ -7,8 +7,8 @@ import {
 } from "../src/evaluation/catalog.js";
 import {
   defaultThinking,
-  harnessIds,
   modelRoutes,
+  openHarnesses,
   routeFor,
   thinkingArguments,
   thinkingOptions,
@@ -49,7 +49,7 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(modelRoutes(qwen)).toEqual([
     {
       ...qwen,
-      harnesses: [...harnessIds],
+      harnesses: [...openHarnesses],
       pricing: expect.objectContaining({ input: 1, output: 4, asOf: "2026-09-29" }),
     },
   ]);
@@ -96,7 +96,7 @@ test("a model two gateways list is one entry with a route on each, under each on
 test("a model gateways list under different ids is one entry when vendor and name match", () => {
   listModels("openrouter", [
     { id: "mistralai/mistral-large-4-0", label: "Mistral Large 4", thinking: ["off", "high"] },
-    { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
+    { id: "meta/muse-spark-1.1", label: "Muse Spark 1.1" },
     { id: "qwen/qwen3-14b", label: "Qwen3 14B" },
     { id: "cohere/command-a-plus", label: "Command A+" },
     { id: "qwen/qwen3-32b", label: "Qwen3 32B" },
@@ -105,7 +105,7 @@ test("a model gateways list under different ids is one entry when vendor and nam
   listModels("vercel-ai-gateway", [
     { id: "mistral/mistral-large-4", label: "Mistral Large 4", thinking: ["low", "high"] },
     // Vercel's meta stands for OpenRouter's meta-llama, but its Muse is OpenRouter's meta Muse.
-    { id: "meta/muse-spark-1.3", label: "Muse Spark 1.3" },
+    { id: "meta/muse-spark-1.1", label: "Muse Spark 1.1" },
     // Listed before the id OpenRouter shares, under the same name: a model of its own.
     { id: "alibaba/qwen3-14b-preview", label: "Qwen3-14B" },
     { id: "alibaba/qwen3-14b", label: "Qwen3 14B" },
@@ -121,8 +121,8 @@ test("a model gateways list under different ids is one entry when vendor and nam
       { openrouter: "mistralai/mistral-large-4-0", "vercel-ai-gateway": "mistral/mistral-large-4" },
     ],
     [
-      "meta/muse-spark-1.3",
-      { openrouter: "meta/muse-spark-1.3", "vercel-ai-gateway": "meta/muse-spark-1.3" },
+      "meta/muse-spark-1.1",
+      { openrouter: "meta/muse-spark-1.1", "vercel-ai-gateway": "meta/muse-spark-1.1" },
     ],
     ["qwen/qwen3-14b", { openrouter: "qwen/qwen3-14b", "vercel-ai-gateway": "alibaba/qwen3-14b" }],
     ["cohere/command-a-plus", { openrouter: "cohere/command-a-plus" }],
@@ -195,7 +195,7 @@ test("current catalog exposes explicit model IDs and dated provider pricing", ()
   });
 });
 
-test("a gateway-only model keeps its gateway IDs and every harness", () => {
+test("a gateway-only model keeps its gateway IDs and every harness a gateway can serve", () => {
   const model = catalog.find((entry) => entry.id === "deepseek-v4-pro-0813");
   if (!model) throw new Error("Missing model");
   expect(model.provider).toBe("openrouter");
@@ -205,7 +205,7 @@ test("a gateway-only model keeps its gateway IDs and every harness", () => {
       expect.objectContaining({
         provider,
         model: "deepseek/deepseek-v4-pro-0813",
-        harnesses: [...harnessIds],
+        harnesses: [...openHarnesses],
       }),
     ),
   );
@@ -251,6 +251,12 @@ test("thinking levels reach the actual Harbor harness flags without changing mod
   ]);
   expect(thinkingArguments("pi", "high")).toEqual(["--agent-kwarg", "thinking=high"]);
   expect(thinkingArguments("pi", "default")).toEqual([]);
+  for (const harness of ["mini-swe-agent", "terminus-2", "muse-code"] as const) {
+    expect(thinkingArguments(harness, "off")).toEqual(["--agent-kwarg", "reasoning_effort=none"]);
+    expect(thinkingArguments(harness, "max")).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
+  }
+  // A level the harness's Harbor adapter would reject never reaches it.
+  expect(thinkingArguments("pi", "max")).toEqual([]);
 });
 
 test("custom endpoints only offer default thinking whatever model ID is typed", () => {
@@ -275,7 +281,14 @@ test.each([
     if (!model) throw new Error(`Missing model ${id}`);
     expect(thinkingOptions(model, ["codex"])).toEqual([...levels]);
     expect(thinkingOptions(model, ["pi"])).toEqual(levels.filter((level) => level !== "max"));
-    expect(thinkingOptions(model, ["mini-swe-agent"])).toEqual(["default"]);
-    expect(thinkingOptions(model, ["terminus-2"])).toEqual(["default"]);
+    expect(thinkingOptions(model, ["mini-swe-agent"])).toEqual([...levels]);
+    expect(thinkingOptions(model, ["terminus-2"])).toEqual([...levels]);
+    // Claude Code takes no "off"; a level one harness lacks leaves the row's other harnesses too.
+    expect(thinkingOptions(model, ["claude-code"])).toEqual(
+      levels.filter((level) => level !== "off"),
+    );
+    expect(thinkingOptions(model, ["pi", "terminus-2"])).toEqual(
+      levels.filter((level) => level !== "max"),
+    );
   },
 );

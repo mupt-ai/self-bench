@@ -139,7 +139,7 @@ export async function checkGenerationCredentials(
       model &&
       (model.kind === "openai"
         ? ["api-key", "codex-login"].includes(model.auth)
-        : model.kind !== "custom" && model.auth === "api-key");
+        : !["custom", "meta"].includes(model.kind) && model.auth === "api-key");
     if (!usable)
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",

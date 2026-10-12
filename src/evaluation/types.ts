@@ -1,7 +1,7 @@
 import type { ModelPricing, ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
-import type { GatewayId } from "../gateways/index.js";
+import type { CatalogProvider } from "./catalog.js";
 import type { Harness } from "./models.js";
 
 export type { Harness } from "./models.js";
@@ -43,7 +43,7 @@ export interface EvaluationInput {
   credentials?: {
     modelCredentialId: string;
     sandboxCredentialId: string;
-    provider: "openai" | "anthropic" | GatewayId | "custom";
+    provider: CatalogProvider;
     auth?: CredentialInfo["auth"];
   };
 }

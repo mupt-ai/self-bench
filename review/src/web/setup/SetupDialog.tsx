@@ -5,8 +5,8 @@ import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credent
 import { Dialog } from "../Dialog";
 import { evaluationRequest } from "../evaluation/api";
 import { ClaudeSignIn } from "../evaluation/ClaudeSignIn";
-import { CodexSignIn } from "../evaluation/CodexSignIn";
 import { isSandbox } from "../evaluation/credential-presentation";
+import { DeviceSignIn } from "../evaluation/DeviceSignIn";
 import { cn } from "../primitives/cn";
 import { Button } from "../ui";
 import { covered, setupCoverage } from "./readiness";
@@ -144,7 +144,8 @@ export function SetupDialog({
               onToggle={setOpen}
               render={(id) =>
                 id === "codex-login" ? (
-                  <CodexSignIn
+                  <DeviceSignIn
+                    login="codex-login"
                     org={org}
                     name="Codex"
                     autoStart

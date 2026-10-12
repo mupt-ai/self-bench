@@ -78,7 +78,7 @@ export function evaluationInput(): EvaluationInput {
 }
 export async function evaluationServer(
   vault?: Vault,
-  logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins"> = {},
+  logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins" | "museLogins"> = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
 ) {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-routes-"));

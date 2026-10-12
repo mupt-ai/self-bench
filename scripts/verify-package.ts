@@ -73,6 +73,7 @@ try {
     "dist/maintenance/backfill-agent-timeouts.js",
     "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
+    "dist/harnesses/harbor/runtime/harbor_muse.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
     "dist/harnesses/harbor/runtime/selfbench_e2b.py",
     "dist/harnesses/harbor/runtime/selfbench_export.py",
@@ -110,6 +111,7 @@ try {
   }
   for (const asset of [
     "harbor_gateway.py",
+    "harbor_muse.py",
     "harbor_smoke.py",
     "selfbench_e2b.py",
     "selfbench_export.py",

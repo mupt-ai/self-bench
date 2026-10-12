@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial, solverAgent } from "../src/evaluation/execution.js";
-import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
+import { harnessIds, modelRoutes, openHarnesses, routeFor } from "../src/evaluation/models.js";
 import { solverArguments } from "../src/evaluation/runner.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayIds, gateways, isGateway } from "../src/gateways/index.js";
@@ -219,7 +219,8 @@ for (const provider of gatewayIds) {
 test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
-      if (isGateway(route.provider)) expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      if (isGateway(route.provider))
+        expect(new Set(route.harnesses)).toEqual(new Set(openHarnesses));
       else
         expect(route.harnesses).not.toContain(
           route.provider === "openai" ? "claude-code" : "codex",

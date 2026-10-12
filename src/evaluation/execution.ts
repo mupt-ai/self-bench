@@ -98,6 +98,12 @@ export async function credentialExecution(
     secrets.push(
       ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
     );
+  } else if (info.auth === "muse-login") {
+    // Muse Code mints its subscription key from the sign-in's token at startup (harbor_muse.py).
+    const authPath = join(home, "muse-auth.json");
+    await writeFile(authPath, modelSecret, { mode: 0o600 });
+    child.MUSE_AUTH_JSON_PATH = authPath;
+    secrets.push(JSON.parse(modelSecret).providers.meta.access_token);
   } else if (info.auth === "claude-login") {
     // Harbor's Claude Code passes the token through and drops any API key once forced.
     child.CLAUDE_CODE_OAUTH_TOKEN = modelSecret;
@@ -133,12 +139,14 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
   if (isGateway(provider)) return [...gateways[provider].hosts];
   if (provider === "anthropic") return ["api.anthropic.com"];
   if (provider === "openai") return ["api.openai.com"];
+  if (provider === "meta") return ["api.meta.ai"];
   return hostsFromEnvironment(env);
 }
 
 /** The Harbor agent for a harness over the selected connection (`provider`, when there is one). */
 export function solverAgent(harness: Harness, provider?: string): string {
   if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
+  if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
   if (harness === "pi") return isGateway(provider) ? gateways[provider].harborPi : harness;
   if (harness !== "codex") return harness;
   // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's

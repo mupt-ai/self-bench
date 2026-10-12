@@ -198,7 +198,9 @@ export function trialCost(
         cacheWritesInferred = true;
       }
     }
-  } else if (harness === "claude-code") {
+  } else if (harness === "claude-code" || harness === "muse-code") {
+    // SelfBench's Muse Code adapter writes the same trajectory from Muse's session log
+    // (harbor_muse.py): one step per request, adding up to the totals it gives Harbor.
     const text = [...files].find(([name]) => name.endsWith("/trajectory.json"))?.[1];
     if (!text) return {};
     let measured: ReturnType<typeof claudeCodeUsage>;

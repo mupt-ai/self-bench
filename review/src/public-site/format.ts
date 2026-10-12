@@ -98,6 +98,7 @@ const HARNESS_LABELS: Record<PublicSetting["harness"], string> = {
   pi: "Pi",
   "mini-swe-agent": "Mini-SWE-Agent",
   "terminus-2": "Terminus 2",
+  "muse-code": "Muse Code",
 };
 
 export function harnessLabel(setting: Pick<PublicSetting, "harness">): string {
@@ -109,6 +110,7 @@ function accessLabel(setting: Pick<PublicSetting, "custom" | "signIn" | "provide
   if (setting.custom) return "Custom Endpoint";
   if (setting.signIn === "codex-login") return "ChatGPT Sign-In";
   if (setting.signIn === "claude-login") return "Claude Sign-In";
+  if (setting.signIn === "muse-login") return "Meta Sign-In";
   return isGateway(setting.provider) ? gateways[setting.provider].label : "API Key";
 }
 
