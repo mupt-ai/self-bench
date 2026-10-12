@@ -147,8 +147,8 @@ export function solverAgent(harness: Harness, provider?: string): string {
 }
 
 /**
- * The solver's Harbor agent arguments: its thinking level, and for Pi over a gateway that
- * describes its models to Pi, the model's models.json, which its harborPi adapter writes.
+ * The solver's Harbor agent arguments: its thinking level, Pi's custom endpoint API, and
+ * a gateway's models.json when its harborPi adapter needs one.
  */
 export function solverAgentArguments(
   harness: Harness,
@@ -157,7 +157,11 @@ export function solverAgentArguments(
   thinking?: ThinkingLevel,
 ): string[] {
   const levels = thinkingArguments(harness, thinking);
-  if (harness !== "pi" || !isGateway(provider)) return levels;
+  if (harness !== "pi") return levels;
+  // Custom credentials are OpenAI-compatible Chat Completions endpoints. Harbor requires
+  // an explicit API style before it will write Pi's isolated custom-provider config.
+  if (provider === "custom") return [...levels, "--agent-kwarg", "model_api=openai-completions"];
+  if (!isGateway(provider)) return levels;
   const models = piModels(provider, model.slice(provider.length + 1));
   return models ? [...levels, "--agent-kwarg", `models_json=${JSON.stringify(models)}`] : levels;
 }
