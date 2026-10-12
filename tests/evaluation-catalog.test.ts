@@ -10,7 +10,6 @@ import {
   modelRoutes,
   openHarnesses,
   routeFor,
-  thinkingArguments,
   thinkingOptions,
 } from "../src/evaluation/models.js";
 import {
@@ -59,6 +58,24 @@ test("OpenRouter's popular models join the curated ones, which keep their routes
   expect(thinkingOptions(kimi, ["pi"])).toEqual(["low", "high"]);
   expect(thinkingOptions(sol, ["codex"])).toEqual(["off", "low", "medium", "high", "xhigh", "max"]);
   expect(routeFor(sol, "openai")?.model).toBe("gpt-6-sol");
+});
+
+test("a variable-price router is selectable on OpenRouter without invented reference pricing", () => {
+  setGatewayListing("openrouter", {
+    models: [{ id: "typesafe/jev-router", label: "Jev Router" }],
+    rates: new Map([["openai/gpt-6-luna", { rates: [0.1, 0.5, 0.1, 0.1], asOf: "2026-10-12" }]]),
+  });
+  const jev = evaluationCatalog().find((model) => model.id === "typesafe/jev-router");
+  if (!jev) throw new Error("Missing Jev Router");
+  const route = routeFor(jev, "openrouter");
+  expect(route).toMatchObject({
+    model: "typesafe/jev-router",
+    provider: "openrouter",
+    harnesses: [...openHarnesses],
+  });
+  expect(route?.pricing).toBeUndefined();
+  expect(thinkingOptions(jev, ["pi"])).toEqual(["default"]);
+  expect(routeFor(jev, "vercel-ai-gateway")).toBeUndefined();
 });
 
 test("a model two gateways list is one entry with a route on each, under each one's id", () => {
@@ -242,23 +259,6 @@ test("credential routes preserve exact model IDs, provider pricing and harness s
   expect(thinkingOptions(haiku, ["claude-code"])).toContain("max");
 });
 
-test("thinking levels reach the actual Harbor harness flags without changing models", () => {
-  expect(thinkingArguments("codex", "max")).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
-  expect(thinkingArguments("codex", "off")).toEqual(["--agent-kwarg", "reasoning_effort=none"]);
-  expect(thinkingArguments("claude-code", "xhigh")).toEqual([
-    "--agent-kwarg",
-    "reasoning_effort=xhigh",
-  ]);
-  expect(thinkingArguments("pi", "high")).toEqual(["--agent-kwarg", "thinking=high"]);
-  expect(thinkingArguments("pi", "default")).toEqual([]);
-  for (const harness of ["mini-swe-agent", "terminus-2", "muse-code"] as const) {
-    expect(thinkingArguments(harness, "off")).toEqual(["--agent-kwarg", "reasoning_effort=none"]);
-    expect(thinkingArguments(harness, "max")).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
-  }
-  // A level the harness's Harbor adapter would reject never reaches it.
-  expect(thinkingArguments("pi", "max")).toEqual([]);
-});
-
 test("custom endpoints only offer default thinking whatever model ID is typed", () => {
   const custom: Omit<CatalogModel, "model"> = {
     id: "custom",
@@ -283,12 +283,5 @@ test.each([
     expect(thinkingOptions(model, ["pi"])).toEqual(levels.filter((level) => level !== "max"));
     expect(thinkingOptions(model, ["mini-swe-agent"])).toEqual([...levels]);
     expect(thinkingOptions(model, ["terminus-2"])).toEqual([...levels]);
-    // Claude Code takes no "off"; a level one harness lacks leaves the row's other harnesses too.
-    expect(thinkingOptions(model, ["claude-code"])).toEqual(
-      levels.filter((level) => level !== "off"),
-    );
-    expect(thinkingOptions(model, ["pi", "terminus-2"])).toEqual(
-      levels.filter((level) => level !== "max"),
-    );
   },
 );

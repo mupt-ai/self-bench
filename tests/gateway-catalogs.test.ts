@@ -6,6 +6,7 @@ import {
   gatewayIds,
   gatewayModelId,
   gatewayPricing,
+  gatewayServes,
   listedModels,
   setGatewayListing,
 } from "../src/gateways/index.js";
@@ -90,6 +91,31 @@ test("models a gateway does not price keep the catalog's reference rates", async
     ]),
   );
   expect(solPricing("openrouter")).toMatchObject({ input: 2, asOf: "2026-09-23" });
+});
+
+test("Jev's variable price does not hide its agent-capable OpenRouter route", async () => {
+  await refreshGateway(
+    "openrouter",
+    respond([
+      routed("openai/gpt-6-luna", { prompt: "0.0000001", completion: "0.0000005" }),
+      {
+        ...routed("typesafe/jev-router", { prompt: "-1", completion: "-1" }),
+        name: "TypeSafe: Jev Router",
+      },
+      // Missing or partially invalid prices are not the variable-price router sentinel.
+      routed("vendor/missing-price", {}),
+      routed("vendor/partial-price", { prompt: "-1", completion: "0.000002" }),
+      routed("vendor/invalid-price", { prompt: "garbage", completion: "garbage" }),
+    ]),
+  );
+  expect(listedModels("openrouter")).toContainEqual({
+    id: "typesafe/jev-router",
+    label: "Jev Router",
+  });
+  expect(listedModels("openrouter")).toHaveLength(2);
+  expect(gatewayServes("openrouter", "typesafe/jev-router")).toBe(true);
+  expect(gatewayPricing("openrouter", "typesafe/jev-router")).toBeUndefined();
+  expect(gatewayServes("openrouter", "vendor/not-listed")).toBe(false);
 });
 
 test("a failed or empty refresh keeps the last good rates", async () => {

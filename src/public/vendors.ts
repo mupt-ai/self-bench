@@ -29,6 +29,7 @@ const VENDOR_COLORS: Record<string, string> = {
   deepseek: "#4f63d8",
   moonshotai: "#c0457a",
   meta: "#0ea5e9",
+  typesafe: "#b08a20",
   custom: "#8a8580",
 };
 
@@ -48,6 +49,7 @@ const VENDOR_NAMES: Record<string, string> = {
   deepseek: "DeepSeek",
   moonshotai: "Moonshot AI",
   meta: "Meta",
+  typesafe: "TypeSafe",
   custom: CUSTOM_VENDOR,
 };
 
