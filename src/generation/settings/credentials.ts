@@ -237,6 +237,7 @@ export async function generationEnvironment(
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;
   delete env.ANTHROPIC_API_KEY;
+  delete env.META_API_KEY;
   for (const { keyVariable } of Object.values(gateways)) delete env[keyVariable];
   delete env.SELFBENCH_PI_AUTH_JSON;
   // The platform OpenRouter key is not a run credential: managed runs re-inject it under
