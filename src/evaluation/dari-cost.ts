@@ -111,9 +111,12 @@ export async function dariTrialCost(
         });
         if (!response.ok) return {};
         const body = record(await response.json());
-        if (body.complete !== true || !Array.isArray(body.data)) return {};
-        const data = body.data;
-        const rows = data.map(record);
+        if (typeof body.complete !== "boolean" || !Array.isArray(body.data)) return {};
+        if (!body.complete) {
+          if (attempt < 6) await pause();
+          continue;
+        }
+        const rows = body.data.map(record);
         const byId = new Map(rows.map((row) => [row.request_id, row]));
         if (
           byId.size !== rows.length ||
@@ -121,13 +124,12 @@ export async function dariTrialCost(
             (row) =>
               typeof row.request_id !== "string" ||
               !UUID.test(row.request_id) ||
-              row.observed !== true ||
               !ids.includes(row.request_id),
           )
         )
           return {};
-        const observed = rows.filter((row) => row.observed).map((row) => row.request_id);
-        if (observed.length !== ids.length || ids.some((id) => !observed.includes(id))) {
+        if (body.complete !== (rows.length === ids.length)) return {};
+        if (ids.some((id) => !byId.has(id))) {
           if (attempt < 6) await pause();
           continue;
         }

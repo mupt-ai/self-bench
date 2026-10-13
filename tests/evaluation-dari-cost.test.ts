@@ -46,7 +46,6 @@ const data = ids.map((id, i) => ({
   request_id: id,
   model_cost_usd: i ? "0.02" : "0.1",
   selected_model: "model",
-  observed: true,
 }));
 
 test("custom Dari replies are verified by authenticated per-request pricing without cash billing", async () => {
@@ -95,7 +94,7 @@ test("only Dari endpoint and Pi route can send the custom credential", async () 
   let called = false;
   const fetcher = (async () => {
     called = true;
-    return Response.json({ complete: true, data: data.map((r) => ({ ...r, observed: true })) });
+    return Response.json({ complete: true, data: data });
   }) as unknown as typeof fetch;
   for (const endpoint of [
     "https://other.example/v1",
@@ -116,11 +115,13 @@ test("only Dari endpoint and Pi route can send the custom credential", async () 
 
 test("delayed ingest retries, but missing or malformed records never yield a partial price", async () => {
   let calls = 0;
-  const fetcher = (async () =>
-    Response.json({
-      complete: true,
-      data: ++calls === 1 ? data.slice(0, 1) : data,
-    })) as unknown as typeof fetch;
+  const fetcher = (async () => {
+    calls++;
+    return Response.json({
+      complete: calls > 1,
+      data: calls === 1 ? data.slice(0, 1) : data,
+    });
+  }) as unknown as typeof fetch;
   expect(
     (await dariTrialCost(run, trial, env, files, fetcher, async () => {})).apiCostUsd,
   ).toBeCloseTo(0.12);
@@ -158,10 +159,11 @@ test("delayed ingest retries, but missing or malformed records never yield a par
   ).toEqual({});
 });
 
-test("rejects neighboring conversation requests and capped responses", async () => {
+test("rejects incomplete, missing, duplicate, and unexpected cost records", async () => {
   for (const body of [
-    { complete: false, data },
-    { data },
+    { complete: false, data: data.slice(0, 1) },
+    { complete: true, data: data.slice(0, 1) },
+    { complete: true, data: [data[0], data[0]] },
     {
       complete: true,
       data: [
@@ -170,19 +172,6 @@ test("rejects neighboring conversation requests and capped responses", async () 
           request_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           model_cost_usd: "0.03",
           selected_model: "model",
-          observed: false,
-        },
-      ],
-    },
-    {
-      complete: true,
-      data: [
-        ...data,
-        {
-          request_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          model_cost_usd: "0.03",
-          selected_model: "model",
-          observed: true,
         },
       ],
     },
