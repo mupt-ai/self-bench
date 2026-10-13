@@ -74,16 +74,28 @@ manifest.json
 tasks/
 └── TASK_ID.tar.gz
     └── harbor-task/
-        ├── task.toml
         ├── instruction.md
+        ├── task.toml
         ├── environment/
+        │   └── Dockerfile
         ├── tests/
+        │   ├── Dockerfile
+        │   ├── test.sh
+        │   └── test.patch
         └── solution/
+            ├── solve.sh
+            └── gold.patch
 ```
 
 `manifest.json` pins the source commit, SelfBench build, generation backend, Harbor environment, task IDs, and archive SHA-256s. The export keeps the first accepted task per source PR and lists the rest under `droppedDuplicates`.
 
-Exports contain repository snapshots, hidden tests, and reference solutions, unencrypted. Keep them private. Any exported task runs with plain Harbor on any environment:
+For tasks verified on Modal with both images exported to the configured task registry, this is the delivered execution tree. Each Dockerfile is a `FROM` of its verified image's immutable digest. The repository checkout, dependencies, setup, smoke script, and verifier runtime are already in those images; no repository archives, setup scripts, `definition.json`, or compiler manifest are duplicated in the execution bundle. Tasks with services also retain their `docker-compose.yaml` files.
+
+The authoring definition and full build bundle remain separate, immutable provenance artifacts. The task's execution bundle is stored as a new artifact (`execution-task.tar.gz`), used by future evaluations and exports. Existing tasks, saved comparisons, and releases keep their original bundle references. Deployments without both exported images retain the full build bundle rather than delivering a task that cannot build.
+
+`task.toml` owns execution configuration and retains separate-verifier isolation. Harbor collects the agent's patch at runtime, then `tests/test.sh` applies it and the hidden test patch to the clean verifier checkout. The agent image contains neither hidden tests nor the reference solution. Only the verifier image contains grader code; Harbor supplies `solution/` to oracle runs.
+
+Exports include hidden tests and reference solutions, unencrypted. Keep them private. Image-backed exports require access to their registry: the SelfBench app uses scoped pull grants for supported providers, while a standalone Harbor run needs registry authentication. They are native Harbor tasks, not self-contained image backups. For example, after authenticating Docker to the image registry:
 
 ```bash
 harbor run --path ./harbor-task --agent codex --model gpt-6-sol --env docker

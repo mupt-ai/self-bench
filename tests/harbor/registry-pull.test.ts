@@ -34,8 +34,8 @@ async function task(toml: string): Promise<string> {
   return root;
 }
 
-test("an E2B or Docker trial starts from the task's exported images, by digest through the API", async () => {
-  for (const environment of ["e2b", "docker"] as const) {
+test("E2B, Docker and Modal can pull exported images by digest through the API", async () => {
+  for (const environment of ["e2b", "docker", "modal"] as const) {
     const root = await task('schema_version = "1.4"\n[verifier.environment]\ncpus = 2\n');
     const env = await startFromExportedImages(root, images, environment, serving, root);
 
@@ -61,10 +61,9 @@ test("an E2B or Docker trial starts from the task's exported images, by digest t
   }
 });
 
-test("Modal keeps its own images, and an unexported task builds its Dockerfiles", async () => {
+test("an unexported task or deployment without image serving builds its Dockerfiles", async () => {
   const toml = 'schema_version = "1.4"\n';
   const cases = [
-    { images, environment: "modal" as const, options: serving },
     { images: { ...images, registry: undefined }, environment: "e2b" as const, options: serving },
     { images, environment: "e2b" as const, options: { ...serving, env: {} } },
   ];
