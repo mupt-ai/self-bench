@@ -15,10 +15,10 @@ import {
 
 /**
  * Harbor environments that start from a task's exported image with SelfBench's pull grant:
- * runtime/selfbench_e2b.py, and Docker through DOCKER_CONFIG. Modal starts from the task's own
- * Modal images; the others build the task's Dockerfiles as before.
+ * runtime/selfbench_e2b.py, Docker through DOCKER_CONFIG, and Modal through an ephemeral
+ * registry secret. Modal still prefers its pins; its fallback can pull the exported image.
  */
-const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set(["e2b", "docker"]);
+const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set(["e2b", "docker", "modal"]);
 
 function pullsTaskImages(environment: HarborEnvironment): boolean {
   return PULLING_ENVIRONMENTS.has(environment);

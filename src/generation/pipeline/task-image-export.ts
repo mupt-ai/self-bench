@@ -14,6 +14,7 @@ import { googleAccessToken } from "../../lib/google-access-token.js";
 import { runCommand } from "../../lib/process.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { type ImageConfig, imageConfig } from "../task/image-registry.js";
+import { publishExecutionBundle } from "./execution-bundle.js";
 import { withHeartbeats } from "./helpers.js";
 import { unpackTask } from "./remote-gate.js";
 
@@ -40,15 +41,16 @@ export async function exportAcceptedTask(
   task: AuthoredTask,
   repository: string | undefined,
 ): Promise<AuthoredTask> {
-  if (!repository || environment !== "modal" || !task.images || task.images.registry) return task;
-  return await withHeartbeats(`exporting ${task.taskId}'s images`, (signal) =>
-    exportTaskImages(store, task, {
+  if (!repository || environment !== "modal" || !task.images) return task;
+  return await withHeartbeats(`exporting ${task.taskId}'s images`, async (signal) => {
+    const exported = await exportTaskImages(store, task, {
       repository,
       env: harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment)),
       token: googleAccessToken,
       signal,
-    }),
-  );
+    });
+    return publishExecutionBundle(store, exported, signal);
+  });
 }
 
 export interface TaskImageExportOptions {

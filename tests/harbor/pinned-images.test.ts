@@ -194,7 +194,7 @@ test("the Modal environment starts from its role's pin, falls back when Modal lo
   const record = await temporary();
   const result = await runCommand("python3", [
     "-c",
-    `import asyncio, importlib.util, logging, pathlib, sys, types
+    `import asyncio, importlib.util, logging, os, pathlib, sys, types
 modal = types.ModuleType("modal"); exception = types.ModuleType("modal.exception")
 class NotFoundError(Exception): pass
 class PermissionDeniedError(Exception): pass
@@ -203,7 +203,13 @@ class Image:
     def __init__(self, object_id): self.object_id = object_id
     @staticmethod
     def from_id(image_id): return Image(image_id)
+    @staticmethod
+    def from_registry(image, secret):
+        assert image == "registry.example/task@sha256:abc", image
+        assert secret == {"REGISTRY_USERNAME": "selfbench", "REGISTRY_PASSWORD": "grant"}, secret
+        return Image("im-Registry")
 modal.Image = Image
+modal.Secret = types.SimpleNamespace(from_dict=lambda values: values)
 exception.NotFoundError, exception.PermissionDeniedError, exception.InvalidError = NotFoundError, PermissionDeniedError, InvalidError
 harbor_modal = types.ModuleType("harbor.environments.modal")
 class ModalEnvironment:
@@ -212,6 +218,7 @@ class ModalEnvironment:
         self.environment_dir = pathlib.Path(environment_dir)
         self._compose_mode = compose
         self._image = Image("im-Built")
+        self.task_env_config = types.SimpleNamespace(docker_image=None)
         self.logger = logging.getLogger("test")
         self.started = []
     async def _create_sandbox(self, **kwargs):
@@ -241,6 +248,15 @@ async def check():
         assert environment.kwargs == {"sandbox_timeout_secs": 10800, "sandbox_idle_timeout_secs": 1800}, environment.kwargs
     # A solver trial at the most agent minutes still ends inside its sandbox's lifetime.
     assert module.SANDBOX_LIFETIME_SECS * 1000 > ${trialTimeouts(AGENT_MINUTES.max).harborMs}
+    os.environ.update(SELFBENCH_REGISTRY_HOST="registry.example", SELFBENCH_REGISTRY_USERNAME="selfbench", SELFBENCH_REGISTRY_PASSWORD="grant")
+    fallback = module.SelfBenchModalEnvironment("/task/tests", verifier_image="im-Gone")
+    fallback.task_env_config.docker_image = "registry.example/task@sha256:abc"
+    await fallback._create_sandbox()
+    assert fallback.started == ["im-Registry"], fallback.started
+    preferred = module.SelfBenchModalEnvironment("/task/environment", agent_image="im-Agent1")
+    preferred.task_env_config.docker_image = "registry.example/task@sha256:abc"
+    await preferred._create_sandbox()
+    assert preferred.started == ["im-Agent1"], preferred.started
     tuned = module.SelfBenchModalEnvironment("/task/tests", sandbox_idle_timeout_secs=None)
     assert tuned.kwargs["sandbox_idle_timeout_secs"] is None, tuned.kwargs
 asyncio.run(check())
