@@ -286,4 +286,6 @@ test("harness dropdown follows the selected credential's route", () => {
     "mini-swe-agent",
     "terminus-2",
   ]);
+  // Before a credential is chosen: every harness some credential runs the model on.
+  expect(harnesses("")).toEqual(["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"]);
 });
