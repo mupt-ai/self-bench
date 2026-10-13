@@ -7,12 +7,12 @@ afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
 });
 
-test("Muse models run only Muse Code on a Meta key, and through gateways like any other model", () => {
+test("Muse models run every harness on a Meta key, Muse Code first, and gateways all but Muse Code", () => {
   const spark = catalog.find((model) => model.id === "muse-spark-1.3");
   if (!spark) throw new Error("Missing Muse Spark 1.3");
   const routes = modelRoutes(spark);
   expect(routes.map((route) => [route.provider, route.model, route.harnesses])).toEqual([
-    ["meta", "muse-spark-1.3", ["muse-code"]],
+    ["meta", "muse-spark-1.3", ["muse-code", ...openHarnesses]],
     ["openrouter", "meta/muse-spark-1.3", [...openHarnesses]],
     ["vercel-ai-gateway", "meta/muse-spark-1.3", [...openHarnesses]],
   ]);

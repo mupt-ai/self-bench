@@ -29,6 +29,19 @@ test("requested harness chooses a compatible credential and respects login restr
   expect(
     nextModelSelection(openai, [login, { ...login, id: "api-key", auth: "api-key" }], "pi"),
   ).toEqual({ catalogId: model.id, credentialId: "api-key", harnesses: ["pi"] });
+  // A Meta key defaults to Muse Code and runs any harness; a Meta sign-in only Muse Code.
+  const spark: CatalogModel = { ...model, provider: "meta", harnesses: ["muse-code"] };
+  const metaKey: CredentialInfo = { ...credential, kind: "meta" };
+  const museLogin: CredentialInfo = { ...metaKey, id: "muse-login", auth: "muse-login" };
+  expect(nextModelSelection(spark, [metaKey])?.harnesses).toEqual(["muse-code"]);
+  expect(nextModelSelection(spark, [museLogin], "claude-code")).toBeUndefined();
+  expect(nextModelSelection(spark, [museLogin, metaKey], "claude-code")).toEqual({
+    catalogId: model.id,
+    credentialId: metaKey.id,
+    harnesses: ["claude-code"],
+  });
+  const claudeLogin: CredentialInfo = { ...credential, auth: "claude-login" };
+  expect(nextModelSelection(model, [claudeLogin], "pi")).toBeUndefined();
 });
 
 test("duplicates match model, effective thinking level, and harness, not credential", () => {

@@ -20,7 +20,8 @@ test.each([
   ],
   ["anthropic", {}, ["api.anthropic.com"]],
   ["anthropic", { CLAUDE_CODE_OAUTH_TOKEN: "test-token" }, ["api.anthropic.com"]],
-  ["meta", {}, ["api.meta.ai"]],
+  // Codex reaches Meta through its OpenAI-compatible API, on Meta's own host.
+  ["meta", { META_API_KEY: "test-key" }, ["api.meta.ai"]],
   ["custom", { OPENAI_BASE_URL: "https://models.example/v1" }, ["models.example"]],
   [
     "openai",

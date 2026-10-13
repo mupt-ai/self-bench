@@ -230,11 +230,14 @@ for (const provider of gatewayIds) {
   });
 }
 
-test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
+test("gateways and Meta keys offer every harness they speak; OpenAI and Anthropic keys their protocol's", () => {
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
       if (isGateway(route.provider))
         expect(new Set(route.harnesses)).toEqual(new Set(openHarnesses));
+      else if (route.provider === "meta")
+        expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      // OpenAI serves no Anthropic Messages, and Anthropic no Responses.
       else
         expect(route.harnesses).not.toContain(
           route.provider === "openai" ? "claude-code" : "codex",

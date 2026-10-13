@@ -81,7 +81,10 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
   return JSON.stringify([runId, taskId]);
 }
 
-/** A subscription sign-in drives only its own vendor's CLI; API keys drive any harness. */
+/**
+ * API keys drive any harness their route speaks. Claude and Meta sign-ins drive only their
+ * vendor's CLI by rule; a ChatGPT sign-in only because Codex alone reads its auth.json.
+ */
 const signInHarnesses: Record<CredentialInfo["auth"], Harness | undefined> = {
   "api-key": undefined,
   "codex-login": "codex",
@@ -105,11 +108,15 @@ export function signInRefusal(
     : undefined;
 }
 
-/** Harnesses a direct provider key can drive; only gateways are remapped for the rest. */
+/**
+ * Harnesses a direct provider key can drive: those that speak its API. OpenAI serves no
+ * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both
+ * (compatibleEndpoints). Muse Code speaks only Meta's API.
+ */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
   openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
   anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
-  meta: ["muse-code"],
+  meta: ["muse-code", ...openHarnesses],
 };
 
 /** Every credential route for a model: its native provider (if any) and each gateway serving it. */
@@ -151,6 +158,12 @@ function gatewayRouteModel(model: CatalogModel, gateway: GatewayId): string | un
 
 export function routeFor(model: CatalogModel, provider: string) {
   return modelRoutes(model).find((route) => route.provider === provider);
+}
+
+/** The harnesses some credential runs the model on, for a row whose credential is unchosen. */
+export function modelHarnesses(model: CatalogModel): Harness[] {
+  const routed = new Set(modelRoutes(model).flatMap((route) => route.harnesses));
+  return harnessIds.filter((harness) => routed.has(harness));
 }
 
 /**

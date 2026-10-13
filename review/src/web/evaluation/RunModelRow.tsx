@@ -6,6 +6,7 @@ import {
   credentialRunsHarness,
   defaultThinking,
   harnessOptions,
+  modelHarnesses,
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
@@ -53,8 +54,9 @@ export function RunModelRow({
       harnesses: harnesses.length ? harnesses : (available?.slice(0, 1) ?? []),
     });
   };
+  // Until a credential is chosen, every harness some credential runs the model on.
   const supportsHarness = (harness: Harness) =>
-    (route ?? model).harnesses.includes(harness) &&
+    (route?.harnesses ?? modelHarnesses(model)).includes(harness) &&
     credentialRunsHarness(credential?.auth ?? "api-key", harness);
 
   return (

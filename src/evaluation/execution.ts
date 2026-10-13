@@ -12,6 +12,7 @@ import {
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
+import { type CompatibleEndpoint, compatibleEndpoint } from "./compatible-endpoints.js";
 import { signInRefusal, thinkingArguments } from "./models.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
@@ -154,9 +155,11 @@ export function solverAgent(harness: Harness, provider?: string): string {
   if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
   if (harness === "pi") return isGateway(provider) ? gateways[provider].harborPi : harness;
   if (harness !== "codex") return harness;
-  // Every gateway route, including a typed model id without a vendor, needs GatewayCodex's
-  // HTTPS-only provider.
-  return isGateway(provider) ? "harbor_gateway:GatewayCodex" : "harbor_gateway:SelfBenchCodex";
+  // Every gateway route, including a typed model id without a vendor, and every compatible
+  // endpoint needs GatewayCodex's HTTPS-only provider.
+  return isGateway(provider) || compatibleEndpoint(provider, harness)
+    ? "harbor_gateway:GatewayCodex"
+    : "harbor_gateway:SelfBenchCodex";
 }
 
 /**
@@ -174,6 +177,9 @@ export function solverAgentArguments(
   // Custom credentials are OpenAI-compatible Chat Completions endpoints. Harbor requires
   // an explicit API style before it will write Pi's isolated custom-provider config.
   if (provider === "custom") return [...levels, "--agent-kwarg", "model_api=openai-completions"];
+  // Meta recommends Responses: Chat Completions drops reasoning between turns.
+  if (harness === "pi" && compatibleEndpoint(provider, harness))
+    return [...levels, "--agent-kwarg", "model_api=openai-responses"];
   if (!isGateway(provider)) return levels;
   const models = piModels(provider, model.slice(provider.length + 1));
   return models ? [...levels, "--agent-kwarg", `models_json=${JSON.stringify(models)}`] : levels;
@@ -185,9 +191,11 @@ export function gatewayModel(
   harness: Harness,
   model: string,
 ): string {
-  if (!isGateway(provider) || harness === "pi") return model;
-  const modelId = model.slice(provider.length + 1);
-  return harness === "claude-code" ? modelId : `openai/${modelId}`;
+  if (!(isGateway(provider) || compatibleEndpoint(provider, harness))) return model;
+  const modelId = model.slice((provider?.length ?? 0) + 1);
+  if (harness === "claude-code") return modelId;
+  // Pi takes a gateway by its own provider name, and a compatible endpoint as an OpenAI one.
+  return harness === "pi" && isGateway(provider) ? model : `openai/${modelId}`;
 }
 
 /** Adapt the selected connection to each harness without inheriting host credentials. */
@@ -198,6 +206,8 @@ export function gatewayTrial(
   env: NodeJS.ProcessEnv,
 ) {
   const provider = input.credentials?.provider;
+  const endpoint = compatibleEndpoint(provider, harness);
+  if (endpoint) return endpointTrial(endpoint, provider, harness, model, env);
   if (!isGateway(provider)) {
     const child = { ...env };
     return { model, child, extraAllowedHosts: providerHosts(provider, child) };
@@ -222,4 +232,29 @@ export function gatewayTrial(
   child.OPENAI_BASE_URL = gateway.openAiBase;
   child.OPENAI_API_BASE = gateway.openAiBase;
   return { model: harborModel, child, extraAllowedHosts };
+}
+
+/** A direct provider's key, moved to the variables the harness's protocol reads. */
+function endpointTrial(
+  endpoint: CompatibleEndpoint,
+  provider: NonNullable<EvaluationInput["credentials"]>["provider"] | undefined,
+  harness: Harness,
+  model: string,
+  env: NodeJS.ProcessEnv,
+) {
+  const keyVariable = modelApiKeyVariable(provider ?? "");
+  const key = env[keyVariable];
+  if (!key) throw refuseTrial("Model credential is unavailable");
+  const child = { ...env };
+  delete child[keyVariable];
+  const extraAllowedHosts = providerHosts(provider, {});
+  if (harness === "claude-code") {
+    child.ANTHROPIC_AUTH_TOKEN = key;
+    child.ANTHROPIC_BASE_URL = endpoint.anthropicBase;
+  } else {
+    child.OPENAI_API_KEY = key;
+    child.OPENAI_BASE_URL = endpoint.openAiBase;
+    child.OPENAI_API_BASE = endpoint.openAiBase;
+  }
+  return { model: gatewayModel(provider, harness, model), child, extraAllowedHosts };
 }
