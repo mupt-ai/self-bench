@@ -92,6 +92,93 @@ test("OpenRouter Jev generations become available after delayed indexing", async
   }
 });
 
+test("Jev zero-token billing placeholders cannot price token-bearing replies as free", async () => {
+  const message = {
+    role: "assistant",
+    responseId: "gen-1791855534-NslUwCGGykHhJuQnwkrz",
+    usage: { input: 3, output: 80, cacheRead: 12000, cacheWrite: 200 },
+  };
+  const placeholder = (async () =>
+    Response.json({
+      data: {
+        router: "typesafe/jev-router",
+        total_cost: 0,
+        upstream_inference_cost: 0,
+        is_byok: false,
+        native_tokens_prompt: 0,
+        native_tokens_completion: 0,
+      },
+    })) as unknown as typeof fetch;
+  for (const usage of [message.usage, { cacheRead: 12000 }, { cacheWrite: 200 }]) {
+    const reply = { ...message, usage };
+    for (const text of [
+      JSON.stringify({ type: "message_end", message: reply }),
+      `[Earlier output truncated]\n${JSON.stringify({
+        type: "agent_end",
+        messages: [{ role: "user" }, reply],
+      })}\n`,
+    ]) {
+      const measured = new Map([["agent/pi.txt", text]]);
+      expect(await gatewayCost("openrouter", "key", "pi", measured, placeholder)).toBeUndefined();
+    }
+  }
+});
+
+test("one contradictory zero-token bill prevents publishing a partial trial bill", async () => {
+  const measured = new Map([
+    [
+      "agent/pi.txt",
+      [...files.values()][0] +
+        "\n" +
+        JSON.stringify({
+          type: "agent_end",
+          messages: [
+            { role: "user" },
+            {
+              role: "assistant",
+              responseId: "gen_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+              usage: { output: 100 },
+            },
+          ],
+        }),
+    ],
+  ]);
+  const partial = (async (url: string) =>
+    Response.json({
+      data: url.endsWith("FAV")
+        ? { total_cost: 0.12 }
+        : { total_cost: 0, native_tokens_prompt: 0, native_tokens_completion: 0 },
+    })) as unknown as typeof fetch;
+  expect(await gatewayCost("openrouter", "key", "pi", measured, partial)).toBeUndefined();
+});
+
+test("explicitly free token-bearing generations and empty replies still cost zero", async () => {
+  const measured = (usage: Record<string, number>) =>
+    new Map([
+      [
+        "agent/pi.txt",
+        JSON.stringify({
+          type: "message_end",
+          message: { role: "assistant", responseId: "gen-free-model", usage },
+        }),
+      ],
+    ]);
+  const free = (async () =>
+    Response.json({
+      data: { total_cost: 0, native_tokens_prompt: 10, native_tokens_completion: 5 },
+    })) as unknown as typeof fetch;
+  expect(
+    await gatewayCost("openrouter", "key", "pi", measured({ input: 10, output: 5 }), free),
+  ).toBe(0);
+  const empty = (async () =>
+    Response.json({
+      data: { total_cost: 0, native_tokens_prompt: 0, native_tokens_completion: 0 },
+    })) as unknown as typeof fetch;
+  expect(
+    await gatewayCost("openrouter", "key", "pi", measured({ input: 0, output: 0 }), empty),
+  ).toBe(0);
+});
+
 test("missing bills and unsupported harnesses leave the caller's usage estimate untouched", async () => {
   const missing = (async () => Response.json({ data: {} })) as unknown as typeof fetch;
   expect(await gatewayCost("openrouter", "key", "pi", files, missing)).toBeUndefined();

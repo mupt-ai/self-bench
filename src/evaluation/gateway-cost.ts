@@ -100,6 +100,7 @@ export async function gatewayCost(
 ): Promise<number | undefined> {
   const ids = generationIds(harness, files);
   if (!key || !ids) return undefined;
+  const tokenBearingIds = generationsWithUsage(files);
   const base =
     provider === "openrouter"
       ? "https://openrouter.ai/api/v1/generation?id="
@@ -119,7 +120,18 @@ export async function gatewayCost(
           const data = record((await response.json()).data);
           const total = charge(data.total_cost);
           const upstream = data.is_byok === true ? charge(data.upstream_inference_cost) : 0;
-          return total === undefined || upstream === undefined ? undefined : total + upstream;
+          if (total === undefined || upstream === undefined) return undefined;
+          // Jev can return a successful generation lookup with every billing/usage field zero,
+          // even though Pi received a token-bearing reply. That is missing accounting, not a
+          // free request: accepting it would publish a partial whole-trial bill.
+          if (
+            total + upstream === 0 &&
+            data.native_tokens_prompt === 0 &&
+            data.native_tokens_completion === 0 &&
+            tokenBearingIds.has(id)
+          )
+            return undefined;
+          return total + upstream;
         }
         if (response.status !== 404) return undefined;
         if (attempt < 6) await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -136,6 +148,37 @@ export async function gatewayCost(
     total += (costs as number[]).reduce((sum, cost) => sum + cost, 0);
   }
   return total;
+}
+
+function generationsWithUsage(files: Map<string, string>): Set<string> {
+  const ids = new Set<string>();
+  const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
+  if (!text) return ids;
+  for (const line of text.split("\n")) {
+    let event: Record<string, unknown>;
+    try {
+      event = record(JSON.parse(line));
+    } catch {
+      continue;
+    }
+    const messages =
+      event.type === "agent_end" && Array.isArray(event.messages)
+        ? event.messages.map(record)
+        : event.type === "message_end"
+          ? [record(event.message)]
+          : [];
+    for (const message of messages) {
+      if (message.role !== "assistant" || typeof message.responseId !== "string") continue;
+      const usage = record(message.usage);
+      if (
+        [usage.input, usage.output, usage.cacheRead, usage.cacheWrite].some(
+          (tokens) => typeof tokens === "number" && Number.isFinite(tokens) && tokens > 0,
+        )
+      )
+        ids.add(message.responseId);
+    }
+  }
+  return ids;
 }
 
 function charge(value: unknown): number | undefined {
