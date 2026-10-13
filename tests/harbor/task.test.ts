@@ -105,9 +105,7 @@ describe("Harbor task compiler", () => {
     });
     const taskToml = await readFile(join(output, "task.toml"), "utf8");
     expect(taskToml).toContain('difficulty = "medium"');
-    expect(taskToml).toContain(
-      'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
-    );
+    expect(taskToml).toContain("allowed_hosts = []");
     // The agent is root, like setup.sh at build time, so it sees setup's HOME and caches. Its
     // time comes from the repository at each run, not the task.
     expect(taskToml).toContain('[agent]\nuser = "root"\nnetwork_mode = "allowlist"');
