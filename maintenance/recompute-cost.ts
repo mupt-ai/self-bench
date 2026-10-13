@@ -75,7 +75,7 @@ export async function storedHarborFiles(
 ): Promise<{ files: Map<string, string>; result: string | undefined }> {
   const files = new Map<string, string>();
   for (const name of trial.artifacts) {
-    if (!/\/(trajectory\.json|pi\.txt|result\.json)$/.test(name)) continue;
+    if (!/\/(trajectory\.json|pi\.txt|result\.json|dari-request-ids\.json)$/.test(name)) continue;
     const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
     if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
   }
@@ -216,7 +216,7 @@ export async function recomputeEvaluationCost(
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
     // A billed gateway cost cannot be reconstructed from token usage or stored transcripts.
-    if (before.costSource === "gateway") {
+    if (before.costSource === "gateway" || before.costSource === "router-reference-rates") {
       report.trials.push({ index, before, changed: false });
       continue;
     }

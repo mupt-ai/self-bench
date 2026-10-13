@@ -8,6 +8,7 @@ const result = await Bun.build({
   entrypoints: [
     "recompute-cost",
     "reprice-vendor-rates",
+    "reprice-dari-router",
     "backfill-agent-timeouts",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),

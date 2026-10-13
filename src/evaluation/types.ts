@@ -88,7 +88,8 @@ export interface EvaluationTrial {
    * "gateway": a gateway's charge, where list rates cannot price the trial (billedTrialCost), and
    * on trials recorded before costs moved to vendor list rates.
    */
-  costSource?: "harbor" | "reference-rates" | "gateway";
+  /** Router reference rates sum the selected providers' per-request costs, not cash charges. */
+  costSource?: "harbor" | "reference-rates" | "gateway" | "router-reference-rates";
   /** What the gateway charged, for comparing with the bill; apiCostUsd is the cost shown. */
   billedCostUsd?: number;
 }
