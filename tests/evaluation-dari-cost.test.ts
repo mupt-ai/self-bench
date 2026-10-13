@@ -53,25 +53,11 @@ test("custom Dari replies are verified by authenticated per-request pricing with
   const result = await dariTrialCost(run, trial, env, files, (async (url, init) => {
     expect(url).toBe("https://routing.dari.dev/v1/request-costs");
     expect(init?.redirect).toBe("error");
-    expect(JSON.parse(String(init?.body))).toEqual({
-      request_ids: ids,
-      include_conversation_requests: true,
-    });
-    return Response.json({
-      complete: true,
-      data: [
-        ...data,
-        {
-          request_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-          model_cost_usd: "0.03",
-          selected_model: "openai/gpt-6-luna",
-          observed: false,
-        },
-      ],
-    });
+    expect(JSON.parse(String(init?.body))).toEqual({ request_ids: ids });
+    return Response.json({ complete: true, data });
   }) as typeof fetch);
   expect(result).toEqual({
-    apiCostUsd: 0.15000000000000002,
+    apiCostUsd: 0.12000000000000001,
     modelVerified: true,
     costSource: "router-reference-rates",
   });
@@ -170,6 +156,48 @@ test("delayed ingest retries, but missing or malformed records never yield a par
       throw new Error("offline");
     }) as unknown as typeof fetch),
   ).toEqual({});
+});
+
+test("rejects neighboring conversation requests and capped responses", async () => {
+  for (const body of [
+    { complete: false, data },
+    { data },
+    {
+      complete: true,
+      data: [
+        ...data,
+        {
+          request_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          model_cost_usd: "0.03",
+          selected_model: "model",
+          observed: false,
+        },
+      ],
+    },
+    {
+      complete: true,
+      data: [
+        ...data,
+        {
+          request_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          model_cost_usd: "0.03",
+          selected_model: "model",
+          observed: true,
+        },
+      ],
+    },
+  ]) {
+    expect(
+      await dariTrialCost(
+        run,
+        trial,
+        env,
+        files,
+        (async () => Response.json(body)) as unknown as typeof fetch,
+        async () => {},
+      ),
+    ).toEqual({});
+  }
 });
 
 test("zero is valid only when explicitly priced", async () => {

@@ -106,7 +106,7 @@ export async function dariTrialCost(
             Authorization: `Bearer ${env.OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ request_ids: ids, include_conversation_requests: true }),
+          body: JSON.stringify({ request_ids: ids }),
           signal: AbortSignal.timeout(5000),
         });
         if (!response.ok) return {};
@@ -121,7 +121,8 @@ export async function dariTrialCost(
             (row) =>
               typeof row.request_id !== "string" ||
               !UUID.test(row.request_id) ||
-              (row.observed !== true && row.observed !== false),
+              row.observed !== true ||
+              !ids.includes(row.request_id),
           )
         )
           return {};
