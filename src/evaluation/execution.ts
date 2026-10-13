@@ -137,10 +137,15 @@ function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
 
 function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): string[] {
   if (isGateway(provider)) return [...gateways[provider].hosts];
+  // Codex subscription traffic goes to ChatGPT, not the OpenAI API. These hosts used to
+  // be baked into every task, including gateway trials that never use them.
+  if (env.CODEX_AUTH_JSON_PATH) return ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"];
+  const endpointHosts = hostsFromEnvironment(env);
+  if (endpointHosts.length) return endpointHosts;
   if (provider === "anthropic") return ["api.anthropic.com"];
   if (provider === "openai") return ["api.openai.com"];
   if (provider === "meta") return ["api.meta.ai"];
-  return hostsFromEnvironment(env);
+  return [];
 }
 
 /** The Harbor agent for a harness over the selected connection (`provider`, when there is one). */

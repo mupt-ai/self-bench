@@ -68,8 +68,10 @@ export async function prepareHarborRun(
 
 /**
  * Refuses a task that would pull host environment into the sandbox, and rewrites task.toml from
- * the parsed value so Harbor reads exactly what was checked, with `agentSeconds` for the agent
- * whatever the task says.
+ * the parsed value so Harbor reads exactly what was checked. Agent time and network access are
+ * run policy, not task content: this also backfills older bundles with baked-in provider hosts.
+ * Harbor merges the trial's --allow-agent-host entries into the empty agent allowlist. Setup and
+ * the separate verifier keep their task-defined network policies.
  */
 export async function assertHostSafeTask(
   taskDirectory: string,
@@ -88,7 +90,12 @@ export async function assertHostSafeTask(
   }
   if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
   rejectHostKeys(config, "");
-  config.agent = { ...(isRecord(config.agent) ? config.agent : {}), timeout_sec: agentSeconds };
+  config.agent = {
+    ...(isRecord(config.agent) ? config.agent : {}),
+    timeout_sec: agentSeconds,
+    network_mode: "allowlist",
+    allowed_hosts: [],
+  };
   await writeFile(path, stringify(config));
 
   for (const compose of await composeFiles(taskDirectory)) {

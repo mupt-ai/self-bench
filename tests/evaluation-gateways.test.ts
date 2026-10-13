@@ -191,6 +191,20 @@ for (const provider of gatewayIds) {
     expect(codex.child.ANTHROPIC_API_KEY).toBeUndefined();
     expect(codex.child.OPENAI_BASE_URL).toBe(gateways[provider].openAiBase);
     expect(codex.extraAllowedHosts).toEqual([...hosts]);
+    const args = solverArguments(
+      "task",
+      "jobs",
+      "codex",
+      codex.model,
+      "modal",
+      undefined,
+      codex.extraAllowedHosts,
+      undefined,
+      provider,
+    );
+    expect(
+      args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
+    ).toEqual([...hosts]);
     // The provider picks the adapter, so a typed id with no vendor still gets HTTPS-only Codex.
     expect(gatewayTrial(input, "codex", `${provider}/gpt-4o`, env).model).toBe("openai/gpt-4o");
     expect(solverAgent("codex", provider)).toBe("harbor_gateway:GatewayCodex");
