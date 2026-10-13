@@ -68,9 +68,11 @@ export async function credentialExecution(
     info.kind !== input.credentials.provider
   )
     throw refuseTrial("Credential unavailable");
-  const modelSecret = managedModel
-    ? managedModelKey(env)
-    : (await credentials.secret(orgId, info.id))?.value;
+  const modelCredential = managedModel
+    ? { value: managedModelKey(env) }
+    : await credentials.secret(orgId, info.id);
+  const modelSecret = modelCredential?.value;
+  const billingKey = info.kind === "openrouter" ? modelCredential?.managementKey : undefined;
   const managedE2B =
     managedSandbox && input.sandbox === "e2b" ? managedSandboxCredentials(env) : undefined;
   const managedModal =
@@ -88,7 +90,12 @@ export async function credentialExecution(
     LANG: "C.UTF-8",
     PYTHONUNBUFFERED: "1",
   };
-  const secrets = [modelSecret, sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(Boolean);
+  const secrets = [
+    modelSecret,
+    sandboxSecret.value,
+    sandboxSecret.tokenId ?? "",
+    billingKey ?? "",
+  ].filter(Boolean);
   const refusal = signInRefusal(info.auth, input.harnesses);
   if (refusal) throw refuseTrial(refusal);
   if (info.auth === "codex-login") {
@@ -119,7 +126,7 @@ export async function credentialExecution(
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
-  return { profile: { model: input.modelName }, child, secrets, auth: info.auth };
+  return { profile: { model: input.modelName }, child, secrets, auth: info.auth, billingKey };
 }
 
 function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {

@@ -3,7 +3,7 @@ import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import { collectOutput, completeLines, redactOutput } from "../src/evaluation/output.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
 import {
   assertEvaluationBundleSize,

@@ -61,7 +61,7 @@ test("one long section cannot evict the rest, and cuts start on a whole line", (
   expect(log).toMatch(/earlier characters omitted\]\nverifier line \d+\n/);
 });
 
-test("recompute re-derives stored OpenRouter Codex costs and writes only on apply", async () => {
+test("recompute verifies OpenRouter usage without inventing a price and writes only on apply", async () => {
   const directory = await mkdtemp(join(tmpdir(), "evaluation-recompute-"));
   directories.push(directory);
   const store = new LocalArtifactStore(directory);
@@ -113,8 +113,6 @@ test("recompute re-derives stored OpenRouter Codex costs and writes only on appl
   expect(dry.trials[0]?.after).toEqual({
     modelVerified: true,
     tokenUsage: usage,
-    apiCostUsd: 0.25,
-    costSource: "harbor",
   });
   expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
 
@@ -123,7 +121,6 @@ test("recompute re-derives stored OpenRouter Codex costs and writes only on appl
   expect(saved?.revision).toBe(2);
   expect(saved?.trials[0]).toMatchObject({
     modelVerified: true,
-    apiCostUsd: 0.25,
     status: "completed",
   });
   expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
@@ -138,7 +135,7 @@ test("recompute re-derives stored OpenRouter Codex costs and writes only on appl
   );
   const cut = await recomputeEvaluationCost(store, run.repoId, run.id, true);
   expect(cut.trials[0]?.changed).toBe(false);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBe(0.25);
+  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
 });
 
 test("recompute infers sign-in cache writes only once the credential's sign-in type is known", async () => {

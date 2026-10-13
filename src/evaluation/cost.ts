@@ -229,6 +229,9 @@ export function trialCost(
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
   if (!verified || !usage) return measured;
+  // OpenRouter's actual charge can include routing, discounts and separate BYOK charges.
+  // Only its gateway billing records provide a price, not harness or catalog estimates.
+  if (run.credentials?.provider === "openrouter") return measured;
   const reported =
     reportedCost === undefined
       ? measured
